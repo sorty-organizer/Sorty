@@ -39,6 +39,7 @@ struct MainWindowRootView: View {
     private let namingPresetManager: NamingPresetManager
     private let steeringPromptManager: SteeringPromptManager
     private let learningsManager: LearningsManager
+    private let startTelemetry: @MainActor () -> Void
 
     init(
         launchRequest: WindowLaunchRequest?,
@@ -61,7 +62,8 @@ struct MainWindowRootView: View {
         loginItemManager: LoginItemManager,
         namingPresetManager: NamingPresetManager,
         steeringPromptManager: SteeringPromptManager,
-        learningsManager: LearningsManager
+        learningsManager: LearningsManager,
+        startTelemetry: @escaping @MainActor () -> Void
     ) {
         self.launchRequest = launchRequest
         self.coordinator = coordinator
@@ -82,6 +84,7 @@ struct MainWindowRootView: View {
         self.namingPresetManager = namingPresetManager
         self.steeringPromptManager = steeringPromptManager
         self.learningsManager = learningsManager
+        self.startTelemetry = startTelemetry
         _windowSession = StateObject(
             wrappedValue: WindowSession(updateManager: updateManager, history: history)
         )
@@ -254,7 +257,7 @@ struct MainWindowRootView: View {
 
     private var contentWithLifecycle: some View {
         contentWithEnvironment
-            .task(id: coordinator != nil) {
+            .task {
                 let calibrate: ((WatchedFolder) -> Void)? = coordinator.map { coord in
                     { folder in coord.calibrateFolder(folder) }
                 }
@@ -270,7 +273,8 @@ struct MainWindowRootView: View {
                     storageLocationsManager: storageLocationsManager,
                     learningsManager: learningsManager,
                     automationManager: automationManager,
-                    calibrateAction: calibrate
+                    calibrateAction: calibrate,
+                    onReady: startTelemetry
                 )
                 configureUITestPreviewIfNeeded()
                 MainWindowRouter.shared.setBusy(
@@ -283,8 +287,15 @@ struct MainWindowRootView: View {
                 processLaunchRequestIfNeeded()
                 processUITestDeeplinkIfNeeded()
                 presentWhatsNewIfNeeded()
-                if coordinator != nil {
-                    MainWindowRouter.shared.markReady(sessionID: windowSession.id)
+                MainWindowRouter.shared.markReady(sessionID: windowSession.id)
+            }
+            .onChange(of: coordinator != nil) { _, _ in
+                let sessionID = windowSession.id
+                windowSession.appState.calibrateAction = coordinator.map { coordinator in
+                    { folder in coordinator.calibrateFolder(folder) }
+                }
+                windowSession.appState.prepareManualOrganizationAction = { [weak coordinator] directory in
+                    await coordinator?.beginManualOrganization(in: directory, sessionID: sessionID)
                 }
             }
             .onChange(of: launchRequest?.id) { _, _ in

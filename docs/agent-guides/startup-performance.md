@@ -37,6 +37,10 @@ File reads, journal replay, and JSON decoding run in detached user-initiated tas
 
 For asynchronous bookmark restoration, snapshot the bookmark, item identity, and generation before leaving the main actor. Accept a result only when its generation and bookmark still match the current item. Keep access ownership explicit. Balance every successful security-scope acquisition with its eventual `stopAccessingSecurityScopedResource()` release, including discarded results. Discard stale results after removal, reauthorization, or reset. Await required access before automation uses a folder. `StorageLocationsManager.refreshAccess(for:)` remains a synchronous main-actor operation for the one-item add-location path. Only bulk restore uses the asynchronous path.
 
+Manual-session restoration reads, decodes, resolves its bookmark, and checks the folder off the main actor. It rechecks the session generation and idle state before publishing the restored folder. The organizer owns a successful security scope until reset and releases scopes from discarded results immediately.
+
+The manual window becomes ready without waiting for history, Learnings, storage-location hydration, or automation folder access. Automation still waits for its history and Learnings state plus watched-folder and storage-location access. Sentry and PostHog start after the window session finishes its interactive setup.
+
 `PersonaManager`, `CustomPersonaStore`, `NamingPresetManager`, and `SteeringPromptManager` use the same lightweight initialization and pending-change merge contract as the other loaders. A picker or preview can display defaults or mocks before those stores hydrate. An organizer scan waits for persona and custom-persona hydration. Naming and steering are view-driven, so a pre-hydration custom preset reference falls back to a built-in preset until the view refreshes.
 
 ## Verification

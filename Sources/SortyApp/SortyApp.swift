@@ -866,7 +866,14 @@ struct SortyApp: App {
             loginItemManager: loginItemManager,
             namingPresetManager: namingPresetManager,
             steeringPromptManager: steeringPromptManager,
-            learningsManager: learningsManager
+            learningsManager: learningsManager,
+            startTelemetry: {
+                ReliabilityManager.shared.startIfAuthorized()
+                AnalyticsManager.shared.startIfAuthorized(launchDuration: appDelegate.launchDuration)
+                if hasConfiguredOperationalServices {
+                    ReliabilityManager.shared.finishLaunchSpan()
+                }
+            }
         )
         .tint(accent ?? SortyDesignSystem.Colors.resolvedAccent)
         .accentColor(accent ?? SortyDesignSystem.Colors.resolvedAccent)
@@ -922,16 +929,13 @@ struct SortyApp: App {
             steeringPromptLoad
         )
 
-        ReliabilityManager.shared.startIfAuthorized()
-        AnalyticsManager.shared.startIfAuthorized(launchDuration: appDelegate.launchDuration)
         appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
         loginItemManager.startUp()
         syncLoginItemState()
 
         if hasCompletedOnboarding || watchedFoldersManager.activeFolderCount > 0 {
-            await configureOperationalServicesIfNeeded()
+            Task { await configureOperationalServicesIfNeeded() }
         }
-        ReliabilityManager.shared.finishLaunchSpan()
 
         if ProcessInfo.processInfo.environment["XCUITEST_NOTIFICATION_ACTION"] == "showDetails" {
             Task { @MainActor in
@@ -1011,6 +1015,7 @@ struct SortyApp: App {
                 learningsManager: learningsManager
             )
         }
+        ReliabilityManager.shared.finishLaunchSpan()
     }
 
     @MainActor

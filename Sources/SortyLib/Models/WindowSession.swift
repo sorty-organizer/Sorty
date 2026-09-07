@@ -32,7 +32,8 @@ public final class WindowSession: ObservableObject {
         storageLocationsManager: StorageLocationsManager,
         learningsManager: LearningsManager,
         automationManager: AutomationManager,
-        calibrateAction: ((WatchedFolder) -> Void)?
+        calibrateAction: ((WatchedFolder) -> Void)?,
+        onReady: @MainActor () -> Void = {}
     ) async {
         guard !didConfigure else { return }
         didConfigure = true
@@ -68,6 +69,7 @@ public final class WindowSession: ObservableObject {
             appState.selectedDirectory = restoredDirectory
         }
         appState.updateManager.checkOnLaunchIfNeeded()
+        onReady()
         AnalyticsManager.shared.captureWorkflow(
             workflow: "app_launch",
             stage: "window_ready",
