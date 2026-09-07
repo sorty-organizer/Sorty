@@ -255,4 +255,23 @@ final class StartupHydrationTests: XCTestCase {
         XCTAssertTrue(manager.prompts.contains { $0.name == "Persisted" })
         XCTAssertTrue(manager.prompts.contains { $0.name == "Early" })
     }
+
+    @MainActor
+    func testLearningsEarlyDirectoryAddPreservedThroughHydration() async throws {
+        let suiteName = "StartupHydrationTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let persisted = ReferenceModelDirectory(path: "/tmp/persisted-reference")
+        defaults.set(
+            try JSONEncoder().encode([persisted]),
+            forKey: "learningsModelDirectories"
+        )
+
+        let manager = LearningsManager(userDefaults: defaults)
+        XCTAssertTrue(manager.addModelDirectory(path: "/tmp/early-reference"))
+        await manager.loadPersistedState()
+
+        XCTAssertTrue(manager.modelDirectories.contains { $0.path == persisted.path })
+        XCTAssertTrue(manager.modelDirectories.contains { $0.path == "/tmp/early-reference" })
+    }
 }

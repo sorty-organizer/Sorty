@@ -498,6 +498,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var cachedManualSessionDirectoryPath: String?
     private var cachedManualSessionBookmark: Data?
     private var lastManualSessionFingerprintByURL: [URL: Data] = [:]
+    private var manualSessionGeneration = 0
+    private var restoredManualSessionScopedURL: URL?
     public var progress: Double {
         get { presentationState.progress }
         set { updatePresentation { $0.progress = newValue } }
@@ -5637,6 +5639,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         var savedAt: Date
     }
 
+    private struct ManualSessionRestoreResult: Sendable {
+        let snapshot: PersistedManualSession
+        let directory: URL
+        let scopedBookmarkURL: URL?
+    }
+
     static func defaultManualSessionURL() -> URL? {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
             .appendingPathComponent("Sorty", isDirectory: true)
@@ -5691,6 +5699,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                FileManager.default.fileExists(atPath: targetURL.path) {
                 return
             }
+            manualSessionGeneration &+= 1
             try FileManager.default.createDirectory(
                 at: targetURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
@@ -5717,6 +5726,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard isManualSessionPersistenceEnabled else { return }
         let targetURL = resolvedManualSessionURL(url)
         guard let targetURL else { return }
+        manualSessionGeneration &+= 1
+        restoredManualSessionScopedURL?.stopAccessingSecurityScopedResource()
+        restoredManualSessionScopedURL = nil
         try? FileManager.default.removeItem(at: targetURL)
         lastManualSessionFingerprintByURL.removeValue(forKey: targetURL)
     }
@@ -5730,44 +5742,56 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard state == .idle, currentDirectory == nil, currentPlan == nil else { return nil }
         let targetURL = resolvedManualSessionURL(sessionURL)
         guard let targetURL else { return nil }
-        let snapshot: PersistedManualSession? = await Task.detached(priority: .userInitiated) {
+        let generation = manualSessionGeneration
+        let result: ManualSessionRestoreResult? = await Task.detached(priority: .userInitiated) {
             guard let data = try? Data(contentsOf: targetURL) else { return nil }
-            return try? JSONDecoder().decode(PersistedManualSession.self, from: data)
-        }.value
-        guard let snapshot else { return nil }
-        var resolved: URL?
-        var scopedBookmarkURL: URL?
-        if let bookmark = snapshot.directoryBookmark {
-            var isStale = false
-            if let bookmarkURL = try? URL(
-                resolvingBookmarkData: bookmark,
-                options: .withSecurityScope,
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            ) {
-                // Held for the restored session, matching the selected-folder
-                // scope ownership; released below if the snapshot is discarded.
-                if bookmarkURL.startAccessingSecurityScopedResource() {
-                    scopedBookmarkURL = bookmarkURL
-                }
-                resolved = bookmarkURL.standardizedFileURL
+            guard let snapshot = try? JSONDecoder().decode(PersistedManualSession.self, from: data) else {
+                return nil
             }
-        }
-        if resolved == nil {
-            resolved = URL(fileURLWithPath: snapshot.directoryPath).standardizedFileURL
-        }
-        guard let directory = resolved else {
-            if let scopedBookmarkURL { scopedBookmarkURL.stopAccessingSecurityScopedResource() }
-            try? FileManager.default.removeItem(at: targetURL)
+            var resolved: URL?
+            var scopedBookmarkURL: URL?
+            if let bookmark = snapshot.directoryBookmark {
+                var isStale = false
+                if let bookmarkURL = try? URL(
+                    resolvingBookmarkData: bookmark,
+                    options: .withSecurityScope,
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &isStale
+                ) {
+                    if bookmarkURL.startAccessingSecurityScopedResource() {
+                        scopedBookmarkURL = bookmarkURL
+                    }
+                    resolved = bookmarkURL.standardizedFileURL
+                }
+            }
+            let directory = resolved
+                ?? URL(fileURLWithPath: snapshot.directoryPath).standardizedFileURL
+            var isDirectory = ObjCBool(false)
+            guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+                  isDirectory.boolValue else {
+                scopedBookmarkURL?.stopAccessingSecurityScopedResource()
+                try? FileManager.default.removeItem(at: targetURL)
+                return nil
+            }
+            return ManualSessionRestoreResult(
+                snapshot: snapshot,
+                directory: directory,
+                scopedBookmarkURL: scopedBookmarkURL
+            )
+        }.value
+        guard let result else { return nil }
+        guard generation == manualSessionGeneration,
+              state == .idle,
+              currentDirectory == nil,
+              currentPlan == nil,
+              resolvedManualSessionURL(sessionURL) == targetURL else {
+            result.scopedBookmarkURL?.stopAccessingSecurityScopedResource()
             return nil
         }
-        var isDirectory = ObjCBool(false)
-        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
-              isDirectory.boolValue else {
-            if let scopedBookmarkURL { scopedBookmarkURL.stopAccessingSecurityScopedResource() }
-            try? FileManager.default.removeItem(at: targetURL)
-            return nil
-        }
+        let snapshot = result.snapshot
+        let directory = result.directory
+        restoredManualSessionScopedURL?.stopAccessingSecurityScopedResource()
+        restoredManualSessionScopedURL = result.scopedBookmarkURL
         customInstructions = snapshot.customInstructions
         currentDirectory = directory
         switch snapshot.stateHint {

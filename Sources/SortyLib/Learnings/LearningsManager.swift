@@ -336,10 +336,12 @@ public class LearningsManager: ObservableObject {
     // MARK: - Dependencies
     
     private let userDefaults: UserDefaults
+    private let persistedDataReader: UserDefaultsDataReader
     public let analyzer = LearningsAnalyzer()
     
     public init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
+        self.persistedDataReader = UserDefaultsDataReader(userDefaults)
         self.consentManager = LearningsConsentManager(userDefaults: userDefaults)
         requiresInitialSetup = !consentManager.hasCompletedInitialSetup
         learningStrength = userDefaults.object(forKey: "learningStrength") as? Double ?? 0.5
@@ -347,7 +349,33 @@ public class LearningsManager: ObservableObject {
         userDefaults.removeObject(forKey: "useAIForLearnings")
     }
 
+    private struct PersistedState: Sendable {
+        let modelSelection: LearningsModelSelection?
+        let modelDirectories: [ReferenceModelDirectory]
+    }
+
+    private struct ModelDirectoryBookmarkSnapshot: Sendable {
+        let id: String
+        let bookmarkData: Data?
+        let path: String
+    }
+
+    private struct ModelDirectoryBookmarkResult: Sendable {
+        let id: String
+        let originalBookmark: Data?
+        let resolvedURL: URL?
+        let renewedBookmark: Data?
+        let didAccess: Bool
+        let isAccessible: Bool
+    }
+
     private var hasLoadedPersistedState = false
+    private var persistedStateLoadTask: Task<PersistedState, Never>?
+    private var persistedStateLoadGeneration = 0
+    private var modelDirectoryRestoreTask: Task<Void, Never>?
+    private var modelDirectoryGeneration = 0
+    private var hasPendingModelSelectionChange = false
+    private var hasPendingModelDirectoryChanges = false
 
     /// Loads the model selection and reference-model directories after launch.
     /// Directory loading resolves security-scoped bookmarks and stats each
@@ -355,9 +383,57 @@ public class LearningsManager: ObservableObject {
     /// run this once the first window is up (see `configureGlobalsIfNeeded`).
     public func loadPersistedState() async {
         guard !hasLoadedPersistedState else { return }
+
+        let generation = persistedStateLoadGeneration
+        let task: Task<PersistedState, Never>
+        if let persistedStateLoadTask {
+            task = persistedStateLoadTask
+        } else {
+            let reader = persistedDataReader
+            let modelSelectionKey = Self.learningsModelSelectionKey
+            let modelDirectoriesKey = Self.modelDirectoriesKey
+            task = Task.detached(priority: .userInitiated) {
+                let selection = reader.data(forKey: modelSelectionKey)
+                    .flatMap { try? JSONDecoder().decode(LearningsModelSelection.self, from: $0) }
+                let directories = reader.data(forKey: modelDirectoriesKey)
+                    .flatMap { try? JSONDecoder().decode([ReferenceModelDirectory].self, from: $0) } ?? []
+                return PersistedState(modelSelection: selection, modelDirectories: directories)
+            }
+            persistedStateLoadTask = task
+        }
+
+        let persistedState = await task.value
+        guard !hasLoadedPersistedState,
+              generation == persistedStateLoadGeneration else { return }
+
+        if learningsModelSelection == nil {
+            learningsModelSelection = persistedState.modelSelection
+        }
+        var seenIDs: Set<String> = []
+        var seenPaths: Set<String> = []
+        modelDirectories = (persistedState.modelDirectories + modelDirectories).filter { directory in
+            seenIDs.insert(directory.id).inserted
+                && seenPaths.insert(directory.canonicalPath).inserted
+        }
         hasLoadedPersistedState = true
-        loadLearningsModelSelection()
-        loadModelDirectories()
+        persistedStateLoadTask = nil
+
+        if hasPendingModelSelectionChange {
+            hasPendingModelSelectionChange = false
+            saveLearningsModelSelection()
+        }
+        if hasPendingModelDirectoryChanges {
+            hasPendingModelDirectoryChanges = false
+            saveModelDirectories()
+        }
+
+        await restoreModelDirectoryAccess()
+        let legacyIDs = modelDirectories.compactMap { directory in
+            directory.scanSnapshot?.needsRescan == true ? directory.id : nil
+        }
+        for id in legacyIDs {
+            Task { await rescanModelDirectory(id: id) }
+        }
     }
     
     public func configure(with config: AIConfig) {
@@ -431,6 +507,14 @@ public class LearningsManager: ObservableObject {
             isLocked = false
             requiresInitialSetup = true
             learningsModelSelection = nil
+            persistedStateLoadGeneration &+= 1
+            persistedStateLoadTask?.cancel()
+            persistedStateLoadTask = nil
+            modelDirectoryGeneration &+= 1
+            modelDirectoryRestoreTask?.cancel()
+            modelDirectoryRestoreTask = nil
+            hasPendingModelSelectionChange = false
+            hasPendingModelDirectoryChanges = false
             stopAllModelDirectoryAccess()
             modelDirectories = []
             modelDirectoryScanStates = [:]
@@ -2629,26 +2713,11 @@ public class LearningsManager: ObservableObject {
     private static let maxRelevantModelDirectories = 2
     private static let maxFolderEntriesPerDirectory = 20
 
-    private func loadLearningsModelSelection() {
-        guard let data = userDefaults.data(forKey: Self.learningsModelSelectionKey) else {
-            learningsModelSelection = nil
+    private func saveLearningsModelSelection() {
+        guard hasLoadedPersistedState else {
+            hasPendingModelSelectionChange = true
             return
         }
-
-        do {
-            learningsModelSelection = try JSONDecoder().decode(LearningsModelSelection.self, from: data)
-        } catch {
-            ReliabilityManager.shared.capture(
-                error: error,
-                feature: "learnings",
-                operation: "load_model_selection"
-            )
-            DebugLogger.log("Failed to load learnings model selection: \(error.localizedDescription)")
-            learningsModelSelection = nil
-        }
-    }
-
-    private func saveLearningsModelSelection() {
         if let learningsModelSelection {
             do {
                 let data = try JSONEncoder().encode(learningsModelSelection)
@@ -2691,33 +2760,11 @@ public class LearningsManager: ObservableObject {
         return effectiveConfig
     }
     
-    private func loadModelDirectories() {
-        guard let data = userDefaults.data(forKey: Self.modelDirectoriesKey) else {
-            modelDirectories = []
+    private func saveModelDirectories() {
+        guard hasLoadedPersistedState else {
+            hasPendingModelDirectoryChanges = true
             return
         }
-        do {
-            modelDirectories = try JSONDecoder().decode([ReferenceModelDirectory].self, from: data)
-            restoreModelDirectoryAccess()
-            refreshModelDirectoryScanStates()
-            let legacyIDs = modelDirectories.compactMap { directory in
-                directory.scanSnapshot?.needsRescan == true ? directory.id : nil
-            }
-            for id in legacyIDs {
-                Task { await rescanModelDirectory(id: id) }
-            }
-        } catch {
-            ReliabilityManager.shared.capture(
-                error: error,
-                feature: "learnings",
-                operation: "load_model_directories"
-            )
-            DebugLogger.log("Failed to load model directories: \(error.localizedDescription)")
-            modelDirectories = []
-        }
-    }
-    
-    private func saveModelDirectories() {
         do {
             let data = try JSONEncoder().encode(modelDirectories)
             userDefaults.set(data, forKey: Self.modelDirectoriesKey)
@@ -2762,13 +2809,14 @@ public class LearningsManager: ObservableObject {
             path: url.path,
             bookmarkData: bookmark
         )
+        modelDirectoryGeneration &+= 1
         modelDirectories.append(directory)
         modelDirectoryScanStates[directory.id] = .scanning
         saveModelDirectories()
-        restoreModelDirectoryAccess()
         
         let directoryId = directory.id
         Task {
+            await restoreModelDirectoryAccess()
             await rescanModelDirectory(id: directoryId)
         }
         
@@ -2795,6 +2843,7 @@ public class LearningsManager: ObservableObject {
     
     /// Remove a model directory by its ID
     public func removeModelDirectory(id: String) {
+        modelDirectoryGeneration &+= 1
         stopModelDirectoryAccess(id: id)
         modelDirectories.removeAll { $0.id == id }
         modelDirectoryScanStates.removeValue(forKey: id)
@@ -2818,68 +2867,143 @@ public class LearningsManager: ObservableObject {
     
     /// Validate all directories, restoring bookmark access where needed
     public func validateModelDirectories() {
-        restoreModelDirectoryAccess()
+        Task { await restoreModelDirectoryAccess() }
     }
     
     /// Restore security-scoped access for all saved directories by resolving bookmarks.
     /// Updates stale bookmarks automatically.
-    private func restoreModelDirectoryAccess() {
-        var didUpdate = false
-        for i in modelDirectories.indices {
-            stopModelDirectoryAccess(id: modelDirectories[i].id)
-            guard let bookmark = modelDirectories[i].bookmarkData else { continue }
-            
-            do {
-                var isStale = false
-                let resolvedURL = try URL(
-                    resolvingBookmarkData: bookmark,
-                    options: .withSecurityScope,
-                    relativeTo: nil,
-                    bookmarkDataIsStale: &isStale
-                )
-                
-                guard resolvedURL.startAccessingSecurityScopedResource() else {
-                    DebugLogger.log("Failed to access model directory: \(modelDirectories[i].displayName)")
-                    continue
-                }
-                activeModelDirectoryURLs[modelDirectories[i].id] = resolvedURL
+    private func restoreModelDirectoryAccess() async {
+        if let modelDirectoryRestoreTask {
+            await modelDirectoryRestoreTask.value
+        }
 
-                let resolvedPath = resolvedURL.standardizedFileURL.path
-                if modelDirectories[i].path != resolvedPath {
-                    let directory = modelDirectories[i]
-                    modelDirectories[i] = ReferenceModelDirectory(
-                        id: directory.id,
-                        path: resolvedPath,
-                        displayName: directory.displayName,
-                        isEnabled: directory.isEnabled,
-                        bookmarkData: directory.bookmarkData,
-                        lastScannedAt: directory.lastScannedAt,
-                        scanSnapshot: directory.scanSnapshot
-                    )
-                    didUpdate = true
-                }
-                
-                if isStale {
-                    do {
-                        let newBookmark = try resolvedURL.bookmarkData(
-                            options: .withSecurityScope,
-                            includingResourceValuesForKeys: nil,
-                            relativeTo: nil
-                        )
-                        modelDirectories[i].bookmarkData = newBookmark
-                        didUpdate = true
-                        DebugLogger.log("Refreshed stale bookmark for \(modelDirectories[i].displayName)")
-                    } catch {
-                        DebugLogger.log("Failed to refresh stale bookmark for \(modelDirectories[i].displayName): \(error.localizedDescription)")
-                    }
-                }
-            } catch {
-                DebugLogger.log("Failed to resolve bookmark for \(modelDirectories[i].displayName): \(error.localizedDescription)")
+        let generation = modelDirectoryGeneration
+        let snapshots = modelDirectories.map { directory in
+            ModelDirectoryBookmarkSnapshot(
+                id: directory.id,
+                bookmarkData: directory.bookmarkData,
+                path: directory.path
+            )
+        }
+        let task = Task { [weak self] in
+            let results = await Task.detached(priority: .userInitiated) {
+                Self.resolveModelDirectoryBookmarks(snapshots)
+            }.value
+            guard let self else {
+                Self.releaseModelDirectoryResults(results)
+                return
+            }
+            self.applyModelDirectoryBookmarkResults(results, generation: generation)
+        }
+        modelDirectoryRestoreTask = task
+        await task.value
+        modelDirectoryRestoreTask = nil
+    }
+
+    private nonisolated static func resolveModelDirectoryBookmarks(
+        _ snapshots: [ModelDirectoryBookmarkSnapshot]
+    ) -> [ModelDirectoryBookmarkResult] {
+        snapshots.map { snapshot in
+            guard let bookmarkData = snapshot.bookmarkData else {
+                var isDirectory = ObjCBool(false)
+                let exists = FileManager.default.fileExists(
+                    atPath: snapshot.path,
+                    isDirectory: &isDirectory
+                ) && isDirectory.boolValue
+                return ModelDirectoryBookmarkResult(
+                    id: snapshot.id,
+                    originalBookmark: nil,
+                    resolvedURL: nil,
+                    renewedBookmark: nil,
+                    didAccess: false,
+                    isAccessible: exists
+                )
+            }
+            var isStale = false
+            guard let url = try? URL(
+                resolvingBookmarkData: bookmarkData,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            ), url.startAccessingSecurityScopedResource() else {
+                return ModelDirectoryBookmarkResult(
+                    id: snapshot.id,
+                    originalBookmark: bookmarkData,
+                    resolvedURL: nil,
+                    renewedBookmark: nil,
+                    didAccess: false,
+                    isAccessible: false
+                )
+            }
+            var isDirectory = ObjCBool(false)
+            let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+                && isDirectory.boolValue
+            let renewedBookmark = isStale ? try? url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            ) : nil
+            return ModelDirectoryBookmarkResult(
+                id: snapshot.id,
+                originalBookmark: bookmarkData,
+                resolvedURL: url,
+                renewedBookmark: renewedBookmark,
+                didAccess: true,
+                isAccessible: exists
+            )
+        }
+    }
+
+    private func applyModelDirectoryBookmarkResults(
+        _ results: [ModelDirectoryBookmarkResult],
+        generation: Int
+    ) {
+        guard generation == modelDirectoryGeneration else {
+            Self.releaseModelDirectoryResults(results)
+            return
+        }
+
+        var didUpdate = false
+        for result in results {
+            guard let index = modelDirectories.firstIndex(where: { $0.id == result.id }),
+                  modelDirectories[index].bookmarkData == result.originalBookmark else {
+                if result.didAccess { result.resolvedURL?.stopAccessingSecurityScopedResource() }
+                continue
+            }
+            stopModelDirectoryAccess(id: result.id)
+            modelDirectoryScanStates[result.id] = scanState(
+                for: modelDirectories[index],
+                isAccessible: result.isAccessible
+            )
+            guard result.didAccess, let resolvedURL = result.resolvedURL else { continue }
+            activeModelDirectoryURLs[result.id] = resolvedURL
+            let resolvedPath = resolvedURL.standardizedFileURL.path
+            if modelDirectories[index].path != resolvedPath {
+                let directory = modelDirectories[index]
+                modelDirectories[index] = ReferenceModelDirectory(
+                    id: directory.id,
+                    path: resolvedPath,
+                    displayName: directory.displayName,
+                    isEnabled: directory.isEnabled,
+                    bookmarkData: directory.bookmarkData,
+                    lastScannedAt: directory.lastScannedAt,
+                    scanSnapshot: directory.scanSnapshot
+                )
+                didUpdate = true
+            }
+            if let renewedBookmark = result.renewedBookmark {
+                modelDirectories[index].bookmarkData = renewedBookmark
+                didUpdate = true
             }
         }
-        
-        if didUpdate {
-            saveModelDirectories()
+        if didUpdate { saveModelDirectories() }
+    }
+
+    private nonisolated static func releaseModelDirectoryResults(
+        _ results: [ModelDirectoryBookmarkResult]
+    ) {
+        for result in results where result.didAccess {
+            result.resolvedURL?.stopAccessingSecurityScopedResource()
         }
     }
     
@@ -2936,7 +3060,14 @@ public class LearningsManager: ObservableObject {
     }
 
     private func scanState(for directory: ReferenceModelDirectory) -> ReferenceDirectoryScanState {
-        guard directory.isAccessible else { return .unavailable }
+        scanState(for: directory, isAccessible: directory.isAccessible)
+    }
+
+    private func scanState(
+        for directory: ReferenceModelDirectory,
+        isAccessible: Bool
+    ) -> ReferenceDirectoryScanState {
+        guard isAccessible else { return .unavailable }
         guard directory.isEnabled else { return .paused }
         guard let snapshot = directory.scanSnapshot else { return .scanning }
         guard snapshot.warnings.isEmpty else {
