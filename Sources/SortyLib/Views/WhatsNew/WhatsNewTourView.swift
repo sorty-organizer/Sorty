@@ -599,36 +599,23 @@ public struct WhatsNewTourView: View {
             strength: 1
         )
         .overlay {
-            GeometryReader { proxy in
-                Rectangle()
-                    .fill(
-                        RadialGradient(
-                            stops: [
-                                .init(color: .white.opacity(0.42), location: 0),
-                                .init(color: .white.opacity(0.12), location: 0.38),
-                                .init(color: .clear, location: 0.88),
-                            ],
-                            center: .top,
-                            startRadius: 0,
-                            endRadius: max(proxy.size.width * 0.52, 1)
-                        )
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white.opacity(0.24), location: 0),
+                            .init(color: .white.opacity(0.09), location: 0.38),
+                            .init(color: .clear, location: 0.78),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
                     )
-                    .frame(
-                        width: proxy.size.width,
-                        height: proxy.size.height * 1.35
-                    )
-                    .position(x: proxy.size.width / 2, y: proxy.size.height * 0.12)
-                    .scaleEffect(
-                        x: reduceMotion ? 1 : (isActionHovering ? 1.10 : 0.94),
-                        y: reduceMotion ? 1 : (isActionHovering ? 1.12 : 0.94)
-                    )
-                    .opacity(reduceTransparency ? 0 : (isActionHovering ? 0.76 : 0.24))
-            }
-            .clipShape(Capsule())
-            .blendMode(.screen)
-            .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: isActionHovering)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+                )
+                .opacity(reduceTransparency ? 0 : (isActionHovering ? 1 : 0.58))
+                .blendMode(.screen)
+                .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: isActionHovering)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
         .contentShape(Capsule())
         .offset(y: reduceMotion ? 0 : (isActionHovering ? -1 : 0))
