@@ -31,9 +31,16 @@ public struct AIClientFactory {
                 if AppleFoundationModelClient.isAvailable() {
                     return AppleFoundationModelClient(config: config)
                 }
+                throw AIClientError.apiError(
+                    statusCode: 503,
+                    message: AppleFoundationModelClient.unavailabilityReason
+                )
             }
             #endif
-            throw AIClientError.apiError(statusCode: 501, message: "Apple Intelligence is not supported on this version of macOS.")
+            throw AIClientError.apiError(
+                statusCode: 501,
+                message: "Apple Intelligence in Sorty requires macOS 26 or later. Apple Intelligence being enabled on macOS 15 does not make Apple's Foundation Models framework available to apps."
+            )
         }
     }
 }

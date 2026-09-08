@@ -40,6 +40,7 @@ public struct OnboardingView: View {
     )
     @State private var hasFilesAndFoldersPermission = false
     @State private var advanceValidationMessage: String?
+    @State private var isShowingProviderSkipConfirmation = false
     @State private var isAdvancing = false
     @State private var swipeController = OnboardingSwipeController()
     @State private var hasConfiguredWindowChrome = false
@@ -160,6 +161,18 @@ public struct OnboardingView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Onboarding")
         .accessibilityIdentifier("OnboardingView")
+        .confirmationDialog(
+            "Set up an AI provider now?",
+            isPresented: $isShowingProviderSkipConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Go Back", role: .cancel) {}
+            Button("Continue without AI") {
+                advancePastProviderSetup()
+            }
+        } message: {
+            Text("Sorty needs a working AI provider to organize files. We strongly recommend setting one up now, but you can finish onboarding and configure it later in Settings.")
+        }
         .onChange(of: currentStep) { _, _ in
             advanceValidationMessage = nil
         }
@@ -278,12 +291,12 @@ public struct OnboardingView: View {
                             }
                             .buttonStyle(.sortyPrimary)
                             .onboardingBeamBorder(
-                                active: validation.canAdvance && !isAdvancing
+                                active: canUseAdvanceButton(validation: validation) && !isAdvancing
                             )
                             .keyboardShortcut(.rightArrow, modifiers: [])
-                            .disabled(!validation.canAdvance || isAdvancing)
+                            .disabled(!canUseAdvanceButton(validation: validation) || isAdvancing)
                             .opacity(
-                                validation.canAdvance && !isAdvancing ? 1.0 : 0.5
+                                canUseAdvanceButton(validation: validation) && !isAdvancing ? 1.0 : 0.5
                             )
                             .accessibilityIdentifier("OnboardingAdvanceButton")
                         }
@@ -403,6 +416,11 @@ public struct OnboardingView: View {
     private func attemptAdvance() {
         guard !isAdvancing else { return }
 
+        if currentStep == .provider, !providerSetupStatus.isReady {
+            isShowingProviderSkipConfirmation = true
+            return
+        }
+
         let validationContext = OnboardingStepValidationContext(
             providerSetupStatus: providerSetupStatus,
             hasRequiredPermissions: hasFilesAndFoldersPermission
@@ -423,6 +441,18 @@ public struct OnboardingView: View {
             HapticFeedbackManager.shared.selection()
             currentStep = currentStep.next
         }
+    }
+
+    private func canUseAdvanceButton(
+        validation: OnboardingStepValidationResult
+    ) -> Bool {
+        currentStep == .provider || validation.canAdvance
+    }
+
+    private func advancePastProviderSetup() {
+        advanceValidationMessage = nil
+        HapticFeedbackManager.shared.selection()
+        currentStep = currentStep.next
     }
 
     private func installSwipeMonitorIfNeeded() {
@@ -2919,6 +2949,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         private weak var configuredWindow: NSWindow?
         private var originalTitleVisibility: NSWindow.TitleVisibility?
         private var originalTitlebarAppearsTransparent: Bool?
+        private var originalTitlebarSeparatorStyle: NSTitlebarSeparatorStyle?
         private var originalStyleMask: NSWindow.StyleMask?
         private var originalBackgroundColor: NSColor?
         private var originalIsOpaque: Bool?
@@ -2933,6 +2964,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             configuredWindow = window
             originalTitleVisibility = window.titleVisibility
             originalTitlebarAppearsTransparent = window.titlebarAppearsTransparent
+            originalTitlebarSeparatorStyle = window.titlebarSeparatorStyle
             originalStyleMask = window.styleMask
             originalBackgroundColor = window.backgroundColor
             originalIsOpaque = window.isOpaque
@@ -2942,6 +2974,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
 
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
+            window.titlebarSeparatorStyle = .none
             window.styleMask.insert(.fullSizeContentView)
             window.backgroundColor = .clear
             window.isOpaque = false
@@ -2981,6 +3014,9 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             }
             if let originalTitlebarAppearsTransparent {
                 window.titlebarAppearsTransparent = originalTitlebarAppearsTransparent
+            }
+            if let originalTitlebarSeparatorStyle {
+                window.titlebarSeparatorStyle = originalTitlebarSeparatorStyle
             }
             if let originalTitleVisibility {
                 window.titleVisibility = originalTitleVisibility

@@ -11,7 +11,7 @@ final class OnboardingWorkflowUITests: XCTestCase {
         app = nil
     }
 
-    func testProviderStepBlocksAdvanceWithoutCredentials() throws {
+    func testProviderStepConfirmsAdvanceWithoutCredentials() throws {
         launchApp(environment: [
             "XCUITEST_FORCE_ONBOARDING": "1",
             "XCUITEST_DISABLE_STORED_PROVIDER_CREDENTIALS": "1"
@@ -21,11 +21,14 @@ final class OnboardingWorkflowUITests: XCTestCase {
 
         let advanceButton = app.buttons["OnboardingAdvanceButton"]
         XCTAssertTrue(advanceButton.waitForExistence(timeout: 3))
+        XCTAssertTrue(advanceButton.isEnabled)
         advanceButton.click()
 
-        let configurationStatus = app.otherElements["OnboardingProviderConfigurationStatus"]
-        XCTAssertTrue(configurationStatus.waitForExistence(timeout: 3))
-        XCTAssertFalse(advanceButton.isEnabled)
+        let continueWithoutAI = app.buttons["Continue without AI"]
+        XCTAssertTrue(continueWithoutAI.waitForExistence(timeout: 3))
+        continueWithoutAI.click()
+
+        XCTAssertTrue(app.otherElements["Permissions Step"].waitForExistence(timeout: 3))
     }
 
     func testCompletionHealthCheckFailureCanRetrySuccessfully() throws {

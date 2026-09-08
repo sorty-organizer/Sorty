@@ -19,6 +19,11 @@ pane reads its finite viewport and uses that as a local minimum content height,
 which centers short configurations while allowing tall ones to scroll. The
 custom-persona list uses an explicit height.
 
+Provider setup is strongly recommended, not mandatory. Keep Next enabled on the
+provider step. If the selected provider is not ready, confirm that choice before
+advancing and explain that organization remains unavailable until the user
+finishes provider setup in Settings.
+
 Prepare the flow hierarchy in a transaction with animations disabled, allow its
 finite layout to resolve, and then animate presentation properties such as
 opacity. Do not animate insertion of the step layout itself.
@@ -92,6 +97,10 @@ an independent whole-window fade finishes out of sync with the glow and blur
 panels and creates a phase-boundary flash. Defer completion-audio preparation
 until after the intro is dismissed so player construction cannot interrupt the
 last file-card reveal.
+The onboarding content extends through the transparent title bar. Keep the
+window's full-size content view, hidden title, transparent title bar, and no
+title-bar separator so the shared background does not stop below the traffic
+light controls.
 Resolve the intro's real file icons before starting its first animation, mount
 no placeholder card hosts, and never replace card images mid-reveal. Finder
 Sync registration repair may restart Finder, so defer automatic repair until

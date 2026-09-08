@@ -128,7 +128,7 @@ public struct ProviderSelectionStepView: View {
                         Text("Provider")
                             .font(.title3.weight(.semibold))
                         Spacer()
-                        Text(setupStatus.isReady ? "Ready" : "Setup required")
+                        Text(setupStatus.isReady ? "Ready" : "Setup recommended")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(setupStatus.isReady ? .green : .orange)
                             .numericTextTransition(
@@ -775,7 +775,7 @@ public struct ProviderSelectionStepView: View {
                             .multilineTextAlignment(.center)
                         }
 
-                        Text("You can continue anyway and fix this later in Settings.")
+                        Text("We strongly recommend fixing this now. You can still continue and configure a provider later in Settings.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .italic()
