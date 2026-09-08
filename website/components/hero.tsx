@@ -49,7 +49,7 @@ export function Hero() {
       <div className="mx-auto max-w-3xl text-center">
         <h1 className="mt-6 text-balance text-5xl font-semibold leading-[0.95] tracking-tight text-foreground sm:text-7xl">
           AI folder{' '}
-          <span className="highlight-pill relative -top-[0.04em] inline-block rounded-2xl px-3 py-1">
+          <span className="highlight-pill hero-keyword inline-block rounded-2xl px-3 py-1">
             organization
           </span>{' '}
           for your{' '}
@@ -77,9 +77,9 @@ export function Hero() {
             className="hero-copy-sorty-icon"
             aria-hidden="true"
           />{' '}
-          Sorty at any messy folder and let AI suggest a clean structure.
-          Preview every change, apply when ready, and undo anytime; your files
-          never leave your Mac unless you say so.
+          Sorty at a folder to get a plan for sorting and renaming its files.
+          Review the changes before applying them. Use a local AI model or
+          connect your preferred provider.
         </p>
         <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <DownloadButton
@@ -120,7 +120,7 @@ export function Hero() {
             data-analytics-target="github_sponsors"
           >
             <Heart className="support-heart-icon size-4" />
-            Support the dev
+            Donate
           </a>
         </div>
 

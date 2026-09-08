@@ -17,13 +17,13 @@ import { sitePath } from '@/lib/site-paths'
 const FEATURES = [
   {
     icon: FolderTree,
-    title: 'Smart structure suggestions',
-    body: 'Sorty suggests folder hierarchies that actually match how you work — by type, project, date, or topic.',
+    title: 'Folders that fit your files',
+    body: 'Group files by type, project, date, or topic. Tell Sorty how you want them organized.',
   },
   {
     icon: PenLine,
-    title: 'Rename & move previews',
-    body: 'See exactly which files will be renamed and where they will land before a single thing moves.',
+    title: 'Preview names and locations',
+    body: 'Check each proposed file name and destination before applying the plan.',
   },
   {
     icon: Brain,
@@ -32,13 +32,13 @@ const FEATURES = [
   },
   {
     icon: History,
-    title: 'History & undo',
-    body: 'Every organization run is recorded. Roll back any change with a single click, even later.',
+    title: 'History and undo',
+    body: 'Review past organizations and undo file moves and renames from History.',
   },
   {
     icon: AppWindow,
     title: 'Finder integration',
-    body: 'Right-click any folder in Finder and send it straight to Sorty to organize in seconds.',
+    body: 'Right-click a folder in Finder to open it in Sorty.',
   },
   {
     icon: Cpu,
@@ -52,7 +52,7 @@ const SHOTS = [
     src: '/sorty-apply.webp?v=lossless-1',
     icon: Eye,
     title: 'Preview every move',
-    body: 'Review the apply step before Sorty touches a file.',
+    body: 'Check proposed changes before applying them.',
     alt: 'Sorty apply screen showing proposed file moves ready for review.',
   },
   {
@@ -65,14 +65,14 @@ const SHOTS = [
   {
     src: '/sorty-health.webp?v=lossless-1',
     icon: Activity,
-    title: 'Keep workspaces healthy',
+    title: 'Check folder activity',
     body: 'See clutter, stale folders, and automation status in one place.',
     alt: 'Sorty workspace health screen showing folder health insights.',
   },
   {
     src: '/sorty-duplicates.webp?v=lossless-1',
     icon: CopyCheck,
-    title: 'Review duplicates clearly',
+    title: 'Compare duplicate files',
     body: 'Compare duplicate candidates before choosing what stays.',
     alt: 'Sorty duplicates screen showing duplicate file review controls.',
   },
@@ -130,10 +130,10 @@ export function Features() {
         <Reveal className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-medium text-primary">Features</p>
           <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-            Everything you need to tame your files
+            Organize, rename, and review
           </h2>
           <p className="mt-4 text-pretty text-muted-foreground">
-            Powerful where it counts, careful where it matters.
+            Set your preferences, compare suggestions, and keep a record of changes.
           </p>
         </Reveal>
 

@@ -1,5 +1,4 @@
 import type { MetadataRoute } from 'next'
-import { DISCOVERY_PAGES } from '@/lib/discovery-pages'
 import { LAST_MODIFIED, SITE_URL } from '@/lib/site-metadata'
 
 export const dynamic = 'force-static'
@@ -32,13 +31,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ]
 
-  const discoveryPages: MetadataRoute.Sitemap = DISCOVERY_PAGES.map((page) => ({
-    url: `${SITE_URL}/${page.slug}/`,
-    lastModified: LAST_MODIFIED,
-    changeFrequency: 'monthly',
-    priority: page.slug === 'mac-folder-organizer' ? 0.9 : 0.8,
-  }))
-
   const legalPages: MetadataRoute.Sitemap = [
     {
       url: `${SITE_URL}/privacy-policy/`,
@@ -54,5 +46,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ]
 
-  return [...primaryPages, ...discoveryPages, ...legalPages]
+  return [...primaryPages, ...legalPages]
 }

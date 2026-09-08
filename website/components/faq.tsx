@@ -67,7 +67,7 @@ export function Faq() {
         <Reveal className="text-center">
           <p className="text-sm font-medium text-primary">FAQ</p>
           <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-            Questions, answered
+            Common questions
           </h2>
         </Reveal>
 
@@ -91,7 +91,7 @@ export function Faq() {
             data-analytics-target="github_sponsors"
           >
             <Heart className="support-heart-icon size-4" />
-            Support the developer
+            Donate
           </a>
         </Reveal>
       </div>

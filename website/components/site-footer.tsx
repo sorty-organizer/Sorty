@@ -13,7 +13,6 @@ const COLUMNS = [
     title: 'Product',
     links: [
       { label: 'Features', href: sitePath('/#features') },
-      { label: 'Mac folder organizer', href: sitePath('/mac-folder-organizer/') },
       { label: 'Compare organizers', href: sitePath('/compare/') },
       { label: 'Privacy', href: sitePath('/privacy-policy/') },
       { label: 'Pricing', href: sitePath('/#pricing') },
@@ -22,8 +21,7 @@ const COLUMNS = [
   {
     title: 'Resources',
     links: [
-      { label: 'Organize Downloads', href: sitePath('/organize-downloads-folder/') },
-      { label: 'Local AI organization', href: sitePath('/local-ai-file-organizer/') },
+      { label: 'Ask your AI', href: sitePath('/#ask-ai') },
       { label: 'Changelog', href: sitePath('/changelog/') },
       { label: 'Press kit', href: sitePath('/press/') },
       { label: 'FAQ', href: sitePath('/#faq') },
@@ -34,14 +32,14 @@ const COLUMNS = [
     links: [
       { label: 'Source code', href: GITHUB_URL },
       { label: 'Report an issue', href: `${GITHUB_URL}/issues` },
-      { label: 'Support the dev', href: SPONSOR_URL },
+      { label: 'Donate', href: SPONSOR_URL },
     ],
   },
   {
     title: 'Legal',
     links: [
-      { label: 'GPL v3 License', href: `${GITHUB_URL}/blob/main/LICENSE` },
-      { label: 'Privacy Policy', href: sitePath('/privacy-policy/') },
+      { label: 'GPL v3 license', href: `${GITHUB_URL}/blob/main/LICENSE` },
+      { label: 'Privacy policy', href: sitePath('/privacy-policy/') },
       { label: 'Terms', href: sitePath('/terms/') },
     ],
   },
@@ -64,8 +62,7 @@ export function SiteFooter() {
         <div className="col-span-2 lg:col-span-1">
           <SortyLogo />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
-            AI folder organization for your Mac. Free, open source, and private
-            by design.
+            AI folder organization for your Mac. Free and open source.
           </p>
           <div className="mt-5 flex items-center gap-2">
             <a

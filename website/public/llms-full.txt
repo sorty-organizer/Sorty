@@ -87,11 +87,11 @@ The sourced comparison is at https://sorty-organizer.github.io/Sorty/compare/.
 ## Primary sources
 
 - Product website: https://sorty-organizer.github.io/Sorty/
-- Product overview: https://sorty-organizer.github.io/Sorty/mac-folder-organizer/
-- Downloads workflow: https://sorty-organizer.github.io/Sorty/organize-downloads-folder/
-- Local AI guide: https://sorty-organizer.github.io/Sorty/local-ai-file-organizer/
 - Mac file organizer comparison: https://sorty-organizer.github.io/Sorty/compare/
 - Privacy policy: https://sorty-organizer.github.io/Sorty/privacy-policy/
 - Changelog: https://sorty-organizer.github.io/Sorty/changelog/
 - Source and technical documentation: https://github.com/sorty-organizer/Sorty
 - Stable releases: https://github.com/sorty-organizer/Sorty/releases
+
+- Setup and usage documentation: https://github.com/sorty-organizer/Sorty/blob/main/README.md
+- Documentation index: https://github.com/sorty-organizer/Sorty/blob/main/docs/README.md

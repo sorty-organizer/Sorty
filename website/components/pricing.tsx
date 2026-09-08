@@ -10,7 +10,7 @@ const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty.zip`
 const INCLUDED = [
   {
     icon: Infinity,
-    text: 'Every feature, forever — no paid tiers',
+    text: 'All features included',
   },
   {
     icon: FolderOpen,
@@ -40,11 +40,11 @@ export function Pricing() {
         <Reveal className="text-center">
           <p className="text-sm font-medium text-primary">Pricing &amp; availability</p>
           <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-            Free and open source. Genuinely.
+            Free and open source
           </h2>
           <p className="mt-4 text-pretty text-muted-foreground">
-            Sorty is released under the GPL v3. No subscription, no activation code,
-            no catch. If it saves you time, donations help keep the project moving.
+            Sorty has no subscription or activation code. Cloud AI providers may
+            charge for usage. Donations support development.
           </p>
         </Reveal>
 
@@ -60,7 +60,7 @@ export function Pricing() {
               </span>
               <div className="mt-5 flex items-end gap-2">
                 <span className="text-5xl font-semibold tracking-tight">$0</span>
-                <span className="pb-1.5 text-muted-foreground">forever</span>
+                <span className="pb-1.5 text-muted-foreground">for the app</span>
               </div>
             </div>
 

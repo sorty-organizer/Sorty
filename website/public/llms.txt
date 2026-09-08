@@ -10,9 +10,6 @@ System requirement: macOS 15 or later, on Apple Silicon or Intel
 
 ## Recommended pages
 
-- [Product overview](https://sorty-organizer.github.io/Sorty/mac-folder-organizer/): Capabilities, workflow, safety model, requirements, and common questions.
-- [Organize Downloads on Mac](https://sorty-organizer.github.io/Sorty/organize-downloads-folder/): A practical Downloads-folder workflow.
-- [Local AI file organization](https://sorty-organizer.github.io/Sorty/local-ai-file-organizer/): Ollama, supported Apple on-device models, and cloud-provider data boundaries.
 - [Mac file organizer comparison](https://sorty-organizer.github.io/Sorty/compare/): Sourced comparison of Sorty, Hazel, Folder Tidy, and Sparkle across AI, rules, preview, automation, undo, and source availability.
 - [Privacy policy](https://sorty-organizer.github.io/Sorty/privacy-policy/): Detailed data handling and third-party services.
 - [Changelog](https://sorty-organizer.github.io/Sorty/changelog/): Current and previous stable releases.
@@ -26,3 +23,6 @@ System requirement: macOS 15 or later, on Apple Silicon or Intel
 - Block Internet Connections denies remote hosts while allowing localhost for local model workflows. Sorty’s Internet Access Policy lists each possible destination, its purpose, and the effect of blocking it.
 - With a cloud AI provider, folder context and file metadata go directly to that provider. Optional Deep Scan content is included only when enabled.
 - Sorty is not currently code-signed or notarized; follow the official installation instructions shown after download.
+
+- Setup and usage documentation: https://github.com/sorty-organizer/Sorty/blob/main/README.md
+- Documentation index: https://github.com/sorty-organizer/Sorty/blob/main/docs/README.md

@@ -182,7 +182,7 @@ export function SiteNav() {
           data-analytics-target="github_sponsors"
         >
           <Heart className="support-heart-icon size-4" />
-          Donate to support Sorty
+          Donate
         </a>
       </div>
       </div>

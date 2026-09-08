@@ -5,7 +5,7 @@ const STEPS = [
   {
     icon: FolderOpen,
     title: 'Choose a folder',
-    body: 'Grant Sorty access to any folder — Downloads, Desktop, a project directory, or an external drive.',
+    body: 'Choose Downloads, Desktop, a project folder, or a folder on an external drive.',
   },
   {
     icon: ScanSearch,
@@ -15,17 +15,17 @@ const STEPS = [
   {
     icon: Sparkles,
     title: 'Sorty suggests a plan',
-    body: 'A clear organization plan is generated with sensible folders, renames, and moves.',
+    body: 'Sorty proposes folders, file names, and moves based on what it finds.',
   },
   {
     icon: ListChecks,
-    title: 'You review the preview',
-    body: 'Every proposed change is laid out side by side. Toggle anything you do not want.',
+    title: 'Review the plan',
+    body: 'Check the proposed names and locations. Exclude changes you do not want.',
   },
   {
     icon: Check,
     title: 'Apply when ready',
-    body: 'Nothing moves until you approve. Changed your mind? Undo restores everything.',
+    body: 'Apply the plan to move and rename files. Use History to undo an organization.',
   },
 ]
 
@@ -39,10 +39,10 @@ export function HowItWorks() {
         <Reveal className="text-center">
           <p className="text-sm font-medium text-primary">How it works</p>
           <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-            From chaos to clean in five calm steps
+            Choose a folder. Review the plan.
           </h2>
           <p className="mt-4 text-pretty text-muted-foreground">
-            Sorty is deliberate by design. You stay in control at every step.
+            Check the suggested changes before Sorty moves your files.
           </p>
         </Reveal>
 

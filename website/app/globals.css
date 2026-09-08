@@ -954,6 +954,11 @@
     0 1px 0 0 oklch(1 0 0 / 25%) inset,
     0 14px 34px -10px oklch(0.62 0.19 256 / 65%);
 }
+/* Clip the shimmer without changing the inline text baseline. */
+.highlight-pill.hero-keyword {
+  overflow: clip;
+  vertical-align: baseline;
+}
 .highlight-pill::after {
   content: '';
   position: absolute;

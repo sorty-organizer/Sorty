@@ -2,22 +2,22 @@ export const FAQS = [
   {
     id: 'file-deletion',
     q: 'Does Sorty delete my files?',
-    a: 'No. Sorty only moves and renames files into folders — it never deletes anything. Nothing happens until you review the plan and click apply.',
+    a: 'Organization moves and renames files after you apply a plan. Duplicate management is a separate feature with its own review controls.',
   },
   {
     id: 'undo',
     q: 'Can I undo changes?',
-    a: 'Yes. Every organization run is recorded in History, and any run can be fully reversed with one click — even days later.',
+    a: 'Yes. Open History, select an organization, and undo its moves and renames. Files must still be available to restore them.',
   },
   {
     id: 'file-uploads',
     q: 'Are my files uploaded anywhere?',
-    a: 'Never to us. Sorty has no servers and no accounts, so the developers can never see your files or anything about them. By default only lightweight metadata (file names, types, sizes, dates) is sent to the AI provider you choose. File contents are only ever shared if you turn on Deep Scan, and even then they go straight to your provider. Pick a local model and nothing leaves your Mac at all.',
+    a: 'File names and metadata go directly to your chosen AI provider. Deep Scan also shares file content when enabled. Use a local model to keep AI analysis on your Mac. Sorty has no developer-operated file-processing server.',
   },
   {
     id: 'ai-providers',
     q: 'Which AI providers are supported?',
-    a: 'Sorty works with major cloud providers like OpenAI, Anthropic, and Mistral, and with local models through Ollama. You bring your own key or run locally — Sorty does not resell AI usage.',
+    a: 'Sorty works with major cloud providers like OpenAI, Anthropic, and Mistral, and with local models through Ollama. Use your own API key or run locally. Sorty does not resell AI usage.',
   },
   {
     id: 'macos-requirements',

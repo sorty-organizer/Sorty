@@ -362,7 +362,7 @@ export function ComparisonPage() {
       <section className="px-4 pb-24 text-center">
         <Reveal>
           <h2 className="text-balance text-3xl font-semibold tracking-tight">
-            See the review-first workflow yourself
+            Try Sorty
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-pretty text-muted-foreground">
             Sorty is free, open source, and available for Apple Silicon and Intel Macs running
@@ -374,10 +374,10 @@ export function ComparisonPage() {
               className="btn-download inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
             >
               <Download className="size-4" />
-              Download Sorty free
+              Download for Mac
             </a>
             <Link
-              href="/mac-folder-organizer/"
+              href="/#how-it-works"
               className="group inline-flex items-center justify-center gap-2 rounded-full border border-border bg-card/25 px-6 py-3 text-sm font-medium transition-[transform,background-color,border-color] duration-300 hover:-translate-y-0.5 hover:border-primary/45 hover:bg-secondary/70"
             >
               See the workflow
