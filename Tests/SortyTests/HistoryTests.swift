@@ -18,7 +18,7 @@ class HistoryTests: XCTestCase {
         storageDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: storageDirectory, withIntermediateDirectories: true)
         history = OrganizationHistory(userDefaults: testDefaults, storageDirectory: storageDirectory)
-        history.clearHistory() // Start with clean slate
+        await history.loadPersistedState()
     }
     
     @MainActor

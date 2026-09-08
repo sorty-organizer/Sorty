@@ -557,7 +557,7 @@ final class ExclusionPatternEdgeCaseTests: XCTestCase {
     }
     
     func testExclusionPatternRegex() {
-        let rule = ExclusionRule(type: .regex, pattern: "^temp_\\d+$")
+        let rule = ExclusionRule(type: .regex, pattern: "^temp_\\d+\\.txt$")
         let matchingFile = FileItem(path: "/test/temp_123.txt", name: "temp_123", extension: "txt", size: 0, isDirectory: false)
         let nonMatchingFile = FileItem(path: "/test/temp_abc.txt", name: "temp_abc", extension: "txt", size: 0, isDirectory: false)
         

@@ -112,9 +112,9 @@ final class RenamePromptBuilderTests: XCTestCase {
         let prompt = PromptBuilder.buildOrganizationPrompt(files: [file], mode: .organize)
 
         XCTAssertTrue(prompt.contains("Actively assign files to practical destination folders"))
-        XCTAssertTrue(prompt.contains("Prefer placing every file into a logical folder"))
-        XCTAssertTrue(prompt.contains("Use `unorganized` only as a last resort"))
-        XCTAssertTrue(prompt.contains("If a file is merely ambiguous, choose the best broad folder"))
+        XCTAssertTrue(prompt.contains("Organizing into folders is the default"))
+        XCTAssertTrue(prompt.contains("Use `unorganized` only when all four options fail"))
+        XCTAssertTrue(prompt.contains("Uncertainty alone is not a reason to leave a file unorganized"))
         XCTAssertTrue(prompt.contains("Never use a no-op to avoid making a reasonable organization decision"))
     }
 

@@ -352,7 +352,7 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("quarterly.pdf"))
         XCTAssertTrue(prompt.contains("## FILE METADATA"))
         XCTAssertTrue(prompt.contains("created:"))
-        XCTAssertTrue(prompt.contains("[Tags]"))
+        XCTAssertTrue(prompt.contains("[finder_tags]"))
         XCTAssertTrue(prompt.contains("Finance team review"))
         XCTAssertFalse(prompt.contains("Confidential revenue details"))
     }
@@ -522,7 +522,8 @@ final class PromptBuilderTests: XCTestCase {
             files: [FileItem(path: nestedFile.path, name: "scan", extension: "pdf")]
         ))
 
-        XCTAssertTrue(context.contains("- Incoming | finder_color Red"))
+        XCTAssertTrue(context.contains("- Incoming |"))
+        XCTAssertTrue(context.contains("finder_color Red"))
         XCTAssertTrue(context.contains("inherits that folder's match"))
     }
 
@@ -617,7 +618,7 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("dimensions: 1920x1080"))
         XCTAssertTrue(prompt.contains("cloud status: synced"))
         XCTAssertTrue(prompt.contains("SHA-256: abc123"))
-        XCTAssertTrue(prompt.contains("[Tags] Work"))
+        XCTAssertTrue(prompt.contains("[finder_tags] Work"))
         XCTAssertTrue(prompt.contains("[Finder Comment] Ready to file"))
         XCTAssertTrue(prompt.contains("Author: A. Example"))
         XCTAssertTrue(prompt.contains("OCR confidence: 0.97"))

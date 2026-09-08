@@ -234,10 +234,16 @@ final class CodexSkillInstaller: ObservableObject {
             return false
         }
         return leftFiles.allSatisfy { relativePath in
-            FileManager.default.contentsEqual(
-                atPath: lhs.appendingPathComponent(relativePath).path,
-                andPath: rhs.appendingPathComponent(relativePath).path
-            )
+            guard let leftData = try? Data(
+                contentsOf: lhs.appendingPathComponent(relativePath),
+                options: .mappedIfSafe
+            ), let rightData = try? Data(
+                contentsOf: rhs.appendingPathComponent(relativePath),
+                options: .mappedIfSafe
+            ) else {
+                return false
+            }
+            return leftData == rightData
         }
     }
 
@@ -251,7 +257,10 @@ final class CodexSkillInstaller: ObservableObject {
         var files: Set<String> = []
         for case let url as URL in enumerator {
             guard (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
-            files.insert(String(url.path.dropFirst(root.path.count + 1)))
+            let relativePath = url.pathComponents
+                .suffix(enumerator.level)
+                .joined(separator: "/")
+            files.insert(relativePath)
         }
         return files
     }
