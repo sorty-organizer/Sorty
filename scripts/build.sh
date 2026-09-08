@@ -664,6 +664,12 @@ stage_preserved_bundle() {
         if ! cp -cR "${FINAL_APP_PATH}" "${STAGED_APP_PATH}" 2>/dev/null; then
             cp -R "${FINAL_APP_PATH}" "${STAGED_APP_PATH}"
         fi
+
+        # An interrupted earlier publish can leave its private staging bundle
+        # inside the published app. It is unsealed content and must not be
+        # copied forward into the bundle we are about to sign.
+        find "${STAGED_APP_PATH}" -mindepth 1 -maxdepth 1 \
+            -name ".${PROJECT_NAME}.app.build.*" -exec rm -rf {} +
     fi
 }
 
