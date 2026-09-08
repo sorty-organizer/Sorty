@@ -1027,12 +1027,23 @@ private struct CompletionAnalyticsPreference: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .background(
-            colorScheme == .dark
-                ? CompletionPalette.shadowRose.opacity(0.18)
-                : Color(NSColor.controlBackgroundColor),
-            in: Capsule()
-        )
+        .background {
+            if colorScheme == .light {
+                Capsule()
+                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.72))
+                    .padding(-8)
+                    .blur(radius: 12)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+
+            Capsule()
+                .fill(
+                    colorScheme == .dark
+                        ? CompletionPalette.shadowRose.opacity(0.18)
+                        : Color(NSColor.controlBackgroundColor)
+                )
+        }
     }
 
     private var analyticsDetails: some View {
@@ -1532,13 +1543,15 @@ private struct CompletionContrastBackdrop: View {
                 LinearGradient(
                     stops: [
                         .init(color: Color.clear, location: 0.00),
-                        .init(color: Color.black.opacity(0.48), location: 0.36),
+                        .init(color: Color.clear, location: 0.16),
+                        .init(color: Color.black.opacity(0.18), location: 0.46),
+                        .init(color: Color.black.opacity(0.62), location: 0.76),
                         .init(color: Color.black, location: 1.00)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 192)
+                .frame(height: 300)
 
                 Color.black
             }
