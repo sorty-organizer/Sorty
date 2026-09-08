@@ -84,7 +84,9 @@ The intro owns one explicit reveal phase shared with its auxiliary panels:
 icon first, screen-edge glow second, window backdrop and chrome third, then file
 cards. Keep the glow and blur panels ordered out until their phase begins; panel
 attachment alone must never make either effect visible during the icon's first
-frame.
+frame. Order both auxiliary panels out before the host enters full screen and
+restore them only after it exits. A full-screen auxiliary panel can otherwise
+cover the host window instead of sitting around or behind it.
 The staged intro is the only startup fade. Keep the host window at full alpha;
 an independent whole-window fade finishes out of sync with the glow and blur
 panels and creates a phase-boundary flash. Defer completion-audio preparation

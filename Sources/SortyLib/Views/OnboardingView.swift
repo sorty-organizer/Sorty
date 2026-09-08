@@ -2247,6 +2247,20 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
                     Task { @MainActor in self?.updatePanelFrame() }
                 },
                 center.addObserver(
+                    forName: NSWindow.willEnterFullScreenNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.hidePanelImmediately() }
+                },
+                center.addObserver(
+                    forName: NSWindow.didExitFullScreenNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.updatePanelFrame() }
+                },
+                center.addObserver(
                     forName: NSWindow.didMiniaturizeNotification,
                     object: window,
                     queue: .main
@@ -2321,6 +2335,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
                   isVisible,
                   window.isVisible,
                   !window.isMiniaturized,
+                  !window.styleMask.contains(.fullScreen),
                   let screen = window.screen ?? NSScreen.main else {
                 hidePanelImmediately()
                 return
@@ -2470,6 +2485,20 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                     Task { @MainActor in self?.updatePanelFrame() }
                 },
                 center.addObserver(
+                    forName: NSWindow.willEnterFullScreenNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.hidePanelImmediately() }
+                },
+                center.addObserver(
+                    forName: NSWindow.didExitFullScreenNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.showPanelIfPossible() }
+                },
+                center.addObserver(
                     forName: NSWindow.didMiniaturizeNotification,
                     object: window,
                     queue: .main
@@ -2542,6 +2571,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             guard let window = hostWindow,
                   window.isVisible,
                   !window.isMiniaturized,
+                  !window.styleMask.contains(.fullScreen),
                   let screen = window.screen ?? NSScreen.main else {
                 hidePanelImmediately()
                 return
@@ -2553,7 +2583,8 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             guard isVisible,
                   let window = hostWindow,
                   window.isVisible,
-                  !window.isMiniaturized else {
+                  !window.isMiniaturized,
+                  !window.styleMask.contains(.fullScreen) else {
                 hidePanelImmediately()
                 return
             }
