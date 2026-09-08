@@ -73,6 +73,14 @@ struct HUDNotificationCard: View {
     private var queuedSummary: String {
         queuedCount == 1 ? "1 more" : "\(queuedCount) more"
     }
+
+    private var supportsLiquidGlass: Bool {
+        if #available(macOS 26.0, *) {
+            true
+        } else {
+            false
+        }
+    }
     
     var body: some View {
         HStack(spacing: 10) {
@@ -85,10 +93,11 @@ struct HUDNotificationCard: View {
                 HUDNotificationHeader(
                     notification: notification,
                     isHovered: isHovered,
+                    showsInlineAction: supportsLiquidGlass,
                     onDismiss: onDismiss
                 )
 
-                if notification.actions.count > 1 {
+                if notification.actions.count > 1 || (!supportsLiquidGlass && !notification.actions.isEmpty) {
                     HUDNotificationActionGrid(actions: notification.actions)
                 }
 
@@ -108,6 +117,7 @@ struct HUDNotificationCard: View {
         .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
         .systemLiquidGlassBackground(cornerRadius: 14)
+        .hudFallbackBackground(cornerRadius: 14)
         .overlay(alignment: .bottom) {
             if !notification.isPersistent {
                 HUDNotificationProgress(
@@ -189,10 +199,11 @@ private struct HUDNotificationHeader: View {
     @SortyHotReload private var hotReload
     let notification: HUDNotification
     let isHovered: Bool
+    let showsInlineAction: Bool
     let onDismiss: () -> Void
 
     private var inlineAction: HUDNotificationAction? {
-        notification.actions.count == 1 ? notification.actions.first : nil
+        showsInlineAction && notification.actions.count == 1 ? notification.actions.first : nil
     }
 
     var body: some View {
@@ -240,6 +251,35 @@ private struct HUDNotificationHeader: View {
                 .transition(.opacity)
             }
         }
+    }
+}
+
+private struct HUDFallbackBackground: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    let cornerRadius: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+        } else if reduceTransparency {
+            content.background(
+                Color(nsColor: .windowBackgroundColor),
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+        } else {
+            content.background(
+                .regularMaterial,
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+        }
+    }
+}
+
+private extension View {
+    func hudFallbackBackground(cornerRadius: CGFloat) -> some View {
+        modifier(HUDFallbackBackground(cornerRadius: cornerRadius))
     }
 }
 
