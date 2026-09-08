@@ -98,18 +98,19 @@ public struct OnboardingView: View {
                             .opacity(hasConfiguredWindowChrome ? 1 : 0)
                             .animation(nil, value: hasConfiguredWindowChrome)
 
-                        // Keep one finite page host across every destination. Only
-                        // its transition inherits the navigation animation.
-                        ZStack {
+                        // Main content
+                        if currentStep == .completion {
                             stepContent
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .id(currentStep)
-                                .transaction(value: currentStep) { $0.animation = nil }
-                                .transition(reduceMotion ? .identity : TransitionStyles.slideFromRight)
+                        } else {
+                            // Step roots use spacers and flexible height. Give
+                            // them this VStack's finite remaining allocation;
+                            // measuring them in an unbounded vertical scroll
+                            // proposal creates a recursive ideal-height cycle.
+                            stepContent
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .clipped()
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
-                        .animation(reduceMotion ? nil : .pageTransition, value: currentStep)
 
                         if currentStep != .completion {
                             navigationControls(validation: validation)
@@ -128,7 +129,6 @@ public struct OnboardingView: View {
                     .ignoresSafeArea(.container, edges: .top)
                     .transition(.opacity)
                 }
-                .transaction(value: isIntroVisible) { $0.animation = nil }
                 .opacity(isIntroVisible ? 0 : 1)
                 .allowsHitTesting(!isIntroVisible && !isDismissingIntro)
                 .accessibilityHidden(isIntroVisible)
@@ -141,7 +141,6 @@ public struct OnboardingView: View {
                     },
                     onGetStarted: dismissIntro
                 )
-                .transaction(value: isIntroVisible) { $0.animation = nil }
                 .transition(.opacity)
                 .allowsHitTesting(!isDismissingIntro)
             }
@@ -230,15 +229,19 @@ public struct OnboardingView: View {
                 }
             }
                 .accessibilityFocused($isProviderStepAccessibilityFocused)
+                .transition(TransitionStyles.slideFromRight)
         case .permissions:
             PermissionsStepView(hasRequiredPermissions: $hasFilesAndFoldersPermission)
+                .transition(TransitionStyles.slideFromRight)
         case .workflow:
             WorkflowSelectionStepView()
+                .transition(TransitionStyles.slideFromRight)
         case .completion:
             OnboardingCompletionDestination(
                 hasCompletedOnboarding: $hasCompletedOnboarding,
                 providerSetupStatus: providerSetupStatus
             )
+            .transition(TransitionStyles.scaleAndFade)
         }
     }
 
@@ -399,7 +402,9 @@ public struct OnboardingView: View {
     private func navigateToPreviousStep() {
         guard currentStep != OnboardingStep.allCases.first && currentStep != .completion else { return }
         HapticFeedbackManager.shared.selection()
-        currentStep = currentStep.previous
+        withAnimation(reduceMotion ? nil : .pageTransition) {
+            currentStep = currentStep.previous
+        }
     }
 
     private func navigateForwardFromControls() {
@@ -439,7 +444,9 @@ public struct OnboardingView: View {
 
             advanceValidationMessage = nil
             HapticFeedbackManager.shared.selection()
-            currentStep = currentStep.next
+            withAnimation(reduceMotion ? nil : .pageTransition) {
+                currentStep = currentStep.next
+            }
         }
     }
 
@@ -452,7 +459,9 @@ public struct OnboardingView: View {
     private func advancePastProviderSetup() {
         advanceValidationMessage = nil
         HapticFeedbackManager.shared.selection()
-        currentStep = currentStep.next
+        withAnimation(reduceMotion ? nil : .pageTransition) {
+            currentStep = currentStep.next
+        }
     }
 
     private func installSwipeMonitorIfNeeded() {

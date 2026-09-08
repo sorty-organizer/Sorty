@@ -42,7 +42,6 @@ public struct ContentView: View {
                         }
                     )
                 )
-                    .transaction(value: appState.hasCompletedOnboarding) { $0.animation = nil }
                     .transition(.opacity)
             } else {
                 ZStack {
@@ -51,7 +50,6 @@ public struct ContentView: View {
                     // HUD notification overlay (bottom-left)
                     HUDNotificationOverlay()
                 }
-                .transaction(value: appState.hasCompletedOnboarding) { $0.animation = nil }
                 .transition(.opacity)
             }
 

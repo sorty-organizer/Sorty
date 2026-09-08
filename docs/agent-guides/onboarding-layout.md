@@ -39,18 +39,15 @@ directly rather than wrapped in another animation transaction.
 
 ## Animation performance
 
-Keep the same finite `ZStack` page host for provider, permissions, workflow,
-and completion. Scope navigation animation to that host, and clear the inherited
-animation inside each page before applying its identity and transition. Local
-entrance and interaction animations still own their timing. The footer and
-page layout must not inherit the navigation transaction. Reduce Motion disables
-the page transition.
+Preserve the original page choreography: directional slides for setup pages,
+scale-and-fade for completion, and opacity dissolves for the intro and main app.
+Keep the navigation transaction so the footer and content allocation settle
+together. Respect Reduce Motion. Reduce work during these animations without
+replacing their transitions or clipping the completion celebration.
 
-Apply the same transaction boundary inside the intro dissolve and the
-onboarding-to-main-app dissolve. Preserve their opacity transitions without
-animating the new screen's layout. Commit analytics consent after the completion
-exit animation, and start provider verification after the main app dissolve so
-service startup and repair-state updates do not compete with those animations.
+Commit analytics consent after the completion exit animation, and start provider
+verification after the main app dissolve so service work and repair-state updates
+do not compete with those animations.
 
 Keep screen-sized effects out of onboarding entirely. Do not place dimming,
 glow, blur, material, or other translucent panels across a monitor behind the
