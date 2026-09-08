@@ -37,34 +37,57 @@ public struct TrafficLightUpdateButton: NSViewRepresentable {
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
 
+    public static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.uninstall()
+    }
+
     // MARK: - Coordinator
 
     @MainActor
     public final class Coordinator: NSObject {
         private var buttonView: UpdateButtonNSView?
+        private var accessoryController: NSTitlebarAccessoryViewController?
         private weak var installedWindow: NSWindow?
 
         func install(in window: NSWindow, updateManager: SparkleUpdateManager) {
             guard installedWindow !== window else { return }
+            uninstall()
             installedWindow = window
-
-            guard let titlebarContainer = window.standardWindowButton(.closeButton)?.superview else { return }
 
             let button = UpdateButtonNSView(updateManager: updateManager)
             button.translatesAutoresizingMaskIntoConstraints = false
-            titlebarContainer.addSubview(button)
 
-            // Position right after the zoom (green) traffic-light button
-            if let zoomButton = window.standardWindowButton(.zoomButton),
-               let closeButton = window.standardWindowButton(.closeButton) {
-                NSLayoutConstraint.activate([
-                    button.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
-                    button.leadingAnchor.constraint(equalTo: zoomButton.trailingAnchor, constant: 12),
-                ])
-            }
+            let accessoryView = NSView()
+            accessoryView.translatesAutoresizingMaskIntoConstraints = false
+            accessoryView.addSubview(button)
+            NSLayoutConstraint.activate([
+                accessoryView.heightAnchor.constraint(equalToConstant: 28),
+                button.leadingAnchor.constraint(equalTo: accessoryView.leadingAnchor, constant: 12),
+                button.trailingAnchor.constraint(equalTo: accessoryView.trailingAnchor),
+                button.centerYAnchor.constraint(equalTo: accessoryView.centerYAnchor),
+            ])
+
+            // A title-bar accessory participates in AppKit's layout. This keeps
+            // the sidebar toggle to the right when the pill expands.
+            let accessoryController = NSTitlebarAccessoryViewController()
+            accessoryController.layoutAttribute = .left
+            accessoryController.view = accessoryView
+            window.addTitlebarAccessoryViewController(accessoryController)
 
             self.buttonView = button
+            self.accessoryController = accessoryController
             update(for: updateManager.updateState)
+        }
+
+        func uninstall() {
+            if let installedWindow,
+               let accessoryController,
+               let index = installedWindow.titlebarAccessoryViewControllers.firstIndex(where: { $0 === accessoryController }) {
+                installedWindow.removeTitlebarAccessoryViewController(at: index)
+            }
+            buttonView = nil
+            accessoryController = nil
+            installedWindow = nil
         }
 
         func update(for state: SparkleUpdateManager.UpdateState) {
