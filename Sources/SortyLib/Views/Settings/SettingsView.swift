@@ -118,7 +118,7 @@ struct SettingsView: View {
             Spacer()
         }
         .padding(12)
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(Color(NSColor.windowBackgroundColor))
     }
     
     private func sectionHeader(_ title: String) -> some View {
