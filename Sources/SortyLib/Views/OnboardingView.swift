@@ -97,19 +97,18 @@ public struct OnboardingView: View {
                             .opacity(hasConfiguredWindowChrome ? 1 : 0)
                             .animation(nil, value: hasConfiguredWindowChrome)
 
-                        // Main content
-                        if currentStep == .completion {
+                        // Keep one finite page host across every destination. Only
+                        // its transition inherits the navigation animation.
+                        ZStack {
                             stepContent
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        } else {
-                            // Step roots use spacers and flexible height. Give
-                            // them this VStack's finite remaining allocation;
-                            // measuring them in an unbounded vertical scroll
-                            // proposal creates a recursive ideal-height cycle.
-                            stepContent
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .clipped()
+                                .id(currentStep)
+                                .transaction(value: currentStep) { $0.animation = nil }
+                                .transition(reduceMotion ? .identity : TransitionStyles.slideFromRight)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                        .animation(reduceMotion ? nil : .pageTransition, value: currentStep)
 
                         if currentStep != .completion {
                             navigationControls(validation: validation)
@@ -128,6 +127,7 @@ public struct OnboardingView: View {
                     .ignoresSafeArea(.container, edges: .top)
                     .transition(.opacity)
                 }
+                .transaction(value: isIntroVisible) { $0.animation = nil }
                 .opacity(isIntroVisible ? 0 : 1)
                 .allowsHitTesting(!isIntroVisible && !isDismissingIntro)
                 .accessibilityHidden(isIntroVisible)
@@ -140,6 +140,7 @@ public struct OnboardingView: View {
                     },
                     onGetStarted: dismissIntro
                 )
+                .transaction(value: isIntroVisible) { $0.animation = nil }
                 .transition(.opacity)
                 .allowsHitTesting(!isDismissingIntro)
             }
@@ -216,19 +217,15 @@ public struct OnboardingView: View {
                 }
             }
                 .accessibilityFocused($isProviderStepAccessibilityFocused)
-                .transition(TransitionStyles.slideFromRight)
         case .permissions:
             PermissionsStepView(hasRequiredPermissions: $hasFilesAndFoldersPermission)
-                .transition(TransitionStyles.slideFromRight)
         case .workflow:
             WorkflowSelectionStepView()
-                .transition(TransitionStyles.slideFromRight)
         case .completion:
             OnboardingCompletionDestination(
                 hasCompletedOnboarding: $hasCompletedOnboarding,
                 providerSetupStatus: providerSetupStatus
             )
-            .transition(TransitionStyles.scaleAndFade)
         }
     }
 
@@ -389,9 +386,7 @@ public struct OnboardingView: View {
     private func navigateToPreviousStep() {
         guard currentStep != OnboardingStep.allCases.first && currentStep != .completion else { return }
         HapticFeedbackManager.shared.selection()
-        withAnimation(.pageTransition) {
-            currentStep = currentStep.previous
-        }
+        currentStep = currentStep.previous
     }
 
     private func navigateForwardFromControls() {
@@ -426,9 +421,7 @@ public struct OnboardingView: View {
 
             advanceValidationMessage = nil
             HapticFeedbackManager.shared.selection()
-            withAnimation(.pageTransition) {
-                currentStep = currentStep.next
-            }
+            currentStep = currentStep.next
         }
     }
 

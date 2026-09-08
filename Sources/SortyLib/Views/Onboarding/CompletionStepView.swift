@@ -1427,28 +1427,8 @@ public struct CompletionStepView: View {
             return
         }
 
-        // Start the transition immediately — the previous flow blocked on a
-        // network round-trip (`testConnection()`) before fading out, which
-        // made "Start Using Sorty" feel sluggish/laggy. We now fire the
-        // verification in the background; if it fails, the main app surfaces
-        // the issue through the existing setup-repair channel.
         readinessState = .idle
-        startTransition()
-
-        let viewModel = settingsViewModel
-        let state = appState
-        Task { @MainActor in
-            do {
-                try await viewModel.testConnection()
-                state.clearSetupRepairState()
-            } catch {
-                state.startSetupRepair(
-                    message: "Sorty could not verify \(viewModel.config.provider.displayName). "
-                        + error.localizedDescription,
-                    navigateToSettings: false
-                )
-            }
-        }
+        startTransition(verifyProvider: true)
     }
 
     private func skipVerificationAndFinish() {
@@ -1460,7 +1440,7 @@ public struct CompletionStepView: View {
         startTransition()
     }
 
-    private func startTransition() {
+    private func startTransition(verifyProvider: Bool = false) {
         guard !exitTriggered else { return }
         runtimeController.animationTask?.cancel()
         runtimeController.animationTask = nil
@@ -1475,7 +1455,6 @@ public struct CompletionStepView: View {
             completionHoverTask?.cancel()
             completionHoverTask = nil
         }
-        AnalyticsManager.shared.setConsent(isAnalyticsEnabled ? .granted : .denied)
         let exitDuration = reduceMotion ? 0 : 0.52
         HapticFeedbackManager.shared.success()
         fadeOutAndStopAudio(duration: exitDuration)
@@ -1493,7 +1472,29 @@ public struct CompletionStepView: View {
         finishTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(exitDuration))
             guard !Task.isCancelled, exitTriggered else { return }
+            AnalyticsManager.shared.setConsent(isAnalyticsEnabled ? .granted : .denied)
             onFinish()
+
+            if verifyProvider {
+                // Outlive this view, but let the main app's 220 ms dissolve
+                // settle before provider setup can publish repair state.
+                let viewModel = settingsViewModel
+                let state = appState
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
+                    do {
+                        try await viewModel.testConnection()
+                        state.clearSetupRepairState()
+                    } catch {
+                        state.startSetupRepair(
+                            message: "Sorty could not verify \(viewModel.config.provider.displayName). "
+                                + error.localizedDescription,
+                            navigateToSettings: false
+                        )
+                    }
+                }
+            }
         }
     }
 }
