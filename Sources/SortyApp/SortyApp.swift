@@ -457,15 +457,16 @@ private enum ApplicationMover {
     private static let suggestionDismissalKey = "hasDismissedMoveToApplicationsSuggestion"
 
     static func offerToMoveToApplicationsIfNeeded() {
+        let sourceURL = originalBundleURL()
         #if DEBUG
-            // Dev builds live in DerivedData, never in /Applications — skip the
-            // nag by default, but allow forcing it for testing with:
+            // Do not nag when launching directly from the build output. A copied
+            // debug app should behave like a distributed app.
             //   SORTY_FORCE_MOVE_SUGGESTION=1 make dev
             let forceForTesting =
                 ProcessInfo.processInfo.environment["SORTY_FORCE_MOVE_SUGGESTION"] == "1"
                 || UserDefaults.standard.bool(forKey: "forceMoveToApplicationsSuggestion")
-            if !forceForTesting {
-                NSLog("SortyMove: skipping suggestion (DEBUG without force flag)")
+            if !forceForTesting, isDevelopmentBuildLocation(sourceURL) {
+                NSLog("SortyMove: skipping suggestion (development build location)")
                 return
             }
         #endif
@@ -479,8 +480,8 @@ private enum ApplicationMover {
             NSLog("SortyMove: skipping suggestion (dismissed)")
             return
         }
-        let bundlePath = originalBundleURL().path
-        guard !isInApplicationsFolder(originalBundleURL()) else {
+        let bundlePath = sourceURL.path
+        guard !isInApplicationsFolder(sourceURL) else {
             NSLog("SortyMove: skipping suggestion (already in Applications: %@)", bundlePath)
             return
         }
@@ -496,6 +497,20 @@ private enum ApplicationMover {
             NSLog("SortyMove: showing suggestion HUD")
             suggestMoveToApplications()
         }
+    }
+
+    private static func isDevelopmentBuildLocation(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL.path
+        if path.contains("/DerivedData/") || path.contains("/.build/") {
+            return true
+        }
+
+        let repositoryURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .standardizedFileURL
+        return path.hasPrefix(repositoryURL.path + "/")
     }
 
     private static func suggestMoveToApplications() {
