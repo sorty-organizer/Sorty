@@ -44,16 +44,14 @@ public struct ContentView: View {
                 )
                     .transition(.opacity)
             } else {
-                ZStack {
-                    mainContent
-
-                    // HUD notification overlay (bottom-left)
-                    HUDNotificationOverlay()
-                }
+                mainContent
                 .transition(.opacity)
             }
 
             WindowLinkHoverPillOverlay(hoverState: windowLinkHoverState)
+
+            // Shared HUD notifications must remain visible during onboarding.
+            HUDNotificationOverlay()
 
             if appState.hasCompletedOnboarding, analytics.consent == .undecided {
                 AnalyticsConsentView()

@@ -453,40 +453,86 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 @MainActor
 private enum ApplicationMover {
     private static let applicationsPath = "/Applications"
-
-    static let shouldLaunchMainUI: Bool = {
-        if ProcessInfo.processInfo.arguments.contains("--release-launch-smoke-test") {
-            return true
-        }
-        #if DEBUG
-        return true
-        #else
-        return isInApplicationsFolder(originalBundleURL())
-        #endif
-    }()
+    private static let suggestionIdentifier = "move-to-applications"
+    private static let suggestionDismissalKey = "hasDismissedMoveToApplicationsSuggestion"
 
     static func offerToMoveToApplicationsIfNeeded() {
-        guard !shouldLaunchMainUI else { return }
-
-        // Resolve Gatekeeper app translocation first: a quarantined copy in
-        // /Applications launches from a randomized /private/var/.../AppTranslocation
-        // path, which used to make this check fail (and re-prompt) forever.
-        let sourceURL = originalBundleURL()
-
-        let alert = NSAlert()
-        alert.alertStyle = .informational
-        alert.messageText = "Move Sorty to Applications"
-        alert.informativeText =
-            "To install updates and keep Finder features working reliably, Sorty must run from the Applications folder. macOS requires an administrator password to move the app into this protected folder; Sorty will replace any older copy, remove this copy from its current location, and reopen."
-        alert.addButton(withTitle: "Move to Applications")
-        alert.addButton(withTitle: "Quit Sorty")
-
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        guard alert.runModal() == .alertFirstButtonReturn else {
-            quitImmediately()
+        #if DEBUG
+            // Dev builds live in DerivedData, never in /Applications — skip the
+            // nag by default, but allow forcing it for testing with:
+            //   SORTY_FORCE_MOVE_SUGGESTION=1 make dev
+            let forceForTesting =
+                ProcessInfo.processInfo.environment["SORTY_FORCE_MOVE_SUGGESTION"] == "1"
+                || UserDefaults.standard.bool(forKey: "forceMoveToApplicationsSuggestion")
+            if !forceForTesting {
+                NSLog("SortyMove: skipping suggestion (DEBUG without force flag)")
+                return
+            }
+        #endif
+        if ProcessInfo.processInfo.arguments.contains("--release-launch-smoke-test") {
             return
         }
-        moveAndRelaunch(from: sourceURL)
+        if ProcessInfo.processInfo.arguments.contains("--uitesting") {
+            return
+        }
+        if UserDefaults.standard.bool(forKey: suggestionDismissalKey) {
+            NSLog("SortyMove: skipping suggestion (dismissed)")
+            return
+        }
+        let bundlePath = originalBundleURL().path
+        guard !isInApplicationsFolder(originalBundleURL()) else {
+            NSLog("SortyMove: skipping suggestion (already in Applications: %@)", bundlePath)
+            return
+        }
+        NSLog("SortyMove: scheduling suggestion for %@", bundlePath)
+
+        // Let the main window and HUD overlay appear before suggesting.
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            if UserDefaults.standard.bool(forKey: suggestionDismissalKey) {
+                return
+            }
+            guard !isInApplicationsFolder(originalBundleURL()) else { return }
+            NSLog("SortyMove: showing suggestion HUD")
+            suggestMoveToApplications()
+        }
+    }
+
+    private static func suggestMoveToApplications() {
+        #if canImport(SortyLib)
+            let sourceURL = originalBundleURL()
+            NotificationManager.shared.showHUDInfo(
+                title: "Move Sorty to Applications?",
+                message:
+                    "Sorty runs fine from here, but moving it to Applications keeps updates and Finder features reliable.",
+                icon: "folder.fill.badge.plus",
+                iconColor: .blue,
+                identifier: suggestionIdentifier,
+                isPersistent: true,
+                actions: [
+                    HUDNotificationAction(
+                        title: "Move to Applications",
+                        systemImage: "arrow.down.app.fill"
+                    ) {
+                        HapticFeedbackManager.shared.success()
+                        NotificationManager.shared.dismissHUD(identifier: suggestionIdentifier)
+                        moveAndRelaunch(from: sourceURL)
+                    },
+                    HUDNotificationAction(
+                        title: "Not Now",
+                        systemImage: "clock"
+                    ) {
+                        HapticFeedbackManager.shared.tap()
+                        NotificationManager.shared.dismissHUD(identifier: suggestionIdentifier)
+                    },
+                    HUDNotificationAction(title: "Don't Ask Again") {
+                        HapticFeedbackManager.shared.selection()
+                        UserDefaults.standard.set(true, forKey: suggestionDismissalKey)
+                        NotificationManager.shared.dismissHUD(identifier: suggestionIdentifier)
+                    },
+                ]
+            )
+        #endif
     }
 
     private static func isInApplicationsFolder(_ url: URL) -> Bool {
@@ -549,7 +595,6 @@ private enum ApplicationMover {
             alert.informativeText = error?[NSAppleScript.errorMessage] as? String
                 ?? "Move Sorty to Applications in Finder, then reopen it."
             alert.runModal()
-            quitImmediately()
             return
         }
 
@@ -693,10 +738,7 @@ struct SortyApp: App {
 
         MenuBarExtra(
             isInserted: Binding(
-                get: {
-                    ApplicationMover.shouldLaunchMainUI
-                        && (showMenuBarExtra || keepInBackground)
-                },
+                get: { showMenuBarExtra || keepInBackground },
                 set: { showMenuBarExtra = $0 }
             )
         ) {
@@ -719,18 +761,14 @@ struct SortyApp: App {
     @SceneBuilder
     private var productionScenes: some Scene {
         WindowGroup("Sorty", id: "main") {
-            if ApplicationMover.shouldLaunchMainUI {
-                mainWindowContent(launchRequest: .constant(nil))
-            }
+            mainWindowContent(launchRequest: .constant(nil))
         }
         .windowStyle(.automatic)
         .defaultSize(width: 1100, height: 750)
         .defaultLaunchBehavior(.presented)
 
         WindowGroup(for: WindowLaunchRequest.self) { launchRequest in
-            if ApplicationMover.shouldLaunchMainUI {
-                mainWindowContent(launchRequest: launchRequest)
-            }
+            mainWindowContent(launchRequest: launchRequest)
         }
         .windowStyle(.automatic)
         .defaultSize(width: 1100, height: 750)
@@ -756,8 +794,7 @@ struct SortyApp: App {
             // _ConditionalContent crashes the type checker. Closed prototype
             // windows stay invisible in production: suppressed at launch and
             // never opened without SORTY_ACCENT_PROTOTYPE=1.
-            if ApplicationMover.shouldLaunchMainUI,
-               ProcessInfo.processInfo.environment["SORTY_ACCENT_PROTOTYPE"] == "1" {
+            if ProcessInfo.processInfo.environment["SORTY_ACCENT_PROTOTYPE"] == "1" {
                 mainWindowContent(launchRequest: .constant(nil), accent: color)
                     .environment(\.isAccentPrototypeWindow, true)
             }
