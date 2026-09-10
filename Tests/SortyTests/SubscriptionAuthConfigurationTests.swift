@@ -112,17 +112,13 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
         XCTAssertEqual(decoded.reasoningEffort, .automatic)
     }
 
-    func testReasoningOptionsFollowKnownModelCapabilities() {
-        let reasoningModel = AIConfig(provider: .openAI, model: "gpt-5.4-mini")
-        let standardModel = AIConfig(provider: .openAI, model: "gpt-4o")
-        let mandatoryThinkingModel = AIConfig(provider: .gemini, model: "gemini-3-flash")
+    func testReasoningEffortAcceptsProviderDefinedLevels() throws {
+        let providerLevel = ReasoningEffort(rawValue: "extreme")
+        let data = try JSONEncoder().encode(providerLevel)
 
-        XCTAssertEqual(
-            reasoningModel.supportedReasoningEfforts,
-            [.automatic, .none, .low, .medium, .high]
-        )
-        XCTAssertTrue(standardModel.supportedReasoningEfforts.isEmpty)
-        XCTAssertFalse(mandatoryThinkingModel.supportedReasoningEfforts.contains(.none))
+        XCTAssertEqual(try JSONDecoder().decode(ReasoningEffort.self, from: data), providerLevel)
+        XCTAssertEqual(providerLevel.requestValue, "extreme")
+        XCTAssertEqual(providerLevel.displayName, "Extreme")
     }
 
     func testProviderAuthResolverUsesConfigApiKeyWhenPresent() {

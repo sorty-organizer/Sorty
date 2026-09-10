@@ -119,6 +119,15 @@ struct AIProviderSettingsView: View {
             currentProvider: viewModel.config.provider,
             currentModel: viewModel.config.model,
             contextMessage: "Choose the provider and model Sorty uses for organization.",
+            reasoningEffortForModel: { provider, model in
+                var config = viewModel.config
+                config.provider = provider
+                config.model = model
+                return config.reasoningEffort
+            },
+            onSelectReasoningEffort: { effort in
+                viewModel.config.setReasoningEffort(effort)
+            },
             onSelect: { provider, model in
                 viewModel.config.provider = provider
                 viewModel.config.model = model
@@ -197,8 +206,6 @@ struct AIProviderSettingsView: View {
                         }
                         .buttonStyle(.sortyBordered)
                     }
-
-                    reasoningEffortRow
                 }
                 .onAppear {
                     viewModel.updateAvailableModels()
@@ -332,8 +339,6 @@ struct AIProviderSettingsView: View {
                     )
                     .modelSelectorTriggerBounds()
                 }
-
-                reasoningEffortRow
             }
         }
         .settingsFocusable(.providerConfiguration)
@@ -576,51 +581,6 @@ struct AIProviderSettingsView: View {
     private var selectedModelDisplay: String {
         let provider = viewModel.config.provider
         return viewModel.config.model.isEmpty ? provider.defaultModel : viewModel.config.model
-    }
-
-    @ViewBuilder
-    private var reasoningEffortRow: some View {
-        let options = viewModel.config.supportedReasoningEfforts
-        if !options.isEmpty {
-            Divider()
-
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Reasoning effort")
-                        .font(.subheadline)
-                    Text(reasoningEffortSelection.helpText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Picker("Reasoning effort", selection: reasoningEffortBinding) {
-                    ForEach(options, id: \.self) { effort in
-                        Text(effort.displayName).tag(effort)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .frame(width: 128)
-                .accessibilityHint(reasoningEffortSelection.helpText)
-                .accessibilityIdentifier("ReasoningEffortPicker")
-            }
-        }
-    }
-
-    private var reasoningEffortSelection: ReasoningEffort {
-        viewModel.config.effectiveReasoningEffort
-    }
-
-    private var reasoningEffortBinding: Binding<ReasoningEffort> {
-        Binding(
-            get: { reasoningEffortSelection },
-            set: { effort in
-                viewModel.config.setReasoningEffort(effort)
-                HapticFeedbackManager.shared.selection()
-            }
-        )
     }
 
     private var connectionSection: some View {

@@ -151,6 +151,8 @@ extension View {
         isSelectionActionProminent: Bool = true,
         resetActionTitle: String? = nil,
         onReset: (() -> Void)? = nil,
+        reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)? = nil,
+        onSelectReasoningEffort: ((ReasoningEffort) -> Void)? = nil,
         onSelect: @escaping (AIProvider, String) -> Void
     ) -> some View {
         modifier(
@@ -163,6 +165,8 @@ extension View {
                 isSelectionActionProminent: isSelectionActionProminent,
                 resetActionTitle: resetActionTitle,
                 onReset: onReset,
+                reasoningEffortForModel: reasoningEffortForModel,
+                onSelectReasoningEffort: onSelectReasoningEffort,
                 onSelect: onSelect
             )
         )
@@ -184,6 +188,8 @@ struct ModelSelectionPopover: View {
     let isSelectionActionProminent: Bool
     let resetActionTitle: String?
     let onReset: (() -> Void)?
+    let reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)?
+    let onSelectReasoningEffort: ((ReasoningEffort) -> Void)?
     let popoverSize: CGSize
     let onSelect: (AIProvider, String) -> Void
 
@@ -193,6 +199,7 @@ struct ModelSelectionPopover: View {
     
     @State private var selectedProvider: AIProvider = .openAI
     @State private var selectedModel: String = ""
+    @State private var selectedReasoningEffort: ReasoningEffort = .automatic
     @State private var searchText: String = ""
     @State private var showAllModels: Bool = false
     @State private var customModelText: String = ""
@@ -211,6 +218,8 @@ struct ModelSelectionPopover: View {
         isSelectionActionProminent: Bool = true,
         resetActionTitle: String? = nil,
         onReset: (() -> Void)? = nil,
+        reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)? = nil,
+        onSelectReasoningEffort: ((ReasoningEffort) -> Void)? = nil,
         popoverSize: CGSize = CGSize(width: 500, height: 420),
         onSelect: @escaping (AIProvider, String) -> Void
     ) {
@@ -222,6 +231,8 @@ struct ModelSelectionPopover: View {
         self.isSelectionActionProminent = isSelectionActionProminent
         self.resetActionTitle = resetActionTitle
         self.onReset = onReset
+        self.reasoningEffortForModel = reasoningEffortForModel
+        self.onSelectReasoningEffort = onSelectReasoningEffort
         self.popoverSize = popoverSize
         self.onSelect = onSelect
     }
@@ -305,6 +316,7 @@ struct ModelSelectionPopover: View {
         .onAppear {
             selectedProvider = currentProvider
             selectedModel = currentModel
+            selectedReasoningEffort = reasoningEffortForModel?(currentProvider, currentModel) ?? .automatic
         }
         .task {
             // Take keyboard focus away from whatever field is focused behind the
@@ -325,6 +337,7 @@ struct ModelSelectionPopover: View {
             if showCodexOnly && codexFastModeAvailability(for: model) == false {
                 isCodexFastModeEnabled = false
             }
+            refreshSelectedReasoningEffort(for: model)
         }
         .onChange(of: modelCatalog.codexSubscriptionModels) { _, _ in
             if codexFastModeAvailability(for: selectedModel) == false {
@@ -395,7 +408,7 @@ struct ModelSelectionPopover: View {
             }
             
             Spacer()
-            
+
             Button {
                 isPresented = false
             } label: {
@@ -822,6 +835,22 @@ struct ModelSelectionPopover: View {
             }
             
             Spacer()
+
+            if onSelectReasoningEffort != nil, !reasoningOptions.isEmpty {
+                Picker("Reasoning effort", selection: $selectedReasoningEffort) {
+                    ForEach(reasoningOptions, id: \.self) { effort in
+                        Text(effort.displayName).tag(effort)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 104)
+                .help(reasoningHelpText)
+                .accessibilityLabel("Reasoning effort")
+                .accessibilityValue(selectedReasoningEffort.displayName)
+                .accessibilityHint(reasoningHelpText)
+                .accessibilityIdentifier("ReasoningEffortPicker")
+            }
             
             if let resetActionTitle, let onReset {
                 Button(resetActionTitle) {
@@ -835,10 +864,16 @@ struct ModelSelectionPopover: View {
             Button("Cancel") {
                 isPresented = false
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
             .keyboardShortcut(.escape, modifiers: [])
             
             Button(selectionActionTitle) {
                 onSelect(selectedProvider, selectedModel)
+                onSelectReasoningEffort?(selectedReasoningEffort)
                 isPresented = false
             }
             .keyboardShortcut(.return, modifiers: [])
@@ -852,6 +887,28 @@ struct ModelSelectionPopover: View {
 
     private var selectionActionButtonStyle: SortyStandardButtonStyle {
         isSelectionActionProminent ? .sortyProminent : .sortyBordered(intent: .primary)
+    }
+
+    private var reasoningConfiguration: (efforts: [ReasoningEffort], defaultEffort: ReasoningEffort?)? {
+        modelCatalog.reasoningConfiguration(for: selectedModel, provider: selectedProvider)
+    }
+
+    private var reasoningOptions: [ReasoningEffort] {
+        guard let efforts = reasoningConfiguration?.efforts else { return [] }
+        return [.automatic] + efforts.filter { $0 != .automatic }
+    }
+
+    private var reasoningHelpText: String {
+        if selectedReasoningEffort == .automatic,
+           let defaultEffort = reasoningConfiguration?.defaultEffort {
+            return "Uses the model default: \(defaultEffort.displayName)."
+        }
+        return selectedReasoningEffort.helpText
+    }
+
+    private func refreshSelectedReasoningEffort(for model: String) {
+        let saved = reasoningEffortForModel?(selectedProvider, model) ?? .automatic
+        selectedReasoningEffort = reasoningOptions.contains(saved) ? saved : .automatic
     }
 
     @ViewBuilder
@@ -937,6 +994,8 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
     let isSelectionActionProminent: Bool
     let resetActionTitle: String?
     let onReset: (() -> Void)?
+    let reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)?
+    let onSelectReasoningEffort: ((ReasoningEffort) -> Void)?
     let onSelect: (AIProvider, String) -> Void
 
     private let contentPadding: CGFloat = 12
@@ -967,6 +1026,8 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
                                     isSelectionActionProminent: isSelectionActionProminent,
                                     resetActionTitle: resetActionTitle,
                                     onReset: onReset,
+                                    reasoningEffortForModel: reasoningEffortForModel,
+                                    onSelectReasoningEffort: onSelectReasoningEffort,
                                     popoverSize: resolvedPopoverSize,
                                     onSelect: onSelect
                                 )

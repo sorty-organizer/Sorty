@@ -82,7 +82,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         if let maxTokens = config.maxTokens {
             requestBody["max_tokens"] = maxTokens
         }
-        Self.configureReasoningEffort(in: &requestBody, effort: config.effectiveReasoningEffort)
+        Self.configureReasoningEffort(in: &requestBody, effort: config.reasoningEffort)
         
         let finalRequestBody = requestBody // Fix mutating warning by assigning to let
         
@@ -152,7 +152,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         if let maxTokens = config.maxTokens {
             requestBody["max_tokens"] = maxTokens
         }
-        Self.configureReasoningEffort(in: &requestBody, effort: config.effectiveReasoningEffort)
+        Self.configureReasoningEffort(in: &requestBody, effort: config.reasoningEffort)
         
         if config.enableStreaming {
             return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files)
@@ -281,7 +281,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             ],
             "temperature": AIConfig.organizationTemperature
         ]
-        Self.configureReasoningEffort(in: &requestBody, effort: config.effectiveReasoningEffort)
+        Self.configureReasoningEffort(in: &requestBody, effort: config.reasoningEffort)
         
         let session = await getSession()
         var didRetryAfterAuthFailure = false

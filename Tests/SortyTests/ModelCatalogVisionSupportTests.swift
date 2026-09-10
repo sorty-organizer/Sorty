@@ -111,4 +111,27 @@ final class ModelCatalogVisionSupportTests: XCTestCase {
         XCTAssertEqual(models.map(\.id), ["gpt-4.1"])
         XCTAssertEqual(models.map(\.displayName), ["gpt-4.1"])
     }
+
+    func testReasoningConfigurationUsesProviderModelMetadata() {
+        let catalog = ModelCatalog()
+        let providerLevel = ReasoningEffort(rawValue: "extreme")
+        catalog.modelsByProvider[.openRouter] = [
+            ModelInfo(
+                id: "provider/reasoning-model",
+                displayName: "Reasoning Model",
+                provider: .openRouter,
+                supportedReasoningEfforts: [.low, .xhigh, providerLevel],
+                defaultReasoningEffort: .xhigh
+            )
+        ]
+
+        let configuration = catalog.reasoningConfiguration(
+            for: "provider/reasoning-model",
+            provider: .openRouter
+        )
+
+        XCTAssertEqual(configuration?.efforts, [.low, .xhigh, providerLevel])
+        XCTAssertEqual(configuration?.defaultEffort, .xhigh)
+        XCTAssertNil(catalog.reasoningConfiguration(for: "unknown", provider: .openRouter))
+    }
 }

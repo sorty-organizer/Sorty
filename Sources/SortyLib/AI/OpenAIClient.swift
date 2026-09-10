@@ -163,7 +163,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         Self.configureReasoningEffort(
             in: &requestBody,
             provider: config.provider,
-            effort: config.effectiveReasoningEffort
+            effort: config.reasoningEffort
         )
 
         guard config.provider == .openRouter else { return }
@@ -208,7 +208,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             in: &requestBody,
             provider: config.provider,
             responseFormat: responseFormat,
-            reasoningEffort: config.effectiveReasoningEffort
+            reasoningEffort: config.reasoningEffort
         )
         
         let headers = authHeaders()

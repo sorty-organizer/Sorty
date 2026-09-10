@@ -25,20 +25,36 @@ public enum ProviderAuthMethod: String, Codable, CaseIterable, Sendable {
     }
 }
 
-public enum ReasoningEffort: String, Codable, CaseIterable, Sendable {
-    case automatic
-    case none
-    case low
-    case medium
-    case high
+public struct ReasoningEffort: RawRepresentable, Codable, Hashable, Sendable {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public static let automatic = Self(rawValue: "automatic")
+    public static let none = Self(rawValue: "none")
+    public static let minimal = Self(rawValue: "minimal")
+    public static let low = Self(rawValue: "low")
+    public static let medium = Self(rawValue: "medium")
+    public static let high = Self(rawValue: "high")
+    public static let xhigh = Self(rawValue: "xhigh")
+    public static let max = Self(rawValue: "max")
+    public static let ultra = Self(rawValue: "ultra")
 
     public var displayName: String {
         switch self {
         case .automatic: "Automatic"
         case .none: "None"
+        case .minimal: "Minimal"
         case .low: "Low"
         case .medium: "Medium"
         case .high: "High"
+        case .xhigh: "Extra High"
+        case .max: "Max"
+        case .ultra: "Ultra"
+        default:
+            rawValue.replacingOccurrences(of: "_", with: " ").capitalized
         }
     }
 
@@ -46,9 +62,14 @@ public enum ReasoningEffort: String, Codable, CaseIterable, Sendable {
         switch self {
         case .automatic: "Let the model choose how much reasoning to use."
         case .none: "Skip additional reasoning when the model allows it."
+        case .minimal: "Use the model's smallest reasoning level."
         case .low: "Use less reasoning for quicker results."
         case .medium: "Balance response time with more careful decisions."
         case .high: "Use more reasoning for difficult or ambiguous folders."
+        case .xhigh: "Use extra reasoning for complex folders."
+        case .max: "Use the model's maximum reasoning depth."
+        case .ultra: "Use the model's most intensive reasoning mode."
+        default: "Use the provider's \(displayName.lowercased()) reasoning level."
         }
     }
 
@@ -861,10 +882,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
         reasoningEffortByModel[reasoningPreferenceKey] ?? .automatic
     }
 
-    public var effectiveReasoningEffort: ReasoningEffort {
-        supportedReasoningEfforts.contains(reasoningEffort) ? reasoningEffort : .automatic
-    }
-
     public mutating func setReasoningEffort(_ effort: ReasoningEffort) {
         if effort == .automatic {
             reasoningEffortByModel.removeValue(forKey: reasoningPreferenceKey)
@@ -873,49 +890,10 @@ public struct AIConfig: Codable, Sendable, Equatable {
         }
     }
 
-    public var supportedReasoningEfforts: [ReasoningEffort] {
-        let normalizedModel = model.lowercased()
-        guard Self.isKnownReasoningModel(normalizedModel, provider: provider) else { return [] }
-
-        switch provider {
-        case .openAI:
-            return normalizedModel.hasPrefix("gpt-5") || normalizedModel.hasPrefix("gpt-6")
-                ? [.automatic, .none, .low, .medium, .high]
-                : [.automatic, .low, .medium, .high]
-        case .gemini:
-            let canDisable = normalizedModel.contains("gemini-2.5-flash")
-            return canDisable
-                ? [.automatic, .none, .low, .medium, .high]
-                : [.automatic, .low, .medium, .high]
-        case .githubCopilot, .openRouter:
-            return [.automatic, .low, .medium, .high]
-        case .groq, .openAICompatible, .ollama, .anthropic, .appleFoundationModel:
-            return []
-        }
-    }
-
     private var reasoningPreferenceKey: String {
         "\(provider.rawValue)|\(model.lowercased())"
     }
 
-    private static func isKnownReasoningModel(_ model: String, provider: AIProvider) -> Bool {
-        switch provider {
-        case .openAI, .githubCopilot:
-            return ["gpt-5", "gpt-6", "o1", "o3", "o4"].contains { model.hasPrefix($0) }
-        case .gemini:
-            return model.hasPrefix("gemini-2.5") || model.hasPrefix("gemini-3")
-        case .openRouter:
-            let reasoningFamilies = [
-                "gpt-5", "gpt-6", "/o1", "/o3", "/o4", "gpt-oss", "claude-3.7",
-                "claude-sonnet-4", "claude-opus-4", "gemini-2.5", "gemini-3",
-                "deepseek-r1", "qwen3", "grok"
-            ]
-            return reasoningFamilies.contains { model.contains($0) }
-        case .groq, .openAICompatible, .ollama, .anthropic, .appleFoundationModel:
-            return false
-        }
-    }
-    
     public static let `default` = AIConfig(
         provider: .openAICompatible,
         apiURL: "https://api.openai.com",

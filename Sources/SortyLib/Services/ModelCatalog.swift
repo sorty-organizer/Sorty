@@ -13,14 +13,27 @@ public struct ModelInfo: Codable, Identifiable, Sendable, Equatable {
     public let displayName: String
     public let provider: AIProvider
     public let capabilities: [String]?
+    public let supportedReasoningEfforts: [ReasoningEffort]?
+    public let defaultReasoningEffort: ReasoningEffort?
     public let updatedAt: Date
     public let isFree: Bool
 
-    public init(id: String, displayName: String, provider: AIProvider, capabilities: [String]? = nil, updatedAt: Date = Date(), isFree: Bool = false) {
+    public init(
+        id: String,
+        displayName: String,
+        provider: AIProvider,
+        capabilities: [String]? = nil,
+        supportedReasoningEfforts: [ReasoningEffort]? = nil,
+        defaultReasoningEffort: ReasoningEffort? = nil,
+        updatedAt: Date = Date(),
+        isFree: Bool = false
+    ) {
         self.id = id
         self.displayName = displayName
         self.provider = provider
         self.capabilities = capabilities
+        self.supportedReasoningEfforts = supportedReasoningEfforts
+        self.defaultReasoningEffort = defaultReasoningEffort
         self.updatedAt = updatedAt
         self.isFree = isFree
     }
@@ -86,6 +99,22 @@ public final class ModelCatalog: ObservableObject {
             return fallbackModels(for: provider)
         }
         return filteredModels(cached, for: provider)
+    }
+
+    public func reasoningConfiguration(
+        for modelID: String,
+        provider: AIProvider
+    ) -> (efforts: [ReasoningEffort], defaultEffort: ReasoningEffort?)? {
+        let providerModels = modelsByProvider[provider] ?? []
+        let candidates = provider == .openAI
+            ? codexSubscriptionModels + providerModels
+            : providerModels
+        guard let model = candidates.first(where: {
+            $0.id.caseInsensitiveCompare(modelID) == .orderedSame
+        }), let efforts = model.supportedReasoningEfforts, !efforts.isEmpty else {
+            return nil
+        }
+        return (efforts, model.defaultReasoningEffort)
     }
 
     public func refreshCodexSubscriptionModels(force: Bool = false) async {
@@ -313,6 +342,8 @@ public final class ModelCatalog: ObservableObject {
                 provider: .openAI,
                 capabilities: model.inputModalities.map { "input:\($0)" }
                     + model.serviceTiers.map { "service:\($0)" },
+                supportedReasoningEfforts: model.supportedReasoningEfforts,
+                defaultReasoningEffort: model.defaultReasoningEffort,
                 updatedAt: Date()
             )
         }
@@ -372,6 +403,11 @@ public final class ModelCatalog: ObservableObject {
             let capabilities: [String]?
             let architecture: OpenRouterArchitecture?
             let pricing: OpenRouterPricing?
+            let reasoning: OpenRouterReasoning?
+        }
+        struct OpenRouterReasoning: Decodable {
+            let supported_efforts: [String]?
+            let default_effort: String?
         }
         struct OpenRouterArchitecture: Decodable {
             let modality: String?
@@ -413,6 +449,8 @@ public final class ModelCatalog: ObservableObject {
                 displayName: model.name ?? model.id,
                 provider: .openRouter,
                 capabilities: capabilityTags,
+                supportedReasoningEfforts: model.reasoning?.supported_efforts?.map(ReasoningEffort.init(rawValue:)),
+                defaultReasoningEffort: model.reasoning?.default_effort.map(ReasoningEffort.init(rawValue:)),
                 updatedAt: Date(),
                 isFree: isFree
             )
@@ -672,6 +710,8 @@ public final class ModelCatalog: ObservableObject {
                 displayName: modelID,
                 provider: .githubCopilot,
                 capabilities: capabilityTags,
+                supportedReasoningEfforts: model.resolvedReasoningEfforts,
+                defaultReasoningEffort: model.resolvedDefaultReasoningEffort,
                 updatedAt: Date()
             )
         }
@@ -764,6 +804,10 @@ public final class ModelCatalog: ObservableObject {
         let output_modalities: [String]?
         let inputModalities: [String]?
         let outputModalities: [String]?
+        let supported_reasoning_efforts: [String]?
+        let supportedReasoningEfforts: [String]?
+        let default_reasoning_effort: String?
+        let defaultReasoningEffort: String?
 
         var resolvedID: String? {
             [id, model, name]
@@ -785,6 +829,17 @@ public final class ModelCatalog: ObservableObject {
             return outputModalities
         }
 
+        var resolvedReasoningEfforts: [ReasoningEffort]? {
+            let values = supported_reasoning_efforts ?? supportedReasoningEfforts
+            let efforts = values?.map(ReasoningEffort.init(rawValue:)) ?? []
+            return efforts.isEmpty ? nil : efforts
+        }
+
+        var resolvedDefaultReasoningEffort: ReasoningEffort? {
+            (default_reasoning_effort ?? defaultReasoningEffort)
+                .map(ReasoningEffort.init(rawValue:))
+        }
+
         init(
             id: String? = nil,
             model: String? = nil,
@@ -794,7 +849,11 @@ public final class ModelCatalog: ObservableObject {
             input_modalities: [String]? = nil,
             output_modalities: [String]? = nil,
             inputModalities: [String]? = nil,
-            outputModalities: [String]? = nil
+            outputModalities: [String]? = nil,
+            supported_reasoning_efforts: [String]? = nil,
+            supportedReasoningEfforts: [String]? = nil,
+            default_reasoning_effort: String? = nil,
+            defaultReasoningEffort: String? = nil
         ) {
             self.id = id
             self.model = model
@@ -805,6 +864,10 @@ public final class ModelCatalog: ObservableObject {
             self.output_modalities = output_modalities
             self.inputModalities = inputModalities
             self.outputModalities = outputModalities
+            self.supported_reasoning_efforts = supported_reasoning_efforts
+            self.supportedReasoningEfforts = supportedReasoningEfforts
+            self.default_reasoning_effort = default_reasoning_effort
+            self.defaultReasoningEffort = defaultReasoningEffort
         }
 
         init?(dictionary: [String: Any]) {
@@ -817,6 +880,8 @@ public final class ModelCatalog: ObservableObject {
             let outputModalitiesSnake = Self.stringArray(from: dictionary["output_modalities"])
             let inputModalitiesCamel = Self.stringArray(from: dictionary["inputModalities"])
             let outputModalitiesCamel = Self.stringArray(from: dictionary["outputModalities"])
+            let reasoningEffortsSnake = Self.reasoningEffortArray(from: dictionary["supported_reasoning_efforts"])
+            let reasoningEffortsCamel = Self.reasoningEffortArray(from: dictionary["supportedReasoningEfforts"])
 
             let payload = GitHubCopilotModelPayload(
                 id: id,
@@ -827,7 +892,11 @@ public final class ModelCatalog: ObservableObject {
                 input_modalities: inputModalitiesSnake,
                 output_modalities: outputModalitiesSnake,
                 inputModalities: inputModalitiesCamel,
-                outputModalities: outputModalitiesCamel
+                outputModalities: outputModalitiesCamel,
+                supported_reasoning_efforts: reasoningEffortsSnake,
+                supportedReasoningEfforts: reasoningEffortsCamel,
+                default_reasoning_effort: dictionary["default_reasoning_effort"] as? String,
+                defaultReasoningEffort: dictionary["defaultReasoningEffort"] as? String
             )
 
             guard payload.resolvedID != nil else { return nil }
@@ -845,6 +914,17 @@ public final class ModelCatalog: ObservableObject {
             }
 
             return nil
+        }
+
+        private static func reasoningEffortArray(from value: Any?) -> [String]? {
+            if let strings = stringArray(from: value) {
+                return strings
+            }
+            guard let values = value as? [[String: Any]] else { return nil }
+            let strings = values.compactMap {
+                $0["reasoningEffort"] as? String ?? $0["reasoning_effort"] as? String
+            }
+            return strings.isEmpty ? nil : strings
         }
     }
     
@@ -968,6 +1048,8 @@ public final class ModelCatalog: ObservableObject {
                         displayName: normalizedDisplayName,
                         provider: provider,
                         capabilities: model.capabilities,
+                        supportedReasoningEfforts: model.supportedReasoningEfforts,
+                        defaultReasoningEffort: model.defaultReasoningEffort,
                         updatedAt: model.updatedAt,
                         isFree: model.isFree
                     )

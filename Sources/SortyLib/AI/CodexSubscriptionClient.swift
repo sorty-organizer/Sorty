@@ -12,12 +12,23 @@ public struct CodexAvailableModel: Sendable, Equatable {
     public let displayName: String
     public let inputModalities: [String]
     public let serviceTiers: [String]
+    public let supportedReasoningEfforts: [ReasoningEffort]
+    public let defaultReasoningEffort: ReasoningEffort?
 
-    public init(id: String, displayName: String, inputModalities: [String], serviceTiers: [String]) {
+    public init(
+        id: String,
+        displayName: String,
+        inputModalities: [String],
+        serviceTiers: [String],
+        supportedReasoningEfforts: [ReasoningEffort] = [],
+        defaultReasoningEffort: ReasoningEffort? = nil
+    ) {
         self.id = id
         self.displayName = displayName
         self.inputModalities = inputModalities
         self.serviceTiers = serviceTiers
+        self.supportedReasoningEfforts = supportedReasoningEfforts
+        self.defaultReasoningEffort = defaultReasoningEffort
     }
 }
 
@@ -267,7 +278,14 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                             displayName: model["displayName"] as? String ?? id,
                             inputModalities: model["inputModalities"] as? [String] ?? [],
                             serviceTiers: (model["serviceTiers"] as? [[String: Any]])?
-                                .compactMap { $0["id"] as? String } ?? []
+                                .compactMap { $0["id"] as? String } ?? [],
+                            supportedReasoningEfforts: (model["supportedReasoningEfforts"] as? [[String: Any]])?
+                                .compactMap { item in
+                                    guard let value = item["reasoningEffort"] as? String else { return nil }
+                                    return ReasoningEffort(rawValue: value)
+                                } ?? [],
+                            defaultReasoningEffort: (model["defaultReasoningEffort"] as? String)
+                                .map(ReasoningEffort.init(rawValue:))
                         )
                     }
                     return availableModels
@@ -321,7 +339,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             schemaURL: schemaURL,
             imageFiles: imageFiles,
             fastMode: CodexSubscriptionSettings.isFastModeEnabled,
-            reasoningEffort: config.effectiveReasoningEffort
+            reasoningEffort: config.reasoningEffort
         )
 
         let inputPipe = Pipe()
