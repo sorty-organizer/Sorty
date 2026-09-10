@@ -320,7 +320,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             outputURL: outputURL,
             schemaURL: schemaURL,
             imageFiles: imageFiles,
-            fastMode: CodexSubscriptionSettings.isFastModeEnabled
+            fastMode: CodexSubscriptionSettings.isFastModeEnabled,
+            reasoningEffort: config.effectiveReasoningEffort
         )
 
         let inputPipe = Pipe()
@@ -444,7 +445,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         outputURL: URL,
         schemaURL: URL?,
         imageFiles: [URL],
-        fastMode: Bool = false
+        fastMode: Bool = false,
+        reasoningEffort: ReasoningEffort = .automatic
     ) -> [String] {
         var arguments = [
             "exec",
@@ -467,6 +469,13 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                 "fast_mode",
                 "--config",
                 #"service_tier="fast""#
+            ]
+        }
+
+        if let requestValue = reasoningEffort.requestValue {
+            arguments += [
+                "--config",
+                #"model_reasoning_effort="\#(requestValue)""#
             ]
         }
 

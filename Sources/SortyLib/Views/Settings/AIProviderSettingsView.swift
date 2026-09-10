@@ -158,43 +158,47 @@ struct AIProviderSettingsView: View {
         SettingsCard(title: "GitHub Copilot", icon: "person.badge.key", color: .black) {
             if copilotAuth.isAuthenticated {
                 // Signed in state
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.green)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.green)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Signed in")
-                            .font(.headline)
-                        if let username = copilotAuth.username {
-                            Text(username)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringUsername) ? 4 : 0)
-                                .animation(.spring(), value: isHoveringUsername)
-                                .onHover { hovering in
-                                    isHoveringUsername = hovering
-                                }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Signed in")
+                                .font(.headline)
+                            if let username = copilotAuth.username {
+                                Text(username)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringUsername) ? 4 : 0)
+                                    .animation(.spring(), value: isHoveringUsername)
+                                    .onHover { hovering in
+                                        isHoveringUsername = hovering
+                                    }
+                            }
                         }
+
+                        Spacer()
+
+                        if !viewModel.availableModels.isEmpty {
+                            ModelSelectorCompactButton(
+                                provider: .githubCopilot,
+                                label: selectedModelDisplay,
+                                onTap: { showModelPicker = true }
+                            )
+                            .modelSelectorTriggerBounds()
+                        } else if viewModel.isLoadingModels {
+                            BouncingSpinner(size: 12, color: .secondary)
+                        }
+
+                        Button("Sign Out") {
+                            copilotAuth.signOut()
+                        }
+                        .buttonStyle(.sortyBordered)
                     }
 
-                    Spacer()
-
-                    if !viewModel.availableModels.isEmpty {
-                        ModelSelectorCompactButton(
-                            provider: .githubCopilot,
-                            label: selectedModelDisplay,
-                            onTap: { showModelPicker = true }
-                        )
-                        .modelSelectorTriggerBounds()
-                    } else if viewModel.isLoadingModels {
-                        BouncingSpinner(size: 12, color: .secondary)
-                    }
-
-                    Button("Sign Out") {
-                        copilotAuth.signOut()
-                    }
-                    .buttonStyle(.sortyBordered)
+                    reasoningEffortRow
                 }
                 .onAppear {
                     viewModel.updateAvailableModels()
@@ -328,6 +332,8 @@ struct AIProviderSettingsView: View {
                     )
                     .modelSelectorTriggerBounds()
                 }
+
+                reasoningEffortRow
             }
         }
         .settingsFocusable(.providerConfiguration)
@@ -570,6 +576,51 @@ struct AIProviderSettingsView: View {
     private var selectedModelDisplay: String {
         let provider = viewModel.config.provider
         return viewModel.config.model.isEmpty ? provider.defaultModel : viewModel.config.model
+    }
+
+    @ViewBuilder
+    private var reasoningEffortRow: some View {
+        let options = viewModel.config.supportedReasoningEfforts
+        if !options.isEmpty {
+            Divider()
+
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Reasoning effort")
+                        .font(.subheadline)
+                    Text(reasoningEffortSelection.helpText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Picker("Reasoning effort", selection: reasoningEffortBinding) {
+                    ForEach(options, id: \.self) { effort in
+                        Text(effort.displayName).tag(effort)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 128)
+                .accessibilityHint(reasoningEffortSelection.helpText)
+                .accessibilityIdentifier("ReasoningEffortPicker")
+            }
+        }
+    }
+
+    private var reasoningEffortSelection: ReasoningEffort {
+        viewModel.config.effectiveReasoningEffort
+    }
+
+    private var reasoningEffortBinding: Binding<ReasoningEffort> {
+        Binding(
+            get: { reasoningEffortSelection },
+            set: { effort in
+                viewModel.config.setReasoningEffort(effort)
+                HapticFeedbackManager.shared.selection()
+            }
+        )
     }
 
     private var connectionSection: some View {

@@ -215,7 +215,8 @@ struct HelpSettingsView: View {
         - File tagging: \(yesNo(config.enableFileTagging))
         - Strict exclusions: \(yesNo(config.strictExclusions))
         - Streaming: \(yesNo(config.enableStreaming))
-        - Reasoning: \(yesNo(config.enableReasoning))
+        - Decision explanations: \(yesNo(config.enableReasoning))
+        - Reasoning effort: \(config.reasoningEffort.displayName)
         - Request timeout: \(Int(config.requestTimeout))s
         - Resource timeout: \(Int(config.resourceTimeout))s
 

@@ -160,13 +160,15 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     /// OpenRouter's free route can select reasoning models. Keep their internal
     /// planning out of the response and reserve the completion for Sorty's plan.
     private func configureStructuredOrganizationOutput(in requestBody: inout [String: Any]) {
+        Self.configureReasoningEffort(
+            in: &requestBody,
+            provider: config.provider,
+            effort: config.effectiveReasoningEffort
+        )
+
         guard config.provider == .openRouter else { return }
 
         requestBody["response_format"] = ["type": "json_object"]
-        requestBody["reasoning"] = [
-            "effort": "none",
-            "exclude": true
-        ]
         if !config.enableStreaming {
             requestBody["plugins"] = [["id": "response-healing"]]
         }
@@ -205,7 +207,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         Self.configureTextGenerationOutput(
             in: &requestBody,
             provider: config.provider,
-            responseFormat: responseFormat
+            responseFormat: responseFormat,
+            reasoningEffort: config.effectiveReasoningEffort
         )
         
         let headers = authHeaders()
@@ -233,18 +236,35 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     static func configureTextGenerationOutput(
         in requestBody: inout [String: Any],
         provider: AIProvider,
-        responseFormat: AITextResponseFormat
+        responseFormat: AITextResponseFormat,
+        reasoningEffort: ReasoningEffort = .automatic
     ) {
-        guard provider == .openRouter, responseFormat != .plain else { return }
+        configureReasoningEffort(in: &requestBody, provider: provider, effort: reasoningEffort)
 
-        requestBody["reasoning"] = [
-            "effort": "none",
-            "exclude": true
-        ]
-
-        if responseFormat == .jsonObject {
+        if provider == .openRouter, responseFormat == .jsonObject {
             requestBody["response_format"] = ["type": "json_object"]
             requestBody["plugins"] = [["id": "response-healing"]]
+        }
+    }
+
+    static func configureReasoningEffort(
+        in requestBody: inout [String: Any],
+        provider: AIProvider,
+        effort: ReasoningEffort
+    ) {
+        guard let requestValue = effort.requestValue else { return }
+
+        requestBody.removeValue(forKey: "temperature")
+        switch provider {
+        case .openRouter:
+            requestBody["reasoning"] = [
+                "effort": requestValue,
+                "exclude": true
+            ]
+        case .openAI, .gemini:
+            requestBody["reasoning_effort"] = requestValue
+        case .githubCopilot, .groq, .openAICompatible, .ollama, .anthropic, .appleFoundationModel:
+            break
         }
     }
     

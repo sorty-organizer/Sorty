@@ -82,6 +82,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         if let maxTokens = config.maxTokens {
             requestBody["max_tokens"] = maxTokens
         }
+        Self.configureReasoningEffort(in: &requestBody, effort: config.effectiveReasoningEffort)
         
         let finalRequestBody = requestBody // Fix mutating warning by assigning to let
         
@@ -151,6 +152,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         if let maxTokens = config.maxTokens {
             requestBody["max_tokens"] = maxTokens
         }
+        Self.configureReasoningEffort(in: &requestBody, effort: config.effectiveReasoningEffort)
         
         if config.enableStreaming {
             return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files)
@@ -271,7 +273,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
         try ensureNetworkAllowed(url)
         
-        let requestBody: [String: Any] = [
+        var requestBody: [String: Any] = [
             "model": config.model,
             "messages": [
                 ["role": "system", "content": systemPrompt ?? "You are a helpful assistant."],
@@ -279,6 +281,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             ],
             "temperature": AIConfig.organizationTemperature
         ]
+        Self.configureReasoningEffort(in: &requestBody, effort: config.effectiveReasoningEffort)
         
         let session = await getSession()
         var didRetryAfterAuthFailure = false
@@ -325,6 +328,15 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
 
             return content
         }
+    }
+
+    static func configureReasoningEffort(
+        in requestBody: inout [String: Any],
+        effort: ReasoningEffort
+    ) {
+        guard let requestValue = effort.requestValue else { return }
+        requestBody.removeValue(forKey: "temperature")
+        requestBody["reasoning_effort"] = requestValue
     }
     
     // MARK: - Non-Streaming Implementation

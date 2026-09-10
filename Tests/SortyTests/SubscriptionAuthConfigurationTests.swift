@@ -95,6 +95,36 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
         XCTAssertEqual(decoded.authMethod(for: .anthropic), .manualSessionToken)
     }
 
+    func testReasoningEffortIsRememberedPerProviderAndModel() throws {
+        var config = AIConfig(provider: .openAI, model: "gpt-5.4-mini")
+        config.setReasoningEffort(.high)
+        config.model = "gpt-5.4"
+        config.setReasoningEffort(.low)
+
+        let data = try JSONEncoder().encode(config)
+        var decoded = try JSONDecoder().decode(AIConfig.self, from: data)
+
+        XCTAssertEqual(decoded.reasoningEffort, .low)
+        decoded.model = "gpt-5.4-mini"
+        XCTAssertEqual(decoded.reasoningEffort, .high)
+        decoded.provider = .gemini
+        decoded.model = "gemini-3-flash"
+        XCTAssertEqual(decoded.reasoningEffort, .automatic)
+    }
+
+    func testReasoningOptionsFollowKnownModelCapabilities() {
+        let reasoningModel = AIConfig(provider: .openAI, model: "gpt-5.4-mini")
+        let standardModel = AIConfig(provider: .openAI, model: "gpt-4o")
+        let mandatoryThinkingModel = AIConfig(provider: .gemini, model: "gemini-3-flash")
+
+        XCTAssertEqual(
+            reasoningModel.supportedReasoningEfforts,
+            [.automatic, .none, .low, .medium, .high]
+        )
+        XCTAssertTrue(standardModel.supportedReasoningEfforts.isEmpty)
+        XCTAssertFalse(mandatoryThinkingModel.supportedReasoningEfforts.contains(.none))
+    }
+
     func testProviderAuthResolverUsesConfigApiKeyWhenPresent() {
         let config = AIConfig(
             provider: .openAI,

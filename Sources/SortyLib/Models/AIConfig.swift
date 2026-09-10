@@ -25,6 +25,38 @@ public enum ProviderAuthMethod: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum ReasoningEffort: String, Codable, CaseIterable, Sendable {
+    case automatic
+    case none
+    case low
+    case medium
+    case high
+
+    public var displayName: String {
+        switch self {
+        case .automatic: "Automatic"
+        case .none: "None"
+        case .low: "Low"
+        case .medium: "Medium"
+        case .high: "High"
+        }
+    }
+
+    public var helpText: String {
+        switch self {
+        case .automatic: "Let the model choose how much reasoning to use."
+        case .none: "Skip additional reasoning when the model allows it."
+        case .low: "Use less reasoning for quicker results."
+        case .medium: "Balance response time with more careful decisions."
+        case .high: "Use more reasoning for difficult or ambiguous folders."
+        }
+    }
+
+    public var requestValue: String? {
+        self == .automatic ? nil : rawValue
+    }
+}
+
 public enum AIProvider: String, Codable, CaseIterable, Sendable {
     case openAI = "openai"
     case githubCopilot = "github_copilot"
@@ -572,6 +604,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
     /// NOTE: For .appleFoundationModel and .ollama (usually), this should be false.
     public var requiresAPIKey: Bool
     public var enableReasoning: Bool  // Ask AI to explain organization decisions
+    public var reasoningEffortByModel: [String: ReasoningEffort]
     
     // Deep Scanning & Duplicate Detection
     public var mode: OrganizationMode
@@ -617,6 +650,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableStreaming: Bool = true,
         requiresAPIKey: Bool = true,
         enableReasoning: Bool = false,
+        reasoningEffortByModel: [String: ReasoningEffort] = [:],
         mode: OrganizationMode = .organize,
         enableDeepScan: Bool = true,
         enableSmartRename: Bool = true,
@@ -654,6 +688,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.enableStreaming = enableStreaming
         self.requiresAPIKey = requiresAPIKey
         self.enableReasoning = enableReasoning
+        self.reasoningEffortByModel = reasoningEffortByModel
         self.mode = mode
         self.enableDeepScan = enableDeepScan
         self.enableSmartRename = enableSmartRename
@@ -694,6 +729,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         case enableStreaming
         case requiresAPIKey
         case enableReasoning
+        case reasoningEffortByModel
         case mode
         case enableDeepScan
         case enableSmartRename
@@ -738,6 +774,10 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableStreaming = try container.decodeIfPresent(Bool.self, forKey: .enableStreaming) ?? true
         requiresAPIKey = try container.decodeIfPresent(Bool.self, forKey: .requiresAPIKey) ?? provider.typicallyRequiresAPIKey
         enableReasoning = try container.decodeIfPresent(Bool.self, forKey: .enableReasoning) ?? false
+        reasoningEffortByModel = try container.decodeIfPresent(
+            [String: ReasoningEffort].self,
+            forKey: .reasoningEffortByModel
+        ) ?? [:]
         mode = try container.decodeIfPresent(OrganizationMode.self, forKey: .mode) ?? .organize
         enableDeepScan = try container.decodeIfPresent(Bool.self, forKey: .enableDeepScan) ?? true
         enableSmartRename = try container.decodeIfPresent(Bool.self, forKey: .enableSmartRename) ?? true
@@ -789,6 +829,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         try container.encode(enableStreaming, forKey: .enableStreaming)
         try container.encode(requiresAPIKey, forKey: .requiresAPIKey)
         try container.encode(enableReasoning, forKey: .enableReasoning)
+        try container.encode(reasoningEffortByModel, forKey: .reasoningEffortByModel)
         try container.encode(mode, forKey: .mode)
         try container.encode(enableDeepScan, forKey: .enableDeepScan)
         try container.encode(enableSmartRename, forKey: .enableSmartRename)
@@ -814,6 +855,65 @@ public struct AIConfig: Codable, Sendable, Equatable {
         try container.encodeIfPresent(automationModel, forKey: .automationModel)
         try container.encode(openAIAuthMethod, forKey: .openAIAuthMethod)
         try container.encode(anthropicAuthMethod, forKey: .anthropicAuthMethod)
+    }
+
+    public var reasoningEffort: ReasoningEffort {
+        reasoningEffortByModel[reasoningPreferenceKey] ?? .automatic
+    }
+
+    public var effectiveReasoningEffort: ReasoningEffort {
+        supportedReasoningEfforts.contains(reasoningEffort) ? reasoningEffort : .automatic
+    }
+
+    public mutating func setReasoningEffort(_ effort: ReasoningEffort) {
+        if effort == .automatic {
+            reasoningEffortByModel.removeValue(forKey: reasoningPreferenceKey)
+        } else {
+            reasoningEffortByModel[reasoningPreferenceKey] = effort
+        }
+    }
+
+    public var supportedReasoningEfforts: [ReasoningEffort] {
+        let normalizedModel = model.lowercased()
+        guard Self.isKnownReasoningModel(normalizedModel, provider: provider) else { return [] }
+
+        switch provider {
+        case .openAI:
+            return normalizedModel.hasPrefix("gpt-5") || normalizedModel.hasPrefix("gpt-6")
+                ? [.automatic, .none, .low, .medium, .high]
+                : [.automatic, .low, .medium, .high]
+        case .gemini:
+            let canDisable = normalizedModel.contains("gemini-2.5-flash")
+            return canDisable
+                ? [.automatic, .none, .low, .medium, .high]
+                : [.automatic, .low, .medium, .high]
+        case .githubCopilot, .openRouter:
+            return [.automatic, .low, .medium, .high]
+        case .groq, .openAICompatible, .ollama, .anthropic, .appleFoundationModel:
+            return []
+        }
+    }
+
+    private var reasoningPreferenceKey: String {
+        "\(provider.rawValue)|\(model.lowercased())"
+    }
+
+    private static func isKnownReasoningModel(_ model: String, provider: AIProvider) -> Bool {
+        switch provider {
+        case .openAI, .githubCopilot:
+            return ["gpt-5", "gpt-6", "o1", "o3", "o4"].contains { model.hasPrefix($0) }
+        case .gemini:
+            return model.hasPrefix("gemini-2.5") || model.hasPrefix("gemini-3")
+        case .openRouter:
+            let reasoningFamilies = [
+                "gpt-5", "gpt-6", "/o1", "/o3", "/o4", "gpt-oss", "claude-3.7",
+                "claude-sonnet-4", "claude-opus-4", "gemini-2.5", "gemini-3",
+                "deepseek-r1", "qwen3", "grok"
+            ]
+            return reasoningFamilies.contains { model.contains($0) }
+        case .groq, .openAICompatible, .ollama, .anthropic, .appleFoundationModel:
+            return false
+        }
     }
     
     public static let `default` = AIConfig(

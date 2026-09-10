@@ -327,6 +327,8 @@ System Settings pane.
 - **OpenAI/Compatible**: Cloud-based, metadata sent to API
 - **Ollama**: Local processing, nothing leaves your machine
 
+For supported reasoning models, **Settings -> AI Provider** includes a Reasoning effort menu below the model picker. Automatic keeps the provider's default. Explicit levels are remembered separately for each provider and model. Models that do not expose a supported reasoning control do not show the menu.
+
 ---
 
 ## Uninstalling Sorty

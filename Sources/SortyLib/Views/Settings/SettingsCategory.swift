@@ -345,6 +345,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Select Provider", "Choose OpenAI, Anthropic, Gemini, Copilot, Ollama, or OpenAI-compatible APIs.", target: .providerSelect),
                 feature("API Configuration", "Set endpoint URL and API key/token details for your selected provider.", keywords: ["api key", "endpoint", "token", "authentication"], target: .providerConfiguration),
                 feature("Model Catalog", "Search and pick models available for each provider.", keywords: ["model picker", "model selection"], target: .providerConfiguration),
+                feature("Reasoning Effort", "Choose how much reasoning supported models use.", keywords: ["reasoning", "thinking", "effort", "speed"], target: .providerConfiguration),
                 feature("Connection Testing", "Validate credentials and endpoint connectivity before organizing files.", keywords: ["test connection", "connection status"], target: .providerConnection),
                 feature("OpenAI", "Use OpenAI with an API key or ChatGPT subscription.", keywords: ["gpt", "chatgpt", "codex"], target: .providerOpenAI),
                 feature("GitHub Copilot", "Use models through a GitHub Copilot subscription.", keywords: ["copilot", "subscription"], target: .providerGitHubCopilot),

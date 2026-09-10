@@ -436,18 +436,20 @@ final class PersonaGeneratorTests: XCTestCase {
         XCTAssertFalse(arguments.contains(#"service_tier="priority""#))
     }
 
-    func testOpenRouterStructuredObjectRequestsDisableReasoningAndRequireJSON() throws {
-        var requestBody: [String: Any] = [:]
+    func testOpenRouterStructuredObjectRequestsUseSelectedReasoningAndRequireJSON() throws {
+        var requestBody: [String: Any] = ["temperature": AIConfig.organizationTemperature]
 
         OpenAIClient.configureTextGenerationOutput(
             in: &requestBody,
             provider: .openRouter,
-            responseFormat: .jsonObject
+            responseFormat: .jsonObject,
+            reasoningEffort: .high
         )
 
         let reasoning = try XCTUnwrap(requestBody["reasoning"] as? [String: Any])
-        XCTAssertEqual(reasoning["effort"] as? String, "none")
+        XCTAssertEqual(reasoning["effort"] as? String, "high")
         XCTAssertEqual(reasoning["exclude"] as? Bool, true)
+        XCTAssertNil(requestBody["temperature"])
         XCTAssertEqual(
             (requestBody["response_format"] as? [String: Any])?["type"] as? String,
             "json_object"
@@ -455,7 +457,7 @@ final class PersonaGeneratorTests: XCTestCase {
         XCTAssertNotNil(requestBody["plugins"])
     }
 
-    func testOpenRouterStructuredArrayRequestsDisableReasoningWithoutForcingObject() throws {
+    func testAutomaticReasoningDoesNotAddProviderParameter() {
         var requestBody: [String: Any] = [:]
 
         OpenAIClient.configureTextGenerationOutput(
@@ -464,10 +466,20 @@ final class PersonaGeneratorTests: XCTestCase {
             responseFormat: .jsonArray
         )
 
-        let reasoning = try XCTUnwrap(requestBody["reasoning"] as? [String: Any])
-        XCTAssertEqual(reasoning["effort"] as? String, "none")
-        XCTAssertEqual(reasoning["exclude"] as? Bool, true)
+        XCTAssertNil(requestBody["reasoning"])
         XCTAssertNil(requestBody["response_format"])
+    }
+
+    func testCodexReasoningEffortUsesModelConfiguration() {
+        let arguments = CodexSubscriptionClient.codexArguments(
+            model: "gpt-5.4-mini",
+            outputURL: URL(fileURLWithPath: "/tmp/output.txt"),
+            schemaURL: nil,
+            imageFiles: [],
+            reasoningEffort: .medium
+        )
+
+        XCTAssertTrue(arguments.contains(#"model_reasoning_effort="medium""#))
     }
     
     // MARK: - AIConfig Modification Tests
