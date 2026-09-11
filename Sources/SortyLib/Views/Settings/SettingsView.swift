@@ -106,8 +106,7 @@ struct SettingsView: View {
                             color: category.color,
                             isSelected: selectedCategory == category
                         ) {
-                            appState.settingsFocusTarget = nil
-                            appState.selectedSettingsSection = category
+                            appState.openSettingsWindow(section: category)
                             HapticFeedbackManager.shared.selection()
                         }
                         .help("\(category.rawValue) settings")

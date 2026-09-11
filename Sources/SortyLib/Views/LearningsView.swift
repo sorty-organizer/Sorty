@@ -1608,14 +1608,14 @@ struct LearningsView: View {
                     )
                     Spacer()
                     HStack(spacing: 8) {
-                        Button("Import…") {
+                        Button("Import") {
                             requestSensitiveAction(
                                 reason: "Authenticate to import a learnings profile."
                             ) {
                                 presentFileImporter(.learningsProfile)
                             }
                         }
-                        Button("Export…") {
+                        Button("Export") {
                             requestSensitiveAction(
                                 reason: "Authenticate to export your learnings profile."
                             ) {
@@ -1625,7 +1625,7 @@ struct LearningsView: View {
                         Button(role: .destructive) {
                             confirmDeleteAllLearningData()
                         } label: {
-                            Label("Delete…", systemImage: "trash")
+                            Label("Delete", systemImage: "trash")
                         }
                         .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
                         .accessibilityHint("Permanently deletes all learning data")

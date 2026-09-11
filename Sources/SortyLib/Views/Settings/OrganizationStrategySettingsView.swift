@@ -70,14 +70,17 @@ struct OrganizationStrategySettingsView: View {
             SettingsCard(title: "AI Vision", icon: "eye", color: .teal) {
                 VStack(alignment: .leading, spacing: 12) {
                     SettingsToggle(
-                        isOn: $viewModel.config.enableVision,
+                        isOn: Binding(
+                            get: { viewModel.config.enableVision && isVisionSupportedByCurrentModel },
+                            set: { viewModel.config.enableVision = $0 }
+                        ),
                         title: "Use AI Vision for Images",
                         description: "Analyze image content for stronger visual grouping, even in Fast Mode",
                         focusTarget: .strategyVision
                     )
-                    .disabled(!ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider))
+                    .disabled(!isVisionSupportedByCurrentModel)
 
-                    if !ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider) {
+                    if !isVisionSupportedByCurrentModel {
                         HStack(spacing: 4) {
                             Image(systemName: "info.circle")
                                 .font(.caption2)
@@ -545,6 +548,13 @@ struct OrganizationStrategySettingsView: View {
         if !viewModel.config.provider.supportsDeepScan {
             viewModel.config.enableDeepScan = false
         }
+    }
+
+    /// Displays off while the current model lacks vision support, but the
+    /// stored preference is left untouched so switching back to a vision
+    /// model restores the previous choice.
+    private var isVisionSupportedByCurrentModel: Bool {
+        ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider)
     }
 }
 

@@ -169,18 +169,31 @@ public struct WorkflowSelectionStepView: View {
                             .contentMargins(.top, 10, for: .scrollContent)
                             .scrollIndicators(.visible)
                             .safeAreaInset(edge: .bottom, spacing: 0) {
-                                Label(
-                                    "Scroll to see \(customPersonaStore.customPersonas.count - 2) more",
-                                    systemImage: "chevron.down"
-                                )
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.secondary)
-                                .accessibilityLabel(
-                                    "\(customPersonaStore.customPersonas.count - 2) more personas available below"
-                                )
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 6)
-                                .padding(.bottom, 2)
+                                VStack(spacing: 0) {
+                                    // Gradual fade so cards dissolve into the footer instead of hard-clipping.
+                                    LinearGradient(
+                                        colors: [
+                                            Color(nsColor: .windowBackgroundColor).opacity(0),
+                                            Color(nsColor: .windowBackgroundColor)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                    .frame(height: 20)
+                                    Label(
+                                        "Scroll to see \(customPersonaStore.customPersonas.count - 2) more",
+                                        systemImage: "chevron.down"
+                                    )
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityLabel(
+                                        "\(customPersonaStore.customPersonas.count - 2) more personas available below"
+                                    )
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, 2)
+                                    .padding(.bottom, 8)
+                                    .background(Color(nsColor: .windowBackgroundColor))
+                                }
                             }
                             .frame(height: 124)
                         } else {

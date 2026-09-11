@@ -198,27 +198,28 @@ public struct SortyCommands: Commands {
 
             Divider()
 
-            Button("Export History as CSV...", systemImage: "tablecells") {
-                appState?.exportHistory(format: .csv)
-            }
-            .disabled(!(appState?.hasHistoryEntries ?? false))
+            Menu("Export History", systemImage: "square.and.arrow.up") {
+                Button("As CSV") {
+                    appState?.exportHistory(format: .csv)
+                }
 
-            Button("Export History as JSON...", systemImage: "curlybraces") {
-                appState?.exportHistory(format: .json)
+                Button("As JSON") {
+                    appState?.exportHistory(format: .json)
+                }
             }
-            .disabled(!(appState?.hasHistoryEntries ?? false))
+            .disabled(appState == nil)
 
-            Button("Import History...", systemImage: "square.and.arrow.down") {
+            Button("Import History", systemImage: "square.and.arrow.down") {
                 appState?.importHistory()
             }
             .disabled(appState == nil)
 
             Divider()
 
-            Button("Clear History...", systemImage: "trash") {
+            Button("Clear History", systemImage: "trash") {
                 appState?.clearHistoryWithConfirmation()
             }
-            .disabled(!(appState?.hasHistoryEntries ?? false))
+            .disabled(appState == nil)
         }
 
         CommandGroup(replacing: .help) {
@@ -616,10 +617,6 @@ public class AppState: ObservableObject {
         organizer?.currentPlan != nil
     }
 
-    public var hasHistoryEntries: Bool {
-        !(organizer?.history.entries.isEmpty ?? true)
-    }
-
     public var canStartOrganization: Bool {
         selectedDirectory != nil && (organizer?.state == .idle || organizer?.state == .completed)
     }
@@ -861,6 +858,11 @@ public class AppState: ObservableObject {
         withAnimation(.pageTransition) {
             currentView = .settings
         }
+        if selectedSettingsSection == .provider {
+            NotificationManager.shared.dismissHUD(identifier: "setup-repair")
+        } else if requiresSetupRepair, let message = setupRepairMessage {
+            presentSetupRepairHUD(message: message)
+        }
     }
 
     /// Opens a related app page while preserving the page that launched it.
@@ -882,13 +884,18 @@ public class AppState: ObservableObject {
     public func startSetupRepair(message: String, navigateToSettings: Bool = false) {
         requiresSetupRepair = true
         setupRepairMessage = message
-        presentSetupRepairHUD(message: message)
         if navigateToSettings {
             openProviderSettingsForRepair()
+            return
         }
+        presentSetupRepairHUD(message: message)
     }
 
     public func presentSetupRepairHUD(message: String) {
+        guard !(currentView == .settings && selectedSettingsSection == .provider) else {
+            NotificationManager.shared.dismissHUD(identifier: "setup-repair")
+            return
+        }
         NotificationManager.shared.showHUDInfo(
             title: "Setup Repair Needed",
             message: message,
