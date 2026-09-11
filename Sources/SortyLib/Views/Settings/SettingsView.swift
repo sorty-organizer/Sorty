@@ -57,9 +57,9 @@ struct SettingsView: View {
         }
         .onChange(of: appState.selectedSettingsSection) { _, newSection in
             if let section = newSection, section != selectedCategory {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    selectedCategory = section
-                }
+                // Cards and header controls animate locally. Animating this
+                // replacement also animates the outgoing page and its layout.
+                selectedCategory = section
             }
         }
         .onChange(of: searchText) { _, _ in
@@ -366,10 +366,8 @@ struct SettingsView: View {
         let target = result.category.focusTarget(for: result.snippet)
         let destinationCategory = target?.category ?? result.category
 
-        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-            selectedCategory = destinationCategory
-            searchText = ""
-        }
+        selectedCategory = destinationCategory
+        searchText = ""
         appState.openSettingsWindow(
             section: destinationCategory,
             focusTarget: target

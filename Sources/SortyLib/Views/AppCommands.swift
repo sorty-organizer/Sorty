@@ -855,8 +855,11 @@ public class AppState: ObservableObject {
     ) {
         selectedSettingsSection = focusTarget?.category ?? section
         settingsFocusTarget = focusTarget
-        withAnimation(.pageTransition) {
-            currentView = .settings
+        // Switching Settings sections does not navigate the app's root page.
+        if currentView != .settings {
+            withAnimation(.pageTransition) {
+                currentView = .settings
+            }
         }
         if selectedSettingsSection == .provider {
             NotificationManager.shared.dismissHUD(identifier: "setup-repair")
