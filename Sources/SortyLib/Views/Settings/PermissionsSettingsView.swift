@@ -214,7 +214,7 @@ struct PermissionsSettingsView: View {
                     accessInfoButton
                 }
             ) {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
                     permissionNote(
                         icon: "folder.fill",
                         text: "Files & Folders access is granted only for folders you choose in the macOS picker."
@@ -392,12 +392,11 @@ struct PermissionsSettingsView: View {
     }
 
     private func permissionNote(icon: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: 9) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.green)
-                .frame(width: 18)
-                .padding(.top, 1)
+                .frame(width: 16)
                 .accessibilityHidden(true)
 
             Text(LocalizedStringKey(text))
