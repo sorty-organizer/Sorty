@@ -212,7 +212,7 @@ struct PermissionsSettingsView: View {
                     accessInfoButton
                 }
             ) {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     permissionNote(
                         icon: "folder.fill",
                         text: "Files & Folders access is granted only for folders you choose in the macOS picker."
@@ -389,6 +389,7 @@ struct PermissionsSettingsView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.green)
                 .frame(width: 18)
+                .padding(.top, 1)
                 .accessibilityHidden(true)
 
             Text(LocalizedStringKey(text))
