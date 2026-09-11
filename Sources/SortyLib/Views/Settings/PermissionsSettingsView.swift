@@ -181,22 +181,23 @@ struct PermissionsSettingsView: View {
                         }
                         .buttonStyle(.sortySecondary(size: .regular))
                         .onHover { hovering in
+                            privacyHoverSettleTask?.cancel()
+                            privacyHoverSettleTask = nil
                             if hovering {
-                                privacyHoverSettleTask?.cancel()
-                                if !isHoveringOpenPrivacySettings {
-                                    HapticFeedbackManager.shared.selection()
-                                }
-                                withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
-                                    isHoveringOpenPrivacySettings = true
-                                }
-                            } else {
-                                privacyHoverSettleTask?.cancel()
+                                guard !isHoveringOpenPrivacySettings else { return }
+                                // Ignore brief passes; leaving cancels the pending hover feedback.
                                 privacyHoverSettleTask = Task { @MainActor in
                                     try? await Task.sleep(for: .milliseconds(120))
                                     guard !Task.isCancelled else { return }
+                                    HapticFeedbackManager.shared.selection()
                                     withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
-                                        isHoveringOpenPrivacySettings = false
+                                        isHoveringOpenPrivacySettings = true
                                     }
+                                    privacyHoverSettleTask = nil
+                                }
+                            } else {
+                                withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                    isHoveringOpenPrivacySettings = false
                                 }
                             }
                         }
@@ -243,8 +244,10 @@ struct PermissionsSettingsView: View {
             automationPermissionTask = nil
             privacyHoverSettleTask?.cancel()
             privacyHoverSettleTask = nil
+            isHoveringOpenPrivacySettings = false
             privacyOpenResetTask?.cancel()
             privacyOpenResetTask = nil
+            isOpeningPrivacySettings = false
         }
         .sheet(item: $selectedEducationPermission) { permission in
             PermissionEducationView(pages: [permission]) {
