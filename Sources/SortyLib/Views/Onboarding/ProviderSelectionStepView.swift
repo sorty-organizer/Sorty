@@ -281,12 +281,19 @@ public struct ProviderSelectionStepView: View {
             isPresented: $isShowingModelPopover,
             currentProvider: settingsViewModel.config.provider,
             currentModel: settingsViewModel.config.model,
-            contextMessage: "Choose the provider and model Sorty will use for organization."
-        ) { provider, model in
-            commitInputDrafts()
-            settingsViewModel.config.provider = provider
-            settingsViewModel.config.model = model
-        }
+            contextMessage: "Choose the provider and model Sorty will use for organization.",
+            onSelect: { provider, model, authMethod in
+                commitInputDrafts()
+                settingsViewModel.config.provider = provider
+                settingsViewModel.config.model = model
+                if provider == .openAI, supportsSubscriptionAuthUI, let desired = authMethod {
+                    if desired != settingsViewModel.config.authMethod(for: .openAI) {
+                        setAuthMethod(desired)
+                    }
+                }
+            },
+            isSubscriptionSelected: settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) == .accountSignIn
+        )
     }
 
     @ViewBuilder

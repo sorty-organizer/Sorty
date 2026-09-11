@@ -138,12 +138,16 @@ struct AutomationSettingsView: View {
             currentProvider: selectedProvider,
             currentModel: selectedModel,
             contextMessage: "Choose the provider and model Sorty uses for watched-folder automation.",
-            onSelect: { provider, model in
+            onSelect: { provider, model, authMethod in
+                if let authMethod {
+                    viewModel.config.setAuthMethod(authMethod, for: provider)
+                }
                 selectedProvider = provider
                 selectedModel = model
                 viewModel.config.automationProvider = provider
                 viewModel.config.automationModel = model
-            }
+            },
+            isSubscriptionSelected: viewModel.config.authMethod(for: selectedProvider) == .accountSignIn
         )
     }
 

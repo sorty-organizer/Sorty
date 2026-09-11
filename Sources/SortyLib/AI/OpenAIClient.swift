@@ -7,6 +7,21 @@
 
 import Foundation
 
+/// Persists the per-provider fast-mode toggles for API paths.
+/// Codex subscription fast mode keeps its own key in `CodexSubscriptionSettings`.
+public enum FastModeSettings {
+    public static let openAIFastModeKey = "openAIFastMode"
+    public static let openRouterFastModeKey = "openRouterFastMode"
+
+    public static var isOpenAIFastModeEnabled: Bool {
+        UserDefaults.standard.bool(forKey: openAIFastModeKey)
+    }
+
+    public static var isOpenRouterFastModeEnabled: Bool {
+        UserDefaults.standard.bool(forKey: openRouterFastModeKey)
+    }
+}
+
 public final class OpenAIClient: AIClientProtocol, Sendable {
     public let config: AIConfig
     @MainActor public weak var streamingDelegate: StreamingDelegate?
@@ -165,6 +180,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             provider: config.provider,
             effort: config.reasoningEffort
         )
+        Self.configureFastMode(in: &requestBody, provider: config.provider)
 
         guard config.provider == .openRouter else { return }
 
@@ -240,6 +256,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         reasoningEffort: ReasoningEffort = .automatic
     ) {
         configureReasoningEffort(in: &requestBody, provider: provider, effort: reasoningEffort)
+        configureFastMode(in: &requestBody, provider: provider)
 
         if provider == .openRouter, responseFormat == .jsonObject {
             requestBody["response_format"] = ["type": "json_object"]
@@ -264,6 +281,29 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         case .openAI, .gemini:
             requestBody["reasoning_effort"] = requestValue
         case .githubCopilot, .groq, .openAICompatible, .ollama, .anthropic, .appleFoundationModel:
+            break
+        }
+    }
+
+    /// Applies the fast service tier for providers that offer one.
+    /// OpenAI uses `service_tier: "fast"` (premium billing); OpenRouter
+    /// sorts providers by throughput. Other providers have no fast tier.
+    static func configureFastMode(
+        in requestBody: inout [String: Any],
+        provider: AIProvider,
+        openAIFastMode: Bool = FastModeSettings.isOpenAIFastModeEnabled,
+        openRouterFastMode: Bool = FastModeSettings.isOpenRouterFastModeEnabled
+    ) {
+        switch provider {
+        case .openAI:
+            if openAIFastMode {
+                requestBody["service_tier"] = "fast"
+            }
+        case .openRouter:
+            if openRouterFastMode {
+                requestBody["provider"] = ["sort": "throughput"]
+            }
+        case .githubCopilot, .groq, .openAICompatible, .ollama, .anthropic, .gemini, .appleFoundationModel:
             break
         }
     }

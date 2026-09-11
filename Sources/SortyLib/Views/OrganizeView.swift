@@ -196,7 +196,13 @@ struct OrganizeView: View {
             currentModel: settingsViewModel.config.model,
             contextMessage: "Select a stronger model to retry this failed organization attempt. Your selection also becomes the active model for future runs.",
             selectionActionTitle: "Retry with Model",
-            onSelect: retryWithSelectedModel
+            onSelect: { provider, model, authMethod in
+                if let authMethod {
+                    settingsViewModel.config.setAuthMethod(authMethod, for: provider)
+                }
+                retryWithSelectedModel(provider: provider, model: model)
+            },
+            isSubscriptionSelected: settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) == .accountSignIn
         )
         .sheet(isPresented: $showSavedPromptsSheet) {
             SavedPromptsSheet(

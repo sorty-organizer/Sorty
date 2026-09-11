@@ -374,11 +374,15 @@ struct HistoryView: View {
             isPresented: $showRedoModelPicker,
             currentProvider: settingsViewModel.config.provider,
             currentModel: settingsViewModel.config.model,
-            onSelect: { provider, model in
+            onSelect: { provider, model, authMethod in
                 guard let entry = redoModelEntry else { return }
+                if let authMethod {
+                    settingsViewModel.config.setAuthMethod(authMethod, for: provider)
+                }
                 showRedoModelPicker = false
                 handleRedoWithModel(entry, provider: provider, model: model)
-            }
+            },
+            isSubscriptionSelected: settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) == .accountSignIn
         )
         .onAppear {
             consumePendingHistoryEntryIfNeeded()
@@ -1710,9 +1714,13 @@ struct HistoryDetailSheet: View {
             isPresented: $showRedoModelPicker,
             currentProvider: settingsViewModel.config.provider,
             currentModel: settingsViewModel.config.model,
-            onSelect: { provider, model in
+            onSelect: { provider, model, authMethod in
+                if let authMethod {
+                    settingsViewModel.config.setAuthMethod(authMethod, for: provider)
+                }
                 handleRedoWithModel(provider: provider, model: model)
-            }
+            },
+            isSubscriptionSelected: settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) == .accountSignIn
         )
         .confirmationDialog(
             "Undo Organization?",

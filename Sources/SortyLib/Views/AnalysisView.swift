@@ -355,9 +355,13 @@ struct AnalysisView: View {
             contextMessage: "Sorty will stop the current attempt and restart analysis from the beginning. The model you choose becomes your active model for future runs.",
             selectionActionTitle: "Restart Analysis",
             isSelectionActionProminent: false,
-            onSelect: { provider, model in
+            onSelect: { provider, model, authMethod in
+                if let authMethod {
+                    settingsViewModel.config.setAuthMethod(authMethod, for: provider)
+                }
                 handleFasterModelSelection(provider: provider, model: model)
-            }
+            },
+            isSubscriptionSelected: settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) == .accountSignIn
         )
     }
 

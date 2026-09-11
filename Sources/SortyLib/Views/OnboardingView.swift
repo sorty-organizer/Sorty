@@ -907,10 +907,10 @@ private struct OnboardingIntroContentLayer: View {
                 .accessibilityIdentifier("OnboardingAdvanceButton")
                 .background {
                     Color.clear
-                        .onGeometryChange(for: CGPoint.self) { proxy in
-                            let frame = proxy.frame(in: .named(Self.coordinateSpace))
-                            return CGPoint(x: frame.midX, y: frame.midY)
-                        } action: { center in
+                        .onGeometryChange(for: CGRect.self) { proxy in
+                            proxy.frame(in: .named(Self.coordinateSpace))
+                        } action: { frame in
+                            let center = CGPoint(x: frame.midX, y: frame.midY)
                             if buttonCenter != center {
                                 buttonCenter = center
                             }
@@ -1345,7 +1345,7 @@ private final class RetainedEnergyScanIconView: NSView, @preconcurrency CAAnimat
     }
 }
 
-private struct OnboardingOrbitFile: Identifiable {
+private struct OnboardingOrbitFile: Identifiable, Sendable {
     let id = UUID()
     let name: String
     let ext: String
@@ -1366,9 +1366,7 @@ private struct OnboardingOrbitFile: Identifiable {
     let collapseX: CGFloat
     let collapseY: CGFloat
 
-    // Roughly 2.5–3× larger orbits and drift radii than before, plus more
-    // varied phase/speed so the cloud feels alive instead of just twitching
-    // in place.
+    // Stagger phases and speeds to keep neighboring files from moving together.
     static let files: [OnboardingOrbitFile] = [
         OnboardingOrbitFile(name: "Q3 Report", ext: "pdf", baseX: -292, baseY: -118, driftPhase: 0.0, driftSpeed: 0.62, driftRadius: 22, orbitWidth: 84, orbitHeight: 46, rotation: -13, scale: 1.04, appearDelay: 0.05, collapseX: -30, collapseY: -18),
         OnboardingOrbitFile(name: "Budget 2024", ext: "xlsx", baseX: 286, baseY: -104, driftPhase: 1.3, driftSpeed: 0.74, driftRadius: 20, orbitWidth: 72, orbitHeight: 52, rotation: 11, scale: 0.96, appearDelay: 0.12, collapseX: 26, collapseY: -22),
@@ -1381,31 +1379,6 @@ private struct OnboardingOrbitFile: Identifiable {
         OnboardingOrbitFile(name: "data", ext: "csv", baseX: -126, baseY: 194, driftPhase: 1.8, driftSpeed: 0.64, driftRadius: 20, orbitWidth: 64, orbitHeight: 42, rotation: -5, scale: 0.86, appearDelay: 0.22, collapseX: -14, collapseY: 26),
         OnboardingOrbitFile(name: "archive", ext: "zip", baseX: 128, baseY: 204, driftPhase: 3.9, driftSpeed: 0.76, driftRadius: 24, orbitWidth: 70, orbitHeight: 48, rotation: 10, scale: 0.9, appearDelay: 0.28, collapseX: 16, collapseY: 28)
     ]
-}
-
-private struct OnboardingSineAnimationSpec: Sendable {
-    let fileID: UUID
-    let animationKey: String
-    let keyPath: String
-    let amplitude: Double
-    let angularSpeed: Double
-    let phase: Double
-}
-
-private struct OnboardingSineAnimationPayload: Sendable {
-    let fileID: UUID
-    let animationKey: String
-    let keyPath: String
-    let values: OnboardingAnimationNumberArray
-    let keyTimes: OnboardingAnimationNumberArray
-    let duration: Double
-}
-
-/// NSNumber is immutable here. Wrapping the arrays lets the detached numeric
-/// preparation include Foundation boxing without sending Core Animation or
-/// AppKit objects across actors.
-private struct OnboardingAnimationNumberArray: @unchecked Sendable {
-    let values: [NSNumber]
 }
 
 private struct OnboardingSourceIcon: @unchecked Sendable {
@@ -1562,7 +1535,7 @@ private struct OnboardingOrbitField: NSViewRepresentable {
 }
 
 /// Keeps every material-backed file chip mounted and updates only layer
-/// position, transform, and opacity from a display link.
+/// compositor keyframes. The display link runs only during hover transitions.
 @MainActor
 private final class OnboardingOrbitFieldView: NSView {
     private static let interactionFrameRate: Float = 120
@@ -1588,8 +1561,17 @@ private final class OnboardingOrbitFieldView: NSView {
     private var reduceMotion = false
     private var isActive = true
     private var configuredIcons: [String: NSImage] = [:]
-    private var preparedInitialIdleAnimations: [UUID: [String: CAKeyframeAnimation]] = [:]
-    private var idleAnimationPreparationTask: Task<Void, Never>?
+    private struct IdleSamples: Sendable {
+        let fileID: UUID
+        let positions: [CGPoint]
+        let rotations: [Double]
+    }
+
+    private var animationBounds: CGRect = .zero
+    private var idlePreparationTask: Task<Void, Never>?
+    private var idlePaths: [UUID: CGPath] = [:]
+    private var positionAnimations: [UUID: CAKeyframeAnimation] = [:]
+    private var rotationAnimations: [UUID: CAKeyframeAnimation] = [:]
 
     override var isFlipped: Bool { true }
 
@@ -1607,7 +1589,6 @@ private final class OnboardingOrbitFieldView: NSView {
         layer?.masksToBounds = false
         setAccessibilityElement(false)
         installHosts(icons: [:])
-        prepareInitialIdleAnimationsIfNeeded()
     }
 
     @available(*, unavailable)
@@ -1618,11 +1599,12 @@ private final class OnboardingOrbitFieldView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window != nil {
+            prepareIdleAnimationsIfNeeded()
             updateHostRasterizationScale()
             installDisplayLinkIfNeeded()
         } else {
-            idleAnimationPreparationTask?.cancel()
-            idleAnimationPreparationTask = nil
+            idlePreparationTask?.cancel()
+            idlePreparationTask = nil
             stopIdleAnimations(preservingPhase: false)
             revealWorkItems.forEach { $0.cancel() }
             revealWorkItems.removeAll()
@@ -1634,9 +1616,10 @@ private final class OnboardingOrbitFieldView: NSView {
 
     override func layout() {
         super.layout()
-        if idleAnimationStartedAt != nil {
-            configureIdleBaseLayers()
-        } else {
+        if idleAnimationStartedAt != nil, animationBounds != bounds {
+            stopIdleAnimations(preservingPhase: true)
+            updateMotionState()
+        } else if idleAnimationStartedAt == nil {
             renderFrame()
         }
     }
@@ -1662,7 +1645,6 @@ private final class OnboardingOrbitFieldView: NSView {
             installHosts(icons: icons)
             updateHostedIcons(icons)
             configuredIcons = icons
-            prepareInitialIdleAnimationsIfNeeded()
         }
 
         if self.filesVisible != filesVisible {
@@ -1825,189 +1807,90 @@ private final class OnboardingOrbitFieldView: NSView {
         updateMotionState()
     }
 
+    private func prepareIdleAnimationsIfNeeded() {
+        guard idlePaths.isEmpty, idlePreparationTask == nil else { return }
+        let files = OnboardingOrbitFile.files
+        idlePreparationTask = Task { [weak self] in
+            let preparation = Task.detached(priority: .userInitiated) {
+                Self.makeIdleSamples(files: files)
+            }
+            let samples = await withTaskCancellationHandler {
+                await preparation.value
+            } onCancel: {
+                preparation.cancel()
+            }
+            guard !Task.isCancelled, let self else { return }
+            idlePreparationTask = nil
+            for sample in samples {
+                let path = CGMutablePath()
+                path.addLines(between: sample.positions)
+                idlePaths[sample.fileID] = path.copy()
+
+                let rotation = CAKeyframeAnimation(keyPath: "transform.rotation.z")
+                rotation.values = sample.rotations.map { NSNumber(value: $0) }
+                rotation.duration = 2 * .pi / 0.7
+                rotation.repeatCount = .infinity
+                rotation.calculationMode = .linear
+                rotationAnimations[sample.fileID] = rotation
+            }
+            updateMotionState()
+        }
+    }
+
+    nonisolated private static func makeIdleSamples(files: [OnboardingOrbitFile]) -> [IdleSamples] {
+        files.compactMap { file in
+            guard !Task.isCancelled else { return nil }
+            let duration = 2 * Double.pi / file.driftSpeed
+            let count = max(120, Int(ceil(duration * idleSampleRate)))
+            let positions = (0...count).map { index in
+                let phase = duration * Double(index) / Double(count)
+                let offset = orbitOffset(for: file, phase: phase)
+                return CGPoint(x: offset.width, y: offset.height)
+            }
+            let rotationCount = max(120, Int(ceil(2 * .pi / 0.7 * idleSampleRate)))
+            let rotations = (0...rotationCount).map { index in
+                let phase = file.driftPhase + 2 * .pi * Double(index) / Double(rotationCount)
+                return (file.rotation + sin(phase) * 3) * .pi / 180
+            }
+            return IdleSamples(fileID: file.id, positions: positions, rotations: rotations)
+        }
+    }
+
     private func startIdleAnimationsIfNeeded() {
-        guard idleAnimationStartedAt == nil, !bounds.isEmpty else { return }
+        guard idleAnimationStartedAt == nil, !bounds.isEmpty, !idlePaths.isEmpty else { return }
+        if animationBounds != bounds || positionAnimations.isEmpty {
+            animationBounds = bounds
+            for file in OnboardingOrbitFile.files {
+                var translation = CGAffineTransform(translationX: bounds.midX, y: bounds.midY)
+                let animation = CAKeyframeAnimation(keyPath: "position")
+                animation.path = idlePaths[file.id]?.copy(using: &translation)
+                animation.duration = 2 * .pi / file.driftSpeed
+                animation.repeatCount = .infinity
+                animation.calculationMode = .linear
+                positionAnimations[file.id] = animation
+            }
+        }
         let startedAt = CACurrentMediaTime()
         idleAnimationStartedAt = startedAt
         idleAnimationBasePhase = orbitPhase
 
-        // Commit the base-layer reset and all additive orbit animations as one
-        // compositor update. Committing the base positions first exposes a
-        // single frame with every chip at its unanimated resting point when
-        // the expansion spring hands back to the idle orbit.
+        // Install model positions and animations together to avoid a handoff snap.
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         configureIdleBaseLayers()
-
         for file in OnboardingOrbitFile.files {
-            guard let chipLayer = hosts[file.id]?.layer else { continue }
+            guard let chipLayer = hosts[file.id]?.layer,
+                  let position = positionAnimations[file.id],
+                  let rotation = rotationAnimations[file.id] else { continue }
             let localStartTime = chipLayer.convertTime(startedAt, from: nil)
-            chipLayer.add(
-                initialOrCurrentSineAnimation(
-                    for: file,
-                    animationKey: "idleOrbitX",
-                    keyPath: "position.x",
-                    amplitude: file.orbitWidth * 1.18,
-                    angularSpeed: file.driftSpeed,
-                    phase: file.driftPhase + .pi / 2,
-                    beginTime: localStartTime
-                ),
-                forKey: "idleOrbitX"
-            )
-            chipLayer.add(
-                initialOrCurrentSineAnimation(
-                    for: file,
-                    animationKey: "idleDriftX",
-                    keyPath: "position.x",
-                    amplitude: file.driftRadius * 1.28,
-                    angularSpeed: 0.42,
-                    phase: file.driftPhase + .pi / 2,
-                    beginTime: localStartTime
-                ),
-                forKey: "idleDriftX"
-            )
-            chipLayer.add(
-                initialOrCurrentSineAnimation(
-                    for: file,
-                    animationKey: "idleOrbitY",
-                    keyPath: "position.y",
-                    amplitude: file.orbitHeight * 1.22,
-                    angularSpeed: file.driftSpeed,
-                    phase: file.driftPhase,
-                    beginTime: localStartTime
-                ),
-                forKey: "idleOrbitY"
-            )
-            chipLayer.add(
-                initialOrCurrentSineAnimation(
-                    for: file,
-                    animationKey: "idleDriftY",
-                    keyPath: "position.y",
-                    amplitude: file.driftRadius * 1.32,
-                    angularSpeed: 0.35,
-                    phase: file.driftPhase,
-                    beginTime: localStartTime
-                ),
-                forKey: "idleDriftY"
-            )
-            chipLayer.add(
-                initialOrCurrentSineAnimation(
-                    for: file,
-                    animationKey: "idleRotation",
-                    keyPath: "transform.rotation.z",
-                    amplitude: 3 * .pi / 180,
-                    angularSpeed: 0.7,
-                    phase: file.driftPhase,
-                    beginTime: localStartTime
-                ),
-                forKey: "idleRotation"
-            )
-        }
-        preparedInitialIdleAnimations.removeAll()
-        CATransaction.commit()
-    }
-
-    /// Build the initial 50 keyframe payloads while the intro icon owns the
-    /// stage. Creating thousands of boxed values when the cards first become
-    /// visible otherwise competes with their material rasterization.
-    private func prepareInitialIdleAnimationsIfNeeded() {
-        guard preparedInitialIdleAnimations.isEmpty,
-              idleAnimationPreparationTask == nil,
-              orbitPhase == 0 else { return }
-
-        let specs = OnboardingOrbitFile.files.flatMap(Self.initialIdleAnimationSpecs(for:))
-        idleAnimationPreparationTask = Task { [weak self] in
-            let payloads = await Task.detached(priority: .userInitiated) {
-                Self.makeInitialIdleAnimationPayloads(specs)
-            }.value
-            self?.idleAnimationPreparationTask = nil
-            guard !Task.isCancelled, let self, orbitPhase == 0 else { return }
-            installInitialIdleAnimations(payloads)
-        }
-    }
-
-    nonisolated private static func initialIdleAnimationSpecs(
-        for file: OnboardingOrbitFile
-    ) -> [OnboardingSineAnimationSpec] {
-        [
-            .init(fileID: file.id, animationKey: "idleOrbitX", keyPath: "position.x", amplitude: Double(file.orbitWidth * 1.18), angularSpeed: file.driftSpeed, phase: file.driftPhase + .pi / 2),
-            .init(fileID: file.id, animationKey: "idleDriftX", keyPath: "position.x", amplitude: Double(file.driftRadius * 1.28), angularSpeed: 0.42, phase: file.driftPhase + .pi / 2),
-            .init(fileID: file.id, animationKey: "idleOrbitY", keyPath: "position.y", amplitude: Double(file.orbitHeight * 1.22), angularSpeed: file.driftSpeed, phase: file.driftPhase),
-            .init(fileID: file.id, animationKey: "idleDriftY", keyPath: "position.y", amplitude: Double(file.driftRadius * 1.32), angularSpeed: 0.35, phase: file.driftPhase),
-            .init(fileID: file.id, animationKey: "idleRotation", keyPath: "transform.rotation.z", amplitude: 3 * .pi / 180, angularSpeed: 0.7, phase: file.driftPhase)
-        ]
-    }
-
-    nonisolated private static func makeInitialIdleAnimationPayloads(
-        _ specs: [OnboardingSineAnimationSpec]
-    ) -> [OnboardingSineAnimationPayload] {
-        var keyTimesBySampleCount: [Int: OnboardingAnimationNumberArray] = [:]
-        return specs.map { spec in
-            let duration = 2 * Double.pi / spec.angularSpeed
-            let sampleCount = max(120, Int(ceil(duration * idleSampleRate)))
-            let startingValue = spec.amplitude * sin(spec.phase)
-            let values = (0...sampleCount).map { index in
-                let progress = Double(index) / Double(sampleCount)
-                return NSNumber(
-                    value: spec.amplitude * sin(spec.phase + progress * 2 * .pi) - startingValue
-                )
+            for animation in [position, rotation] {
+                animation.beginTime = localStartTime
+                animation.timeOffset = orbitPhase.truncatingRemainder(dividingBy: animation.duration)
             }
-            let keyTimes = keyTimesBySampleCount[sampleCount] ?? {
-                let times = OnboardingAnimationNumberArray(
-                    values: (0...sampleCount).map { index in
-                        NSNumber(value: Double(index) / Double(sampleCount))
-                    }
-                )
-                keyTimesBySampleCount[sampleCount] = times
-                return times
-            }()
-            return OnboardingSineAnimationPayload(
-                fileID: spec.fileID,
-                animationKey: spec.animationKey,
-                keyPath: spec.keyPath,
-                values: OnboardingAnimationNumberArray(values: values),
-                keyTimes: keyTimes,
-                duration: duration
-            )
+            chipLayer.add(position, forKey: "idlePosition")
+            chipLayer.add(rotation, forKey: "idleRotation")
         }
-    }
-
-    private func installInitialIdleAnimations(_ payloads: [OnboardingSineAnimationPayload]) {
-        for payload in payloads {
-            let animation = CAKeyframeAnimation(keyPath: payload.keyPath)
-            animation.values = payload.values.values
-            animation.keyTimes = payload.keyTimes.values
-            animation.duration = payload.duration
-            animation.repeatCount = .infinity
-            animation.calculationMode = .linear
-            animation.isAdditive = true
-            animation.isRemovedOnCompletion = false
-            preparedInitialIdleAnimations[payload.fileID, default: [:]][payload.animationKey] = animation
-        }
-    }
-
-    private func initialOrCurrentSineAnimation(
-        for file: OnboardingOrbitFile,
-        animationKey: String,
-        keyPath: String,
-        amplitude: CGFloat,
-        angularSpeed: Double,
-        phase: Double,
-        beginTime: CFTimeInterval
-    ) -> CAKeyframeAnimation {
-        if orbitPhase == 0,
-           let prepared = preparedInitialIdleAnimations[file.id]?[animationKey]?.copy()
-            as? CAKeyframeAnimation {
-            prepared.beginTime = beginTime
-            return prepared
-        }
-        return sineAnimation(
-            keyPath: keyPath,
-            amplitude: amplitude,
-            angularSpeed: angularSpeed,
-            phase: phase,
-            beginTime: beginTime
-        )
+        CATransaction.commit()
     }
 
     private func stopIdleAnimations(preservingPhase: Bool) {
@@ -2032,7 +1915,7 @@ private final class OnboardingOrbitFieldView: NSView {
         for file in OnboardingOrbitFile.files {
             guard let host = hosts[file.id], let chipLayer = host.layer else { continue }
             let fittingSize = hostSizes[file.id] ?? host.fittingSize
-            let orbit = orbitOffset(for: file, phase: idleAnimationBasePhase)
+            let orbit = Self.orbitOffset(for: file, phase: idleAnimationBasePhase)
             if host.bounds.size != fittingSize {
                 host.frame = CGRect(origin: .zero, size: fittingSize)
             }
@@ -2050,45 +1933,7 @@ private final class OnboardingOrbitFieldView: NSView {
         CATransaction.commit()
     }
 
-    private func sineAnimation(
-        keyPath: String,
-        amplitude: CGFloat,
-        angularSpeed: Double,
-        phase: Double,
-        beginTime: CFTimeInterval
-    ) -> CAKeyframeAnimation {
-        let duration = 2 * Double.pi / angularSpeed
-        // Sample the curve at the highest refresh rate this animation targets.
-        // A fixed 120 samples leaves long, slow orbits with visibly stepped
-        // velocity even though Core Animation interpolates their positions.
-        let sampleCount = max(120, Int(ceil(duration * Self.idleSampleRate)))
-        let startingPhase = phase + angularSpeed * orbitPhase
-        let startingValue = Double(amplitude) * sin(startingPhase)
-        let animation = CAKeyframeAnimation(keyPath: keyPath)
-        animation.values = (0...sampleCount).map { index in
-            let progress = Double(index) / Double(sampleCount)
-            let value = Double(amplitude) * sin(startingPhase + progress * 2 * .pi)
-            return NSNumber(value: value - startingValue)
-        }
-        animation.keyTimes = (0...sampleCount).map { index in
-            NSNumber(value: Double(index) / Double(sampleCount))
-        }
-        animation.duration = duration
-        animation.beginTime = beginTime
-        animation.repeatCount = .infinity
-        animation.calculationMode = .linear
-        animation.isAdditive = true
-        animation.isRemovedOnCompletion = false
-        return animation
-    }
-
-    private static let idleAnimationKeys = [
-        "idleOrbitX",
-        "idleDriftX",
-        "idleOrbitY",
-        "idleDriftY",
-        "idleRotation"
-    ]
+    private static let idleAnimationKeys = ["idlePosition", "idleRotation"]
 
     private func advanceCollapseSpring(delta: CFTimeInterval) {
         let displacement = collapseProgress - collapseTarget
@@ -2116,7 +1961,7 @@ private final class OnboardingOrbitFieldView: NSView {
         for file in OnboardingOrbitFile.files {
             guard let host = hosts[file.id], let chipLayer = host.layer else { continue }
             let fittingSize = hostSizes[file.id] ?? host.fittingSize
-            let orbit = orbitOffset(for: file, phase: phase)
+            let orbit = Self.orbitOffset(for: file, phase: phase)
             let collapse = CGSize(
                 width: collapseOrigin.width + file.collapseX * 0.65,
                 height: collapseOrigin.height + file.collapseY * 0.18
@@ -2149,13 +1994,17 @@ private final class OnboardingOrbitFieldView: NSView {
         CATransaction.commit()
     }
 
-    private func orbitOffset(for file: OnboardingOrbitFile, phase: Double) -> CGSize {
+    nonisolated private static func orbitOffset(for file: OnboardingOrbitFile, phase: Double) -> CGSize {
         let orbitalAngle = phase * file.driftSpeed + file.driftPhase
         let orbitalX = cos(orbitalAngle) * file.orbitWidth * 1.18
         let orbitalY = sin(orbitalAngle) * file.orbitHeight * 1.22
-        let driftX = cos(phase * 0.42 + file.driftPhase) * file.driftRadius * 1.28
-        let driftY = sin(phase * 0.35 + file.driftPhase) * file.driftRadius * 1.32
-        return CGSize(width: file.baseX + orbitalX + driftX, height: file.baseY + orbitalY + driftY)
+        // Harmonics share the orbit period so the compositor loop has no seam.
+        let driftX = cos(orbitalAngle * 2) * file.driftRadius
+        let driftY = sin(orbitalAngle * 2) * file.driftRadius
+        return CGSize(
+            width: file.baseX * 1.18 + orbitalX + driftX,
+            height: file.baseY * 1.18 + orbitalY + driftY
+        )
     }
 
 }

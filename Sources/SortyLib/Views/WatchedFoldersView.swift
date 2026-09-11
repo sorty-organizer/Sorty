@@ -1599,10 +1599,14 @@ struct WatchedFolderConfigView: View {
             currentProvider: selectedProvider,
             currentModel: selectedModel,
             contextMessage: "Choose the provider and model used only for this watched folder.",
-            onSelect: { provider, model in
+            onSelect: { provider, model, authMethod in
+                if let authMethod {
+                    settingsViewModel.config.setAuthMethod(authMethod, for: provider)
+                }
                 selectedProvider = provider
                 selectedModel = model
-            }
+            },
+            isSubscriptionSelected: settingsViewModel.config.authMethod(for: selectedProvider) == .accountSignIn
         )
         .sheet(isPresented: $showSavedPromptsSheet) {
             SavedPromptsSheet(

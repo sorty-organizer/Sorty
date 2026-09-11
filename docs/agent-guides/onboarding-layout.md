@@ -64,7 +64,7 @@ clear glass over an adaptive control-background fill in light mode so retained
 rasterization does not turn the decorative cards into dark gray slabs. Use
 semantic low-opacity fills and adaptive AppKit background colors for onboarding
 cards and access education so their contrast remains correct in both appearances. Its
-idle sine components run as additive Core Animation keyframes sampled at the
+idle position paths and rotation run as Core Animation keyframes sampled at the
 interaction refresh rate; do not reduce them to a fixed sample count because
 the slower cycles expose stepped velocity. Each finished chip is rasterized at
 the window's native backing scale, preserving its glass
@@ -72,11 +72,15 @@ appearance while pointer-event processing moves one cached compositor surface
 per file. The full-window AppKit container returns `nil` from `hitTest` so
 pointer movement never traverses the decorative card subtree, and identical
 representable inputs must not rewrite the chips' base layers.
-Resolve every workspace icon into one immutable 46-point Retina bitmap and
-prebuild the initial keyframe payloads while the intro icon owns the stage.
-Shared, lazy multi-representation icons can change on their first moving draw,
-and constructing all 50 keyframe arrays at the file reveal competes with the
-cards' first material rasterization.
+Resolve every workspace icon into one immutable 46-point Retina bitmap before
+reveal. Shared, lazy multi-representation icons can change on their first moving draw.
+Prepare orbit and rotation samples off the main actor before reveal, then retain
+Core Animation paths and keyframes. Resume them using the current phase; resizing
+translates cached paths without resampling the orbit.
+The file centers spread 18 percent farther from the intro center. Cards follow
+continuous orbit and drift paths without bouncing off window edges or the
+icon, title, and button. Orbit and drift share a period so paths loop continuously.
+Reduce Motion keeps static positions; CTA hover still owns the collapse spring.
 Keep the screen-edge glow static while the intro orbit is visible. Rebuilding
 and blurring four screen-sized SwiftUI gradients on a frame timeline competes
 with the card compositor for frames without adding meaningful motion. Card
@@ -141,10 +145,10 @@ boundary crossing does not reverse the file spring before re-entry. Keep the
 collapse driven by one continuous, reversible progress value; use a subtle
 curved path and fade only near the button rather than staging independent file
 timers that cannot reverse cleanly. When the expansion spring finishes, install
-the idle orbit's base layers and additive animations in one Core Animation
+the idle orbit's base layers and animations in one Core Animation
 transaction; committing the base positions separately produces a one-frame
 snap before orbiting resumes. Seed those model layers with the final spring
-position and make each idle animation additive relative to that exact phase,
+position and start each idle animation at that exact phase,
 so a delayed first animation frame cannot expose the files' static resting
 positions. Remove the idle animations and render the first spring frame in one
 transaction for the same reason. Keep this CTA's system glass
@@ -194,6 +198,12 @@ provider is still selected, preventing rapid selection changes from publishing
 stale model lists. The onboarding-specific Copilot catalog request is likewise
 single-flight and is cancelled when the provider pane disappears or selection
 moves away from Copilot.
+
+Model picker callbacks include the selected OpenAI authentication method. Apply
+it alongside the model in settings, retries, history, learnings, and automation;
+other providers leave authentication unchanged. API and subscription catalog
+caches must not substitute for each other. Forced refreshes bypass both cache
+layers, and successful refreshes clear earlier error and fallback indicators.
 
 GitHub Copilot authentication follows the same distinct-state rule: cancelled
 status checks stop before publishing, profile refresh stays inside the single

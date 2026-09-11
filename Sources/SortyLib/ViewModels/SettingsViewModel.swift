@@ -495,7 +495,11 @@ public class SettingsViewModel: ObservableObject {
         modelRefreshTask = Task { [weak self] in
             guard let self else { return }
             let loadStartedAt = Date()
-            await ModelCatalog.shared.refresh(provider: provider, force: force)
+            await ModelCatalog.shared.refresh(
+                provider: provider,
+                force: force,
+                authMethod: self.config.authMethod(for: provider)
+            )
             guard !Task.isCancelled, self.config.provider == provider else { return }
 
             let catalogModels = ModelCatalog.shared.cachedModels(for: provider)
@@ -506,7 +510,10 @@ public class SettingsViewModel: ObservableObject {
             if self.availableModels != resolvedModels {
                 self.availableModels = resolvedModels
             }
-            if !resolvedModels.isEmpty && !resolvedModels.contains(self.config.model) {
+            let isKnownCodexModel = provider == .openAI
+                && ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: self.config) == .accountSignIn
+                && ModelCatalog.shared.isCodexSubscriptionModel(self.config.model)
+            if !resolvedModels.isEmpty, !isKnownCodexModel, !resolvedModels.contains(self.config.model) {
                 self.config.model = resolvedModels.first ?? provider.defaultModel
             }
             self.isLoadingModels = false

@@ -153,7 +153,8 @@ extension View {
         onReset: (() -> Void)? = nil,
         reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)? = nil,
         onSelectReasoningEffort: ((ReasoningEffort) -> Void)? = nil,
-        onSelect: @escaping (AIProvider, String) -> Void
+        onSelect: @escaping (AIProvider, String, ProviderAuthMethod?) -> Void,
+        isSubscriptionSelected: Bool = false
     ) -> some View {
         modifier(
             ModelSelectionOverlayModifier(
@@ -167,7 +168,8 @@ extension View {
                 onReset: onReset,
                 reasoningEffortForModel: reasoningEffortForModel,
                 onSelectReasoningEffort: onSelectReasoningEffort,
-                onSelect: onSelect
+                onSelect: onSelect,
+                isSubscriptionSelected: isSubscriptionSelected
             )
         )
     }
@@ -191,7 +193,8 @@ struct ModelSelectionPopover: View {
     let reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)?
     let onSelectReasoningEffort: ((ReasoningEffort) -> Void)?
     let popoverSize: CGSize
-    let onSelect: (AIProvider, String) -> Void
+    let onSelect: (AIProvider, String, ProviderAuthMethod?) -> Void
+    let isSubscriptionSelected: Bool
 
     private let cornerRadius: CGFloat = 12
     
@@ -207,7 +210,10 @@ struct ModelSelectionPopover: View {
     @State private var showFreeOnly: Bool = false
     @State private var showCodexOnly: Bool = false
     @State private var isContextMessageVisible = true
+    @AppStorage("hasDismissedModelPickerGuidance") private var hasDismissedGuidance = false
     @AppStorage(CodexSubscriptionSettings.fastModeKey) private var isCodexFastModeEnabled = false
+    @AppStorage(FastModeSettings.openAIFastModeKey) private var isOpenAIFastModeEnabled = false
+    @AppStorage(FastModeSettings.openRouterFastModeKey) private var isOpenRouterFastModeEnabled = false
 
     init(
         isPresented: Binding<Bool>,
@@ -221,7 +227,8 @@ struct ModelSelectionPopover: View {
         reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)? = nil,
         onSelectReasoningEffort: ((ReasoningEffort) -> Void)? = nil,
         popoverSize: CGSize = CGSize(width: 500, height: 420),
-        onSelect: @escaping (AIProvider, String) -> Void
+        onSelect: @escaping (AIProvider, String, ProviderAuthMethod?) -> Void,
+        isSubscriptionSelected: Bool = false
     ) {
         self._isPresented = isPresented
         self.currentProvider = currentProvider
@@ -235,6 +242,8 @@ struct ModelSelectionPopover: View {
         self.onSelectReasoningEffort = onSelectReasoningEffort
         self.popoverSize = popoverSize
         self.onSelect = onSelect
+        self.isSubscriptionSelected = isSubscriptionSelected
+        self._showCodexOnly = State(initialValue: isSubscriptionSelected && currentProvider == .openAI && FeatureFlags.subscriptionAuthEnabled)
     }
     
     private var availableProviders: [AIProvider] {
@@ -279,7 +288,7 @@ struct ModelSelectionPopover: View {
     }
 
     private func isCodexModel(_ modelId: String) -> Bool {
-        modelCatalog.codexSubscriptionModels.contains { $0.id == modelId }
+        modelCatalog.isCodexSubscriptionModel(modelId)
     }
 
     private func codexFastModeAvailability(for modelId: String) -> Bool? {
@@ -293,6 +302,33 @@ struct ModelSelectionPopover: View {
         codexFastModeAvailability(for: modelId) == true
     }
 
+    private func fastModeRow(
+        isOn: Binding<Bool>,
+        disabled: Bool,
+        helpText: String
+    ) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "bolt.fill")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.orange)
+
+            Text("Fast mode")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Toggle("Fast mode", isOn: isOn)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .labelsHidden()
+                .disabled(disabled)
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
+        .help(helpText)
+    }
+
     /// Returns whether a model supports vision (for badge display)
     private func isVisionModel(_ modelId: String) -> Bool {
         modelCatalog.supportsVision(modelId: modelId, provider: selectedProvider)
@@ -302,7 +338,7 @@ struct ModelSelectionPopover: View {
         VStack(spacing: 0) {
             header
             Divider()
-            if let contextMessage, !contextMessage.isEmpty, isContextMessageVisible {
+            if let contextMessage, !contextMessage.isEmpty, isContextMessageVisible, !hasDismissedGuidance {
                 contextMessageView(message: contextMessage)
                 Divider()
             }
@@ -325,12 +361,16 @@ struct ModelSelectionPopover: View {
             await Task.yield()
             isSearchFocused = true
             isSearchAccessibilityFocused = true
-            await modelCatalog.refresh(provider: currentProvider)
+            await modelCatalog.refresh(provider: currentProvider, authMethod: selectedAuthMethod)
         }
         .onChange(of: showCodexOnly) { _, isEnabled in
-            guard isEnabled else { return }
+            guard selectedProvider == .openAI else { return }
+            selectedModel = ""
             Task {
-                await modelCatalog.refreshCodexSubscriptionModels()
+                await modelCatalog.refresh(
+                    provider: .openAI,
+                    authMethod: isEnabled ? .accountSignIn : .apiKey
+                )
             }
         }
         .onChange(of: selectedModel) { _, model in
@@ -361,6 +401,7 @@ struct ModelSelectionPopover: View {
 
             Button {
                 HapticFeedbackManager.shared.light()
+                hasDismissedGuidance = true
                 if reduceMotion {
                     isContextMessageVisible = false
                 } else {
@@ -468,10 +509,11 @@ struct ModelSelectionPopover: View {
                     : .spring(response: 0.3, dampingFraction: 0.82)
             ) {
                 selectedProvider = provider
+                selectedModel = ""
                 showCustomInput = false
             }
             Task {
-                await modelCatalog.refresh(provider: provider)
+                await modelCatalog.refresh(provider: provider, authMethod: selectedAuthMethod)
             }
         } label: {
             HStack(spacing: 8) {
@@ -530,7 +572,7 @@ struct ModelSelectionPopover: View {
                     .help("Show only free models")
                 }
 
-                if selectedProvider == .openAI {
+                if selectedProvider == .openAI && FeatureFlags.subscriptionAuthEnabled {
                     HStack(spacing: 4) {
                         Text("Codex")
                             .font(.system(size: 10))
@@ -549,7 +591,7 @@ struct ModelSelectionPopover: View {
                         if showCodexOnly && selectedProvider == .openAI {
                             await modelCatalog.refreshCodexSubscriptionModels(force: true)
                         } else {
-                            await modelCatalog.refresh(provider: selectedProvider, force: true)
+                            await modelCatalog.refresh(provider: selectedProvider, force: true, authMethod: selectedAuthMethod)
                         }
                     }
                 } label: {
@@ -582,29 +624,24 @@ struct ModelSelectionPopover: View {
             .padding(.bottom, 6)
 
             if selectedProvider == .openAI && showCodexOnly {
-                HStack(spacing: 6) {
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.orange)
-
-                    Text("Fast mode")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary)
-
-                    Spacer()
-
-                    Toggle("", isOn: $isCodexFastModeEnabled)
-                        .toggleStyle(.switch)
-                        .controlSize(.mini)
-                        .labelsHidden()
-                        .disabled(!supportsCodexFastMode(selectedModel))
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 6)
-                .help(
-                    supportsCodexFastMode(selectedModel)
+                fastModeRow(
+                    isOn: $isCodexFastModeEnabled,
+                    disabled: !supportsCodexFastMode(selectedModel),
+                    helpText: supportsCodexFastMode(selectedModel)
                         ? "Use Codex's faster priority service tier"
                         : "Fast mode isn't available for this model"
+                )
+            } else if selectedProvider == .openAI {
+                fastModeRow(
+                    isOn: $isOpenAIFastModeEnabled,
+                    disabled: false,
+                    helpText: "Use OpenAI's fast service tier (billed at a premium)"
+                )
+            } else if selectedProvider == .openRouter {
+                fastModeRow(
+                    isOn: $isOpenRouterFastModeEnabled,
+                    disabled: false,
+                    helpText: "Prefer higher token throughput; provider prices may vary"
                 )
             }
             
@@ -617,10 +654,14 @@ struct ModelSelectionPopover: View {
                     if modelCatalog.usingFallback[selectedProvider] ?? false {
                         fallbackWarningView
                     }
-                    
-                    ForEach(modelsForSelectedProvider, id: \.self) { model in
-                        modelRow(model)
-                            .transition(modelRowTransition)
+
+                    if modelCatalog.isFetching[selectedProvider] ?? false {
+                        modelListSkeleton
+                    } else {
+                        ForEach(modelsForSelectedProvider, id: \.self) { model in
+                            modelRow(model)
+                                .transition(modelRowTransition)
+                        }
                     }
                     
                     if !showCustomInput {
@@ -761,6 +802,24 @@ struct ModelSelectionPopover: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
     }
+
+    private var modelListSkeleton: some View {
+        ForEach(0..<5, id: \.self) { _ in
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.primary.opacity(0.12))
+                    .frame(width: 140, height: 12)
+                Spacer()
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.primary.opacity(0.08))
+                    .frame(width: 52, height: 12)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .shimmer(isLoading: true)
+            .accessibilityHidden(true)
+        }
+    }
     
     private var customModelButton: some View {
         Button {
@@ -816,18 +875,48 @@ struct ModelSelectionPopover: View {
     
     // MARK: - Footer
     
+    private var selectedAuthMethod: ProviderAuthMethod? {
+        guard selectedProvider == .openAI else { return nil }
+        return showCodexOnly ? .accountSignIn : .apiKey
+    }
+
+    private var isFastBadgeVisible: Bool {
+        switch selectedProvider {
+        case .openAI:
+            if showCodexOnly {
+                return isCodexFastModeEnabled && supportsCodexFastMode(selectedModel)
+            }
+            return isOpenAIFastModeEnabled
+        case .openRouter:
+            return isOpenRouterFastModeEnabled
+        case .githubCopilot, .groq, .openAICompatible, .ollama, .anthropic, .gemini, .appleFoundationModel:
+            return false
+        }
+    }
+
     private var footer: some View {
         HStack {
             if !selectedModel.isEmpty {
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     ProviderLogoView(provider: selectedProvider, size: 12)
                     Text("\(selectedProvider.displayName) / \(selectedModel)")
                         .font(.system(size: 12))
                         .lineLimit(1)
+                        .truncationMode(.middle)
                         .numericTextTransition(
                             animationValue: "\(selectedProvider.rawValue)-\(selectedModel)"
                         )
+                    if isFastBadgeVisible {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(.white)
+                            .fixedSize()
+                            .transition(.opacity.combined(with: .scale(scale: 0.7)))
+                            .help("Fast mode enabled")
+                            .accessibilityLabel("Fast mode enabled")
+                    }
                 }
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isFastBadgeVisible)
             } else {
                 Text("Select a model")
                     .font(.system(size: 12))
@@ -845,6 +934,8 @@ struct ModelSelectionPopover: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(width: 104)
+                .foregroundColor(.primary)
+                .tint(.primary)
                 .help(reasoningHelpText)
                 .accessibilityLabel("Reasoning effort")
                 .accessibilityValue(selectedReasoningEffort.displayName)
@@ -872,13 +963,13 @@ struct ModelSelectionPopover: View {
             .keyboardShortcut(.escape, modifiers: [])
             
             Button(selectionActionTitle) {
-                onSelect(selectedProvider, selectedModel)
+                onSelect(selectedProvider, selectedModel, selectedAuthMethod)
                 onSelectReasoningEffort?(selectedReasoningEffort)
                 isPresented = false
             }
             .keyboardShortcut(.return, modifiers: [])
             .buttonStyle(selectionActionButtonStyle)
-            .disabled(selectedModel.isEmpty)
+            .disabled(selectedModel.isEmpty || (modelCatalog.isFetching[selectedProvider] ?? false))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -996,7 +1087,8 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
     let onReset: (() -> Void)?
     let reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)?
     let onSelectReasoningEffort: ((ReasoningEffort) -> Void)?
-    let onSelect: (AIProvider, String) -> Void
+    let onSelect: (AIProvider, String, ProviderAuthMethod?) -> Void
+    let isSubscriptionSelected: Bool
 
     private let contentPadding: CGFloat = 12
     private let idealPopoverSize = CGSize(width: 500, height: 420)
@@ -1029,7 +1121,8 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
                                     reasoningEffortForModel: reasoningEffortForModel,
                                     onSelectReasoningEffort: onSelectReasoningEffort,
                                     popoverSize: resolvedPopoverSize,
-                                    onSelect: onSelect
+                                    onSelect: onSelect,
+                                    isSubscriptionSelected: isSubscriptionSelected
                                 )
                             }
                     }
@@ -1064,6 +1157,6 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
         currentModel: "gpt-4o",
         contextMessage: nil,
         selectionActionTitle: "Select",
-        onSelect: { _, _ in }
+        onSelect: { _, _, _ in }
     )
 }

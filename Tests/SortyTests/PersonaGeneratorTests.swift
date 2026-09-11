@@ -436,6 +436,40 @@ final class PersonaGeneratorTests: XCTestCase {
         XCTAssertFalse(arguments.contains(#"service_tier="priority""#))
     }
 
+    func testOpenAIFastModeSetsFastServiceTier() {
+        var requestBody: [String: Any] = [:]
+        OpenAIClient.configureFastMode(in: &requestBody, provider: .openAI, openAIFastMode: true)
+
+        XCTAssertEqual(requestBody["service_tier"] as? String, "fast")
+    }
+
+    func testOpenAIFastModeOffLeavesServiceTierUnset() {
+        var requestBody: [String: Any] = [:]
+        OpenAIClient.configureFastMode(in: &requestBody, provider: .openAI, openAIFastMode: false)
+
+        XCTAssertNil(requestBody["service_tier"])
+    }
+
+    func testOpenRouterFastModeSortsByThroughput() {
+        var requestBody: [String: Any] = [:]
+        OpenAIClient.configureFastMode(in: &requestBody, provider: .openRouter, openRouterFastMode: true)
+
+        XCTAssertEqual((requestBody["provider"] as? [String: Any])?["sort"] as? String, "throughput")
+    }
+
+    func testFastModeLeavesProvidersWithoutATierUntouched() {
+        var requestBody: [String: Any] = [:]
+        OpenAIClient.configureFastMode(
+            in: &requestBody,
+            provider: .groq,
+            openAIFastMode: true,
+            openRouterFastMode: true
+        )
+
+        XCTAssertNil(requestBody["service_tier"])
+        XCTAssertNil(requestBody["provider"])
+    }
+
     func testOpenRouterStructuredObjectRequestsUseSelectedReasoningAndRequireJSON() throws {
         var requestBody: [String: Any] = ["temperature": AIConfig.organizationTemperature]
 

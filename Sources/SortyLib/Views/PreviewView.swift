@@ -236,7 +236,13 @@ struct PreviewView: View {
             isPresented: $showRedoModelPicker,
             currentProvider: settingsViewModel.config.provider,
             currentModel: settingsViewModel.config.model,
-            onSelect: redoWithProviderAndModel
+            onSelect: { provider, model, authMethod in
+                if let authMethod {
+                    settingsViewModel.config.setAuthMethod(authMethod, for: provider)
+                }
+                redoWithProviderAndModel(provider, model)
+            },
+            isSubscriptionSelected: settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) == .accountSignIn
         )
         .environmentObject(dragDropManager)
         .background(Color(NSColor.windowBackgroundColor))

@@ -327,7 +327,10 @@ struct LearningsView: View {
             onReset: {
                 manager.clearLearningsModelOverride()
             },
-            onSelect: { provider, model in
+            onSelect: { provider, model, authMethod in
+                if let authMethod {
+                    settingsViewModel.config.setAuthMethod(authMethod, for: provider)
+                }
                 HapticFeedbackManager.shared.selection()
                 if provider == settingsViewModel.config.provider
                     && model == settingsViewModel.config.model
@@ -336,7 +339,8 @@ struct LearningsView: View {
                 } else {
                     manager.setLearningsModelOverride(provider: provider, model: model)
                 }
-            }
+            },
+            isSubscriptionSelected: settingsViewModel.config.authMethod(for: usesDedicatedLearningsModel ? (manager.learningsModelSelection?.provider ?? settingsViewModel.config.provider) : settingsViewModel.config.provider) == .accountSignIn
         )
         .sheet(item: $selectedLearningRecordsCategory) { category in
             if let profile = manager.currentProfile {

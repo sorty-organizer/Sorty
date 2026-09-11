@@ -3,6 +3,70 @@ import XCTest
 
 @MainActor
 final class ModelCatalogVisionSupportTests: XCTestCase {
+    func testCodexRefreshClearsErrorsAndFallbackAfterRecovery() async {
+        var shouldFail = true
+        let models = [ModelInfo(id: "subscription-model", displayName: "Subscription model", provider: .openAI)]
+        let catalog = ModelCatalog(codexModelLoader: {
+            if shouldFail { throw URLError(.notConnectedToInternet) }
+            return models
+        })
+
+        await catalog.refreshCodexSubscriptionModels(force: true)
+        XCTAssertNotNil(catalog.lastError[.openAI] ?? nil)
+        XCTAssertEqual(catalog.isFetching[.openAI], false)
+
+        shouldFail = false
+        await catalog.refreshCodexSubscriptionModels(force: true)
+        XCTAssertNil(catalog.lastError[.openAI] ?? nil)
+        XCTAssertEqual(catalog.codexSubscriptionModels, models)
+        XCTAssertEqual(catalog.usingFallback[.openAI], false)
+
+        shouldFail = true
+        await catalog.refreshCodexSubscriptionModels(force: true)
+        XCTAssertEqual(catalog.codexSubscriptionModels, models)
+        XCTAssertEqual(catalog.usingFallback[.openAI], true)
+
+        shouldFail = false
+        await catalog.refreshCodexSubscriptionModels(force: true)
+        XCTAssertNil(catalog.lastError[.openAI] ?? nil)
+        XCTAssertEqual(catalog.usingFallback[.openAI], false)
+        XCTAssertEqual(catalog.isFetching[.openAI], false)
+    }
+
+    func testOlderCodexRefreshCannotOverwriteNewerResult() async {
+        var firstRequest: CheckedContinuation<[ModelInfo], Error>?
+        var firstStarted: CheckedContinuation<Void, Never>?
+        var callCount = 0
+        let latest = [ModelInfo(id: "latest", displayName: "Latest", provider: .openAI)]
+        let catalog = ModelCatalog(codexModelLoader: {
+            callCount += 1
+            if callCount == 1 {
+                return try await withCheckedThrowingContinuation { continuation in
+                    firstRequest = continuation
+                    firstStarted?.resume()
+                }
+            }
+            return latest
+        })
+
+        let older = Task { await catalog.refreshCodexSubscriptionModels(force: true) }
+        await withCheckedContinuation { continuation in
+            if firstRequest != nil {
+                continuation.resume()
+            } else {
+                firstStarted = continuation
+            }
+        }
+        await catalog.refreshCodexSubscriptionModels(force: true)
+        firstRequest?.resume(throwing: URLError(.timedOut))
+        await older.value
+
+        XCTAssertEqual(catalog.codexSubscriptionModels, latest)
+        XCTAssertNil(catalog.lastError[.openAI] ?? nil)
+        XCTAssertEqual(catalog.usingFallback[.openAI], false)
+        XCTAssertEqual(catalog.isFetching[.openAI], false)
+    }
+
     func testKnownVisionModelsReturnTrue() {
         XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "gpt-4o", provider: .openAI))
         XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "claude-sonnet-4", provider: .anthropic))

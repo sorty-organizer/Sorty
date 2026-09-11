@@ -128,10 +128,16 @@ struct AIProviderSettingsView: View {
             onSelectReasoningEffort: { effort in
                 viewModel.config.setReasoningEffort(effort)
             },
-            onSelect: { provider, model in
+            onSelect: { provider, model, authMethod in
                 viewModel.config.provider = provider
                 viewModel.config.model = model
-            }
+                if provider == .openAI, supportsSubscriptionAuthUI, let desired = authMethod {
+                    if desired != viewModel.config.authMethod(for: .openAI) {
+                        setAuthMethod(desired)
+                    }
+                }
+            },
+            isSubscriptionSelected: viewModel.config.authMethod(for: viewModel.config.provider) == .accountSignIn
         )
         .sheet(isPresented: $isShowingCodexDeviceAuth) {
             CodexDeviceAuthSheet(

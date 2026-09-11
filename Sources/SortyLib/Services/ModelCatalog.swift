@@ -65,8 +65,10 @@ public final class ModelCatalog: ObservableObject {
     
     private var cacheTimestamps: [AIProvider: Date] = [:]
     private let session: URLSession
+    private let codexModelLoader: @MainActor () async throws -> [ModelInfo]
     private var searchTask: Task<Void, Never>?
     private var codexModelsTimestamp: Date?
+    private var cachedOpenAIAuthMethod: ProviderAuthMethod?
     private var refreshIDs: [AIProvider: UUID] = [:]
     
     private static let cloudTTL: TimeInterval = 24 * 60 * 60
@@ -78,7 +80,12 @@ public final class ModelCatalog: ObservableObject {
         return appSupport.appendingPathComponent("Sorty/ModelCache")
     }
     
-    public init() {
+    public convenience init() {
+        self.init(codexModelLoader: Self.fetchCodexSubscriptionModels)
+    }
+
+    init(codexModelLoader: @escaping @MainActor () async throws -> [ModelInfo]) {
+        self.codexModelLoader = codexModelLoader
         let config = URLSessionConfiguration.default
         // Optimized timeouts for fast connection establishment
         // Model list fetches should be quick; slow providers will use fallback models
@@ -125,22 +132,52 @@ public final class ModelCatalog: ObservableObject {
             return
         }
 
+        let refreshID = UUID()
+        refreshIDs[.openAI] = refreshID
+        isFetching[.openAI] = true
+        lastError[.openAI] = nil
+        defer {
+            if refreshIDs[.openAI] == refreshID {
+                isFetching[.openAI] = false
+            }
+        }
         do {
-            let models = try await fetchCodexSubscriptionModels()
+            let models = try await codexModelLoader()
+            guard refreshIDs[.openAI] == refreshID, !Task.isCancelled else { return }
             codexSubscriptionModels = models
             codexModelsTimestamp = Date()
+            usingFallback[.openAI] = false
+            lastError[.openAI] = nil
         } catch {
-            lastError[.openAI] = error
+            guard refreshIDs[.openAI] == refreshID, !Task.isCancelled else { return }
             ReliabilityManager.shared.capture(
                 error: error,
                 feature: "model_catalog",
                 operation: "refresh_codex_models"
             )
+            guard codexSubscriptionModels.isEmpty else {
+                usingFallback[.openAI] = true
+                return
+            }
+            lastError[.openAI] = error
         }
     }
+
+    /// Whether a model id is served through the ChatGPT subscription (Codex).
+    public func isCodexSubscriptionModel(_ modelId: String) -> Bool {
+        codexSubscriptionModels.contains { $0.id == modelId }
+    }
     
-    public func refresh(provider: AIProvider, force: Bool = false) async {
-        if !force, let timestamp = cacheTimestamps[provider] {
+    public func refresh(
+        provider: AIProvider,
+        force: Bool = false,
+        authMethod: ProviderAuthMethod? = nil
+    ) async {
+        let resolvedAuth = provider == .openAI
+            ? (authMethod ?? ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: storedAIConfig() ?? .default))
+            : nil
+        let authMatchesCache = provider != .openAI || cachedOpenAIAuthMethod == resolvedAuth
+        if !force, authMatchesCache, let timestamp = cacheTimestamps[provider] {
             let ttl = provider == .ollama ? Self.ollamaTTL : Self.cloudTTL
             if Date().timeIntervalSince(timestamp) < ttl {
                 return
@@ -158,13 +195,16 @@ public final class ModelCatalog: ObservableObject {
         }
         
         do {
-            let result = try await fetchModels(for: provider)
+            let result = try await fetchModels(for: provider, force: force, authMethod: resolvedAuth, refreshID: refreshID)
             let sortedModels = filteredModels(
                 result.models.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending },
                 for: provider
             )
             guard refreshIDs[provider] == refreshID, !Task.isCancelled else { return }
             modelsByProvider[provider] = sortedModels
+            if provider == .openAI {
+                cachedOpenAIAuthMethod = resolvedAuth
+            }
             usingFallback[provider] = result.isFallback
             
             // Only update cache and timestamp if NOT using fallback
@@ -266,10 +306,10 @@ public final class ModelCatalog: ObservableObject {
         }
     }
     
-    private func fetchModels(for provider: AIProvider) async throws -> (models: [ModelInfo], isFallback: Bool) {
+    private func fetchModels(for provider: AIProvider, force: Bool, authMethod: ProviderAuthMethod?, refreshID: UUID) async throws -> (models: [ModelInfo], isFallback: Bool) {
         switch provider {
         case .openAI:
-            return try await fetchOpenAIModels()
+            return try await fetchOpenAIModels(force: force, authMethod: authMethod, refreshID: refreshID)
         case .anthropic:
             return try await fetchAnthropicModels()
         case .gemini:
@@ -289,11 +329,20 @@ public final class ModelCatalog: ObservableObject {
         }
     }
     
-    private func fetchOpenAIModels() async throws -> (models: [ModelInfo], isFallback: Bool) {
-        let config = configForProvider(.openAI)
+    private func fetchOpenAIModels(force: Bool, authMethod: ProviderAuthMethod?, refreshID: UUID) async throws -> (models: [ModelInfo], isFallback: Bool) {
+        var config = configForProvider(.openAI)
+        if let authMethod {
+            config.setAuthMethod(authMethod, for: .openAI)
+        }
         let authMethod = ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config)
 
         if authMethod == .accountSignIn {
+            // Avoid CLI startup while the subscription catalog is fresh.
+            if !force, !codexSubscriptionModels.isEmpty,
+               let codexModelsTimestamp,
+               Date().timeIntervalSince(codexModelsTimestamp) < Self.cloudTTL {
+                return (codexSubscriptionModels, false)
+            }
             // `hasRequiredCredential` may shell out to the Codex CLI (`codex login
             // status`) and block on `Process.waitUntilExit()`. Running that on the
             // main thread spins the run loop and re-enters SwiftUI's in-progress
@@ -302,10 +351,28 @@ public final class ModelCatalog: ObservableObject {
                 ProviderAuthResolver.hasRequiredCredential(for: .openAI, config: config)
             }.value
             if hasCredential {
-                let models = try await fetchCodexSubscriptionModels()
-                codexSubscriptionModels = models
-                codexModelsTimestamp = Date()
-                return (models, false)
+                do {
+                    let models = try await codexModelLoader()
+                    guard refreshIDs[.openAI] == refreshID, !Task.isCancelled else {
+                        throw CancellationError()
+                    }
+                    codexSubscriptionModels = models
+                    codexModelsTimestamp = Date()
+                    return (models, false)
+                } catch {
+                    guard refreshIDs[.openAI] == refreshID, !Task.isCancelled else {
+                        throw CancellationError()
+                    }
+                    ReliabilityManager.shared.capture(
+                        error: error,
+                        feature: "model_catalog",
+                        operation: "refresh_codex_models_stale_fallback"
+                    )
+                    if !codexSubscriptionModels.isEmpty {
+                        return (codexSubscriptionModels, true)
+                    }
+                    throw error
+                }
             }
             return ([], true)
         }
@@ -334,7 +401,7 @@ public final class ModelCatalog: ObservableObject {
         return (models, false)
     }
 
-    private func fetchCodexSubscriptionModels() async throws -> [ModelInfo] {
+    private static func fetchCodexSubscriptionModels() async throws -> [ModelInfo] {
         try await CodexSubscriptionClient.availableModels().map { model in
             ModelInfo(
                 id: model.id,
