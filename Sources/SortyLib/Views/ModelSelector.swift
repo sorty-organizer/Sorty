@@ -374,7 +374,7 @@ struct ModelSelectionPopover: View {
             }
         }
         .onChange(of: selectedModel) { _, model in
-            if showCodexOnly && codexFastModeAvailability(for: model) == false {
+            if showCodexOnly && (model.isEmpty || codexFastModeAvailability(for: model) == false) {
                 isCodexFastModeEnabled = false
             }
             refreshSelectedReasoningEffort(for: model)
