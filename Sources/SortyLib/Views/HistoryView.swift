@@ -374,6 +374,12 @@ struct HistoryView: View {
             isPresented: $showRedoModelPicker,
             currentProvider: settingsViewModel.config.provider,
             currentModel: settingsViewModel.config.model,
+            reasoningEffortForModel: { provider, model in
+                settingsViewModel.config.reasoningEffort(for: provider, model: model)
+            },
+            onSelectReasoningEffort: { provider, model, effort in
+                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
+            },
             onSelect: { provider, model, authMethod in
                 guard let entry = redoModelEntry else { return }
                 if let authMethod {
@@ -1714,6 +1720,12 @@ struct HistoryDetailSheet: View {
             isPresented: $showRedoModelPicker,
             currentProvider: settingsViewModel.config.provider,
             currentModel: settingsViewModel.config.model,
+            reasoningEffortForModel: { provider, model in
+                settingsViewModel.config.reasoningEffort(for: provider, model: model)
+            },
+            onSelectReasoningEffort: { provider, model, effort in
+                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
+            },
             onSelect: { provider, model, authMethod in
                 if let authMethod {
                     settingsViewModel.config.setAuthMethod(authMethod, for: provider)

@@ -196,6 +196,12 @@ struct OrganizeView: View {
             currentModel: settingsViewModel.config.model,
             contextMessage: "Select a stronger model to retry this failed organization attempt. Your selection also becomes the active model for future runs.",
             selectionActionTitle: "Retry with Model",
+            reasoningEffortForModel: { provider, model in
+                settingsViewModel.config.reasoningEffort(for: provider, model: model)
+            },
+            onSelectReasoningEffort: { provider, model, effort in
+                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
+            },
             onSelect: { provider, model, authMethod in
                 if let authMethod {
                     settingsViewModel.config.setAuthMethod(authMethod, for: provider)

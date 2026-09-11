@@ -282,6 +282,12 @@ public struct ProviderSelectionStepView: View {
             currentProvider: settingsViewModel.config.provider,
             currentModel: settingsViewModel.config.model,
             contextMessage: "Choose the provider and model Sorty will use for organization.",
+            reasoningEffortForModel: { provider, model in
+                settingsViewModel.config.reasoningEffort(for: provider, model: model)
+            },
+            onSelectReasoningEffort: { provider, model, effort in
+                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
+            },
             onSelect: { provider, model, authMethod in
                 commitInputDrafts()
                 settingsViewModel.config.provider = provider

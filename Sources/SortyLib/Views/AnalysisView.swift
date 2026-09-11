@@ -355,6 +355,12 @@ struct AnalysisView: View {
             contextMessage: "Sorty will stop the current attempt and restart analysis from the beginning. The model you choose becomes your active model for future runs.",
             selectionActionTitle: "Restart Analysis",
             isSelectionActionProminent: false,
+            reasoningEffortForModel: { provider, model in
+                settingsViewModel.config.reasoningEffort(for: provider, model: model)
+            },
+            onSelectReasoningEffort: { provider, model, effort in
+                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
+            },
             onSelect: { provider, model, authMethod in
                 if let authMethod {
                     settingsViewModel.config.setAuthMethod(authMethod, for: provider)

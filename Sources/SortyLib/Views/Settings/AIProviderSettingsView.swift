@@ -120,13 +120,10 @@ struct AIProviderSettingsView: View {
             currentModel: viewModel.config.model,
             contextMessage: "Choose the provider and model Sorty uses for organization.",
             reasoningEffortForModel: { provider, model in
-                var config = viewModel.config
-                config.provider = provider
-                config.model = model
-                return config.reasoningEffort
+                viewModel.config.reasoningEffort(for: provider, model: model)
             },
-            onSelectReasoningEffort: { effort in
-                viewModel.config.setReasoningEffort(effort)
+            onSelectReasoningEffort: { provider, model, effort in
+                viewModel.config.setReasoningEffort(effort, for: provider, model: model)
             },
             onSelect: { provider, model, authMethod in
                 viewModel.config.provider = provider

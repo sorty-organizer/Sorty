@@ -879,19 +879,34 @@ public struct AIConfig: Codable, Sendable, Equatable {
     }
 
     public var reasoningEffort: ReasoningEffort {
-        reasoningEffortByModel[reasoningPreferenceKey] ?? .automatic
+        reasoningEffort(for: provider, model: model)
     }
 
     public mutating func setReasoningEffort(_ effort: ReasoningEffort) {
+        setReasoningEffort(effort, for: provider, model: model)
+    }
+
+    /// Pair-keyed access so any selection surface can read/write effort for the
+    /// picked model without switching the active config first.
+    public func reasoningEffort(for provider: AIProvider, model: String) -> ReasoningEffort {
+        reasoningEffortByModel[Self.reasoningPreferenceKey(provider: provider, model: model)] ?? .automatic
+    }
+
+    public mutating func setReasoningEffort(_ effort: ReasoningEffort, for provider: AIProvider, model: String) {
+        let key = Self.reasoningPreferenceKey(provider: provider, model: model)
         if effort == .automatic {
-            reasoningEffortByModel.removeValue(forKey: reasoningPreferenceKey)
+            reasoningEffortByModel.removeValue(forKey: key)
         } else {
-            reasoningEffortByModel[reasoningPreferenceKey] = effort
+            reasoningEffortByModel[key] = effort
         }
     }
 
-    private var reasoningPreferenceKey: String {
+    private static func reasoningPreferenceKey(provider: AIProvider, model: String) -> String {
         "\(provider.rawValue)|\(model.lowercased())"
+    }
+
+    private var reasoningPreferenceKey: String {
+        Self.reasoningPreferenceKey(provider: provider, model: model)
     }
 
     public static let `default` = AIConfig(

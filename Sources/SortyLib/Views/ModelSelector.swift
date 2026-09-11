@@ -152,7 +152,7 @@ extension View {
         resetActionTitle: String? = nil,
         onReset: (() -> Void)? = nil,
         reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)? = nil,
-        onSelectReasoningEffort: ((ReasoningEffort) -> Void)? = nil,
+        onSelectReasoningEffort: ((AIProvider, String, ReasoningEffort) -> Void)? = nil,
         onSelect: @escaping (AIProvider, String, ProviderAuthMethod?) -> Void,
         isSubscriptionSelected: Bool = false
     ) -> some View {
@@ -191,7 +191,7 @@ struct ModelSelectionPopover: View {
     let resetActionTitle: String?
     let onReset: (() -> Void)?
     let reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)?
-    let onSelectReasoningEffort: ((ReasoningEffort) -> Void)?
+    let onSelectReasoningEffort: ((AIProvider, String, ReasoningEffort) -> Void)?
     let popoverSize: CGSize
     let onSelect: (AIProvider, String, ProviderAuthMethod?) -> Void
     let isSubscriptionSelected: Bool
@@ -225,7 +225,7 @@ struct ModelSelectionPopover: View {
         resetActionTitle: String? = nil,
         onReset: (() -> Void)? = nil,
         reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)? = nil,
-        onSelectReasoningEffort: ((ReasoningEffort) -> Void)? = nil,
+        onSelectReasoningEffort: ((AIProvider, String, ReasoningEffort) -> Void)? = nil,
         popoverSize: CGSize = CGSize(width: 500, height: 420),
         onSelect: @escaping (AIProvider, String, ProviderAuthMethod?) -> Void,
         isSubscriptionSelected: Bool = false
@@ -983,7 +983,7 @@ struct ModelSelectionPopover: View {
             
             Button(selectionActionTitle) {
                 onSelect(selectedProvider, selectedModel, selectedAuthMethod)
-                onSelectReasoningEffort?(selectedReasoningEffort)
+                onSelectReasoningEffort?(selectedProvider, selectedModel, selectedReasoningEffort)
                 isPresented = false
             }
             .keyboardShortcut(.return, modifiers: [])
@@ -1105,7 +1105,7 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
     let resetActionTitle: String?
     let onReset: (() -> Void)?
     let reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)?
-    let onSelectReasoningEffort: ((ReasoningEffort) -> Void)?
+    let onSelectReasoningEffort: ((AIProvider, String, ReasoningEffort) -> Void)?
     let onSelect: (AIProvider, String, ProviderAuthMethod?) -> Void
     let isSubscriptionSelected: Bool
 

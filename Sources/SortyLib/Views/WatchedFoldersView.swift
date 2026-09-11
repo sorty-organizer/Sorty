@@ -1599,6 +1599,12 @@ struct WatchedFolderConfigView: View {
             currentProvider: selectedProvider,
             currentModel: selectedModel,
             contextMessage: "Choose the provider and model used only for this watched folder.",
+            reasoningEffortForModel: { provider, model in
+                settingsViewModel.config.reasoningEffort(for: provider, model: model)
+            },
+            onSelectReasoningEffort: { provider, model, effort in
+                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
+            },
             onSelect: { provider, model, authMethod in
                 if let authMethod {
                     settingsViewModel.config.setAuthMethod(authMethod, for: provider)
