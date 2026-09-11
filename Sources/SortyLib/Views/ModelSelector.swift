@@ -329,6 +329,25 @@ struct ModelSelectionPopover: View {
         .help(helpText)
     }
 
+    /// Codex and API-key fetches share the OpenAI provider but fail independently;
+    /// only surface the error for the auth mode currently on screen.
+    private var activeFetchError: Error? {
+        if selectedProvider == .openAI && showCodexOnly {
+            return modelCatalog.lastCodexError
+        }
+        return modelCatalog.lastError[selectedProvider] as? Error
+    }
+
+    /// Prefers the actionable failure reason (e.g. the Codex CLI message) over the generic description.
+    private func fetchErrorMessage(for error: Error) -> String {
+        if let aiError = error as? AIClientError,
+           let reason = aiError.failureReason,
+           !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return reason
+        }
+        return error.localizedDescription
+    }
+
     /// Returns whether a model supports vision (for badge display)
     private func isVisionModel(_ modelId: String) -> Bool {
         modelCatalog.supportsVision(modelId: modelId, provider: selectedProvider)
@@ -647,7 +666,7 @@ struct ModelSelectionPopover: View {
             
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    if let error = modelCatalog.lastError[selectedProvider] as? Error {
+                    if let error = activeFetchError {
                         errorView(error)
                     }
                     
@@ -769,7 +788,7 @@ struct ModelSelectionPopover: View {
                 Text("Fetch Failed")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.red)
-                Text(error.localizedDescription)
+                Text(fetchErrorMessage(for: error))
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
                     .lineLimit(2)

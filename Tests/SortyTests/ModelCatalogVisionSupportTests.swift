@@ -12,12 +12,12 @@ final class ModelCatalogVisionSupportTests: XCTestCase {
         })
 
         await catalog.refreshCodexSubscriptionModels(force: true)
-        XCTAssertNotNil(catalog.lastError[.openAI] ?? nil)
+        XCTAssertNotNil(catalog.lastCodexError)
         XCTAssertEqual(catalog.isFetching[.openAI], false)
 
         shouldFail = false
         await catalog.refreshCodexSubscriptionModels(force: true)
-        XCTAssertNil(catalog.lastError[.openAI] ?? nil)
+        XCTAssertNil(catalog.lastCodexError)
         XCTAssertEqual(catalog.codexSubscriptionModels, models)
         XCTAssertEqual(catalog.usingFallback[.openAI], false)
 
@@ -28,7 +28,7 @@ final class ModelCatalogVisionSupportTests: XCTestCase {
 
         shouldFail = false
         await catalog.refreshCodexSubscriptionModels(force: true)
-        XCTAssertNil(catalog.lastError[.openAI] ?? nil)
+        XCTAssertNil(catalog.lastCodexError)
         XCTAssertEqual(catalog.usingFallback[.openAI], false)
         XCTAssertEqual(catalog.isFetching[.openAI], false)
     }
@@ -62,7 +62,7 @@ final class ModelCatalogVisionSupportTests: XCTestCase {
         await older.value
 
         XCTAssertEqual(catalog.codexSubscriptionModels, latest)
-        XCTAssertNil(catalog.lastError[.openAI] ?? nil)
+        XCTAssertNil(catalog.lastCodexError)
         XCTAssertEqual(catalog.usingFallback[.openAI], false)
         XCTAssertEqual(catalog.isFetching[.openAI], false)
     }

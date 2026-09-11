@@ -62,6 +62,9 @@ public final class ModelCatalog: ObservableObject {
     @Published public var searchResults: [(provider: AIProvider, models: [ModelInfo])] = []
     @Published public var usingFallback: [AIProvider: Bool] = [:]
     @Published public private(set) var codexSubscriptionModels: [ModelInfo] = []
+    /// Latest Codex subscription fetch failure. Kept separate from `lastError[.openAI]`
+    /// (API-key path) so one OpenAI auth mode never paints its error over the other's list.
+    @Published public var lastCodexError: Error?
     
     private var cacheTimestamps: [AIProvider: Date] = [:]
     private let session: URLSession
@@ -135,7 +138,7 @@ public final class ModelCatalog: ObservableObject {
         let refreshID = UUID()
         refreshIDs[.openAI] = refreshID
         isFetching[.openAI] = true
-        lastError[.openAI] = nil
+        lastCodexError = nil
         defer {
             if refreshIDs[.openAI] == refreshID {
                 isFetching[.openAI] = false
@@ -147,7 +150,7 @@ public final class ModelCatalog: ObservableObject {
             codexSubscriptionModels = models
             codexModelsTimestamp = Date()
             usingFallback[.openAI] = false
-            lastError[.openAI] = nil
+            lastCodexError = nil
         } catch {
             guard refreshIDs[.openAI] == refreshID, !Task.isCancelled else { return }
             ReliabilityManager.shared.capture(
@@ -159,7 +162,7 @@ public final class ModelCatalog: ObservableObject {
                 usingFallback[.openAI] = true
                 return
             }
-            lastError[.openAI] = error
+            lastCodexError = error
         }
     }
 
@@ -187,7 +190,12 @@ public final class ModelCatalog: ObservableObject {
         let refreshID = UUID()
         refreshIDs[provider] = refreshID
         isFetching[provider] = true
-        lastError[provider] = nil
+        let isCodexFetch = provider == .openAI && resolvedAuth == .accountSignIn
+        if isCodexFetch {
+            lastCodexError = nil
+        } else {
+            lastError[provider] = nil
+        }
         defer {
             if refreshIDs[provider] == refreshID {
                 isFetching[provider] = false
@@ -214,7 +222,11 @@ public final class ModelCatalog: ObservableObject {
             }
         } catch {
             guard refreshIDs[provider] == refreshID, !Task.isCancelled else { return }
-            lastError[provider] = error
+            if isCodexFetch {
+                lastCodexError = error
+            } else {
+                lastError[provider] = error
+            }
             ReliabilityManager.shared.capture(
                 error: error,
                 feature: "model_catalog",
