@@ -28,6 +28,8 @@ struct PermissionsSettingsView: View {
     @State private var isHoveringRefreshStatus = false
     @State private var isHoveringOpenPrivacySettings = false
     @State private var isOpeningPrivacySettings = false
+    @State private var privacyHoverSettleTask: Task<Void, Never>?
+    @State private var privacyOpenResetTask: Task<Void, Never>?
     @State private var isShowingAccessInfo = false
     @State private var hoveredAccessInfoAction: AccessInfoAction?
     @State private var automationPermissionTask: Task<Void, Never>?
@@ -159,20 +161,7 @@ struct PermissionsSettingsView: View {
 
                         Spacer(minLength: 16)
 
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
-                                isOpeningPrivacySettings = true
-                            }
-                            openPrivacyAndSecuritySettings()
-
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .seconds(0.35))
-                                withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
-                                    isOpeningPrivacySettings = false
-                                }
-                            }
-                        } label: {
+                        Button(action: openPrivacySettings) {
                             Label {
                                 Text("Open Privacy & Security")
                                     .lineLimit(1)
@@ -192,11 +181,23 @@ struct PermissionsSettingsView: View {
                         }
                         .buttonStyle(.sortySecondary(size: .regular))
                         .onHover { hovering in
-                            if hovering && !isHoveringOpenPrivacySettings {
-                                HapticFeedbackManager.shared.selection()
-                            }
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
-                                isHoveringOpenPrivacySettings = hovering
+                            if hovering {
+                                privacyHoverSettleTask?.cancel()
+                                if !isHoveringOpenPrivacySettings {
+                                    HapticFeedbackManager.shared.selection()
+                                }
+                                withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                    isHoveringOpenPrivacySettings = true
+                                }
+                            } else {
+                                privacyHoverSettleTask?.cancel()
+                                privacyHoverSettleTask = Task { @MainActor in
+                                    try? await Task.sleep(for: .milliseconds(120))
+                                    guard !Task.isCancelled else { return }
+                                    withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                        isHoveringOpenPrivacySettings = false
+                                    }
+                                }
                             }
                         }
                     }
@@ -240,6 +241,10 @@ struct PermissionsSettingsView: View {
         .onDisappear {
             automationPermissionTask?.cancel()
             automationPermissionTask = nil
+            privacyHoverSettleTask?.cancel()
+            privacyHoverSettleTask = nil
+            privacyOpenResetTask?.cancel()
+            privacyOpenResetTask = nil
         }
         .sheet(item: $selectedEducationPermission) { permission in
             PermissionEducationView(pages: [permission]) {
@@ -740,6 +745,25 @@ struct PermissionsSettingsView: View {
             "x-apple.systempreferences:com.apple.preference.security",
             "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension"
         ])
+    }
+
+    private func openPrivacySettings() {
+        guard !isOpeningPrivacySettings else { return }
+
+        HapticFeedbackManager.shared.tap()
+        privacyOpenResetTask?.cancel()
+        withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+            isOpeningPrivacySettings = true
+        }
+        openPrivacyAndSecuritySettings()
+
+        privacyOpenResetTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.75))
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                isOpeningPrivacySettings = false
+            }
+        }
     }
 
     private func openFirstAvailableSettingsURL(_ candidates: [String]) {
