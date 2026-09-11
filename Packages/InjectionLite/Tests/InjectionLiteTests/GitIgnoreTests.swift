@@ -1,0 +1,142 @@
+//
+//  GitIgnoreTests.swift
+//  InjectionLiteTests
+//
+//  Tests for GitIgnoreParser functionality
+//
+
+import XCTest
+@testable import InjectionBazel
+
+final class GitIgnoreTests: XCTestCase {
+    
+    func testBasicPatterns() {
+        let gitignoreContent = """
+        *.log
+        build/
+        node_modules
+        temp/*.tmp
+        """
+        
+        let parser = GitIgnoreParser(content: gitignoreContent)
+        
+        // Test file patterns
+        XCTAssertTrue(parser.shouldIgnore(path: "error.log"))
+        XCTAssertTrue(parser.shouldIgnore(path: "logs/debug.log"))
+        XCTAssertFalse(parser.shouldIgnore(path: "readme.txt"))
+        
+        // Test directory patterns
+        XCTAssertTrue(parser.shouldIgnore(path: "build/", isDirectory: true))
+        XCTAssertTrue(parser.shouldIgnore(path: "build/output.bin"))
+        XCTAssertTrue(parser.shouldIgnore(path: "node_modules"))
+        
+        // Test wildcard patterns
+        XCTAssertTrue(parser.shouldIgnore(path: "temp/cache.tmp"))
+        XCTAssertFalse(parser.shouldIgnore(path: "temp/data.json"))
+    }
+    
+    func testNegationPatterns() {
+        let gitignoreContent = """
+        *.log
+        !important.log
+        build/
+        !build/keep.txt
+        """
+        
+        let parser = GitIgnoreParser(content: gitignoreContent)
+        
+        // Test negation
+        XCTAssertTrue(parser.shouldIgnore(path: "debug.log"))
+        XCTAssertFalse(parser.shouldIgnore(path: "important.log"))
+        XCTAssertTrue(parser.shouldIgnore(path: "build/temp.bin"))
+        XCTAssertFalse(parser.shouldIgnore(path: "build/keep.txt"))
+    }
+    
+    func testCommentAndEmptyLines() {
+        let gitignoreContent = """
+        # This is a comment
+        *.log
+        
+        # Another comment
+        build/
+        """
+        
+        let parser = GitIgnoreParser(content: gitignoreContent)
+        
+        XCTAssertTrue(parser.shouldIgnore(path: "error.log"))
+        XCTAssertTrue(parser.shouldIgnore(path: "build/", isDirectory: true))
+    }
+    
+    func testSourceFileFiltering() {
+        let gitignoreContent = """
+        *.o
+        *.a
+        build/
+        .git/
+        """
+        
+        let parser = GitIgnoreParser(content: gitignoreContent)
+        
+        // These should be ignored
+        XCTAssertTrue(parser.shouldIgnore(path: "main.o"))
+        XCTAssertTrue(parser.shouldIgnore(path: "libtest.a"))
+        XCTAssertTrue(parser.shouldIgnore(path: "build/Debug/"))
+        XCTAssertTrue(parser.shouldIgnore(path: ".git/config"))
+        
+        // These should not be ignored
+        XCTAssertFalse(parser.shouldIgnore(path: "main.swift"))
+        XCTAssertFalse(parser.shouldIgnore(path: "ViewController.m"))
+        XCTAssertFalse(parser.shouldIgnore(path: "Header.h"))
+    }
+    
+    func testComplexGlobstarPatterns() {
+        let gitignoreContent = """
+        **/*.cache
+        **/logs/**/*.log
+        src/**/*.min.js
+        **/node_modules/**
+        **/.git/**
+        """
+        
+        let parser = GitIgnoreParser(content: gitignoreContent)
+        
+        // Test globstar patterns
+        XCTAssertTrue(parser.shouldIgnore(path: "deep/nested/file.cache"))
+        XCTAssertTrue(parser.shouldIgnore(path: "project/logs/debug/error.log"))
+        XCTAssertTrue(parser.shouldIgnore(path: "src/components/bundle.min.js"))
+        XCTAssertTrue(parser.shouldIgnore(path: "project/node_modules/package/index.js"))
+        XCTAssertTrue(parser.shouldIgnore(path: "repo/.git/config"))
+        
+        // These should not match
+        XCTAssertFalse(parser.shouldIgnore(path: "src/main.js"))
+        XCTAssertFalse(parser.shouldIgnore(path: "logs/info.txt"))
+    }
+    
+    func testLeadingSlashDotPatterns() {
+        // Test that patterns like "/.bazel-*" properly match ".bazel-*" directories
+        let gitignoreContent = """
+        /.bazel-*
+        /.git/
+        /.vscode/
+        /build/
+        """
+        
+        let parser = GitIgnoreParser(content: gitignoreContent)
+        
+        // Test that leading slash + dot patterns match hidden directories
+        XCTAssertTrue(parser.shouldIgnore(path: ".bazel-grpc-logs/", isDirectory: true))
+        XCTAssertTrue(parser.shouldIgnore(path: ".bazel-bin/", isDirectory: true))
+        XCTAssertTrue(parser.shouldIgnore(path: ".bazel-out/ios_arm64-dbg/bin/", isDirectory: true))
+        XCTAssertTrue(parser.shouldIgnore(path: ".git/", isDirectory: true))
+        XCTAssertTrue(parser.shouldIgnore(path: ".git/config"))
+        XCTAssertTrue(parser.shouldIgnore(path: ".vscode/", isDirectory: true))
+        
+        // Test that /build/ still matches build/ (no dot normalization needed)
+        XCTAssertTrue(parser.shouldIgnore(path: "build/", isDirectory: true))
+        
+        // Test that source files are not ignored
+        XCTAssertFalse(parser.shouldIgnore(path: "main.swift"))
+        XCTAssertFalse(parser.shouldIgnore(path: ".bazel-other-file.swift")) // Edge case: .bazel- prefix but not matching pattern
+    }
+    
+}

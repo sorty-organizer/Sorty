@@ -92,7 +92,7 @@ format_hot_reload_runtime_output() {
                 print_runtime_warning "${line}"
                 ;;
             *"⚠️ Size of a type changed over injection"*"blocked"*)
-                print_runtime_warning "Type layout changed. Injection blocked; save again to retry."
+                print_runtime_warning "Type layout changed. Quit this session and rebuild with make hot."
                 ;;
             *"⚠️ Logs dir not initialised."*)
                 print_runtime_warning "Compile log is not ready. Edit a file and rebuild."
@@ -154,15 +154,14 @@ print_summary "Session" \
 mkdir -p "${HOT_RELOAD_LOG_DIR}"
 
 print_step 1 4 "Preparing Runtime"
-if run_hot_reload_command "hot_reload_runtime" \
+run_hot_reload_command "hot_reload_runtime" \
     swift build \
         --scratch-path "${BUILD_DIR}" \
         --disable-dependency-cache \
         -c debug \
         --product SortyHotReloadPreparer \
-        --disable-sandbox; then
-    log_success "Runtime ready"
-fi
+        --disable-sandbox
+log_success "Runtime ready"
 
 print_step 2 4 "Recording Compile Commands"
 run_hot_reload_build "hot_reload_initial_build"
@@ -182,8 +181,15 @@ print_step 4 4 "Watching Source Files"
 log_success "Hot reload active. Quit Sorty or press Control-C to stop."
 echo ""
 
+runtime_status=0
 script -q /dev/null env \
     INJECTION_DIRECTORIES="${PROJECT_DIR},${HOME}/Library" \
     "${HOT_RELOAD_APP}/Contents/MacOS/${PROJECT_NAME}" 2>&1 |
     stream_hot_reload_frames |
-    format_hot_reload_runtime_output
+    format_hot_reload_runtime_output || runtime_status=$?
+
+if [ "${runtime_status}" -ne 0 ]; then
+    log_failure "Hot reload session ended unexpectedly (status ${runtime_status})."
+    log_item "Check Sorty's crash report in Console. Run make hot to start a fresh process."
+    exit "${runtime_status}"
+fi

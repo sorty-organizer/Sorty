@@ -1,5 +1,5 @@
 {
-  "originHash" : "0fd61919b68ad6928a21ef14d48c4f181f80207b4321324f487302abfbcf74d1",
+  "originHash" : "b00644c28da397f25206cb62abe6fd3dec2a8d542e3d89c07be40827cf4ccf47",
   "pins" : [
     {
       "identity" : "dlkit",
@@ -17,14 +17,6 @@
       "state" : {
         "revision" : "51b4b873fb03072921337fc4b86a45e2fb24556e",
         "version" : "1.2.2"
-      }
-    },
-    {
-      "identity" : "injectionlite",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/johnno1962/InjectionLite.git",
-      "state" : {
-        "revision" : "20dd8459d058a6012ea156eecdeef586260ad90d"
       }
     },
     {

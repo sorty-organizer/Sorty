@@ -94,12 +94,8 @@ let package = Package(
             url: "https://github.com/getsentry/sentry-cocoa.git",
             exact: "9.23.0"
         ),
-        // Exact InjectionNext 2.0.1 submodule revision. InjectionLite is the
-        // self-contained, in-process watcher/compiler/runtime used by make hot.
-        .package(
-            url: "https://github.com/johnno1962/InjectionLite.git",
-            revision: "20dd8459d058a6012ea156eecdeef586260ad90d"
-        ),
+        // Pinned InjectionLite sources with Sorty's reentrant-save protection.
+        .package(path: "Packages/InjectionLite"),
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
     ],
     targets: [

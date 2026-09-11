@@ -18,8 +18,9 @@ Optimized workflows for rapid iteration on Sorty.
 
 ## Hot reload
 
-Sorty uses the InjectionLite runtime pinned to InjectionNext 2.0.1's exact
-submodule revision. The Debug app watches the project, recompiles a saved Swift
+Sorty vendors the InjectionLite runtime at InjectionNext 2.0.1's exact
+submodule revision, with protection against saves arriving during injection.
+The Debug app watches the project, recompiles a saved Swift
 file, loads it, and redraws observing SwiftUI views in the same process. There
 is no companion application or Xcode session.
 
@@ -29,8 +30,8 @@ is no companion application or Xcode session.
 2. Keep that Sorty process running.
 3. Save Swift files from Codex or another editor.
 
-The first run downloads and builds the pinned runtime. Later starts reuse a
-dedicated hot-reload SwiftPM cache, separate from normal builds because the two
+The first run builds the vendored runtime and downloads its dependencies. Later
+starts reuse a dedicated hot-reload SwiftPM cache, separate from normal builds because the two
 modes have different dependencies, compiler flags, and ABI. Startup reports
 four stages: preparing the runtime, recording
 compile commands, relinking the app, and starting the source watcher. It exports
@@ -40,6 +41,9 @@ cache along the way. Hot and normal builds do not reuse compiled products.
 `make hot` stays attached to the running app so watcher activity, compiler
 errors, link results, and load results remain visible in that terminal. Quit
 Sorty or press Control-C to stop the session.
+
+Saves received during an injection wait until that injection finishes. Repeated
+saves of a pending file coalesce into one pass using its latest contents.
 
 ### What reloads
 
@@ -55,6 +59,9 @@ or widget targets.
 
 ### Troubleshooting
 
+- The recursive `os_unfair_lock` crash on `InjectionQueue`, reported by make as
+  `[hot] Error 9`, is addressed by the vendored save queue. Quit any older hot
+  process and start `make hot` again to build and load the fix.
 - If no save is detected, quit Sorty and run `make hot` again from the repository
   root so the compile-command cache is refreshed.
 - If a save reports a compile error, fix or revert that file. The running app
