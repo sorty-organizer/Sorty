@@ -30,7 +30,7 @@ struct FinderIntegrationSettingsView: View {
                         Image(systemName: overallStatusIcon)
                             .font(.title3)
                             .foregroundStyle(overallStatusColor)
-                            .frame(width: 24, height: 24)
+                            .frame(width: 16, height: 24)
                             .symbolReplaceTransition(animationValue: overallStatusIcon)
                             .accessibilityHidden(true)
 
