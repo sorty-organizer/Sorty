@@ -15,6 +15,7 @@ struct CometLoader<S: Shape>: View {
     var color: Color = SortyDesignSystem.Colors.resolvedAccent
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var isWindowVisible = true
     @State private var pausedAt: Date?
     @State private var hiddenDuration: TimeInterval = 0
@@ -32,7 +33,12 @@ struct CometLoader<S: Shape>: View {
     }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(paused: reduceMotion || !isWindowVisible)) { timeline in
+        SwiftUI.TimelineView(
+            .animation(
+                minimumInterval: 1.0 / 30.0,
+                paused: reduceMotion || !isWindowVisible || controlActiveState == .inactive
+            )
+        ) { timeline in
             Canvas { context, canvasSize in
                 let rect = CGRect(origin: .zero, size: canvasSize).insetBy(dx: lineWidth, dy: lineWidth)
                 let path = shape.path(in: rect)

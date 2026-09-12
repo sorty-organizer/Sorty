@@ -3467,10 +3467,16 @@ struct FocusedInstructionBeamBorder: View {
     let active: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var isWindowVisible = true
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(paused: reduceMotion || !active || !isWindowVisible)) { timeline in
+        SwiftUI.TimelineView(
+            .animation(
+                minimumInterval: 1.0 / 30.0,
+                paused: reduceMotion || !active || !isWindowVisible || controlActiveState == .inactive
+            )
+        ) { timeline in
             let phase = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate / 1.96
 
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -3513,11 +3519,13 @@ private struct RotatingInstructionSuggestionEditor: View {
 
     @State private var suggestionIndex = 0
     @State private var isWindowVisible = true
+    @Environment(\.controlActiveState) private var controlActiveState
 
     private struct SuggestionCycleID: Equatable {
         let suggestions: [String]
         let isEmpty: Bool
         let isVisible: Bool
+        let isActive: Bool
     }
 
     private var currentSuggestion: String {
@@ -3565,10 +3573,20 @@ private struct RotatingInstructionSuggestionEditor: View {
         }
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .onChange(of: suggestions) { _, _ in suggestionIndex = 0 }
-        .task(id: SuggestionCycleID(suggestions: suggestions, isEmpty: text.isEmpty, isVisible: isWindowVisible)) {
-            guard text.isEmpty, isWindowVisible, suggestions.count > 1 else { return }
+        .task(
+            id: SuggestionCycleID(
+                suggestions: suggestions,
+                isEmpty: text.isEmpty,
+                isVisible: isWindowVisible,
+                isActive: controlActiveState != .inactive
+            )
+        ) {
+            guard text.isEmpty,
+                  isWindowVisible,
+                  controlActiveState != .inactive,
+                  suggestions.count > 1 else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3.5))
+                try? await Task.sleep(for: .seconds(7))
                 guard !Task.isCancelled else { return }
                 suggestionIndex = (suggestionIndex + 1) % suggestions.count
             }

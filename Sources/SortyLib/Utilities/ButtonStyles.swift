@@ -414,7 +414,7 @@ private struct MetalFxPillSurface: View {
     }
 
     private var animationFrameInterval: TimeInterval {
-        isIntensified ? 1.0 / 30.0 : 1.0 / 15.0
+        isIntensified ? 1.0 / 30.0 : 1.0 / 10.0
     }
 
     var body: some View {

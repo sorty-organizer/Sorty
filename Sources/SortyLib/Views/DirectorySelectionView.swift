@@ -20,6 +20,7 @@ struct DirectorySelectionView: View {
     @State private var isTargeted = false
     @State private var isHovering = false
     @State private var isBrowseHovering = false
+    @State private var isWindowVisible = true
 
     @State private var iconBounce = false
     @State private var hasAppeared = false
@@ -84,13 +85,14 @@ struct DirectorySelectionView: View {
                     active: hasAppeared
                         && isPresented
                         && !reduceMotion
+                        && isWindowVisible
                         && controlActiveState != .inactive,
                     shape: .capsule,
                     strength: 1
                 )
                 .contentShape(Capsule())
                 .scaleEffect(isBrowseHovering ? 1.03 : 1.0)
-                .animation(.spring(response: 0.22, dampingFraction: 0.84), value: isBrowseHovering)
+                .animation(.easeOut(duration: 0.15), value: isBrowseHovering)
                 .onHover { hovering in
                     let wasHovering = isBrowseHovering
                     if hovering && !wasHovering {
@@ -118,6 +120,7 @@ struct DirectorySelectionView: View {
                 .opacity(hasAppeared ? 1 : 0)
                 .animation(.easeOut(duration: 0.2).delay(0.15), value: hasAppeared)
         }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .siriDropZone(isTargeted: $isTargeted) { providers in
             handleDrop(providers: providers)
         }
