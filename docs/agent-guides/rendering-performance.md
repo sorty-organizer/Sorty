@@ -40,5 +40,6 @@ Full-app power measurements remain outstanding. Background organization, file wa
 - The widget uses event-driven `WidgetCenter.reloadTimelines` updates and no longer requests an unchanged snapshot every 30 minutes.
 - Folder scanning and the AI request allow idle system sleep. The apply phase keeps its separate sleep-preventing activity while it changes files.
 - Rolling credits update at 15 Hz instead of 60 Hz. The glass loader updates at 20 Hz, pauses when its window is hidden or minimized, and bounds shader sampling to the effect's visible radius.
+- Directory scanning still yields every 50 files, but it now publishes enumeration progress and samples process memory every 1,000 files. Dispatch-source memory-pressure events continue to pause scans immediately.
 
 These are source-level wakeup reductions. They do not establish a battery-life delta without matched signed Release measurements.

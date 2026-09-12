@@ -833,19 +833,20 @@ actor DirectoryScanner {
             files.append(fileItem)
             scannedCount += 1
 
-            // Periodic memory pressure check and yield
-            if scannedCount % getCurrentBatchSize() == 0 {
-                if scannedCount % enumerationProgressInterval == 0 {
-                    scanProgressCallback?(scannedCount)
-                }
+            // Yield in small batches, but avoid a task_info syscall and progress
+            // publication for every batch. The memory-pressure dispatch source
+            // still handles urgent pressure changes immediately.
+            if scannedCount.isMultiple(of: batchSize) {
                 await Task.yield()
-                await checkMemoryPressure()
 
-                // Log progress periodically under memory pressure
-                if memoryPressureState != .normal && scannedCount % (batchSize * 10) == 0 {
-                    logger.info(
-                        "Scan progress: \(self.scannedCount) files, pressure: \(self.memoryPressureState.rawValue)"
-                    )
+                if scannedCount.isMultiple(of: enumerationProgressInterval) {
+                    scanProgressCallback?(scannedCount)
+                    await checkMemoryPressure()
+                    if memoryPressureState != .normal {
+                        logger.info(
+                            "Scan progress: \(self.scannedCount) files, pressure: \(self.memoryPressureState.rawValue)"
+                        )
+                    }
                 }
             }
         }
