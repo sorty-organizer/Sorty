@@ -25,6 +25,11 @@ Use this baseline when changing Sorty's macOS SwiftUI surfaces.
   do not need display-rate updates.
 - Avoid sorting, filtering, formatting, or allocating large collections inside
   per-frame closures. Precompute stable inputs outside the render loop.
+- Build focus-ring strokes and blur layers only while the target is active.
+  Transparent effects still add rendering work across dense Settings pages.
+- Update Settings sidebar selection in the click event. Keep the shared route
+  synchronized without publishing unchanged values or deferring local selection
+  to a second update pass.
 - Treat build duration as build-system evidence only. Performance claims require
   repeated measurements of the same running-app workflow.
 

@@ -71,29 +71,30 @@ private struct SortyFocusHighlightModifier<FocusShape: InsettableShape>: ViewMod
     func body(content: Content) -> some View {
         content
             .overlay {
-                ZStack {
-                    shape
-                        .strokeBorder(
-                            isActive
-                                ? Color.accentColor.opacity(isBreathing ? 0.95 : 0.72)
-                                : Color.clear,
-                            lineWidth: 2
-                        )
+                // Inactive targets must not build transparent stroked and blurred
+                // layers. Settings pages can contain dozens of these highlights.
+                if isActive {
+                    ZStack {
+                        shape
+                            .strokeBorder(
+                                Color.accentColor.opacity(isBreathing ? 0.95 : 0.72),
+                                lineWidth: 2
+                            )
 
-                    shape
-                        .strokeBorder(
-                            isActive
-                                ? Color.accentColor.opacity(isBreathing ? 0.42 : 0.16)
-                                : Color.clear,
-                            lineWidth: 3
-                        )
-                        .scaleEffect(!reduceMotion && isBreathing ? 1.012 : 1)
-                        .blur(radius: reduceMotion ? 0 : (isBreathing ? 4 : 2))
+                        shape
+                            .strokeBorder(
+                                Color.accentColor.opacity(isBreathing ? 0.42 : 0.16),
+                                lineWidth: 3
+                            )
+                            .scaleEffect(!reduceMotion && isBreathing ? 1.012 : 1)
+                            .blur(radius: reduceMotion ? 0 : (isBreathing ? 4 : 2))
+                    }
+                    .padding(.horizontal, -horizontalRingPadding)
+                    .padding(.vertical, -verticalRingPadding)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                    .transition(.opacity)
                 }
-                .padding(.horizontal, -horizontalRingPadding)
-                .padding(.vertical, -verticalRingPadding)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
             }
             .shadow(
                 color: isActive && !reduceMotion

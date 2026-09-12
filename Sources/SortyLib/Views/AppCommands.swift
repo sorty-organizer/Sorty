@@ -853,8 +853,13 @@ public class AppState: ObservableObject {
         section: SettingsCategory? = nil,
         focusTarget: SettingsFocusTarget? = nil
     ) {
-        selectedSettingsSection = focusTarget?.category ?? section
-        settingsFocusTarget = focusTarget
+        let destinationSection = focusTarget?.category ?? section
+        if selectedSettingsSection != destinationSection {
+            selectedSettingsSection = destinationSection
+        }
+        if settingsFocusTarget != focusTarget {
+            settingsFocusTarget = focusTarget
+        }
         // Switching Settings sections does not navigate the app's root page.
         if currentView != .settings {
             withAnimation(.pageTransition) {

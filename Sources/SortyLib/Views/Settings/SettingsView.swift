@@ -106,6 +106,9 @@ struct SettingsView: View {
                             color: category.color,
                             isSelected: selectedCategory == category
                         ) {
+                            // Update the detail with the click, instead of waiting
+                            // for AppState's onChange to schedule a second update.
+                            selectedCategory = category
                             appState.openSettingsWindow(section: category)
                             HapticFeedbackManager.shared.selection()
                         }
