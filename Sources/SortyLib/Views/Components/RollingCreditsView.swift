@@ -624,7 +624,7 @@ struct RollingCreditsView: View {
                     if isScrollingSuspended {
                         creditRows(at: pausedAt ?? .now)
                     } else {
-                        SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 60.0)) { context in
+                        SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 15.0)) { context in
                             creditRows(at: context.date)
                         }
                     }

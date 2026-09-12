@@ -29,7 +29,7 @@ public final class AutomationManager: ObservableObject {
     private var selectionCheckTimer: Timer?
     private var selectionRefreshTask: Task<Void, Never>?
     private var selectionMonitoringDemandCount = 0
-    private let selectionCheckInterval: TimeInterval = 2.0
+    private let selectionCheckInterval: TimeInterval = 8.0
     private var isInitializing = true
     private var isStartedUp = false
     private var automationChecksEnabled = false
@@ -239,7 +239,7 @@ public final class AutomationManager: ObservableObject {
                 self.updateFinderSelection()
             }
         }
-        selectionCheckTimer?.tolerance = min(selectionCheckInterval * 0.1, 0.5)
+        selectionCheckTimer?.tolerance = selectionCheckInterval * 0.3
         statusMessage = "Monitoring Finder selection"
     }
     

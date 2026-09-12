@@ -32,8 +32,7 @@ private struct SortyWidgetProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SortyWidgetEntry>) -> Void) {
         let entry = currentEntry()
-        let refreshDate = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date().addingTimeInterval(1800)
-        completion(Timeline(entries: [entry], policy: .after(refreshDate)))
+        completion(Timeline(entries: [entry], policy: .never))
     }
 
     private func currentEntry() -> SortyWidgetEntry {

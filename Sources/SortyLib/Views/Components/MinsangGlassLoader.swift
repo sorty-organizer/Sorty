@@ -13,6 +13,7 @@ struct MinsangGlassLoader: View {
     @State private var phase = LoaderPhase.base
     @State private var hasPresented = false
     @State private var nextAlternatePhase = LoaderPhase.dual
+    @State private var isWindowVisible = true
 
     private static let circleFraction: Float = 0.32
     private static let dotFraction: Float = 0.08
@@ -30,7 +31,7 @@ struct MinsangGlassLoader: View {
     private static let fullTurnDuration = (2 * Double.pi) / Double(moverSpeed)
 
     private var shouldAnimate: Bool {
-        isActive && !reduceMotion && controlActiveState != .inactive
+        isActive && !reduceMotion && controlActiveState != .inactive && isWindowVisible
     }
 
     var body: some View {
@@ -67,12 +68,13 @@ struct MinsangGlassLoader: View {
                 phase = .base
             }
         }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .accessibilityHidden(true)
     }
 
     private func glassLoader(shaderLibrary: ShaderLibrary) -> some View {
         SwiftUI.TimelineView(
-            .animation(minimumInterval: 1.0 / 30.0, paused: !shouldAnimate)
+            .animation(minimumInterval: 1.0 / 20.0, paused: !shouldAnimate)
         ) { timeline in
             GeometryReader { proxy in
                 let time = shouldAnimate ? timeline.date.timeIntervalSinceReferenceDate : 0
@@ -84,7 +86,7 @@ struct MinsangGlassLoader: View {
                             time: time,
                             size: proxy.size
                         ),
-                        maxSampleOffset: CGSize(width: 48, height: 48)
+                        maxSampleOffset: CGSize(width: 24, height: 24)
                     )
 
                 if colorScheme == .dark {

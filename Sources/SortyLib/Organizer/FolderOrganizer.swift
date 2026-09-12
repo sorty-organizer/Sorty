@@ -1793,7 +1793,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         let activity = ProcessInfo.processInfo.beginActivity(
-            options: .userInitiated,
+            options: .userInitiatedAllowsIdleSystemSleep,
             reason: "Organizing folder: \(directory.lastPathComponent)"
         )
         defer { ProcessInfo.processInfo.endActivity(activity) }

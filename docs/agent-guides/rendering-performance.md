@@ -33,3 +33,12 @@ Validation for this pass:
 - An optimized standalone benchmark compared the original and changed streaming-payload functions on the same 248,000-byte Unicode response and asserted identical output. Median time across five batches of 100 calls was 0.2651 seconds before and 0.04584 seconds after, about 83% less time for this operation. This does not measure total analysis time or battery life.
 
 Full-app power measurements remain outstanding. Background organization, file watching, network requests, and visible animations retain their existing behavior.
+
+## Periodic wakeup reductions, September 12, 2026
+
+- Finder selection monitoring remains demand-gated, stops while Sorty is inactive, and refreshes immediately when monitoring starts. Its repeating check now runs every eight seconds with 30% timer tolerance instead of every two seconds.
+- The widget uses event-driven `WidgetCenter.reloadTimelines` updates and no longer requests an unchanged snapshot every 30 minutes.
+- Folder scanning and the AI request allow idle system sleep. The apply phase keeps its separate sleep-preventing activity while it changes files.
+- Rolling credits update at 15 Hz instead of 60 Hz. The glass loader updates at 20 Hz, pauses when its window is hidden or minimized, and bounds shader sampling to the effect's visible radius.
+
+These are source-level wakeup reductions. They do not establish a battery-life delta without matched signed Release measurements.
