@@ -121,10 +121,14 @@ struct TroubleshootingSettingsView: View {
                         Button {
                             runHealthCheck()
                         } label: {
-                            Label(
-                                isRunningHealthCheck ? "Checking" : healthChecks.isEmpty ? "Run Checks" : "Check Again",
-                                systemImage: isRunningHealthCheck ? "arrow.trianglehead.2.clockwise.rotate.90" : "waveform.path.ecg"
-                            )
+                            HStack(spacing: 6) {
+                                if isRunningHealthCheck {
+                                    BouncingSpinner(size: 12, color: .accentColor)
+                                } else {
+                                    Image(systemName: "waveform.path.ecg")
+                                }
+                                Text(isRunningHealthCheck ? "Checking" : healthChecks.isEmpty ? "Run Checks" : "Check Again")
+                            }
                         }
                         .buttonStyle(.sortyBordered(intent: .info, size: .small))
                         .disabled(isRunningHealthCheck)
@@ -132,9 +136,13 @@ struct TroubleshootingSettingsView: View {
                     }
 
                     if isRunningHealthCheck {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(spacing: 8) {
+                            BouncingSpinner(size: 14, color: .secondary)
+                            Text("Checking configuration…")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     if !healthChecks.isEmpty {
