@@ -54,6 +54,8 @@ public final class RefreshManager: ObservableObject {
                 action()
             }
         }
+        // Let macOS combine noncritical refresh wakeups without changing cadence.
+        timer.tolerance = min(safeInterval * 0.1, 0.5)
         if isPaused {
             timer.fireDate = .distantFuture
         }

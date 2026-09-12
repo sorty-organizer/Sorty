@@ -1007,20 +1007,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     nonisolated private static func makeStreamPresentationPayload(from content: String) -> StreamPresentationPayload {
-        let fullContent: String
-        if content.count > streamUIPresentationCharacterLimit {
-            fullContent = String(content.suffix(streamUIPresentationCharacterLimit))
-        } else {
-            fullContent = content
-        }
-
-        let truncatedContent: String
-        if content.count > streamPreviewCharacterLimit {
-            let start = content.index(content.endIndex, offsetBy: -streamPreviewCharacterLimit)
-            truncatedContent = "..." + String(content[start...])
-        } else {
-            truncatedContent = content
-        }
+        // Walk only the displayed suffix, rather than counting the entire response
+        // before walking it again. String indices preserve composed characters.
+        let fullStart = content.index(
+            content.endIndex,
+            offsetBy: -streamUIPresentationCharacterLimit,
+            limitedBy: content.startIndex
+        ) ?? content.startIndex
+        let fullContent = String(content[fullStart...])
+        let previewStart = content.index(
+            content.endIndex,
+            offsetBy: -streamPreviewCharacterLimit,
+            limitedBy: content.startIndex
+        ) ?? content.startIndex
+        let truncatedContent = (previewStart == content.startIndex ? "" : "...")
+            + String(content[previewStart...])
         return StreamPresentationPayload(
             fullContent: fullContent,
             truncatedContent: truncatedContent
@@ -1069,7 +1070,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         lastDisplayUpdate = now
 
         let estimatedTotal = estimatedStreamingCharacterTarget()
-        let contentLength = contentSnapshot.count
+        // Progress is capped at 80%; characters beyond the target cannot change it.
+        let contentLength = progress < 0.80 ? contentSnapshot.prefix(estimatedTotal).count : estimatedTotal
         let expectedRevision = streamingContentRevision
 
         displayUpdateTask?.cancel()
@@ -1185,7 +1187,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let now = Date()
             if now.timeIntervalSince(lastDisplayUpdate) >= displayUpdateInterval {
                 lastDisplayUpdate = now
-                updateProgressFromStreamLength(streamingContent.count)
+                if progress < 0.80 {
+                    let target = estimatedStreamingCharacterTarget()
+                    updateProgressFromStreamLength(streamingContent.prefix(target).count, estimatedTotal: target)
+                }
             }
         }
     }
@@ -1516,7 +1521,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         // Get the last portion of content for analysis
         let content = streamingContent
-        guard content.count > 20 else { return }
+        guard content.index(content.startIndex, offsetBy: 21, limitedBy: content.endIndex) != nil else { return }
         
         // Check cache first
         let contentHash = content.hashValue

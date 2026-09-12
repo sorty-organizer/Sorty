@@ -3467,9 +3467,10 @@ struct FocusedInstructionBeamBorder: View {
     let active: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isWindowVisible = true
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(paused: reduceMotion || !active)) { timeline in
+        SwiftUI.TimelineView(.animation(paused: reduceMotion || !active || !isWindowVisible)) { timeline in
             let phase = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate / 1.96
 
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -3494,6 +3495,7 @@ struct FocusedInstructionBeamBorder: View {
                 .opacity(active ? 0.95 : 0)
                 .animation(.easeOut(duration: 0.2), value: active)
         }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -3510,9 +3512,16 @@ private struct RotatingInstructionSuggestionEditor: View {
     let onSubmit: () -> Void
 
     @State private var suggestionIndex = 0
+    @State private var isWindowVisible = true
+
+    private struct SuggestionCycleID: Equatable {
+        let suggestions: [String]
+        let isEmpty: Bool
+        let isVisible: Bool
+    }
 
     private var currentSuggestion: String {
-        suggestions[suggestionIndex % suggestions.count]
+        suggestions.isEmpty ? "" : suggestions[suggestionIndex % suggestions.count]
     }
 
     var body: some View {
@@ -3554,8 +3563,10 @@ private struct RotatingInstructionSuggestionEditor: View {
                 .allowsHitTesting(false)
             }
         }
-        .task(id: suggestions) {
-            suggestionIndex = 0
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
+        .onChange(of: suggestions) { _, _ in suggestionIndex = 0 }
+        .task(id: SuggestionCycleID(suggestions: suggestions, isEmpty: text.isEmpty, isVisible: isWindowVisible)) {
+            guard text.isEmpty, isWindowVisible, suggestions.count > 1 else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3.5))
                 guard !Task.isCancelled else { return }

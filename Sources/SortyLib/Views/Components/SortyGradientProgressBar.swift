@@ -191,6 +191,7 @@ struct SortyGradientCircularProgress: View {
     var showsShimmer: Bool = false
 
     @State private var animatedProgress: Double = 0
+    @State private var isWindowVisible = true
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
@@ -212,7 +213,7 @@ struct SortyGradientCircularProgress: View {
             }
 
             if showsShimmer {
-                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || !isWindowVisible || animatedProgress == 0)) { context in
                     let elapsed = context.date.timeIntervalSinceReferenceDate
                     let arcSpan = animatedProgress * 360
                     let phase = (elapsed * 120).truncatingRemainder(
@@ -252,6 +253,7 @@ struct SortyGradientCircularProgress: View {
             }
         }
         .frame(width: size, height: size)
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .onAppear {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) {
                 animatedProgress = clampedProgress

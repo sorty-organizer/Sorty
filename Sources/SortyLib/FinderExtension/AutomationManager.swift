@@ -239,6 +239,7 @@ public final class AutomationManager: ObservableObject {
                 self.updateFinderSelection()
             }
         }
+        selectionCheckTimer?.tolerance = min(selectionCheckInterval * 0.1, 0.5)
         statusMessage = "Monitoring Finder selection"
     }
     

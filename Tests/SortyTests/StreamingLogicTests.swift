@@ -324,6 +324,35 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertEqual(cached.history.last?.text, "Grouping project documents together")
     }
 
+    func testStreamingDisplayPreservesCharacterBoundariesAndPreviewEllipsis() async {
+        let character = "e\u{301}"
+        for count in [999, 1_000, 1_001, 48_000, 48_001] {
+            organizer = FolderOrganizer()
+            let content = String(repeating: character, count: count)
+            organizer.didReceiveChunk(content)
+            await settleStreamingUpdates()
+
+            XCTAssertEqual(organizer.displayStreamingContent, String(content.suffix(48_000)))
+            XCTAssertEqual(
+                organizer.truncatedDisplayStreamingContent,
+                (count > 1_000 ? "..." : "") + String(content.suffix(1_000))
+            )
+        }
+    }
+
+    func testLongStreamProgressKeepsCapWithAndWithoutLiveInsights() async {
+        for insightsEnabled in [true, false] {
+            organizer = FolderOrganizer()
+            organizer.liveInsightsEnabled = insightsEnabled
+            organizer.didReceiveChunk(String(repeating: "x", count: 100_000))
+            await settleStreamingUpdates()
+            XCTAssertEqual(organizer.progress, 0.80, accuracy: 0.0001)
+            organizer.didReceiveChunk("more")
+            await settleStreamingUpdates()
+            XCTAssertEqual(organizer.progress, 0.80, accuracy: 0.0001)
+        }
+    }
+
     func testProgressLineParserRecoversAfterLongIrrelevantLine() {
         organizer.didReceiveChunk(String(repeating: "x", count: 100_000))
         organizer.didReceiveChunk("\n>> decision: Grouping project documents together\n")

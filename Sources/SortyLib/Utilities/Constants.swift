@@ -392,6 +392,7 @@ public enum TransitionStyles {
 public struct LoadingDotsView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isWindowVisible = true
 
     let dotCount: Int
     let dotSize: CGFloat
@@ -409,10 +410,11 @@ public struct LoadingDotsView: View {
         if reduceMotion {
             dots(at: 0)
         } else {
-            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 12.0)) { timeline in
+            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: !isWindowVisible)) { timeline in
                 dots(at: timeline.date.timeIntervalSinceReferenceDate)
             }
             .drawingGroup(opaque: false)
+            .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         }
     }
 
@@ -437,6 +439,7 @@ public struct LoadingDotsView: View {
 public struct BouncingSpinner: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isWindowVisible = true
 
     let size: CGFloat
     let color: Color
@@ -450,12 +453,13 @@ public struct BouncingSpinner: View {
         if reduceMotion {
             spinner(rotation: 0, scale: 1)
         } else {
-            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isWindowVisible)) { timeline in
                 let elapsed = timeline.date.timeIntervalSinceReferenceDate
                 let rotation = elapsed.truncatingRemainder(dividingBy: 0.8) / 0.8 * 360
                 let scale = CGFloat(0.95 + (sin(elapsed * .pi * 2 / 0.8) + 1) * 0.025)
                 spinner(rotation: rotation, scale: scale)
             }
+            .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         }
     }
 
