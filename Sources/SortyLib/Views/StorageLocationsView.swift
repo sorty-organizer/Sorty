@@ -22,7 +22,9 @@ struct StorageLocationConfigView: View {
     @State private var descriptionSelection = NSRange(location: 0, length: 0)
     @State private var descriptionSuggestionIndex = 0
     @State private var isHoveringPath = false
+    @State private var isWindowVisible = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
 
     private let descriptionSuggestions = [
         "Archive for completed projects older than 6 months",
@@ -163,10 +165,12 @@ struct StorageLocationConfigView: View {
                                     .padding(.trailing, 10)
                                     .padding(.vertical, 9)
                                     .allowsHitTesting(false)
-                                    .task {
+                                    .task(id: shouldCycleDescriptionSuggestions) {
+                                        guard shouldCycleDescriptionSuggestions else { return }
                                         while !Task.isCancelled {
                                             try? await Task.sleep(for: .seconds(3.5))
-                                            guard !Task.isCancelled else { return }
+                                            guard !Task.isCancelled,
+                                                  shouldCycleDescriptionSuggestions else { return }
                                             descriptionSuggestionIndex =
                                                 (descriptionSuggestionIndex + 1)
                                                 % descriptionSuggestions.count
@@ -205,6 +209,14 @@ struct StorageLocationConfigView: View {
         }
         .frame(width: 450, height: 460)
         .background(Color(NSColor.windowBackgroundColor))
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
+    }
+
+    private var shouldCycleDescriptionSuggestions: Bool {
+        description.isEmpty
+            && !isDescriptionFocused
+            && isWindowVisible
+            && controlActiveState != .inactive
     }
 
     private var currentDescriptionSuggestion: String {

@@ -647,7 +647,12 @@ struct WatchedFolderCard: View {
             } else if case .parked(let count) = activity {
                 parkedBatchLine(fileCount: count)
             } else if activityHasCountdown(activity) {
-                SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
+                SwiftUI.TimelineView(
+                    .animation(
+                        minimumInterval: 1,
+                        paused: controlActiveState == .inactive
+                    )
+                ) { context in
                     activityStatusLabel(activity, now: context.date)
                 }
             } else {

@@ -111,7 +111,7 @@ struct SortyGradientProgressBar: View {
             .clipShape(Capsule(style: .continuous))
         }
         .frame(height: height)
-        .animation(.easeInOut(duration: 0.25), value: clampedProgress)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: clampedProgress)
     }
 }
 

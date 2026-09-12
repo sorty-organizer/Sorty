@@ -22,6 +22,8 @@ struct PersonaGeneratorView: View {
     @State private var prompt: String = ""
     @State private var promptSelection = NSRange(location: 0, length: 0)
     @State private var promptSuggestionIndex: Int = 0
+    @State private var isWindowVisible = true
+    @Environment(\.controlActiveState) private var controlActiveState
     
     @StateObject private var honingEngine = PersonaHoningEngine()
     @State private var questions: [HoningQuestion] = []
@@ -58,6 +60,7 @@ struct PersonaGeneratorView: View {
             reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82),
             value: isHoning || generator.isGenerating
         )
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
     }
 
     private var generationOverlay: some View {
@@ -173,12 +176,14 @@ struct PersonaGeneratorView: View {
                         .padding(.trailing, 10)
                         .padding(.top, 7)
                         .allowsHitTesting(false)
-                        .task {
+                        .task(id: shouldCyclePromptSuggestions) {
+                            guard shouldCyclePromptSuggestions else { return }
                             promptSuggestionIndex = 0
 
                             while !Task.isCancelled {
                                 try? await Task.sleep(for: .seconds(2.5))
-                                guard !Task.isCancelled else { return }
+                                guard !Task.isCancelled,
+                                      shouldCyclePromptSuggestions else { return }
                                 promptSuggestionIndex =
                                     (promptSuggestionIndex + 1) % promptSuggestions.count
                             }
@@ -226,6 +231,14 @@ struct PersonaGeneratorView: View {
             .padding(.top, 4)
             .padding(.bottom, 24)
         }
+    }
+
+    private var shouldCyclePromptSuggestions: Bool {
+        prompt.isEmpty
+            && !isHoning
+            && !generator.isGenerating
+            && isWindowVisible
+            && controlActiveState != .inactive
     }
     
     private func honingView(question: HoningQuestion) -> some View {
