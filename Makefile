@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-fast test-full clean help install quick now hot dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark harness harness-accent quality-report ci ci-report
+.PHONY: build run debug test test-fast test-full clean help install quick now daily hot dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark harness harness-accent quality-report ci ci-report
 
 # Default target
 all: build
@@ -81,6 +81,12 @@ cache-prune:
 # skips all checks and builds/runs immediately
 now:
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@open releases/Sorty.app
+
+# Optimized local app for daily use and launch profiling. Keep the same signing
+# identity as the development loop, but exclude hot reload even if inherited.
+daily:
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SORTY_HOT_RELOAD=false APP_ICON_VARIANT=release SKIP_TESTS=true BUILD_CONFIG=release BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_RELEASE_FLAGS)" ./scripts/build.sh
 	@open releases/Sorty.app
 
 # Build and launch Sorty with its in-process InjectionLite hot-reload runtime.
@@ -212,6 +218,7 @@ help:
 	@echo "  make dev         - Fastest development build (debug + parallel + no tests)"
 	@echo "  make hot         - Build and launch self-contained Swift hot reload"
 	@echo "  make now         - Build fast and launch immediately (skips tests, parallel)"
+	@echo "  make daily       - Build optimized app and launch (no hot reload or tests)"
 	@echo "  make build-ci-universal - CI-style universal xcodebuild + Sorty-universal.zip"
 	@echo ""
 	@echo ""

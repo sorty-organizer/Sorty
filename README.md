@@ -339,10 +339,16 @@ Use local commands only for fast diagnosis before pushing:
 ```bash
 make dev                                      # Fast debug build, no tests
 make now                                      # Fast debug build + launch, no tests
+make daily                                    # Optimized local build + launch, no tests
 swift test --disable-sandbox --filter SortyTests.TestClass/testMethod
 ```
 
 `make ci`, `make test`, and `make test-full` still exist for local troubleshooting, but they do not replace Blacksmith checks.
+
+Use `make daily` for everyday use or startup profiling. `make now` prioritizes
+compile speed and leaves an unoptimized Debug app; `make hot` also embeds the
+InjectionLite runtime. All three replace `releases/Sorty.app`, so run `make daily`
+again after development to restore the optimized app.
 
 ### Blacksmith Validation
 

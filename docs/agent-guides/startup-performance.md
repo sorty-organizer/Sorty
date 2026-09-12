@@ -55,6 +55,12 @@ For substantive startup changes, run `make dev` to verify the app target and Swi
 
 For launch-time acceptance:
 
+- Use `make daily` to build and launch the optimized local app with the usual
+  signing identity and Finder extension. It explicitly disables hot reload and
+  skips tests; it is not a release validation command. `make now` and `make hot`
+  overwrite the same bundle with development builds. Confirm the bundle being
+  measured, including whether it contains InjectionLite, before changing startup
+  code in response to slow Dock launches.
 - Compare the same signed Release configuration and persisted data, outside a debugger or hot-reload process. Record the exact build and app path.
 - Measure launch request to first visible frame, then separately to usable controls. Distinguish process launch from reopening a window in an already-running app.
 - Report repeated run values and medians. Keep warm-cache launches separate from the first launch after reboot; preserve real user data and quit gracefully after hydration finishes.
