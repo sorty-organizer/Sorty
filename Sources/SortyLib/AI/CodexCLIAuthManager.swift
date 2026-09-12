@@ -95,7 +95,17 @@ public final class CodexCLIAuthManager: ObservableObject {
         let account_id: String?
     }
 
-    public init() {
+    private var hasStartedLaunchProbe = false
+
+    /// Construction never probes: the status check spawns the Codex CLI, which
+    /// must not run before the first window is on screen.
+    public init() {}
+
+    /// Runs the first status probe once per launch. `SortyApp` calls this from
+    /// the window-ready callback so the subprocess starts after the first frame.
+    public func startLaunchProbeIfNeeded() {
+        guard !hasStartedLaunchProbe else { return }
+        hasStartedLaunchProbe = true
         checkStatus()
     }
 
@@ -178,7 +188,9 @@ public final class CodexCLIAuthManager: ObservableObject {
     }
 
     private func performStatusRefresh() async {
-        let probe = await Task.detached(priority: .userInitiated) {
+        // Utility priority keeps the CLI subprocess from competing with the
+        // main thread for CPU while the first window is still settling.
+        let probe = await Task.detached(priority: .utility) {
             let executablePath = CodexSubscriptionClient.resolveCodexExecutablePath()
             let status = Self.readLoginStatus(codexExecutablePath: executablePath)
             let accountEmail: String?

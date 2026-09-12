@@ -681,7 +681,35 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         }
     }
 
+    private static let executablePathCacheLock = NSLock()
+    nonisolated(unsafe) private static var executablePathCache: (path: String?, resolvedAt: Date)?
+    /// Bounds how often a missing install re-runs the `which` subprocess.
+    private static let executablePathCacheLifetime: TimeInterval = 10
+
+    /// Locates the Codex CLI, caching the outcome briefly so the status probes
+    /// clustered around launch and setup reconciliation do not each spawn
+    /// `which`. A cached hit is re-validated against the file system.
     nonisolated static func resolveCodexExecutablePath() -> String? {
+        executablePathCacheLock.lock()
+        let cached = executablePathCache
+        executablePathCacheLock.unlock()
+
+        if let cached, Date().timeIntervalSince(cached.resolvedAt) < executablePathCacheLifetime {
+            if let path = cached.path {
+                if FileManager.default.fileExists(atPath: path) { return path }
+            } else {
+                return nil
+            }
+        }
+
+        let resolved = locateCodexExecutable()
+        executablePathCacheLock.lock()
+        executablePathCache = (path: resolved, resolvedAt: Date())
+        executablePathCacheLock.unlock()
+        return resolved
+    }
+
+    private nonisolated static func locateCodexExecutable() -> String? {
         let paths = [
             "/usr/local/bin/codex",
             "/opt/homebrew/bin/codex",

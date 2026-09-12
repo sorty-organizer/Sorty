@@ -113,6 +113,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     private var recoveryWindowController: NSWindowController?
     private var applicationRemovalMonitor: ApplicationRemovalMonitor?
     private var buildAutoCloseMonitor: BuildAutoCloseMonitor?
+    private var buildAutoCloseContainerURL: URL?
     private var cacheEvictionTask: Task<Void, Never>?
     private var memoryPressureSource: DispatchSourceMemoryPressure?
     private let launchStartedAt = Date()
@@ -134,11 +135,11 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
             self?.finishExternalUninstall(movedApplicationURL: movedApplicationURL) ?? false
         }
         applicationRemovalMonitor?.start()
+        configureBuildAutoCloseMonitor()
     }
 
     override init() {
         super.init()
-        configureBuildAutoCloseMonitor()
         configureMemoryPressureEviction()
         applicationObservers.append(NotificationCenter.default.addObserver(
             forName: .forceQuitSorty,
@@ -170,16 +171,27 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         })
     }
 
+    /// Watches the app-group container for a build-script quit request. The
+    /// container lookup talks to the container manager and can stall for tens
+    /// of milliseconds, so it runs off the main thread after launch instead of
+    /// inside the delegate initializer.
     private func configureBuildAutoCloseMonitor() {
-        guard let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier
-        ) else { return }
+        let appGroupIdentifier = Self.appGroupIdentifier
+        Task { @MainActor [weak self] in
+            let containerURL = await Task.detached(priority: .utility) {
+                FileManager.default.containerURL(
+                    forSecurityApplicationGroupIdentifier: appGroupIdentifier
+                )
+            }.value
+            guard let self, let containerURL else { return }
 
-        buildAutoCloseMonitor = BuildAutoCloseMonitor(containerURL: containerURL) { [weak self] in
-            self?.finishBuildRequestedQuitIfSafe()
+            self.buildAutoCloseContainerURL = containerURL
+            self.buildAutoCloseMonitor = BuildAutoCloseMonitor(containerURL: containerURL) { [weak self] in
+                self?.finishBuildRequestedQuitIfSafe()
+            }
+            self.buildAutoCloseMonitor?.start()
+            self.finishBuildRequestedQuitIfSafe()
         }
-        buildAutoCloseMonitor?.start()
-        finishBuildRequestedQuitIfSafe()
     }
 
     private func configureMemoryPressureEviction() {
@@ -291,11 +303,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         private var shouldAllowBuildRequestedQuit: Bool {
-            guard let containerURL = FileManager.default.containerURL(
-                forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier
-            ) else {
-                return false
-            }
+            guard let containerURL = buildAutoCloseContainerURL else { return false }
 
             return FileManager.default.fileExists(
                 atPath: containerURL.appendingPathComponent(Self.buildAutoCloseRequestFileName).path
@@ -922,6 +930,9 @@ struct SortyApp: App {
             startTelemetry: {
                 ReliabilityManager.shared.startIfAuthorized()
                 AnalyticsManager.shared.startIfAuthorized(launchDuration: appDelegate.launchDuration)
+                // The Codex CLI probe spawns a subprocess; it waits for the
+                // window to be interactive and runs once per launch.
+                codexAuthManager.startLaunchProbeIfNeeded()
                 if hasConfiguredOperationalServices {
                     ReliabilityManager.shared.finishLaunchSpan()
                 }
