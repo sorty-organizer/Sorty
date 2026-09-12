@@ -10,25 +10,58 @@ public struct ThinkingOrbLoaderView: View {
     public init() {}
 
     public var body: some View {
-        SwiftUI.TimelineView(
-            .animation(
-                minimumInterval: 1.0 / 60.0,
-                paused: reduceMotion || controlActiveState == .inactive
-            )
-        ) { timeline in
-            let raw = reduceMotion ? 0.6 : timeline.date.timeIntervalSinceReferenceDate
-            let isDark = colorScheme == .dark
-            Canvas(rendersAsynchronously: true) { context, size in
-                Self.drawGlobe(context: &context, size: size, rawTime: raw, dark: isDark)
+        GeometryReader { geometry in
+            // The sphere does not change as it rotates. Build its vertices outside
+            // the timeline so frame updates only project and shade existing points.
+            let vertices = Self.sphereVertices(size: geometry.size)
+            SwiftUI.TimelineView(
+                .animation(
+                    minimumInterval: 1.0 / 60.0,
+                    paused: reduceMotion || controlActiveState == .inactive
+                )
+            ) { timeline in
+                let raw = reduceMotion ? 0.6 : timeline.date.timeIntervalSinceReferenceDate
+                let isDark = colorScheme == .dark
+                Canvas(rendersAsynchronously: true) { context, size in
+                    Self.drawGlobe(context: &context, size: size, vertices: vertices, rawTime: raw, dark: isDark)
+                }
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Thinking activity indicator")
     }
 
+    private struct SphereVertex: Sendable {
+        let x, y, z, longitude: CGFloat
+    }
+
+    private static func sphereVertices(size: CGSize) -> [SphereVertex] {
+        let s = min(size.width, size.height)
+        guard s > 0 else { return [] }
+        let f = min(1, max(0, (s - 20) / 44))
+        let latRings = Int((6 + f * (11 - 6)).rounded())
+        let lonDensity: CGFloat = 14 + f * (29 - 14)
+        var vertices: [SphereVertex] = []
+        vertices.reserveCapacity((latRings + 1) * Int(lonDensity.rounded()))
+        for li in 0...latRings {
+            let lat = -CGFloat.pi / 2 + CGFloat(li) / CGFloat(latRings) * .pi
+            let cosLat = cos(lat), sinLat = sin(lat)
+            let lonCount = max(1, Int((abs(cosLat) * lonDensity).rounded()))
+            for lj in 0..<lonCount {
+                let lon = CGFloat(lj) / CGFloat(lonCount) * 2 * .pi
+                vertices.append(SphereVertex(
+                    x: cosLat * cos(lon), y: sinLat,
+                    z: cosLat * sin(lon), longitude: lon
+                ))
+            }
+        }
+        return vertices
+    }
+
     private static func drawGlobe(
         context: inout GraphicsContext,
         size: CGSize,
+        vertices: [SphereVertex],
         rawTime: TimeInterval,
         dark: Bool
     ) {
@@ -37,8 +70,6 @@ public struct ThinkingOrbLoaderView: View {
 
         let f = min(1, max(0, (s - 20) / 44))
         let speed: CGFloat = (2.665 + f * (2.015 - 2.665)) * 0.65
-        let latRings = Int((6 + f * (11 - 6)).rounded())
-        let lonDensity: CGFloat = 14 + f * (29 - 14)
         let rBase: CGFloat = 1.05 + f * (0.69 - 1.05)
         let rDepth: CGFloat = 2.975 + f * (1.955 - 2.975)
         let scanMul: CGFloat = 4.335 + f * (4.08 - 4.335)
@@ -66,36 +97,29 @@ public struct ThinkingOrbLoaderView: View {
         }
         var dots: [Dot] = []
 
-        for li in 0...latRings {
-            let lat = -CGFloat.pi / 2 + CGFloat(li) / CGFloat(latRings) * .pi
-            let cosLat = cos(lat), sinLat = sin(lat)
-            let lonCount = max(1, Int((abs(cosLat) * lonDensity).rounded()))
-            for lj in 0..<lonCount {
-                let lon = CGFloat(lj) / CGFloat(lonCount) * 2 * .pi
-                let x = cosLat * cos(lon)
-                let y = sinLat
-                let z = cosLat * sin(lon)
+        dots.reserveCapacity(vertices.count)
+        for vertex in vertices {
+            let x = vertex.x, y = vertex.y, z = vertex.z
+            let lon = vertex.longitude
+            let x1 = x * cyw + z * sy
+            let z1 = -x * sy + z * cyw
+            let y1 = y * ct - z1 * st
+            let z2 = y * st + z1 * ct
+            let depth = (z2 + 1) / 2
+            let a = lon + t * spin - scan
+            let d = atan2(sin(a), cos(a))
+            let boost = exp(-(d * d) / 0.18) * max(0, z2)
 
-                let x1 = x * cyw + z * sy
-                let z1 = -x * sy + z * cyw
-                let y1 = y * ct - z1 * st
-                let z2 = y * st + z1 * ct
-                let depth = (z2 + 1) / 2
-                let a = lon + t * spin - scan
-                let d = atan2(sin(a), cos(a))
-                let boost = exp(-(d * d) / 0.18) * max(0, z2)
-
-                dots.append(
-                    Dot(
-                        x: cx + x1 * radius,
-                        y: cy - y1 * radius,
-                        z: z2,
-                        r: max(rMin, (rBase + rDepth * depth + boost) * rs),
-                        white: inkFar - inkSpan * depth,
-                        alpha: dimBase + (1 - dimBase) * min(1, boost)
-                    )
+            dots.append(
+                Dot(
+                    x: cx + x1 * radius,
+                    y: cy - y1 * radius,
+                    z: z2,
+                    r: max(rMin, (rBase + rDepth * depth + boost) * rs),
+                    white: inkFar - inkSpan * depth,
+                    alpha: dimBase + (1 - dimBase) * min(1, boost)
                 )
-            }
+            )
         }
 
         dots.sort { $0.z < $1.z }

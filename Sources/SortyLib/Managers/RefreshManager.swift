@@ -18,6 +18,7 @@ public final class RefreshManager: ObservableObject {
     /// Represents a scheduled refresh action
     private struct ScheduledAction: @unchecked Sendable {
         let timer: Timer
+        var remainingInterval: TimeInterval?
     }
 
     // MARK: - Properties
@@ -53,9 +54,12 @@ public final class RefreshManager: ObservableObject {
                 action()
             }
         }
+        if isPaused {
+            timer.fireDate = .distantFuture
+        }
         RunLoop.main.add(timer, forMode: .common)
 
-        scheduledActions[id] = ScheduledAction(timer: timer)
+        scheduledActions[id] = ScheduledAction(timer: timer, remainingInterval: isPaused ? safeInterval : nil)
 
         // Fire immediately if not paused
         if !isPaused {
@@ -85,12 +89,28 @@ public final class RefreshManager: ObservableObject {
 
     /// Pause all timers (they won't fire until resumed)
     public func pause() {
+        guard !isPaused else { return }
         isPaused = true
+        let now = Date()
+        for id in Array(scheduledActions.keys) {
+            guard var scheduled = scheduledActions[id] else { continue }
+            scheduled.remainingInterval = max(0, scheduled.timer.fireDate.timeIntervalSince(now))
+            scheduled.timer.fireDate = .distantFuture
+            scheduledActions[id] = scheduled
+        }
     }
 
     /// Resume all paused timers
     public func resume() {
+        guard isPaused else { return }
         isPaused = false
+        let now = Date()
+        for id in Array(scheduledActions.keys) {
+            guard var scheduled = scheduledActions[id] else { continue }
+            scheduled.timer.fireDate = now.addingTimeInterval(scheduled.remainingInterval ?? scheduled.timer.timeInterval)
+            scheduled.remainingInterval = nil
+            scheduledActions[id] = scheduled
+        }
     }
 
     // MARK: - Convenience Methods

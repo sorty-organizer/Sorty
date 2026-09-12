@@ -56,10 +56,23 @@ public struct AppKitImageView: NSViewRepresentable {
         if imageView.image !== image {
             imageView.image = image
         }
-        imageView.imageScaling = scaling.imageScaling
-        imageView.alphaValue = opacity
-        imageView.wantsLayer = cornerRadius > 0 || opacity < 1
-        imageView.layer?.cornerRadius = cornerRadius
-        imageView.layer?.masksToBounds = cornerRadius > 0
+        // Parent animations can update every row without changing its image.
+        // Avoid asking AppKit to invalidate layout or layers for equal values.
+        if imageView.imageScaling != scaling.imageScaling {
+            imageView.imageScaling = scaling.imageScaling
+        }
+        if imageView.alphaValue != opacity {
+            imageView.alphaValue = opacity
+        }
+        let wantsLayer = cornerRadius > 0 || opacity < 1
+        if imageView.wantsLayer != wantsLayer {
+            imageView.wantsLayer = wantsLayer
+        }
+        if imageView.layer?.cornerRadius != cornerRadius {
+            imageView.layer?.cornerRadius = cornerRadius
+        }
+        if imageView.layer?.masksToBounds != (cornerRadius > 0) {
+            imageView.layer?.masksToBounds = cornerRadius > 0
+        }
     }
 }

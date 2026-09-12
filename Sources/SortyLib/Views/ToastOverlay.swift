@@ -15,6 +15,9 @@ struct CometLoader<S: Shape>: View {
     var color: Color = SortyDesignSystem.Colors.resolvedAccent
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isWindowVisible = true
+    @State private var pausedAt: Date?
+    @State private var hiddenDuration: TimeInterval = 0
 
     init(
         shape: S,
@@ -29,7 +32,7 @@ struct CometLoader<S: Shape>: View {
     }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(paused: reduceMotion)) { timeline in
+        SwiftUI.TimelineView(.animation(paused: reduceMotion || !isWindowVisible)) { timeline in
             Canvas { context, canvasSize in
                 let rect = CGRect(origin: .zero, size: canvasSize).insetBy(dx: lineWidth, dy: lineWidth)
                 let path = shape.path(in: rect)
@@ -40,7 +43,8 @@ struct CometLoader<S: Shape>: View {
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
                 )
 
-                let phase = reduceMotion ? 0.18 : timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.2) / 1.2
+                let time = (pausedAt ?? timeline.date).timeIntervalSinceReferenceDate - hiddenDuration
+                let phase = reduceMotion ? 0.18 : time.truncatingRemainder(dividingBy: 1.2) / 1.2
                 let head = CGFloat(phase)
                 let tail = max(0, head - 0.28)
                 let cometPath = path.trimmedPath(from: tail, to: head)
@@ -61,6 +65,19 @@ struct CometLoader<S: Shape>: View {
             }
         }
         .frame(width: size, height: size)
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
+        .onChange(of: isWindowVisible) { _, visible in
+            // Keep the comet in phase across occlusion. Losing keyboard focus
+            // alone must not pause a window that remains visible.
+            if visible {
+                if let pausedAt {
+                    hiddenDuration += Date().timeIntervalSince(pausedAt)
+                    self.pausedAt = nil
+                }
+            } else if pausedAt == nil {
+                pausedAt = Date()
+            }
+        }
         .accessibilityHidden(true)
     }
 }
