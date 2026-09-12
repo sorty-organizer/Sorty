@@ -40,7 +40,8 @@ public struct ContentView: View {
                                 appState.hasCompletedOnboarding = false
                             }
                         }
-                    )
+                    ),
+                    isRestart: appState.isRestartingOnboarding
                 )
                     .transition(.opacity)
             } else {

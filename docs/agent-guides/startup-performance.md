@@ -33,6 +33,15 @@ The loaders are idempotent. A second caller awaits the existing task. Bookmark r
 
 ## Threading rules
 
+Help > Restart Onboarding presents the welcome controls immediately. Its
+`isRestart` presentation skips the timed first-launch reveal and preserves the
+current window position. Icon and audio preparation must not gate those controls.
+The root replacement disables animations so the outgoing navigation does not
+crossfade while onboarding changes the same window's chrome. Keep the normal
+first-launch reveal and onboarding completion transition separate from restart.
+Cancel pending intro preparation when Get Started is pressed, before the outgoing
+intro finishes its transition.
+
 File reads, journal replay, and JSON decoding run in detached user-initiated tasks. Published state and persistence writes remain on the main actor. `UserDefaultsDataReader` exposes reads only and uses the documented thread-safe `UserDefaults` read behavior. Do not add write methods to it.
 
 For asynchronous bookmark restoration, snapshot the bookmark, item identity, and generation before leaving the main actor. Accept a result only when its generation and bookmark still match the current item. Keep access ownership explicit. Balance every successful security-scope acquisition with its eventual `stopAccessingSecurityScopedResource()` release, including discarded results. Discard stale results after removal, reauthorization, or reset. Await required access before automation uses a folder. `StorageLocationsManager.refreshAccess(for:)` remains a synchronous main-actor operation for the one-item add-location path. Only bulk restore uses the asynchronous path.

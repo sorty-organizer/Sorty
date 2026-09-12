@@ -31,6 +31,7 @@ private enum OnboardingIntroRevealPhase: Int {
 public struct OnboardingView: View {
     @SortyHotReload private var hotReload
     @Binding var hasCompletedOnboarding: Bool
+    private let isRestart: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var currentStep: OnboardingStep = .provider
     @State private var providerSetupStatus = ProviderSetupStatus(
@@ -52,8 +53,10 @@ public struct OnboardingView: View {
 
     private let swipeThreshold: CGFloat = 42
 
-    public init(hasCompletedOnboarding: Binding<Bool>) {
+    public init(hasCompletedOnboarding: Binding<Bool>, isRestart: Bool = false) {
         self._hasCompletedOnboarding = hasCompletedOnboarding
+        self.isRestart = isRestart
+        self._introRevealPhase = State(initialValue: isRestart ? .files : .icon)
     }
 
     public var body: some View {
@@ -136,6 +139,7 @@ public struct OnboardingView: View {
 
             if isIntroVisible {
                 OnboardingIntroView(
+                    isRestart: isRestart,
                     onRevealPhaseChanged: { phase in
                         introRevealPhase = phase
                     },
@@ -182,7 +186,7 @@ public struct OnboardingView: View {
         }
         .background(
             ZStack {
-                OnboardingWindowTitleConfigurator {
+                OnboardingWindowTitleConfigurator(preserveWindowPosition: isRestart) {
                     hasConfiguredWindowChrome = true
                 }
                 OnboardingScreenBackdropBlurPresenter(
@@ -668,6 +672,7 @@ private final class OnboardingIntroTaskController {
 
 private struct OnboardingIntroView: View {
     @SortyHotReload private var hotReload
+    let isRestart: Bool
     let onRevealPhaseChanged: (OnboardingIntroRevealPhase) -> Void
     let onGetStarted: () -> Void
 
@@ -682,6 +687,22 @@ private struct OnboardingIntroView: View {
     @State private var fileIcons: [String: NSImage] = [:]
     @State private var taskController = OnboardingIntroTaskController()
     @StateObject private var audio = OnboardingAudioManager()
+
+    init(
+        isRestart: Bool,
+        onRevealPhaseChanged: @escaping (OnboardingIntroRevealPhase) -> Void,
+        onGetStarted: @escaping () -> Void
+    ) {
+        self.isRestart = isRestart
+        self.onRevealPhaseChanged = onRevealPhaseChanged
+        self.onGetStarted = onGetStarted
+        _iconScale = State(initialValue: isRestart ? 1 : 0.86)
+        _iconOpacity = State(initialValue: isRestart ? 1 : 0)
+        _glowVisible = State(initialValue: isRestart)
+        _chromeRevealed = State(initialValue: isRestart)
+        _textOpacity = State(initialValue: isRestart ? 1 : 0)
+        _textOffset = State(initialValue: isRestart ? 0 : 14)
+    }
 
     var body: some View {
         ZStack {
@@ -703,6 +724,8 @@ private struct OnboardingIntroView: View {
                 textOffset: textOffset
             ) {
                 HapticFeedbackManager.shared.success()
+                taskController.revealGeneration += 1
+                taskController.iconPreparationTask?.cancel()
                 audio.stopAll()
                 onGetStarted()
             }
@@ -741,6 +764,14 @@ private struct OnboardingIntroView: View {
             let icons = await measuredIntroIcons()
             guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
             fileIcons = icons
+
+            if isRestart {
+                filesAppeared = true
+                await audio.prepareBackgroundMelody()
+                guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
+                audio.startBackgroundMelody()
+                return
+            }
 
             if reduceMotion {
                 iconScale = 1
@@ -2775,12 +2806,13 @@ private struct OnboardingNavigationBackdrop: View {
 
 private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
     @SortyHotReload private var hotReload
+    let preserveWindowPosition: Bool
     let onConfigured: () -> Void
 
     func makeNSView(context: Context) -> NSView {
         let view = WindowAttachedView()
         view.onWindowAttached = { window in
-            context.coordinator.configure(window: window)
+            context.coordinator.configure(window: window, preserveWindowPosition: preserveWindowPosition)
             notifyAfterWindowLayoutSettles()
         }
         return view
@@ -2815,7 +2847,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         private var originalAlphaValue: CGFloat?
         private var originalContentMinSize: NSSize?
 
-        func configure(window: NSWindow) {
+        func configure(window: NSWindow, preserveWindowPosition: Bool) {
             guard configuredWindow !== window else { return }
             restore()
 
@@ -2851,8 +2883,11 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             {
                 window.setContentSize(targetSize)
             }
-            window.center()
-            if let screen = window.screen ?? NSScreen.main {
+            if !preserveWindowPosition, !window.styleMask.contains(.fullScreen) {
+                window.center()
+            }
+            if !preserveWindowPosition, !window.styleMask.contains(.fullScreen),
+               let screen = window.screen ?? NSScreen.main {
                 let centeredOrigin = window.frame.origin
                 let loweredY = max(screen.visibleFrame.minY + 24, centeredOrigin.y - 32)
                 window.setFrameOrigin(NSPoint(x: centeredOrigin.x, y: loweredY))

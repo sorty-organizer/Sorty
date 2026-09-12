@@ -485,6 +485,7 @@ public class AppState: ObservableObject {
             userDefaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
         }
     }
+    @Published public private(set) var isRestartingOnboarding = false
     @Published public var shouldPresentSteeringPrompts = false
 
     // State derived from FolderOrganizer
@@ -838,8 +839,13 @@ public class AppState: ObservableObject {
     
     /// Show the onboarding flow again (for revisiting setup)
     public func showOnboarding() {
-        withAnimation(.spring()) {
+        // Replace the root before onboarding configures the shared window.
+        // Suppress the root crossfade while it changes that shared window.
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
             clearSetupRepairState()
+            isRestartingOnboarding = true
             hasCompletedOnboarding = false
         }
     }
