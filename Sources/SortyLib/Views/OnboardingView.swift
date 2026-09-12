@@ -110,7 +110,11 @@ public struct OnboardingView: View {
                             // measuring them in an unbounded vertical scroll
                             // proposal creates a recursive ideal-height cycle.
                             stepContent
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .frame(
+                                    maxWidth: .infinity,
+                                    minHeight: 0,
+                                    maxHeight: .infinity
+                                )
                                 .clipped()
                         }
 
