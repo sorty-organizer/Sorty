@@ -113,7 +113,6 @@ struct FinderIntegrationSettingsView: View {
                 }
             }
             .settingsFocusable(.finderIntegration)
-            .animatedAppearance(delay: 0.03)
 
             if shouldShowTroubleshooting {
                 SettingsCard(title: "Troubleshooting", icon: "wrench.and.screwdriver", color: .purple) {
@@ -235,6 +234,7 @@ struct FinderIntegrationSettingsView: View {
                 .foregroundStyle(compactStatusColor(isHealthy: isHealthy))
                 .font(.caption)
                 .frame(width: 16, height: 16, alignment: .center)
+                .symbolReplaceTransition(animationValue: compactStatusIcon(isHealthy: isHealthy))
                 .accessibilityHidden(true)
             Text(label)
                 .font(.caption.weight(.medium))
