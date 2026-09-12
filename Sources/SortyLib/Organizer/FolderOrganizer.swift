@@ -2089,7 +2089,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Injected Model Directory reference context into prompt")
         }
 
-        if !isRenameOnly, let directoryManifest = PromptBuilder.buildDirectoryManifestContext(baseDirectoryURL: directory, files: files) {
+        if !isRenameOnly,
+           let directoryManifest = try await PromptBuilder.buildDirectoryManifestContextOffMain(
+               baseDirectoryURL: directory,
+               files: files
+           ) {
             instructions += "\n\n" + directoryManifest
             DebugLogger.log("Injected source folder context into prompt")
         }
@@ -2219,7 +2223,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if mode != .renameOnly,
            !completeInstructions.contains("## SOURCE FOLDER CONTEXT"),
            let resolvedDirectory,
-           let manifest = PromptBuilder.buildDirectoryManifestContext(
+           let manifest = try await PromptBuilder.buildDirectoryManifestContextOffMain(
                baseDirectoryURL: resolvedDirectory,
                files: files
            ) {
@@ -3073,7 +3077,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         var validatedPlanFromRetry: OrganizationPlan? = nil
         do {
-            try validator.validate(
+            try await validator.validateOffMain(
                 normalizedInputPlan,
                 at: directory,
                 allowedStorageLocations: allowedLocations,
@@ -3100,8 +3104,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         var planAfterValidation = validatedPlanFromRetry ?? normalizedInputPlan
 
         if aiConfig?.mode != .renameOnly {
-            let existingFolderPaths = PlanQualityEvaluator.existingFolderPaths(at: directory)
-            let initialAssessment = PlanQualityEvaluator.assess(
+            let existingFolderPaths = try await PlanQualityEvaluator.existingFolderPathsOffMain(at: directory)
+            let initialAssessment = try await PlanQualityEvaluator.assessOffMain(
                 planAfterValidation,
                 existingFolderPaths: existingFolderPaths
             )
@@ -3120,7 +3124,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     planAfterValidation = retryPlan
                 }
 
-                let rescoredPlan = PlanQualityEvaluator.assess(
+                let rescoredPlan = try await PlanQualityEvaluator.assessOffMain(
                     planAfterValidation,
                     existingFolderPaths: existingFolderPaths
                 )
@@ -3638,7 +3642,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let normalizedRetryPlan = normalizeStorageDestinations(in: retryPlan, allowedLocations: allowedStorageLocations, sourceDirectoryURL: directory)
 
             // Validate the retry plan
-            try validator.validate(
+            try await validator.validateOffMain(
                 normalizedRetryPlan,
                 at: directory,
                 allowedStorageLocations: allowedStorageLocations,
@@ -3691,7 +3695,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 allowedLocations: allowedStorageLocations,
                 sourceDirectoryURL: directory
             )
-            try validator.validate(
+            try await validator.validateOffMain(
                 storageNormalized,
                 at: directory,
                 allowedStorageLocations: allowedStorageLocations,
@@ -4032,7 +4036,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 baseURL: directory
             )
             do {
-                try validator.validate(
+                try await validator.validateOffMain(
                     planAfterValidation,
                     at: directory,
                     allowedStorageLocations: allowedLocations,
@@ -4302,7 +4306,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let allowedLocations = storageLocationsManager?.enabledLocations ?? []
             var validatedPlan = normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
             do {
-                try validator.validate(
+                try await validator.validateOffMain(
                     validatedPlan,
                     at: directory,
                     allowedStorageLocations: allowedLocations
@@ -4441,7 +4445,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             baseURL: baseURL
         )
         self.currentPlan = planToApply
-        try validator.validate(
+        try await validator.validateOffMain(
             planToApply,
             at: baseURL,
             allowedStorageLocations: allowedLocations,

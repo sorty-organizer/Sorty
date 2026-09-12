@@ -981,6 +981,32 @@ struct PromptBuilder {
         return context
     }
 
+    /// Builds filesystem-backed source context without occupying the caller's actor.
+    static func buildDirectoryManifestContextOffMain(
+        baseDirectoryURL: URL,
+        files: [FileItem],
+        maxEntries: Int = 400
+    ) async throws -> String? {
+        try Task.checkCancellation()
+        let task = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let context = buildDirectoryManifestContext(
+                baseDirectoryURL: baseDirectoryURL,
+                files: files,
+                maxEntries: maxEntries
+            )
+            try Task.checkCancellation()
+            return context
+        }
+        return try await withTaskCancellationHandler {
+            let context = try await task.value
+            try Task.checkCancellation()
+            return context
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
     private static func directoryMetadataContext(
         baseDirectoryURL: URL,
         maxEntries: Int

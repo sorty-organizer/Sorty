@@ -491,6 +491,50 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(context?.contains("txt:1") ?? false)
     }
 
+    func testOffMainDirectoryManifestPreservesDeterministicOutput() async throws {
+        let file = FileItem(
+            path: tempDir.appendingPathComponent("report.pdf").path,
+            name: "report",
+            extension: "pdf",
+            size: 128
+        )
+
+        let synchronous = PromptBuilder.buildDirectoryManifestContext(
+            baseDirectoryURL: tempDir,
+            files: [file]
+        )
+        let offMain = try await PromptBuilder.buildDirectoryManifestContextOffMain(
+            baseDirectoryURL: tempDir,
+            files: [file]
+        )
+
+        XCTAssertEqual(offMain, synchronous)
+    }
+
+    func testOffMainDirectoryManifestHonorsCallerCancellation() async {
+        let directory = tempDir!
+        let task = Task {
+            while !Task.isCancelled {
+                await Task.yield()
+            }
+            return try await PromptBuilder.buildDirectoryManifestContextOffMain(
+                baseDirectoryURL: directory,
+                files: [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]
+            )
+        }
+
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected manifest preparation to stop after cancellation")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+    }
+
     func testDirectoryManifestIncludesFileFinderMetadata() throws {
         let file = FileItem(
             path: tempDir.appendingPathComponent("invoice.pdf").path,

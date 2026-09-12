@@ -8,6 +8,31 @@
 import Foundation
 
 struct FileOrganizationValidator {
+    static func validateOffMain(
+        _ plan: OrganizationPlan,
+        at baseURL: URL,
+        allowedStorageLocations: [StorageLocation] = [],
+        mode: OrganizationMode = .organize
+    ) async throws {
+        try Task.checkCancellation()
+        let task = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            try validate(
+                plan,
+                at: baseURL,
+                allowedStorageLocations: allowedStorageLocations,
+                mode: mode
+            )
+            try Task.checkCancellation()
+        }
+        try await withTaskCancellationHandler {
+            try await task.value
+            try Task.checkCancellation()
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
     static func validate(
         _ plan: OrganizationPlan,
         at baseURL: URL,
@@ -189,6 +214,46 @@ struct PlanQualityEvaluator {
 
         let score = max(0, 100 - issues.reduce(0) { $0 + $1.deduction })
         return PlanQualityAssessment(score: score, issues: issues)
+    }
+
+    static func assessOffMain(
+        _ plan: OrganizationPlan,
+        existingFolderPaths: [String]
+    ) async throws -> PlanQualityAssessment {
+        try Task.checkCancellation()
+        let task = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let assessment = assess(plan, existingFolderPaths: existingFolderPaths)
+            try Task.checkCancellation()
+            return assessment
+        }
+        return try await withTaskCancellationHandler {
+            let assessment = try await task.value
+            try Task.checkCancellation()
+            return assessment
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    static func existingFolderPathsOffMain(
+        at directory: URL,
+        maxDepth: Int = 2
+    ) async throws -> [String] {
+        try Task.checkCancellation()
+        let task = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let paths = existingFolderPaths(at: directory, maxDepth: maxDepth)
+            try Task.checkCancellation()
+            return paths
+        }
+        return try await withTaskCancellationHandler {
+            let paths = try await task.value
+            try Task.checkCancellation()
+            return paths
+        } onCancel: {
+            task.cancel()
+        }
     }
 
     private static func excessiveUnorganizedIssues(in plan: OrganizationPlan) -> [PlanQualityIssue] {

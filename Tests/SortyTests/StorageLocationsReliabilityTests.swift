@@ -50,6 +50,19 @@ final class StorageLocationsReliabilityTests: XCTestCase {
         )
     }
 
+    func testOffMainValidatorPreservesValidationResult() async throws {
+        let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
+        try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)
+        let fileURL = sourceDir.appendingPathComponent("notes.txt")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+        let file = FileItem(path: fileURL.path, name: "notes", extension: "txt", size: 5)
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Documents", files: [file])]
+        )
+
+        try await FileOrganizationValidator.validateOffMain(plan, at: sourceDir)
+    }
+
     func testValidatorRejectsAbsoluteStorageDestinationThatEscapesThroughSymlink() throws {
         let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
         let storageDir = tempRoot.appendingPathComponent("Archive", isDirectory: true)
