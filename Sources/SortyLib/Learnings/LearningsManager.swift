@@ -2875,6 +2875,7 @@ public class LearningsManager: ObservableObject {
     private func restoreModelDirectoryAccess() async {
         if let modelDirectoryRestoreTask {
             await modelDirectoryRestoreTask.value
+            return
         }
 
         let generation = modelDirectoryGeneration

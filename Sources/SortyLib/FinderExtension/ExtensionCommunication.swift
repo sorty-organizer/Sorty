@@ -24,6 +24,28 @@ private actor FinderSyncAutoRepairGate {
     }
 }
 
+/// Shares one expensive Finder registration probe between callers that ask at
+/// the same time, such as Settings and the troubleshooting check.
+private actor FinderSyncDiagnosticsGate {
+    static let shared = FinderSyncDiagnosticsGate()
+
+    private var inFlight: Task<ExtensionCommunication.FinderSyncDiagnostics, Never>?
+
+    func run(
+        _ operation: @escaping @Sendable () async -> ExtensionCommunication.FinderSyncDiagnostics
+    ) async -> ExtensionCommunication.FinderSyncDiagnostics {
+        if let inFlight {
+            return await inFlight.value
+        }
+
+        let task = Task { await operation() }
+        inFlight = task
+        let diagnostics = await task.value
+        inFlight = nil
+        return diagnostics
+    }
+}
+
 public struct ExtensionCommunication {
     private static let appGroupIdentifier = "group.com.sorty.app"
     private static let directoryKey = "selectedDirectory"
@@ -1054,6 +1076,12 @@ public struct ExtensionCommunication {
     }
 
     static func getFinderSyncDiagnosticsAsync() async -> FinderSyncDiagnostics {
+        await FinderSyncDiagnosticsGate.shared.run {
+            await collectFinderSyncDiagnostics()
+        }
+    }
+
+    private static func collectFinderSyncDiagnostics() async -> FinderSyncDiagnostics {
         beginMonitoringFinderSyncRuntime()
         let entries = await registeredFinderSyncExtensionEntriesAsync()
         return finderSyncDiagnostics(
