@@ -102,7 +102,7 @@ public final class CodexCLIAuthManager: ObservableObject {
     public init() {}
 
     /// Runs the first status probe once per launch. `SortyApp` calls this from
-    /// the window-ready callback so the subprocess starts after the first frame.
+    /// the window-ready callback so the subprocess starts after interactive setup.
     public func startLaunchProbeIfNeeded() {
         guard !hasStartedLaunchProbe else { return }
         hasStartedLaunchProbe = true

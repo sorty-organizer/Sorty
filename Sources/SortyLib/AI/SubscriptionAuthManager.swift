@@ -25,7 +25,6 @@ public final class SubscriptionAuthManager: ObservableObject {
             codexAuthManager.$isAuthenticated,
             codexAuthManager.$accountEmail
         )
-        .dropFirst()
         .sink { [weak self] isAuthenticated, accountEmail in
             self?.mirrorCodexStatus(isAuthenticated: isAuthenticated, accountEmail: accountEmail)
         }
