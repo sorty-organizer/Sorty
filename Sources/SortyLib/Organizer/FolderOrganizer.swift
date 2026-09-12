@@ -712,7 +712,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     /// Structure to hold cached insights data
     private struct InsightsCache {
-        let streamingContentHash: Int
+        let streamingContentRevision: UInt64
+        let retainedStreamingByteCount: Int
         let insights: [AIInsight]
         let currentInsight: String
         let timestamp: Date
@@ -1524,9 +1525,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard content.index(content.startIndex, offsetBy: 21, limitedBy: content.endIndex) != nil else { return }
         
         // Check cache first
-        let contentHash = content.hashValue
-        if let cache = insightsCache, 
-           cache.streamingContentHash == contentHash,
+        let contentRevision = streamingContentRevision
+        let contentByteCount = retainedStreamingByteCount
+        if let cache = insightsCache,
+           cache.streamingContentRevision == contentRevision,
+           cache.retainedStreamingByteCount == contentByteCount,
            cache.isValid {
             // Use cached insights
             withBatchUpdates {
@@ -1565,7 +1568,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             self.insightsCache = InsightsCache(
-                streamingContentHash: contentHash,
+                streamingContentRevision: contentRevision,
+                retainedStreamingByteCount: contentByteCount,
                 insights: self.insightHistory,
                 currentInsight: insight.text,
                 timestamp: Date()
@@ -1793,7 +1797,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         let activity = ProcessInfo.processInfo.beginActivity(
-            options: .userInitiatedAllowsIdleSystemSleep,
+            options: .userInitiatedAllowingIdleSystemSleep,
             reason: "Organizing folder: \(directory.lastPathComponent)"
         )
         defer { ProcessInfo.processInfo.endActivity(activity) }

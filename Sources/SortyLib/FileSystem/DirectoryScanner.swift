@@ -718,7 +718,6 @@ actor DirectoryScanner {
             logger.info("Hash computation disabled due to memory pressure")
         }
 
-        let batchSize = getCurrentBatchSize()
         var lastBatchTime = Date()
 
         while let fileURL = enumerator.nextObject() as? URL {
@@ -836,7 +835,7 @@ actor DirectoryScanner {
             // Yield in small batches, but avoid a task_info syscall and progress
             // publication for every batch. The memory-pressure dispatch source
             // still handles urgent pressure changes immediately.
-            if scannedCount.isMultiple(of: batchSize) {
+            if scannedCount.isMultiple(of: getCurrentBatchSize()) {
                 await Task.yield()
 
                 if scannedCount.isMultiple(of: enumerationProgressInterval) {
