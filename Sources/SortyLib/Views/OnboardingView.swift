@@ -293,7 +293,6 @@ public struct OnboardingView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 12, weight: .semibold))
                                 }
-                                .frame(width: 104)
                             }
                             .buttonStyle(.sortyPrimary)
                             .onboardingBeamBorder(
