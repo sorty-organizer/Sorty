@@ -64,19 +64,9 @@ public struct WorkflowSelectionStepView: View {
             .padding(.leading, 72)
             .padding(.trailing, 24)
             
-            // Right side - persona selection. Custom personas can push this
-            // column past the window's finite step allocation, so scroll
-            // locally instead of growing the window and moving the footer.
-            Group {
-                if customPersonaStore.customPersonas.isEmpty {
-                    personaColumn
-                } else {
-                    ScrollView(.vertical) {
-                        personaColumn
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
+            // Right side - persona selection. The custom-persona list handles
+            // its own overflow without scrolling the whole column.
+            personaColumn
             .frame(maxWidth: .infinity)
             .frame(maxHeight: .infinity, alignment: .center)
             .padding(.trailing, 72)
@@ -95,8 +85,6 @@ public struct WorkflowSelectionStepView: View {
         .accessibilityLabel("Workflow Selection Step")
     }
 
-    // Rendered directly, or inside a local scroll when custom personas make
-    // the column taller than the window's finite step allocation.
     private var personaColumn: some View {
         VStack(spacing: 8) {
             Text("Select Default Persona")
