@@ -26,7 +26,7 @@ struct FinderIntegrationSettingsView: View {
         VStack(spacing: 14) {
             SettingsCard(title: "Finder Integration", icon: "folder.badge.gearshape", color: .cyan) {
                 VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top, spacing: 12) {
+                    HStack(alignment: .center, spacing: 12) {
                         Image(systemName: overallStatusIcon)
                             .font(.title3)
                             .foregroundStyle(overallStatusColor)
@@ -66,16 +66,18 @@ struct FinderIntegrationSettingsView: View {
                     Divider()
                         .opacity(0.35)
 
-                    Label {
+                    HStack(alignment: .center, spacing: 8) {
+                        Image(systemName: "cursorarrow.click.2")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 16, height: 16, alignment: .center)
+                            .accessibilityHidden(true)
                         Text("In Finder, right-click a folder to use Organize, Watch, or Exclude.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                    } icon: {
-                        Image(systemName: "cursorarrow.click.2")
-                            .foregroundStyle(.secondary)
-                            .accessibilityHidden(true)
                     }
+                    .accessibilityElement(children: .combine)
 
                     VStack(spacing: 8) {
                         compactStatusRow(
@@ -228,7 +230,7 @@ struct FinderIntegrationSettingsView: View {
         isHealthy: Bool,
         focusTarget: SettingsFocusTarget
     ) -> some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .center, spacing: 8) {
             Image(systemName: compactStatusIcon(isHealthy: isHealthy))
                 .foregroundStyle(compactStatusColor(isHealthy: isHealthy))
                 .font(.caption)
