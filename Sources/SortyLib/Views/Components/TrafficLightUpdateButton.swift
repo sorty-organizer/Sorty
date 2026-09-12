@@ -32,6 +32,11 @@ public struct TrafficLightUpdateButton: NSViewRepresentable {
     }
 
     public func updateNSView(_ nsView: NSView, context: Context) {
+        // makeNSView fires once before the container has a window; retry here
+        // so a missed initial install still recovers once AppKit attaches it.
+        if let window = nsView.window {
+            context.coordinator.install(in: window, updateManager: updateManager)
+        }
         context.coordinator.update(for: updateManager.updateState)
     }
 
