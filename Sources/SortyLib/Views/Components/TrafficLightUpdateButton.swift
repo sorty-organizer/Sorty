@@ -53,6 +53,7 @@ public struct TrafficLightUpdateButton: NSViewRepresentable {
         private var buttonView: UpdateButtonNSView?
         private var accessoryController: NSTitlebarAccessoryViewController?
         private weak var installedWindow: NSWindow?
+        private var isAccessoryInstalled = false
 
         func install(in window: NSWindow, updateManager: SparkleUpdateManager) {
             guard installedWindow !== window else { return }
@@ -78,6 +79,7 @@ public struct TrafficLightUpdateButton: NSViewRepresentable {
             accessoryController.layoutAttribute = .left
             accessoryController.view = accessoryView
             window.addTitlebarAccessoryViewController(accessoryController)
+            isAccessoryInstalled = true
 
             self.buttonView = button
             self.accessoryController = accessoryController
@@ -93,27 +95,43 @@ public struct TrafficLightUpdateButton: NSViewRepresentable {
             buttonView = nil
             accessoryController = nil
             installedWindow = nil
+            isAccessoryInstalled = false
         }
 
         func update(for state: SparkleUpdateManager.UpdateState) {
             guard let buttonView else { return }
             buttonView.update(for: state)
             #if DEBUG
-            buttonView.isHidden = false
+            setAccessoryVisible(true)
             #else
             switch state {
-            case .available, .downloading, .readyToInstall, .installing:
-                buttonView.isHidden = false
+            case .checking, .available, .error, .downloading, .readyToInstall, .installing:
+                setAccessoryVisible(true)
             default:
-                buttonView.isHidden = true
+                setAccessoryVisible(false)
             }
             #endif
+        }
+
+        private func setAccessoryVisible(_ visible: Bool) {
+            guard let installedWindow, let accessoryController else { return }
+            guard visible != isAccessoryInstalled else { return }
+
+            if visible {
+                installedWindow.addTitlebarAccessoryViewController(accessoryController)
+            } else if let index = installedWindow.titlebarAccessoryViewControllers.firstIndex(
+                where: { $0 === accessoryController }
+            ) {
+                installedWindow.removeTitlebarAccessoryViewController(at: index)
+            }
+            isAccessoryInstalled = visible
         }
     }
 }
 
 // MARK: - AppKit Button View
 
+@MainActor
 final class UpdateButtonNSView: NSView {
     private weak var updateManager: SparkleUpdateManager?
 
@@ -137,6 +155,7 @@ final class UpdateButtonNSView: NSView {
     private var trackingArea: NSTrackingArea?
     private var windowFocusObservations: [NSObjectProtocol] = []
     private var stateCancellable: AnyCancellable?
+    private var lastActivationTime: TimeInterval = 0
 
     private let buttonDiameter: CGFloat = 14
     private let collapsedPillWidth: CGFloat = 14
@@ -183,6 +202,10 @@ final class UpdateButtonNSView: NSView {
             return "INSTALL"
         case .installing:
             return "INSTALLING"
+        case .checking:
+            return "CHECKING"
+        case .error:
+            return "RETRY"
         default:
             return idleLabelText
         }
@@ -214,10 +237,6 @@ final class UpdateButtonNSView: NSView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
-
-    deinit {
-        removeWindowFocusObservation()
-    }
 
     // MARK: Setup
 
@@ -561,7 +580,10 @@ final class UpdateButtonNSView: NSView {
     }
 
     private func triggerPrimaryAction() {
-        HapticFeedbackManager.shared.alignment()
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastActivationTime >= 0.35 else { return }
+        lastActivationTime = now
+        HapticFeedbackManager.shared.tap()
         Task { @MainActor in
             #if DEBUG
             guard !isBusy else {
@@ -575,8 +597,10 @@ final class UpdateButtonNSView: NSView {
                 updateManager?.installAvailableUpdate()
             case .downloading, .readyToInstall, .installing:
                 updateManager?.showUpdateInFocus()
-            default:
+            case .error:
                 updateManager?.checkForUpdates()
+            default:
+                break
             }
             #endif
         }
@@ -592,15 +616,19 @@ final class UpdateButtonNSView: NSView {
         }
         #endif
 
+        window?.makeFirstResponder(self)
         isPressed = true
         applyVisualState(animated: false)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            self.isPressed = false
-            self.applyVisualState(animated: true)
-        }
+    }
 
-        triggerPrimaryAction()
+    override func mouseUp(with event: NSEvent) {
+        let shouldActivate = isPressed && bounds.contains(convert(event.locationInWindow, from: nil))
+        isPressed = false
+        applyVisualState(animated: true)
+        if shouldActivate {
+            triggerPrimaryAction()
+        }
     }
 
     // MARK: Tracking & Hover
@@ -617,6 +645,7 @@ final class UpdateButtonNSView: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) {
+        HapticFeedbackManager.shared.selection()
         isHovered = true
         setExpanded(true, animated: true)
         applyVisualState(animated: true)
@@ -632,6 +661,27 @@ final class UpdateButtonNSView: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override var focusRingType: NSFocusRingType {
+        get { .default }
+        set {}
+    }
+
+    override var focusRingMaskBounds: NSRect { bounds }
+
+    override func drawFocusRingMask() {
+        NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2).fill()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 36 || event.keyCode == 49 {
+            triggerPrimaryAction()
+        } else {
+            super.keyDown(with: event)
+        }
+    }
 
     // MARK: Cursor
 
@@ -662,6 +712,10 @@ final class UpdateButtonNSView: NSView {
             setAccessibilityLabel("Sorty update is ready to install and relaunch")
         case .installing:
             setAccessibilityLabel("Sorty update is installing")
+        case .checking:
+            setAccessibilityLabel("Checking for a Sorty update")
+        case .error:
+            setAccessibilityLabel("Retry Sorty update")
         default:
             setAccessibilityLabel("Update Sorty")
         }

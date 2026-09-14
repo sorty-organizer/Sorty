@@ -38,6 +38,8 @@ enum SparkleVersionHistoryLink {
 
 struct SparkleTrafficLightSkipStore {
     private static let skippedVersionsKey = "trafficLightSkippedUpdateVersions"
+    private static let versionPrefix = "build:"
+    private static let displayVersionPrefix = "display:"
 
     private let userDefaults: UserDefaults
 
@@ -45,20 +47,48 @@ struct SparkleTrafficLightSkipStore {
         self.userDefaults = userDefaults
     }
 
-    func contains(version: String) -> Bool {
-        skippedVersions.contains(version)
+    func contains(version: String, displayVersion: String) -> Bool {
+        skippedVersions.contains(Self.versionPrefix + version)
+            || skippedVersions.contains(Self.displayVersionPrefix + displayVersion)
+            || skippedVersions.contains(version)
+            || skippedVersions.contains(displayVersion)
     }
 
-    func markSkipped(version: String) {
+    func markSkipped(version: String, displayVersion: String) {
         var versions = skippedVersions
-        versions.insert(version)
+        versions.insert(Self.versionPrefix + version)
+        versions.insert(Self.displayVersionPrefix + displayVersion)
         save(versions)
     }
 
-    func clearSkipped(version: String) {
+    func clearSkipped(version: String, displayVersion: String) {
         var versions = skippedVersions
+        versions.remove(Self.versionPrefix + version)
+        versions.remove(Self.displayVersionPrefix + displayVersion)
         versions.remove(version)
+        versions.remove(displayVersion)
         save(versions)
+    }
+
+    func prune(installedVersion: String?, installedDisplayVersion: String?) {
+        let comparator = SUStandardVersionComparator.default
+        let retained = skippedVersions.filter { storedVersion in
+            let installed: String?
+            let candidate: String
+            if storedVersion.hasPrefix(Self.versionPrefix) {
+                candidate = String(storedVersion.dropFirst(Self.versionPrefix.count))
+                installed = installedVersion
+            } else if storedVersion.hasPrefix(Self.displayVersionPrefix) {
+                candidate = String(storedVersion.dropFirst(Self.displayVersionPrefix.count))
+                installed = installedDisplayVersion
+            } else {
+                // Old entries did not record which version field they came from.
+                return false
+            }
+            guard let installed else { return false }
+            return comparator.compareVersion(candidate, toVersion: installed) == .orderedDescending
+        }
+        save(retained)
     }
 
     private var skippedVersions: Set<String> {
@@ -184,17 +214,17 @@ public class SparkleUpdateManager: ObservableObject {
             hostBundle: .main,
             delegate: userDriverDelegate
         )
+        userDriver.pruneSkippedVersions()
         self.updaterDelegate = updaterDelegate
         self.userDriverDelegate = userDriverDelegate
         self.userDriver = userDriver
         updateChannel = Self.UpdateChannel.current
 
-        updaterDelegate.stateCallback = { [weak self, weak userDriver] state in
-            switch state {
-            case .upToDate, .error, .disabled:
-                userDriver?.cancelRequestedInstall()
-            default:
-                break
+        updaterDelegate.stateCallback = { [weak self] state in
+            if let self,
+               case .available = self.updateState,
+               case .error = state {
+                return
             }
             self?.updateState = state
         }
@@ -264,7 +294,8 @@ public class SparkleUpdateManager: ObservableObject {
         }
 
         if updater.sessionInProgress {
-            updater.checkForUpdates()
+            NSApp.activate(ignoringOtherApps: true)
+            userDriver?.showUpdateInFocus()
             return
         }
 
@@ -287,9 +318,15 @@ public class SparkleUpdateManager: ObservableObject {
             LogManager.shared.log("Cannot check for updates in background - Sparkle is disabled", level: .warning, category: "SparkleUpdateManager")
             return
         }
-        updateState = .checking
-        updater.checkForUpdatesInBackground()
-        recordCheckDate()
+        guard !updater.sessionInProgress else { return }
+        switch updateState {
+        case .idle, .upToDate, .error, .disabled:
+            updateState = .checking
+            updater.checkForUpdatesInBackground()
+            recordCheckDate()
+        case .checking, .available, .downloading, .readyToInstall, .installing:
+            return
+        }
         #else
         LogManager.shared.log("Sparkle is not available in this build", level: .warning, category: "SparkleUpdateManager")
         updateState = .disabled
@@ -337,13 +374,7 @@ public class SparkleUpdateManager: ObservableObject {
 
         #if canImport(Sparkle)
         guard let userDriver else { return false }
-        if userDriver.installPendingUpdate() {
-            return true
-        }
-
-        userDriver.installNextDiscoveredUpdate()
-        checkForUpdatesInBackground()
-        return true
+        return userDriver.installPendingUpdate()
         #else
         return false
         #endif
@@ -355,7 +386,8 @@ public class SparkleUpdateManager: ObservableObject {
         initializeIfNeeded()
 
         #if canImport(Sparkle)
-        updater?.checkForUpdates()
+        NSApp.activate(ignoringOtherApps: true)
+        userDriver?.showUpdateInFocus()
         #endif
     }
 
@@ -462,7 +494,7 @@ private class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
     }
 
     nonisolated func feedURLString(for updater: SPUUpdater) -> String? {
-        SparkleUpdateFeed.stableAppcastURLString
+        nil
     }
 }
 
@@ -480,7 +512,6 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
     private var pendingState: SPUUserUpdateState?
     private var pendingReply: ((SPUUserUpdateChoice) -> Void)?
     private var isHoldingScheduledUpdate = false
-    private var shouldInstallNextDiscoveredUpdate = false
     private var downloadedBytes: UInt64 = 0
     private var expectedContentLength: UInt64 = 0
 
@@ -500,6 +531,7 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
         reply: @escaping (SPUUserUpdateChoice) -> Void
     ) {
         let version = appcastItem.versionString
+        let displayVersion = appcastItem.displayVersionString
         let availableState = SparkleUpdateManager.UpdateState.available(
             version: appcastItem.displayVersionString,
             releaseNotes: appcastItem.itemDescription
@@ -507,13 +539,13 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
         let stateAwareReply: (SPUUserUpdateChoice) -> Void = { [weak self] choice in
             switch choice {
             case .install:
-                self?.skipStore.clearSkipped(version: version)
+                self?.skipStore.clearSkipped(version: version, displayVersion: displayVersion)
                 self?.stateCallback?(.downloading(progress: nil))
             case .dismiss:
-                self?.skipStore.clearSkipped(version: version)
+                self?.skipStore.clearSkipped(version: version, displayVersion: displayVersion)
                 self?.stateCallback?(availableState)
             case .skip:
-                self?.skipStore.markSkipped(version: version)
+                self?.skipStore.markSkipped(version: version, displayVersion: displayVersion)
                 self?.stateCallback?(.idle)
             @unknown default:
                 self?.stateCallback?(.idle)
@@ -522,19 +554,13 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
         }
 
         guard !state.userInitiated else {
+            stateCallback?(availableState)
             super.showUpdateFound(with: appcastItem, state: state, reply: stateAwareReply)
             return
         }
 
-        guard !skipStore.contains(version: version) else {
-            shouldInstallNextDiscoveredUpdate = false
+        guard !skipStore.contains(version: version, displayVersion: displayVersion) else {
             stateAwareReply(.skip)
-            return
-        }
-
-        if shouldInstallNextDiscoveredUpdate, !appcastItem.isInformationOnlyUpdate {
-            shouldInstallNextDiscoveredUpdate = false
-            stateAwareReply(.install)
             return
         }
 
@@ -558,12 +584,17 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
         return true
     }
 
-    func installNextDiscoveredUpdate() {
-        shouldInstallNextDiscoveredUpdate = true
-    }
-
-    func cancelRequestedInstall() {
-        shouldInstallNextDiscoveredUpdate = false
+    func pruneSkippedVersions() {
+        let installedVersion = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleVersion"
+        ) as? String
+        let installedDisplayVersion = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String
+        skipStore.prune(
+            installedVersion: installedVersion,
+            installedDisplayVersion: installedDisplayVersion
+        )
     }
 
     override func showUpdateInFocus() {
