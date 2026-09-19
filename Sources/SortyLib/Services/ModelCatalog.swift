@@ -79,8 +79,9 @@ public final class ModelCatalog: ObservableObject {
     private let configKey = "aiConfig"
     
     private var cacheDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("Sorty/ModelCache")
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return base.appendingPathComponent("Sorty/ModelCache")
     }
     
     public convenience init() {
@@ -160,6 +161,7 @@ public final class ModelCatalog: ObservableObject {
             )
             guard codexSubscriptionModels.isEmpty else {
                 usingFallback[.openAI] = true
+                lastCodexError = error
                 return
             }
             lastCodexError = error
@@ -168,7 +170,7 @@ public final class ModelCatalog: ObservableObject {
 
     /// Whether a model id is served through the ChatGPT subscription (Codex).
     public func isCodexSubscriptionModel(_ modelId: String) -> Bool {
-        codexSubscriptionModels.contains { $0.id == modelId }
+        codexSubscriptionModels.contains { $0.id.caseInsensitiveCompare(modelId) == .orderedSame }
     }
     
     public func refresh(
@@ -214,6 +216,16 @@ public final class ModelCatalog: ObservableObject {
                 cachedOpenAIAuthMethod = resolvedAuth
             }
             usingFallback[provider] = result.isFallback
+            if result.isFallback {
+                // Fallback lists are not silent: keep a reason so the UI can
+                // explain why live models are unavailable.
+                let fallbackReason = ModelCatalogError.fetchFailed
+                if isCodexFetch {
+                    if lastCodexError == nil { lastCodexError = fallbackReason }
+                } else if lastError[provider] == nil {
+                    lastError[provider] = fallbackReason
+                }
+            }
             
             // Only update cache and timestamp if NOT using fallback
             if !result.isFallback {
@@ -1094,7 +1106,15 @@ public final class ModelCatalog: ObservableObject {
     }
     
     private func openAICompatibleFallback() -> [ModelInfo] {
-        [ModelInfo(id: "gpt-5.4-mini", displayName: "gpt-5.4-mini", provider: .openAICompatible)]
+        // Prefer the user's configured model over a hardcoded default so a
+        // custom OpenAI-compatible endpoint keeps working offline.
+        let storedModel = storedAIConfig().flatMap { config -> String? in
+            guard config.provider == .openAICompatible else { return nil }
+            let trimmed = config.model.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        let configured = storedModel ?? AIProvider.openAICompatible.defaultModel
+        return [ModelInfo(id: configured, displayName: configured, provider: .openAICompatible)]
     }
     
     private func fallbackModels(for provider: AIProvider) -> [ModelInfo] {

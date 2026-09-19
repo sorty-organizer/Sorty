@@ -34,6 +34,20 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         ProviderAuthResolver.authHeaders(for: config.provider, config: config)
     }
     
+    private func resolvedTemperature(_ override: Double?) -> Double {
+        override ?? AIConfig.organizationTemperature
+    }
+
+    private func resolvedMaxTokens() -> Int {
+        config.maxTokens ?? 4096
+    }
+
+    private func applyOrganizeTimeout(to request: inout URLRequest) {
+        // Respect the configured request timeout so large organize calls fail
+        // fast instead of hanging on the URLRequest default.
+        request.timeoutInterval = max(30, min(config.requestTimeout, 300))
+    }
+    
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         let apiURL = try AIRequestSupport.requireAPIURL(from: config)
         try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
@@ -63,13 +77,11 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": userPrompt]
             ],
-            "temperature": AIConfig.organizationTemperature
+            "temperature": resolvedTemperature(temperature)
         ]
         
-        // Add max_tokens if specified
-        if let maxTokens = config.maxTokens {
-            requestBody["max_tokens"] = maxTokens
-        }
+        // Always send a max_tokens bound so organize output cannot grow without limit.
+        requestBody["max_tokens"] = resolvedMaxTokens()
         configureStructuredOrganizationOutput(in: &requestBody)
 
         do {
@@ -134,12 +146,10 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": contentArray]
             ],
-            "temperature": AIConfig.organizationTemperature
+            "temperature": resolvedTemperature(temperature)
         ]
         
-        if let maxTokens = config.maxTokens {
-            requestBody["max_tokens"] = maxTokens
-        }
+        requestBody["max_tokens"] = resolvedMaxTokens()
         configureStructuredOrganizationOutput(in: &requestBody)
 
         do {
@@ -216,9 +226,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             "temperature": AIConfig.organizationTemperature
         ]
         
-        if let maxTokens = config.maxTokens {
-            requestBody["max_tokens"] = maxTokens
-        }
+        requestBody["max_tokens"] = config.maxTokens ?? 4096
 
         Self.configureTextGenerationOutput(
             in: &requestBody,
@@ -228,7 +236,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         )
         
         let headers = authHeaders()
-        let request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
+        var request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
+        request.timeoutInterval = min(config.requestTimeout, 60)
 
         let session = await AIRequestSupport.session(for: config)
         let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
@@ -383,7 +392,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         let startTime = Date()
         let headers = authHeaders()
 
-        let request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
+        var request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
+        applyOrganizeTimeout(to: &request)
 
         let session = await AIRequestSupport.session(for: config)
         do {
@@ -455,7 +465,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         
         let headers = authHeaders()
 
-        let request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: streamingRequestBody)
+        var request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: streamingRequestBody)
+        applyOrganizeTimeout(to: &request)
         
         let startTime = Date()
         var firstTokenTime: Date?
