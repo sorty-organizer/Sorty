@@ -3530,6 +3530,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @MainActor
     private func userFacingErrorMessage(for error: Error) -> String {
         if let clientError = error as? AIClientError {
+            // Quota errors surface the raw provider body (including long
+            // upgrade URLs) via failureReason; keep the toast and history entry
+            // to the actionable summary instead.
+            if clientError.isQuotaExhausted {
+                return "Free-tier allowance used up for this model. Add paid credits or switch models."
+            }
             return clientError.failureReason ?? clientError.errorDescription ?? clientError.localizedDescription
         }
         if let localized = error as? LocalizedError {

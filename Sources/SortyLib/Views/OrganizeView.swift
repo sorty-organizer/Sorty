@@ -1431,14 +1431,14 @@ struct ReadyToOrganizeView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(.orange)
-                Text("Connection warning: \(error.prefix(40))...")
+                Text("Connection warning: \(error)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
         }
-        .frame(height: 16)
-        .help("Current AI connection state")
+        .frame(minHeight: 16)
+        .help(sessionManager.prewarmError ?? "Current AI connection state")
         .accessibilityLabel("Connection status")
         .accessibilityHint("Shows whether Sorty can reach the selected AI provider")
     }
@@ -2864,12 +2864,16 @@ struct ErrorView: View {
     private enum ErrorCategory: Equatable {
         case internetPrivacy
         case apiKey
+        case quota
         case network
         case permissions
         case generic
     }
-    
+
     private var category: ErrorCategory {
+        if let aiError = error as? AIClientError, aiError.isQuotaExhausted {
+            return .quota
+        }
         let description = error.localizedDescription.lowercased()
         if let aiError = error as? AIClientError, aiError.isInternetAccessBlocked {
             return .internetPrivacy
@@ -2901,6 +2905,8 @@ struct ErrorView: View {
             return "network.slash"
         case .apiKey:
             return "key.fill"
+        case .quota:
+            return "creditcard.trianglebadge.exclamationmark"
         case .network:
             return "wifi.exclamationmark"
         case .permissions:
@@ -2916,6 +2922,8 @@ struct ErrorView: View {
             return "Internet Access Blocked"
         case .apiKey:
             return "AI Credentials Required"
+        case .quota:
+            return "Usage Limit Reached"
         case .network:
             return "Connection Problem"
         case .permissions:
@@ -2931,6 +2939,8 @@ struct ErrorView: View {
             return "Sorty stopped the request before it reached your AI provider. Turn off Block Internet Connections in Advanced Settings, then retry."
         case .apiKey:
             return "Check your provider and API key in Settings, then retry."
+        case .quota:
+            return "This model has used its free-tier allowance. Add paid credits in your provider dashboard, or choose a different model, then retry."
         case .network:
             if isTimeoutError {
                 return "If your connection is stable, a slower provider may need more time."
@@ -2980,6 +2990,8 @@ struct ErrorView: View {
             return "Internet privacy"
         case .apiKey:
             return "AI credentials"
+        case .quota:
+            return "Usage limit"
         case .network:
             return "Network connection"
         case .permissions:
@@ -2995,6 +3007,8 @@ struct ErrorView: View {
             return "Sorty blocked the request locally before it reached the selected AI provider."
         case .apiKey:
             return "Sorty couldn't authenticate with the selected AI provider."
+        case .quota:
+            return "The selected AI provider reported the free-tier allowance is used up."
         case .network:
             if isTimeoutError {
                 return "The selected AI provider didn't respond before the request timeout."
@@ -3022,6 +3036,8 @@ struct ErrorView: View {
             return "Open Advanced Settings, turn off Block Internet Connections, then retry."
         case .apiKey:
             return "Check the selected provider and its API key in Settings, then retry."
+        case .quota:
+            return "Add paid credits or choose a different model, then retry."
         case .network:
             if isTimeoutError {
                 return "Check the internet connection, then review timeout settings before retrying."
@@ -3103,6 +3119,7 @@ struct ErrorView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 460)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 recoveryGuidance
             }
@@ -3242,7 +3259,7 @@ struct ErrorView: View {
                     }
                 }
 
-                if category == .apiKey {
+                if category == .apiKey || category == .quota {
                     Button {
                         HapticFeedbackManager.shared.tap()
                         animateActionFeedback(.settings)
@@ -3324,7 +3341,7 @@ struct ErrorView: View {
                     .accessibilityIdentifier("ErrorOpenPermissionsButton")
                 }
 
-                if category == .generic {
+                if category == .generic || category == .quota {
                     Button {
                         HapticFeedbackManager.shared.tap()
                         animateActionFeedback(.helpSupport)
@@ -3423,7 +3440,7 @@ struct ErrorView: View {
 
     @ViewBuilder
     private var recoveryGuidance: some View {
-        if category == .generic {
+        if category == .generic || category == .quota {
             VStack(spacing: 6) {
                 Text(recoveryText)
                     .fontWeight(.semibold)
@@ -3437,12 +3454,14 @@ struct ErrorView: View {
             .foregroundStyle(.tertiary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: 520)
+            .fixedSize(horizontal: false, vertical: true)
         } else {
             Text(recoveryText)
                 .font(.caption)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 500)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

@@ -237,7 +237,7 @@ private struct HUDNotificationHeader: View {
                 Text(notification.message)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .numericTextTransition(animationValue: notification.message)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

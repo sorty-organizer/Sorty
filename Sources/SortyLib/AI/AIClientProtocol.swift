@@ -77,6 +77,25 @@ public enum AIClientError: LocalizedError, Sendable {
             return false
         }
     }
+
+    /// True when a 429 carries a free-tier/quota-exhaustion body rather than a
+    /// transient rate limit. Retrying won't help; the user must add paid
+    /// credits or switch models.
+    public var isQuotaExhausted: Bool {
+        guard case .apiError(let statusCode, let message) = self else { return false }
+        return Self.isQuotaExhaustedMessage(message, statusCode: statusCode)
+    }
+
+    private static func isQuotaExhaustedMessage(_ message: String, statusCode: Int) -> Bool {
+        guard statusCode == 429 else { return false }
+        let body = message.lowercased()
+        return body.contains("free tier")
+            || body.contains("quota")
+            || body.contains("insufficient")
+            || body.contains("billing")
+            || body.contains("paid credits")
+            || body.contains("upgrade to paid")
+    }
     
     public var errorDescription: String? {
         switch self {
@@ -92,7 +111,10 @@ public enum AIClientError: LocalizedError, Sendable {
             return "Invalid response format (JSON mode might be unsupported)"
         case .internetAccessBlocked:
             return "Internet access is blocked"
-        case .apiError(let statusCode, _):
+        case .apiError(let statusCode, let message):
+            if Self.isQuotaExhaustedMessage(message, statusCode: statusCode) {
+                return "API Error (\(statusCode)): This model has used its free-tier allowance. Add paid credits or switch models."
+            }
             return "API Error (\(statusCode)): \(getStatusExplanation(statusCode))"
         case .networkError(let error):
             return "Connection Failed: \(error.localizedDescription)"
