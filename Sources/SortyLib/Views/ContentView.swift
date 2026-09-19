@@ -353,7 +353,7 @@ public struct ContentView: View {
             )
             .listRowBackground(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(SortyDesignSystem.Colors.resolvedAccent)
+                    .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.clear)
                     .padding(.horizontal, 4)
             )
     }
