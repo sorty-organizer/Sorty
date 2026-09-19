@@ -114,7 +114,7 @@ struct HUDNotificationCard: View {
             .padding(.vertical, 10)
         }
         .padding(.leading, 12)
-        .frame(minWidth: 420, idealWidth: 420, maxWidth: 560)
+        .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
         .systemLiquidGlassBackground(cornerRadius: 14)
         .hudFallbackBackground(cornerRadius: 14)
@@ -226,7 +226,7 @@ private struct HUDNotificationHeader: View {
                 Text(notification.message)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
+                    .lineLimit(2)
                     .numericTextTransition(animationValue: notification.message)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
