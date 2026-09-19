@@ -34,6 +34,16 @@ struct AIProviderSettingsView: View {
     @State private var codexDeviceAuthDismissTask: Task<Void, Never>?
     @State private var codexDeviceCodeCopiedID: UUID?
     @State private var isShowingCodexDeviceAuth = false
+    @State private var connectionSuccessResetTask: Task<Void, Never>?
+
+    private var isConnectionSuccessful: Bool {
+        testConnectionStatus?.contains("Success") == true
+    }
+
+    private var isConnectionFailed: Bool {
+        guard let status = testConnectionStatus else { return false }
+        return !isConnectionSuccessful && !status.isEmpty
+    }
 
     private let providerColumns = Array(
         repeating: GridItem(.flexible(minimum: 160), spacing: 10),
@@ -614,13 +624,31 @@ struct AIProviderSettingsView: View {
                         HStack(spacing: 6) {
                             if isTestingConnection {
                                 BouncingSpinner(size: 12, color: .primary)
+                            } else if isConnectionSuccessful {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .contentTransition(.symbolEffect(.replace))
+                            } else if isConnectionFailed {
+                                Image(
+                                    systemName: isInternetAccessBlocked
+                                        ? "network.slash" : "xmark.circle.fill"
+                                )
+                                .contentTransition(.symbolEffect(.replace))
                             } else {
                                 Image(systemName: "network")
+                                    .contentTransition(.symbolEffect(.replace))
                             }
-                            Text("Test Connection")
+                            Text(connectionButtonTitle)
                         }
+                        .animation(
+                            reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78),
+                            value: connectionButtonTitle
+                        )
                     }
-                    .buttonStyle(.sortyBordered)
+                    .buttonStyle(.sortyBordered(intent: connectionButtonIntent))
+                    .animation(
+                        reduceMotion ? nil : .easeInOut(duration: 0.2),
+                        value: connectionButtonIntent
+                    )
                     .settingsFocusable(
                         .providerTestConnection,
                         shape: Capsule(style: .continuous),
@@ -628,134 +656,106 @@ struct AIProviderSettingsView: View {
                         verticalRingPadding: 4
                     )
                     .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
+                    .accessibilityLabel(connectionButtonTitle)
 
-                    if let status = testConnectionStatus {
+                    if let status = testConnectionStatus, isConnectionFailed {
                         VStack(alignment: .center, spacing: 8) {
-                            let isSuccessful = status.contains("Success")
+                            HStack(alignment: .top, spacing: 6) {
+                                Text(status.replacingOccurrences(of: "Error: ", with: ""))
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(isInternetAccessBlocked ? .orange : .red)
+                                    .multilineTextAlignment(.center)
+                                    .frame(maxWidth: 560)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .textSelection(.enabled)
 
-                            HStack(spacing: 8) {
-                                Label(
-                                    isSuccessful
-                                        ? "Connected"
-                                        : isInternetAccessBlocked
-                                            ? "Internet Access Blocked"
-                                            : "Connection Failed",
-                                    systemImage: isSuccessful
-                                        ? "checkmark.circle.fill"
-                                        : isInternetAccessBlocked
-                                            ? "network.slash"
-                                            : "xmark.circle.fill"
-                                )
-                                .foregroundColor(
-                                    isSuccessful ? .green : isInternetAccessBlocked ? .orange : .red
-                                )
-                                .contentTransition(.symbolEffect(.replace))
-
-                                if isInternetAccessBlocked {
-                                    copyConnectionErrorButton(status: status)
-                                }
+                                copyConnectionErrorButton(status: status)
                             }
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(maxWidth: 700, alignment: .center)
 
-                            if !isSuccessful {
-                                HStack(alignment: .top, spacing: 6) {
-                                    Text(status.replacingOccurrences(of: "Error: ", with: ""))
-                                        .font(.caption)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(isInternetAccessBlocked ? .orange : .red)
-                                        .multilineTextAlignment(.center)
-                                        .frame(maxWidth: 560)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                        .textSelection(.enabled)
-
-                                    if !isInternetAccessBlocked {
-                                        copyConnectionErrorButton(status: status)
-                                    }
-                                }
-                                .fixedSize(horizontal: true, vertical: false)
-                                .frame(maxWidth: 700, alignment: .center)
-
-                                if let details = testConnectionDetails, !details.isEmpty {
-                                    VStack(spacing: 6) {
-                                        Button {
-                                            HapticFeedbackManager.shared.selection()
-                                            withAnimation(
-                                                reduceMotion
-                                                    ? nil
-                                                    : .spring(response: 0.30, dampingFraction: 0.78)
-                                            ) {
-                                                isDetailsExpanded.toggle()
-                                            }
-                                        } label: {
-                                            HStack {
-                                                Text(
-                                                    isInternetAccessBlocked
-                                                        ? "Why this is blocked"
-                                                        : "Technical Details"
-                                                )
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
-
-                                                Spacer()
-
-                                                Image(
-                                                    systemName: isDetailsExpanded
-                                                        ? "chevron.up"
-                                                        : "chevron.down"
-                                                )
-                                                .font(.caption2.bold())
-                                                .foregroundStyle(.secondary)
-                                                .contentTransition(.symbolEffect(.replace))
-                                            }
-                                            .contentShape(Rectangle())
-                                        }
-                                        .buttonStyle(.plain)
-                                        .accessibilityIdentifier("ProviderConnectionDetailsDisclosure")
-
-                                        if isDetailsExpanded {
-                                            Text(details)
-                                                .font(.system(.caption, design: .monospaced))
-                                                .padding(10)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .background(Color.secondary.opacity(0.1))
-                                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                                                .fixedSize(horizontal: false, vertical: true)
-                                                .textSelection(.enabled)
-                                                .transition(.move(edge: .top).combined(with: .opacity))
-                                        }
-                                    }
-                                    .frame(maxWidth: 620)
-                                }
-
-                                if isInternetAccessBlocked {
+                            if let details = testConnectionDetails, !details.isEmpty {
+                                VStack(spacing: 6) {
                                     Button {
-                                        HapticFeedbackManager.shared.tap()
-                                        appState.openSettingsWindow(
-                                            section: .advanced,
-                                            focusTarget: .advancedInternetPrivacy
-                                        )
-                                        appState.navigatedFromSettings = true
-                                    } label: {
-                                        Label(
-                                            "Open Internet Settings",
-                                            systemImage: isHoveringInternetSettings ? "arrow.up.right" : "network"
-                                        )
-                                        .font(.caption.bold())
-                                        .contentTransition(.symbolEffect(.replace))
-                                    }
-                                    .buttonStyle(.tintedPill(.orange, size: .small))
-                                    .help("Open Advanced Settings and focus Block Internet Connections")
-                                    .accessibilityHint(
-                                        "Opens the setting that prevents Sorty from contacting cloud providers"
-                                    )
-                                    .accessibilityIdentifier("ProviderOpenInternetSettingsButton")
-                                    .onHover { hovering in
+                                        HapticFeedbackManager.shared.selection()
                                         withAnimation(
                                             reduceMotion
                                                 ? nil
-                                                : .spring(response: 0.24, dampingFraction: 0.82)
+                                                : .spring(response: 0.30, dampingFraction: 0.78)
                                         ) {
-                                            isHoveringInternetSettings = hovering
+                                            isDetailsExpanded.toggle()
                                         }
+                                    } label: {
+                                        HStack {
+                                            Text(
+                                                isInternetAccessBlocked
+                                                    ? "Why this is blocked"
+                                                    : "Technical Details"
+                                            )
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+
+                                            Spacer()
+
+                                            Image(
+                                                systemName: isDetailsExpanded
+                                                    ? "chevron.up"
+                                                    : "chevron.down"
+                                            )
+                                            .font(.caption2.bold())
+                                            .foregroundStyle(.secondary)
+                                            .contentTransition(.symbolEffect(.replace))
+                                        }
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier("ProviderConnectionDetailsDisclosure")
+
+                                    if isDetailsExpanded {
+                                        Text(details)
+                                            .font(.system(.caption, design: .monospaced))
+                                            .padding(10)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .background(Color.secondary.opacity(0.1))
+                                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                                            .fixedSize(horizontal: false, vertical: true)
+                                            .textSelection(.enabled)
+                                            .transition(.move(edge: .top).combined(with: .opacity))
+                                    }
+                                }
+                                .frame(maxWidth: 620)
+                            }
+
+                            if isInternetAccessBlocked {
+                                Button {
+                                    HapticFeedbackManager.shared.tap()
+                                    appState.openSettingsWindow(
+                                        section: .advanced,
+                                        focusTarget: .advancedInternetPrivacy
+                                    )
+                                    appState.navigatedFromSettings = true
+                                } label: {
+                                    Label(
+                                        "Open Internet Settings",
+                                        systemImage: isHoveringInternetSettings ? "arrow.up.right" : "network"
+                                    )
+                                    .font(.caption.bold())
+                                    .contentTransition(.symbolEffect(.replace))
+                                }
+                                .buttonStyle(.tintedPill(.orange, size: .small))
+                                .help("Open Advanced Settings and focus Block Internet Connections")
+                                .accessibilityHint(
+                                    "Opens the setting that prevents Sorty from contacting cloud providers"
+                                )
+                                .accessibilityIdentifier("ProviderOpenInternetSettingsButton")
+                                .onHover { hovering in
+                                    withAnimation(
+                                        reduceMotion
+                                            ? nil
+                                            : .spring(response: 0.24, dampingFraction: 0.82)
+                                    ) {
+                                        isHoveringInternetSettings = hovering
                                     }
                                 }
                             }
@@ -769,6 +769,29 @@ struct AIProviderSettingsView: View {
             }
         }
         .settingsFocusable(.providerConnection)
+    }
+
+    private var connectionButtonTitle: String {
+        if isTestingConnection {
+            return "Testing…"
+        }
+        if isConnectionSuccessful {
+            return "Connected"
+        }
+        if isConnectionFailed {
+            return isInternetAccessBlocked ? "Internet Blocked" : "Connection Failed"
+        }
+        return "Test Connection"
+    }
+
+    private var connectionButtonIntent: SortyButtonIntent {
+        if isConnectionSuccessful {
+            return .success
+        }
+        if isConnectionFailed {
+            return isInternetAccessBlocked ? .warning : .destructive
+        }
+        return .secondary
     }
 
     private func copyConnectionErrorButton(status: String) -> some View {
@@ -806,6 +829,8 @@ struct AIProviderSettingsView: View {
 
     private func testConnection() {
         HapticFeedbackManager.shared.tap()
+        connectionSuccessResetTask?.cancel()
+        connectionSuccessResetTask = nil
         isTestingConnection = true
         testConnectionStatus = nil
         testConnectionDetails = nil
@@ -815,6 +840,7 @@ struct AIProviderSettingsView: View {
         let testedConfig = viewModel.config
         let testID = UUID()
         connectionTestID = testID
+        let shouldAnimate = !reduceMotion
 
         Task {
             do {
@@ -822,11 +848,14 @@ struct AIProviderSettingsView: View {
                 await MainActor.run {
                     guard connectionTestID == testID, viewModel.config == testedConfig else { return }
                     HapticFeedbackManager.shared.success()
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    withAnimation(
+                        shouldAnimate ? .spring(response: 0.4, dampingFraction: 0.7) : nil
+                    ) {
                         testConnectionStatus = "Success: Connection test passed"
                         testConnectionDetails = nil
                     }
                     clearSetupRepairIfProviderIsUsable(testedConfig: testedConfig)
+                    scheduleConnectionSuccessReset()
                 }
             } catch let decodingError as DecodingError {
                 let context: String
@@ -885,12 +914,32 @@ struct AIProviderSettingsView: View {
     @MainActor
     private func resetConnectionTestState() {
         connectionTestID = nil
+        connectionSuccessResetTask?.cancel()
+        connectionSuccessResetTask = nil
         isTestingConnection = false
         testConnectionStatus = nil
         testConnectionDetails = nil
         isDetailsExpanded = false
         isInternetAccessBlocked = false
         hasCopiedConnectionError = false
+    }
+
+    @MainActor
+    private func scheduleConnectionSuccessReset() {
+        connectionSuccessResetTask?.cancel()
+        connectionSuccessResetTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            guard !Task.isCancelled else { return }
+            HapticFeedbackManager.shared.selection()
+            withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.78)) {
+                testConnectionStatus = nil
+                testConnectionDetails = nil
+                isDetailsExpanded = false
+                isInternetAccessBlocked = false
+                hasCopiedConnectionError = false
+            }
+            connectionSuccessResetTask = nil
+        }
     }
 
     @MainActor
