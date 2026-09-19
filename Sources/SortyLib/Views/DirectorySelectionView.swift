@@ -125,7 +125,7 @@ struct DirectorySelectionView: View {
             handleDrop(providers: providers)
         }
         .onAppear {
-            withAnimation {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
                 hasAppeared = true
             }
         }

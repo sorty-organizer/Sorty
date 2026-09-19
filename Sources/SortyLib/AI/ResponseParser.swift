@@ -73,14 +73,55 @@ struct ResponseParser {
                 }
             }
 
-            // Partial matching is deliberately the last resort. Normal compact
-            // responses resolve through the O(1) indexes above.
-            for candidate in candidates where candidate.count > 3 {
-                if let partial = files.first(where: {
-                    $0.displayName.contains(candidate) || candidate.contains($0.displayName)
-                }) {
-                    return partial
+            // Suffix/path match comes before any fuzzy logic, so qualified
+            // paths bind to their exact file instead of a substring sibling.
+            // Example: "docs/report.pdf" must prefer docs/report.pdf over report.pdf.
+            let loweredCandidates = candidates.map { $0.lowercased() }
+            var suffixMatches: [FileItem] = []
+            var seenSuffixIDs = Set<UUID>()
+            for file in files {
+                let fileLower = file.displayName.lowercased()
+                let nameLower = file.name.lowercased()
+                let matchesSuffix = loweredCandidates.contains { candidate in
+                    guard !candidate.isEmpty else { return false }
+                    return fileLower.hasSuffix("/" + candidate)
+                        || nameLower.hasSuffix("/" + candidate)
+                        || fileLower == candidate
+                        || nameLower == candidate
                 }
+                if matchesSuffix, seenSuffixIDs.insert(file.id).inserted {
+                    suffixMatches.append(file)
+                }
+            }
+            if suffixMatches.count == 1, let unique = suffixMatches.first {
+                return unique
+            }
+            if suffixMatches.count > 1 {
+                // Ambiguous suffix (e.g. two folders each hold report.pdf):
+                // fall through to no match rather than first-match-wins.
+                return nil
+            }
+
+            // Last-resort substring match requires a unique hit. Returning the
+            // first of several "contains" hits misbinds siblings such as
+            // report.pdf vs report_final.pdf, so ambiguity resolves to nil.
+            var substringMatches: [FileItem] = []
+            var seenSubstringIDs = Set<UUID>()
+            for candidate in candidates where candidate.count > 3 {
+                let lowered = candidate.lowercased()
+                for file in files {
+                    let displayLower = file.displayName.lowercased()
+                    let nameLower = file.name.lowercased()
+                    if displayLower.contains(lowered) || lowered.contains(displayLower)
+                        || nameLower.contains(lowered) || lowered.contains(nameLower) {
+                        if seenSubstringIDs.insert(file.id).inserted {
+                            substringMatches.append(file)
+                        }
+                    }
+                }
+            }
+            if substringMatches.count == 1, let unique = substringMatches.first {
+                return unique
             }
             return nil
         }
@@ -88,19 +129,36 @@ struct ResponseParser {
 
     private struct LossyArray<Element: Decodable>: Decodable {
         let elements: [Element]
+        let droppedCount: Int
 
         init(from decoder: Decoder) throws {
             var container = try decoder.unkeyedContainer()
             var decoded: [Element] = []
+            var dropped = 0
 
             while !container.isAtEnd {
                 let elementDecoder = try container.superDecoder()
                 if let element = try? Element(from: elementDecoder) {
                     decoded.append(element)
+                } else {
+                    dropped += 1
                 }
             }
 
             elements = decoded
+            droppedCount = dropped
+        }
+    }
+
+    /// Counts of response entries the parser could not map to real files.
+    /// Surfaced on the plan so partial/hallucinated output is never silent.
+    struct ParseDiagnostics {
+        var unresolvedFilenames: [String] = []
+        var hallucinatedIDs: [Int] = []
+        var droppedElements: Int = 0
+
+        var hasIssues: Bool {
+            !unresolvedFilenames.isEmpty || !hallucinatedIDs.isEmpty || droppedElements > 0
         }
     }
 
@@ -112,6 +170,7 @@ struct ResponseParser {
         let unorganizedIDs: [Int]?
         let notes: String?
         let learningToolCall: LearningToolCall?
+        let droppedElementCount: Int
 
         enum CodingKeys: String, CodingKey {
             case folders, unorganized, notes
@@ -124,11 +183,13 @@ struct ResponseParser {
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             sessionName = try container.decodeIfPresent(String.self, forKey: .sessionName)
-            folders = try container.decodeIfPresent(LossyArray<FolderResponse>.self, forKey: .folders)?.elements ?? []
-            folderAssignments = try container.decodeIfPresent(
+            let foldersLossy = try container.decodeIfPresent(LossyArray<FolderResponse>.self, forKey: .folders)
+            folders = foldersLossy?.elements ?? []
+            let assignmentsLossy = try container.decodeIfPresent(
                 LossyArray<FolderResponse>.self,
                 forKey: .folderAssignments
-            )?.elements
+            )
+            folderAssignments = assignmentsLossy?.elements
             unorganized = try container.decodeIfPresent([UnorganizedFileResponse].self, forKey: .unorganized)
             unorganizedIDs = try container.decodeIfPresent([Int].self, forKey: .unorganizedIDs)
             notes = try container.decodeIfPresent(String.self, forKey: .notes)
@@ -136,6 +197,7 @@ struct ResponseParser {
                 LearningToolCall.self,
                 forKey: .learningToolCall
             )
+            droppedElementCount = (foldersLossy?.droppedCount ?? 0) + (assignmentsLossy?.droppedCount ?? 0)
         }
     }
 
@@ -153,6 +215,7 @@ struct ResponseParser {
         let ruleId: String?
         let fileIDs: [Int]?
         let renameSuggestions: [RenameSuggestionResponse]?
+        let droppedNestedCount: Int
 
         // Support both array of strings and array of FileEntry objects
         init(from decoder: Decoder) throws {
@@ -160,20 +223,23 @@ struct ResponseParser {
             name = try container.decode(String.self, forKey: .name)
             description = try container.decodeIfPresent(String.self, forKey: .description)
             reasoning = try container.decodeIfPresent(String.self, forKey: .reasoning)
-            subfolders = try container.decodeIfPresent(
+            let subfoldersLossy = try container.decodeIfPresent(
                 LossyArray<FolderResponse>.self,
                 forKey: .subfolders
-            )?.elements
+            )
+            subfolders = subfoldersLossy?.elements
             tags = try container.decodeIfPresent([String].self, forKey: .tags)
             comment = try container.decodeIfPresent(String.self, forKey: .comment)
             semanticTags = try container.decodeIfPresent([String].self, forKey: .semanticTags)
             confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
             ruleId = try container.decodeIfPresent(String.self, forKey: .ruleId)
             fileIDs = try container.decodeIfPresent([Int].self, forKey: .fileIDs)
-            renameSuggestions = try container.decodeIfPresent(
+            let renamesLossy = try container.decodeIfPresent(
                 LossyArray<RenameSuggestionResponse>.self,
                 forKey: .renameSuggestions
-            )?.elements
+            )
+            renameSuggestions = renamesLossy?.elements
+            droppedNestedCount = (subfoldersLossy?.droppedCount ?? 0) + (renamesLossy?.droppedCount ?? 0)
 
             // Try to decode files as FileEntry array first
             if let fileEntries = try? container.decode([FileEntry].self, forKey: .files) {
@@ -404,17 +470,20 @@ struct ResponseParser {
         if let jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
             if let compactFolders = jsonObject["f"] as? [[String: Any]] {
                 // Parse ultra-compact format: {"f":[{"n":"Folder","files":[]}]}
+                var unresolvedCompact = 0
                 let suggestions = compactFolders.compactMap { dict -> FolderSuggestion? in
                     guard let name = dict["n"] as? String,
                           let fileNames = dict["files"] as? [String] else { return nil }
-                    
+
                     var files: [FileItem] = []
                     for fileName in fileNames {
                         if let file = fileLookup.resolve(fileName) {
                             files.append(file)
+                        } else {
+                            unresolvedCompact += 1
                         }
                     }
-                    
+
                     return FolderSuggestion(
                         folderName: name,
                         files: files,
@@ -425,24 +494,39 @@ struct ResponseParser {
                 guard !suggestions.isEmpty else {
                     throw ParserError.missingRequiredFields
                 }
-                
+
                 // Identify unorganized files
                 let organizedIds = Set(suggestions.flatMap { $0.files }.map { $0.id })
                 let unorganizedFiles = originalFiles.filter { !organizedIds.contains($0.id) }
-                
+                let isPartialCompact = unresolvedCompact > 0 || !unorganizedFiles.isEmpty
+                var compactWarnings: [String] = []
+                if unresolvedCompact > 0 {
+                    compactWarnings.append("\(unresolvedCompact) filename(s) could not be matched to scanned files and were skipped.")
+                }
+                if !unorganizedFiles.isEmpty {
+                    compactWarnings.append("\(unorganizedFiles.count) file(s) were not mapped by the AI and kept unorganized.")
+                }
+                var compactNotes = "Processed via ultra-compact strategy"
+                if isPartialCompact {
+                    compactNotes += ". Partial plan: \(compactWarnings.joined(separator: " ")) Retry with fewer files or clearer filenames if mappings look wrong."
+                }
+
                 return OrganizationPlan(
                     suggestions: suggestions,
                     unorganizedFiles: unorganizedFiles,
-                    notes: "Processed via ultra-compact strategy",
+                    notes: compactNotes,
                     timestamp: Date(),
-                    version: 1
+                    version: 1,
+                    isPartial: isPartialCompact,
+                    needsReview: isPartialCompact,
+                    parseWarnings: compactWarnings
                 )
             }
         }
 
         let decoder = JSONDecoder()
         // Do NOT use convertFromSnakeCase here as we handle it in CodingKeys
-        
+
         let response: AIResponse
 
         do {
@@ -455,29 +539,41 @@ struct ResponseParser {
 
         let fileIdIndex = Dictionary(uniqueKeysWithValues: originalFiles.enumerated().map { ($0.offset + 1, $0.element) })
 
-        func suggestions(from payload: [FolderResponse]) -> [FolderSuggestion] {
-            payload.map { folder in
-                convertFolderResponse(
-                    folder,
-                    fileLookup: fileLookup,
-                    fileIdIndex: fileIdIndex,
-                    mode: mode
-                )
-            }
+        var folderDiagnostics = ParseDiagnostics()
+        folderDiagnostics.droppedElements += response.droppedElementCount
+        let folderSuggestions: [FolderSuggestion] = response.folders.map { folder in
+            convertFolderResponse(
+                folder,
+                fileLookup: fileLookup,
+                fileIdIndex: fileIdIndex,
+                mode: mode,
+                diagnostics: &folderDiagnostics
+            )
         }
-
-        let folderSuggestions = suggestions(from: response.folders)
-        let assignmentSuggestions = suggestions(from: response.folderAssignments ?? [])
+        var assignmentDiagnostics = ParseDiagnostics()
+        assignmentDiagnostics.droppedElements += response.droppedElementCount
+        let assignmentSuggestions: [FolderSuggestion] = (response.folderAssignments ?? []).map { folder in
+            convertFolderResponse(
+                folder,
+                fileLookup: fileLookup,
+                fileIdIndex: fileIdIndex,
+                mode: mode,
+                diagnostics: &assignmentDiagnostics
+            )
+        }
         let folderAssignmentCount = collectAssignedFileIDs(from: folderSuggestions).count
         let compactAssignmentCount = collectAssignedFileIDs(from: assignmentSuggestions).count
 
         // Some models emit both schemas in one response. Prefer the schema that
         // actually maps more input files instead of blindly choosing `folders`.
         let parsedSuggestions: [FolderSuggestion]
+        var diagnostics: ParseDiagnostics
         if folderSuggestions.isEmpty || compactAssignmentCount > folderAssignmentCount {
             parsedSuggestions = assignmentSuggestions
+            diagnostics = assignmentDiagnostics
         } else {
             parsedSuggestions = folderSuggestions
+            diagnostics = folderDiagnostics
         }
 
         let hasExplicitUnorganizedFiles = !(response.unorganized ?? []).isEmpty ||
@@ -500,18 +596,27 @@ struct ResponseParser {
                             reason: "Marked as unorganized in compact file_ids response"
                         )
                     )
+                } else if !diagnostics.hallucinatedIDs.contains(id) {
+                    diagnostics.hallucinatedIDs.append(id)
                 }
             }
         }
 
         var unorganizedFiles: [FileItem] = []
         var seenUnorganizedIDs: Set<UUID> = []
+        var unresolvedUnorganized = 0
 
         for detail in unorganizedDetails {
-            guard let file = fileLookup.resolve(detail.filename) else { continue }
+            guard let file = fileLookup.resolve(detail.filename) else {
+                unresolvedUnorganized += 1
+                continue
+            }
             guard !assignedFileIDs.contains(file.id) else { continue }
             guard seenUnorganizedIDs.insert(file.id).inserted else { continue }
             unorganizedFiles.append(file)
+        }
+        if unresolvedUnorganized > 0 {
+            diagnostics.unresolvedFilenames.append("\(unresolvedUnorganized) unorganized filename(s) could not be resolved")
         }
 
         // A response containing named folders but no usable assignments is not
@@ -521,16 +626,41 @@ struct ResponseParser {
             throw ParserError.missingRequiredFields
         }
 
-        // Defensive fallback: if the model omitted/garbled mappings, keep unmatched files visible.
+        // Unmapped fallback: files the model never mentioned stay visible, but
+        // they are counted distinctly from explicitly unorganized files and mark
+        // the plan partial instead of silently valid.
+        var unmappedCount = 0
         for file in originalFiles where !assignedFileIDs.contains(file.id) {
             guard seenUnorganizedIDs.insert(file.id).inserted else { continue }
+            unmappedCount += 1
             unorganizedFiles.append(file)
             unorganizedDetails.append(
                 UnorganizedFile(
                     filename: file.displayName,
-                    reason: "Could not map this file from AI response; kept unorganized."
+                    reason: "Unmapped: AI response did not assign this file; kept unorganized for review."
                 )
             )
+        }
+
+        var parseWarnings: [String] = []
+        if diagnostics.droppedElements > 0 {
+            parseWarnings.append("\(diagnostics.droppedElements) malformed folder/rename entr\(diagnostics.droppedElements == 1 ? "y was" : "ies were") dropped during decoding.")
+        }
+        if !diagnostics.hallucinatedIDs.isEmpty {
+            parseWarnings.append("\(diagnostics.hallucinatedIDs.count) file ID(s) referenced by the AI do not exist in this batch (\(diagnostics.hallucinatedIDs.prefix(8).map(String.init).joined(separator: ", "))\(diagnostics.hallucinatedIDs.count > 8 ? ", …" : "")).")
+        }
+        if !diagnostics.unresolvedFilenames.isEmpty {
+            let sample = diagnostics.unresolvedFilenames.prefix(3).joined(separator: "; ")
+            parseWarnings.append("\(diagnostics.unresolvedFilenames.count) filename reference(s) could not be matched (\(sample)\(diagnostics.unresolvedFilenames.count > 3 ? "; …" : "")).")
+        }
+        if unmappedCount > 0 {
+            parseWarnings.append("\(unmappedCount) of \(originalFiles.count) file(s) were unmapped by the AI and kept unorganized.")
+        }
+        let isPartial = unmappedCount > 0 || diagnostics.hasIssues || unresolvedUnorganized > 0
+        var notes = response.notes ?? ""
+        if !parseWarnings.isEmpty {
+            let retryHint = "Partial plan — review unmapped items before applying. Retry with fewer files or clearer filenames if mappings look wrong."
+            notes = notes.isEmpty ? retryHint : "\(notes) \(retryHint)"
         }
 
         return OrganizationPlan(
@@ -538,10 +668,13 @@ struct ResponseParser {
             suggestions: parsedSuggestions,
             unorganizedFiles: unorganizedFiles,
             unorganizedDetails: unorganizedDetails,
-            notes: response.notes ?? "",
+            notes: notes,
             timestamp: Date(),
             version: 1,
-            learningToolCall: response.learningToolCall
+            learningToolCall: response.learningToolCall,
+            isPartial: isPartial,
+            needsReview: isPartial,
+            parseWarnings: parseWarnings
         )
     }
 
@@ -568,7 +701,8 @@ struct ResponseParser {
         _ folder: FolderResponse,
         fileLookup: FileLookup,
         fileIdIndex: [Int: FileItem],
-        mode: OrganizationMode
+        mode: OrganizationMode,
+        diagnostics: inout ParseDiagnostics
     ) -> FolderSuggestion {
         var files: [FileItem] = []
         var renameMappings: [FileRenameMapping] = []
@@ -579,9 +713,17 @@ struct ResponseParser {
             renameMappings.append(mapping)
         }
 
+        diagnostics.droppedElements += folder.droppedNestedCount
+
         if let fileIDs = folder.fileIDs {
             for id in fileIDs {
-                guard let file = fileIdIndex[id], !seenFileIds.contains(file.id) else { continue }
+                guard let file = fileIdIndex[id] else {
+                    if !diagnostics.hallucinatedIDs.contains(id) {
+                        diagnostics.hallucinatedIDs.append(id)
+                    }
+                    continue
+                }
+                guard !seenFileIds.contains(file.id) else { continue }
                 seenFileIds.insert(file.id)
                 files.append(file)
             }
@@ -610,12 +752,19 @@ struct ResponseParser {
                     // NOTE: FolderSuggestion doesn't have a mutable 'addTag' during init easily without
                     // accumulating them first. Let's create the FileTagMapping here.
                 }
+            } else {
+                diagnostics.unresolvedFilenames.append(fileEntry.filename)
             }
         }
 
         if mode != .organize {
             for rename in folder.renameSuggestions ?? [] {
-                guard let file = fileIdIndex[rename.fileID] else { continue }
+                guard let file = fileIdIndex[rename.fileID] else {
+                    if !diagnostics.hallucinatedIDs.contains(rename.fileID) {
+                        diagnostics.hallucinatedIDs.append(rename.fileID)
+                    }
+                    continue
+                }
                 if seenFileIds.insert(file.id).inserted {
                     files.append(file)
                 }
@@ -647,7 +796,8 @@ struct ResponseParser {
                 subfolder,
                 fileLookup: fileLookup,
                 fileIdIndex: fileIdIndex,
-                mode: mode
+                mode: mode,
+                diagnostics: &diagnostics
             )
         }
 
@@ -793,11 +943,13 @@ struct ResponseParser {
         for segment in folderObjectSegments(in: workingJSON) {
             if let data = sanitizeJSONPayload(segment).data(using: .utf8),
                let folder = try? JSONDecoder().decode(FolderResponse.self, from: data) {
+                var segmentDiagnostics = ParseDiagnostics()
                 let suggestion = convertFolderResponse(
                     folder,
                     fileLookup: fileLookup,
                     fileIdIndex: fileIdIndex,
-                    mode: mode
+                    mode: mode,
+                    diagnostics: &segmentDiagnostics
                 )
                 let suggestionFileIDs = collectAssignedFileIDs(from: [suggestion])
                 if suggestionFileIDs.contains(where: { !assignedFiles.contains($0) }) {
@@ -836,13 +988,17 @@ struct ResponseParser {
 
         // Unassigned files go to unorganized
         let unorganizedFiles = originalFiles.filter { !assignedFiles.contains($0.id) }
+        let partialWarning = "\(unorganizedFiles.count) of \(originalFiles.count) file(s) unmapped in partial extraction."
 
         return OrganizationPlan(
             suggestions: suggestions,
             unorganizedFiles: unorganizedFiles,
-            notes: "Partial extraction - some organization data may be missing",
+            notes: "Partial extraction - some organization data may be missing. \(partialWarning) Retry with fewer files if mappings look wrong.",
             timestamp: Date(),
-            version: 1
+            version: 1,
+            isPartial: true,
+            needsReview: true,
+            parseWarnings: [partialWarning]
         )
     }
 

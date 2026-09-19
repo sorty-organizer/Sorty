@@ -665,8 +665,20 @@ struct OrganizeView: View {
 
         guard panel.runModal() == .OK, let authorizedDirectory = panel.url else { return }
 
-        _ = authorizedDirectory.startAccessingSecurityScopedResource()
-        appState.selectedDirectory = authorizedDirectory
+        // User-picked via NSOpenPanel: validate, hold a balanced temporary
+        // session while the bookmark is minted in didSet, then release it.
+        // Long-lived access comes from bookmark resolution at organize time.
+        guard case .success(let validated) = IncomingPathValidator.validatedDirectoryURL(for: authorizedDirectory.path) else {
+            DebugLogger.log("Rejected panel directory: \(authorizedDirectory.path)")
+            return
+        }
+        let didStart = validated.startAccessingSecurityScopedResource()
+        defer {
+            if didStart {
+                validated.stopAccessingSecurityScopedResource()
+            }
+        }
+        appState.selectedDirectory = validated
         withAnimation(.pageTransition) {
             organizer.reset()
         }
@@ -1653,7 +1665,14 @@ struct ReadyToOrganizeView: View {
         defer { isImprovingPrompt = false }
 
         do {
-            let client = try AIClientFactory.createClient(config: settingsViewModel.config)
+            // Prefer the Manager-owned client (injectable via
+            // FolderOrganizer.setAIClientForTesting with MockAIClient).
+            let client: any AIClientProtocol
+            if let owned = organizer.aiClient {
+                client = owned
+            } else {
+                client = try AIClientFactory.createClient(config: settingsViewModel.config)
+            }
             let outcome = try await ImproveInstructionsTool.run(
                 client: client,
                 originalInstructions: original,
@@ -2367,6 +2386,7 @@ private struct SavedPromptDisplayCard: View {
     let row: SavedPromptRowContent
     let showsPinControls: Bool
     let onAction: (SavedPromptRowAction) -> Void
+    @State private var hoveredButton: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2394,35 +2414,66 @@ private struct SavedPromptDisplayCard: View {
             }
 
             HStack(spacing: 8) {
-                Button("Use") {
+                rowButton(id: "Use", label: "Use \(row.name)", prominent: true) {
+                    HapticFeedbackManager.shared.tap()
                     onAction(.use(row.id))
+                } label: {
+                    Text("Use")
                 }
-                .buttonStyle(SavedPromptRowButtonStyle(isProminent: true))
 
-                Button("Edit") {
+                rowButton(id: "Edit", label: "Edit \(row.name)", prominent: false) {
+                    HapticFeedbackManager.shared.tap()
                     onAction(.edit(row.id))
+                } label: {
+                    Text("Edit")
                 }
-                .buttonStyle(SavedPromptRowButtonStyle())
 
                 if showsPinControls {
-                    Button(row.isPinned ? "Unpin" : "Pin") {
+                    rowButton(
+                        id: row.isPinned ? "Unpin" : "Pin",
+                        label: "\(row.isPinned ? "Unpin" : "Pin") \(row.name)",
+                        prominent: false
+                    ) {
+                        HapticFeedbackManager.shared.selection()
                         onAction(.togglePin(row.id))
+                    } label: {
+                        Text(row.isPinned ? "Unpin" : "Pin")
                     }
-                    .buttonStyle(SavedPromptRowButtonStyle())
                 }
 
                 Spacer()
 
-                Button(role: .destructive) {
+                rowButton(id: "Delete", label: "Delete \(row.name)", prominent: false, destructive: true) {
+                    HapticFeedbackManager.shared.tap()
                     onAction(.delete(row.id))
                 } label: {
                     Image(systemName: "trash")
                 }
-                .buttonStyle(SavedPromptRowButtonStyle())
-                .accessibilityLabel("Delete \(row.name)")
             }
         }
         .savedPromptCardSurface()
+    }
+
+    private func rowButton<Label: View>(
+        id: String,
+        label: String,
+        prominent: Bool,
+        destructive: Bool = false,
+        action: @escaping () -> Void,
+        label labelView: () -> Label
+    ) -> some View {
+        Button(role: destructive ? .destructive : nil, action: action, label: labelView)
+            .buttonStyle(SavedPromptRowButtonStyle(isProminent: prominent))
+            .accessibilityLabel(label)
+            .accessibilityIdentifier("SavedPrompt\(id)Button-\(row.id.uuidString)")
+            .scaleEffect(hoveredButton == id ? 1.04 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.75), value: hoveredButton)
+            .onHover { hovering in
+                hoveredButton = hovering ? id : nil
+                if hovering {
+                    HapticFeedbackManager.shared.selection()
+                }
+            }
     }
 }
 
@@ -2482,6 +2533,8 @@ private struct SavedPromptEditorCard: View {
     let settingsConfig: AIConfig
     let onCancel: (SavedPromptEditingSession) -> Void
     let onSave: (SavedPromptEditingSession) -> Void
+    /// Injected for tests (MockAIClient); defaults to the factory in production.
+    var injectedAIClient: (any AIClientProtocol)? = nil
 
     @FocusState private var isEditTextFocused: Bool
     @State private var improveTask: Task<Void, Never>?
@@ -2586,7 +2639,12 @@ private struct SavedPromptEditorCard: View {
 
         do {
             try Task.checkCancellation()
-            let client = try AIClientFactory.createClient(config: settingsConfig)
+            let client: any AIClientProtocol
+            if let injected = injectedAIClient {
+                client = injected
+            } else {
+                client = try AIClientFactory.createClient(config: settingsConfig)
+            }
             let outcome = try await ImproveInstructionsTool.run(
                 client: client,
                 originalInstructions: original,

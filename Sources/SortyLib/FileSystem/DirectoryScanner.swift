@@ -115,6 +115,9 @@ actor DirectoryScanner {
     private var isScanning = false
     private var scannedCount = 0
     private var cloudPlaceholdersSkipped = 0
+    /// Symlinked entries skipped during the current scan (never followed, so
+    /// `A/loop -> ..` style cycles cannot hang or escape the scan root).
+    private var symlinksSkipped = 0
     private var isPaused = false
     private var memoryPressureState: MemoryPressureState = .normal
     private var pressureSource: DispatchSourceMemoryPressure?
@@ -185,6 +188,7 @@ actor DirectoryScanner {
         isScanning = true
         scannedCount = 0
         cloudPlaceholdersSkipped = 0
+        symlinksSkipped = 0
         isPaused = false
         lastScanWasDegraded = false
         degradationReason = nil
@@ -249,7 +253,7 @@ actor DirectoryScanner {
         }
 
         logger.info(
-            "Scan completed: \(self.scannedCount) files, cloud placeholders skipped: \(self.cloudPlaceholdersSkipped), memory pressure: \(self.memoryPressureState.rawValue)"
+            "Scan completed: \(self.scannedCount) files, cloud placeholders skipped: \(self.cloudPlaceholdersSkipped), symlinks skipped: \(self.symlinksSkipped), memory pressure: \(self.memoryPressureState.rawValue)"
         )
 
         return files
@@ -276,6 +280,7 @@ actor DirectoryScanner {
         isScanning = true
         scannedCount = 0
         cloudPlaceholdersSkipped = 0
+        symlinksSkipped = 0
         isPaused = false
         lastScanWasDegraded = false
         degradationReason = nil
@@ -310,6 +315,8 @@ actor DirectoryScanner {
 
         let resourceKeys: Set<URLResourceKey> = [
             .isDirectoryKey,
+            .isSymbolicLinkKey,
+            .fileResourceIdentifierKey,
             .fileSizeKey,
             .creationDateKey,
             .contentModificationDateKey,
@@ -346,6 +353,13 @@ actor DirectoryScanner {
         var eligibleFileCount = 0
         var exactCandidateCount = 0
         var unavailableFiles: [UnavailableDuplicateFile] = []
+        // Directory identities already descended into. Symlinked directories
+        // are skipped outright, so this only trips on hardlink/bind cycles.
+        var visitedDirectoryIDs = Set<String>()
+        if let rootID = try? url.resourceValues(forKeys: [.fileResourceIdentifierKey]),
+           let key = Self.visitedDirectoryKey(for: rootID) {
+            visitedDirectoryIDs.insert(key)
+        }
 
         while let fileURL = enumerator.nextObject() as? URL {
             try Task.checkCancellation()
@@ -363,8 +377,23 @@ actor DirectoryScanner {
                 continue
             }
 
+            // Never follow symlinks: a `ln -s .. A/loop` cycle would otherwise
+            // hang the scan, and a dir symlink could escape the scan root.
+            if resourceValues.isSymbolicLink == true {
+                symlinksSkipped += 1
+                if resourceValues.isDirectory == true {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
+
             let enumerationLevel = enumerator.level
             if resourceValues.isDirectory == true {
+                if let key = Self.visitedDirectoryKey(for: resourceValues),
+                   !visitedDirectoryIDs.insert(key).inserted {
+                    enumerator.skipDescendants()
+                    continue
+                }
                 if settings.maxScanDepth >= 0,
                    enumerationLevel > settings.maxScanDepth {
                     enumerator.skipDescendants()
@@ -469,6 +498,7 @@ actor DirectoryScanner {
         var exactCandidates: [FileItem] = []
         exactCandidates.reserveCapacity(exactCandidateCount)
         var enumeratedFileCount = 0
+        var secondPassVisitedDirectoryIDs = visitedDirectoryIDs
 
         while let fileURL = candidateEnumerator.nextObject() as? URL {
             try Task.checkCancellation()
@@ -477,8 +507,21 @@ actor DirectoryScanner {
                 continue
             }
 
+            if resourceValues.isSymbolicLink == true {
+                symlinksSkipped += 1
+                if resourceValues.isDirectory == true {
+                    candidateEnumerator.skipDescendants()
+                }
+                continue
+            }
+
             let enumerationLevel = candidateEnumerator.level
             if resourceValues.isDirectory == true {
+                if let key = Self.visitedDirectoryKey(for: resourceValues),
+                   !secondPassVisitedDirectoryIDs.insert(key).inserted {
+                    candidateEnumerator.skipDescendants()
+                    continue
+                }
                 if settings.maxScanDepth >= 0,
                    enumerationLevel > settings.maxScanDepth {
                     candidateEnumerator.skipDescendants()
@@ -535,8 +578,9 @@ actor DirectoryScanner {
             )
         }
 
+        let skippedSymlinks = self.symlinksSkipped
         logger.info(
-            "Duplicate inventory completed: \(eligibleFileCount) eligible files, \(exactCandidates.count) exact candidates"
+            "Duplicate inventory completed: \(eligibleFileCount) eligible files, \(exactCandidates.count) exact candidates, symlinks skipped: \(skippedSymlinks)"
         )
 
         return DuplicateScanInventory(
@@ -645,6 +689,14 @@ actor DirectoryScanner {
         )
     }
 
+    /// Stable identity for a visited directory, used to break enumeration
+    /// cycles. Symlinks are skipped outright (see below), so this is a second
+    /// line of defense against hardlinked or bind-mounted directory loops.
+    private static func visitedDirectoryKey(for resourceValues: URLResourceValues) -> String? {
+        guard let identifier = resourceValues.fileResourceIdentifier else { return nil }
+        return String(describing: identifier)
+    }
+
     private func makeDuplicateFileItem(
         at url: URL,
         fileSize: Int64,
@@ -679,7 +731,8 @@ actor DirectoryScanner {
         ]
         let resourceKeys: [URLResourceKey] =
             [
-                .isDirectoryKey, .fileSizeKey, .creationDateKey, .isHiddenKey,
+                .isDirectoryKey, .isSymbolicLinkKey, .fileResourceIdentifierKey,
+                .fileSizeKey, .creationDateKey, .isHiddenKey,
                 .contentModificationDateKey, .contentAccessDateKey, .tagNamesKey,
                 .labelNumberKey,
             ] + cloudResourceKeys
@@ -719,6 +772,11 @@ actor DirectoryScanner {
         }
 
         var lastBatchTime = Date()
+        var visitedDirectoryIDs = Set<String>()
+        if let rootID = try? url.resourceValues(forKeys: [.fileResourceIdentifierKey]),
+           let key = Self.visitedDirectoryKey(for: rootID) {
+            visitedDirectoryIDs.insert(key)
+        }
 
         while let fileURL = enumerator.nextObject() as? URL {
             // Check and wait if paused due to memory pressure
@@ -728,6 +786,17 @@ actor DirectoryScanner {
             // Get file attributes. The enumerator already skips hidden files when requested,
             // so avoid an extra per-file resource lookup for large directories.
             let resourceValues = try? fileURL.resourceValues(forKeys: Set(resourceKeys))
+
+            // Never follow symlinks: breaks `ln -s .. A/loop` cycles and keeps
+            // directory symlinks from escaping the scan root.
+            if resourceValues?.isSymbolicLink == true {
+                symlinksSkipped += 1
+                if resourceValues?.isDirectory == true {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
+
             let isDirectory = resourceValues?.isDirectory ?? false
             let size = resourceValues?.fileSize ?? 0
             let creationDate = resourceValues?.creationDate
@@ -737,6 +806,12 @@ actor DirectoryScanner {
             let finderLabelNumber = resourceValues?.labelNumber
 
             if isDirectory {
+                if let values = resourceValues,
+                   let key = Self.visitedDirectoryKey(for: values),
+                   !visitedDirectoryIDs.insert(key).inserted {
+                    enumerator.skipDescendants()
+                    continue
+                }
                 if exclusionMatcher?.shouldPruneDirectory(
                     at: fileURL,
                     finderLabelNumber: finderLabelNumber

@@ -240,7 +240,7 @@ struct StorageLocationConfigView: View {
         updated.name = name.isEmpty ? location.url.lastPathComponent : name
         updated.description = description.isEmpty ? nil : description
         
-        withAnimation {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
             storageLocationsManager.updateLocation(updated)
         }
         dismiss()

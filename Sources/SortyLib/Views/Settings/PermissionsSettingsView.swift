@@ -652,9 +652,8 @@ struct PermissionsSettingsView: View {
 
             switch type {
             case .filesAndFolders:
-                if let selectedDirectory = appState.selectedDirectory {
-                    selectedDirectory.stopAccessingSecurityScopedResource()
-                }
+                // Only balance access this session actually started.
+                appState.releaseSelectedDirectoryAccess()
                 appState.revokeFilesAndFoldersPermission()
                 appState.selectedDirectory = nil
                 updatePermissionState(.unknown, for: .filesAndFolders)

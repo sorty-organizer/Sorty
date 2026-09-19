@@ -15,8 +15,9 @@ public struct LearningsFileManager {
     // MARK: - Configuration
     
     private static var learningsDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("Sorty/Learnings")
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return base.appendingPathComponent("Sorty/Learnings")
     }
     
     private static var userIdentifier: String {

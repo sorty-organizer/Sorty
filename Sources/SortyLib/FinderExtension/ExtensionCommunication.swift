@@ -98,15 +98,18 @@ public struct ExtensionCommunication {
     // MARK: - URL Scheme Handling
 
     /// Handle incoming URL schemes: sorty://organize?path=/path/to/folder
+    /// Case-insensitive to match DeeplinkHandler; query values from
+    /// URLComponents are already decoded once so no second
+    /// removingPercentEncoding is applied (prevents %252e traversal).
     public static func handleURL(_ url: URL) -> URL? {
-        guard url.scheme == "sorty" else { return nil }
+        guard url.scheme?.lowercased() == "sorty" else { return nil }
 
-        switch url.host {
+        switch url.host?.lowercased() {
         case "organize":
             // sorty://organize?path=/path/to/folder
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                let pathItem = components.queryItems?.first(where: { $0.name == "path" }),
-               let path = pathItem.value?.removingPercentEncoding {
+               let path = pathItem.value {
                 return URL(fileURLWithPath: path)
             }
 
@@ -114,7 +117,7 @@ public struct ExtensionCommunication {
             // sorty://scan?path=/path/to/folder
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                let pathItem = components.queryItems?.first(where: { $0.name == "path" }),
-               let path = pathItem.value?.removingPercentEncoding {
+               let path = pathItem.value {
                 return URL(fileURLWithPath: path)
             }
 
@@ -122,7 +125,7 @@ public struct ExtensionCommunication {
             // sorty://open?path=/path/to/folder
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                let pathItem = components.queryItems?.first(where: { $0.name == "path" }),
-               let path = pathItem.value?.removingPercentEncoding {
+               let path = pathItem.value {
                 return URL(fileURLWithPath: path)
             }
 
@@ -130,7 +133,7 @@ public struct ExtensionCommunication {
             // sorty://watched?action=add&path=/path/to/folder
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                let pathItem = components.queryItems?.first(where: { $0.name == "path" }),
-               let path = pathItem.value?.removingPercentEncoding {
+               let path = pathItem.value {
                 return URL(fileURLWithPath: path)
             }
 
@@ -167,7 +170,6 @@ public struct ExtensionCommunication {
     public static func sendDirectoryToApp(_ directoryURL: URL) {
         if let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) {
             sharedDefaults.set(directoryURL.path, forKey: directoryKey)
-            sharedDefaults.synchronize()
         }
 
         let notificationCenter = DistributedNotificationCenter.default()
@@ -178,13 +180,21 @@ public struct ExtensionCommunication {
         )
     }
 
+    /// Atomic read-take of the app-group handoff slot. Validates the payload
+    /// exactly like a deeplink (exists, directory, blocklist); invalid or
+    /// missing payloads return nil. Callers must still treat the result as
+    /// untrusted until the user confirms any destructive action.
     public static func receiveFromExtension() -> URL? {
-        if let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier),
-           let path = sharedDefaults.string(forKey: directoryKey) {
-            sharedDefaults.removeObject(forKey: directoryKey)
-            return URL(fileURLWithPath: path)
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier),
+              let path = sharedDefaults.string(forKey: directoryKey) else {
+            return nil
         }
-        return nil
+        sharedDefaults.removeObject(forKey: directoryKey)
+        guard let validated = IncomingPathValidator.validatedDirectoryURLIfValid(path: path) else {
+            DebugLogger.log("Rejected invalid Finder extension directory: \(path)")
+            return nil
+        }
+        return validated
     }
 
     @discardableResult
@@ -198,7 +208,14 @@ public struct ExtensionCommunication {
             if let userInfo = notification.userInfo,
                let path = userInfo["path"] as? String {
                 UserDefaults(suiteName: appGroupIdentifier)?.removeObject(forKey: directoryKey)
-                let url = URL(fileURLWithPath: path)
+                // DistributedNotificationCenter is unauthenticated: any local
+                // process can post SortyDirectorySelected. Validate like a
+                // deeplink before handing the URL to the UI.
+                guard let validated = IncomingPathValidator.validatedDirectoryURLIfValid(path: path) else {
+                    DebugLogger.log("Rejected invalid directory notification payload")
+                    return
+                }
+                let url = validated
                 Task { @MainActor in
                     handler(url)
                 }
@@ -422,10 +439,30 @@ public struct ExtensionCommunication {
             reportedAt = Date()
         }
 
+        // DistributedNotificationCenter is unauthenticated: reject spoofed
+        // heartbeats before they can drive diagnostics or auto-repair.
+        // Timestamps must be plausible (no far-future, max age enforced by
+        // isRecent) and the path must be an existing .appex bundle.
+        let now = Date()
+        guard reportedAt <= now.addingTimeInterval(60),
+              reportedAt >= now.addingTimeInterval(-finderSyncHeartbeatMaxAge - 60) else {
+            return nil
+        }
+        let standardizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+        guard standardizedPath.hasSuffix(".appex"),
+              FileManager.default.fileExists(atPath: standardizedPath) else {
+            return nil
+        }
+        let expectedIdentifier = finderSyncBundleIdentifier()
+        if let bundleIdentifier, !bundleIdentifier.isEmpty,
+           bundleIdentifier != expectedIdentifier {
+            return nil
+        }
+
         return FinderSyncRuntimeHeartbeat(
             event: event?.isEmpty == false ? event! : "heartbeat",
-            bundleIdentifier: bundleIdentifier?.isEmpty == false ? bundleIdentifier! : finderSyncBundleIdentifier(),
-            path: path,
+            bundleIdentifier: bundleIdentifier?.isEmpty == false ? bundleIdentifier! : expectedIdentifier,
+            path: standardizedPath,
             reportedAt: reportedAt
         )
     }
@@ -631,6 +668,10 @@ public struct ExtensionCommunication {
         }
     }
 
+    /// UserDefaults-controlled uninstall target. Never trust the stored path
+    /// blindly: require the .app to live directly inside /Applications or
+    /// ~/Applications, match the stored file identity, and carry a known
+    /// Sorty bundle identifier.
     public static func stagedApplicationURLForUninstall() -> URL? {
         guard let path = UserDefaults.standard.string(forKey: stagedApplicationPathDefaultsKey),
               !path.isEmpty,
@@ -641,13 +682,26 @@ public struct ExtensionCommunication {
         }
 
         let applicationURL = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
+        guard applicationURL.pathExtension.caseInsensitiveCompare("app") == .orderedSame else {
+            return nil
+        }
         let userApplicationsURL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(userApplicationsDirectoryName, isDirectory: true)
             .standardizedFileURL
-        guard applicationURL.deletingLastPathComponent().path == userApplicationsURL.path else {
+        let systemApplicationsURL = URL(
+            fileURLWithPath: systemApplicationsDirectoryPath, isDirectory: true
+        ).standardizedFileURL
+        let parentPath = applicationURL.deletingLastPathComponent().path
+        guard parentPath == userApplicationsURL.path || parentPath == systemApplicationsURL.path else {
             return nil
         }
         guard applicationFileIdentity(at: applicationURL) == expectedIdentity else {
+            return nil
+        }
+        guard let bundle = Bundle(url: applicationURL),
+              let identifier = bundle.bundleIdentifier,
+              ["com.sorty.app", "com.shirishpothi.Sorty", "com.sorty.Sorty", "com.sorty.SortyApp"]
+                .contains(identifier) else {
             return nil
         }
         return applicationURL
@@ -1199,8 +1253,15 @@ public struct ExtensionCommunication {
     /// currently registered path doesn't match this build.  This prevents
     /// the extension from going missing after a rebuild or after switching
     /// between release and debug builds.
+    /// Rate-limited (once per 24h) and never restarts Finder on its own:
+    /// destructive repair (pkill/pluginkit/killall Finder) requires explicit
+    /// user consent via the Settings Repair button.
     public static func autoRepairFinderSyncIfNeeded() async {
         await FinderSyncAutoRepairGate.shared.run {
+            let lastAutoRepair = UserDefaults.standard.object(forKey: "finderSyncLastAutoRepairAt") as? Date
+            if let lastAutoRepair, Date().timeIntervalSince(lastAutoRepair) < 24 * 60 * 60 {
+                return
+            }
             guard let currentExtensionURL = currentFinderSyncExtensionURL() else {
                 return
             }
@@ -1212,7 +1273,8 @@ public struct ExtensionCommunication {
                 return
             }
 
-            _ = await repairFinderSyncExtensionRegistrationAsync(restartFinder: true)
+            UserDefaults.standard.set(Date(), forKey: "finderSyncLastAutoRepairAt")
+            _ = await repairFinderSyncExtensionRegistrationAsync(restartFinder: false)
         }
     }
 

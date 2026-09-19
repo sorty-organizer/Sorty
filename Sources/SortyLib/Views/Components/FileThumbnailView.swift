@@ -48,7 +48,7 @@ public struct FileThumbnailView: View {
 
     /// Cached fallback icon to avoid repeated NSWorkspace lookups
     private static let fallbackIcon: NSImage = {
-        NSWorkspace.shared.icon(for: .data).copy() as! NSImage
+        copiedIcon(NSWorkspace.shared.icon(for: .data))
     }()
 
     nonisolated(unsafe) private static let iconCache: NSCache<NSString, NSImage> = {
@@ -72,7 +72,7 @@ public struct FileThumbnailView: View {
 
             if let utType = UTType(filenameExtension: ext) ??
                 UTType(tag: ext, tagClass: .filenameExtension, conformingTo: nil) {
-                let icon = NSWorkspace.shared.icon(for: utType).copy() as! NSImage
+                let icon = copiedIcon(NSWorkspace.shared.icon(for: utType))
                 iconCache.setObject(icon, forKey: key, cost: imageCost(icon))
                 return icon
             }
@@ -84,7 +84,7 @@ public struct FileThumbnailView: View {
                 return cached
             }
 
-            let icon = NSWorkspace.shared.icon(for: hint).copy() as! NSImage
+            let icon = copiedIcon(NSWorkspace.shared.icon(for: hint))
             iconCache.setObject(icon, forKey: key, cost: imageCost(icon))
             return icon
         }
@@ -95,5 +95,11 @@ public struct FileThumbnailView: View {
     private static func imageCost(_ image: NSImage) -> Int {
         let pixels = max(1, Int(image.size.width * 2 * image.size.height * 2))
         return pixels * 4
+    }
+
+    /// Copies a shared workspace icon so view recycling never mutates the
+    /// shared instance. Falls back to the original instead of trapping on `as!`.
+    private static func copiedIcon(_ icon: NSImage) -> NSImage {
+        (icon.copy() as? NSImage) ?? icon
     }
 }

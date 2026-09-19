@@ -917,11 +917,12 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
             control.controlSize = .large
         }
 
-        // `role` is public API in the macOS 27 SDK (`NSSegmentedControl.Role.tabs`).
-        // Sorty currently builds against the macOS 26 SDK, so set it via KVC when the
-        // runtime supports it. Tabs role gives the Xcode navigator-bar treatment:
-        // glass rail, morphing glass thumb, and continuous drag tracking between tabs.
-        // TODO: Replace with `control.role = .tabs` once CI builds with the macOS 27 SDK.
+        // COMPAT (macOS 27 SDK): `role` becomes public API as
+        // `NSSegmentedControl.Role.tabs`. Sorty builds against the macOS 26
+        // SDK, so set it via KVC when the runtime supports it. Tabs role
+        // gives the Xcode navigator-bar treatment: glass rail, morphing glass
+        // thumb, and continuous drag tracking between tabs.
+        // Adopt `control.role = .tabs` when CI moves to the macOS 27 SDK.
         if control.responds(to: NSSelectorFromString("setRole:")) {
             control.setValue(1, forKey: "role") // NSSegmentedControlRoleTabs
         }
@@ -1264,8 +1265,7 @@ private struct HistorySessionCard: View {
                 .padding(.trailing, 12)
                 .accessibilityHidden(true)
         }
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .systemLiquidGlassBackground(cornerRadius: 16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.5) : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
@@ -1275,6 +1275,9 @@ private struct HistorySessionCard: View {
         .animation(.subtleBounce, value: isHovered)
         .onHover { hovering in
             isHovered = hovering
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
         }
     }
 }
@@ -2312,8 +2315,7 @@ struct ProcessingOverlay: View {
                     .numericTextTransition(animationValue: stage)
             }
             .padding(24)
-            .background(.regularMaterial)
-            .cornerRadius(12)
+            .systemLiquidGlassBackground(cornerRadius: 12)
             .scaleEffect(appeared ? 1 : 0.8)
             .opacity(appeared ? 1 : 0)
             .accessibilityElement(children: .combine)

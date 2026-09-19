@@ -412,11 +412,24 @@ public class AppState: ObservableObject {
     @Published public var selectedDirectory: URL? {
         didSet {
             if let url = selectedDirectory {
-                selectedDirectoryBookmark = try? url.bookmarkData(
-                    options: .withSecurityScope,
-                    includingResourceValuesForKeys: nil,
-                    relativeTo: nil
-                )
+                // Only mint bookmarks for validated user-visible folders.
+                // Untrusted deeplink/IPC payloads are validated before
+                // assignment; this is defense-in-depth so a stray assignment
+                // never mints a bookmark for /etc, /System, or missing paths.
+                guard case .success = IncomingPathValidator.validatedDirectoryURL(for: url.path) else {
+                    selectedDirectoryBookmark = nil
+                    return
+                }
+                do {
+                    selectedDirectoryBookmark = try url.bookmarkData(
+                        options: .withSecurityScope,
+                        includingResourceValuesForKeys: nil,
+                        relativeTo: nil
+                    )
+                } catch {
+                    DebugLogger.log("Failed to mint selected-directory bookmark: \(error.localizedDescription)")
+                    selectedDirectoryBookmark = nil
+                }
                 // Remember a bare folder selection so a restart forced by
                 // macOS (e.g. enabling Full Disk Access) restores the folder
                 // even before analysis ever ran. Richer snapshots win: the
@@ -429,6 +442,30 @@ public class AppState: ObservableObject {
     }
     /// Security-scoped bookmark for the currently selected directory within this window session.
     public private(set) var selectedDirectoryBookmark: Data?
+    /// Tracks whether resolveSelectedDirectoryWithAccess holds an active
+    /// security-scoped session, so permission revocation only stops access it
+    /// actually started (avoids unbalanced stopAccessing calls).
+    private var selectedDirectoryAccessHeld = false
+
+    /// Balances one active selected-directory access session, if held.
+    public func releaseSelectedDirectoryAccess() {
+        guard selectedDirectoryAccessHeld, let bookmark = selectedDirectoryBookmark else {
+            selectedDirectoryAccessHeld = false
+            return
+        }
+        var isStale = false
+        if let resolved = try? URL(
+            resolvingBookmarkData: bookmark,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) {
+            resolved.stopAccessingSecurityScopedResource()
+        } else if let directory = selectedDirectory {
+            directory.stopAccessingSecurityScopedResource()
+        }
+        selectedDirectoryAccessHeld = false
+    }
     /// Persistent security-scoped bookmark for the folder selected in Files & Folders settings.
     @Published public private(set) var filesAndFoldersPermissionBookmark: Data?
     @Published public var updateManager: SparkleUpdateManager
@@ -715,24 +752,35 @@ public class AppState: ObservableObject {
 
     /// Resolve the security-scoped bookmark for the selected directory.
     /// Returns a URL with active security scope, or falls back to the stored URL.
+    /// Holds one balanced session tracked by selectedDirectoryAccessHeld; call
+    /// releaseSelectedDirectoryAccess() to balance it.
     public func resolveSelectedDirectoryWithAccess() -> URL? {
         if let bookmark = selectedDirectoryBookmark {
             var isStale = false
-            if let resolved = try? URL(
-                resolvingBookmarkData: bookmark,
-                options: .withSecurityScope,
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            ) {
-                _ = resolved.startAccessingSecurityScopedResource()
+            do {
+                let resolved = try URL(
+                    resolvingBookmarkData: bookmark,
+                    options: .withSecurityScope,
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &isStale
+                )
+                if resolved.startAccessingSecurityScopedResource() {
+                    selectedDirectoryAccessHeld = true
+                }
                 if isStale {
-                    selectedDirectoryBookmark = try? resolved.bookmarkData(
-                        options: .withSecurityScope,
-                        includingResourceValuesForKeys: nil,
-                        relativeTo: nil
-                    )
+                    do {
+                        selectedDirectoryBookmark = try resolved.bookmarkData(
+                            options: .withSecurityScope,
+                            includingResourceValuesForKeys: nil,
+                            relativeTo: nil
+                        )
+                    } catch {
+                        DebugLogger.log("Failed to renew selected-directory bookmark: \(error.localizedDescription)")
+                    }
                 }
                 return resolved
+            } catch {
+                DebugLogger.log("Failed to resolve selected-directory bookmark: \(error.localizedDescription)")
             }
         }
         return selectedDirectory

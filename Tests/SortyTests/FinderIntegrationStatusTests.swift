@@ -12,10 +12,14 @@ final class FinderIntegrationStatusTests: XCTestCase {
 
     func testFinderRequestIsConsumedOnlyOnce() {
         let defaults = UserDefaults(suiteName: "group.com.sorty.app")!
-        defaults.set("/tmp/Incoming", forKey: "selectedDirectory")
+        let incoming = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SortyIncoming-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: incoming, withIntermediateDirectories: true)
+        defaults.set(incoming.path, forKey: "selectedDirectory")
 
-        XCTAssertEqual(ExtensionCommunication.receiveFromExtension()?.path, "/tmp/Incoming")
+        XCTAssertEqual(ExtensionCommunication.receiveFromExtension()?.path, incoming.path)
         XCTAssertNil(ExtensionCommunication.receiveFromExtension())
+        try? FileManager.default.removeItem(at: incoming)
     }
 
     func testIntegrationCountUsesActiveIntegrationsOnly() {

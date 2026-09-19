@@ -11,7 +11,10 @@ import XCTest
 @MainActor
 final class LLMRuleInducerTests: XCTestCase {
     
-    // Mock Client
+    // Mock Client (generateText-focused).
+    // NOTE: Intentionally divergent from the actor MockAIClient in
+    // SortyLibTests.swift (analyze-focused). See the note there for why the
+    // two are kept separate.
     final class MockAIClient: AIClientProtocol, @unchecked Sendable {
         nonisolated(unsafe) var config: AIConfig = AIConfig()
         nonisolated(unsafe) var generateTextResponse: String = ""

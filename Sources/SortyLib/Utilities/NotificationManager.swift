@@ -484,14 +484,14 @@ public class NotificationManager: ObservableObject {
         if isSafeToUseSystemNotifications {
             await checkNotificationPermission()
         } else {
-            print("NotificationManager: Skipping system notification setup (CLI/Test environment)")
+            DebugLogger.log("NotificationManager: Skipping system notification setup (CLI/Test environment)")
             await MainActor.run {
                 self.notificationPermissionStatus = .denied
             }
         }
         
         if isSafeToUseSystemNotifications {
-            print("NotificationManager: Using native macOS notifications")
+            DebugLogger.log("NotificationManager: Using native macOS notifications")
         }
     }
     
@@ -539,7 +539,7 @@ public class NotificationManager: ObservableObject {
 
                 return notificationPermissionStatus == .authorized || notificationPermissionStatus == .provisional || granted
             } catch {
-                print("NotificationManager: Failed to request permission: \(error)")
+                DebugLogger.log("NotificationManager: Failed to request permission: \(error)")
                 await checkNotificationPermission()
                 return notificationPermissionStatus == .authorized || notificationPermissionStatus == .provisional
             }
@@ -552,7 +552,7 @@ public class NotificationManager: ObservableObject {
     public func show(_ type: NotificationType) {
         let settingsValue = settings.settings
         
-        print("NotificationManager: show() called with type, inAppHUD=\(settingsValue.inAppHUD), systemNotifications=\(settingsValue.systemNotifications)")
+        DebugLogger.log("NotificationManager: show() called with type, inAppHUD=\(settingsValue.inAppHUD), systemNotifications=\(settingsValue.systemNotifications)")
         
         // Handle automated organization filter
         switch type {
@@ -564,13 +564,13 @@ public class NotificationManager: ObservableObject {
         case .processingComplete(_, _, _, _, let isAutomated),
              .batchSummary(_, let isAutomated):
             if isAutomated && !settingsValue.watchedFolderCompletionNotificationsEnabled {
-                print("NotificationManager: Automated organization notification suppressed by settings")
+                DebugLogger.log("NotificationManager: Automated organization notification suppressed by settings")
                 trackAnalytics(.suppressed, type: type, backend: "native", detail: "automated notifications disabled")
                 return
             }
         case .processingError(_, _, _, _, let isAutomated):
             if isAutomated && !settingsValue.notifyOnAutoOrganize && !type.isCritical {
-                print("NotificationManager: Automated organization error suppressed by settings")
+                DebugLogger.log("NotificationManager: Automated organization error suppressed by settings")
                 trackAnalytics(.suppressed, type: type, backend: "native", detail: "automated notifications disabled")
                 return
             }
@@ -582,13 +582,13 @@ public class NotificationManager: ObservableObject {
         switch type {
         case .processingComplete:
             guard settingsValue.processingComplete else {
-                print("NotificationManager: processingComplete notifications disabled")
+                DebugLogger.log("NotificationManager: processingComplete notifications disabled")
                 trackAnalytics(.suppressed, type: type, backend: "native", detail: "processing complete disabled")
                 return
             }
         case .previewReady:
             guard settingsValue.previewReady else {
-                print("NotificationManager: previewReady notifications disabled")
+                DebugLogger.log("NotificationManager: previewReady notifications disabled")
                 trackAnalytics(.suppressed, type: type, backend: "native", detail: "preview ready disabled")
                 return
             }
@@ -596,13 +596,13 @@ public class NotificationManager: ObservableObject {
             if isCritical && settingsValue.alwaysShowCriticalErrors {
                 // Always show critical errors
             } else if !settingsValue.processingErrors {
-                print("NotificationManager: processingErrors notifications disabled")
+                DebugLogger.log("NotificationManager: processingErrors notifications disabled")
                 trackAnalytics(.suppressed, type: type, backend: "native", detail: "processing errors disabled")
                 return
             }
         case .batchSummary:
             guard settingsValue.processingComplete && settingsValue.batchSummary else {
-                print("NotificationManager: batchSummary notifications disabled")
+                DebugLogger.log("NotificationManager: batchSummary notifications disabled")
                 trackAnalytics(.suppressed, type: type, backend: "native", detail: "batch summary disabled")
                 return
             }
@@ -631,7 +631,7 @@ public class NotificationManager: ObservableObject {
                 defaultAction: defaultHUDAction(for: type)
             )
         } else {
-            print("NotificationManager: skipping HUD (inAppHUD=\(settingsValue.inAppHUD), isActive=\(NSApplication.shared.isActive))")
+            DebugLogger.log("NotificationManager: skipping HUD (inAppHUD=\(settingsValue.inAppHUD), isActive=\(NSApplication.shared.isActive))")
         }
         
         // Show system notification: always for critical errors, otherwise when enabled + shouldShow
@@ -654,7 +654,7 @@ public class NotificationManager: ObservableObject {
                 )
             }
         } else {
-            print("NotificationManager: skipping system notification (enabled=\(settingsValue.systemNotifications), shouldShow=\(shouldShowSystem), critical=\(isCriticalError))")
+            DebugLogger.log("NotificationManager: skipping system notification (enabled=\(settingsValue.systemNotifications), shouldShow=\(shouldShowSystem), critical=\(isCriticalError))")
             trackAnalytics(.shown, type: type, backend: "native", detail: "hud only")
         }
     }
@@ -1061,7 +1061,7 @@ public class NotificationManager: ObservableObject {
         actions: [HUDNotificationAction] = [],
         defaultAction: (@MainActor () -> Void)? = nil
     ) {
-        print("NotificationManager: showHUD called - title: \(title), message: \(message)")
+        DebugLogger.log("NotificationManager: showHUD called - title: \(title), message: \(message)")
         
         let notification = HUDNotification(
             identifier: identifier,
@@ -1085,16 +1085,16 @@ public class NotificationManager: ObservableObject {
         }
         
         if currentHUDNotification == nil {
-            print("NotificationManager: Presenting HUD immediately")
+            DebugLogger.log("NotificationManager: Presenting HUD immediately")
             presentHUD(notification)
         } else {
-            print("NotificationManager: Queuing HUD notification (queue size: \(hudNotificationQueue.count + 1))")
+            DebugLogger.log("NotificationManager: Queuing HUD notification (queue size: \(hudNotificationQueue.count + 1))")
             hudNotificationQueue.append(notification)
         }
     }
     
     private func presentHUD(_ notification: HUDNotification) {
-        print("NotificationManager: presentHUD - \(notification.title)")
+        DebugLogger.log("NotificationManager: presentHUD - \(notification.title)")
         
         if notification.playSound {
             playHUDSound()
@@ -1107,7 +1107,7 @@ public class NotificationManager: ObservableObject {
         // Force publish change for observers
         objectWillChange.send()
         
-        print("NotificationManager: currentHUDNotification set, scheduling auto-dismiss")
+        DebugLogger.log("NotificationManager: currentHUDNotification set, scheduling auto-dismiss")
         
         dismissTask?.cancel()
         guard !notification.isPersistent else { return }
@@ -1182,7 +1182,7 @@ public class NotificationManager: ObservableObject {
         actionHandler: NotificationActionHandler?
     ) async {
         guard isSafeToUseSystemNotifications else {
-            print("NotificationManager: Skipping native notification (CLI/Test environment)")
+            DebugLogger.log("NotificationManager: Skipping native notification (CLI/Test environment)")
             return
         }
         
@@ -1196,7 +1196,7 @@ public class NotificationManager: ObservableObject {
         }
         
         guard status == .authorized else {
-            print("NotificationManager: System notifications not authorized (status: \(status.rawValue))")
+            DebugLogger.log("NotificationManager: System notifications not authorized (status: \(status.rawValue))")
             trackAnalytics(.failed, type: type, backend: "native", detail: "authorization denied")
             return
         }
@@ -1241,10 +1241,10 @@ public class NotificationManager: ObservableObject {
         do {
             try await UNUserNotificationCenter.current().add(request)
             let actionSummary = actions.isEmpty ? "no actions" : actions.map(\.label).joined(separator: ", ")
-            print("NotificationManager: Native system notification sent successfully")
+            DebugLogger.log("NotificationManager: Native system notification sent successfully")
             trackAnalytics(.shown, type: type, backend: "native", detail: "native notification sent [\(actionSummary)]")
         } catch {
-            print("NotificationManager: Failed to send system notification: \(error)")
+            DebugLogger.log("NotificationManager: Failed to send system notification: \(error)")
             trackAnalytics(.failed, type: type, backend: "native", detail: error.localizedDescription)
         }
     }
@@ -1713,9 +1713,9 @@ public class NotificationManager: ObservableObject {
             await MainActor.run {
                 self.notificationPermissionStatus = granted ? .authorized : .denied
             }
-            print("NotificationManager: Permission \(granted ? "granted" : "denied")")
+            DebugLogger.log("NotificationManager: Permission \(granted ? "granted" : "denied")")
         } catch {
-            print("NotificationManager: Permission request failed: \(error)")
+            DebugLogger.log("NotificationManager: Permission request failed: \(error)")
         }
     }
     

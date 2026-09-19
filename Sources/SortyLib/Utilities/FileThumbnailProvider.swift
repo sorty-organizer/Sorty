@@ -204,7 +204,7 @@ public class FileThumbnailProvider: ObservableObject {
 
         // Directories get the system's per-folder icon; QuickLook only yields a generic one
         if metadata.isDirectory {
-            let icon = NSWorkspace.shared.icon(forFile: url.path).copy() as! NSImage
+            let icon = copiedIcon(NSWorkspace.shared.icon(forFile: url.path))
             icon.size = size
             return icon
         }
@@ -227,7 +227,7 @@ public class FileThumbnailProvider: ObservableObject {
                     return waveform
                 }
             }
-            let icon = NSWorkspace.shared.icon(for: type).copy() as! NSImage
+            let icon = copiedIcon(NSWorkspace.shared.icon(for: type))
             icon.size = size
             return icon
         }
@@ -254,7 +254,7 @@ public class FileThumbnailProvider: ObservableObject {
             return thumbnail.nsImage
         } catch {
             // Fall back to system icon from NSWorkspace, copying to avoid shared reference invalidation
-            return NSWorkspace.shared.icon(forFile: url.path).copy() as! NSImage
+            return copiedIcon(NSWorkspace.shared.icon(forFile: url.path))
         }
     }
     
@@ -270,15 +270,21 @@ public class FileThumbnailProvider: ObservableObject {
         // Copy icons to avoid shared reference invalidation during view recycling
         let ext = url.pathExtension
         if !ext.isEmpty, let utType = UTType(filenameExtension: ext) {
-            return NSWorkspace.shared.icon(for: utType).copy() as! NSImage
+            return copiedIcon(NSWorkspace.shared.icon(for: utType))
         }
         if !ext.isEmpty {
-            return NSWorkspace.shared.icon(forFileType: ext).copy() as! NSImage
+            return copiedIcon(NSWorkspace.shared.icon(forFileType: ext))
         }
         if url.hasDirectoryPath {
-            return NSWorkspace.shared.icon(for: .folder).copy() as! NSImage
+            return copiedIcon(NSWorkspace.shared.icon(for: .folder))
         }
-        return NSWorkspace.shared.icon(for: .data).copy() as! NSImage
+        return copiedIcon(NSWorkspace.shared.icon(for: .data))
+    }
+
+    /// Copies a shared workspace icon so cached thumbnails never mutate the
+    /// shared instance. Falls back to the original instead of trapping on `as!`.
+    private func copiedIcon(_ icon: NSImage) -> NSImage {
+        (icon.copy() as? NSImage) ?? icon
     }
     
     /// Clear the thumbnail cache

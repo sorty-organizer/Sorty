@@ -21,8 +21,12 @@ public struct FolderThumbnailView: View {
     @State private var isLoading = true
 
     private static let systemFolderIcon: NSImage = {
-        NSWorkspace.shared.icon(for: .folder).copy() as! NSImage
+        copiedIcon(NSWorkspace.shared.icon(for: .folder))
     }()
+    
+    private static func copiedIcon(_ icon: NSImage) -> NSImage {
+        (icon.copy() as? NSImage) ?? icon
+    }
     
     public init(
         url: URL,
@@ -66,8 +70,12 @@ public struct CompactFolderThumbnail: View {
     @State private var thumbnail: NSImage?
     
     private static let systemFolderIcon: NSImage = {
-        NSWorkspace.shared.icon(for: .folder).copy() as! NSImage
+        copiedIcon(NSWorkspace.shared.icon(for: .folder))
     }()
+    
+    private static func copiedIcon(_ icon: NSImage) -> NSImage {
+        (icon.copy() as? NSImage) ?? icon
+    }
     
     public init(url: URL?, folderName: String, size: CGFloat = 20, fileCount: Int = 0) {
         self.url = url

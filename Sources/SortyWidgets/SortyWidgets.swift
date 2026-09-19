@@ -32,7 +32,10 @@ private struct SortyWidgetProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SortyWidgetEntry>) -> Void) {
         let entry = currentEntry()
-        completion(Timeline(entries: [entry], policy: .never))
+        // TTL refresh so the widget does not stay stale until the next organize.
+        // The app also calls WidgetCenter.reloadAllTimelines() after each run.
+        let nextRefresh = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
+        completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
     }
 
     private func currentEntry() -> SortyWidgetEntry {
@@ -95,7 +98,7 @@ private struct SortyOverviewWidgetEntryView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .widgetURL(URL(string: "sorty://organize"))
+        .widgetURL(Self.safeURL("sorty://organize"))
         .containerBackground(backgroundGradient, for: .widget)
     }
 
@@ -200,16 +203,39 @@ private struct SortyOverviewWidgetEntryView: View {
         }
     }
 
+    // NOTE: The SortyWidgets extension target lives in Sorty.xcodeproj
+    // (SortyWidgets.appex); it is intentionally not an SPM target because
+    // WidgetKit extensions require Xcode signing/entitlements. It links
+    // SortyLib types via the Xcode target's dependencies.
+    private static func safeURL(_ string: String) -> URL? {
+        guard let url = URL(string: string),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "sorty" else { return nil }
+        return url
+    }
+
     private func widgetLink(title: String, systemImage: String, urlString: String) -> some View {
-        Link(destination: URL(string: urlString)!) {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(.white.opacity(0.12), in: Capsule(style: .continuous))
+        Group {
+            if let url = Self.safeURL(urlString) {
+                Link(destination: url) {
+                    Label(title, systemImage: systemImage)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(.white.opacity(0.12), in: Capsule(style: .continuous))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Label(title, systemImage: systemImage)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(.white.opacity(0.12), in: Capsule(style: .continuous))
+                    .foregroundStyle(.secondary)
+            }
         }
-        .buttonStyle(.plain)
     }
 
     private var statusSymbol: String {

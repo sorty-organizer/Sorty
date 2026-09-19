@@ -467,7 +467,7 @@ public class WatchedFoldersManager: ObservableObject {
     ) -> [BookmarkRestoreResult] {
         var results: [BookmarkRestoreResult] = []
         results.reserveCapacity(snapshots.count)
-        let requiresAccess = ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+        let requiresAccess = SandboxEnvironment.isSandboxed
 
         for snapshot in snapshots {
             guard !Task.isCancelled else { break }
@@ -480,6 +480,9 @@ public class WatchedFoldersManager: ObservableObject {
                     bookmarkDataIsStale: &isStale
                 )
                 if !requiresAccess {
+                    // Outside the sandbox, stale bookmarks are harmless:
+                    // renew opportunistically and report valid so dev builds
+                    // do not surface spurious access issues.
                     var newBookmark: Data? = nil
                     if isStale {
                         newBookmark = try? url.bookmarkData(
@@ -492,7 +495,7 @@ public class WatchedFoldersManager: ObservableObject {
                         BookmarkRestoreResult(
                             id: snapshot.id,
                             originalBookmark: snapshot.bookmarkData,
-                            status: isStale ? .stale : .valid,
+                            status: .valid,
                             newBookmark: newBookmark,
                             resolvedPath: url.path,
                             url: nil,
@@ -769,11 +772,19 @@ public class WatchedFoldersManager: ObservableObject {
     }
 
     private static func hasAccessIssue(_ folder: WatchedFolder) -> Bool {
-        folder.accessStatus == .lost || folder.accessStatus == .stale
+        // Outside the sandbox, .stale is informational only (renewed
+        // opportunistically); only .lost blocks automation.
+        if folder.accessStatus == .lost {
+            return true
+        }
+        if folder.accessStatus == .stale {
+            return SandboxEnvironment.isSandboxed
+        }
+        return false
     }
 
     private static var requiresSecurityScopedAccess: Bool {
-        ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+        SandboxEnvironment.isSandboxed
     }
 }
 

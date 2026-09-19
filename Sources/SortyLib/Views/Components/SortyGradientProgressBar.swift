@@ -183,6 +183,8 @@ struct SortyGradientLoadingBar: View {
 struct SortyGradientCircularProgress: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var controlActiveState
 
     let progress: Double
     var accent: Color = SortyDesignSystem.Colors.resolvedAccent
@@ -195,6 +197,11 @@ struct SortyGradientCircularProgress: View {
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
+    }
+
+    private var shimmerPaused: Bool {
+        reduceMotion || reduceTransparency || !isWindowVisible
+            || controlActiveState == .inactive || animatedProgress == 0
     }
 
     var body: some View {
@@ -212,8 +219,8 @@ struct SortyGradientCircularProgress: View {
                 )
             }
 
-            if showsShimmer {
-                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || !isWindowVisible || animatedProgress == 0)) { context in
+            if showsShimmer, !reduceTransparency {
+                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: shimmerPaused)) { context in
                     let elapsed = context.date.timeIntervalSinceReferenceDate
                     let arcSpan = animatedProgress * 360
                     let phase = (elapsed * 120).truncatingRemainder(
@@ -221,7 +228,6 @@ struct SortyGradientCircularProgress: View {
                     let shimmerCenter = phase / max(arcSpan, 1)
                     let pulse = (sin(elapsed * 1.8) + 1) * 0.5
                     let peakOpacity = 0.35 + (pulse * 0.25)
-                    let glowOpacity = 0.10 + (pulse * 0.10)
                     let highlightWidth: Double = 0.12
 
                     let trimStart = max(shimmerCenter - highlightWidth, 0) * animatedProgress
@@ -235,21 +241,7 @@ struct SortyGradientCircularProgress: View {
                             style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                         )
                         .rotationEffect(.degrees(-90))
-                        .blur(radius: 2)
-                        .blendMode(.plusLighter)
-
-                    Circle()
-                        .inset(by: lineWidth / 2)
-                        .trim(from: 0, to: animatedProgress)
-                        .stroke(
-                            accent.opacity(glowOpacity),
-                            style: StrokeStyle(lineWidth: lineWidth + 4, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .blur(radius: lineWidth * 0.8)
-                        .blendMode(.plusLighter)
                 }
-                .drawingGroup(opaque: false)
             }
         }
         .frame(width: size, height: size)
@@ -277,18 +269,21 @@ struct SortyGradientCircularLoader: View {
     var lineWidth: CGFloat = 3
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         SwiftUI.TimelineView(
             .animation(
                 minimumInterval: 1.0 / 30.0,
-                paused: reduceMotion || controlActiveState == .inactive
+                paused: reduceMotion || reduceTransparency || controlActiveState == .inactive
+                    || scenePhase != .active
             )
         ) { context in
             let time = context.date.timeIntervalSinceReferenceDate
             let rotation = reduceMotion ? 0 : (time * 280).truncatingRemainder(dividingBy: 360)
-            let pulse = (sin(time * 2.2) + 1) * 0.5
+            let pulse = (reduceMotion || reduceTransparency) ? 0.5 : (sin(time * 2.2) + 1) * 0.5
             let sweep = 0.24 + (0.34 * pulse)
             let trailEnd = 0.06 + ((1 - pulse) * 0.08)
             let leadEnd = min(trailEnd + sweep, 0.97)
@@ -314,10 +309,9 @@ struct SortyGradientCircularLoader: View {
                         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                     )
                     .rotationEffect(.degrees(rotation - 90))
-                    .shadow(color: accent.opacity(0.48), radius: lineWidth * 1.2, x: 0, y: 0)
+                    .shadow(color: accent.opacity(reduceTransparency ? 0 : 0.48), radius: reduceTransparency ? 0 : lineWidth * 1.2, x: 0, y: 0)
             }
         }
         .frame(width: size, height: size)
-        .drawingGroup(opaque: false)
     }
 }

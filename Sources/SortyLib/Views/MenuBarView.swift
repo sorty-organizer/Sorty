@@ -114,7 +114,7 @@ private struct LaunchAtLoginIcon: View {
 
 public struct MenuBarLabel: View {
     @SortyHotReload private var hotReload
-    @ObservedObject private var controller: MenuBarController
+    @EnvironmentObject private var controller: MenuBarController
 
     private static let menuBarImages: [MenuBarActivity: NSImage] = {
         Dictionary(uniqueKeysWithValues: MenuBarActivity.allCases.map { activity in
@@ -129,9 +129,7 @@ public struct MenuBarLabel: View {
         })
     }()
 
-    public init(controller: MenuBarController) {
-        self.controller = controller
-    }
+    public init() {}
 
     public var body: some View {
         Image(nsImage: Self.menuBarImages[controller.activity] ?? SortyResources.menuBarLabelNSImage())
@@ -152,7 +150,12 @@ public struct MenuBarView: View {
     @AppStorage("keepInBackground") private var keepInBackground = false
     @AppStorage("hideDockIcon") private var hideDockIcon = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
-    @State private var isAllPaused: Bool = false
+
+    // Derived from watched folders so "Pause All" never goes stale.
+    private var isAllPaused: Bool {
+        !watchedFoldersManager.folders.isEmpty
+            && watchedFoldersManager.folders.allSatisfy { !$0.isEnabled }
+    }
 
     public init() {}
 
@@ -196,6 +199,8 @@ public struct MenuBarView: View {
                 Text(headerTitle)
                     .font(.headline)
                     .lineLimit(1)
+                    .accessibilityLabel(menuBarController.activity.accessibilityLabel)
+                    .accessibilityIdentifier("MenuBarStatusTitle")
 
                 if activeWatchedCount > 0 {
                     Text("\(activeWatchedCount) folder\(activeWatchedCount == 1 ? "" : "s") active")
@@ -222,7 +227,16 @@ public struct MenuBarView: View {
     }
 
     private var headerTitle: String {
-        menuBarController.activity == .idle ? "Sorty" : menuBarController.activity.accessibilityLabel
+        // Visible short label; the full VoiceOver string stays in accessibilityLabel above.
+        switch menuBarController.activity {
+        case .idle: return "Sorty"
+        case .greeting: return "Sorty"
+        case .organizing: return "Organizing"
+        case .renaming: return "Renaming"
+        case .watchedFolder: return "Watching"
+        case .duplicateScanning: return "Scanning"
+        case .learning: return "Learning"
+        }
     }
 
     // MARK: - Quick Actions
@@ -445,11 +459,13 @@ public struct MenuBarView: View {
     }
 
     private func togglePauseAll() {
-        isAllPaused.toggle()
+        // If everything is already paused, resume; otherwise pause all.
+        let shouldPause = !isAllPaused
+        HapticFeedbackManager.shared.tap()
 
         for folder in watchedFoldersManager.folders {
             var updated = folder
-            updated.isEnabled = !isAllPaused
+            updated.isEnabled = !shouldPause
             watchedFoldersManager.updateFolder(updated)
         }
     }
@@ -513,6 +529,8 @@ private struct MenuBarButton: View {
         }
         .buttonStyle(.plain)
         .opacity(isEnabled ? 1 : 0.5)
+        .accessibilityIdentifier("MenuBarButton-\(title)")
+        .animation(.easeOut(duration: 0.15), value: isHovered)
         .onHover { hovering in
             isHovered = hovering
             if hovering {
@@ -614,6 +632,7 @@ private struct WatchedFolderMenuItem: View {
                     .fill(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
             )
             .contentShape(RoundedRectangle(cornerRadius: 6))
+            .animation(.easeOut(duration: 0.15), value: isHovered)
             .onHover { hovering in
                 isHovered = hovering
                 if hovering {
@@ -625,14 +644,18 @@ private struct WatchedFolderMenuItem: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Open \(folder.name) in Finder")
+        .accessibilityIdentifier("MenuBarWatchedFolder-\(folder.id.uuidString)")
         .contextMenu {
             Button {
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
             } label: {
                 Label("Open in Finder", systemImage: "folder")
             }
+            .accessibilityIdentifier("MenuBarFolderOpen-\(folder.id.uuidString)")
 
             Button {
+                HapticFeedbackManager.shared.tap()
                 var updated = folder
                 updated.isEnabled.toggle()
                 watchedFoldersManager.updateFolder(updated)
@@ -642,14 +665,17 @@ private struct WatchedFolderMenuItem: View {
                     systemImage: folder.isEnabled ? "pause.fill" : "play.fill"
                 )
             }
+            .accessibilityIdentifier("MenuBarFolderToggle-\(folder.id.uuidString)")
 
             Divider()
 
             Button(role: .destructive) {
+                HapticFeedbackManager.shared.tap()
                 watchedFoldersManager.removeFolder(folder)
             } label: {
                 Label("Remove from Watch List", systemImage: "trash")
             }
+            .accessibilityIdentifier("MenuBarFolderRemove-\(folder.id.uuidString)")
             .disabled(isAwaitingReview)
         }
     }

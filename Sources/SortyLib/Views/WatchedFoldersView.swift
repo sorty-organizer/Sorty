@@ -950,8 +950,7 @@ struct WatchedFolderCard: View {
                     value: isHovered
                 )
         }
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .systemLiquidGlassBackground(cornerRadius: 12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(cardBorderColor, lineWidth: isHighlighted ? 1.6 : 1)
@@ -962,6 +961,9 @@ struct WatchedFolderCard: View {
         .onHover { hovering in
             guard hovering != isHovered else { return }
             isHovered = hovering
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
         }
         .onAppear {
             updateHighlightAnimation(isHighlighted)
@@ -1318,7 +1320,7 @@ struct WatchedFolderConfigView: View {
                 .buttonStyle(.sortyProminent)
             }
             .padding()
-            .background(.ultraThinMaterial)
+            .systemLiquidGlassBackground(cornerRadius: 12)
 
             Divider()
 
@@ -1815,7 +1817,14 @@ struct WatchedFolderConfigView: View {
         defer { isImprovingPrompt = false }
 
         do {
-            let client = try AIClientFactory.createClient(config: settingsViewModel.config)
+            // Prefer the Manager-owned client (injectable via
+            // FolderOrganizer.setAIClientForTesting with MockAIClient).
+            let client: any AIClientProtocol
+            if let owned = organizer.aiClient {
+                client = owned
+            } else {
+                client = try AIClientFactory.createClient(config: settingsViewModel.config)
+            }
             let outcome = try await ImproveInstructionsTool.run(
                 client: client,
                 originalInstructions: trimmedCustomPrompt,
@@ -1893,7 +1902,7 @@ struct WatchedFolderConfigView: View {
     }
 
     private func save() {
-        withAnimation {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
             watchedFoldersManager.updateFolder(currentFolderConfiguration)
         }
         dismiss()

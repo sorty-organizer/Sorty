@@ -5,9 +5,9 @@
 //  Scalable FSEvents monitoring for watched folders.
 //
 
+import Foundation
 import AppKit
 import CoreServices
-import Foundation
 
 /// Protocol for receiving bounded folder-change batches.
 ///
@@ -397,6 +397,8 @@ public final class FolderWatcher: @unchecked Sendable {
         } else if url.startAccessingSecurityScopedResource() {
             resolvedURLs[folder.id] = url
             securityScopedFolderIDs.insert(folder.id)
+        } else {
+            DebugLogger.log("Lost security-scoped access for: \(folder.name)")
         }
 
         if isStale,
@@ -749,22 +751,22 @@ public final class FolderWatcher: @unchecked Sendable {
         let batch = Set(files.prefix(Self.maximumFilesPerBatch))
         let resolvedURL = resolvedURLs[folderID] ?? folder.url
         guard deliveryInFlight.insert(folderID).inserted else { return }
-        let watcher = self
-        DispatchQueue.main.async { [weak self] in
+        // Hop to the main actor for the @MainActor delegate instead of
+        // assuming isolation: `assumeIsolated` traps on the wrong executor,
+        // while this Task resumes on the main actor by construction.
+        Task { @MainActor [weak self] in
             guard let self else { return }
-            MainActor.assumeIsolated {
-                guard let delegate = self.delegate else {
-                    self.completeDelivery(for: folderID, batch: batch, accepted: true)
-                    return
-                }
-                delegate.folderWatcher(
-                    watcher,
-                    didDetectChangesIn: folder,
-                    newFiles: batch,
-                    resolvedURL: resolvedURL
-                ) { [weak self] accepted in
-                    self?.completeDelivery(for: folderID, batch: batch, accepted: accepted)
-                }
+            guard let delegate = self.delegate else {
+                self.completeDelivery(for: folderID, batch: batch, accepted: true)
+                return
+            }
+            delegate.folderWatcher(
+                self,
+                didDetectChangesIn: folder,
+                newFiles: batch,
+                resolvedURL: resolvedURL
+            ) { [weak self] accepted in
+                self?.completeDelivery(for: folderID, batch: batch, accepted: accepted)
             }
         }
     }
@@ -1595,7 +1597,7 @@ public final class FolderWatcher: @unchecked Sendable {
     }
 
     private static var requiresSecurityScopedAccess: Bool {
-        ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
+        SandboxEnvironment.isSandboxed
     }
 
     static func shouldIgnoreCloudPlaceholder(

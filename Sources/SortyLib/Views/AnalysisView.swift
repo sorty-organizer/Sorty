@@ -26,7 +26,7 @@ enum AnalysisIconProvider {
         if let image = cache.object(forKey: key as NSString) {
             return image
         }
-        let image = NSWorkspace.shared.icon(for: contentType).copy() as! NSImage
+        let image = copiedIcon(NSWorkspace.shared.icon(for: contentType))
         image.size = NSSize(width: 32, height: 32)
         cache.setObject(image, forKey: key as NSString, cost: imageCost(image))
         return image
@@ -45,10 +45,17 @@ enum AnalysisIconProvider {
         if let image = cache.object(forKey: key as NSString) {
             return image
         }
-        let image = NSWorkspace.shared.icon(forFileType: normalizedExtension).copy() as! NSImage
+        let image = copiedIcon(NSWorkspace.shared.icon(forFileType: normalizedExtension))
         image.size = NSSize(width: 32, height: 32)
         cache.setObject(image, forKey: key as NSString, cost: imageCost(image))
         return image
+    }
+
+    /// Copies a shared workspace icon so view recycling never mutates the
+    /// shared instance. Falls back to the original on copy failure instead
+    /// of trapping on `as!`.
+    private static func copiedIcon(_ icon: NSImage) -> NSImage {
+        (icon.copy() as? NSImage) ?? icon
     }
 
     private static func imageCost(_ image: NSImage) -> Int {
@@ -158,7 +165,7 @@ final class AnalysisRefreshManager: ObservableObject {
 
         let elapsedSeconds = Int(organizer?.elapsedTime ?? 0)
         if elapsedSeconds > 30 {
-            currentFunnyMessage = calmerMessages.randomElement() ?? calmerMessages[0]
+            currentFunnyMessage = calmerMessages.randomElement() ?? calmerMessages.first ?? "Still working..."
         } else {
             currentFunnyMessage = nextStatusMessage()
         }
@@ -169,7 +176,7 @@ final class AnalysisRefreshManager: ObservableObject {
     }
 
     private func nextStatusMessage() -> String {
-        funnyMessages.randomElement() ?? funnyMessages[0]
+        funnyMessages.randomElement() ?? funnyMessages.first ?? "Working..."
     }
 }
 
@@ -305,7 +312,7 @@ struct AnalysisView: View {
             Spacer(minLength: 20)
         }
         .onAppear {
-            withAnimation {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
                 hasAppeared = true
             }
             settingsViewModel.config.enableStreaming = true

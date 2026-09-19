@@ -13,6 +13,13 @@ struct KeychainManager {
     // and bundle ID changes during development
     private static let primaryService = "com.sorty.app.credentials"
 
+    // Accessibility choice: AfterFirstUnlock keeps API keys available to
+    // background automation (watched folders, login item) after a restart
+    // once the user has unlocked once, without requiring an unlock prompt on
+    // every launch. Deliberately NOT ThisDeviceOnly: users expect keys to
+    // migrate with encrypted backups. NOT WhenUnlocked: that would break
+    // background organize runs while the screen is locked.
+
     private static var fallbackServices: [String] {
         var services: [String] = []
 
@@ -93,7 +100,13 @@ struct KeychainManager {
 
         for service in fallbackServices {
             guard let value = readValue(key: key, service: service) else { continue }
-            _ = save(key: key, value: value)
+            // Silent migration would hide keychain errors; only migrate after
+            // a verified read, and log when the follow-up save fails.
+            if !save(key: key, value: value) {
+                LogManager.shared.log("Sorty Keychain migration failed for key \(key)", level: .error, category: "KeychainManager")
+            } else {
+                LogManager.shared.log("Sorty Keychain migrated key \(key) from \(service)", level: .info, category: "KeychainManager")
+            }
             return value
         }
 
@@ -118,6 +131,9 @@ struct KeychainManager {
 
             let status = SecItemDelete(query as CFDictionary)
             let isDeleted = status == errSecSuccess || status == errSecItemNotFound
+            if !isDeleted {
+                logFailure(operation: "delete(\(service))", status: status)
+            }
             success = success && isDeleted
         }
 
@@ -141,6 +157,9 @@ struct KeychainManager {
 
             let status = SecItemDelete(query as CFDictionary)
             let isDeleted = status == errSecSuccess || status == errSecItemNotFound
+            if !isDeleted {
+                logFailure(operation: "deleteAll(\(service))", status: status)
+            }
             success = success && isDeleted
         }
 
@@ -162,6 +181,11 @@ struct KeychainManager {
         guard status == errSecSuccess,
               let data = result as? Data,
               let value = String(data: data, encoding: .utf8) else {
+            // errSecItemNotFound is the normal "no saved key" case; log only
+            // real failures so keychain issues are diagnosable.
+            if status != errSecItemNotFound {
+                logFailure(operation: "read(\(service))", status: status)
+            }
             return nil
         }
 
@@ -181,6 +205,6 @@ struct KeychainManager {
 
     private static func logFailure(operation: String, status: OSStatus) {
         let message = SecCopyErrorMessageString(status, nil).map { $0 as String } ?? "Unknown Keychain error"
-        NSLog("Sorty Keychain %@ failed (OSStatus %d): %@", operation, status, message)
+        LogManager.shared.log("Sorty Keychain \(operation) failed (OSStatus \(status)): \(message)", level: .error, category: "KeychainManager")
     }
 }

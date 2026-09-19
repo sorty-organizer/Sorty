@@ -65,13 +65,17 @@ public class DeeplinkHandler: ObservableObject {
         let queryItems = components?.queryItems ?? []
         
         func queryValue(for name: String) -> String? {
+            // URLComponents query values are already percent-decoded once.
+            // Do not call removingPercentEncoding on the result.
             queryItems.first { $0.name == name }?.value
         }
         
         let normalizedHost = host.lowercased()
         
         if normalizedHost.isEmpty {
-            let legacyPath = url.path.removingPercentEncoding ?? url.path
+            // URL.path is already percent-decoded exactly once. Do not call
+            // removingPercentEncoding again: "%252e" would decode twice to "."
+            let legacyPath = url.path
             if !legacyPath.isEmpty && legacyPath != "/" {
                 pendingDestination = .organize(path: legacyPath, persona: nil, mode: nil, autostart: false)
                 return

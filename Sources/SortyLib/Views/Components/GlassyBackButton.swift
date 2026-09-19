@@ -17,11 +17,8 @@ struct GlassyBackButton: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.primary)
                 .frame(width: 28, height: 28)
-                .background(
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-                )
+                .systemLiquidGlassCircularButtonLabel()
+                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Back")

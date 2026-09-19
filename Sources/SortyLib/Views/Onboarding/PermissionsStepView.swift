@@ -446,7 +446,8 @@ public struct PermissionsStepView: View {
                 }
 
                 if permission == .filesAndFolders {
-                    appState.selectedDirectory?.stopAccessingSecurityScopedResource()
+                    // Only balance access this session actually started.
+                    appState.releaseSelectedDirectoryAccess()
                     appState.revokeFilesAndFoldersPermission()
                     appState.selectedDirectory = nil
                     hasRequiredPermissions = false

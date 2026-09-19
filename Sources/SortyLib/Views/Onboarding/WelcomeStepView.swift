@@ -15,11 +15,20 @@ import SwiftUI
 struct AnimatedGradientBackground: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var animate = false
+    @State private var isWindowVisible = true
     var revealed: Bool = true
     var color1: Color = .purple
     var color2: Color = .blue
     var color3: Color = .teal
+
+    private var motionPaused: Bool {
+        reduceMotion || reduceTransparency || !isWindowVisible
+            || controlActiveState == .inactive || scenePhase != .active
+    }
 
     var body: some View {
         ZStack {
@@ -29,7 +38,7 @@ struct AnimatedGradientBackground: View {
                 )
                 .frame(width: 400, height: 400)
                 .offset(x: animate ? 50 : -50, y: animate ? -30 : 30)
-                .blur(radius: 80)
+                .blur(radius: reduceTransparency ? 0 : 28)
 
             Circle()
                 .fill(
@@ -37,7 +46,7 @@ struct AnimatedGradientBackground: View {
                 )
                 .frame(width: 500, height: 500)
                 .offset(x: animate ? -40 : 60, y: animate ? 40 : -20)
-                .blur(radius: 100)
+                .blur(radius: reduceTransparency ? 0 : 32)
 
             Circle()
                 .fill(
@@ -45,18 +54,24 @@ struct AnimatedGradientBackground: View {
                 )
                 .frame(width: 350, height: 350)
                 .offset(x: animate ? 30 : -30, y: animate ? 50 : -50)
-                .blur(radius: 70)
+                .blur(radius: reduceTransparency ? 0 : 24)
         }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .onAppear {
-            guard !reduceMotion else { return }
+            guard !motionPaused else { return }
             withAnimation(.easeInOut(duration: 6).repeatForever(autoreverses: true)) {
                 animate = true
             }
         }
-        .onChange(of: reduceMotion) { _, shouldReduceMotion in
-            guard shouldReduceMotion else { return }
-            withAnimation(nil) {
-                animate = false
+        .onChange(of: motionPaused) { _, paused in
+            if paused {
+                withAnimation(nil) {
+                    animate = false
+                }
+            } else {
+                withAnimation(.easeInOut(duration: 6).repeatForever(autoreverses: true)) {
+                    animate = true
+                }
             }
         }
     }
@@ -71,7 +86,14 @@ private struct RevealGradientBlob: View {
     let opacity: Double
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var colorPhase: Double = 0
+    @State private var isWindowVisible = true
+
+    private var motionPaused: Bool {
+        reduceMotion || reduceTransparency || !isWindowVisible || controlActiveState == .inactive
+    }
 
     var body: some View {
         ZStack {
@@ -91,7 +113,7 @@ private struct RevealGradientBlob: View {
                     )
                 )
                 .frame(width: 600, height: 500)
-                .blur(radius: 60)
+                .blur(radius: reduceTransparency ? 0 : 24)
 
             // Secondary blob - shifting hue
             Ellipse()
@@ -109,7 +131,7 @@ private struct RevealGradientBlob: View {
                 )
                 .frame(width: 450, height: 400)
                 .offset(x: 30 * sin(colorPhase), y: -20 * cos(colorPhase))
-                .blur(radius: 50)
+                .blur(radius: reduceTransparency ? 0 : 20)
 
             // Bright core
             Circle()
@@ -126,20 +148,26 @@ private struct RevealGradientBlob: View {
                     )
                 )
                 .frame(width: 240, height: 240)
-                .blur(radius: 30)
+                .blur(radius: reduceTransparency ? 0 : 12)
         }
         .scaleEffect(scale)
         .opacity(opacity)
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .onAppear {
-            guard !reduceMotion else { return }
+            guard !motionPaused else { return }
             withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
                 colorPhase = .pi * 2
             }
         }
-        .onChange(of: reduceMotion) { _, shouldReduceMotion in
-            guard shouldReduceMotion else { return }
-            withAnimation(nil) {
-                colorPhase = 0
+        .onChange(of: motionPaused) { _, paused in
+            if paused {
+                withAnimation(nil) {
+                    colorPhase = 0
+                }
+            } else {
+                withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
+                    colorPhase = .pi * 2
+                }
             }
         }
     }
@@ -153,7 +181,14 @@ private struct GlowRing: View {
     let isActive: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var pulseScale: CGFloat = 1.0
+    @State private var isWindowVisible = true
+
+    private var motionPaused: Bool {
+        reduceMotion || !isWindowVisible || controlActiveState == .inactive
+    }
 
     var body: some View {
         Circle()
@@ -167,17 +202,23 @@ private struct GlowRing: View {
             .frame(width: 120, height: 120)
             .scaleEffect(isActive ? pulseScale : 0.5)
             .opacity(isActive ? 0.6 : 0)
-            .blur(radius: 8)
+            .blur(radius: reduceTransparency ? 0 : 4)
+            .background(WindowVisibilityReader(isVisible: $isWindowVisible))
             .onAppear {
-                guard !reduceMotion else { return }
+                guard !motionPaused else { return }
                 withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
                     pulseScale = 1.15
                 }
             }
-            .onChange(of: reduceMotion) { _, shouldReduceMotion in
-                guard shouldReduceMotion else { return }
-                withAnimation(nil) {
-                    pulseScale = 1
+            .onChange(of: motionPaused) { _, paused in
+                if paused {
+                    withAnimation(nil) {
+                        pulseScale = 1
+                    }
+                } else {
+                    withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
+                        pulseScale = 1.15
+                    }
                 }
             }
     }
@@ -188,11 +229,17 @@ private struct GlowRing: View {
 struct FloatingParticle: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var yOffset: CGFloat = 0
     @State private var opacity: Double = 0
+    @State private var isWindowVisible = true
     let delay: Double
     let size: CGFloat
     let xPosition: CGFloat
+
+    private var motionPaused: Bool {
+        reduceMotion || !isWindowVisible || controlActiveState == .inactive
+    }
 
     var body: some View {
         Circle()
@@ -200,8 +247,9 @@ struct FloatingParticle: View {
             .frame(width: size, height: size)
             .offset(x: xPosition, y: yOffset)
             .opacity(opacity)
+            .background(WindowVisibilityReader(isVisible: $isWindowVisible))
             .onAppear {
-                guard !reduceMotion else { return }
+                guard !motionPaused else { return }
                 withAnimation(.easeInOut(duration: Double.random(in: 3...6)).repeatForever(autoreverses: false).delay(delay)) {
                     yOffset = -300
                     opacity = 0
@@ -210,8 +258,8 @@ struct FloatingParticle: View {
                     opacity = 0.6
                 }
             }
-            .onChange(of: reduceMotion) { _, shouldReduceMotion in
-                guard shouldReduceMotion else { return }
+            .onChange(of: motionPaused) { _, paused in
+                guard paused else { return }
                 withAnimation(nil) {
                     yOffset = 0
                     opacity = 0
@@ -449,11 +497,11 @@ public struct WelcomeStepView: View {
             guard !Task.isCancelled else { return }
 
             // Phase 4: Particles and features
-            withAnimation(.easeIn(duration: 0.8)) {
+            withAnimation(reduceMotion ? nil : .easeIn(duration: 0.8)) {
                 showParticles = true
             }
 
-            withAnimation {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85)) {
                 featuresAppeared = true
             }
         }

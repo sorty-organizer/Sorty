@@ -16,6 +16,11 @@ public class ExtensionListener: ObservableObject {
 
     public init() {
         notificationObserver = ExtensionCommunication.setupNotificationObserver { @MainActor [weak self] url in
+            // ExtensionCommunication validates the IPC payload; keep only
+            // validated directory URLs here.
+            guard case .success = IncomingPathValidator.validatedDirectoryURL(for: url.path) else {
+                return
+            }
             self?.incomingURL = url
         }
 

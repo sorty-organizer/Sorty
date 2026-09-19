@@ -19,12 +19,15 @@ public enum OrganizationState: Equatable, Sendable {
     case completed
     case error(Error)
 
-    /// Whether the organizer is actively performing work and should not be interrupted
+    /// Whether the organizer is actively performing work and should not be interrupted.
+    /// Ready means a plan is waiting for user review (no active work), so it is
+    /// not in-progress. Kept in sync with `isTrackedRunningState`, the private
+    /// `isOperationInProgress()`, and `AppState.isOperationInProgress`.
     public var isOperationInProgress: Bool {
         switch self {
-        case .scanning, .organizing, .ready, .applying:
+        case .scanning, .organizing, .applying:
             return true
-        case .idle, .completed, .error:
+        case .idle, .ready, .completed, .error:
             return false
         }
     }
@@ -47,6 +50,12 @@ public enum OrganizationState: Equatable, Sendable {
     
     /// Returns true if a transition from `from` state to `to` state is valid
     public static func canTransition(from: OrganizationState, to: OrganizationState) -> Bool {
+        // Re-entrant apply is never a valid transition; callers must no-op via
+        // the apply() guard instead of restarting file moves. Checked before the
+        // same-state fast path so applying->applying reports false.
+        if from == .applying, to == .applying {
+            return false
+        }
         // Same state is always valid (no-op)
         if from == to {
             return true
@@ -72,50 +81,58 @@ public enum OrganizationState: Equatable, Sendable {
             }
         }
         
-        // From organizing: can go to ready, idle (cancel), or error
+        // From organizing: can go to ready, idle (cancel), restart scanning, or error
         if from == .organizing {
             switch to {
-            case .organizing, .ready, .idle, .error:
+            case .organizing, .scanning, .ready, .idle, .error:
                 return true
             default:
                 return false
             }
         }
         
-        // From ready: can go to applying, idle (cancel), organizing (regenerate), or error
+        // From ready: can re-scan, regenerate, apply, cancel, or error.
+        // Ready is idle w.r.t. work (see isOperationInProgress), so re-organize
+        // must be able to leave ready via scanning.
         if from == .ready {
             switch to {
-            case .ready, .applying, .idle, .organizing, .error:
+            case .ready, .scanning, .applying, .idle, .organizing, .error:
                 return true
             default:
                 return false
             }
         }
         
-        // From applying: can go to completed, idle (cancel), or error
+        // From applying: can go to completed, idle (cancel), or error.
+        // Re-entrant applying->applying is a no-op handled by the apply()
+        // guard; it is intentionally not a valid transition so a second apply
+        // cannot restart file moves (same-state equality still no-ops).
         if from == .applying {
             switch to {
-            case .applying, .completed, .idle, .error:
+            case .completed, .idle, .error:
                 return true
             default:
                 return false
             }
         }
         
-        // From completed: can only go to idle (reset)
+        // From completed: a finished run can start a new organize (scanning),
+        // regenerate (organizing), restore a preview (ready), re-apply/undo/
+        // redo/restore (applying), reset (idle), or surface an error.
         if from == .completed {
             switch to {
-            case .completed, .idle:
+            case .completed, .idle, .scanning, .organizing, .ready, .applying, .error:
                 return true
             default:
                 return false
             }
         }
         
-        // From error: can go to idle (retry/reset), or retry the previous operation
+        // From error: can go to idle (retry/reset), retry the previous operation,
+        // or run undo/redo/restore (applying).
         if case .error = from {
             switch to {
-            case .error, .idle, .scanning, .organizing:
+            case .error, .idle, .scanning, .organizing, .applying:
                 return true
             default:
                 return false
@@ -793,7 +810,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @discardableResult
     public func transition(to newState: OrganizationState, force: Bool = false) -> Bool {
         let currentState = state
-        
+
+        // Re-entrant apply is a no-op rejection, not a successful transition,
+        // so a second apply() cannot restart file moves via updateState.
+        if currentState == .applying, newState == .applying, !force {
+            return false
+        }
+
         // Always allow same state (no-op)
         if currentState == newState {
             state = newState
@@ -848,6 +871,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
     private var scannedFilePathLookup: [String: [String]] = [:]
     private let scannedFilesUIPublishLimit = 200
+
+    /// Full scan results backing lookups, insights, and thumbnails.
+    /// `scannedFiles` publishes only a bounded slice for UI; this keeps every
+    /// scanned file so streaming resolution and thumbnails keep working past
+    /// the UI cap (deep scan up to `deepScanFileLimit`).
+    public private(set) var allScannedFiles: [FileItem] = []
 
     // CRITICAL: Cancellation token - must be checked frequently
     private var currentTask: Task<Void, Error>?
@@ -910,8 +939,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     deinit {
         if isRegisteredAsRunningOrganizer {
+            // Capture only the identifier so the cleanup Task never retains self
+            // from deinit; it hops to the main actor to mutate shared state.
             let id = ObjectIdentifier(self)
-            Task { @MainActor in
+            Task { @MainActor [id] in
                 Self.runningOrganizerIDs.remove(id)
                 Self.runningActivity.count = Self.runningOrganizationCount
             }
@@ -961,8 +992,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     #endif
 
     private func recordPreviewVersion(_ plan: OrganizationPlan) {
+        // Oversized plans are skipped without wiping existing preview history;
+        // wiping silently destroys undo context for regeneration preferences.
         guard plan.totalFiles <= Self.previewVersionFileLimit else {
-            planHistory.removeAll(keepingCapacity: false)
+            LogManager.shared.log(
+                "Skipping preview history for \(plan.totalFiles) files (limit \(Self.previewVersionFileLimit)); preserving \(planHistory.count) existing versions",
+                level: .warning,
+                category: "FolderOrganizer"
+            )
             return
         }
         planHistory.append(plan)
@@ -1642,9 +1679,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
     
     private func setScannedFiles(_ files: [FileItem]) {
-        let publishedFiles = Array(files.prefix(scannedFilesUIPublishLimit))
-        scannedFiles = publishedFiles
-        scannedFilePathLookup = Dictionary(grouping: publishedFiles, by: { $0.displayName.lowercased() })
+        // Publish only a bounded slice for UI, but keep the full list and
+        // lookup for insights, thumbnails, and streaming resolution
+        // (deep scan up to 2000).
+        allScannedFiles = files
+        scannedFiles = Array(files.prefix(scannedFilesUIPublishLimit))
+        scannedFilePathLookup = Dictionary(grouping: files, by: { $0.displayName.lowercased() })
             .mapValues { $0.map { $0.path } }
     }
     
@@ -1956,14 +1996,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // Set up deep scan progress reporting
         await scanner.setDeepScanProgressCallback { [weak self] current, _ in
             guard current == 1 || current.isMultiple(of: 25) else { return }
-            Task { @MainActor in
-                self?.deepScanProgress = (current: current, total: 0)
-                self?.organizationStage = "Analyzing file content: \(current) files..."
+            Task { @MainActor [weak self] in
+                guard let self, !Task.isCancelled, !self.isCancellationRequested else { return }
+                self.deepScanProgress = (current: current, total: 0)
+                self.organizationStage = "Analyzing file content: \(current) files..."
             }
         }
         await scanner.setScanProgressCallback { [weak self] current in
-            Task { @MainActor in
-                guard let self, !self.isCancellationRequested else { return }
+            // Throttle per-file callbacks to avoid spawning a Task per file.
+            guard current == 1 || current.isMultiple(of: 25) else { return }
+            Task { @MainActor [weak self] in
+                guard let self, !Task.isCancelled, !self.isCancellationRequested else { return }
                 self.scannedFileCount = current
                 self.organizationStage =
                     "\(scanStagePrefix): \(GenerationStats.formatCount(current)) files found..."
@@ -2317,6 +2360,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             var batchInstructions = completeInstructions
             if batchCount > 1 {
+                // Avoid repeating the full 400-entry manifest on every 350-file
+                // batch: replace it with a small batch-scoped manifest.
+                if let resolvedDirectory,
+                   batchInstructions.contains("## SOURCE FOLDER CONTEXT") {
+                    batchInstructions = PromptBuilder.strippingSourceFolderContext(from: batchInstructions)
+                    if let batchManifest = PromptBuilder.buildBatchManifestContext(
+                        baseDirectoryURL: resolvedDirectory,
+                        batchFiles: batch
+                    ) {
+                        batchInstructions += "\n\n" + batchManifest
+                    }
+                }
                 batchInstructions += Self.largeFolderBatchContext(
                     batchIndex: batchIndex,
                     batchCount: batchCount,
@@ -2495,8 +2550,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         visionBaseDirectory: URL? = nil,
         instructions: String,
         personaPrompt: String?,
-        temperature: Double?
+        temperature: Double?,
+        adaptiveDepth: Int = 0
     ) async throws -> [OrganizationPlan] {
+        // Cap halve-and-retry recursion so a persistently failing batch cannot
+        // recurse without bound; depth 4 splits 350 -> ~22 files minimum.
+        let maxAdaptiveDepth = 4
         try checkCancellation()
 
         // Compact prompts number this request's files 1-based; publish the same
@@ -2543,7 +2602,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return [plan]
         } catch {
             try checkCancellation()
-            guard Self.shouldSplitAnalysisBatch(after: error, fileCount: files.count) else {
+            guard adaptiveDepth < maxAdaptiveDepth,
+                  Self.shouldSplitAnalysisBatch(after: error, fileCount: files.count) else {
                 throw error
             }
 
@@ -2571,7 +2631,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 visionBaseDirectory: nil,
                 instructions: recoveryInstructions,
                 personaPrompt: personaPrompt,
-                temperature: temperature
+                temperature: temperature,
+                adaptiveDepth: adaptiveDepth + 1
             )
             let secondPlans = try await analyzeBatchAdaptively(
                 files: secondFiles,
@@ -2581,7 +2642,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 visionBaseDirectory: nil,
                 instructions: recoveryInstructions,
                 personaPrompt: personaPrompt,
-                temperature: temperature
+                temperature: temperature,
+                adaptiveDepth: adaptiveDepth + 1
             )
             return firstPlans + secondPlans
         }
@@ -4145,9 +4207,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         // Check if we have automation permission
         guard automationManager.automationStatus == .granted else {
-            throw NSError(domain: "Sorty", code: -1, userInfo: [
-                NSLocalizedDescriptionKey: "Automation permission not granted. Please enable it in System Settings to organize selected files."
-            ])
+            throw OrganizationError.automationNotConfigured
         }
 
         // Get the selected files from Finder
@@ -4163,44 +4223,106 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let firstFile = selectedFiles[0]
         let directory = firstFile.deletingLastPathComponent()
 
-        // Convert URLs to FileItems
+        // Convert URLs to FileItems, collecting skipped selections so silent
+        // try? failures surface instead of vanishing.
         let exclusionMatcher = exclusionRules?.matcherSnapshot()
         var files: [FileItem] = []
+        var skippedSelectionNames: [String] = []
         for url in selectedFiles {
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+                skippedSelectionNames.append(url.lastPathComponent)
                 continue
             }
 
             if isDirectory.boolValue {
-                if let nestedFiles = try? await scanner.scanDirectory(
-                    at: url,
-                    relativeTo: directory,
-                    deepScan: aiConfig?.enableDeepScan ?? false,
-                    deepScanFileLimit: Self.deepScanFileLimit,
-                    exclusionMatcher: exclusionMatcher
-                ) {
+                do {
+                    let nestedFiles = try await scanner.scanDirectory(
+                        at: url,
+                        relativeTo: directory,
+                        deepScan: aiConfig?.enableDeepScan ?? false,
+                        deepScanFileLimit: Self.deepScanFileLimit,
+                        exclusionMatcher: exclusionMatcher
+                    )
+                    // Empty results mean an empty or fully-excluded folder, not a
+                    // failure, so only failures (below) join the skipped list.
                     files.append(contentsOf: nestedFiles)
+                } catch {
+                    if case ScannerError.excluded = error {
+                        continue
+                    }
+                    skippedSelectionNames.append(url.lastPathComponent)
+                    LogManager.shared.log(
+                        "Skipping Finder selection \(url.lastPathComponent): \(error.localizedDescription)",
+                        level: .warning,
+                        category: "FolderOrganizer"
+                    )
                 }
-            } else if let item = try? await scanner.scanFile(
-                at: url,
-                relativeTo: directory,
-                deepScan: aiConfig?.enableDeepScan ?? false,
-                exclusionMatcher: exclusionMatcher
-            ) {
-                files.append(item)
+            } else {
+                do {
+                    let item = try await scanner.scanFile(
+                        at: url,
+                        relativeTo: directory,
+                        deepScan: aiConfig?.enableDeepScan ?? false,
+                        exclusionMatcher: exclusionMatcher
+                    )
+                    files.append(item)
+                } catch {
+                    if case ScannerError.excluded = error {
+                        continue
+                    }
+                    skippedSelectionNames.append(url.lastPathComponent)
+                    LogManager.shared.log(
+                        "Skipping Finder selection \(url.lastPathComponent): \(error.localizedDescription)",
+                        level: .warning,
+                        category: "FolderOrganizer"
+                    )
+                }
             }
         }
         setScannedFiles(files)
+        let skippedSelectionNotice: String? = skippedSelectionNames.isEmpty ? nil : {
+            let preview = skippedSelectionNames.prefix(3).joined(separator: ", ")
+            let suffix = skippedSelectionNames.count > 3 ? " and \(skippedSelectionNames.count - 3) more" : ""
+            return "Skipped \(skippedSelectionNames.count) unreadable selection(s): \(preview)\(suffix)"
+        }()
+        if let notice = skippedSelectionNotice {
+            LogManager.shared.log(notice, level: .warning, category: "FolderOrganizer")
+        }
 
         guard !files.isEmpty else {
             await MainActor.run {
                 transition(to: .idle, force: true)
-                organizationStage = exclusionMatcher?.isEmpty == false
-                    ? "All selected files are excluded by your rules"
-                    : "No files found to organize"
+                if let notice = skippedSelectionNotice {
+                    organizationStage = notice
+                } else {
+                    organizationStage = exclusionMatcher?.isEmpty == false
+                        ? "All selected files are excluded by your rules"
+                        : "No files found to organize"
+                }
+            }
+            if skippedSelectionNotice != nil {
+                NotificationManager.shared.showHUDInfo(
+                    title: "Some Finder selections skipped",
+                    message: skippedSelectionNotice ?? "",
+                    icon: "exclamationmark.triangle.fill",
+                    iconColor: .orange,
+                    identifier: "finder-selection-skipped"
+                )
             }
             return 0
+        }
+        if let notice = skippedSelectionNotice {
+            // Surface partial skips before the analyzing stage overwrites it;
+            // the analyzing phase keeps the accurate scanned count.
+            organizationStage = notice
+            NotificationManager.shared.showHUDInfo(
+                title: "Some Finder selections skipped",
+                message: notice,
+                icon: "exclamationmark.triangle.fill",
+                iconColor: .orange,
+                identifier: "finder-selection-skipped"
+            )
         }
 
         // Set the current directory
@@ -4371,6 +4493,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         source: OrganizationEntrySource = .manual,
         modeOverride: OrganizationMode? = nil
     ) async throws {
+        // Double-apply guard: a second apply while file moves are in flight is a
+        // no-op with user feedback, preserving a single history entry. Checked
+        // before cancelInternal so the second call cannot cancel the first run.
+        if state == .applying {
+            organizationStage = "Already applying changes..."
+            LogManager.shared.log(
+                "Ignoring re-entrant apply() while already applying",
+                level: .warning,
+                category: "FolderOrganizer"
+            )
+            return
+        }
         guard currentPlan != nil else {
             throw OrganizationError.noCurrentPlan
         }
@@ -4454,13 +4588,28 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             mode: operationMode,
             baseURL: baseURL
         )
+        // Validate before publishing: a failing plan must not replace the
+        // user-reviewed preview, and must surface as .error (not a silent stay
+        // in .ready/.completed with a swapped plan).
+        do {
+            try await validator.validateOffMain(
+                planToApply,
+                at: baseURL,
+                allowedStorageLocations: allowedLocations,
+                mode: operationMode
+            )
+        } catch {
+            let displayMessage = userFacingErrorMessage(for: error)
+            transition(to: .error(error), force: true)
+            errorMessage = displayMessage
+            NotificationManager.shared.showError(
+                message: displayMessage,
+                folderPath: baseURL.path,
+                isCritical: true
+            )
+            throw error
+        }
         self.currentPlan = planToApply
-        try await validator.validateOffMain(
-            planToApply,
-            at: baseURL,
-            allowedStorageLocations: allowedLocations,
-            mode: operationMode
-        )
 
         let activity = ProcessInfo.processInfo.beginActivity(
             options: .userInitiated,
@@ -4493,9 +4642,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 strictExclusions: aiConfig?.strictExclusions ?? true,
                 exclusionManager: exclusionRules,
                 progress: { [weak self] percent, message in
-                    Task { @MainActor in
-                        self?.progress = min(percent, 1.0)
-                        self?.organizationStage = message
+                    Task { @MainActor [weak self] in
+                        guard let self, !Task.isCancelled, !self.isCancellationRequested else { return }
+                        self.progress = min(percent, 1.0)
+                        self.organizationStage = message
                     }
                 }
             )
@@ -4633,6 +4783,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             await MainActor.run {
                 history.addEntry(failedEntry)
+                transition(to: .error(error), force: true)
+                errorMessage = userFacingErrorMessage(for: error)
+                organizationStage = errorMessage ?? "Apply failed"
             }
 
             AnalyticsManager.shared.captureWorkflow(
@@ -4667,8 +4820,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         currentDirectory = baseURL
         currentPlan = plan
 
-        updateState(.applying, stage: "Re-applying organization...", progress: 0.3)
-
+        // Do not pre-transition to .applying here: apply() owns the
+        // idle/ready/completed -> applying transition and treats a second apply
+        // while .applying as a no-op, so pre-setting .applying would make this
+        // redo a no-op. performApply sets the applying stage.
         do {
             try await apply(at: baseURL, dryRun: false, enableTagging: aiConfig?.enableFileTagging ?? true)
             
@@ -5619,6 +5774,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             blockingExclusionRule = nil
             scannedFileCount = 0
             scannedFiles = []
+            allScannedFiles = []
             detectedDuplicates = []
             measuredWorkProgress = nil
             visionAnalysisSummary = nil
@@ -5727,7 +5883,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             try data.write(to: targetURL, options: .atomic)
             lastManualSessionFingerprintByURL[targetURL] = fingerprint
         } catch {
-            print("FolderOrganizer: Failed to persist manual session: \(error)")
+            DebugLogger.log("FolderOrganizer: Failed to persist manual session: \(error)")
         }
     }
 

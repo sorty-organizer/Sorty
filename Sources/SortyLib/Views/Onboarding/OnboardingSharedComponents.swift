@@ -221,6 +221,6 @@ struct OnboardingCapsuleBadge: View {
             .foregroundStyle(.primary)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(.ultraThinMaterial, in: Capsule())
+            .systemLiquidGlassBackground(cornerRadius: 999)
     }
 }

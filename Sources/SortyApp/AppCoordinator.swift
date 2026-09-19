@@ -6,12 +6,23 @@
 //
 
 @preconcurrency import Foundation
-import Combine
 import SwiftUI
+import Combine
 import UserNotifications
+import os
 #if canImport(SortyLib)
 import SortyLib
 #endif
+
+private enum CoordinatorLog {
+    static func log(_ message: @autoclosure () -> String) {
+        #if canImport(SortyLib)
+        LogManager.shared.log(message(), level: .debug, category: "AppCoordinator")
+        #else
+        Logger(subsystem: "com.sorty.app", category: "AppCoordinator").debug("\(message())")
+        #endif
+    }
+}
 
 @MainActor
 class AppCoordinator: ObservableObject, FolderWatcherDelegate {
@@ -123,7 +134,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 try data.write(to: pendingURL, options: .atomic)
                 return true
             } catch {
-                print("Coordinator: Failed to persist watched-folder pending work: \(error)")
+                CoordinatorLog.log("Coordinator: Failed to persist watched-folder pending work: \(error)")
                 return false
             }
         }
@@ -265,7 +276,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 }
                 
                 // Just reverted, so we must update snapshot to avoid re-triggering
-                print("Coordinator: Revert detected for \(folder.name), updating snapshot to ignore reverted files")
+                CoordinatorLog.log("Coordinator: Revert detected for \(folder.name), updating snapshot to ignore reverted files")
 
                 self.folderWatcher.refreshSnapshot(for: folder)
             }
@@ -421,20 +432,20 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         
         // Find the entry to undo
         guard let entryToUndo = findEntryToUndo(folderPath: folderPath) else {
-            print("Coordinator: No entry found to undo")
+            CoordinatorLog.log("Coordinator: No entry found to undo")
             notificationManager.recordActionLifecycle("undo", stage: "no-op", failed: true, detail: folderPath ?? "latest")
             notificationManager.showError(message: "Nothing to undo", isCritical: false)
             return
         }
         
         guard !entryToUndo.isUndone else {
-            print("Coordinator: Entry already undone")
+            CoordinatorLog.log("Coordinator: Entry already undone")
             notificationManager.recordActionLifecycle("undo", stage: "already-undone", failed: true, detail: entryToUndo.directoryPath)
             notificationManager.showError(message: "Already undone", isCritical: false)
             return
         }
         
-        print("Coordinator: Undoing organization for \(entryToUndo.directoryPath)")
+        CoordinatorLog.log("Coordinator: Undoing organization for \(entryToUndo.directoryPath)")
         
         do {
             let result = try await organizer.undoHistoryEntry(entryToUndo)
@@ -457,7 +468,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             notificationManager.recordActionLifecycle("undo", stage: "completed", detail: entryToUndo.directoryPath)
             
         } catch {
-            print("Coordinator: Undo failed: \(error)")
+            CoordinatorLog.log("Coordinator: Undo failed: \(error)")
             notificationManager.recordActionLifecycle("undo", stage: "failed", failed: true, detail: error.localizedDescription)
             notificationManager.showError(message: "Undo failed: \(error.localizedDescription)", isCritical: false)
         }
@@ -489,13 +500,13 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
         
         guard let path = path else {
-            print("Coordinator: No folder path to open")
+            CoordinatorLog.log("Coordinator: No folder path to open")
             return
         }
         
         let url = URL(fileURLWithPath: path)
         NSWorkspace.shared.open(url)
-        print("Coordinator: Opened folder \(path)")
+        CoordinatorLog.log("Coordinator: Opened folder \(path)")
     }
     
     /// Handle retry action from notification
@@ -512,7 +523,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
         
         guard let path = path else {
-            print("Coordinator: No folder path to retry")
+            CoordinatorLog.log("Coordinator: No folder path to retry")
             notificationManager.recordActionLifecycle("retry", stage: "no-op", failed: true, detail: "missing folder path")
             notificationManager.showError(message: "No failed operation to retry", isCritical: false)
             return
@@ -528,13 +539,13 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         
         // Check if we're already busy
         guard organizer.state == .idle else {
-            print("Coordinator: Cannot retry - organizer is busy")
+            CoordinatorLog.log("Coordinator: Cannot retry - organizer is busy")
             notificationManager.recordActionLifecycle("retry", stage: "busy", failed: true, detail: path)
             notificationManager.showError(message: "Organizer is busy, try again later", isCritical: false)
             return
         }
         
-        print("Coordinator: Retrying organization for \(path)")
+        CoordinatorLog.log("Coordinator: Retrying organization for \(path)")
         
         do {
             let url = URL(fileURLWithPath: path)
@@ -548,7 +559,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             notificationManager.recordActionLifecycle("retry", stage: "completed", detail: path)
             
         } catch {
-            print("Coordinator: Retry failed: \(error)")
+            CoordinatorLog.log("Coordinator: Retry failed: \(error)")
             notificationManager.recordActionLifecycle("retry", stage: "failed", failed: true, detail: error.localizedDescription)
             notificationManager.showError(message: "Retry failed: \(error.localizedDescription)", isCritical: false)
         }
@@ -615,7 +626,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         // Activate the app and bring it to front
         NSApplication.shared.activate(ignoringOtherApps: true)
 
-        print("Coordinator: Activated app for details view")
+        CoordinatorLog.log("Coordinator: Activated app for details view")
     }
     
     /// Extract detailed batch statistics from an organization history entry
@@ -688,7 +699,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         // Also ensure status is valid
         updatedFolder.accessStatus = .valid
         watchedFoldersManager.updateFolder(updatedFolder)
-        print("Coordinator: Updated stale bookmark for \(folder.name)")
+        CoordinatorLog.log("Coordinator: Updated stale bookmark for \(folder.name)")
     }
     
     func folderWatcher(
@@ -716,14 +727,14 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
 
         guard !isManualOrganizationActive(for: folder.id) else {
-            print("Coordinator: Ignoring watcher changes for \(folder.name) during manual organization")
+            CoordinatorLog.log("Coordinator: Ignoring watcher changes for \(folder.name) during manual organization")
             completion(true)
             return
         }
 
         if let ignoreUntil = ignoredWatchEventsUntil[folder.id] {
             if ignoreUntil > Date() {
-                print("Coordinator: Ignoring watcher burst for \(folder.name) after manual apply")
+                CoordinatorLog.log("Coordinator: Ignoring watcher burst for \(folder.name) after manual apply")
                 completion(true)
                 return
             }
@@ -739,7 +750,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 return
             }
 
-            print("Coordinator: Organizer unavailable, queueing \(routedFiles.count) files for \(folder.name)")
+            CoordinatorLog.log("Coordinator: Organizer unavailable, queueing \(routedFiles.count) files for \(folder.name)")
             mergePendingFiles(folder: folder, files: routedFiles, resolvedURL: resolvedURL)
             scheduleRetry()
             completion(true)
@@ -821,7 +832,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
               currentFolder.isEnabled else { return }
 
         guard organizer.aiClient != nil else {
-            print("Coordinator: Cannot auto-organize \(folder.name) - provider not configured")
+            CoordinatorLog.log("Coordinator: Cannot auto-organize \(folder.name) - provider not configured")
             mergePendingFiles(
                 folder: currentFolder,
                 files: files,
@@ -846,7 +857,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
               executionFolder.isEnabled else { return }
 
         if !candidateAudit.unsettled.isEmpty {
-            print("Coordinator: Deferring \(candidateAudit.unsettled.count) unsettled files for \(folder.name)")
+            CoordinatorLog.log("Coordinator: Deferring \(candidateAudit.unsettled.count) unsettled files for \(folder.name)")
             let nextRetryAttempt = stabilityRetryAttempt + 1
             mergePendingFiles(
                 folder: executionFolder,
@@ -861,7 +872,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
         guard !candidateAudit.stable.isEmpty else {
             if !candidateAudit.gone.isEmpty {
-                print("Coordinator: Dropping \(candidateAudit.gone.count) vanished files for \(folder.name)")
+                CoordinatorLog.log("Coordinator: Dropping \(candidateAudit.gone.count) vanished files for \(folder.name)")
             }
             return
         }
@@ -891,7 +902,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 folderPath: resolvedURL.path
             )
             
-            print("Coordinator: Auto-organizing \(candidateAudit.stable.count) stable new files in \(folder.name): \(candidateAudit.stable)")
+            CoordinatorLog.log("Coordinator: Auto-organizing \(candidateAudit.stable.count) stable new files in \(folder.name): \(candidateAudit.stable)")
             
             try await organizer.organizeIncremental(
                 directory: resolvedURL,
@@ -941,7 +952,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             folderWatcher.refreshSnapshot(for: executionFolder)
             
             let duration = Date().timeIntervalSince(startTime)
-            print("Coordinator: Auto-organize completed for \(folder.name) in \(String(format: "%.1f", duration))s")
+            CoordinatorLog.log("Coordinator: Auto-organize completed for \(folder.name) in \(String(format: "%.1f", duration))s")
             let newHistoryEntries = organizer.history.entries.prefix { entry in
                 previousNewestHistoryEntryID.map { entry.id != $0 } ?? true
             }
@@ -956,7 +967,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         } catch is CancellationError {
             organizer.state = .idle
         } catch {
-            print("Coordinator: Auto-organize failed for \(folder.name): \(error)")
+            CoordinatorLog.log("Coordinator: Auto-organize failed for \(folder.name): \(error)")
             organizer.state = .idle
             folderWatcher.refreshSnapshot(for: executionFolder)
 
@@ -1278,7 +1289,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             )
             try data.write(to: pendingWorkURL, options: .atomic)
         } catch {
-            print("Coordinator: Failed to flush watched-folder pending work: \(error)")
+            CoordinatorLog.log("Coordinator: Failed to flush watched-folder pending work: \(error)")
         }
     }
 
@@ -1622,7 +1633,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
         guard let automaticTask = autoOrganizeTasks[folder.id] else { return }
 
-        print("Coordinator: Prioritizing manual organization for \(folder.name)")
+        CoordinatorLog.log("Coordinator: Prioritizing manual organization for \(folder.name)")
         automaticTask.cancel()
         organizer.cancel(source: .watchedFolder)
         await automaticTask.value
@@ -1638,7 +1649,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         if let currentFolder = watchedFoldersManager.folder(withID: folder.id),
            currentFolder.isEnabled {
             folderWatcher.resume(currentFolder)
-            print("Coordinator: Resumed watching \(currentFolder.name) after manual organization")
+            CoordinatorLog.log("Coordinator: Resumed watching \(currentFolder.name) after manual organization")
         }
     }
 

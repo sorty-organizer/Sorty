@@ -81,7 +81,12 @@ public final class WindowSession: ObservableObject {
     }
 
     public func applyConfiguration(_ config: AIConfig, learningsManager: LearningsManager) async {
-        try? await organizer.configure(with: config)
+        do {
+            try await organizer.configure(with: config)
+        } catch {
+            DebugLogger.log("WindowSession configuration failed: \(error.localizedDescription)")
+            organizer.state = .error(error)
+        }
         learningsManager.configure(with: config)
     }
 
@@ -96,7 +101,15 @@ public final class WindowSession: ObservableObject {
         switch destination {
         case .organize(let path, let personaId, _, let autostart):
             if let path {
-                appState.selectedDirectory = URL(fileURLWithPath: path)
+                switch IncomingPathValidator.validatedDirectoryURL(for: path) {
+                case .success(let url):
+                    appState.selectedDirectory = url
+                case .failure(let error):
+                    DebugLogger.log("Rejected deeplink organize path: \(error.localizedDescription)")
+                    organizer.state = .error(error)
+                    appState.currentView = .organize
+                    return
+                }
             }
             if let personaId {
                 if let persona = PersonaType(rawValue: personaId) {
@@ -112,17 +125,34 @@ public final class WindowSession: ObservableObject {
             appState.currentView = .organize
             if autostart {
                 Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 500_000_000)
-                    if let directory = appState.selectedDirectory {
-                        await appState.prepareForManualOrganization(at: directory)
-                        try? await appState.organizer?.organize(directory: directory)
+                    do {
+                        try await Task.sleep(nanoseconds: 500_000_000)
+                    } catch {
+                        return
+                    }
+                    guard let directory = appState.selectedDirectory else { return }
+                    await appState.prepareForManualOrganization(at: directory)
+                    do {
+                        try await appState.organizer?.organize(directory: directory)
+                    } catch is CancellationError {
+                    } catch {
+                        appState.organizer?.state = .error(error)
                     }
                 }
             }
 
         case .duplicates(let path, _):
+            // Autostart is intentionally dropped for duplicates: deeplinks only
+            // select the folder and navigate; the user confirms any scan.
             if let path {
-                appState.selectedDirectory = URL(fileURLWithPath: path)
+                switch IncomingPathValidator.validatedDirectoryURL(for: path) {
+                case .success(let url):
+                    appState.selectedDirectory = url
+                case .failure(let error):
+                    DebugLogger.log("Rejected deeplink duplicates path: \(error.localizedDescription)")
+                    appState.currentView = .duplicates
+                    return
+                }
             }
             appState.currentView = .duplicates
 
@@ -161,9 +191,11 @@ public final class WindowSession: ObservableObject {
         case .open(let path):
             _ = MainWindowRouter.shared.activateWindow(for: id)
             if let path {
-                var isDirectory = ObjCBool(false)
-                if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue {
-                    appState.selectedDirectory = URL(fileURLWithPath: path)
+                switch IncomingPathValidator.validatedDirectoryURL(for: path) {
+                case .success(let url):
+                    appState.selectedDirectory = url
+                case .failure(let error):
+                    DebugLogger.log("Rejected deeplink open path: \(error.localizedDescription)")
                 }
             }
 
@@ -200,7 +232,10 @@ public final class WindowSession: ObservableObject {
         case .watched(let action, let path):
             appState.currentView = .watchedFolders
             if action == "add", let path {
-                let folderURL = URL(fileURLWithPath: path).standardizedFileURL
+                guard case .success(let folderURL) = IncomingPathValidator.validatedDirectoryURL(for: path) else {
+                    DebugLogger.log("Rejected deeplink watched path: \(path)")
+                    break
+                }
                 let normalizedPath = folderURL.path
                 let watchedFolder: WatchedFolder
 
@@ -230,7 +265,11 @@ public final class WindowSession: ObservableObject {
         case .exclude(let path):
             appState.currentView = .exclusions
             if let path {
-                let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+                guard case .success(let validatedURL) = IncomingPathValidator.validatedDirectoryURL(for: path) else {
+                    DebugLogger.log("Rejected deeplink exclude path: \(path)")
+                    break
+                }
+                let normalizedPath = validatedURL.path
                 let alreadyExcluded = exclusionRules.rules.contains {
                     $0.type == .pathContains
                         && $0.pattern.hasPrefix("/")
@@ -251,8 +290,16 @@ public final class WindowSession: ObservableObject {
             // Storage locations are managed inline on the Ready to Organize page.
             appState.currentView = .organize
             if action == "add", let path {
-                let url = URL(fileURLWithPath: path)
-                try? storageLocationsManager.addLocation(url: url)
+                guard case .success(let url) = IncomingPathValidator.validatedDirectoryURL(for: path) else {
+                    DebugLogger.log("Rejected deeplink storage path: \(path)")
+                    break
+                }
+                do {
+                    try storageLocationsManager.addLocation(url: url)
+                } catch {
+                    DebugLogger.log("Deeplink storage add failed: \(error.localizedDescription)")
+                    organizer.state = .error(error)
+                }
             }
         }
     }
@@ -265,11 +312,16 @@ public final class WindowSession: ObservableObject {
             }
         }
 
-        return try? url.bookmarkData(
-            options: .withSecurityScope,
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        )
+        do {
+            return try url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+        } catch {
+            DebugLogger.log("Failed to mint watched-folder bookmark: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     private func highlightWatchedFolder(_ folderID: UUID) {

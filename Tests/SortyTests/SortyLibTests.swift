@@ -2,7 +2,14 @@ import XCTest
 import Combine
 @testable import SortyLib
 
-// Mock AI Client for testing
+// Mock AI Client for testing (analyze-focused).
+// NOTE: A second, divergent MockAIClient lives in LLMRuleInducerTests.swift
+// for generateText-focused tests (final class, nonisolated config). The two
+// are intentionally separate: this actor records analyze batches for
+// FolderOrganizer tests, while the other stubs generateText for
+// LLMRuleInducer. Unifying would couple unrelated test domains; production
+// views now accept an injected (any AIClientProtocol) so both can inject
+// without touching AIClientFactory.
 actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     let config: AIConfig
     var analyzeHandler: (([FileItem]) async throws -> OrganizationPlan)?

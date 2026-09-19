@@ -15,6 +15,8 @@ struct ExclusionRulesView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var learningsManager: LearningsManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Injected for tests (MockAIClient); defaults to the factory in production.
+    var injectedAIClient: (any AIClientProtocol)? = nil
     @State private var showingAddRule = false
     @State private var isUsingManualExclusion = false
     @State private var ruleToEdit: ExclusionRule?
@@ -774,7 +776,12 @@ struct ExclusionRulesView: View {
         defer { isImprovingException = false }
 
         do {
-            let client = try AIClientFactory.createClient(config: settingsViewModel.config)
+            let client: any AIClientProtocol
+            if let injected = injectedAIClient {
+                client = injected
+            } else {
+                client = try AIClientFactory.createClient(config: settingsViewModel.config)
+            }
             let outcome = try await ImproveInstructionsTool.run(
                 client: client,
                 originalInstructions: original,
@@ -807,7 +814,12 @@ struct ExclusionRulesView: View {
         defer { isCreatingExceptionRules = false }
 
         do {
-            let client = try AIClientFactory.createClient(config: settingsViewModel.config)
+            let client: any AIClientProtocol
+            if let injected = injectedAIClient {
+                client = injected
+            } else {
+                client = try AIClientFactory.createClient(config: settingsViewModel.config)
+            }
             let resolution = try await NaturalLanguageExclusionResolver.resolve(
                 client: client,
                 description: String(exception.prefix(200))

@@ -5,6 +5,11 @@ import SwiftUI
 /// other apps), like Finder's sidebar. Liquid glass alone cannot do this:
 /// `glassEffect` only samples content inside the window, so pair this backdrop
 /// with a `.clear` glass effect layered above it.
+/// This NSVisualEffectView is the single sanctioned AppKit bridge for
+/// behind-window glass (used by `behindWindowLiquidGlassBackground` and the
+/// Onboarding fullscreen backdrop panel, which cannot use a SwiftUI modifier).
+/// Do not add other raw materials/blurs; use `systemLiquidGlassBackground`
+/// or `.systemLiquidGlassPopover` instead.
 private struct BehindWindowBackdropView: NSViewRepresentable {
     @SortyHotReload private var hotReload
     func makeNSView(context: Context) -> NSVisualEffectView {

@@ -7,10 +7,21 @@
 
 import Darwin
 import SwiftUI
+import os
 
 #if canImport(SortyLib)
     import SortyLib
 #endif
+
+private enum SortyAppLog {
+    static func log(_ message: @autoclosure () -> String) {
+        #if canImport(SortyLib)
+        LogManager.shared.log(message(), level: .debug, category: "SortyApp")
+        #else
+        Logger(subsystem: "com.sorty.app", category: "SortyApp").debug("\(message())")
+        #endif
+    }
+}
 
 @MainActor
 private final class ApplicationRemovalMonitor {
@@ -332,18 +343,11 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         private var activeWatchedAutoOrganizeFolderCount: Int {
-            let defaults = UserDefaults.standard
-            if defaults.object(forKey: "activeWatchedFolderCount") != nil {
-                return defaults.integer(forKey: "activeWatchedFolderCount")
-            }
-
-            guard let data = UserDefaults.standard.data(forKey: "watchedFolders"),
-                let folders = try? JSONDecoder().decode([WatchedFolder].self, from: data)
-            else {
-                return 0
-            }
-
-            return folders.filter(\.isEnabled).count
+            #if canImport(SortyLib)
+            AppRelocationService.activeWatchedAutoOrganizeFolderCount()
+            #else
+            0
+            #endif
         }
 
         private var shouldContinueRunningWhenLastWindowCloses: Bool {
@@ -460,12 +464,11 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 
 @MainActor
 private enum ApplicationMover {
-    private static let applicationsPath = "/Applications"
     private static let suggestionIdentifier = "move-to-applications"
     private static let suggestionDismissalKey = "hasDismissedMoveToApplicationsSuggestion"
 
     static func offerToMoveToApplicationsIfNeeded() {
-        let sourceURL = originalBundleURL()
+        let sourceURL = AppRelocationService.originalBundleURL()
         #if DEBUG
             // Do not nag when launching directly from the build output. A copied
             // debug app should behave like a distributed app.
@@ -474,7 +477,7 @@ private enum ApplicationMover {
                 ProcessInfo.processInfo.environment["SORTY_FORCE_MOVE_SUGGESTION"] == "1"
                 || UserDefaults.standard.bool(forKey: "forceMoveToApplicationsSuggestion")
             if !forceForTesting, isDevelopmentBuildLocation(sourceURL) {
-                NSLog("SortyMove: skipping suggestion (development build location)")
+                SortyAppLog.log("SortyMove: skipping suggestion (development build location)")
                 return
             }
         #endif
@@ -485,15 +488,15 @@ private enum ApplicationMover {
             return
         }
         if UserDefaults.standard.bool(forKey: suggestionDismissalKey) {
-            NSLog("SortyMove: skipping suggestion (dismissed)")
+            SortyAppLog.log("SortyMove: skipping suggestion (dismissed)")
             return
         }
         let bundlePath = sourceURL.path
         guard !isInApplicationsFolder(sourceURL) else {
-            NSLog("SortyMove: skipping suggestion (already in Applications: %@)", bundlePath)
+            SortyAppLog.log("SortyMove: skipping suggestion (already in Applications: \(bundlePath))")
             return
         }
-        NSLog("SortyMove: scheduling suggestion for %@", bundlePath)
+        SortyAppLog.log("SortyMove: scheduling suggestion for \(bundlePath)")
 
         // Let the main window and HUD overlay appear before suggesting.
         Task { @MainActor in
@@ -501,8 +504,8 @@ private enum ApplicationMover {
             if UserDefaults.standard.bool(forKey: suggestionDismissalKey) {
                 return
             }
-            guard !isInApplicationsFolder(originalBundleURL()) else { return }
-            NSLog("SortyMove: showing suggestion HUD")
+            guard !AppRelocationService.isInApplicationsFolder(AppRelocationService.originalBundleURL()) else { return }
+            SortyAppLog.log("SortyMove: showing suggestion HUD")
             suggestMoveToApplications()
         }
     }
@@ -523,7 +526,7 @@ private enum ApplicationMover {
 
     private static func suggestMoveToApplications() {
         #if canImport(SortyLib)
-            let sourceURL = originalBundleURL()
+            let sourceURL = AppRelocationService.originalBundleURL()
             NotificationManager.shared.showHUDInfo(
                 title: "Move Sorty to Applications?",
                 message:
@@ -559,56 +562,19 @@ private enum ApplicationMover {
     }
 
     private static func isInApplicationsFolder(_ url: URL) -> Bool {
-        let path = url.path
-        if path.hasPrefix(applicationsPath + "/") { return true }
-        let userApplicationsPath = FileManager.default
-            .homeDirectoryForCurrentUser
-            .appendingPathComponent("Applications", isDirectory: true)
-            .path
-        return path.hasPrefix(userApplicationsPath + "/")
+        AppRelocationService.isInApplicationsFolder(url)
     }
 
-    /// Returns the app's real on-disk location, resolving Gatekeeper app
-    /// translocation back to the original path when necessary.
     private static func originalBundleURL() -> URL {
-        let bundleURL = Bundle.main.bundleURL.resolvingSymlinksInPath()
-        guard bundleURL.path.contains("/AppTranslocation/") else { return bundleURL }
-
-        guard
-            let handle = dlopen(
-                "/System/Library/Frameworks/Security.framework/Security",
-                RTLD_LAZY
-            )
-        else {
-            return bundleURL
-        }
-        defer { dlclose(handle) }
-
-        typealias CreateOriginalPath = @convention(c) (
-            CFURL,
-            UnsafeMutablePointer<Unmanaged<CFError>?>?
-        ) -> Unmanaged<CFURL>?
-        guard let symbol = dlsym(handle, "SecTranslocateCreateOriginalPathForURL") else {
-            return bundleURL
-        }
-        let createOriginalPath = unsafeBitCast(symbol, to: CreateOriginalPath.self)
-        guard let original = createOriginalPath(bundleURL as CFURL, nil)?.takeRetainedValue() else {
-            return bundleURL
-        }
-        return (original as URL).resolvingSymlinksInPath()
+        AppRelocationService.originalBundleURL()
     }
 
     private static func moveAndRelaunch(from sourceURL: URL) {
-        let destinationURL = URL(fileURLWithPath: applicationsPath, isDirectory: true)
-            .appendingPathComponent(sourceURL.lastPathComponent, isDirectory: true)
+        let destinationURL = AppRelocationService.destinationForMove(from: sourceURL)
         // Move instead of copying so the downloaded app is not left behind,
         // then strip quarantine so the installed app launches without
         // Gatekeeper translocation (which would re-trigger this prompt).
-        let script = """
-        set sourcePath to \(appleScriptString(sourceURL.path))
-        set destinationPath to \(appleScriptString(destinationURL.path))
-        do shell script "/bin/rm -rf " & quoted form of destinationPath & " && /bin/mv " & quoted form of sourcePath & " " & quoted form of destinationPath & " && (/usr/bin/xattr -dr com.apple.quarantine " & quoted form of destinationPath & " || /usr/bin/true)" with administrator privileges
-        """
+        let script = AppRelocationService.moveScript(source: sourceURL, destination: destinationURL)
 
         var error: NSDictionary?
         guard NSAppleScript(source: script)?.executeAndReturnError(&error) != nil else {
@@ -628,17 +594,7 @@ private enum ApplicationMover {
     /// Waits for this instance to exit, then opens the moved copy. Opening
     /// while the old instance is still running would just re-activate it.
     private static func relaunch(at destinationURL: URL) {
-        let pid = ProcessInfo.processInfo.processIdentifier
-        let quotedPath =
-            "'" + destinationURL.path.replacingOccurrences(of: "'", with: "'\\''") + "'"
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = [
-            "-c",
-            "while /bin/kill -0 \(pid) 2>/dev/null; do /bin/sleep 0.1; done; "
-                + "/usr/bin/open \(quotedPath)",
-        ]
-        try? process.run()
+        AppRelocationService.relaunch(at: destinationURL)
     }
 
     private static func quitImmediately() {
@@ -647,7 +603,7 @@ private enum ApplicationMover {
     }
 
     private static func appleScriptString(_ value: String) -> String {
-        "\"\(value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\""
+        AppRelocationService.appleScriptString(value)
     }
 }
 
@@ -696,7 +652,7 @@ struct SortyApp: App {
             let value = make()
             let elapsedMS = (CFAbsoluteTimeGetCurrent() - start) * 1000
             if elapsedMS > 1 {
-                NSLog("SortyLaunch: %@ init took %.1fms", "\(name)", elapsedMS)
+                SortyAppLog.log("SortyLaunch: \(name) init took \(elapsedMS)ms")
             }
             return value
         #else
@@ -748,9 +704,7 @@ struct SortyApp: App {
         configureUITestStateIfNeeded()
 
         #if DEBUG
-            NSLog(
-                "SortyLaunch: SortyApp.init total %.1fms",
-                (CFAbsoluteTimeGetCurrent() - launchInitStart) * 1000)
+            SortyAppLog.log("SortyLaunch: SortyApp.init total \((CFAbsoluteTimeGetCurrent() - launchInitStart) * 1000)ms")
         #endif
     }
 
@@ -776,7 +730,8 @@ struct SortyApp: App {
                     await configureGlobalsIfNeeded()
                 }
         } label: {
-            MenuBarLabel(controller: menuBarController)
+            MenuBarLabel()
+                .environmentObject(menuBarController)
         }
         .menuBarExtraStyle(.window)
     }
@@ -910,8 +865,6 @@ struct SortyApp: App {
             coordinator: coordinator,
             history: organizationHistory,
             updateManager: updateManager,
-            settingsViewModel: settingsViewModel,
-            codexAuth: codexAuthManager,
             personaManager: personaManager,
             customPersonaStore: customPersonaStore,
             watchedFoldersManager: watchedFoldersManager,

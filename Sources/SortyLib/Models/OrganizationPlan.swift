@@ -44,7 +44,29 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
     public var generationStats: GenerationStats?
     public var qualityAssessment: PlanQualityAssessment?
     public var learningToolCall: LearningToolCall?
-    
+    /// True when the AI response omitted, garbled, or hallucinated mappings.
+    /// UI should surface a retry hint instead of presenting the plan as fully valid.
+    public var isPartial: Bool
+    public var needsReview: Bool
+    public var parseWarnings: [String]
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case sessionName
+        case suggestions
+        case unorganizedFiles
+        case unorganizedDetails
+        case notes
+        case timestamp
+        case version
+        case generationStats
+        case qualityAssessment
+        case learningToolCall
+        case isPartial
+        case needsReview
+        case parseWarnings
+    }
+
     public init(
         id: UUID = UUID(),
         sessionName: String? = nil,
@@ -56,7 +78,10 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
         version: Int = 1,
         generationStats: GenerationStats? = nil,
         qualityAssessment: PlanQualityAssessment? = nil,
-        learningToolCall: LearningToolCall? = nil
+        learningToolCall: LearningToolCall? = nil,
+        isPartial: Bool = false,
+        needsReview: Bool = false,
+        parseWarnings: [String] = []
     ) {
         self.id = id
         self.sessionName = sessionName
@@ -69,6 +94,45 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
         self.generationStats = generationStats
         self.qualityAssessment = qualityAssessment
         self.learningToolCall = learningToolCall
+        self.isPartial = isPartial
+        self.needsReview = needsReview
+        self.parseWarnings = parseWarnings
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        sessionName = try container.decodeIfPresent(String.self, forKey: .sessionName)
+        suggestions = try container.decodeIfPresent([FolderSuggestion].self, forKey: .suggestions) ?? []
+        unorganizedFiles = try container.decodeIfPresent([FileItem].self, forKey: .unorganizedFiles) ?? []
+        unorganizedDetails = try container.decodeIfPresent([UnorganizedFile].self, forKey: .unorganizedDetails) ?? []
+        notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
+        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        generationStats = try container.decodeIfPresent(GenerationStats.self, forKey: .generationStats)
+        qualityAssessment = try container.decodeIfPresent(PlanQualityAssessment.self, forKey: .qualityAssessment)
+        learningToolCall = try container.decodeIfPresent(LearningToolCall.self, forKey: .learningToolCall)
+        isPartial = try container.decodeIfPresent(Bool.self, forKey: .isPartial) ?? false
+        needsReview = try container.decodeIfPresent(Bool.self, forKey: .needsReview) ?? false
+        parseWarnings = try container.decodeIfPresent([String].self, forKey: .parseWarnings) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(sessionName, forKey: .sessionName)
+        try container.encode(suggestions, forKey: .suggestions)
+        try container.encode(unorganizedFiles, forKey: .unorganizedFiles)
+        try container.encode(unorganizedDetails, forKey: .unorganizedDetails)
+        try container.encode(notes, forKey: .notes)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(version, forKey: .version)
+        try container.encodeIfPresent(generationStats, forKey: .generationStats)
+        try container.encodeIfPresent(qualityAssessment, forKey: .qualityAssessment)
+        try container.encodeIfPresent(learningToolCall, forKey: .learningToolCall)
+        try container.encode(isPartial, forKey: .isPartial)
+        try container.encode(needsReview, forKey: .needsReview)
+        try container.encode(parseWarnings, forKey: .parseWarnings)
     }
     
     public var totalFiles: Int {

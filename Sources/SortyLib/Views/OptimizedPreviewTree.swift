@@ -1399,6 +1399,8 @@ struct FlatFileRowView: View {
     let onPlanChanged: () -> Void
     @EnvironmentObject var learningsManager: LearningsManager
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    /// Injected for tests (MockAIClient); defaults to the factory in production.
+    var injectedAIClient: (any AIClientProtocol)? = nil
     
     @State private var isDragging = false
     @State private var isEditingName = false
@@ -1517,7 +1519,12 @@ struct FlatFileRowView: View {
 
         Task {
             do {
-                let client = try AIClientFactory.createClient(config: settingsViewModel.config)
+                let client: any AIClientProtocol
+                if let injected = injectedAIClient {
+                    client = injected
+                } else {
+                    client = try AIClientFactory.createClient(config: settingsViewModel.config)
+                }
                 let plan = try await client.analyze(
                     files: [file],
                     customInstructions: renameRegenerationPrompt(),

@@ -287,6 +287,9 @@ public actor ContentAnalyzer {
     private let maxTextBytesToRead = 262_144 // 256KB
     private let maxDocumentTextLength = 12_000
     private let maxOfficeXMLBytes = 2 * 1024 * 1024
+    /// ZIPs larger than this are skipped (list-only): mapping a whole huge
+    /// archive with `Data(contentsOf:)` plus in-memory deflate risks OOM.
+    private let maximumZipBytesToMap = 100 * 1024 * 1024
     private let initialPDFPageProbeCount = 3
     private let visionAnalyzer = VisionAnalyzer()
 
@@ -634,8 +637,18 @@ public actor ContentAnalyzer {
 
     // MARK: - DOCX Extraction
 
+    /// Returns the archive bytes only when the file is small enough to map
+    /// safely; oversized ZIPs are skipped to avoid OOM.
+    private func mappableZipData(at url: URL) -> Data? {
+        if let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber,
+           size.int64Value > Int64(maximumZipBytesToMap) {
+            return nil
+        }
+        return try? Data(contentsOf: url, options: .mappedIfSafe)
+    }
+
     private func extractDOCXContent(from url: URL) async -> ContentMetadata? {
-        guard let zipData = try? Data(contentsOf: url, options: .mappedIfSafe) else {
+        guard let zipData = mappableZipData(at: url) else {
             return nil
         }
 
@@ -859,7 +872,7 @@ public actor ContentAnalyzer {
     }
 
     private func extractZipXMLContent(from url: URL, xmlPath: String) async -> ContentMetadata? {
-        guard let zipData = try? Data(contentsOf: url, options: .mappedIfSafe),
+        guard let zipData = mappableZipData(at: url),
               let xmlString = extractFileFromZip(
                 data: zipData,
                 fileName: xmlPath,

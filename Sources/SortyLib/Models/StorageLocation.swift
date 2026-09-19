@@ -599,28 +599,51 @@ public class StorageLocationsManager: ObservableObject {
     }
     
     /// Resolves a storage location URL with security-scoped access
-    /// Returns a wrapper that ensures balanced access (call .cleanup() when done)
+    /// Returns a wrapper that ensures balanced access (call .cleanup() when done).
+    /// Renews stale bookmarks so access survives across launches.
     public func resolveURL(for location: StorageLocation) -> ScopedSecurityAccess? {
         guard let bookmarkData = location.bookmarkData else {
             return ScopedSecurityAccess(url: location.url, didAccess: false)
         }
-        
+
         var isStale = false
         do {
             let url = try URL(resolvingBookmarkData: bookmarkData,
                               options: .withSecurityScope,
                               relativeTo: nil,
                               bookmarkDataIsStale: &isStale)
-            
+
+            if isStale {
+                do {
+                    let renewed = try url.bookmarkData(
+                        options: .withSecurityScope,
+                        includingResourceValuesForKeys: nil,
+                        relativeTo: nil
+                    )
+                    if let index = locations.firstIndex(where: { $0.id == location.id }) {
+                        locations[index].bookmarkData = renewed
+                        saveLocations()
+                    }
+                } catch {
+                    DebugLogger.log("Failed to renew stale storage bookmark: \(error.localizedDescription)")
+                }
+            }
+
             if url.startAccessingSecurityScopedResource() {
                 return ScopedSecurityAccess(url: url, didAccess: true)
             }
-            markAccessLost(for: location.id)
+            // startAccessing returns false outside the sandbox even for valid
+            // bookmarks; only mark lost when actually sandboxed.
+            if SandboxEnvironment.isSandboxed {
+                markAccessLost(for: location.id)
+            } else {
+                return ScopedSecurityAccess(url: url, didAccess: false)
+            }
         } catch {
             markAccessLost(for: location.id)
             DebugLogger.log("Failed to resolve storage location bookmark: \(error)")
         }
-        
+
         return nil
     }
     
@@ -719,21 +742,6 @@ public class StorageLocationsManager: ObservableObject {
                     relativeTo: nil,
                     bookmarkDataIsStale: &isStale
                 )
-                guard resolvedURL.startAccessingSecurityScopedResource() else {
-                    results.append(
-                        BookmarkRestoreResult(
-                            id: snapshot.id,
-                            originalBookmark: bookmarkData,
-                            status: .lost,
-                            newBookmark: nil,
-                            resolvedPath: nil,
-                            url: nil,
-                            didAccess: false
-                        )
-                    )
-                    continue
-                }
-
                 var newBookmark: Data? = nil
                 if isStale {
                     newBookmark = try? resolvedURL.bookmarkData(
@@ -742,6 +750,38 @@ public class StorageLocationsManager: ObservableObject {
                         relativeTo: nil
                     )
                 }
+                guard resolvedURL.startAccessingSecurityScopedResource() else {
+                    // Outside the sandbox, startAccessing returns false for
+                    // valid bookmarks; keep the location usable without a
+                    // held session.
+                    if SandboxEnvironment.isSandboxed {
+                        results.append(
+                            BookmarkRestoreResult(
+                                id: snapshot.id,
+                                originalBookmark: bookmarkData,
+                                status: .lost,
+                                newBookmark: nil,
+                                resolvedPath: nil,
+                                url: nil,
+                                didAccess: false
+                            )
+                        )
+                    } else {
+                        results.append(
+                            BookmarkRestoreResult(
+                                id: snapshot.id,
+                                originalBookmark: bookmarkData,
+                                status: .valid,
+                                newBookmark: newBookmark,
+                                resolvedPath: StorageLocationPathResolver.canonicalPath(resolvedURL.path),
+                                url: nil,
+                                didAccess: false
+                            )
+                        )
+                    }
+                    continue
+                }
+
                 results.append(
                     BookmarkRestoreResult(
                         id: snapshot.id,

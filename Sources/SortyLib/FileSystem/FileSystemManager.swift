@@ -27,6 +27,12 @@ public actor FileSystemManager {
 
     private static let crossVolumeChunkSize: Int = 1_024 * 1_024 * 4 // 4 MB
     private static let largeFileThreshold: UInt64 = 50 * 1_024 * 1_024 // 50 MB
+    /// Upper bound for collision-uniquify attempts. Prevents an unbounded
+    /// `while fileExists` loop when a directory is densely populated.
+    static let maximumUniqueNameAttempts = 1_000
+    /// Retries for a lost check-then-act race (destination appeared between
+    /// our existence check and the move).
+    private static let conflictingMoveRetryAttempts = 3
 
     private struct TransferSnapshot: Equatable {
         let itemCount: Int
@@ -50,7 +56,7 @@ public actor FileSystemManager {
 
         guard let enumerator = fileManager.enumerator(
             at: url,
-            includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
+            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey],
             options: [],
             errorHandler: { _, _ in false }
         ) else {
@@ -62,7 +68,15 @@ public actor FileSystemManager {
         var latestModificationDate = rootValues.contentModificationDate
         for case let itemURL as URL in enumerator {
             try Task.checkCancellation()
-            let values = try itemURL.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
+            let values = try itemURL.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey])
+            // Never follow symlinks while snapshotting: directory cycles
+            // would loop forever and escaping links would inflate the totals.
+            if values.isSymbolicLink == true {
+                if values.isDirectory == true {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
             itemCount += 1
             if values.isDirectory != true {
                 totalBytes += UInt64(max(values.fileSize ?? 0, 0))
@@ -101,15 +115,87 @@ public actor FileSystemManager {
         #endif
 
         let sourceValues = try? source.resourceValues(forKeys: [.volumeIdentifierKey])
-        let destinationParent = destination.deletingLastPathComponent()
-        let destValues = try? destinationParent.resourceValues(forKeys: [.volumeIdentifierKey])
+        // The destination may not exist yet, so walk up to the nearest
+        // existing ancestor for a meaningful destination volume.
+        var probe = destination.deletingLastPathComponent()
+        var destValues: URLResourceValues?
+        while destValues == nil {
+            if fileManager.fileExists(atPath: probe.path) {
+                destValues = try? probe.resourceValues(forKeys: [.volumeIdentifierKey])
+                break
+            }
+            let parent = probe.deletingLastPathComponent()
+            guard parent.path != probe.path else { break }
+            probe = parent
+        }
 
         guard let sourceVolume = sourceValues?.volumeIdentifier as? NSObject,
               let destVolume = destValues?.volumeIdentifier as? NSObject else {
-            return false
+            // Volume identity unknown: take the safe copy-then-verify path
+            // rather than assuming a same-volume rename will work.
+            return true
         }
 
         return !sourceVolume.isEqual(destVolume)
+    }
+
+    /// Maps a filesystem write failure to a storage-specific error when the
+    /// underlying cause is disk-full, read-only media, or quota — instead of
+    /// mislabeling all of them `permissionDenied`. Preserves errno and path.
+    private func storageError(for error: Error, path: String) -> FileSystemError? {
+        let nsError = error as NSError
+        if nsError.domain == NSPOSIXErrorDomain {
+            switch Int32(nsError.code) {
+            case ENOSPC:
+                return .diskFull(path: path, underlyingErrno: ENOSPC)
+            case EROFS:
+                return .readOnlyFileSystem(path: path, underlyingErrno: EROFS)
+            case EDQUOT:
+                return .quotaExceeded(path: path, underlyingErrno: EDQUOT)
+            default:
+                break
+            }
+        }
+        if nsError.domain == NSCocoaErrorDomain {
+            switch nsError.code {
+            case NSFileWriteOutOfSpaceError:
+                return .diskFull(path: path, underlyingErrno: ENOSPC)
+            case NSFileWriteVolumeReadOnlyError:
+                return .readOnlyFileSystem(path: path, underlyingErrno: EROFS)
+            default:
+                break
+            }
+        }
+        // FileHandle writes surface the raw errno value.
+        if (error as? POSIXError)?.code == .ENOSPC {
+            return .diskFull(path: path, underlyingErrno: ENOSPC)
+        }
+        return nil
+    }
+
+    /// The errno captured right after a failed `createFile`, mapped the same way.
+    private func storageErrorForCurrentErrno(path: String) -> FileSystemError? {
+        switch errno {
+        case ENOSPC:
+            return .diskFull(path: path, underlyingErrno: ENOSPC)
+        case EROFS:
+            return .readOnlyFileSystem(path: path, underlyingErrno: EROFS)
+        case EDQUOT:
+            return .quotaExceeded(path: path, underlyingErrno: EDQUOT)
+        default:
+            return nil
+        }
+    }
+
+    private func isFileExistsError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain, nsError.code == NSFileWriteFileExistsError {
+            return true
+        }
+        if nsError.domain == NSPOSIXErrorDomain, nsError.code == Int(EEXIST) {
+            return true
+        }
+        return false
     }
 
     private func copyWithProgress(from source: URL, to destination: URL, progressHandler: (@Sendable (Double) -> Void)?) async throws {
@@ -120,6 +206,9 @@ public actor FileSystemManager {
             ".sorty-transfer-\(UUID().uuidString)-\(destination.lastPathComponent)"
         )
 
+        // Staging lives next to the destination (same volume), so the final
+        // staging->destination move is atomic and a mid-copy ENOSPC only ever
+        // leaves a hidden partial file that this defer removes.
         defer {
             if fileManager.fileExists(atPath: stagingURL.path) {
                 try? fileManager.removeItem(at: stagingURL)
@@ -128,13 +217,13 @@ public actor FileSystemManager {
 
         if fileSize > Self.largeFileThreshold {
             guard let readHandle = FileHandle(forReadingAtPath: source.path) else {
-                throw FileSystemError.fileNotFound
+                throw FileSystemError.fileNotFound(path: source.path, underlyingErrno: errno)
             }
 
             guard fileManager.createFile(atPath: stagingURL.path, contents: nil),
                   let writeHandle = FileHandle(forWritingAtPath: stagingURL.path) else {
                 try? readHandle.close()
-                throw FileSystemError.permissionDenied
+                throw storageErrorForCurrentErrno(path: stagingURL.path) ?? FileSystemError.permissionDenied(path: stagingURL.path, underlyingErrno: errno)
             }
 
             do {
@@ -162,11 +251,16 @@ public actor FileSystemManager {
             } catch {
                 try? writeHandle.close()
                 try? readHandle.close()
-                throw error
+                // Partial staging content is removed by the defer above.
+                throw storageError(for: error, path: stagingURL.path) ?? error
             }
         } else {
             try Task.checkCancellation()
-            try fileManager.copyItem(at: source, to: stagingURL)
+            do {
+                try fileManager.copyItem(at: source, to: stagingURL)
+            } catch {
+                throw storageError(for: error, path: stagingURL.path) ?? error
+            }
             progressHandler?(1.0)
         }
 
@@ -177,12 +271,39 @@ public actor FileSystemManager {
               sourceSnapshot.matchesCopiedContent(destinationSnapshot) else {
             throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
         }
-
-        guard !fileManager.fileExists(atPath: destination.path) else {
-            throw CocoaError(.fileWriteFileExists)
+        // Extra size check so a truncated staging copy can never replace the
+        // source. Directory metadata sizes vary by volume, so single files
+        // compare raw sizes while directories rely on the snapshot byte totals.
+        if sourceSnapshot.itemCount <= 1 {
+            let stagedSize = (try? fileManager.attributesOfItem(atPath: stagingURL.path)[.size] as? UInt64) ?? UInt64.max
+            guard stagedSize == fileSize else {
+                throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
+            }
         }
-        try fileManager.moveItem(at: stagingURL, to: destination)
-        try fileManager.removeItem(at: source)
+
+        do {
+            try fileManager.moveItem(at: stagingURL, to: destination)
+        } catch {
+            // Lost the arrival race: let the caller uniquify and retry.
+            if isFileExistsError(error) {
+                throw CocoaError(.fileWriteFileExists)
+            }
+            throw storageError(for: error, path: destination.path) ?? error
+        }
+        // Only delete the source after the destination is verified on disk.
+        guard fileManager.fileExists(atPath: destination.path) else {
+            throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
+        }
+        do {
+            try fileManager.removeItem(at: source)
+        } catch {
+            // Copy succeeded but the source survives: surface the failure so
+            // the caller records a partial apply instead of claiming success.
+            throw FileSystemError.partialApplyFailure(
+                operations: [],
+                underlyingDescription: "Copied to \(destination.path) but could not remove source \(source.path): \(error.localizedDescription)"
+            )
+        }
     }
 
     /// Start accessing a security-scoped resource and track it
@@ -248,17 +369,27 @@ public actor FileSystemManager {
             options: [.skipsHiddenFiles]
         ) else { return nil }
 
+        var fuzzyMatch: URL?
         for item in items {
             guard let values = try? item.resourceValues(forKeys: [.isDirectoryKey]),
                   values.isDirectory == true else { continue }
 
-            let itemNormalized = item.lastPathComponent.lowercased().filter { $0.isLetter || $0.isNumber }
-            if itemNormalized == normalized {
+            // Prefer the existing directory's exact on-disk name: the scan
+            // folds separators/case/unicode when comparing, but the move path
+            // must reuse the real name verbatim instead of creating a
+            // near-duplicate folder.
+            if item.lastPathComponent == name {
                 return item
+            }
+            if fuzzyMatch == nil {
+                let itemNormalized = item.lastPathComponent.lowercased().filter { $0.isLetter || $0.isNumber }
+                if itemNormalized == normalized {
+                    fuzzyMatch = item
+                }
             }
         }
 
-        return nil
+        return fuzzyMatch
     }
 
     /// Stop accessing all tracked security-scoped resources
@@ -516,9 +647,12 @@ public actor FileSystemManager {
 
     func moveFiles(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, exclusionManager: ExclusionRulesManager? = nil) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
+        // Shared across suggestions so two files targeting the same name in
+        // one run never share a destination.
+        var reserved = Set<String>()
 
         for suggestion in plan.suggestions {
-            let ops = try await moveFilesInSuggestion(suggestion, parentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager)
+            let ops = try await moveFilesInSuggestion(suggestion, parentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager, reserved: &reserved)
             operations.append(contentsOf: ops)
         }
 
@@ -584,7 +718,7 @@ public actor FileSystemManager {
         )
     }
     
-    private func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
+    private func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?, reserved: inout Set<String>) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
         let renameMappings = renameMappingsByFileID(in: suggestion)
         
@@ -624,27 +758,19 @@ public actor FileSystemManager {
                     try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
                 }
 
-                // Handle conflicts
-                if fileManager.fileExists(atPath: destinationURL.path) {
-                    destinationURL = generateUniqueURL(for: destinationURL)
-                }
-
                 // Verify source exists
                 guard fileManager.fileExists(atPath: sourceURL.path) else {
                     continue
                 }
 
-                // Move file — use cross-volume copy+delete when source and destination are on different volumes
-                if isCrossVolume(from: sourceURL, to: destinationURL) {
-                    DebugLogger.log("Cross-volume move detected: \(sourceURL.path) → \(destinationURL.path)")
-                    let fileName = sourceURL.lastPathComponent
-                    let handler = crossVolumeProgressHandler
-                    try await copyWithProgress(from: sourceURL, to: destinationURL) { progress in
-                        handler?(fileName, progress)
-                    }
-                } else {
-                    try fileManager.moveItem(at: sourceURL, to: destinationURL)
-                }
+                // Move file, uniquifying against disk + batch reservations and
+                // retrying races. Records the actual destination below so the
+                // preview never silently disagrees with what landed on disk.
+                destinationURL = try await moveFileResolvingConflicts(
+                    from: sourceURL,
+                    proposedDestination: destinationURL,
+                    reserved: &reserved
+                )
             }
 
             // Record the operation
@@ -666,7 +792,7 @@ public actor FileSystemManager {
 
         // Process subfolders
         for subfolder in suggestion.subfolders {
-            let subOps = try await moveFilesInSuggestion(subfolder, parentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager)
+            let subOps = try await moveFilesInSuggestion(subfolder, parentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager, reserved: &reserved)
             operations.append(contentsOf: subOps)
         }
         
@@ -716,8 +842,9 @@ public actor FileSystemManager {
 
         guard let comment = comment, !comment.isEmpty else {
             let rc = removexattr(path, key, 0)
-            if rc != 0 && errno != 93 {
+            if rc != 0 && errno != ENOENT && errno != 93 {
                 DebugLogger.log("Failed to remove Finder comment for \(path): errno \(errno)")
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
             }
             return
         }
@@ -733,6 +860,7 @@ public actor FileSystemManager {
         }
         if rc != 0 {
             DebugLogger.log("Failed to set Finder comment for \(path): errno \(errno)")
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
     }
 
@@ -979,6 +1107,9 @@ public actor FileSystemManager {
 
             progress?(0.1, "Moving files...")
 
+            // Shared across suggestions so two files targeting the same name
+            // in one run never share a destination.
+            var reservedDestinations = Set<String>()
             for suggestion in plan.suggestions {
                 let result = try await moveFilesInSuggestionWithProgress(
                     suggestion,
@@ -986,7 +1117,8 @@ public actor FileSystemManager {
                     dryRun: dryRun,
                     exclusionManager: exclusionManager,
                     operationProgress: &operationProgress,
-                    failures: &allFailures
+                    failures: &allFailures,
+                    reserved: &reservedDestinations
                 )
                 allOperations.append(contentsOf: result.operations)
             }
@@ -1169,7 +1301,8 @@ public actor FileSystemManager {
         dryRun: Bool,
         exclusionManager: ExclusionRulesManager? = nil,
         operationProgress: inout OrganizationProgress,
-        failures: inout [OperationFailure]
+        failures: inout [OperationFailure],
+        reserved: inout Set<String>
     ) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
@@ -1215,10 +1348,7 @@ public actor FileSystemManager {
                                 try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
                             }
                         }
-                        if fileManager.fileExists(atPath: destinationURL.path) {
-                            destinationURL = generateUniqueURL(for: destinationURL)
-                        }
-                        
+
                         guard fileManager.fileExists(atPath: sourceURL.path) else {
                             failures.append(OperationFailure(
                                 sourcePath: sourceURL.path,
@@ -1230,19 +1360,15 @@ public actor FileSystemManager {
                             processedCount += 1
                             continue
                         }
-                        
-                        if isCrossVolume(from: sourceURL, to: destinationURL) {
-                            DebugLogger.log("Cross-volume move detected: \(sourceURL.path) → \(destinationURL.path)")
-                            let fileName = sourceURL.lastPathComponent
-                            let handler = crossVolumeProgressHandler
-                            try await copyWithProgress(from: sourceURL, to: destinationURL) { progress in
-                                handler?(fileName, progress)
-                            }
-                        } else {
-                            try await withRetry {
-                                try fileManager.moveItem(at: sourceURL, to: destinationURL)
-                            }
-                        }
+
+                        // Uniquifies against disk + batch reservations, retries
+                        // check-then-act races, and returns the actual
+                        // destination, which is what gets recorded below.
+                        destinationURL = try await moveFileResolvingConflicts(
+                            from: sourceURL,
+                            proposedDestination: destinationURL,
+                            reserved: &reserved
+                        )
                         
                         let operationType = operationType(
                             from: sourceURL,
@@ -1295,7 +1421,8 @@ public actor FileSystemManager {
                 dryRun: dryRun,
                 exclusionManager: exclusionManager,
                 operationProgress: &operationProgress,
-                failures: &failures
+                failures: &failures,
+                reserved: &reserved
             )
             operations.append(contentsOf: subResult.operations)
             processedCount += subResult.processedCount
@@ -1411,7 +1538,7 @@ public actor FileSystemManager {
     
     /// Recursively find and remove empty subdirectories, excluding newly created folders
     private func cleanupEmptySubdirectories(at baseURL: URL, excluding protectedPaths: Set<String>) throws {
-        let contents = try fileManager.contentsOfDirectory(at: baseURL, includingPropertiesForKeys: [.isDirectoryKey])
+        let contents = try fileManager.contentsOfDirectory(at: baseURL, includingPropertiesForKeys: [.isDirectoryKey, .isPackageKey])
         let protected = Set(protectedPaths.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path })
 
         for item in contents {
@@ -1424,7 +1551,11 @@ public actor FileSystemManager {
                 continue
             }
 
-            let resourceValues = try? item.resourceValues(forKeys: [.isDirectoryKey])
+            let resourceValues = try? item.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+            // Never descend into or remove app bundles, photo libraries, and
+            // other packages: they are opaque to the user even though they are
+            // directories on disk.
+            guard resourceValues?.isPackage != true else { continue }
             let isDirectory = resourceValues?.isDirectory ?? false
 
             if isDirectory {
@@ -1521,7 +1652,7 @@ public actor FileSystemManager {
                         }
                         if fileManager.fileExists(atPath: finalSourcePath) {
                             // Original location is occupied by something else
-                            let uniqueURL = generateUniqueURL(for: URL(fileURLWithPath: finalSourcePath))
+                            let uniqueURL = try generateUniqueURL(for: URL(fileURLWithPath: finalSourcePath))
                             finalSourcePath = uniqueURL.path
                         }
 
@@ -1572,25 +1703,41 @@ public actor FileSystemManager {
                 }
                 
             case .tagFile:
+                let tagURL = URL(fileURLWithPath: operation.sourcePath)
+                guard fileManager.fileExists(atPath: tagURL.path) else {
+                    missingFiles.append(tagURL.lastPathComponent)
+                    retryableFailedOperationIDs.append(operation.id)
+                    break
+                }
+                var tagFailures = 0
+                var attemptedRestores = 0
                 if let originalTags = operation.metadata?.originalTags {
-                   let url = URL(fileURLWithPath: operation.sourcePath)
-                   if fileManager.fileExists(atPath: url.path) {
-                       let nsURL = url as NSURL
-                       try? nsURL.setResourceValue(originalTags, forKey: .tagNamesKey)
-                       successCount += 1
-                   } else {
-                       missingFiles.append(url.lastPathComponent)
-                       retryableFailedOperationIDs.append(operation.id)
-                   }
+                    attemptedRestores += 1
+                    do {
+                        try (tagURL as NSURL).setResourceValue(originalTags, forKey: .tagNamesKey)
+                    } catch {
+                        tagFailures += 1
+                        DebugLogger.log("Failed to restore tags for \(tagURL.path): \(error.localizedDescription)")
+                    }
                 }
                 if operation.metadata?.newComment != nil {
-                    let url = URL(fileURLWithPath: operation.sourcePath)
-                    if fileManager.fileExists(atPath: url.path) {
-                        try? setFinderComment(operation.metadata?.originalComment, for: url)
-                    } else if !missingFiles.contains(url.lastPathComponent) {
-                        missingFiles.append(url.lastPathComponent)
-                        retryableFailedOperationIDs.append(operation.id)
+                    attemptedRestores += 1
+                    do {
+                        try setFinderComment(operation.metadata?.originalComment, for: tagURL)
+                    } catch {
+                        tagFailures += 1
+                        DebugLogger.log("Failed to restore comment for \(tagURL.path): \(error.localizedDescription)")
                     }
+                }
+                if attemptedRestores == 0 {
+                    // No tag/comment payload recorded; nothing to restore.
+                    break
+                }
+                if tagFailures == 0 {
+                    successCount += 1
+                } else {
+                    missingFiles.append(tagURL.lastPathComponent)
+                    retryableFailedOperationIDs.append(operation.id)
                 }
                 }
             } catch is CancellationError {
@@ -1673,7 +1820,7 @@ public actor FileSystemManager {
                         }
                     }
                     if fileManager.fileExists(atPath: finalSourcePath) {
-                        let uniqueURL = generateUniqueURL(for: URL(fileURLWithPath: finalSourcePath))
+                        let uniqueURL = try generateUniqueURL(for: URL(fileURLWithPath: finalSourcePath))
                         finalSourcePath = uniqueURL.path
                     }
 
@@ -1724,14 +1871,32 @@ public actor FileSystemManager {
         case .tagFile:
             let url = URL(fileURLWithPath: operation.sourcePath)
             if fileManager.fileExists(atPath: url.path) {
+                var singleFailures = 0
+                var singleAttempted = 0
                 if let originalTags = operation.metadata?.originalTags {
-                    let nsURL = url as NSURL
-                    try? nsURL.setResourceValue(originalTags, forKey: .tagNamesKey)
+                    singleAttempted += 1
+                    do {
+                        try (url as NSURL).setResourceValue(originalTags, forKey: .tagNamesKey)
+                    } catch {
+                        singleFailures += 1
+                        DebugLogger.log("Failed to restore tags for \(url.path): \(error.localizedDescription)")
+                    }
                 }
                 if operation.metadata?.newComment != nil {
-                    try? setFinderComment(operation.metadata?.originalComment, for: url)
+                    singleAttempted += 1
+                    do {
+                        try setFinderComment(operation.metadata?.originalComment, for: url)
+                    } catch {
+                        singleFailures += 1
+                        DebugLogger.log("Failed to restore comment for \(url.path): \(error.localizedDescription)")
+                    }
                 }
-                successCount += 1
+                if singleAttempted > 0, singleFailures == 0 {
+                    successCount += 1
+                } else if singleAttempted > 0 {
+                    missingFiles.append(url.lastPathComponent)
+                    retryableFailedOperationIDs.append(operation.id)
+                }
             } else {
                 missingFiles.append(url.lastPathComponent)
                 retryableFailedOperationIDs.append(operation.id)
@@ -1753,6 +1918,12 @@ public actor FileSystemManager {
 
     private func removeEmptyFolderIfEmpty(at path: String) -> Bool {
         guard fileManager.fileExists(atPath: path) else { return true }
+
+        // Packages (.app, .photoslibrary, ...) are never cleanup candidates,
+        // even when they look like empty directories.
+        if (try? URL(fileURLWithPath: path).resourceValues(forKeys: [.isPackageKey]).isPackage) == true {
+            return false
+        }
 
         do {
             let contents = try fileManager.contentsOfDirectory(atPath: path)
@@ -1854,7 +2025,7 @@ public actor FileSystemManager {
             }
         }
         
-        throw lastError ?? FileSystemError.fileNotFound
+        throw lastError ?? FileSystemError.fileNotFound()
     }
     
     private func checkFileAccessibility(at url: URL) -> (accessible: Bool, issue: String?) {
@@ -2067,30 +2238,92 @@ public actor FileSystemManager {
 
     // MARK: - Helpers
 
-    /// Generate a unique filename by appending a counter
-    private func generateUniqueURL(for url: URL) -> URL {
+    /// Generate a unique filename by appending a counter. Capped so a densely
+    /// populated directory cannot spin forever; throws after the cap.
+    private func generateUniqueURL(for url: URL) throws -> URL {
+        var reserved = Set<String>()
+        return try uniqueDestinationURL(for: url, reserved: &reserved)
+    }
+
+    /// Reservation key for a destination path. Lowercased because the common
+    /// macOS volumes are case-insensitive: `Report.pdf` and `report.pdf`
+    /// collide on disk even though the strings differ.
+    private func reservedDestinationKey(for url: URL) -> String {
+        normalizedPath(url.path).lowercased()
+    }
+
+    /// Returns an available destination, checking both the disk and the
+    /// intra-batch reservation set, and reserves the result. Two files in one
+    /// plan targeting the same name therefore land on different paths instead
+    /// of the second silently overwriting (or failing on) the first.
+    private func uniqueDestinationURL(for url: URL, reserved: inout Set<String>) throws -> URL {
         let directory = url.deletingLastPathComponent()
         let filename = url.deletingPathExtension().lastPathComponent
         let ext = url.pathExtension
 
-        var counter = 1
-        var newURL = url
-
-        while fileManager.fileExists(atPath: newURL.path) {
-            let newName = ext.isEmpty ? "\(filename)_\(counter)" : "\(filename)_\(counter).\(ext)"
-            newURL = directory.appendingPathComponent(newName)
+        var candidate = url
+        var counter = 0
+        while fileManager.fileExists(atPath: candidate.path)
+            || reserved.contains(reservedDestinationKey(for: candidate)) {
             counter += 1
+            guard counter <= Self.maximumUniqueNameAttempts else {
+                throw FileSystemError.uniqueNameExhausted(url.lastPathComponent)
+            }
+            let newName = ext.isEmpty ? "\(filename)_\(counter)" : "\(filename)_\(counter).\(ext)"
+            candidate = directory.appendingPathComponent(newName)
         }
 
-        return newURL
+        reserved.insert(reservedDestinationKey(for: candidate))
+        return candidate
+    }
+
+    /// Moves a file, uniquifying against disk + batch reservations and
+    /// retrying when another process wins a check-then-act race
+    /// (`fileWriteFileExists`/`EEXIST` on the move itself). Returns the actual
+    /// destination used, which callers record so the plan's preview never
+    /// silently disagrees with what landed on disk.
+    private func moveFileResolvingConflicts(
+        from sourceURL: URL,
+        proposedDestination: URL,
+        reserved: inout Set<String>
+    ) async throws -> URL {
+        var destination = try uniqueDestinationURL(for: proposedDestination, reserved: &reserved)
+        var attempts = 0
+        while true {
+            do {
+                if isCrossVolume(from: sourceURL, to: destination) {
+                    DebugLogger.log("Cross-volume move detected: \(sourceURL.path) → \(destination.path)")
+                    let fileName = sourceURL.lastPathComponent
+                    let handler = crossVolumeProgressHandler
+                    try await copyWithProgress(from: sourceURL, to: destination) { progress in
+                        handler?(fileName, progress)
+                    }
+                } else {
+                    try await withRetry {
+                        try fileManager.moveItem(at: sourceURL, to: destination)
+                    }
+                }
+                return destination
+            } catch {
+                guard isFileExistsError(error), attempts < Self.conflictingMoveRetryAttempts else {
+                    throw error
+                }
+                attempts += 1
+                destination = try uniqueDestinationURL(for: proposedDestination, reserved: &reserved)
+            }
+        }
     }
 }
 
 // MARK: - Errors
 
 enum FileSystemError: LocalizedError {
-    case fileNotFound
-    case permissionDenied
+    case fileNotFound(path: String? = nil, underlyingErrno: Int32? = nil)
+    case permissionDenied(path: String? = nil, underlyingErrno: Int32? = nil)
+    case diskFull(path: String?, underlyingErrno: Int32?)
+    case readOnlyFileSystem(path: String?, underlyingErrno: Int32?)
+    case quotaExceeded(path: String?, underlyingErrno: Int32?)
+    case uniqueNameExhausted(String)
     case partialFailure(successCount: Int, failures: [OperationFailure])
     case partialApplyFailure(operations: [FileSystemManager.FileOperation], underlyingDescription: String)
     case preValidationFailed([String])
@@ -2099,10 +2332,22 @@ enum FileSystemError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .fileNotFound:
-            return "File not found"
-        case .permissionDenied:
-            return "Permission denied"
+        case .fileNotFound(let path, let errnoValue):
+            var message = path.map { "File not found: \($0)" } ?? "File not found"
+            if let errnoValue { message += " (errno \(errnoValue))" }
+            return message
+        case .permissionDenied(let path, let errnoValue):
+            var message = path.map { "Permission denied: \($0)" } ?? "Permission denied"
+            if let errnoValue { message += " (errno \(errnoValue))" }
+            return message
+        case .diskFull(let path, _):
+            return path.map { "Disk is full while writing: \($0)" } ?? "Disk is full"
+        case .readOnlyFileSystem(let path, _):
+            return path.map { "Destination is on a read-only volume: \($0)" } ?? "Destination is on a read-only volume"
+        case .quotaExceeded(let path, _):
+            return path.map { "Storage quota exceeded while writing: \($0)" } ?? "Storage quota exceeded"
+        case .uniqueNameExhausted(let name):
+            return "Could not find an available name for \(name) after \(FileSystemManager.maximumUniqueNameAttempts) attempts"
         case .partialFailure(let successCount, let failures):
             return "Partial failure: \(successCount) succeeded, \(failures.count) failed"
         case .partialApplyFailure(let operations, let underlyingDescription):

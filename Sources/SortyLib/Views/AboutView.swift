@@ -738,16 +738,8 @@ private struct BurstParticle: Identifiable {
 
 private struct AboutGlassBackground: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-                .background {
-                    Color.clear
-                        .glassEffect(.regular, in: .rect(cornerRadius: 0))
-                        .ignoresSafeArea()
-                }
-        } else {
-            content.background(.ultraThinMaterial)
-        }
+        // Sanctioned liquid-glass API only; pre-macOS 26 renders plain content.
+        content.systemLiquidGlassBackground(cornerRadius: 0)
     }
 }
 

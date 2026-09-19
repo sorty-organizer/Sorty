@@ -6,9 +6,9 @@
 //
 
 import Foundation
-import ServiceManagement
 import AppKit
 import Combine
+import ServiceManagement
 
 private struct LoginItemServiceStatus: Sendable {
     let isLaunchAtLoginEnabled: Bool

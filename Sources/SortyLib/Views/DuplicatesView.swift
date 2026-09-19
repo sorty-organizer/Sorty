@@ -1855,13 +1855,22 @@ private struct ScanningPulseIcon: View {
     let color: Color
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isWindowVisible = true
+
+    private var isPaused: Bool {
+        reduceMotion || reduceTransparency || !isWindowVisible
+            || controlActiveState == .inactive || scenePhase != .active
+    }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) {
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPaused)) {
             timeline in
             let elapsed = timeline.date.timeIntervalSinceReferenceDate
-            let pulse = reduceMotion ? 0.5 : (sin(elapsed * 3.2) + 1) / 2
-            let beamPhase = reduceMotion ? 0.5 : elapsed.truncatingRemainder(dividingBy: 1.8) / 1.8
+            let pulse = isPaused ? 0.5 : (sin(elapsed * 3.2) + 1) / 2
+            let beamPhase = isPaused ? 0.5 : elapsed.truncatingRemainder(dividingBy: 1.8) / 1.8
 
             Image(systemName: systemName)
                 .font(.system(size: 48))
@@ -1883,16 +1892,17 @@ private struct ScanningPulseIcon: View {
                         Image(systemName: systemName)
                             .font(.system(size: 48))
                     }
-                    .opacity(reduceMotion ? 0.35 : 0.95)
+                    .opacity(isPaused ? 0.35 : 0.95)
                 }
-                .scaleEffect(reduceMotion ? 1 : 1 + pulse * 0.035)
+                .scaleEffect(isPaused ? 1 : 1 + pulse * 0.035)
                 .shadow(
                     color: SortyDesignSystem.Colors.resolvedAccent.opacity(
-                        reduceMotion ? 0.18 : 0.16 + pulse * 0.22),
-                    radius: reduceMotion ? 4 : 4 + pulse * 5
+                        isPaused ? 0.18 : 0.16 + pulse * 0.22),
+                    radius: isPaused ? 4 : 4 + pulse * 5
                 )
         }
         .frame(width: 72, height: 56)
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .accessibilityHidden(true)
     }
 }
@@ -2068,10 +2078,11 @@ private struct ScanProgressReferenceBeamFallback: View {
     let includesInteriorGlow: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
 
     private var shouldAnimate: Bool {
-        active && !reduceMotion && controlActiveState != .inactive
+        active && !reduceMotion && !reduceTransparency && controlActiveState != .inactive
     }
 
     var body: some View {
@@ -2146,11 +2157,11 @@ private struct ScanProgressReferenceBeamFallback: View {
                     angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
                 )
             )
-            .blur(radius: 9)
+            .blur(radius: reduceTransparency ? 0 : 4)
             .mask {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(lineWidth: 22)
-                    .blur(radius: 7)
+                    .blur(radius: reduceTransparency ? 0 : 3)
             }
     }
 }

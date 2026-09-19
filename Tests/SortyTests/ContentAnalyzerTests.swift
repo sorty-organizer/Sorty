@@ -248,7 +248,11 @@ final class ContentAnalyzerTests: XCTestCase {
     
     override func tearDown() async throws {
         if let tempDirectory = tempDirectory {
-            try? FileManager.default.removeItem(at: tempDirectory)
+            do {
+                try FileManager.default.removeItem(at: tempDirectory)
+            } catch {
+                XCTFail("Failed to clean up test directory: " + String(describing: error))
+            }
         }
         
     }
@@ -486,7 +490,11 @@ final class ContentAnalyzerRTFTests: XCTestCase {
 
     override func tearDown() async throws {
         if let tempDirectory = tempDirectory {
-            try? FileManager.default.removeItem(at: tempDirectory)
+            do {
+                try FileManager.default.removeItem(at: tempDirectory)
+            } catch {
+                XCTFail("Failed to clean up test directory: " + String(describing: error))
+            }
         }
     }
 
@@ -520,7 +528,11 @@ final class ContentAnalyzerCacheTests: XCTestCase {
 
     override func tearDown() async throws {
         if let tempDirectory = tempDirectory {
-            try? FileManager.default.removeItem(at: tempDirectory)
+            do {
+                try FileManager.default.removeItem(at: tempDirectory)
+            } catch {
+                XCTFail("Failed to clean up test directory: " + String(describing: error))
+            }
         }
     }
 
@@ -547,9 +559,14 @@ final class ContentAnalyzerCacheTests: XCTestCase {
         let first = await analyzer.analyze(fileURL: textFile)
         XCTAssertEqual(first?.textPreview, "Original")
 
-        // Wait a moment and modify the file
-        try await Task.sleep(for: .milliseconds(100))
+        // Bump mtime explicitly: 100ms sleeps are flaky on coarse filesystems
+        // and can leave the cache thinking the file is unchanged.
+        try await Task.sleep(for: .milliseconds(250))
         try "Updated content".write(to: textFile, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(2)],
+            ofItemAtPath: textFile.path
+        )
 
         let second = await analyzer.analyze(fileURL: textFile)
         XCTAssertEqual(second?.textPreview, "Updated content")
@@ -583,7 +600,11 @@ final class ContentAnalyzerDeepScanFlagTests: XCTestCase {
 
     override func tearDown() async throws {
         if let tempDirectory = tempDirectory {
-            try? FileManager.default.removeItem(at: tempDirectory)
+            do {
+                try FileManager.default.removeItem(at: tempDirectory)
+            } catch {
+                XCTFail("Failed to clean up test directory: " + String(describing: error))
+            }
         }
     }
 

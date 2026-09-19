@@ -7,8 +7,8 @@ import SortyLib
 struct MainWindowRootView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ObservedObject private var settingsViewModel: SettingsViewModel
-    @ObservedObject private var codexAuth: CodexCLIAuthManager
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @EnvironmentObject private var codexAuth: CodexCLIAuthManager
     @Environment(\.openWindow) private var openWindow
     @Environment(\.isAccentPrototypeWindow) private var isAccentPrototypeWindow
     @AppStorage("lastSeenWhatsNewVersion") private var lastSeenWhatsNewVersion = ""
@@ -46,8 +46,6 @@ struct MainWindowRootView: View {
         coordinator: AppCoordinator?,
         history: OrganizationHistory,
         updateManager: SparkleUpdateManager,
-        settingsViewModel: SettingsViewModel,
-        codexAuth: CodexCLIAuthManager,
         personaManager: PersonaManager,
         customPersonaStore: CustomPersonaStore,
         watchedFoldersManager: WatchedFoldersManager,
@@ -67,8 +65,6 @@ struct MainWindowRootView: View {
     ) {
         self.launchRequest = launchRequest
         self.coordinator = coordinator
-        self.settingsViewModel = settingsViewModel
-        self.codexAuth = codexAuth
         self.personaManager = personaManager
         self.customPersonaStore = customPersonaStore
         self.watchedFoldersManager = watchedFoldersManager

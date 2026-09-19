@@ -24,12 +24,27 @@ struct AutomationSettingsView: View {
     @State private var isLoadingSettings = true
     
     var body: some View {
-        VStack(spacing: 16) {
-            globalModelSection
-                .animatedAppearance(delay: 0.05)
+        Group {
+            if isLoadingSettings {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading automation settings…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 80)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Loading automation settings")
+            } else {
+                VStack(spacing: 16) {
+                    globalModelSection
+                        .animatedAppearance(delay: 0.05)
 
-            backgroundBehaviorSection
-                .animatedAppearance(delay: 0.1)
+                    backgroundBehaviorSection
+                        .animatedAppearance(delay: 0.1)
+                }
+            }
         }
         .onAppear {
             loadAutomationSettings()

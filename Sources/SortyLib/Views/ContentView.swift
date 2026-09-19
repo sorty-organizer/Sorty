@@ -218,8 +218,16 @@ public struct ContentView: View {
         }
         .onReceive(extensionListener.$incomingURL) { url in
             if let url = url {
+                // Defense-in-depth: ExtensionCommunication already validated
+                // this IPC payload; re-validate before it becomes the workflow
+                // directory.
+                guard case .success(let validated) = IncomingPathValidator.validatedDirectoryURL(for: url.path) else {
+                    DebugLogger.log("Rejected invalid extension directory in ContentView")
+                    extensionListener.incomingURL = nil
+                    return
+                }
                 appState.showsFinderWorkflowPicker = true
-                appState.selectedDirectory = url
+                appState.selectedDirectory = validated
                 appState.currentView = .organize
                 extensionListener.incomingURL = nil
             }

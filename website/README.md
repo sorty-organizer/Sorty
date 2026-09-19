@@ -6,7 +6,8 @@ Next.js marketing site for Sorty.
 
 ```bash
 pnpm install
-pnpm dev
+portless
+# -> https://sorty.localhost (portless.json name `sorty`; raw `pnpm dev` still works)
 ```
 
 ## Static Build

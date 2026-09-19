@@ -43,7 +43,13 @@ final class FolderWatcherTests: XCTestCase {
         let watchedURL = testRoot.appendingPathComponent("Watched", isDirectory: true)
         let persistenceRoot = testRoot.appendingPathComponent("State", isDirectory: true)
         try FileManager.default.createDirectory(at: watchedURL, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: testRoot) }
+        defer {
+            do {
+                try FileManager.default.removeItem(at: testRoot)
+            } catch {
+                XCTFail("Failed to clean up \(testRoot.path): \(error)")
+            }
+        }
 
         try Data("before".utf8).write(to: watchedURL.appendingPathComponent("before.txt"))
         let folder = WatchedFolder(
@@ -57,7 +63,9 @@ final class FolderWatcherTests: XCTestCase {
         let snapshotURL = persistenceRoot
             .appendingPathComponent("WatcherSnapshots", isDirectory: true)
             .appendingPathComponent("\(folder.id.uuidString).json")
-        for _ in 0..<100 where !FileManager.default.fileExists(atPath: snapshotURL.path) {
+        // Poll for snapshot with an early exit instead of a fixed long sleep.
+        let snapshotDeadline = Date().addingTimeInterval(5)
+        while !FileManager.default.fileExists(atPath: snapshotURL.path), Date() < snapshotDeadline {
             try await Task.sleep(for: .milliseconds(25))
         }
         XCTAssertTrue(FileManager.default.fileExists(atPath: snapshotURL.path))
@@ -72,7 +80,8 @@ final class FolderWatcherTests: XCTestCase {
         secondWatcher.delegate = delegate
         secondWatcher.syncWithFolders([folder])
 
-        await fulfillment(of: [delivered], timeout: 3)
+        // Generous timeout for slow CI; fulfillment fires on delivery, not on sleep.
+        await fulfillment(of: [delivered], timeout: 10)
         XCTAssertEqual(delegate.deliveredFiles, ["after.txt"])
         secondWatcher.stopAllWatching()
     }
@@ -83,7 +92,13 @@ final class FolderWatcherTests: XCTestCase {
         let watchedURL = testRoot.appendingPathComponent("Watched", isDirectory: true)
         let persistenceRoot = testRoot.appendingPathComponent("State", isDirectory: true)
         try FileManager.default.createDirectory(at: watchedURL, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: testRoot) }
+        defer {
+            do {
+                try FileManager.default.removeItem(at: testRoot)
+            } catch {
+                XCTFail("Failed to clean up \(testRoot.path): \(error)")
+            }
+        }
 
         try Data("unchanged".utf8).write(to: watchedURL.appendingPathComponent("file.txt"))
         let folder = WatchedFolder(path: watchedURL.path, triggerDelay: 0.05)
@@ -94,13 +109,16 @@ final class FolderWatcherTests: XCTestCase {
         let snapshotURL = persistenceRoot
             .appendingPathComponent("WatcherSnapshots", isDirectory: true)
             .appendingPathComponent("\(folder.id.uuidString).json")
-        for _ in 0..<100 where !FileManager.default.fileExists(atPath: snapshotURL.path) {
+        let unchangedDeadline = Date().addingTimeInterval(5)
+        while !FileManager.default.fileExists(atPath: snapshotURL.path), Date() < unchangedDeadline {
             try await Task.sleep(for: .milliseconds(25))
         }
         let initialSnapshot = try Data(contentsOf: snapshotURL)
 
         watcher.reconcileNow()
-        try await Task.sleep(for: .milliseconds(300))
+        // Fixed settle window for the no-rewrite assertion; kept generous so
+        // slow CI does not flake on a negative assertion.
+        try await Task.sleep(for: .milliseconds(500))
 
         XCTAssertEqual(try Data(contentsOf: snapshotURL), initialSnapshot)
     }

@@ -272,18 +272,15 @@ private struct HUDFallbackBackground: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-        } else if reduceTransparency {
+        if reduceTransparency {
             content.background(
                 Color(nsColor: .windowBackgroundColor),
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             )
         } else {
-            content.background(
-                .regularMaterial,
-                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            )
+            // Sanctioned liquid-glass API; on macOS <26 it renders the
+            // content without glass, which is preferable to a raw material.
+            content.systemLiquidGlassBackground(cornerRadius: cornerRadius)
         }
     }
 }

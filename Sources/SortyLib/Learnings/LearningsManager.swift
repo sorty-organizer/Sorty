@@ -7,9 +7,9 @@
 //
 
 import Foundation
-import CryptoKit
 import SwiftUI
 import Combine
+import CryptoKit
 
 public enum LearningExclusionReviewTarget: String, Codable, Sendable {
     case instructions
@@ -1558,14 +1558,40 @@ public class LearningsManager: ObservableObject {
     }
     
     // MARK: - Feedback Loop (Continuous Learning)
-    
+
+    /// Maximum stored path length and per-list cap for labeled examples.
+    /// Keeps a single 10k-char paste from bloating the profile.
+    private static let maxLearningPathLength = 1024
+    private static let maxLabeledExamplesPerList = 200
+
+    private func isValidLearningPath(_ path: String) -> Bool {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.count <= Self.maxLearningPathLength else { return false }
+        // Learnings are historical (src may no longer exist after a move), so
+        // require a plausible absolute path shape rather than disk existence.
+        guard trimmed.hasPrefix("/") else { return false }
+        return true
+    }
+
+    private func isValidLabeledExample(srcPath: String, dstPath: String, action: ExampleAction) -> Bool {
+        guard isValidLearningPath(srcPath), isValidLearningPath(dstPath) else { return false }
+        // src == dst is only meaningful for rejections (keep in place).
+        if action != .reject, srcPath == dstPath { return false }
+        return true
+    }
+
     /// Record a manual correction (File moved manually after AI organization)
     public func recordCorrection(originalPath: String, newPath: String, folderPath: String? = nil) {
         guard consentManager.canCollectData else { return }
+        guard isValidLabeledExample(srcPath: originalPath, dstPath: newPath, action: .edit) else { return }
+        if let folderPath, !folderPath.isEmpty, !isValidLearningPath(folderPath) { return }
         guard !shouldExcludeLearning(paths: [originalPath, newPath]) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
-        
+
+        let dedupKey = "\(originalPath)\n\(newPath)"
+        if profile.corrections.contains(where: { "\($0.srcPath)\n\($0.dstPath)" == dedupKey }) { return }
+
         let example = LabeledExample(
             srcPath: originalPath,
             dstPath: newPath,
@@ -1573,9 +1599,12 @@ public class LearningsManager: ObservableObject {
             action: .edit
         )
         profile.corrections.append(example)
+        if profile.corrections.count > Self.maxLabeledExamplesPerList {
+            profile.corrections = Array(profile.corrections.suffix(Self.maxLabeledExamplesPerList))
+        }
         currentProfile = profile
         debouncedSave()
-        
+
         // Trigger auto-inference check after recording correction
         Task { await checkAndTriggerAutoInference() }
     }
@@ -1583,16 +1612,22 @@ public class LearningsManager: ObservableObject {
     /// Record a rejection (File reverted or explicitly rejected)
     public func recordRejection(originalPath: String) {
         guard consentManager.canCollectData else { return }
+        guard isValidLearningPath(originalPath) else { return }
         guard !isPathExcludedFromLearning(originalPath) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
-        
+
+        if profile.rejections.contains(where: { $0.srcPath == originalPath && $0.dstPath == originalPath }) { return }
+
         let example = LabeledExample(
             srcPath: originalPath,
             dstPath: originalPath,
             action: .reject
         )
         profile.rejections.append(example)
+        if profile.rejections.count > Self.maxLabeledExamplesPerList {
+            profile.rejections = Array(profile.rejections.suffix(Self.maxLabeledExamplesPerList))
+        }
         currentProfile = profile
         Task { 
             await saveProfile() 
@@ -1616,27 +1651,47 @@ public class LearningsManager: ObservableObject {
     /// Internal helper to add a labeled example
     public func addLabeledExample(srcPath: String, dstPath: String, action: ExampleAction) {
         guard consentManager.canCollectData else { return }
+        guard isValidLabeledExample(srcPath: srcPath, dstPath: dstPath, action: action) else { return }
         guard !shouldExcludeLearning(paths: [srcPath, dstPath]) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
-        
+
+        let isDuplicate: Bool = {
+            switch action {
+            case .accept, .addToExamples:
+                return profile.positiveExamples.contains { $0.srcPath == srcPath && $0.dstPath == dstPath }
+            case .reject:
+                return profile.rejections.contains { $0.srcPath == srcPath && $0.dstPath == dstPath }
+            case .edit:
+                return profile.corrections.contains { $0.srcPath == srcPath && $0.dstPath == dstPath }
+            }
+        }()
+        guard !isDuplicate else { return }
+
         let example = LabeledExample(
             srcPath: srcPath,
             dstPath: dstPath,
             action: action
         )
-        
+
         switch action {
-        case .accept:
+        case .accept, .addToExamples:
             profile.positiveExamples.append(example)
+            if profile.positiveExamples.count > Self.maxLabeledExamplesPerList {
+                profile.positiveExamples = Array(profile.positiveExamples.suffix(Self.maxLabeledExamplesPerList))
+            }
         case .reject:
             profile.rejections.append(example)
+            if profile.rejections.count > Self.maxLabeledExamplesPerList {
+                profile.rejections = Array(profile.rejections.suffix(Self.maxLabeledExamplesPerList))
+            }
         case .edit:
             profile.corrections.append(example)
-        default:
-            break
+            if profile.corrections.count > Self.maxLabeledExamplesPerList {
+                profile.corrections = Array(profile.corrections.suffix(Self.maxLabeledExamplesPerList))
+            }
         }
-        
+
         currentProfile = profile
         Task { 
             await saveProfile()
