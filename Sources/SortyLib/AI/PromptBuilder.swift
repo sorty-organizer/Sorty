@@ -58,6 +58,12 @@ struct PromptBuilder {
         return prompt
     }
     
+    /// Budget for the main (non-Apple-FM) organization prompt. The compact
+    /// Apple path already selects a compaction level against a token budget;
+    /// the main path previously grew without bound (full metadata per file).
+    static let mainPromptTokenBudget = 12_000
+    static let mainPromptMaxFullMetadataFiles = 80
+
     static func buildOrganizationPrompt(
         files: [FileItem],
         mode: OrganizationMode = .organize,
@@ -232,16 +238,25 @@ struct PromptBuilder {
         }
         
         prompt += "Files to process (\(files.count) total):\n\n"
-        
+
+        // Enforce the main-path token budget incrementally: full per-file
+        // metadata for the first N files, path-only lines afterwards. This
+        // keeps the JSON contract tail intact while bounding prompt growth.
+        var fullMetadataRemaining = Self.mainPromptMaxFullMetadataFiles
+        var emittedMinimalLines = 0
+        func overMainBudget(_ current: String) -> Bool {
+            estimateTokens(current) >= mainPromptTokenBudget
+        }
+
         // Group files by extension for better context
         let groupedByExtension = Dictionary(grouping: files) { $0.extension.lowercased() }
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime]
-        
+
         for (ext, fileList) in groupedByExtension.sorted(by: { $0.key < $1.key }) {
             let extLabel = ext.isEmpty ? "no extension" : ".\(ext)"
             prompt += "\(extLabel.uppercased()) files (\(fileList.count)):\n"
-            
+
             // Prioritize files with content metadata (deep-scanned) before applying the cap
             let sortedFiles: [FileItem]
             if includeContentMetadata {
@@ -254,9 +269,16 @@ struct PromptBuilder {
             } else {
                 sortedFiles = fileList
             }
-            
+
             for file in sortedFiles {
                 let promptPath = file.relativePath ?? file.displayName
+                let useMinimalLine = fullMetadataRemaining <= 0 || overMainBudget(prompt)
+                if useMinimalLine {
+                    emittedMinimalLines += 1
+                    prompt += "  - \(promptPath)\n"
+                    continue
+                }
+                fullMetadataRemaining -= 1
                 var fileDesc = "  - \(promptPath)"
                 
                 fileDesc += " [\(file.isDirectory ? "directory" : "file"), \(file.size) bytes / \(file.formattedSize)]"
@@ -331,8 +353,60 @@ struct PromptBuilder {
         } else {
             prompt += "\nProvide the organization structure in JSON format."
         }
-        
-        return prompt
+
+        if emittedMinimalLines > 0 {
+            prompt += "\n\nNote: \(emittedMinimalLines) file(s) list path only to stay within the \(mainPromptTokenBudget)-token prompt budget; full metadata is shown for the first \(mainPromptMaxFullMetadataFiles) files."
+        }
+
+        return enforceMainPromptBudget(prompt)
+    }
+
+    /// Final guard: hard-truncate an over-budget main-path prompt while
+    /// preserving the JSON-contract tail, so callers never send unbounded input.
+    static func enforceMainPromptBudget(_ prompt: String, budget: Int = mainPromptTokenBudget) -> String {
+        guard estimateTokens(prompt) > budget else { return prompt }
+        let contractMarker = "\nProvide the organization structure in JSON format."
+        let renameMarker = "\nReturn the suggestions in JSON format."
+        let tail: String
+        if let range = prompt.range(of: contractMarker, options: .backwards) {
+            tail = String(prompt[range.lowerBound...])
+        } else if let range = prompt.range(of: renameMarker, options: .backwards) {
+            tail = String(prompt[range.lowerBound...])
+        } else {
+            tail = ""
+        }
+        let allowedChars = max(1_000, budget * 4 - tail.count - 200)
+        let truncated = String(prompt.prefix(allowedChars))
+        return truncated + "\n\n[... truncated to \(budget)-token budget ...]\n" + tail
+    }
+
+    /// Batch-scoped manifest so multi-batch folders don't repeat the full
+    /// 400-entry directory manifest on every 350-file request.
+    static func buildBatchManifestContext(
+        baseDirectoryURL: URL,
+        batchFiles: [FileItem],
+        maxEntries: Int = 60
+    ) -> String? {
+        buildDirectoryManifestContext(
+            baseDirectoryURL: baseDirectoryURL,
+            files: batchFiles,
+            maxEntries: maxEntries
+        )
+    }
+
+    /// Strips a previously injected full SOURCE FOLDER CONTEXT block so a
+    /// smaller batch-scoped block can replace it without duplication.
+    static func strippingSourceFolderContext(from instructions: String) -> String {
+        guard let start = instructions.range(of: "## SOURCE FOLDER CONTEXT") else {
+            return instructions
+        }
+        let before = String(instructions[..<start.lowerBound])
+        let remainder = String(instructions[start.lowerBound...])
+        // Manifest block ends before the next top-level "## " section, if any.
+        if let next = remainder.range(of: "\n## ", options: [], range: remainder.index(after: remainder.startIndex)..<remainder.endIndex) {
+            return (before + String(remainder[next.lowerBound...])).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return before.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     
@@ -481,7 +555,7 @@ struct PromptBuilder {
         return line
     }
 
-    private static func compactFileIdTable(
+    static func compactFileIdTable(
         files: [FileItem],
         maxNameLength: Int,
         maxPathLength: Int,
