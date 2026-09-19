@@ -32,7 +32,15 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(plan.suggestions.first?.folderName, "Images")
         XCTAssertEqual(plan.suggestions.first?.files.count, 2)
         XCTAssertEqual(plan.sessionName, "Vacation Photos")
-        XCTAssertEqual(plan.notes, "Organized by file type")
+        // notes.txt is never mapped by the model, so the plan is partial and
+        // the notes carry the review hint instead of staying silently valid.
+        XCTAssertTrue(plan.notes.hasPrefix("Organized by file type"))
+        XCTAssertTrue(plan.notes.contains("Partial plan"))
+        XCTAssertTrue(plan.isPartial)
+        XCTAssertTrue(plan.needsReview)
+        XCTAssertEqual(plan.parseWarnings.count, 1)
+        XCTAssertTrue(plan.parseWarnings[0].contains("1 of 3 file(s) were unmapped"))
+        XCTAssertEqual(plan.unorganizedFiles.map(\.name), ["notes"])
     }
     
     func testMarkdownWrappedJSONParsing() throws {

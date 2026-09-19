@@ -9,10 +9,10 @@ final class SparkleTrafficLightSkipStoreTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = SparkleTrafficLightSkipStore(userDefaults: defaults)
 
-        store.markSkipped(version: "100")
+        store.markSkipped(version: "100", displayVersion: "1.0.0")
 
-        XCTAssertTrue(store.contains(version: "100"))
-        XCTAssertFalse(store.contains(version: "101"))
+        XCTAssertTrue(store.contains(version: "100", displayVersion: "1.0.0"))
+        XCTAssertFalse(store.contains(version: "101", displayVersion: "1.0.1"))
     }
 
     func testClearingOneSkippedVersionPreservesOtherVersions() throws {
@@ -21,11 +21,11 @@ final class SparkleTrafficLightSkipStoreTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = SparkleTrafficLightSkipStore(userDefaults: defaults)
 
-        store.markSkipped(version: "100")
-        store.markSkipped(version: "101")
-        store.clearSkipped(version: "100")
+        store.markSkipped(version: "100", displayVersion: "1.0.0")
+        store.markSkipped(version: "101", displayVersion: "1.0.1")
+        store.clearSkipped(version: "100", displayVersion: "1.0.0")
 
-        XCTAssertFalse(store.contains(version: "100"))
-        XCTAssertTrue(store.contains(version: "101"))
+        XCTAssertFalse(store.contains(version: "100", displayVersion: "1.0.0"))
+        XCTAssertTrue(store.contains(version: "101", displayVersion: "1.0.1"))
     }
 }
