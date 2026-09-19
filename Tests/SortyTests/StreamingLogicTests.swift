@@ -510,12 +510,21 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertTrue(OrganizationState.canTransition(from: .organizing, to: .ready))
         XCTAssertTrue(OrganizationState.canTransition(from: .ready, to: .applying))
         XCTAssertTrue(OrganizationState.canTransition(from: .applying, to: .completed))
+        // A finished run can start over, restore a preview, or re-apply/undo/redo.
+        XCTAssertTrue(OrganizationState.canTransition(from: .completed, to: .scanning))
+        XCTAssertTrue(OrganizationState.canTransition(from: .completed, to: .ready))
+        XCTAssertTrue(OrganizationState.canTransition(from: .completed, to: .applying))
+        XCTAssertTrue(OrganizationState.canTransition(from: .completed, to: .idle))
+        // Ready can re-scan; organizing can restart scanning.
+        XCTAssertTrue(OrganizationState.canTransition(from: .ready, to: .scanning))
+        XCTAssertTrue(OrganizationState.canTransition(from: .organizing, to: .scanning))
     }
-    
+
     func testInvalidStateTransitions() {
         XCTAssertFalse(OrganizationState.canTransition(from: .idle, to: .applying))
-        XCTAssertFalse(OrganizationState.canTransition(from: .completed, to: .applying))
         XCTAssertFalse(OrganizationState.canTransition(from: .idle, to: .ready))
+        // Re-entrant apply must never restart file moves.
+        XCTAssertFalse(OrganizationState.canTransition(from: .applying, to: .applying))
     }
     
     func testTransitionMethodUpdatesState() {

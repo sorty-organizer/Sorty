@@ -138,3 +138,61 @@ git worktree add --detach <tmp>/sorty-head cc47c6f6
 # same for sorty-head; then launch each binary, poll for first Sorty window,
 # and sample `ps -o %cpu,rss -p $(pgrep -x Sorty)` while visible/minimized.
 ```
+
+## 7. Post-spike addendum (2026-09-20): prompt/budget work ported from `spike/jev-vercel-gateway`
+
+After closing the Jev spike, the non-Jev changes were ported to main
+(`b793eb4f`). A/B measured with a temporary XCTest probe (same synthetic
+deep-scanned folders, `includeContentMetadata: true`, 5 runs, median) on a
+clean detached worktree at `f9bfd0b5` (before) vs main HEAD (after).
+Probe files were deleted after the runs; only the numbers below remain.
+
+### 7a. Organization-prompt size vs folder size (`PromptBuilder.buildOrganizationPrompt`)
+
+| Files | Before tokens | After tokens | Saving |
+|---|---|---|---|
+| 50 | 7,545 | 7,545 | 0% — byte-identical output under budget |
+| 200 | 27,125 | 11,961 | 56% |
+| 350 | 46,786 | 11,961 | 74% |
+| 500 | 66,464 | 11,961 | 82% |
+| 1000 | 132,059 | 11,961 | 91% |
+
+Before grows ~264 tokens/file with no bound (a 1000-file deep-scanned folder
+sends 132k tokens). After caps at the 12k main-path budget with full metadata
+for the first 80 files and path-only lines beyond. Prompt build time is flat:
+5.0 ms at 1000 files after vs 12.1 ms before. Behavior below the budget is
+unchanged (identical chars at 50 files), so normal folders see zero quality
+delta; oversized folders now degrade to a flagged partial plan instead of an
+unbounded request.
+
+### 7b. Batch manifest (1050-file folder, 3 × 350-file batches)
+
+Full 400-entry manifest measured at 4,562 tokens. Old shape repeats it per
+batch: 13,686 tokens. New shape swaps in a 60-entry batch-scoped manifest per
+batch: 2,627 tokens total — 81% less (computed from the measured manifest;
+the swap code only runs on multi-batch folders).
+
+### 7c. §4 filter re-run on the new HEAD
+
+`StreamingLogicTests|DuplicateDetectorTests|DirectoryScannerTests|HistoryTests|FolderWatcherTests`
+(warm cache, execution only): 103 tests, 0 failures in ~3 s. Not comparable to
+the §4 22.5 s wall (that included the test-bundle build); execution-only
+per-test is ~0.03 s.
+
+### 7d. Behavioral notes (test expectations updated, not regressions)
+
+- `ResponseParserTests.testValidJSONParsing`: unmapped files now mark the plan
+  partial with a review hint in notes (`isPartial`/`needsReview`, 1
+  `parseWarnings` entry) instead of a silently valid plan. Test asserts the new
+  contract.
+- `StreamingLogicTests.testInvalidStateTransitions`: `completed → applying`
+  (re-apply/undo/redo/restore) and `completed/ready/organizing → scanning`
+  are deliberate extensions from the ported workflow commit; the test now
+  covers the new table including the `applying → applying` guard.
+- §5's "HEAD cannot `swift test` clean" is fixed on main: the stale
+  `SparkleTrafficLightSkipStoreTests` 1-arg calls now pass `displayVersion`.
+  (The A/B "before" worktree needed the same worktree-local patch — the
+  breakage predates the port.)
+
+Launch/idle (§1–2) were not re-measured: the port touches no launch-path or
+timer code, so no delta is expected there.
