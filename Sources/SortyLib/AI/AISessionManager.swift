@@ -40,10 +40,36 @@ public class AISessionManager: ObservableObject {
     @Published public private(set) var isPrewarmed: Bool = false
     @Published public private(set) var prewarmError: String?
 
+    /// Prewarm generations per provider. Bumped whenever credentials change so
+    /// a prewarm that started with the previous config cannot overwrite fresh
+    /// state when it finishes late.
+    private var prewarmGenerations: [AIProvider: Int] = [:]
+
     /// Clear current prewarm errors
     public func clearErrors() {
         prewarmError = nil
     }
+
+    /// Drops any prewarm verdict tied to previous credentials. Call
+    /// synchronously when the provider, API key, API URL, or auth method
+    /// changes so the ready-to-organize screen never shows an error produced
+    /// with the old config. In-flight prewarms keep running but their results
+    /// are discarded by the generation guard in `prewarm(provider:config:)`;
+    /// the caller re-verifies with the new config through the normal delayed
+    /// connection task.
+    public func resetPrewarmState(for provider: AIProvider) {
+        prewarmGenerations[provider, default: 0] += 1
+        prewarmError = nil
+        isPrewarmed = false
+    }
+
+    #if DEBUG
+    /// Test hook: seeds a prewarm verdict without performing network I/O.
+    public func setPrewarmStateForTesting(isPrewarmed: Bool, error: String?) {
+        self.isPrewarmed = isPrewarmed
+        self.prewarmError = error
+    }
+    #endif
 
     public var prewarmingProvider: AIProvider? {
         prewarmingProviders.first
@@ -99,6 +125,7 @@ public class AISessionManager: ObservableObject {
         prewarmingProviders.insert(provider)
         prewarmError = nil
         isPrewarmed = false
+        let generation = prewarmGenerations[provider, default: 0]
 
         defer {
             prewarmingProviders.remove(provider)
@@ -115,6 +142,9 @@ public class AISessionManager: ObservableObject {
                 }
             }.value
 
+            // Credentials may have changed while the detached health check ran;
+            // a stale verdict must not overwrite the reset state.
+            guard generation == prewarmGenerations[provider, default: 0] else { return }
             if let codexPrewarmError {
                 isPrewarmed = false
                 prewarmError = codexPrewarmError
@@ -170,6 +200,9 @@ public class AISessionManager: ObservableObject {
 
                         if isSuccess {
                             LogManager.shared.log("Prewarmed \(provider.displayName): HTTP \(httpResponse.statusCode)", level: .debug, category: "AISessionManager")
+                            // The config may have been fixed while the request was in
+                            // flight; only a verdict for the current generation applies.
+                            guard generation == prewarmGenerations[provider, default: 0] else { return }
                             isPrewarmed = true
                             prewarmError = nil
                             return
@@ -186,12 +219,14 @@ public class AISessionManager: ObservableObject {
             }
 
             // All URLs failed
+            guard generation == prewarmGenerations[provider, default: 0] else { return }
             prewarmError = "Could not establish connection to \(provider.displayName)"
             isPrewarmed = false
 
         } catch {
             // Connection failed, but that's okay - we tried
             LogManager.shared.log("Prewarm failed for \(provider.displayName): \(error.localizedDescription)", level: .debug, category: "AISessionManager")
+            guard generation == prewarmGenerations[provider, default: 0] else { return }
             prewarmError = error.localizedDescription
             // Session is still created and may work when the actual request is made
             isPrewarmed = false

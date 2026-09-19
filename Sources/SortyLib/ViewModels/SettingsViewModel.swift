@@ -57,6 +57,17 @@ public class SettingsViewModel: ObservableObject {
             let oldAuthMethod = oldValue.authMethod(for: oldProvider)
             let newAuthMethod = config.authMethod(for: newProvider)
 
+            // Credentials changed — any prewarm verdict tied to the old config
+            // is stale. Reset synchronously so the ready-to-organize screen never
+            // shows the previous error; the delayed connection task below
+            // re-verifies with the new config.
+            if oldProvider != newProvider
+                || oldKey != newKey
+                || oldValue.apiURL != config.apiURL
+                || oldAuthMethod != newAuthMethod {
+                AISessionManager.shared.resetPrewarmState(for: newProvider)
+            }
+
             // Persist model changes immediately for the active provider.
             if oldProvider == newProvider, oldValue.model != config.model {
                 userDefaults.set(config.model, forKey: modelSelectionKey(for: newProvider))
@@ -334,6 +345,19 @@ public class SettingsViewModel: ObservableObject {
             }
             self.setInMemoryAPIKey(apiKey)
             self.isConfiguredCredentialHydrating = false
+            // The provider-switch verification may have already run with a
+            // keyless config while hydration was in flight; drop that verdict
+            // and re-verify with the hydrated credential.
+            if provider != .githubCopilot,
+               provider.typicallyRequiresAPIKey,
+               authMethod == .apiKey,
+               apiKey != nil {
+                AISessionManager.shared.resetPrewarmState(for: provider)
+                Task { [weak self] in
+                    guard let self, self.config.provider == provider else { return }
+                    await AISessionManager.shared.prewarm(provider: provider, config: self.config)
+                }
+            }
         }
     }
 
@@ -541,6 +565,8 @@ public class SettingsViewModel: ObservableObject {
             userDefaults.removeObject(forKey: modelSelectionKey(for: provider))
         }
         config = .default
+        // A full reset invalidates any prior connection verdict.
+        AISessionManager.shared.resetPrewarmState(for: config.provider)
         availableModels = config.provider.recommendedModels
         // No need to save manually here as config.didSet will trigger debouncedSave,
         // but since we want to clear from UserDefaults, we already handled it in AppState.
