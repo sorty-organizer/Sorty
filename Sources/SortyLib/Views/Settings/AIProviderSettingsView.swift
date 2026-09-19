@@ -28,6 +28,7 @@ struct AIProviderSettingsView: View {
     @State private var isDetailsExpanded = false
     @State private var isInternetAccessBlocked = false
     @State private var isHoveringInternetSettings = false
+    @State private var isHoveringCopyError = false
     @State private var isHoveringCodexTerminalButton = false
     @State private var codexTerminalButtonState: CodexActionVisualState = .idle
     @State private var codexTerminalResetTask: Task<Void, Never>?
@@ -660,7 +661,7 @@ struct AIProviderSettingsView: View {
 
                     if let status = testConnectionStatus, isConnectionFailed {
                         VStack(alignment: .center, spacing: 8) {
-                            HStack(alignment: .top, spacing: 6) {
+                            HStack(alignment: .top, spacing: 8) {
                                 Text(status.replacingOccurrences(of: "Error: ", with: ""))
                                     .font(.caption)
                                     .fontWeight(.semibold)
@@ -809,22 +810,25 @@ struct AIProviderSettingsView: View {
         } label: {
             Image(systemName: hasCopiedConnectionError ? "checkmark" : "doc.on.doc")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(hasCopiedConnectionError ? .green : .secondary)
-                .frame(width: 28, height: 28)
-                .background(
-                    Circle()
-                        .fill(
-                            hasCopiedConnectionError
-                                ? Color.green.opacity(0.14)
-                                : Color.secondary.opacity(0.08)
-                        )
+                .foregroundStyle(
+                    hasCopiedConnectionError ? .green : isHoveringCopyError ? .primary : .secondary
                 )
-                .symbolReplaceTransition(animationValue: hasCopiedConnectionError)
+                .contentTransition(.symbolEffect(.replace))
+                .scaleEffect(isHoveringCopyError && !reduceMotion ? 1.12 : 1)
+                .opacity(isHoveringCopyError ? 1 : 0.75)
+                .animation(
+                    reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.75),
+                    value: isHoveringCopyError
+                )
+                .padding(.top, 1)
         }
         .buttonStyle(.plain)
         .help(hasCopiedConnectionError ? "Copied error message" : "Copy error message")
         .accessibilityLabel("Copy error message")
         .accessibilityValue(hasCopiedConnectionError ? "Copied" : "")
+        .onHover { hovering in
+            isHoveringCopyError = hovering
+        }
     }
 
     private func testConnection() {
@@ -922,6 +926,7 @@ struct AIProviderSettingsView: View {
         isDetailsExpanded = false
         isInternetAccessBlocked = false
         hasCopiedConnectionError = false
+        isHoveringCopyError = false
     }
 
     @MainActor
