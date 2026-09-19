@@ -81,6 +81,17 @@ struct HUDNotificationCard: View {
             false
         }
     }
+
+    /// Long single-action titles (e.g. "Open Provider Settings") squeeze the
+    /// title/message column in the fixed-width card and truncate the message.
+    /// Keep short actions inline, stack long ones below the text instead.
+    private var usesInlineAction: Bool {
+        guard supportsLiquidGlass,
+              notification.actions.count == 1,
+              let title = notification.actions.first?.title
+        else { return false }
+        return title.count <= 14
+    }
     
     var body: some View {
         HStack(spacing: 10) {
@@ -93,11 +104,11 @@ struct HUDNotificationCard: View {
                 HUDNotificationHeader(
                     notification: notification,
                     isHovered: isHovered,
-                    showsInlineAction: supportsLiquidGlass,
+                    showsInlineAction: usesInlineAction,
                     onDismiss: onDismiss
                 )
 
-                if notification.actions.count > 1 || (!supportsLiquidGlass && !notification.actions.isEmpty) {
+                if !usesInlineAction, !notification.actions.isEmpty {
                     HUDNotificationActionGrid(actions: notification.actions)
                 }
 
