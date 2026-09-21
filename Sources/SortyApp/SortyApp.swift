@@ -642,6 +642,7 @@ struct SortyApp: App {
     @State private var hasConfiguredGlobals = false
     @State private var hasConfiguredOperationalServices = false
     @State private var operationalServicesTask: Task<Void, Never>?
+    @State private var idleStartupTask: Task<Void, Never>?
 
     private let widgetSyncManager = SortyWidgetSyncManager.shared
 
@@ -806,8 +807,9 @@ struct SortyApp: App {
             }
             .onChange(of: settingsViewModel.config) { _, newConfig in
                 Task { @MainActor in
-                    try? await automationOrganizer?.configure(with: newConfig)
-                    learningsManager.configure(with: newConfig)
+                    if let automationOrganizer {
+                        try? await automationOrganizer.configure(with: newConfig)
+                    }
                 }
             }
             .onChange(of: hideDockIcon) { _, newValue in
@@ -820,10 +822,6 @@ struct SortyApp: App {
             .onChange(of: finderIntegrationEnabled) { _, newValue in
                 if newValue, hasCompletedOnboarding {
                     ExtensionCommunication.beginMonitoringFinderSyncRuntime()
-                    Task {
-                        _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-                        await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
-                    }
                 }
             }
             .onChange(of: hasCompletedOnboarding) { _, isComplete in
@@ -833,14 +831,13 @@ struct SortyApp: App {
                     }
                     guard isComplete, finderIntegrationEnabled else { return }
                     ExtensionCommunication.beginMonitoringFinderSyncRuntime()
-                    _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-                    await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
                 }
             }
             .onChange(of: watchedFoldersManager.activeFolderCount) { _, _ in
                 if watchedFoldersManager.activeFolderCount > 0 {
                     Task {
                         await configureOperationalServicesIfNeeded()
+                        await configureAutomationIfNeeded()
                     }
                 }
                 widgetSyncManager.scheduleSync(
@@ -883,9 +880,6 @@ struct SortyApp: App {
             startTelemetry: {
                 ReliabilityManager.shared.startIfAuthorized()
                 AnalyticsManager.shared.startIfAuthorized(launchDuration: appDelegate.launchDuration)
-                // The Codex CLI probe spawns a subprocess; it waits for the
-                // window to be interactive and runs once per launch.
-                codexAuthManager.startLaunchProbeIfNeeded()
                 if hasConfiguredOperationalServices {
                     ReliabilityManager.shared.finishLaunchSpan()
                 }
@@ -952,6 +946,7 @@ struct SortyApp: App {
         if hasCompletedOnboarding || watchedFoldersManager.activeFolderCount > 0 {
             Task { await configureOperationalServicesIfNeeded() }
         }
+        scheduleIdleStartupWorkIfNeeded()
 
         if ProcessInfo.processInfo.environment["XCUITEST_NOTIFICATION_ACTION"] == "showDetails" {
             Task { @MainActor in
@@ -995,24 +990,35 @@ struct SortyApp: App {
 
         if hasCompletedOnboarding, finderIntegrationEnabled {
             ExtensionCommunication.beginMonitoringFinderSyncRuntime()
-            Task {
-                _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-                await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
-            }
         }
 
-        if coordinator == nil {
-            let automationOrganizer = FolderOrganizer(history: organizationHistory)
-            self.automationOrganizer = automationOrganizer
+        menuBarController.configure(
+            settings: settingsViewModel,
+            learningsManager: learningsManager
+        )
+        if watchedFoldersManager.activeFolderCount > 0 {
+            await configureAutomationIfNeeded()
+        }
+        ReliabilityManager.shared.finishLaunchSpan()
+    }
+
+    @MainActor
+    private func configureAutomationIfNeeded() async {
+        let automationOrganizer: FolderOrganizer
+        if let existing = self.automationOrganizer {
+            automationOrganizer = existing
+        } else {
+            let created = FolderOrganizer(history: organizationHistory)
+            self.automationOrganizer = created
             coordinator = AppCoordinator(
-                organizer: automationOrganizer,
+                organizer: created,
                 watchedFoldersManager: watchedFoldersManager,
                 learningsManager: learningsManager,
                 exclusionRules: exclusionRules
             )
+            automationOrganizer = created
         }
 
-        guard let automationOrganizer else { return }
         automationOrganizer.exclusionRules = exclusionRules
         automationOrganizer.personaManager = personaManager
         automationOrganizer.customPersonaStore = customPersonaStore
@@ -1020,18 +1026,38 @@ struct SortyApp: App {
         automationOrganizer.learningsManager = learningsManager
         automationOrganizer.automationManager = automationManager
 
-        Task<Void, Never> { @MainActor in
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            automationManager.startUp()
-            try? await automationOrganizer.configure(with: settingsViewModel.config)
-            learningsManager.configure(with: settingsViewModel.config)
-            menuBarController.configure(
-                settings: settingsViewModel,
-                automationOrganizer: automationOrganizer,
-                learningsManager: learningsManager
-            )
+        automationManager.startUp()
+        try? await automationOrganizer.configure(with: settingsViewModel.config)
+        menuBarController.configure(
+            settings: settingsViewModel,
+            automationOrganizer: automationOrganizer,
+            learningsManager: learningsManager
+        )
+    }
+
+    @MainActor
+    private func scheduleIdleStartupWorkIfNeeded() {
+        guard idleStartupTask == nil else { return }
+        idleStartupTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled else { return }
+
+            AnalyticsManager.shared.reloadExperimentalFeatures()
+            if hasCompletedOnboarding, finderIntegrationEnabled {
+                let defaults = UserDefaults.standard
+                let key = "finderQuickActionsVerifiedVersion"
+                if defaults.string(forKey: key) != BuildInfo.version {
+                    let result = await ExtensionCommunication.ensureQuickActionInstalledAsync()
+                    if result.installed {
+                        defaults.set(BuildInfo.version, forKey: key)
+                    }
+                }
+            }
+
+            try? await Task.sleep(for: .seconds(15))
+            guard !Task.isCancelled else { return }
+            updateManager.checkOnLaunchIfNeeded(minimumInterval: 24 * 60 * 60)
         }
-        ReliabilityManager.shared.finishLaunchSpan()
     }
 
     @MainActor

@@ -71,7 +71,7 @@ public final class AnalyticsManager: ObservableObject {
         config.captureApplicationLifecycleEvents = false
         config.captureScreenViews = false
         config.enableSwizzling = false
-        config.preloadFeatureFlags = true
+        config.preloadFeatureFlags = false
         config.sendFeatureFlagEvent = false
         config.flushAt = 20
         config.maxQueueSize = 250
@@ -82,7 +82,6 @@ public final class AnalyticsManager: ObservableObject {
         PostHogSDK.shared.setup(config)
         activeProjectToken = projectToken
         isActive = true
-        reloadExperimentalFeatures()
         var sessionProperties: [String: Any] = [
             "platform_surface": "mac_app",
             "launch_source": "standard",

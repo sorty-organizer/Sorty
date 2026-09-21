@@ -671,7 +671,7 @@ public class StorageLocationsManager: ObservableObject {
         }
 
         let task = Task { [weak self] in
-            let results = await Task.detached(priority: .userInitiated) {
+            let results = await Task.detached(priority: .utility) {
                 Self.resolveBookmarks(snapshots)
             }.value
             guard let self else {

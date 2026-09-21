@@ -115,28 +115,31 @@ private struct LaunchAtLoginIcon: View {
 public struct MenuBarLabel: View {
     @SortyHotReload private var hotReload
     @EnvironmentObject private var controller: MenuBarController
-
-    private static let menuBarImages: [MenuBarActivity: NSImage] = {
-        Dictionary(uniqueKeysWithValues: MenuBarActivity.allCases.map { activity in
-            let source = SortyResources.image(
-                named: activity.resourceName,
-                withExtension: "png"
-            ) ?? SortyResources.menuBarLabelNSImage()
-            let image = (source.copy() as? NSImage) ?? source
-            image.size = NSSize(width: 18, height: 18)
-            image.isTemplate = false
-            return (activity, image)
-        })
-    }()
+    @State private var image = NSImage(
+        systemSymbolName: "sparkles",
+        accessibilityDescription: "Sorty"
+    ) ?? NSImage()
 
     public init() {}
 
     public var body: some View {
-        Image(nsImage: Self.menuBarImages[controller.activity] ?? SortyResources.menuBarLabelNSImage())
+        Image(nsImage: image)
             .resizable()
             .scaledToFit()
             .frame(width: 18, height: 18)
             .accessibilityLabel(controller.activity.accessibilityLabel)
+            .task(id: controller.activity) {
+                let activity = controller.activity
+                guard let loaded = await SortyResources.imageAsync(
+                    named: activity.resourceName,
+                    withExtension: "png"
+                ) else { return }
+                guard !Task.isCancelled, controller.activity == activity else { return }
+                let resized = (loaded.copy() as? NSImage) ?? loaded
+                resized.size = NSSize(width: 18, height: 18)
+                resized.isTemplate = false
+                image = resized
+            }
     }
 }
 

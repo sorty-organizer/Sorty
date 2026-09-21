@@ -159,6 +159,12 @@ struct LearningsView: View {
                     .transition(.opacity.combined(with: .scale(scale: 1.015)))
             }
         }
+        .onAppear {
+            manager.configure(with: settingsViewModel.config)
+        }
+        .onChange(of: settingsViewModel.config) { _, config in
+            manager.configure(with: config)
+        }
         .animation(.easeInOut(duration: 0.36), value: manager.consentManager.hasConsented)
         .frame(minWidth: 700, minHeight: 600)
         .accessibilityElement(children: .contain)

@@ -16,11 +16,9 @@ struct MainWindowRootView: View {
     @AppStorage("forceShowWhatsNewOnLaunch") private var forceShowWhatsNewOnLaunch = false
 
     @StateObject private var windowSession: WindowSession
-    @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
     @State private var handledLaunchRequestID: UUID?
     @State private var handledUITestDeepLink = false
     @State private var isShowingWhatsNew = false
-    @State private var setupRepairTask: Task<Void, Never>?
 
     let launchRequest: WindowLaunchRequest?
     let coordinator: AppCoordinator?
@@ -258,11 +256,12 @@ struct MainWindowRootView: View {
                     { folder in coord.calibrateFolder(folder) }
                 }
                 let sessionID = windowSession.id
-                windowSession.appState.prepareManualOrganizationAction = { [weak coordinator] directory in
+                windowSession.appState.prepareManualOrganizationAction = { [weak coordinator, weak windowSession] directory in
+                    guard let windowSession else { throw CancellationError() }
+                    try await prepareManualOrganization(with: windowSession)
                     await coordinator?.beginManualOrganization(in: directory, sessionID: sessionID)
                 }
                 await windowSession.configureIfNeeded(
-                    settingsViewModel: settingsViewModel,
                     personaManager: personaManager,
                     customPersonaStore: customPersonaStore,
                     exclusionRules: exclusionRules,
@@ -279,7 +278,6 @@ struct MainWindowRootView: View {
                 )
                 updateMenuBarOrganizationActivity()
                 updateMenuBarDuplicateActivity()
-                scheduleSetupRepairReconciliation()
                 processLaunchRequestIfNeeded()
                 processUITestDeeplinkIfNeeded()
                 presentWhatsNewIfNeeded()
@@ -290,7 +288,9 @@ struct MainWindowRootView: View {
                 windowSession.appState.calibrateAction = coordinator.map { coordinator in
                     { folder in coordinator.calibrateFolder(folder) }
                 }
-                windowSession.appState.prepareManualOrganizationAction = { [weak coordinator] directory in
+                windowSession.appState.prepareManualOrganizationAction = { [weak coordinator, weak windowSession] directory in
+                    guard let windowSession else { throw CancellationError() }
+                    try await prepareManualOrganization(with: windowSession)
                     await coordinator?.beginManualOrganization(in: directory, sessionID: sessionID)
                 }
             }
@@ -299,37 +299,14 @@ struct MainWindowRootView: View {
             }
             .onChange(of: settingsViewModel.config) { _, newConfig in
                 Task { @MainActor in
-                    await windowSession.applyConfiguration(newConfig, learningsManager: learningsManager)
+                    await windowSession.applyConfiguration(newConfig)
                 }
                 updateMenuBarOrganizationActivity()
-                scheduleSetupRepairReconciliation()
-            }
-            .onChange(of: settingsViewModel.hasLoadedPersistedState) { _, _ in
-                scheduleSetupRepairReconciliation()
-            }
-            .onChange(of: settingsViewModel.isConfiguredCredentialHydrating) { _, _ in
-                scheduleSetupRepairReconciliation()
             }
             .onChange(of: windowSession.appState.hasCompletedOnboarding) { wasComplete, isComplete in
-                scheduleSetupRepairReconciliation()
                 if !wasComplete && isComplete {
                     presentWhatsNewIfNeeded()
                 }
-            }
-            .onChange(of: windowSession.appState.requiresSetupRepair) { _, _ in
-                scheduleSetupRepairReconciliation()
-            }
-            .onChange(of: codexAuth.isAuthenticated) { _, _ in
-                scheduleSetupRepairReconciliation()
-            }
-            .onChange(of: codexAuth.isCodexInstalled) { _, _ in
-                scheduleSetupRepairReconciliation()
-            }
-            .onChange(of: codexAuth.hasResolvedStatus) { _, _ in
-                scheduleSetupRepairReconciliation()
-            }
-            .onChange(of: copilotAuth.isAuthenticated) { _, _ in
-                scheduleSetupRepairReconciliation()
             }
             .onChange(of: windowSession.organizer.isAIConfigured) { oldValue, newValue in
                 if oldValue == true && newValue == false {
@@ -442,6 +419,14 @@ struct MainWindowRootView: View {
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 700_000_000)
+            await SortyResources.preloadImages(named: [
+                "whats-new-preview.png",
+                "whats-new-design-system-1.png",
+                "whats-new-design-system-2.png",
+                "whats-new-design-system-3.png",
+                "whats-new-design-system-4.png",
+                "whats-new-design-system-5.png",
+            ])
             if forceShowWhatsNewOnLaunch || lastSeenWhatsNewBuild != currentIdentifier {
                 isShowingWhatsNew = true
             }
@@ -586,71 +571,30 @@ struct MainWindowRootView: View {
         reduceMotion ? nil : .pageTransition
     }
 
-    private var providerSetupContext: ProviderSetupContext {
-        ProviderSetupContext(
-            config: settingsViewModel.config,
-            isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
-            isCodexAuthenticated: codexAuth.isAuthenticated,
-            isCodexInstalled: codexAuth.isCodexInstalled,
-            isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
-            appleFoundationModelStatus: settingsViewModel.appleModelStatus
-        )
-    }
-
-    /// The Codex CLI probe resolves asynchronously after launch. Until it has,
-    /// reconciling would mistake the initial `isCodexInstalled == false` for a
-    /// missing setup and persist a bogus repair state on every restart.
-    private var isCodexStatusResolvedForValidation: Bool {
-        let config = settingsViewModel.config
-        guard config.provider == .openAI,
-              ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config) == .accountSignIn
-        else { return true }
-        return codexAuth.hasResolvedStatus
-    }
-
-    private func scheduleSetupRepairReconciliation() {
-        setupRepairTask?.cancel()
-        setupRepairTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 250_000_000)
-            guard !Task.isCancelled else { return }
-            await reconcileSetupRepairState()
-        }
-    }
-
     @MainActor
-    private func reconcileSetupRepairState() async {
-        let appState = windowSession.appState
-
-        guard appState.hasCompletedOnboarding,
-              settingsViewModel.hasLoadedPersistedState,
-              !settingsViewModel.isConfiguredCredentialHydrating,
-              isCodexStatusResolvedForValidation else { return }
-
-        codexAuth.checkStatus()
-        openAIAuth.checkAuthenticationStatus()
-        copilotAuth.checkAuthenticationStatus()
-        settingsViewModel.refreshAppleModelStatus()
-
-        let providerStatus = OnboardingSetupValidator.providerStatus(context: providerSetupContext)
-        if !providerStatus.isReady {
-            appState.startSetupRepair(message: providerStatus.message, navigateToSettings: false)
-            return
+    private func prepareManualOrganization(with windowSession: WindowSession) async throws {
+        if windowSession.appState.requiresSetupRepair {
+            let testedConfig = settingsViewModel.config
+            do {
+                try await settingsViewModel.testConnection()
+                guard settingsViewModel.config == testedConfig else {
+                    throw CancellationError()
+                }
+                windowSession.appState.clearSetupRepairState()
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                guard settingsViewModel.config == testedConfig else {
+                    throw CancellationError()
+                }
+                windowSession.appState.startSetupRepair(
+                    message: "Sorty could not verify \(testedConfig.provider.displayName): \(error.localizedDescription)"
+                )
+                throw error
+            }
         }
 
-        guard appState.requiresSetupRepair else { return }
-
-        let testedConfig = settingsViewModel.config
-        do {
-            try await settingsViewModel.testConnection()
-            guard settingsViewModel.config == testedConfig else { return }
-            appState.clearSetupRepairState()
-        } catch {
-            guard settingsViewModel.config == testedConfig else { return }
-            appState.startSetupRepair(
-                message: "Sorty could not verify \(testedConfig.provider.displayName): \(error.localizedDescription)",
-                navigateToSettings: false
-            )
-        }
+        try await windowSession.organizer.configure(with: settingsViewModel.config)
     }
 
 }

@@ -1151,7 +1151,6 @@ public class ExclusionRulesManager: ObservableObject {
         rules = mergedRules
         naturalLanguageExceptions = mergedNL
         usageByRuleID = mergedUsage
-        rebuildMatcher()
         if snapshot.didMigrateLegacyNaturalLanguage {
             hasPendingChanges = true
         }
@@ -1161,6 +1160,18 @@ public class ExclusionRulesManager: ObservableObject {
             setupDefaultRules()
         }
         migrateConfidentNaturalLanguageExceptions()
+
+        let firstMatcherRules = rules
+        var matcher = await Task.detached(priority: .utility) {
+            ExclusionMatcher(rules: firstMatcherRules)
+        }.value
+        if firstMatcherRules != rules {
+            let latestMatcherRules = rules
+            matcher = await Task.detached(priority: .utility) {
+                ExclusionMatcher(rules: latestMatcherRules)
+            }.value
+        }
+        compiledMatcher = matcher
 
         hasLoadedPersistedState = true
         loadTask = nil
@@ -1442,11 +1453,11 @@ public class ExclusionRulesManager: ObservableObject {
     }
 
     private func saveRules() {
-        rebuildMatcher()
         guard hasLoadedPersistedState else {
             hasPendingChanges = true
             return
         }
+        rebuildMatcher()
         if let encoded = try? JSONEncoder().encode(rules) {
             userDefaults.set(encoded, forKey: rulesKey)
         }

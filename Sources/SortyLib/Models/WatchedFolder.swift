@@ -446,7 +446,7 @@ public class WatchedFoldersManager: ObservableObject {
         guard !snapshots.isEmpty else { return }
 
         let task = Task { [weak self] in
-            let results = await Task.detached(priority: .userInitiated) {
+            let results = await Task.detached(priority: .utility) {
                 Self.resolveBookmarks(snapshots)
             }.value
             guard let self else {

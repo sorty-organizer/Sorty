@@ -165,6 +165,7 @@ public class SparkleUpdateManager: ObservableObject {
     private var lastObservedUpdateChannel = UpdateChannel.current
     private var hasRequestedLaunchCheck = false
     private var hasInitialized = false
+    private var updateChannelRefreshTask: Task<Void, Never>?
 
     public init() {
         if let savedDate = UserDefaults.standard.object(forKey: Self.lastAutoCheckKey) as? Date {
@@ -189,7 +190,17 @@ public class SparkleUpdateManager: ObservableObject {
 
     @objc nonisolated private func handleUserDefaultsDidChangeNotification(_ notification: Notification) {
         Task { @MainActor [weak self] in
+            self?.scheduleUpdateChannelRefresh()
+        }
+    }
+
+    private func scheduleUpdateChannelRefresh() {
+        updateChannelRefreshTask?.cancel()
+        updateChannelRefreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
             self?.handleUserDefaultsDidChange()
+            self?.updateChannelRefreshTask = nil
         }
     }
 
@@ -339,6 +350,18 @@ public class SparkleUpdateManager: ObservableObject {
         guard !hasRequestedLaunchCheck else { return }
         hasRequestedLaunchCheck = true
         guard allowInternetUpdateAction() else { return }
+
+        // Check the persisted date before loading and starting Sparkle. A
+        // skipped background check should have no framework startup cost.
+        if minimumInterval > 0,
+           let lastCheck = UserDefaults.standard.object(forKey: Self.lastAutoCheckKey) as? Date {
+            let elapsed = Date.now.timeIntervalSince(lastCheck)
+            if elapsed < minimumInterval {
+                LogManager.shared.log("Skipping auto-update check, last check was \(Int(elapsed / 60)) minutes ago", category: "SparkleUpdateManager")
+                return
+            }
+        }
+
         initializeIfNeeded()
 
         // Skip if Sparkle is disabled
@@ -350,16 +373,6 @@ public class SparkleUpdateManager: ObservableObject {
 
         // Skip if already checking
         guard updateState != .checking else { return }
-
-        // Check if enough time has passed since last check
-        if minimumInterval > 0,
-           let lastCheck = UserDefaults.standard.object(forKey: Self.lastAutoCheckKey) as? Date {
-            let elapsed = Date.now.timeIntervalSince(lastCheck)
-            if elapsed < minimumInterval {
-                LogManager.shared.log("Skipping auto-update check, last check was \(Int(elapsed / 60)) minutes ago", category: "SparkleUpdateManager")
-                return
-            }
-        }
 
         LogManager.shared.log("Performing automatic update check on launch", category: "SparkleUpdateManager")
         checkForUpdatesInBackground()

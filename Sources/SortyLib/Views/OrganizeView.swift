@@ -160,7 +160,6 @@ struct OrganizeView: View {
             directorySelectionIsPresented = appState.selectedDirectory == nil
             settingsViewModel.config.enableStreaming = true
             organizer.setLiveInsightsEnabled(true)
-            configureOrganizer()
             presentSteeringPromptsIfRequested()
             presentWorkflowContentIfNeeded()
         }
@@ -168,7 +167,9 @@ struct OrganizeView: View {
             presentSteeringPromptsIfRequested()
         }
         .onChange(of: settingsViewModel.config.provider) { oldValue, newValue in
-            configureOrganizer()
+            if organizer.aiClient != nil {
+                configureOrganizer()
+            }
         }
         .onChange(of: organizer.state) { oldValue, newValue in
             handleStateChange(to: newValue)
@@ -220,12 +221,6 @@ struct OrganizeView: View {
                     HapticFeedbackManager.shared.tap()
                 }
             )
-        }
-        .onAppear {
-            updateSetupRepairHUD()
-        }
-        .onChange(of: activeSetupRepairMessage) {
-            updateSetupRepairHUD()
         }
         .onDisappear {
             directorySelectionIsPresented = false
@@ -369,6 +364,7 @@ struct OrganizeView: View {
             if needsSetupRepair {
                 SetupRepairGateView(
                     message: activeSetupRepairMessage ?? "Finish setting up your provider before organizing files.",
+                    onStart: startOrganization,
                     onOpenSettings: {
                         HapticFeedbackManager.shared.selection()
                         appState.startSetupRepair(
@@ -626,28 +622,48 @@ struct OrganizeView: View {
             HapticFeedbackManager.shared.error()
             return
         }
-        guard !needsSetupRepair else {
-            HapticFeedbackManager.shared.error()
-            appState.startSetupRepair(
-                message: activeSetupRepairMessage ?? "Finish setting up your provider before organizing files."
-            )
-            return
-        }
-
         HapticFeedbackManager.shared.tap()
         resetLiveOrganizationPresentation()
 
-
-
         Task {
             do {
-                await appState.prepareForManualOrganization(at: directory)
+                if needsSetupRepair {
+                    try await verifyProviderForOrganization()
+                }
+                try await appState.prepareForManualOrganization(at: directory)
                 try await organizer.organize(directory: directory)
             } catch is CancellationError {
                 return
             } catch {
+                if appState.requiresSetupRepair {
+                    HapticFeedbackManager.shared.error()
+                    return
+                }
                 organizer.state = .error(error)
             }
+        }
+    }
+
+    /// A persisted repair flag is only a prompt to revalidate. The network
+    /// check runs after the user starts an organization, never during launch.
+    private func verifyProviderForOrganization() async throws {
+        let testedConfig = settingsViewModel.config
+        do {
+            try await settingsViewModel.testConnection()
+            guard settingsViewModel.config == testedConfig else {
+                throw CancellationError()
+            }
+            appState.clearSetupRepairState()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            guard settingsViewModel.config == testedConfig else {
+                throw CancellationError()
+            }
+            appState.startSetupRepair(
+                message: "Sorty could not verify \(testedConfig.provider.displayName): \(error.localizedDescription)"
+            )
+            throw error
         }
     }
 
@@ -735,15 +751,18 @@ struct OrganizeView: View {
     }
 
     private var needsSetupRepair: Bool {
+        if appState.requiresSetupRepair {
+            return true
+        }
         guard isProviderStateReadyForValidation else { return false }
-        return appState.requiresSetupRepair || !providerSetupStatus.isReady
+        return !providerSetupStatus.isReady
     }
 
     private var activeSetupRepairMessage: String? {
-        guard isProviderStateReadyForValidation else { return nil }
         if appState.requiresSetupRepair {
             return appState.setupRepairMessage ?? providerSetupStatus.message
         }
+        guard isProviderStateReadyForValidation else { return nil }
         if !providerSetupStatus.isReady {
             return providerSetupStatus.message
         }
@@ -765,15 +784,6 @@ struct OrganizeView: View {
               ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config) == .accountSignIn
         else { return true }
         return codexAuth.hasResolvedStatus
-    }
-
-    private func updateSetupRepairHUD() {
-        guard let message = activeSetupRepairMessage else {
-            NotificationManager.shared.dismissHUD(identifier: "setup-repair")
-            return
-        }
-
-        appState.presentSetupRepairHUD(message: message)
     }
 
 }
@@ -904,6 +914,7 @@ private extension AnyTransition {
 private struct SetupRepairGateView: View {
     @SortyHotReload private var hotReload
     let message: String
+    let onStart: () -> Void
     let onOpenSettings: () -> Void
 
     var body: some View {
@@ -921,9 +932,15 @@ private struct SetupRepairGateView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
 
-            Button("Open Provider Settings", action: onOpenSettings)
-                .buttonStyle(.sortyProminent)
-                .accessibilityIdentifier("OpenProviderSettingsForRepairButton")
+            HStack(spacing: 10) {
+                Button("Open Provider Settings", action: onOpenSettings)
+                    .buttonStyle(.sortyBordered)
+                    .accessibilityIdentifier("OpenProviderSettingsForRepairButton")
+
+                Button("Try Organizing", action: onStart)
+                    .buttonStyle(.sortyProminent)
+                    .accessibilityIdentifier("RetryOrganizationForRepairButton")
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(32)

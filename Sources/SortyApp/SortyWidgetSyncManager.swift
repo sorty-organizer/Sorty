@@ -85,7 +85,17 @@ final class SortyWidgetSyncManager {
         }
 
         Task { @MainActor [weak self, weak watchedFoldersManager, weak storageLocationsManager] in
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled else { return }
             guard let self, let watchedFoldersManager, let storageLocationsManager else { return }
+
+            // An empty persisted snapshot already represents empty source
+            // stores, so avoid opening history and waking WidgetKit at idle.
+            if watchedFoldersManager.folders.isEmpty,
+               storageLocationsManager.locations.isEmpty,
+               SortyWidgetSnapshotStore.load().hasNoContent {
+                return
+            }
             await self.sync(
                 watchedFoldersManager: watchedFoldersManager,
                 storageLocationsManager: storageLocationsManager
@@ -150,6 +160,14 @@ final class SortyWidgetSyncManager {
 }
 
 private extension SortyWidgetSnapshot {
+    var hasNoContent: Bool {
+        totalSessions == 0
+            && totalFilesOrganized == 0
+            && activeWatchedFolderCount == 0
+            && enabledStorageLocationCount == 0
+            && lastRunDate == nil
+    }
+
     func hasSameWidgetContent(as other: SortyWidgetSnapshot) -> Bool {
         totalSessions == other.totalSessions
             && totalFilesOrganized == other.totalFilesOrganized

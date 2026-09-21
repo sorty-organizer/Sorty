@@ -35,6 +35,7 @@ public final class LogManager: @unchecked Sendable {
     private let maxLogSize: UInt64 = 2 * 1024 * 1024
     private var currentLogSize: UInt64 = 0
     private var logFileHandle: FileHandle?
+    private var hasPreparedLogFile = false
     private let timestampFormatter = ISO8601DateFormatter()
     private let userPathRegex = try? NSRegularExpression(pattern: "/Users/([^/]+)")
     
@@ -56,13 +57,7 @@ public final class LogManager: @unchecked Sendable {
         return logsDirectory?.appendingPathComponent("sorty.log")
     }
     
-    private init() {
-        rotateLogsIfNeeded()
-        if let logFile = currentLogFile,
-           let size = try? logFile.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-            currentLogSize = UInt64(size)
-        }
-    }
+    private init() {}
     
     // MARK: - Public API
     
@@ -603,6 +598,14 @@ public final class LogManager: @unchecked Sendable {
     // MARK: - Private Methods
     
     private func writeLog(_ message: String, level: LogLevel, category: String, data: [String: Any]?) {
+        if !hasPreparedLogFile {
+            hasPreparedLogFile = true
+            rotateLogsIfNeeded()
+            if let logFile = currentLogFile,
+               let size = try? logFile.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                currentLogSize = UInt64(size)
+            }
+        }
         guard let logFile = currentLogFile else { return }
         
         let timestamp = timestampFormatter.string(from: Date())

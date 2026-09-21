@@ -124,7 +124,6 @@ public class GitHubCopilotAuthManager: ObservableObject {
     
     init() {
         restorePersistedState()
-        checkAuthenticationStatus()
     }
 
     private func restorePersistedState() {

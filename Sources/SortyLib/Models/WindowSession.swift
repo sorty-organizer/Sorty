@@ -25,7 +25,6 @@ public final class WindowSession: ObservableObject {
     }
 
     public func configureIfNeeded(
-        settingsViewModel: SettingsViewModel,
         personaManager: PersonaManager,
         customPersonaStore: CustomPersonaStore,
         exclusionRules: ExclusionRulesManager,
@@ -39,8 +38,8 @@ public final class WindowSession: ObservableObject {
         didConfigure = true
 
         // The window session task starts as the view appears. Yield before
-        // configuring AI clients and Sparkle so the first frame is not held
-        // behind startup work.
+        // restoring the previous manual session so the first frame is not held
+        // behind startup work. AI clients are created by the first operation.
         await Task.yield()
         guard !Task.isCancelled else {
             didConfigure = false
@@ -60,7 +59,6 @@ public final class WindowSession: ObservableObject {
         appState.calibrateAction = calibrateAction
         organizer.isManualSessionPersistenceEnabled = true
 
-        await applyConfiguration(settingsViewModel.config, learningsManager: learningsManager)
         // A restart forced by macOS (e.g. enabling Full Disk Access) wipes
         // in-memory state; restore the manual folder and ready preview so the
         // user picks up where they left off.
@@ -68,7 +66,6 @@ public final class WindowSession: ObservableObject {
            appState.selectedDirectory == nil {
             appState.selectedDirectory = restoredDirectory
         }
-        appState.updateManager.checkOnLaunchIfNeeded()
         onReady()
         AnalyticsManager.shared.captureWorkflow(
             workflow: "app_launch",
@@ -80,14 +77,14 @@ public final class WindowSession: ObservableObject {
         )
     }
 
-    public func applyConfiguration(_ config: AIConfig, learningsManager: LearningsManager) async {
+    public func applyConfiguration(_ config: AIConfig) async {
+        guard organizer.aiClient != nil else { return }
         do {
             try await organizer.configure(with: config)
         } catch {
             DebugLogger.log("WindowSession configuration failed: \(error.localizedDescription)")
             organizer.state = .error(error)
         }
-        learningsManager.configure(with: config)
     }
 
     public func handle(destination: DeeplinkDestination,
@@ -131,8 +128,8 @@ public final class WindowSession: ObservableObject {
                         return
                     }
                     guard let directory = appState.selectedDirectory else { return }
-                    await appState.prepareForManualOrganization(at: directory)
                     do {
+                        try await appState.prepareForManualOrganization(at: directory)
                         try await appState.organizer?.organize(directory: directory)
                     } catch is CancellationError {
                     } catch {

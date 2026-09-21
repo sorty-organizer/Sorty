@@ -411,6 +411,7 @@ public class AppState: ObservableObject {
     public var hasPresentedReadyToOrganize = false
     @Published public var selectedDirectory: URL? {
         didSet {
+            selectedDirectoryBookmarkTask?.cancel()
             if let url = selectedDirectory {
                 // Only mint bookmarks for validated user-visible folders.
                 // Untrusted deeplink/IPC payloads are validated before
@@ -420,15 +421,24 @@ public class AppState: ObservableObject {
                     selectedDirectoryBookmark = nil
                     return
                 }
-                do {
-                    selectedDirectoryBookmark = try url.bookmarkData(
-                        options: .withSecurityScope,
-                        includingResourceValuesForKeys: nil,
-                        relativeTo: nil
-                    )
-                } catch {
-                    DebugLogger.log("Failed to mint selected-directory bookmark: \(error.localizedDescription)")
-                    selectedDirectoryBookmark = nil
+                selectedDirectoryBookmark = nil
+                selectedDirectoryBookmarkTask = Task { [weak self] in
+                    let result = await Task.detached(priority: .utility) {
+                        Result {
+                            try url.bookmarkData(
+                                options: .withSecurityScope,
+                                includingResourceValuesForKeys: nil,
+                                relativeTo: nil
+                            )
+                        }
+                    }.value
+                    guard !Task.isCancelled, let self, self.selectedDirectory == url else { return }
+                    switch result {
+                    case .success(let bookmark):
+                        self.selectedDirectoryBookmark = bookmark
+                    case .failure(let error):
+                        DebugLogger.log("Failed to mint selected-directory bookmark: \(error.localizedDescription)")
+                    }
                 }
                 // Remember a bare folder selection so a restart forced by
                 // macOS (e.g. enabling Full Disk Access) restores the folder
@@ -442,6 +452,7 @@ public class AppState: ObservableObject {
     }
     /// Security-scoped bookmark for the currently selected directory within this window session.
     public private(set) var selectedDirectoryBookmark: Data?
+    private var selectedDirectoryBookmarkTask: Task<Void, Never>?
     /// Tracks whether resolveSelectedDirectoryWithAccess holds an active
     /// security-scoped session, so permission revocation only stops access it
     /// actually started (avoids unbalanced stopAccessing calls).
@@ -528,10 +539,10 @@ public class AppState: ObservableObject {
     // State derived from FolderOrganizer
     public weak var organizer: FolderOrganizer?
     public var calibrateAction: ((WatchedFolder) -> Void)?
-    public var prepareManualOrganizationAction: ((URL) async -> Void)?
+    public var prepareManualOrganizationAction: ((URL) async throws -> Void)?
 
-    public func prepareForManualOrganization(at directory: URL) async {
-        await prepareManualOrganizationAction?(directory)
+    public func prepareForManualOrganization(at directory: URL) async throws {
+        try await prepareManualOrganizationAction?(directory)
     }
     
     // Window controllers - retained to prevent use-after-free crashes
@@ -637,8 +648,11 @@ public class AppState: ObservableObject {
         self.requiresSetupRepair = requiresSetupRepair
         self.setupRepairMessage = setupRepairMessage
         
-        // Always store current version for future launches
-        userDefaults.set(currentVersion, forKey: "lastLaunchedVersion")
+        // Multiple windows construct AppState, but only the first state for a
+        // new build needs to update the launch stamp.
+        if userDefaults.string(forKey: "lastLaunchedVersion") != currentVersion {
+            userDefaults.set(currentVersion, forKey: "lastLaunchedVersion")
+        }
     }
 
     public func recordOnboardingCompletion() {
@@ -1476,7 +1490,13 @@ public class AppState: ObservableObject {
     public func startOrganization() {
         guard let organizer = organizer, let directory = selectedDirectory else { return }
         Task {
-            try? await organizer.organize(directory: directory)
+            do {
+                try await prepareForManualOrganization(at: directory)
+                try await organizer.organize(directory: directory)
+            } catch is CancellationError {
+            } catch {
+                organizer.state = .error(error)
+            }
         }
     }
 
