@@ -10,7 +10,7 @@ const SPONSOR_URL = 'https://github.com/sponsors/shirishpothi'
 const DOWNLOAD_URL = `${GITHUB_URL}/releases/latest/download/Sorty.zip`
 
 const TRUST_ITEMS = [
-  { icon: Monitor, label: 'macOS 15+' },
+  { icon: Monitor, label: 'macOS 15.1+' },
   { icon: Cpu, label: 'Apple Silicon & Intel' },
   { icon: UserX, label: 'No account required' },
 ]

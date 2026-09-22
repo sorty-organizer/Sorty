@@ -3,7 +3,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Swift](https://img.shields.io/badge/Swift-6.0+-orange.svg)](https://swift.org)
-[![macOS](https://img.shields.io/badge/macOS-15.0+-blue.svg)](https://www.apple.com/macos)
+[![macOS](https://img.shields.io/badge/macOS-15.1+-blue.svg)](https://www.apple.com/macos)
 [![Security Checks](https://github.com/sorty-organizer/Sorty/actions/workflows/swift.yml/badge.svg)](https://github.com/sorty-organizer/Sorty/actions/workflows/swift.yml)
 
 A native macOS SwiftUI app that uses AI to organize files into relevant, semantically named folders.
@@ -46,7 +46,7 @@ personas, Learnings, provider settings, and interactive previews. See the
 [Sorty skill guide](docs/sorty-skill.md) for setup, examples, and safety rules.
 
 ### Prerequisites
-- macOS 15.0 or later
+- macOS 15.1 or later
 - Xcode 16.0 or later
 - (Optional) API key for OpenAI or compatible provider
 

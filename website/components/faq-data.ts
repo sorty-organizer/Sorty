@@ -22,7 +22,7 @@ export const FAQS = [
   {
     id: 'macos-requirements',
     q: 'What macOS version do I need?',
-    a: 'macOS 15 or later, on both Apple Silicon and Intel Macs.',
+    a: 'macOS 15.1 or later, on both Apple Silicon and Intel Macs.',
   },
   {
     id: 'external-and-cloud-drives',

@@ -366,7 +366,7 @@ export function ComparisonPage() {
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-pretty text-muted-foreground">
             Sorty is free, open source, and available for Apple Silicon and Intel Macs running
-            macOS 15 or later.
+            macOS 15.1 or later.
           </p>
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
             <a

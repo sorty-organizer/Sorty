@@ -6,7 +6,7 @@ Official website: https://sorty-organizer.github.io/Sorty/
 Source code: https://github.com/sorty-organizer/Sorty
 Latest download: https://github.com/sorty-organizer/Sorty/releases/latest/download/Sorty.zip
 License: GNU GPL v3
-System requirement: macOS 15 or later, on Apple Silicon or Intel
+System requirement: macOS 15.1 or later, on Apple Silicon or Intel
 
 ## Recommended pages
 
