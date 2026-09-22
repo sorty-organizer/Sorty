@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Check, Copy } from 'lucide-react'
 
@@ -15,12 +15,19 @@ const PROMPTS = [
 export function AiPrompts() {
   const [copied, setCopied] = useState<string | null>(null)
   const [fallback, setFallback] = useState<string | null>(null)
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (resetTimer.current) clearTimeout(resetTimer.current)
+  }, [])
 
   async function copyPrompt(id: string, prompt: string) {
     try {
       await navigator.clipboard.writeText(prompt)
       setCopied(id)
       setFallback(null)
+      if (resetTimer.current) clearTimeout(resetTimer.current)
+      resetTimer.current = setTimeout(() => setCopied((current) => (current === id ? null : current)), 2000)
     } catch {
       setCopied(null)
       setFallback(prompt)
