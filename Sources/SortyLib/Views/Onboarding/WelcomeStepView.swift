@@ -187,8 +187,11 @@ private struct GlowRing: View {
     @State private var isWindowVisible = true
 
     private var motionPaused: Bool {
-        reduceMotion || !isWindowVisible || controlActiveState == .inactive
+        reduceMotion || reduceTransparency || !isWindowVisible || controlActiveState == .inactive
     }
+
+    // How the ring is drawn: a static stroked circle whenever motion or
+    // transparency is reduced. The pulse runs only while fully active.
 
     var body: some View {
         Circle()
@@ -250,21 +253,30 @@ struct FloatingParticle: View {
             .background(WindowVisibilityReader(isVisible: $isWindowVisible))
             .onAppear {
                 guard !motionPaused else { return }
-                withAnimation(.easeInOut(duration: Double.random(in: 3...6)).repeatForever(autoreverses: false).delay(delay)) {
-                    yOffset = -300
-                    opacity = 0
-                }
-                withAnimation(.easeIn(duration: 1).delay(delay)) {
-                    opacity = 0.6
-                }
+                startDrift()
             }
             .onChange(of: motionPaused) { _, paused in
-                guard paused else { return }
-                withAnimation(nil) {
-                    yOffset = 0
-                    opacity = 0
+                if paused {
+                    withAnimation(nil) {
+                        yOffset = 0
+                        opacity = 0
+                    }
+                } else {
+                    startDrift()
                 }
             }
+    }
+
+    // How particles resume: the same drift used on appear, so unpausing
+    // (window visible again) restarts motion instead of leaving them parked.
+    private func startDrift() {
+        withAnimation(.easeInOut(duration: Double.random(in: 3...6)).repeatForever(autoreverses: false).delay(delay)) {
+            yOffset = -300
+            opacity = 0
+        }
+        withAnimation(.easeIn(duration: 1).delay(delay)) {
+            opacity = 0.6
+        }
     }
 }
 
@@ -303,14 +315,15 @@ public struct WelcomeStepView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-            // Floating particles (appear after reveal)
+            // Floating particles (appear after reveal). Size and lane are
+            // seeded from the index so parent re-renders never re-randomize them.
             if showParticles {
                 ZStack {
                     ForEach(0..<7, id: \.self) { i in
                         FloatingParticle(
                             delay: Double(i) * 0.4,
-                            size: CGFloat.random(in: 3...6),
-                            xPosition: CGFloat.random(in: -200...200)
+                            size: 3 + CGFloat((i * 37 + 11) % 30) / 10,
+                            xPosition: CGFloat((i * 137 + 43) % 400) - 200
                         )
                     }
                 }
