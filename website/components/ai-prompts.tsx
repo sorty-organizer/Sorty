@@ -28,8 +28,8 @@ export function AiPrompts() {
   }
 
   return (
-    <section id="ask-ai" className="page-section px-4 py-12" aria-labelledby="ask-ai-title">
-      <div className="mx-auto max-w-3xl rounded-3xl border border-border bg-card/35 p-6 sm:p-8">
+    <section id="ask-ai" className="section-seam px-4 py-16 sm:py-20" aria-labelledby="ask-ai-title">
+      <div className="glass-surface mx-auto max-w-3xl rounded-3xl border border-border bg-card/65 p-6 sm:p-8">
         <h2 id="ask-ai-title" className="text-2xl font-semibold tracking-tight">Ask your AI about Sorty</h2>
         <p className="mt-2 text-base leading-relaxed text-muted-foreground">
           Copy a prompt into ChatGPT, Claude, Codex, or Claude Code for help with Sorty.
