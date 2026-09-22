@@ -258,15 +258,23 @@ public struct ProviderSelectionStepView: View {
             taskController.initialProviderRefreshTask?.cancel()
             taskController.initialProviderRefreshTask = nil
             taskController.apiKeyCommitTask?.cancel()
+            taskController.apiKeyCommitTask = nil
             taskController.apiURLCommitTask?.cancel()
+            taskController.apiURLCommitTask = nil
             taskController.testDebounceTask?.cancel()
+            taskController.testDebounceTask = nil
             taskController.connectionTestTask?.cancel()
+            taskController.connectionTestTask = nil
             taskController.copilotModelTask?.cancel()
             taskController.copilotModelTask = nil
+            taskController.codexTerminalResetTask?.cancel()
+            taskController.codexTerminalResetTask = nil
+            taskController.codexVerifyResetTask?.cancel()
+            taskController.codexVerifyResetTask = nil
         }
         .task(id: readinessInputs) {
             let inputs = readinessInputs
-            let snapshot = await Task.detached(priority: .userInitiated) {
+            let snapshot = await Task.detached(priority: .utility) {
                 Self.resolveReadiness(from: inputs)
             }.value
             guard !Task.isCancelled else { return }
@@ -893,6 +901,7 @@ public struct ProviderSelectionStepView: View {
         taskController.initialProviderRefreshTask?.cancel()
         let provider = settingsViewModel.config.provider
         taskController.initialProviderRefreshTask = Task { @MainActor in
+            defer { taskController.initialProviderRefreshTask = nil }
             // Keep process/keychain/model probes off the provider pane's first
             // reveal frames. Existing manager state still renders immediately.
             try? await Task.sleep(for: .milliseconds(550))
@@ -919,6 +928,7 @@ public struct ProviderSelectionStepView: View {
 
         taskController.apiKeyCommitTask?.cancel()
         taskController.apiKeyCommitTask = Task { @MainActor in
+            defer { taskController.apiKeyCommitTask = nil }
             try? await Task.sleep(for: .milliseconds(550))
             guard !Task.isCancelled else { return }
             commitAPIKeyDraft()
@@ -934,6 +944,7 @@ public struct ProviderSelectionStepView: View {
 
         taskController.apiURLCommitTask?.cancel()
         taskController.apiURLCommitTask = Task { @MainActor in
+            defer { taskController.apiURLCommitTask = nil }
             try? await Task.sleep(for: .milliseconds(550))
             guard !Task.isCancelled else { return }
             commitAPIURLDraft()
@@ -969,14 +980,16 @@ public struct ProviderSelectionStepView: View {
     private func scheduleConnectionTest() {
         taskController.testDebounceTask?.cancel()
         taskController.connectionTestTask?.cancel()
+        taskController.testDebounceTask = nil
+        taskController.connectionTestTask = nil
         connectionStatus = .idle
 
-        taskController.testDebounceTask = Task {
+        taskController.testDebounceTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-            if !Task.isCancelled && readinessSnapshot.canTestConnection {
-                await MainActor.run {
-                    testConnection()
-                }
+            guard !Task.isCancelled else { return }
+            taskController.testDebounceTask = nil
+            if readinessSnapshot.canTestConnection {
+                testConnection()
             }
         }
     }
@@ -988,6 +1001,7 @@ public struct ProviderSelectionStepView: View {
         connectionError = nil
 
         taskController.connectionTestTask = Task {
+            defer { taskController.connectionTestTask = nil }
             do {
                 try await settingsViewModel.testConnection()
                 guard !Task.isCancelled,
@@ -1039,6 +1053,10 @@ public struct ProviderSelectionStepView: View {
     }
 
     private func autoVerifyCodexSignInLoop() async {
+        // Bounded exponential backoff (2s, 4s, 8s, 16s, then 30s cap,
+        // ~10 tries) instead of an unbounded fixed 2s poll that keeps
+        // process spawns churning while the panel sits open.
+        var attempt = 0
         while !Task.isCancelled {
             let becameAuthenticated = await verifyCodexSignInStatus()
 
@@ -1059,7 +1077,10 @@ public struct ProviderSelectionStepView: View {
                 break
             }
 
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            attempt += 1
+            guard attempt < 10 else { break }
+            let backoffNanoseconds = min(UInt64(2_000_000_000) << (attempt - 1), 30_000_000_000)
+            try? await Task.sleep(nanoseconds: backoffNanoseconds)
         }
     }
 
@@ -1109,22 +1130,22 @@ public struct ProviderSelectionStepView: View {
     @MainActor
     private func scheduleCodexTerminalButtonReset() {
         taskController.codexTerminalResetTask?.cancel()
-        taskController.codexTerminalResetTask = Task {
+        taskController.codexTerminalResetTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_400_000_000)
-            await MainActor.run {
-                codexTerminalButtonState = .idle
-            }
+            guard !Task.isCancelled else { return }
+            codexTerminalButtonState = .idle
+            taskController.codexTerminalResetTask = nil
         }
     }
 
     @MainActor
     private func scheduleCodexVerifyButtonReset() {
         taskController.codexVerifyResetTask?.cancel()
-        taskController.codexVerifyResetTask = Task {
+        taskController.codexVerifyResetTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_400_000_000)
-            await MainActor.run {
-                codexVerifyButtonState = .idle
-            }
+            guard !Task.isCancelled else { return }
+            codexVerifyButtonState = .idle
+            taskController.codexVerifyResetTask = nil
         }
     }
 
@@ -1137,6 +1158,7 @@ public struct ProviderSelectionStepView: View {
         let config = settingsViewModel.config
         isLoadingModels = true
         taskController.copilotModelTask = Task { @MainActor in
+            defer { taskController.copilotModelTask = nil }
             do {
                 guard let client = try AIClientFactory.createClient(config: config) as? GitHubCopilotClient else {
                     isLoadingModels = false

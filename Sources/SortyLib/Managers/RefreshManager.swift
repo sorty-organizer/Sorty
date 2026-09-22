@@ -55,7 +55,8 @@ public final class RefreshManager: ObservableObject {
             }
         }
         // Let macOS combine noncritical refresh wakeups without changing cadence.
-        timer.tolerance = min(safeInterval * 0.1, 0.5)
+        // Tolerance stays at >=10% so the system can coalesce timers and save power.
+        timer.tolerance = max(safeInterval * 0.1, 0.1)
         if isPaused {
             timer.fireDate = .distantFuture
         }
@@ -124,7 +125,14 @@ public final class RefreshManager: ObservableObject {
 
     private func normalizedRepeatingInterval(_ interval: TimeInterval) -> TimeInterval {
         guard interval.isFinite, interval > 0 else { return 1 }
-        return max(interval, 0.01)
+        // Sub-second repeating timers wake the CPU up to 100Hz and drain the
+        // battery. Clamp to a 1.0s floor so the fastest cadence stays at 1Hz.
+        if interval < 1.0 {
+            assertionFailure("RefreshManager: interval \(interval)s below 1.0s floor; clamping to 1.0s")
+            DebugLogger.log("RefreshManager clamped interval \(interval)s to 1.0s floor")
+            return 1.0
+        }
+        return interval
     }
 }
 

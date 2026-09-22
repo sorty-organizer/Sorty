@@ -96,7 +96,7 @@ public class SteeringPromptManager: ObservableObject {
         } else {
             let persistedDataReader = persistedDataReader
             let storageKey = Self.storageKey
-            task = Task.detached(priority: .userInitiated) {
+            task = Task.detached(priority: .utility) {
                 var snapshot = PersistedSnapshot()
                 guard let data = persistedDataReader.data(forKey: storageKey),
                       let decoded = try? JSONDecoder().decode([SavedSteeringPrompt].self, from: data) else {

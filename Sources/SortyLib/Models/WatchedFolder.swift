@@ -197,7 +197,7 @@ public class WatchedFoldersManager: ObservableObject {
             let journal = journal
             let persistedDataReader = persistedDataReader
             let legacyStorageKey = legacyStorageKey
-            task = Task.detached(priority: .userInitiated) {
+            task = Task.detached(priority: .utility) {
                 if let journalFolders = journal.load() {
                     return (journalFolders, false)
                 }

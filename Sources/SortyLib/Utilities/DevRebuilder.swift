@@ -40,11 +40,12 @@ public final class DevRebuilder {
             return
         }
 
-        Task.detached {
+        Task.detached(priority: .background) {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/make")
             process.arguments = ["now"]
             process.currentDirectoryURL = URL(fileURLWithPath: projectRoot)
+            process.qualityOfService = .background
 
             // Inherit the user's shell environment so toolchain paths resolve
             var env = ProcessInfo.processInfo.environment
@@ -74,10 +75,24 @@ public final class DevRebuilder {
                 return
             }
 
-            // Wait for build completion before relaunching.
-            process.waitUntilExit()
+            // Wait for build completion without blocking the cooperative pool.
+            // waitUntilExit() parks a pool thread; terminationHandler suspends instead.
+            let status: Int32 = await withTaskCancellationHandler {
+                await withCheckedContinuation { continuation in
+                    if !process.isRunning {
+                        continuation.resume(returning: process.terminationStatus)
+                        return
+                    }
+                    process.terminationHandler = { proc in
+                        continuation.resume(returning: proc.terminationStatus)
+                    }
+                }
+            } onCancel: {
+                process.terminate()
+            }
+            process.terminationHandler = nil
+            guard !Task.isCancelled else { return }
 
-            let status = process.terminationStatus
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             let output = String(data: data, encoding: .utf8) ?? ""
             if status != 0 {

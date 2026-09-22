@@ -40,7 +40,7 @@ public class NamingPresetManager: ObservableObject {
         } else {
             let persistedDataReader = persistedDataReader
             let storageKey = Self.storageKey
-            task = Task.detached(priority: .userInitiated) {
+            task = Task.detached(priority: .utility) {
                 guard let data = persistedDataReader.data(forKey: storageKey),
                       let decoded = try? JSONDecoder().decode([NamingPreset].self, from: data) else {
                     return []

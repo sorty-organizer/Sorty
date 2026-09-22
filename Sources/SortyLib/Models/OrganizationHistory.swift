@@ -706,7 +706,7 @@ public class OrganizationHistory: ObservableObject {
         } else {
             let repository = repository
             let pendingPersistence = persistenceTask
-            task = Task.detached(priority: .userInitiated) {
+            task = Task.detached(priority: .utility) {
                 await pendingPersistence?.value
                 return repository.loadEntries()
             }
@@ -767,7 +767,7 @@ public class OrganizationHistory: ObservableObject {
         }
         let repository = repository
         let pendingPersistence = persistenceTask
-        let details = await Task.detached(priority: .userInitiated) {
+        let details = await Task.detached(priority: .utility) {
             await pendingPersistence?.value
             return repository.loadDetails(for: entry)
         }.value

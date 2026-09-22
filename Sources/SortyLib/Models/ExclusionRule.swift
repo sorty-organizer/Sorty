@@ -1106,7 +1106,7 @@ public class ExclusionRulesManager: ObservableObject {
             let rulesKey = rulesKey
             let nlExceptionsKey = nlExceptionsKey
             let usageKey = usageKey
-            task = Task.detached(priority: .userInitiated) {
+            task = Task.detached(priority: .utility) {
                 var snapshot = PersistedSnapshot()
                 if let data = persistedDataReader.data(forKey: rulesKey),
                    let decoded = try? JSONDecoder().decode([ExclusionRule].self, from: data) {

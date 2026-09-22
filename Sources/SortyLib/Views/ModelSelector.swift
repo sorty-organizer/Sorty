@@ -204,6 +204,8 @@ struct ModelSelectionPopover: View {
     @State private var selectedModel: String = ""
     @State private var selectedReasoningEffort: ReasoningEffort = .automatic
     @State private var searchText: String = ""
+    @State private var debouncedSearchText: String = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
     @State private var showAllModels: Bool = false
     @State private var customModelText: String = ""
     @State private var showCustomInput: Bool = false
@@ -251,12 +253,13 @@ struct ModelSelectionPopover: View {
     }
     
     private var filteredProviders: [AIProvider] {
-        if searchText.isEmpty {
+        if debouncedSearchText.isEmpty {
             return availableProviders
         }
+        let query = debouncedSearchText
         return availableProviders.filter { provider in
-            provider.displayName.localizedCaseInsensitiveContains(searchText) ||
-            getModelsForProvider(provider).contains { $0.localizedCaseInsensitiveContains(searchText) }
+            provider.displayName.localizedCaseInsensitiveContains(query) ||
+            getModelsForProvider(provider).contains { $0.localizedCaseInsensitiveContains(query) }
         }
     }
     
@@ -275,10 +278,11 @@ struct ModelSelectionPopover: View {
             models = modelCatalog.codexSubscriptionModels.map(\.id)
         }
 
-        if !searchText.isEmpty {
-            models = models.filter { $0.localizedCaseInsensitiveContains(searchText) }
+        if !debouncedSearchText.isEmpty {
+            let query = debouncedSearchText
+            models = models.filter { $0.localizedCaseInsensitiveContains(query) }
         }
-        return showAllModels || !searchText.isEmpty ? models : Array(models.prefix(10))
+        return showAllModels || !debouncedSearchText.isEmpty ? models : Array(models.prefix(10))
     }
 
     /// Returns whether a model ID is free (for badge display)
@@ -402,6 +406,21 @@ struct ModelSelectionPopover: View {
             if codexFastModeAvailability(for: selectedModel) == false {
                 isCodexFastModeEnabled = false
             }
+        }
+        .onChange(of: searchText) { _, newValue in
+            // Debounce per-keystroke filtering so large catalogs are not
+            // re-scanned with localizedCaseInsensitiveContains on every key.
+            searchDebounceTask?.cancel()
+            searchDebounceTask = Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                debouncedSearchText = newValue
+                searchDebounceTask = nil
+            }
+        }
+        .onDisappear {
+            searchDebounceTask?.cancel()
+            searchDebounceTask = nil
         }
     }
 

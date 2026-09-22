@@ -36,6 +36,7 @@ struct AIProviderSettingsView: View {
     @State private var codexDeviceCodeCopiedID: UUID?
     @State private var isShowingCodexDeviceAuth = false
     @State private var connectionSuccessResetTask: Task<Void, Never>?
+    @State private var connectionTestTask: Task<Void, Never>?
 
     private var isConnectionSuccessful: Bool {
         testConnectionStatus?.contains("Success") == true
@@ -174,6 +175,18 @@ struct AIProviderSettingsView: View {
         .onChange(of: codexAuth.deviceAuthSession?.status) { _, status in
             guard status == .authorized, isShowingCodexDeviceAuth else { return }
             handleCodexDeviceAuthSuccess()
+        }
+        .onDisappear {
+            // The Codex verify loop is owned by .task and cancels with the
+            // view; cancel every other stored task here so none outlive it.
+            connectionTestTask?.cancel()
+            connectionTestTask = nil
+            codexTerminalResetTask?.cancel()
+            codexTerminalResetTask = nil
+            codexDeviceAuthDismissTask?.cancel()
+            codexDeviceAuthDismissTask = nil
+            connectionSuccessResetTask?.cancel()
+            connectionSuccessResetTask = nil
         }
     }
 
@@ -835,6 +848,8 @@ struct AIProviderSettingsView: View {
         HapticFeedbackManager.shared.tap()
         connectionSuccessResetTask?.cancel()
         connectionSuccessResetTask = nil
+        connectionTestTask?.cancel()
+        connectionTestTask = nil
         isTestingConnection = true
         testConnectionStatus = nil
         testConnectionDetails = nil
@@ -846,7 +861,7 @@ struct AIProviderSettingsView: View {
         connectionTestID = testID
         let shouldAnimate = !reduceMotion
 
-        Task {
+        connectionTestTask = Task {
             do {
                 try await viewModel.testConnection()
                 await MainActor.run {
@@ -911,6 +926,7 @@ struct AIProviderSettingsView: View {
                 guard connectionTestID == testID else { return }
                 connectionTestID = nil
                 isTestingConnection = false
+                connectionTestTask = nil
             }
         }
     }
@@ -918,6 +934,8 @@ struct AIProviderSettingsView: View {
     @MainActor
     private func resetConnectionTestState() {
         connectionTestID = nil
+        connectionTestTask?.cancel()
+        connectionTestTask = nil
         connectionSuccessResetTask?.cancel()
         connectionSuccessResetTask = nil
         isTestingConnection = false
@@ -967,6 +985,10 @@ struct AIProviderSettingsView: View {
     }
 
     private func autoVerifyCodexSignInLoop() async {
+        // Bounded exponential backoff (2s, 4s, 8s, 16s, then 30s cap,
+        // ~10 tries) instead of an unbounded fixed 2s poll that keeps
+        // process spawns churning while the panel sits open.
+        var attempt = 0
         while !Task.isCancelled {
             let becameAuthenticated = await MainActor.run {
                 verifyCodexSignInStatus()
@@ -987,7 +1009,10 @@ struct AIProviderSettingsView: View {
                 break
             }
 
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            attempt += 1
+            guard attempt < 10 else { break }
+            let backoffNanoseconds = min(UInt64(2_000_000_000) << (attempt - 1), 30_000_000_000)
+            try? await Task.sleep(nanoseconds: backoffNanoseconds)
         }
     }
 
@@ -1065,12 +1090,12 @@ struct AIProviderSettingsView: View {
     @MainActor
     private func scheduleCodexTerminalButtonReset() {
         codexTerminalResetTask?.cancel()
-        codexTerminalResetTask = Task {
+        codexTerminalResetTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_400_000_000)
-            await MainActor.run {
-                guard codexAuth.deviceAuthSession?.status != .authorized else { return }
-                codexTerminalButtonState = .idle
-            }
+            guard !Task.isCancelled else { return }
+            guard codexAuth.deviceAuthSession?.status != .authorized else { return }
+            codexTerminalButtonState = .idle
+            codexTerminalResetTask = nil
         }
     }
 
@@ -1086,8 +1111,10 @@ struct AIProviderSettingsView: View {
         codexDeviceAuthDismissTask?.cancel()
         codexDeviceAuthDismissTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 650_000_000)
+            guard !Task.isCancelled else { return }
             guard codexAuth.isAuthenticated || codexAuth.deviceAuthSession?.status == .authorized else { return }
             isShowingCodexDeviceAuth = false
+            codexDeviceAuthDismissTask = nil
         }
     }
 

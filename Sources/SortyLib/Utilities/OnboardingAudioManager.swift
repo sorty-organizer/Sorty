@@ -52,6 +52,8 @@ class OnboardingAudioManager: ObservableObject {
     private let state = AudioState()
 
     private var audioPlayer: AVAudioPlayer?
+    private var fadeTask: Task<Void, Never>?
+    private var playerStopTask: Task<Void, Never>?
 
     // MARK: - Constants
 
@@ -124,6 +126,12 @@ class OnboardingAudioManager: ObservableObject {
 
     /// Start the bundled background melody, falling back to the synthesized loop.
     func startBackgroundMelody(after delay: TimeInterval = 0) {
+        // A pending fade-out owns the engine volumes; cancel it so a restart
+        // does not get its levels zeroed or its engine stopped mid-fade.
+        fadeTask?.cancel()
+        fadeTask = nil
+        playerStopTask?.cancel()
+        playerStopTask = nil
         guard !state.isRunning else { return }
 
         if let audioPlayer {
@@ -235,12 +243,18 @@ class OnboardingAudioManager: ObservableObject {
 
         let fadeDuration: TimeInterval = 0.35
 
+        fadeTask?.cancel()
+        playerStopTask?.cancel()
+
         // Fade file-based audio instead of abruptly stopping.
         if let player = audioPlayer {
             player.setVolume(0, fadeDuration: fadeDuration)
             let playerToStop = player
-            DispatchQueue.main.asyncAfter(deadline: .now() + fadeDuration) {
+            playerStopTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(fadeDuration))
+                guard !Task.isCancelled else { return }
                 playerToStop.stop()
+                playerStopTask = nil
             }
             audioPlayer = nil
         }
@@ -254,16 +268,21 @@ class OnboardingAudioManager: ObservableObject {
         isPlaying = false
 
         // Fade synthesized audio before stopping to avoid abrupt cutoff.
+        // Runs off the main actor at utility QoS with cancellable Task.sleep
+        // instead of parking a userInitiated GCD thread with Thread.sleep.
         if engine != nil {
-            DispatchQueue.global(qos: .userInitiated).async { [state] in
+            let state = state
+            fadeTask = Task.detached(priority: .utility) {
                 let steps = 20
-                let interval = fadeDuration / Double(steps)
+                let stepNanos = UInt64((fadeDuration / Double(steps)) * 1_000_000_000)
                 for i in 0..<steps {
+                    try? await Task.sleep(nanoseconds: stepNanos)
+                    guard !Task.isCancelled else { return }
                     let factor = Float(steps - i - 1) / Float(steps)
                     state.melodyVolume = startingMelodyVolume * factor
                     state.bassVolume = startingBassVolume * factor
-                    Thread.sleep(forTimeInterval: interval)
                 }
+                guard !Task.isCancelled else { return }
 
                 state.isRunning = false
                 state.engine?.stop()

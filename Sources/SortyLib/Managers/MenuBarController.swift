@@ -63,6 +63,10 @@ public final class MenuBarController: ObservableObject {
                 automationOrganizer.statePublisher,
                 settings.$config
             )
+            .removeDuplicates(by: { previous, next in
+                previous.0 == next.0 && previous.1 == next.1
+            })
+            .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
             .sink { [weak self] state, config in
                 self?.updateOrganizationActivity(
                     state: state,
@@ -75,6 +79,8 @@ public final class MenuBarController: ObservableObject {
 
         if let learningsManager {
             learningActivitySubscription = learningsManager.analyzer.$isAnalyzing
+                .removeDuplicates()
+                .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
                 .sink { [weak self] isAnalyzing in
                     self?.setActivity(
                         isAnalyzing ? .learning : nil,
