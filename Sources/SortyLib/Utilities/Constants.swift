@@ -388,10 +388,14 @@ public enum TransitionStyles {
 
 // MARK: - Loading Indicator Views
 
-/// Animated loading dots view
+/// Animated loading dots view.
+/// How it stays cheap: a single 12fps timeline shared by all dots, paused
+/// offscreen or while the window is inactive. Dots are pure opacity/offset
+/// with no blur passes.
 public struct LoadingDotsView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var isWindowVisible = true
 
     let dotCount: Int
@@ -410,7 +414,12 @@ public struct LoadingDotsView: View {
         if reduceMotion {
             dots(at: 0)
         } else {
-            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: !isWindowVisible)) { timeline in
+            SwiftUI.TimelineView(
+                .animation(
+                    minimumInterval: 1.0 / 12.0,
+                    paused: !isWindowVisible || controlActiveState == .inactive
+                )
+            ) { timeline in
                 dots(at: timeline.date.timeIntervalSinceReferenceDate)
             }
             .drawingGroup(opaque: false)
@@ -435,10 +444,13 @@ public struct LoadingDotsView: View {
     }
 }
 
-/// Spinning loading indicator with bounce
+/// Spinning loading indicator with bounce.
+/// How it stays cheap: a single 12fps timeline (matching LoadingDotsView),
+/// paused offscreen or while the window is inactive.
 public struct BouncingSpinner: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @State private var isWindowVisible = true
 
     let size: CGFloat
@@ -453,7 +465,12 @@ public struct BouncingSpinner: View {
         if reduceMotion {
             spinner(rotation: 0, scale: 1)
         } else {
-            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isWindowVisible)) { timeline in
+            SwiftUI.TimelineView(
+                .animation(
+                    minimumInterval: 1.0 / 12.0,
+                    paused: !isWindowVisible || controlActiveState == .inactive
+                )
+            ) { timeline in
                 let elapsed = timeline.date.timeIntervalSinceReferenceDate
                 let rotation = elapsed.truncatingRemainder(dividingBy: 0.8) / 0.8 * 360
                 let scale = CGFloat(0.95 + (sin(elapsed * .pi * 2 / 0.8) + 1) * 0.025)

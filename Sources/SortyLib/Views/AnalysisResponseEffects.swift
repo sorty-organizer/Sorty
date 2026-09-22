@@ -1,23 +1,27 @@
 import SwiftUI
 
 /// Dotted globe shown while analysis waits for an AI response.
+/// How it renders: sphere vertices are memoized per quantized size, the globe
+/// draws at 20fps inside one Canvas pass, and the timeline pauses offscreen.
 public struct ThinkingOrbLoaderView: View {
     @SortyHotReload private var hotReload
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
+    @State private var isWindowVisible = true
 
     public init() {}
 
     public var body: some View {
         GeometryReader { geometry in
-            // The sphere does not change as it rotates. Build its vertices outside
-            // the timeline so frame updates only project and shade existing points.
-            let vertices = Self.sphereVertices(size: geometry.size)
+            // The sphere does not change as it rotates. Vertices are memoized
+            // per quantized size so frame updates only project and shade
+            // existing points.
+            let vertices = Self.cachedSphereVertices(size: geometry.size)
             SwiftUI.TimelineView(
                 .animation(
-                    minimumInterval: 1.0 / 60.0,
-                    paused: reduceMotion || controlActiveState == .inactive
+                    minimumInterval: 1.0 / 20.0,
+                    paused: reduceMotion || !isWindowVisible || controlActiveState == .inactive
                 )
             ) { timeline in
                 let raw = reduceMotion ? 0.6 : timeline.date.timeIntervalSinceReferenceDate
@@ -27,12 +31,48 @@ public struct ThinkingOrbLoaderView: View {
                 }
             }
         }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Thinking activity indicator")
     }
 
     private struct SphereVertex: Sendable {
         let x, y, z, longitude: CGFloat
+    }
+
+    /// Memoized vertex shells keyed by quantized size. Sizes repeat across
+    /// rows and rerenders; rebuilding the shell each body evaluation wastes
+    /// the frame budget the timeline is trying to save.
+    private final class SphereVertexCache: Sendable {
+        private let lock = NSLock()
+        private var storage: [String: [SphereVertex]] = [:]
+
+        func vertices(for key: String) -> [SphereVertex]? {
+            lock.withLock { storage[key] }
+        }
+
+        func store(_ vertices: [SphereVertex], for key: String) {
+            lock.withLock {
+                // Bound the cache: quantized buckets repeat, but never grow it
+                // without limit if sizes keep varying.
+                if storage.count > 24 {
+                    storage.removeAll()
+                }
+                storage[key] = vertices
+            }
+        }
+    }
+
+    private static let vertexCache = SphereVertexCache()
+
+    private static func cachedSphereVertices(size: CGSize) -> [SphereVertex] {
+        let key = "\(Int(size.width / 8))x\(Int(size.height / 8))"
+        if let cached = vertexCache.vertices(for: key) {
+            return cached
+        }
+        let built = sphereVertices(size: size)
+        vertexCache.store(built, for: key)
+        return built
     }
 
     private static func sphereVertices(size: CGSize) -> [SphereVertex] {
@@ -139,6 +179,7 @@ public struct ThinkingOrbLoaderView: View {
 public struct TextSweepModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
+    @State private var isWindowVisible = true
 
     private let bandSize: CGFloat = 0.3
     private let sweepDuration: TimeInterval = 2.0
@@ -158,7 +199,7 @@ public struct TextSweepModifier: ViewModifier {
                     SwiftUI.TimelineView(
                         .animation(
                             minimumInterval: 1.0 / 30.0,
-                            paused: controlActiveState == .inactive
+                            paused: !isWindowVisible || controlActiveState == .inactive
                         )
                     ) { timeline in
                         let cycleDuration = sweepDuration + sweepDelay
@@ -180,6 +221,7 @@ public struct TextSweepModifier: ViewModifier {
                         )
                     }
                 )
+                .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         }
     }
 }
