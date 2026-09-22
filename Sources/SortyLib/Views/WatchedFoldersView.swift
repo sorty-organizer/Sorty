@@ -5,6 +5,7 @@
 //  Modern watched folders management with rich folder cards and status indicators
 //
 
+import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 

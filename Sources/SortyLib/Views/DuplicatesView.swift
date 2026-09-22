@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import Foundation
 import SwiftUI
 import Beam
 

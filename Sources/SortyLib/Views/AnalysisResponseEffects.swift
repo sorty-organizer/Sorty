@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 /// Dotted globe shown while analysis waits for an AI response.

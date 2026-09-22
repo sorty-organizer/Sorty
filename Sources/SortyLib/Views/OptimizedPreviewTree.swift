@@ -7,6 +7,7 @@
 //  and improve scrolling performance.
 //
 
+import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 import Combine
@@ -424,7 +425,7 @@ class PreviewStore: ObservableObject {
     }
 
     func presentation(for row: FlattenedRow) -> PreviewRowPresentation {
-        let highlighted = highlightedFileID(for: row)
+        let highlighted = isRowHighlighted(row)
         if let cached = presentationCache[row.id],
            cached.planVersion == plan.version, cached.highlighted == highlighted {
             return cached.presentation
@@ -434,7 +435,7 @@ class PreviewStore: ObservableObject {
         return built
     }
 
-    private func highlightedFileID(for row: FlattenedRow) -> Bool {
+    private func isRowHighlighted(_ row: FlattenedRow) -> Bool {
         switch row.type {
         case .file(let file, _), .unorganizedFile(let file):
             return highlightedFileID == file.id
