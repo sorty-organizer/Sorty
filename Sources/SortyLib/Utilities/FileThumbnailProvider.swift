@@ -48,6 +48,7 @@ public class FileThumbnailProvider: ObservableObject {
     public static let shared = FileThumbnailProvider()
 
     private static let maximumConcurrentRequests = 4
+    private static let lazyStartDelay: Duration = .milliseconds(250)
     private let cache = NSCache<NSString, NSImage>()
     private var pendingRequests: [String: PendingThumbnailRequest] = [:]
     private var queuedKeys: [String] = []
@@ -56,6 +57,13 @@ public class FileThumbnailProvider: ObservableObject {
     private var liveWaiters: Set<UUID> = []
     private let waveformCache = NSCache<NSString, NSImage>()
     private let metadataProbe = FileThumbnailMetadataProbe()
+    /// Cached backing scale so cost accounting never queries NSScreen per
+    /// thumbnail; refreshed at most once a minute.
+    private var cachedBackingScale: CGFloat = 2.0
+    private var cachedBackingScaleAt = Date.distantPast
+    /// Extension -> UTType cache so scrolling never re-resolves type strings.
+    private static let utTypeCacheLock = NSLock()
+    private static var utTypeCache: [String: UTType] = [:]
     
     private init() {
         cache.countLimit = 180
@@ -137,6 +145,11 @@ public class FileThumbnailProvider: ObservableObject {
             let requestID = request.id
             request.task = Task { [weak self] in
                 guard let self else { return }
+                // Visible-rows lazy start: fast scrolling cancels the waiter
+                // within 250 ms, so generation never begins for rows that
+                // scrolled past.
+                try? await Task.sleep(for: Self.lazyStartDelay)
+                guard !Task.isCancelled else { return }
                 let image = await generateThumbnail(for: url, size: size)
                 finishGeneration(image, forKey: key, requestID: requestID)
             }
@@ -161,7 +174,7 @@ public class FileThumbnailProvider: ObservableObject {
             cache.setObject(
                 image,
                 forKey: key as NSString,
-                cost: image.thumbnailCost(scale: NSScreen.main?.backingScaleFactor ?? 2.0)
+                cost: image.thumbnailCost(scale: currentBackingScale())
             )
             let sendableImage = SendableThumbnailImage(image: image)
             for continuation in request.waiters.values {
@@ -222,7 +235,7 @@ public class FileThumbnailProvider: ObservableObject {
                     waveformCache.setObject(
                         waveform,
                         forKey: waveformKey as NSString,
-                        cost: waveform.thumbnailCost(scale: NSScreen.main?.backingScaleFactor ?? 2.0)
+                        cost: waveform.thumbnailCost(scale: currentBackingScale())
                     )
                     return waveform
                 }
@@ -237,7 +250,7 @@ public class FileThumbnailProvider: ObservableObject {
         }
         
         // Try QuickLook first for rich thumbnails (images, PDFs, etc.)
-        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+        let scale = currentBackingScale()
         let request = QLThumbnailGenerator.Request(
             fileAt: url,
             size: size,
@@ -269,7 +282,7 @@ public class FileThumbnailProvider: ObservableObject {
         // This ensures moved files still get proper icons
         // Copy icons to avoid shared reference invalidation during view recycling
         let ext = url.pathExtension
-        if !ext.isEmpty, let utType = UTType(filenameExtension: ext) {
+        if !ext.isEmpty, let utType = Self.cachedUTType(forExtension: ext) {
             return copiedIcon(NSWorkspace.shared.icon(for: utType))
         }
         if !ext.isEmpty {
@@ -279,6 +292,34 @@ public class FileThumbnailProvider: ObservableObject {
             return copiedIcon(NSWorkspace.shared.icon(for: .folder))
         }
         return copiedIcon(NSWorkspace.shared.icon(for: .data))
+    }
+
+    private static func cachedUTType(forExtension ext: String) -> UTType? {
+        let key = ext.lowercased()
+        utTypeCacheLock.lock()
+        if let cached = utTypeCache[key] {
+            utTypeCacheLock.unlock()
+            return cached
+        }
+        utTypeCacheLock.unlock()
+        guard let resolved = UTType(filenameExtension: ext) else { return nil }
+        utTypeCacheLock.lock()
+        if utTypeCache.count > 256 {
+            utTypeCache.removeAll()
+        }
+        utTypeCache[key] = resolved
+        utTypeCacheLock.unlock()
+        return resolved
+    }
+
+    private func currentBackingScale() -> CGFloat {
+        if Date().timeIntervalSince(cachedBackingScaleAt) < 60 {
+            return cachedBackingScale
+        }
+        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+        cachedBackingScale = scale
+        cachedBackingScaleAt = Date()
+        return scale
     }
 
     /// Copies a shared workspace icon so cached thumbnails never mutate the

@@ -29,8 +29,10 @@ public actor RuleInducer {
         
         // 1. Analyze example folders first (high priority)
         for folder in exampleFolders {
+            guard !Task.isCancelled else { break }
             let folderRules = await analyzeExampleFolder(folder)
             rules.append(contentsOf: folderRules)
+            await Task.yield()
         }
         
         // 2. Analyze labeled examples by file category
@@ -59,18 +61,25 @@ public actor RuleInducer {
         guard let enumerator = fm.enumerator(
             at: folderURL,
             includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) else { return [] }
         
         var filePaths: [String] = []
         var folderStructure: [String: [String]] = [:]  // folder path -> file names
+        var scannedSinceYield = 0
         
         while let url = enumerator.nextObject() as? URL {
+            guard !Task.isCancelled else { break }
             let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
             if !isDirectory {
                 filePaths.append(url.path)
                 let parent = url.deletingLastPathComponent().path
                 folderStructure[parent, default: []].append(url.lastPathComponent)
+            }
+            scannedSinceYield += 1
+            if scannedSinceYield >= 20 {
+                scannedSinceYield = 0
+                await Task.yield()
             }
         }
         

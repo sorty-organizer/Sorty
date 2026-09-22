@@ -47,7 +47,7 @@ public final class ImageVisionAnalyzer: Sendable {
             return nil
         }
 
-        return await Task.detached(priority: .userInitiated) {
+        return await Task.detached(priority: .utility) {
             guard !Task.isCancelled else { return nil }
 
             if let cached = self.cachedImageData(for: url) {
@@ -244,7 +244,7 @@ public final class ImageVisionAnalyzer: Sendable {
         displayName: String,
         maxPages: Int
     ) async -> [String: Data] {
-        await Task.detached(priority: .userInitiated) {
+        await Task.detached(priority: .utility) {
             guard let document = PDFDocument(url: url) else {
                 DebugLogger.log("ImageVisionAnalyzer: failed to open PDF \(url.lastPathComponent)")
                 return [:]
@@ -320,19 +320,20 @@ public final class ImageVisionAnalyzer: Sendable {
             return
         }
 
-        Self.cacheLock.lock()
-        defer { Self.cacheLock.unlock() }
-
         do {
             if !FileManager.default.fileExists(atPath: cacheDirectory.path) {
                 try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
             }
+            // File I/O runs outside the lock; only the prune pass below holds it.
             try data.write(to: cacheURL, options: .atomic)
-            if pruneAfterWrite {
-                Self.pruneCache(in: cacheDirectory, preserving: cacheURL)
-            }
         } catch {
             DebugLogger.log("ImageVisionAnalyzer: failed to write cache for \(url.lastPathComponent) (\(error.localizedDescription))")
+            return
+        }
+        if pruneAfterWrite {
+            Self.cacheLock.lock()
+            defer { Self.cacheLock.unlock() }
+            Self.pruneCache(in: cacheDirectory, preserving: cacheURL)
         }
     }
 
@@ -360,6 +361,7 @@ public final class ImageVisionAnalyzer: Sendable {
         let expirationDate = Date().addingTimeInterval(-maximumCacheAge)
         var retained: [(url: URL, modificationDate: Date, size: Int)] = []
         retained.reserveCapacity(cacheFiles.count)
+        var expiredRemoved = 0
 
         for fileURL in cacheFiles {
             guard let values = try? fileURL.resourceValues(forKeys: keys),
@@ -370,10 +372,20 @@ public final class ImageVisionAnalyzer: Sendable {
             let modificationDate = values.contentModificationDate ?? .distantPast
             if fileURL != preservedURL, modificationDate < expirationDate {
                 try? FileManager.default.removeItem(at: fileURL)
+                expiredRemoved += 1
                 continue
             }
 
             retained.append((fileURL, modificationDate, values.fileSize ?? 0))
+        }
+
+        // Fast path: within count and size budgets with nothing expired, skip
+        // the sort and second pass entirely.
+        let retainedSize = retained.reduce(0) { $0 + $1.size }
+        guard expiredRemoved > 0
+            || retained.count > maximumCachedFileCount
+            || retainedSize > maximumCacheSize else {
+            return
         }
 
         retained.sort { $0.modificationDate > $1.modificationDate }

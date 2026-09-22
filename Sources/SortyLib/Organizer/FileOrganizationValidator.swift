@@ -15,7 +15,7 @@ struct FileOrganizationValidator {
         mode: OrganizationMode = .organize
     ) async throws {
         try Task.checkCancellation()
-        let task = Task.detached(priority: .userInitiated) {
+        let task = Task.detached(priority: .utility) {
             try Task.checkCancellation()
             try validate(
                 plan,
@@ -221,7 +221,7 @@ struct PlanQualityEvaluator {
         existingFolderPaths: [String]
     ) async throws -> PlanQualityAssessment {
         try Task.checkCancellation()
-        let task = Task.detached(priority: .userInitiated) {
+        let task = Task.detached(priority: .utility) {
             try Task.checkCancellation()
             let assessment = assess(plan, existingFolderPaths: existingFolderPaths)
             try Task.checkCancellation()
@@ -241,7 +241,7 @@ struct PlanQualityEvaluator {
         maxDepth: Int = 2
     ) async throws -> [String] {
         try Task.checkCancellation()
-        let task = Task.detached(priority: .userInitiated) {
+        let task = Task.detached(priority: .utility) {
             try Task.checkCancellation()
             let paths = existingFolderPaths(at: directory, maxDepth: maxDepth)
             try Task.checkCancellation()
@@ -373,21 +373,44 @@ struct PlanQualityEvaluator {
     }
 
     private static func duplicateNameIssues(in folders: [FolderRecord]) -> [PlanQualityIssue] {
-        var issues: [PlanQualityIssue] = []
-        for index in folders.indices {
-            for otherIndex in folders.indices where otherIndex > index {
-                let lhs = normalizedName(folders[index].suggestion.folderName)
-                let rhs = normalizedName(folders[otherIndex].suggestion.folderName)
-                guard lhs == rhs || editDistance(lhs, rhs) <= 2 else { continue }
-                let pair = [folders[index], folders[otherIndex]]
-                issues.append(PlanQualityIssue(
-                    kind: .duplicateFolderNames,
-                    message: "Folders \"\(pair[0].path)\" and \"\(pair[1].path)\" have duplicate or nearly identical names. Merge them or give each a distinct purpose.",
-                    folderPaths: pair.map(\.path),
-                    fileIDs: pair.flatMap(\.files).map(\.id),
-                    deduction: 18
-                ))
+        // Length-banded pairs: an edit distance <= 2 requires the normalized
+        // lengths to differ by at most 2, so only neighboring length buckets
+        // are compared. Pairs are then evaluated in original index order, so
+        // results are identical to the old O(n^2) pass minus the wasted work.
+        let normalized = folders.map { normalizedName($0.suggestion.folderName) }
+        var indicesByLength: [Int: [Int]] = [:]
+        for (index, name) in normalized.enumerated() {
+            indicesByLength[name.count, default: []].append(index)
+        }
+        var candidatePairs = Set<Int64>()
+        for length in indicesByLength.keys {
+            let bucket = [length, length + 1, length + 2].flatMap {
+                indicesByLength[$0] ?? []
             }
+            for position in bucket.indices {
+                for otherPosition in bucket.indices where otherPosition > position {
+                    let first = min(bucket[position], bucket[otherPosition])
+                    let second = max(bucket[position], bucket[otherPosition])
+                    candidatePairs.insert((Int64(first) << 32) | Int64(second))
+                }
+            }
+        }
+        let orderedPairs = candidatePairs.sorted().map {
+            (Int($0 >> 32), Int($0 & 0xFFFF_FFFF))
+        }
+        var issues: [PlanQualityIssue] = []
+        for (index, otherIndex) in orderedPairs {
+            let lhs = normalized[index]
+            let rhs = normalized[otherIndex]
+            guard lhs == rhs || editDistance(lhs, rhs) <= 2 else { continue }
+            let pair = [folders[index], folders[otherIndex]]
+            issues.append(PlanQualityIssue(
+                kind: .duplicateFolderNames,
+                message: "Folders \"\(pair[0].path)\" and \"\(pair[1].path)\" have duplicate or nearly identical names. Merge them or give each a distinct purpose.",
+                folderPaths: pair.map(\.path),
+                fileIDs: pair.flatMap(\.files).map(\.id),
+                deduction: 18
+            ))
         }
         return issues
     }
@@ -460,7 +483,11 @@ struct PlanQualityEvaluator {
         return folders.compactMap { folder in
             let proposed = normalizedName(folder.suggestion.folderName)
             guard !existing.contains(where: { $0.1 == proposed }) else { return nil }
-            guard let match = existing.first(where: { editDistance($0.1, proposed) <= 2 }) else { return nil }
+            // Length prefilter: editDistance <= 2 is impossible when the
+            // normalized lengths differ by more than 2.
+            guard let match = existing.first(where: {
+                abs($0.1.count - proposed.count) <= 2 && editDistance($0.1, proposed) <= 2
+            }) else { return nil }
             return PlanQualityIssue(
                 kind: .existingConventionMismatch,
                 message: "Folder \"\(folder.path)\" conflicts with the existing \"\(match.0)\" naming convention. Reuse the existing folder when it represents the same category.",
@@ -498,6 +525,9 @@ struct PlanQualityEvaluator {
         guard lhs != rhs else { return 0 }
         guard !lhs.isEmpty else { return rhs.count }
         guard !rhs.isEmpty else { return lhs.count }
+        // Callers only test `<= 2`; bail early when the length gap alone
+        // exceeds the threshold instead of filling the matrix.
+        guard abs(lhs.count - rhs.count) <= 2 else { return 3 }
         let left = Array(lhs)
         let right = Array(rhs)
         var previous = Array(0...right.count)

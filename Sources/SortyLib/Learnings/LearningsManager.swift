@@ -515,6 +515,8 @@ public class LearningsManager: ObservableObject {
             modelDirectoryRestoreTask = nil
             hasPendingModelSelectionChange = false
             hasPendingModelDirectoryChanges = false
+            promptContextCacheKey = nil
+            promptContextCacheValue = nil
             stopAllModelDirectoryAccess()
             modelDirectories = []
             modelDirectoryScanStates = [:]
@@ -603,8 +605,13 @@ public class LearningsManager: ObservableObject {
         // Prune before saving to keep file size manageable
         pruneOldData()
         
+        // File I/O runs on .utility: this manager lives on the main actor and
+        // must never block it with encrypted-profile writes.
+        let snapshot = currentProfile ?? profile
         do {
-            try LearningsFileManager.save(profile: currentProfile ?? profile)
+            try await Task.detached(priority: .utility) {
+                try LearningsFileManager.save(profile: snapshot)
+            }.value
         } catch {
             ReliabilityManager.shared.capture(
                 error: error,
@@ -1463,10 +1470,16 @@ public class LearningsManager: ObservableObject {
     
     private var saveTask: Task<Void, Never>?
     private let saveDebounceInterval: UInt64 = 2_000_000_000 // 2 seconds in nanoseconds
+    /// Memoized prompt context, keyed by a cheap profile fingerprint.
+    private var promptContextCacheKey: String?
+    private var promptContextCacheValue: String?
     
     /// Debounced save to prevent rapid successive writes
     private func debouncedSave() {
         saveTask?.cancel()
+        // Any mutation invalidates the memoized prompt context.
+        promptContextCacheKey = nil
+        promptContextCacheValue = nil
         saveTask = Task {
             try? await Task.sleep(nanoseconds: saveDebounceInterval)
             guard !Task.isCancelled else { return }
@@ -1477,12 +1490,16 @@ public class LearningsManager: ObservableObject {
     /// Force immediate save (for critical operations)
     public func forceSave() async {
         saveTask?.cancel()
+        promptContextCacheKey = nil
+        promptContextCacheValue = nil
         pruneOldData()
         await saveProfile()
     }
 
     public func forceSaveSynchronously() {
         saveTask?.cancel()
+        promptContextCacheKey = nil
+        promptContextCacheValue = nil
         pruneOldData()
         guard let profile = currentProfile else { return }
         do {
@@ -2252,12 +2269,20 @@ public class LearningsManager: ObservableObject {
             return ""
         }
 
-        let scopedSessions = filteredProfile.sessions
+        let scopedSessions = Array(filteredProfile.sessions
             .filter { session in
                 guard let folderPath else { return true }
                 return session.folderPath.hasPrefix(folderPath) || folderPath.hasPrefix(session.folderPath)
             }
             .sorted(by: { ($0.completedAt ?? $0.timestamp) > ($1.completedAt ?? $1.timestamp) })
+            .prefix(20))
+
+        // Memoize per profile generation: identical organize runs (initial
+        // analysis plus validation/quality retries) share one computation.
+        let contextFingerprint = "\(filteredProfile.sessions.count)|\(filteredProfile.inferredRules.count)|\(filteredProfile.additionalInstructionsHistory.count)|\(filteredProfile.guidingInstructionsHistory.count)|\(filteredProfile.positiveExamples.count)|\(filteredProfile.renameFeedbackHistory.count)|\(folderPath ?? "")"
+        if promptContextCacheKey == contextFingerprint, let cached = promptContextCacheValue {
+            return cached
+        }
 
         var hardRules: [String] = []
 
@@ -2309,7 +2334,10 @@ public class LearningsManager: ObservableObject {
         }
 
         guard output.count > 2 else { return "" }
-        return "<learnings_context>\n\(output.joined(separator: "\n"))\n</learnings_context>"
+        let context = "<learnings_context>\n\(output.joined(separator: "\n"))\n</learnings_context>"
+        promptContextCacheKey = contextFingerprint
+        promptContextCacheValue = context
+        return context
     }
     
     // MARK: - Prompt Context Helpers

@@ -751,6 +751,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var timeoutTask: Task<Void, Never>?
     private var suppressCancellationReset = false
     private var resumeCheckpoint: OrganizationResumeCheckpoint?
+    /// Counts validation/quality/exclusion retries in the current run so each
+    /// one backs off with a bounded, jittered delay instead of hot-looping
+    /// the provider with full-prompt resends.
+    private var retryAttemptCount = 0
     private var preparedVisionAttachmentNames: Set<String> = []
     private var visionPreparationFailureCount = 0
     private var visionPreparationByteLimitSkipCount = 0
@@ -1722,7 +1726,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         timeoutTask?.cancel()
         timeoutTask = Task { @MainActor [weak self] in
             while let self = self, !Task.isCancelled, !self.isCancellationRequested {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                // 10 s granularity: elapsed-time display and the 30 s
+                // timeout banner do not need a 2 s main-actor wakeup.
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
                 if Task.isCancelled || self.isCancellationRequested { break }
 
                 if let start = self.startTime {
@@ -1834,11 +1840,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             throw error
         }
 
-        let activity = ProcessInfo.processInfo.beginActivity(
-            options: .userInitiatedAllowingIdleSystemSleep,
-            reason: "Organizing folder: \(directory.lastPathComponent)"
-        )
-        defer { ProcessInfo.processInfo.endActivity(activity) }
+        // No process-wide power assertion here: the network-bound AI wait in
+        // aiAnalysisPhase holds its own narrowly scoped assertion, while
+        // scanning and local validation run without keeping the machine awake.
+        // (ProcessInfo has no .utilityAllowingIdleSystemSleep option, so
+        // narrowing scope is the available lever.)
 
         do {
             currentDirectory = directory
@@ -2096,6 +2102,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             aiAnalysisActivity = .requesting
         }
 
+        // Power assertion covers the network-bound AI wait only.
+        let analysisActivity = ProcessInfo.processInfo.beginActivity(
+            options: .userInitiatedAllowingIdleSystemSleep,
+            reason: "Requesting organization plan"
+        )
+        defer { ProcessInfo.processInfo.endActivity(analysisActivity) }
+
         startTimeoutTimer()
 
         try checkCancellation()
@@ -2112,7 +2125,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         let directInstructions = customPrompt ?? customInstructions
         var instructions = PromptBuilder.wrapDirectUserInstructions(directInstructions)
-        if let referenceContext = fileReferenceContext(from: directInstructions, in: directory) {
+        if let referenceContext = try await fileReferenceContext(from: directInstructions, files: files) {
             instructions += "\n\n" + referenceContext
         }
         if !duplicateContext.isEmpty {
@@ -2614,6 +2627,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 category: "FolderOrganizer"
             )
             organizationStage = "Retrying with fewer files at a time..."
+            // Bounded jittered pause so a throttled provider is not hit again
+            // immediately by both halves.
+            try? await Task.sleep(
+                nanoseconds: UInt64(Double.random(in: 0.3...0.6) * 1_000_000_000)
+            )
+            try checkCancellation()
 
             let recoveryInstructions = instructions + """
 
@@ -3047,31 +3066,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return instructions
     }
 
-    private func fileReferenceContext(from instructions: String, in directory: URL) -> String? {
-        let referencedNames = referencedFileNames(in: instructions)
-        guard !referencedNames.isEmpty else { return nil }
+    /// Builds @mention context from the already-scanned inventory instead of
+    /// walking the directory tree again with a synchronous enumerator on the
+    /// main actor. Matching runs on `.utility`, caps at 400 files, and yields
+    /// with a cancellation check every 100 files.
+    private func fileReferenceContext(from instructions: String, files: [FileItem]) async throws -> String? {
+        let referencedNames = Self.referencedFileNames(in: instructions)
+        guard !referencedNames.isEmpty, !files.isEmpty else { return nil }
 
-        let resourceKeys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
-        guard let enumerator = FileManager.default.enumerator(
-            at: directory,
-            includingPropertiesForKeys: resourceKeys,
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else {
-            return nil
-        }
-
-        var matches: [String] = []
-        for case let url as URL in enumerator {
-            guard let values = try? url.resourceValues(forKeys: Set(resourceKeys)),
-                  values.isRegularFile == true else { continue }
-
-            let relativePath = relativePath(for: url, baseDirectory: directory)
-            let name = url.lastPathComponent
-            guard referencedNames.contains(relativePath.localizedLowercase) || referencedNames.contains(name.localizedLowercase) else { continue }
-            let size = values.fileSize.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? "unknown size"
-            let modified = values.contentModificationDate.map { DateFormatter.localizedString(from: $0, dateStyle: .medium, timeStyle: .short) } ?? "unknown modified date"
-            matches.append("- @\(name): relative path \"\(relativePath)\", extension \"\(url.pathExtension)\", size \(size), modified \(modified)")
-        }
+        let matches = await Task.detached(priority: .utility) {
+            await Self.matchReferencedFiles(names: referencedNames, files: files)
+        }.value
+        try Task.checkCancellation()
 
         guard !matches.isEmpty else { return nil }
 
@@ -3083,9 +3089,43 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         """
     }
 
-    private func referencedFileNames(in instructions: String) -> Set<String> {
-        let pattern = #"@(?:"([^"]+)"|([^\s,;()\[\]{}]+))"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+    nonisolated private static func matchReferencedFiles(names: Set<String>, files: [FileItem]) async -> [String] {
+        var matches: [String] = []
+        matches.reserveCapacity(min(names.count, 400))
+        var checked = 0
+
+        for file in files {
+            guard !Task.isCancelled else { break }
+            let nameKey = file.displayName.localizedLowercase
+            let relativeKey = (file.relativePath ?? file.displayName).localizedLowercase
+            guard names.contains(relativeKey) || names.contains(nameKey) else {
+                checked += 1
+                if checked.isMultiple(of: 100) {
+                    await Task.yield()
+                }
+                continue
+            }
+            let size = ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)
+            let modified = file.modificationDate.map {
+                DateFormatter.localizedString(from: $0, dateStyle: .medium, timeStyle: .short)
+            } ?? "unknown modified date"
+            let relativePath = file.relativePath ?? file.displayName
+            matches.append("- @\(file.displayName): relative path \"\(relativePath)\", extension \"\(file.extension)\", size \(size), modified \(modified)")
+            if matches.count >= 400 { break }
+            checked += 1
+            if checked.isMultiple(of: 100) {
+                await Task.yield()
+            }
+        }
+
+        return matches
+    }
+
+    nonisolated private static let fileReferenceRegex =
+        try? NSRegularExpression(pattern: #"@(?:"([^"]+)"|([^\s,;()\[\]{}]+))"#)
+
+    nonisolated private static func referencedFileNames(in instructions: String) -> Set<String> {
+        guard let regex = fileReferenceRegex else { return [] }
 
         let nsRange = NSRange(instructions.startIndex..<instructions.endIndex, in: instructions)
         return Set(regex.matches(in: instructions, range: nsRange).compactMap { match in
@@ -3097,15 +3137,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let token = String(instructions[range]).trimmingCharacters(in: .whitespacesAndNewlines)
             return token.isEmpty ? nil : token.localizedLowercase
         })
-    }
-
-    private func relativePath(for url: URL, baseDirectory: URL) -> String {
-        let basePath = baseDirectory.standardizedFileURL.path
-        let path = url.standardizedFileURL.path
-        if path.hasPrefix(basePath + "/") {
-            return String(path.dropFirst(basePath.count + 1))
-        }
-        return url.lastPathComponent
     }
 
     private func validationPhase(
@@ -3126,6 +3157,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             isStreaming = false
             aiAnalysisActivity = .validating
         }
+        retryAttemptCount = 0
 
         guard let client = aiClient else {
             throw OrganizationError.clientNotConfigured
@@ -3609,6 +3641,19 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return error.localizedDescription
     }
 
+    /// Bounded exponential backoff with jitter before a plan retry.
+    /// Validation, quality, and exclusion retries resend the full prompt
+    /// (request bodies live in the AI client layer), so at minimum each retry
+    /// waits its turn: 1s, 2s, 4s capped, plus up to 250 ms of jitter.
+    @MainActor
+    private func waitForPlanRetryBackoff() async {
+        retryAttemptCount += 1
+        let cappedShift = min(retryAttemptCount, 2)
+        let base = 0.5 * Double(1 << cappedShift)
+        let delay = min(4.0, base) + Double.random(in: 0...0.25)
+        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+    }
+
     // MARK: - Exclusion Retry
     
     /// Retry AI call with enhanced exclusion prompt after violations
@@ -3625,6 +3670,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         LogManager.shared.log("Retrying with enhanced exclusion prompt", category: "FolderOrganizer")
         restartPlanGenerationForRetry()
+        await waitForPlanRetryBackoff()
+        try checkCancellation()
         
         // Generate enhanced prompt with violation details
         let enhancedPrompt = instructions + enforcer.generateRetryPromptEnhancement(for: violations)
@@ -3697,6 +3744,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         restartPlanGenerationForRetry()
         
         let enhancedPrompt = instructions + enhancement
+        await waitForPlanRetryBackoff()
+        try checkCancellation()
         
         do {
             defer { stopTimeoutTimer() }
@@ -3749,6 +3798,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         """
 
         restartPlanGenerationForRetry()
+        await waitForPlanRetryBackoff()
+        try checkCancellation()
         do {
             defer { stopTimeoutTimer() }
             let retryPlan = try await analyzeInBoundedBatches(

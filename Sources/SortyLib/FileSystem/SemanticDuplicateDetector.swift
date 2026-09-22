@@ -94,11 +94,38 @@ public struct SemanticDuplicateGroup: Identifiable, Sendable {
 public actor SemanticDuplicateDetector {
     private static let perceptualHashBitLength = 64
     private static let maximumVibeCandidateCount = 500
+    /// Content comparison is quadratic, so the candidate set is capped and
+    /// pairs are generated from a token inverted index (shingle blocking)
+    /// instead of comparing every pair.
+    private static let maximumContentCandidateCount = 1_500
+    private static let maximumContentCandidatePairs = 200_000
+    private static let contentPairYieldInterval = 256
 
     private struct PerceptualHashRecord {
         let file: FileItem
         let value: UInt64
     }
+
+    private static let resolutionSuffixPatterns = [
+        #"_\d+x\d+"#,      // _1920x1080
+        #"@\d+x"#,         // @2x, @3x
+        #"-small"#,
+        #"-medium"#,
+        #"-large"#,
+        #"-thumbnail"#,
+        #"-thumb"#,
+        #"_hd"#,
+        #"_sd"#,
+        #"_4k"#,
+        #"_1080p"#,
+        #"_720p"#,
+    ]
+
+    private static let documentVersionPatterns = [
+        #"([\s_\-\.]|^)(v|version|rev)\s*\d+(\.\d+)?$"#,
+        #"[\s_\-\.]+(draft|final|copy|backup|old|new)(\s*\d+)?$"#,
+        #"\s+\(\d+\)$"#
+    ]
 
     private struct HashSegmentKey: Hashable {
         let segment: Int
@@ -326,6 +353,7 @@ public actor SemanticDuplicateDetector {
         var imageHashes: [PerceptualHashRecord] = []
         imageHashes.reserveCapacity(images.count)
 
+        var processedCount = 0
         for file in images {
             if Task.isCancelled {
                 return []
@@ -345,6 +373,10 @@ public actor SemanticDuplicateDetector {
                 continue
             }
             imageHashes.append(PerceptualHashRecord(file: file, value: value))
+            processedCount += 1
+            if processedCount.isMultiple(of: 50) {
+                await Task.yield()
+            }
         }
 
         return imageHashes
@@ -450,33 +482,18 @@ public actor SemanticDuplicateDetector {
     ) async -> [SemanticDuplicateGroup] {
         var groups: [SemanticDuplicateGroup] = []
 
-        // Group by similar filename patterns
+        // Group by similar filename patterns. Suffix patterns are compiled
+        // once per call, not once per file.
+        let suffixRegexes = Self.resolutionSuffixPatterns.compactMap {
+            try? NSRegularExpression(pattern: $0, options: .caseInsensitive)
+        }
         let baseNameGroups = Dictionary(grouping: images) { file -> String in
             // Extract base name without resolution suffix patterns
-            let name = file.name.lowercased()
-            let patterns = [
-                #"_\d+x\d+"#,      // _1920x1080
-                #"@\d+x"#,         // @2x, @3x
-                #"-small"#,
-                #"-medium"#,
-                #"-large"#,
-                #"-thumbnail"#,
-                #"-thumb"#,
-                #"_hd"#,
-                #"_sd"#,
-                #"_4k"#,
-                #"_1080p"#,
-                #"_720p"#
-            ]
-
-            var baseName = name
-            for pattern in patterns {
-                if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
-                    let range = NSRange(baseName.startIndex..., in: baseName)
-                    baseName = regex.stringByReplacingMatches(in: baseName, range: range, withTemplate: "")
-                }
+            var baseName = file.name.lowercased()
+            for regex in suffixRegexes {
+                let range = NSRange(baseName.startIndex..., in: baseName)
+                baseName = regex.stringByReplacingMatches(in: baseName, range: range, withTemplate: "")
             }
-
             return baseName
         }
 
@@ -558,9 +575,13 @@ public actor SemanticDuplicateDetector {
 
         // Group documents by explicit version/copy markers only. Bare numbers
         // often carry meaning (tax year, invoice number, report quarter) and
-        // should not create false-positive version groups.
+        // should not create false-positive version groups. Version patterns
+        // are compiled once per call, not once per file.
+        let versionRegexes = Self.documentVersionPatterns.compactMap {
+            try? NSRegularExpression(pattern: $0, options: .caseInsensitive)
+        }
         let versionRecords = documents.map { file in
-            let versionKey = documentVersionKey(for: file)
+            let versionKey = documentVersionKey(for: file, regexes: versionRegexes)
             return (file: file, key: versionKey.key, hasVersionMarker: versionKey.hasVersionMarker)
         }
         let baseNameGroups = Dictionary(grouping: versionRecords, by: \.key)
@@ -603,12 +624,22 @@ public actor SemanticDuplicateDetector {
     }
 
     private func findSimilarByContent(_ documents: [FileItem], processedIds: Set<UUID>) async -> [SemanticDuplicateGroup] {
-        let features = documents.map { file in
-            file.semanticTextContent.map(Self.textFeatures)
+        // Cap the candidate set deterministically (sorted by path) so huge
+        // folders cannot explode the quadratic comparison below.
+        let eligible = documents.indices.filter {
+            !processedIds.contains(documents[$0].id)
+                && documents[$0].semanticTextContent != nil
+        }.sorted { documents[$0].path < documents[$1].path }
+        let order = Array(eligible.prefix(Self.maximumContentCandidateCount))
+        guard order.count > 1 else { return [] }
+
+        let features = order.map { index in
+            // Nil was filtered above; fall back to empty features defensively.
+            documents[index].semanticTextContent.map(Self.textFeatures)
         }
-        var parent = Array(documents.indices)
-        var rank = Array(repeating: 0, count: documents.count)
-        var minimumSimilarity = Array(repeating: 1.0, count: documents.count)
+        var parent = Array(order.indices)
+        var rank = Array(repeating: 0, count: order.count)
+        var minimumSimilarity = Array(repeating: 1.0, count: order.count)
 
         func root(of index: Int) -> Int {
             var current = index
@@ -639,22 +670,63 @@ public actor SemanticDuplicateDetector {
             }
         }
 
-        for i in 0..<documents.count {
-            guard !processedIds.contains(documents[i].id), let firstFeatures = features[i] else { continue }
+        // Shingle blocking: a pair with similarity above zero must share at
+        // least one token (bigram overlap implies token overlap), so generate
+        // candidate pairs from a token inverted index. Rarest tokens first,
+        // with a hard pair cap for pathological corpora.
+        var postings: [String: [Int]] = [:]
+        for (position, feature) in features.enumerated() {
+            guard let feature else { continue }
+            for token in feature.frequencies.keys {
+                postings[token, default: []].append(position)
+            }
+        }
+        var seenPairs = Set<Int64>()
+        var candidatePairs: [(Int, Int)] = []
+        candidatePairs.reserveCapacity(
+            min(Self.maximumContentCandidatePairs, order.count * order.count / 2)
+        )
+        let tokensByRarity = postings.keys.sorted {
+            (postings[$0]?.count ?? 0) < (postings[$1]?.count ?? 0)
+        }
+        pairGeneration: for token in tokensByRarity {
+            guard let list = postings[token] else { continue }
+            for a in list.indices {
+                for b in list.indices where b > a {
+                    // Positions ascend within a posting list, so the key is ordered.
+                    let key = (Int64(list[a]) << 32) | Int64(list[b])
+                    if seenPairs.insert(key).inserted {
+                        candidatePairs.append((list[a], list[b]))
+                        if candidatePairs.count >= Self.maximumContentCandidatePairs {
+                            break pairGeneration
+                        }
+                    }
+                }
+            }
+        }
 
-            for j in (i + 1)..<documents.count {
-                guard !processedIds.contains(documents[j].id), let secondFeatures = features[j] else { continue }
+        var comparedCount = 0
+        for (first, second) in candidatePairs {
+            guard let firstFeatures = features[first],
+                  let secondFeatures = features[second] else { continue }
 
-                let similarity = Self.textSimilarity(firstFeatures, secondFeatures)
-                if similarity >= similarityThreshold {
-                    union(i, j, similarity: similarity)
+            let similarity = Self.textSimilarity(firstFeatures, secondFeatures)
+            if similarity >= similarityThreshold {
+                union(first, second, similarity: similarity)
+            }
+
+            comparedCount += 1
+            if comparedCount.isMultiple(of: Self.contentPairYieldInterval) {
+                await Task.yield()
+                if Task.isCancelled {
+                    return []
                 }
             }
         }
 
         var indexesByRoot: [Int: Set<Int>] = [:]
-        for index in documents.indices where !processedIds.contains(documents[index].id) && features[index] != nil {
-            indexesByRoot[root(of: index), default: []].insert(index)
+        for position in order.indices where features[position] != nil {
+            indexesByRoot[root(of: position), default: []].insert(order[position])
         }
 
         return indexesByRoot.compactMap { componentRoot, indexes in
@@ -711,6 +783,7 @@ public actor SemanticDuplicateDetector {
 
             var similarFiles: [FileItem] = [featurePrints[i].file]
             var matchedDistances: [Float] = []
+            var comparedCount = 0
 
             for j in (i + 1)..<featurePrints.count {
                 guard !processedIds.contains(featurePrints[j].file.id) else { continue }
@@ -720,6 +793,14 @@ public actor SemanticDuplicateDetector {
                     try featurePrints[i].featurePrint.computeDistance(&distance, to: featurePrints[j].featurePrint)
                 } catch {
                     continue
+                }
+
+                comparedCount += 1
+                if comparedCount.isMultiple(of: Self.contentPairYieldInterval) {
+                    await Task.yield()
+                    if Task.isCancelled {
+                        return []
+                    }
                 }
 
                 if distance < vibeFeaturePrintThreshold {
@@ -762,12 +843,20 @@ public actor SemanticDuplicateDetector {
 
             var similarFiles: [FileItem] = [withContent[i]]
             var lowestSimilarityInGroup = 1.0
+            var comparedCount = 0
 
             for j in (i + 1)..<withContent.count {
                 guard !processedIds.contains(withContent[j].id),
                       let content2 = withContent[j].semanticTextContent else { continue }
 
                 let similarity = Self.textSimilarity(content1, content2)
+                comparedCount += 1
+                if comparedCount.isMultiple(of: Self.contentPairYieldInterval) {
+                    await Task.yield()
+                    if Task.isCancelled {
+                        return []
+                    }
+                }
                 if similarity >= vibeTextSimilarityThreshold {
                     similarFiles.append(withContent[j])
                     lowestSimilarityInGroup = min(lowestSimilarityInGroup, similarity)
@@ -1010,24 +1099,17 @@ public actor SemanticDuplicateDetector {
         return ratio >= 0.75
     }
 
-    private func documentVersionKey(for file: FileItem) -> (key: String, hasVersionMarker: Bool) {
+    private func documentVersionKey(for file: FileItem, regexes: [NSRegularExpression]) -> (key: String, hasVersionMarker: Bool) {
         let lowercasedName = file.name.lowercased()
-        let patterns = [
-            #"([\s_\-\.]|^)(v|version|rev)\s*\d+(\.\d+)?$"#,
-            #"[\s_\-\.]+(draft|final|copy|backup|old|new)(\s*\d+)?$"#,
-            #"\s+\(\d+\)$"#
-        ]
 
         var normalizedName = lowercasedName
         var hasVersionMarker = false
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
-                let range = NSRange(normalizedName.startIndex..., in: normalizedName)
-                let updated = regex.stringByReplacingMatches(in: normalizedName, range: range, withTemplate: "")
-                if updated != normalizedName {
-                    normalizedName = updated
-                    hasVersionMarker = true
-                }
+        for regex in regexes {
+            let range = NSRange(normalizedName.startIndex..., in: normalizedName)
+            let updated = regex.stringByReplacingMatches(in: normalizedName, range: range, withTemplate: "")
+            if updated != normalizedName {
+                normalizedName = updated
+                hasVersionMarker = true
             }
         }
 

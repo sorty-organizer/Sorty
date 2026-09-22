@@ -44,6 +44,8 @@ public actor FileSystemManager {
         }
     }
 
+    private static let snapshotYieldIntervalBytes: UInt64 = 64 * 1024 * 1024
+
     private func transferSnapshot(at url: URL) throws -> TransferSnapshot {
         let rootValues = try url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
         guard rootValues.isDirectory == true else {
@@ -57,7 +59,7 @@ public actor FileSystemManager {
         guard let enumerator = fileManager.enumerator(
             at: url,
             includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey],
-            options: [],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants],
             errorHandler: { _, _ in false }
         ) else {
             throw FileSystemError.crossVolumeCopyVerificationFailed(url.path)
@@ -65,6 +67,7 @@ public actor FileSystemManager {
 
         var itemCount = 1
         var totalBytes: UInt64 = 0
+        var bytesSinceYield: UInt64 = 0
         var latestModificationDate = rootValues.contentModificationDate
         for case let itemURL as URL in enumerator {
             try Task.checkCancellation()
@@ -79,7 +82,14 @@ public actor FileSystemManager {
             }
             itemCount += 1
             if values.isDirectory != true {
-                totalBytes += UInt64(max(values.fileSize ?? 0, 0))
+                let fileBytes = UInt64(max(values.fileSize ?? 0, 0))
+                totalBytes += fileBytes
+                // Cooperative yield every 64 MB so huge trees don't pin the actor.
+                bytesSinceYield += fileBytes
+                if bytesSinceYield >= Self.snapshotYieldIntervalBytes {
+                    bytesSinceYield = 0
+                    await Task.yield()
+                }
             }
             if let date = values.contentModificationDate,
                latestModificationDate == nil || date > latestModificationDate! {
@@ -201,7 +211,10 @@ public actor FileSystemManager {
     private func copyWithProgress(from source: URL, to destination: URL, progressHandler: (@Sendable (Double) -> Void)?) async throws {
         let sourceAttributes = try fileManager.attributesOfItem(atPath: source.path)
         let fileSize = (sourceAttributes[.size] as? UInt64) ?? 0
-        let sourceSnapshot = try transferSnapshot(at: source)
+        // Single files skip snapshot enumeration entirely: raw size/mtime
+        // stats verify the copy without walking a tree.
+        let sourceIsDirectory = (try? source.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+        let sourceSnapshot = sourceIsDirectory ? try transferSnapshot(at: source) : nil
         let stagingURL = destination.deletingLastPathComponent().appendingPathComponent(
             ".sorty-transfer-\(UUID().uuidString)-\(destination.lastPathComponent)"
         )
@@ -265,18 +278,20 @@ public actor FileSystemManager {
         }
 
         try Task.checkCancellation()
-        let currentSourceSnapshot = try transferSnapshot(at: source)
-        let destinationSnapshot = try transferSnapshot(at: stagingURL)
-        guard currentSourceSnapshot == sourceSnapshot,
-              sourceSnapshot.matchesCopiedContent(destinationSnapshot) else {
-            throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
-        }
-        // Extra size check so a truncated staging copy can never replace the
-        // source. Directory metadata sizes vary by volume, so single files
-        // compare raw sizes while directories rely on the snapshot byte totals.
-        if sourceSnapshot.itemCount <= 1 {
+        if let sourceSnapshot {
+            let currentSourceSnapshot = try transferSnapshot(at: source)
+            let destinationSnapshot = try transferSnapshot(at: stagingURL)
+            guard currentSourceSnapshot == sourceSnapshot,
+                  sourceSnapshot.matchesCopiedContent(destinationSnapshot) else {
+                throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
+            }
+        } else {
+            // Single-file fast path: staged size plus an unchanged source size
+            // prove the copy without enumerating anything. Directory metadata
+            // sizes vary by volume, so directories keep the snapshot totals.
             let stagedSize = (try? fileManager.attributesOfItem(atPath: stagingURL.path)[.size] as? UInt64) ?? UInt64.max
-            guard stagedSize == fileSize else {
+            let currentSourceSize = (try? fileManager.attributesOfItem(atPath: source.path)[.size] as? UInt64) ?? UInt64.max
+            guard stagedSize == fileSize, currentSourceSize == fileSize else {
                 throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
             }
         }
@@ -315,6 +330,39 @@ public actor FileSystemManager {
         return false
     }
 
+    /// Starts security-scoped access once per URL: repeated resolves of the
+    /// same storage root during one apply share a single session instead of
+    /// stacking start/stop pairs. Counts stay balanced because
+    /// stopAccessingAll drains exactly what was started.
+    private func startAccessingOnce(_ url: URL) -> Bool {
+        if activeBookmarks[url] != nil { return true }
+        return startAccessing(url)
+    }
+
+    /// Per-apply directory listing cache for fuzzy folder matching, so an
+    /// apply touching N folders performs one contentsOfDirectory per parent
+    /// instead of N. Only active while directoryListingCacheGeneration != 0
+    /// (i.e. inside applyOrganization); all other callers bypass the cache.
+    private var directoryListingCache: [String: [URL]] = [:]
+    private var directoryListingCacheGeneration = 0
+    private var applyGenerationCounter = 0
+
+    private func beginListingCacheScope() {
+        applyGenerationCounter &+= 1
+        directoryListingCacheGeneration = applyGenerationCounter
+        directoryListingCache.removeAll(keepingCapacity: true)
+    }
+
+    private func endListingCacheScope() {
+        directoryListingCacheGeneration = 0
+        directoryListingCache.removeAll(keepingCapacity: false)
+    }
+
+    private func invalidateListingCache(forParent parentURL: URL) {
+        guard directoryListingCacheGeneration != 0 else { return }
+        directoryListingCache.removeValue(forKey: parentURL.standardizedFileURL.path)
+    }
+
     /// Resolve folder destinations, including absolute storage locations.
     private func resolveDestinationFolderURL(
         folderName: String,
@@ -324,7 +372,7 @@ public actor FileSystemManager {
         if let absoluteURL = StorageLocationPathResolver.absoluteURL(from: folderName) {
             let resolvedURL = URL(fileURLWithPath: StorageLocationPathResolver.resolvedPath(absoluteURL.path), isDirectory: true)
             if requestSecurityScope {
-                _ = startAccessing(resolvedURL)
+                _ = startAccessingOnce(resolvedURL)
             }
             return resolvedURL
         }
@@ -363,11 +411,24 @@ public actor FileSystemManager {
         let normalized = name.lowercased().filter { $0.isLetter || $0.isNumber }
         guard !normalized.isEmpty else { return nil }
 
-        guard let items = try? fileManager.contentsOfDirectory(
-            at: parentURL,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return nil }
+        // One listing per parent per apply; invalidated whenever this apply
+        // creates a directory under the parent.
+        let cacheKey = parentURL.standardizedFileURL.path
+        let items: [URL]
+        if directoryListingCacheGeneration != 0,
+           let cached = directoryListingCache[cacheKey] {
+            items = cached
+        } else {
+            guard let listed = try? fileManager.contentsOfDirectory(
+                at: parentURL,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) else { return nil }
+            items = listed
+            if directoryListingCacheGeneration != 0 {
+                directoryListingCache[cacheKey] = listed
+            }
+        }
 
         var fuzzyMatch: URL?
         for item in items {
@@ -1063,7 +1124,11 @@ public actor FileSystemManager {
         progress: (@Sendable (Double, String) -> Void)? = nil
     ) async throws -> [FileOperation] {
         _ = startAccessing(baseURL)
-        defer { stopAccessingAll() }
+        beginListingCacheScope()
+        defer {
+            endListingCacheScope()
+            stopAccessingAll()
+        }
 
         var allOperations: [FileOperation] = []
         var allFailures: [OperationFailure] = []
@@ -1256,6 +1321,7 @@ public actor FileSystemManager {
                     try await withRetry {
                         try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
                     }
+                    invalidateListingCache(forParent: currentURL)
                     operations.append(FileOperation(
                         type: .createFolder,
                         sourcePath: folderURL.path,
@@ -1347,6 +1413,7 @@ public actor FileSystemManager {
                             try await withRetry {
                                 try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
                             }
+                            invalidateListingCache(forParent: folderURL.deletingLastPathComponent())
                         }
 
                         guard fileManager.fileExists(atPath: sourceURL.path) else {
@@ -1538,7 +1605,12 @@ public actor FileSystemManager {
     
     /// Recursively find and remove empty subdirectories, excluding newly created folders
     private func cleanupEmptySubdirectories(at baseURL: URL, excluding protectedPaths: Set<String>) throws {
-        let contents = try fileManager.contentsOfDirectory(at: baseURL, includingPropertiesForKeys: [.isDirectoryKey, .isPackageKey])
+        try Task.checkCancellation()
+        let contents = try fileManager.contentsOfDirectory(
+            at: baseURL,
+            includingPropertiesForKeys: [.isDirectoryKey, .isPackageKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        )
         let protected = Set(protectedPaths.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path })
 
         for item in contents {

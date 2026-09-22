@@ -428,23 +428,59 @@ public actor DuplicateDetector {
         )
     }
     
-    /// Compute hashes for files that don't have them
+    /// Compute hashes for files that don't have them.
+    ///
+    /// Reads run two at a time on `.utility` tasks (never serially on the
+    /// caller), progress reports are throttled to ~4 Hz, and cancellation
+    /// stops scheduling new reads.
     public func computeHashes(for files: inout [FileItem], progressHandler: ((Int, Int) -> Void)? = nil) async {
-        for i in 0..<files.count {
-            if Task.isCancelled {
-                return
+        let missing = files.indices.filter { files[$0].sha256Hash == nil }
+        guard !missing.isEmpty else {
+            progressHandler?(files.count, files.count)
+            return
+        }
+
+        let total = files.count
+        var completed = total - missing.count
+        var lastReport = Date.distantPast
+        func report(force: Bool = false) {
+            let now = Date()
+            guard force || now.timeIntervalSince(lastReport) >= 0.25 else { return }
+            lastReport = now
+            progressHandler?(completed, total)
+        }
+
+        var next = 0
+        await withTaskGroup(of: (Int, String?).self) { group in
+            while next < min(maximumConcurrentHashers, missing.count) {
+                let fileIndex = missing[next]
+                next += 1
+                let path = files[fileIndex].path
+                group.addTask(priority: .utility) {
+                    (fileIndex, HashUtility.computeSHA256(for: URL(fileURLWithPath: path)))
+                }
             }
 
-            if files[i].sha256Hash == nil {
-                files[i].sha256Hash = HashUtility.computeSHA256(for: URL(fileURLWithPath: files[i].path))
-            }
-            progressHandler?(i + 1, files.count)
-            
-            // Yield periodically for UI updates
-            if i % 10 == 0 {
-                await Task.yield()
+            while let (fileIndex, hash) = await group.next() {
+                if Task.isCancelled {
+                    group.cancelAll()
+                    break
+                }
+                files[fileIndex].sha256Hash = hash
+                completed += 1
+                report()
+
+                if next < missing.count {
+                    let nextFileIndex = missing[next]
+                    next += 1
+                    let path = files[nextFileIndex].path
+                    group.addTask(priority: .utility) {
+                        (nextFileIndex, HashUtility.computeSHA256(for: URL(fileURLWithPath: path)))
+                    }
+                }
             }
         }
+        report(force: true)
     }
     
     private static func cacheKey(for file: FileItem) -> HashCacheKey {
@@ -530,7 +566,10 @@ public class DuplicateDetectionManager: ObservableObject {
     
     private let detector = DuplicateDetector()
     private var lastProgressUpdate = Date.distantPast
-    private let progressUpdateInterval: TimeInterval = 0.12
+    /// Progress store publishes at most ~4 Hz. Result stores below
+    /// (duplicateGroups/semanticGroups) are assigned once per scan, never
+    /// per file, so 20+ @Published properties never churn in a hot loop.
+    private let progressUpdateInterval: TimeInterval = 0.25
     
     public init() {}
 
@@ -694,14 +733,18 @@ public class DuplicateDetectionManager: ObservableObject {
                 )
                 let detectedSemanticGroups = await semanticDetector.findSemanticDuplicates(
                     in: remainingSemanticCandidates
-                ) { current, total, stage in
-                    Task { @MainActor in
-                        self.scanStage = stage
+                ) { [weak self] current, total, stage in
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
                         let semanticProgress = total > 0 ? Double(current) / Double(total) : 1
-                        self.publishScanProgress(
+                        // Stage labels ride the same 4 Hz throttle as progress
+                        // instead of hopping to the main actor per file.
+                        if self.publishScanProgress(
                             0.7 + semanticProgress * 0.3,
                             force: current == total
-                        )
+                        ) {
+                            self.scanStage = stage
+                        }
                     }
                 }
                 let promotedExactGroups = await promoteExactMatches(from: detectedSemanticGroups)
@@ -779,15 +822,17 @@ public class DuplicateDetectionManager: ObservableObject {
         }
     }
 
-    private func publishScanProgress(_ progress: Double, force: Bool = false) {
+    @discardableResult
+    private func publishScanProgress(_ progress: Double, force: Bool = false) -> Bool {
         let now = Date()
         guard force || now.timeIntervalSince(lastProgressUpdate) >= progressUpdateInterval else {
-            return
+            return false
         }
 
         lastProgressUpdate = now
         scanProgress = progress
         state = .scanning(progress: progress)
+        return true
     }
 
     private func promoteExactMatches(from semanticGroups: [SemanticDuplicateGroup]) async -> [DuplicateGroup] {

@@ -44,7 +44,11 @@ public final class LogManager: @unchecked Sendable {
     private var hasPreparedLogFile = false
     private let timestampFormatter = ISO8601DateFormatter()
     private let userPathRegex = try? NSRegularExpression(pattern: "/Users/([^/]+)")
-    
+    /// Debug sampling: hot loops must not thrash the log file, so only 1 in
+    /// 100 debug messages is persisted. Info and above always persist.
+    private let debugSampleLock = NSLock()
+    private var debugSampleCount = 0
+
     private var logsDirectory: URL? {
         guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return nil
@@ -74,6 +78,7 @@ public final class LogManager: @unchecked Sendable {
         data: [String: Any]? = nil
     ) {
         guard shouldPersist(level) else { return }
+        if level == .debug, !shouldKeepDebugSample() { return }
         let resolvedMessage = message()
         // The context payload is serialized on the logging queue; box it so the
         // @Sendable work item below captures only Sendable state.
@@ -644,7 +649,10 @@ public final class LogManager: @unchecked Sendable {
         do {
             try logFileHandle.write(contentsOf: data)
             currentLogSize += UInt64(data.count)
-            if level >= .warning {
+            // fsync only on faults: warning-level fsyncs on every write kept
+            // the disk awake during bulk operations. Rotation still syncs via
+            // generateDiagnosticReport before reading.
+            if level >= .fault {
                 try logFileHandle.synchronize()
             }
         } catch {
@@ -665,7 +673,22 @@ public final class LogManager: @unchecked Sendable {
 #endif
     }
 
+    private func shouldKeepDebugSample() -> Bool {
+        debugSampleLock.lock()
+        defer { debugSampleLock.unlock() }
+        debugSampleCount &+= 1
+        return debugSampleCount.isMultiple(of: 100) || debugSampleCount == 1
+    }
+
     private func sanitize(_ text: String) -> String {
+        // Fast path: messages without user paths or key prefixes skip every
+        // regex below. This covers the vast majority of hot-loop messages.
+        guard text.contains("/Users/")
+            || text.contains("sk-")
+            || text.contains("ghp_")
+            || text.contains("gho_") else {
+            return text
+        }
         var result = text
         
         // Redact standard API keys

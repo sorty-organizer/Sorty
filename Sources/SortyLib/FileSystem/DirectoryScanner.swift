@@ -644,7 +644,7 @@ actor DirectoryScanner {
             resourceValues: resourceValues,
             pathExtension: pathExtension
         )
-        if skipCloudPlaceholders && hasCloudSignals && isCloudPlaceholder(at: url) {
+        if skipCloudPlaceholders && hasCloudSignals && isCloudPlaceholder(at: url, fileSize: size) {
             throw ScannerError.cloudPlaceholder
         }
         let cloudStatus = hasCloudSignals ? detectCloudStatus(at: url) : nil
@@ -661,10 +661,14 @@ actor DirectoryScanner {
         let extractedOCRText = contentMetadata?.ocrText
         let extractedDimensions = Self.extractImageDimensions(from: contentMetadata)
 
-        // Hash computation for duplicate detection
+        // Hash computation for duplicate detection, off the scan priority so a
+        // large file never inherits a user-initiated QoS from the caller.
         var sha256Hash: String?
         if computeHashes {
-            sha256Hash = HashUtility.computeSHA256(for: url)
+            let target = url
+            sha256Hash = await Task.detached(priority: .utility) {
+                HashUtility.computeSHA256(for: target)
+            }.value
         }
 
         return FileItem(
@@ -777,6 +781,11 @@ actor DirectoryScanner {
             visitedDirectoryIDs.insert(key)
         }
 
+        // Lightweight enumeration rows. Expensive content analysis and hashing
+        // run in a bounded parallel phase after enumeration (see
+        // enrichPendingEntries), never serially inside this loop.
+        var pending: [PendingScanEntry] = []
+
         while let fileURL = enumerator.nextObject() as? URL {
             // Check and wait if paused due to memory pressure
             try await waitIfPaused()
@@ -843,7 +852,9 @@ actor DirectoryScanner {
 
             // Cloud placeholder detection can require xattr checks, so only run it
             // when the path or prefetched resource values indicate cloud storage.
-            if skipCloudPlaceholders && hasCloudSignals && isCloudPlaceholder(at: fileURL) {
+            // The known file size is passed so zero-byte gating avoids a
+            // redundant size lookup inside the check.
+            if skipCloudPlaceholders && hasCloudSignals && isCloudPlaceholder(at: fileURL, fileSize: size) {
                 let provider = cloudProviderName(for: fileURL) ?? "Unknown"
                 logger.debug(
                     "Skipping cloud placeholder (\(provider)): \(fileURL.lastPathComponent)")
@@ -854,56 +865,27 @@ actor DirectoryScanner {
             // Determine cloud status for the file
             let cloudStatus = hasCloudSignals ? detectCloudStatus(at: fileURL) : nil
 
-            // Deep scan: extract content metadata (skipped under memory pressure)
-            var contentMetadata: ContentMetadata?
-            let isWithinDeepScanBudget = deepScanFileLimit.map {
-                deepScanAnalyzedCount < max(0, $0)
-            } ?? true
-            if effectiveDeepScan && isWithinDeepScanBudget {
-                contentMetadata = await contentAnalyzer.analyze(fileURL: fileURL)
-                deepScanAnalyzedCount += 1
-                deepScanProgressCallback?(deepScanAnalyzedCount, 0)
-            } else if effectiveDeepScan && !isWithinDeepScanBudget && degradationReason == nil {
-                lastScanWasDegraded = true
-                degradationReason =
-                    "Deep content analysis was limited to \(deepScanAnalyzedCount) files to keep this large folder responsive"
-            }
-
             // Finder comments are lightweight filesystem metadata and remain useful
             // even when content extraction is disabled.
             let finderComment = fileURL.finderComment
 
-            let extractedOCRText = contentMetadata?.ocrText
-            let extractedDimensions = Self.extractImageDimensions(from: contentMetadata)
-
-            // Hash computation for duplicate detection (skipped under memory pressure)
-            var sha256Hash: String?
-            if effectiveComputeHashes {
-                sha256Hash = HashUtility.computeSHA256(for: fileURL)
-            }
-
-            let fileItem = FileItem(
-                path: fileURL.path,
-                relativePath: Self.relativePath(for: fileURL, under: baseDirectoryURL),
-                name: fileName,
-                extension: pathExtension,
-                size: Int64(size),
-                isDirectory: false,
-                creationDate: creationDate,
-                modificationDate: modificationDate,
-                lastAccessDate: lastAccessDate,
-                contentMetadata: contentMetadata,
-                sha256Hash: sha256Hash,
-                ocrText: extractedOCRText,
-                imageWidth: extractedDimensions?.width,
-                imageHeight: extractedDimensions?.height,
-                cloudStatus: cloudStatus,
-                finderComment: finderComment,
-                finderTags: finderTags,
-                finderLabelNumber: finderLabelNumber
+            // Defer expensive content analysis and hashing to the bounded
+            // parallel phase below; enumeration stays a cheap metadata walk.
+            pending.append(
+                PendingScanEntry(
+                    url: fileURL,
+                    pathExtension: pathExtension,
+                    fileName: fileName,
+                    size: size,
+                    creationDate: creationDate,
+                    modificationDate: modificationDate,
+                    lastAccessDate: lastAccessDate,
+                    finderTags: finderTags,
+                    finderLabelNumber: finderLabelNumber,
+                    cloudStatus: cloudStatus,
+                    finderComment: finderComment
+                )
             )
-
-            files.append(fileItem)
             scannedCount += 1
 
             // Yield in small batches, but avoid a task_info syscall and progress
@@ -924,6 +906,17 @@ actor DirectoryScanner {
             }
         }
 
+        // Bounded parallel enrichment: content analysis and hashing run at most
+        // two at a time on .utility tasks instead of serially on this loop.
+        try await enrichPendingEntries(
+            &pending,
+            baseDirectoryURL: baseDirectoryURL,
+            deepScan: effectiveDeepScan,
+            computeHashes: effectiveComputeHashes,
+            deepScanFileLimit: deepScanFileLimit,
+            files: &files
+        )
+
         scanProgressCallback?(scannedCount)
 
         // Final memory state logging
@@ -942,6 +935,177 @@ actor DirectoryScanner {
         _ callback: (@Sendable (_ current: Int) -> Void)?
     ) {
         scanProgressCallback = callback
+    }
+
+    /// Lightweight enumeration row. Content analysis and hashing results are
+    /// filled in by `enrichPendingEntries`.
+    private struct PendingScanEntry: Sendable {
+        let url: URL
+        let pathExtension: String
+        let fileName: String
+        let size: Int
+        let creationDate: Date?
+        let modificationDate: Date?
+        let lastAccessDate: Date?
+        let finderTags: [String]?
+        let finderLabelNumber: Int?
+        let cloudStatus: CloudFileStatus?
+        let finderComment: String?
+        var contentMetadata: ContentMetadata?
+        var sha256Hash: String?
+    }
+
+    /// Maximum concurrent content-analysis/hash tasks. Two lanes overlap
+    /// Vision/PDF/AV I/O without multiplying memory pressure.
+    private let enrichmentConcurrency = 2
+    private let enrichmentYieldInterval = 50
+
+    private func enrichPendingEntries(
+        _ pending: inout [PendingScanEntry],
+        baseDirectoryURL: URL,
+        deepScan: Bool,
+        computeHashes: Bool,
+        deepScanFileLimit: Int?,
+        files: inout [FileItem]
+    ) async throws {
+        guard !pending.isEmpty else { return }
+        files.reserveCapacity(files.count + pending.count)
+        let total = pending.count
+
+        if deepScan || computeHashes {
+            let analysisBudget = deepScan
+                ? (deepScanFileLimit.map { max(0, $0 - deepScanAnalyzedCount) } ?? Int.max)
+                : 0
+            var analysisUsed = 0
+            var budgetSkipped = 0
+            // Re-read as the phase runs: pressure can change mid-scan, and AV
+            // assets plus OCR are the first work to shed.
+            var skipHeavyWork = shouldSkipNonEssentialWork()
+            var completedSinceYield = 0
+            var nextIndex = 0
+
+            await withTaskGroup(of: (Int, ContentMetadata?, String?, Bool).self) { group in
+                // Seed the lanes.
+                while nextIndex < min(enrichmentConcurrency, total) {
+                    let index = nextIndex
+                    nextIndex += 1
+                    let entry = pending[index]
+                    let withinBudget = deepScan && analysisBudget - analysisUsed > 0
+                    if deepScan && !withinBudget {
+                        budgetSkipped += 1
+                    }
+                    let skipAnalysis = withinBudget && skipHeavyWork
+                        && Self.isExpensiveMediaExtension(entry.pathExtension)
+                    let wantsAnalysis = withinBudget && !skipAnalysis
+                    if wantsAnalysis {
+                        analysisUsed += 1
+                    }
+                    let analyzeWithoutOCR = wantsAnalysis && skipHeavyWork
+                    let wantsHash = computeHashes
+                    group.addTask(priority: .utility) {
+                        var metadata: ContentMetadata?
+                        if wantsAnalysis {
+                            metadata = await self.contentAnalyzer.analyze(
+                                fileURL: entry.url,
+                                enableOCR: !analyzeWithoutOCR
+                            )
+                        }
+                        var hash: String?
+                        if wantsHash {
+                            hash = HashUtility.computeSHA256(for: entry.url)
+                        }
+                        return (index, metadata, hash, wantsAnalysis)
+                    }
+                }
+
+                while let result = await group.next() {
+                    if Task.isCancelled {
+                        group.cancelAll()
+                        break
+                    }
+                    pending[result.0].contentMetadata = result.1
+                    pending[result.0].sha256Hash = result.2
+                    if result.3 {
+                        deepScanAnalyzedCount += 1
+                        deepScanProgressCallback?(deepScanAnalyzedCount, 0)
+                    }
+
+                    completedSinceYield += 1
+                    if completedSinceYield >= enrichmentYieldInterval {
+                        completedSinceYield = 0
+                        await Task.yield()
+                        skipHeavyWork = shouldSkipNonEssentialWork()
+                    }
+
+                    if nextIndex < total {
+                        let index = nextIndex
+                        nextIndex += 1
+                        let entry = pending[index]
+                        let withinBudget = deepScan && analysisBudget - analysisUsed > 0
+                        if deepScan && !withinBudget {
+                            budgetSkipped += 1
+                        }
+                        let skipAnalysis = withinBudget && skipHeavyWork
+                            && Self.isExpensiveMediaExtension(entry.pathExtension)
+                        let wantsAnalysis = withinBudget && !skipAnalysis
+                        if wantsAnalysis {
+                            analysisUsed += 1
+                        }
+                        let analyzeWithoutOCR = wantsAnalysis && skipHeavyWork
+                        let wantsHash = computeHashes
+                        group.addTask(priority: .utility) {
+                            var metadata: ContentMetadata?
+                            if wantsAnalysis {
+                                metadata = await self.contentAnalyzer.analyze(
+                                    fileURL: entry.url,
+                                    enableOCR: !analyzeWithoutOCR
+                                )
+                            }
+                            var hash: String?
+                            if wantsHash {
+                                hash = HashUtility.computeSHA256(for: entry.url)
+                            }
+                            return (index, metadata, hash, wantsAnalysis)
+                        }
+                    }
+                }
+            }
+            try Task.checkCancellation()
+
+            if deepScan, budgetSkipped > 0, degradationReason == nil {
+                lastScanWasDegraded = true
+                degradationReason =
+                    "Deep content analysis was limited to \(deepScanAnalyzedCount) files to keep this large folder responsive"
+            }
+        }
+
+        for entry in pending {
+            let extractedOCRText = entry.contentMetadata?.ocrText
+            let extractedDimensions = Self.extractImageDimensions(from: entry.contentMetadata)
+            files.append(
+                FileItem(
+                    path: entry.url.path,
+                    relativePath: Self.relativePath(for: entry.url, under: baseDirectoryURL),
+                    name: entry.fileName,
+                    extension: entry.pathExtension,
+                    size: Int64(entry.size),
+                    isDirectory: false,
+                    creationDate: entry.creationDate,
+                    modificationDate: entry.modificationDate,
+                    lastAccessDate: entry.lastAccessDate,
+                    contentMetadata: entry.contentMetadata,
+                    sha256Hash: entry.sha256Hash,
+                    ocrText: extractedOCRText,
+                    imageWidth: extractedDimensions?.width,
+                    imageHeight: extractedDimensions?.height,
+                    cloudStatus: entry.cloudStatus,
+                    finderComment: entry.finderComment,
+                    finderTags: entry.finderTags,
+                    finderLabelNumber: entry.finderLabelNumber
+                )
+            )
+        }
+        pending.removeAll(keepingCapacity: false)
     }
 
     // MARK: - Finder Metadata
@@ -1002,51 +1166,82 @@ actor DirectoryScanner {
         return pathComponents.contains("cloudstorage") || pathComponents.contains("dropbox")
     }
 
-    private func isCloudPlaceholder(at url: URL) -> Bool {
-        // iCloud: check ubiquitous item download status
-        if let resourceValues = try? url.resourceValues(forKeys: [
-            .ubiquitousItemDownloadingStatusKey,
-            .ubiquitousItemIsDownloadingKey,
-        ]) {
-            if let status = resourceValues.ubiquitousItemDownloadingStatus,
-                status == .notDownloaded
-            {
-                return true
-            }
-        }
-
-        // iCloud: .icloud wrapper file (e.g., ".Document.icloud")
+    private func isCloudPlaceholder(at url: URL, fileSize: Int? = nil) -> Bool {
+        // Cheap name checks first: no syscall for ordinary files.
         let fileName = url.lastPathComponent
         if fileName.hasPrefix(".") && url.pathExtension == "icloud" {
+            return true
+        }
+        if url.pathExtension == "cloud" {
             return true
         }
 
         // Google Drive exposes cloud-native Docs, Sheets, and Slides as small
         // local files. They can be moved in Finder and should be organized.
+        guard Self.pathSuggestsCloudStorage(url.path) else {
+            return false
+        }
 
-        // Dropbox: check for extended attribute or zero-size placeholder
-        let path = url.path
-        let xattrLength = getxattr(path, "com.dropbox.attrs", nil, 0, 0, 0)
-        if xattrLength > 0 {
-            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? -1
-            if size == 0 {
-                return true
+        // iCloud: check ubiquitous item download status
+        var hasUbiquitousSignals = false
+        if let resourceValues = try? url.resourceValues(forKeys: [
+            .ubiquitousItemDownloadingStatusKey,
+            .ubiquitousItemIsDownloadingKey,
+        ]) {
+            if let status = resourceValues.ubiquitousItemDownloadingStatus {
+                hasUbiquitousSignals = true
+                if status == .notDownloaded {
+                    return true
+                }
+            } else if resourceValues.ubiquitousItemIsDownloading == true {
+                hasUbiquitousSignals = true
             }
         }
 
-        // OneDrive: check for .cloud file or zero-byte placeholder with attributes
-        if url.pathExtension == "cloud" {
-            return true
+        // Dropbox: check for extended attribute on zero-byte placeholder
+        // candidates only. getxattr is a syscall per file, so it runs only for
+        // dropbox paths (or files with known ubiquitous signals) that are empty.
+        let size = fileSize
+            ?? (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+            ?? -1
+        guard size == 0,
+              Self.isLikelyDropboxPath(url) || hasUbiquitousSignals,
+              getxattr(url.path, "com.dropbox.attrs", nil, 0, 0, 0) > 0 else {
+            return false
         }
+        return true
+    }
 
-        return false
+    /// Cheap substring prefilter so ordinary paths skip cloud syscalls entirely.
+    private static func pathSuggestsCloudStorage(_ path: String) -> Bool {
+        path.range(of: "cloudstorage", options: .caseInsensitive) != nil
+            || path.range(of: "dropbox", options: .caseInsensitive) != nil
+            || path.range(of: "mobile documents", options: .caseInsensitive) != nil
+    }
+
+    private static func isLikelyDropboxPath(_ url: URL) -> Bool {
+        url.path.range(of: "dropbox", options: .caseInsensitive) != nil
+    }
+
+    /// Audio/video extensions whose analysis loads AVFoundation assets.
+    /// Under memory pressure these are skipped while cheap text metadata
+    /// extraction continues.
+    private static func isExpensiveMediaExtension(_ pathExtension: String) -> Bool {
+        switch pathExtension.lowercased() {
+        case "mp3", "mp4", "m4a", "mov", "avi", "mkv",
+             "wav", "aac", "flac", "m4v", "webm":
+            return true
+        default:
+            return false
+        }
     }
 
     private func cloudProviderName(for url: URL) -> String? {
         // iCloud detection
-        if let resourceValues = try? url.resourceValues(forKeys: [
-            .ubiquitousItemDownloadingStatusKey
-        ]) {
+        if Self.pathSuggestsCloudStorage(url.path),
+           let resourceValues = try? url.resourceValues(forKeys: [
+               .ubiquitousItemDownloadingStatusKey
+           ]) {
             if resourceValues.ubiquitousItemDownloadingStatus != nil {
                 return "iCloud"
             }
@@ -1068,9 +1263,9 @@ actor DirectoryScanner {
             return "Google Drive"
         }
 
-        // Dropbox extended attribute
-        let xattrLength = getxattr(url.path, "com.dropbox.attrs", nil, 0, 0, 0)
-        if xattrLength > 0 {
+        // Dropbox extended attribute (syscall only on dropbox paths)
+        if Self.isLikelyDropboxPath(url),
+           getxattr(url.path, "com.dropbox.attrs", nil, 0, 0, 0) > 0 {
             return "Dropbox"
         }
 
@@ -1083,6 +1278,22 @@ actor DirectoryScanner {
     }
 
     private func detectCloudStatus(at url: URL) -> CloudFileStatus? {
+        if googleDriveNativeExtensions.contains(url.pathExtension.lowercased()) {
+            return .synced
+        }
+
+        let fileName = url.lastPathComponent
+        if fileName.hasPrefix(".") && url.pathExtension == "icloud" {
+            return .cloudOnly
+        }
+        if url.pathExtension == "cloud" {
+            return .cloudOnly
+        }
+
+        guard Self.pathSuggestsCloudStorage(url.path) else {
+            return nil
+        }
+
         if let resourceValues = try? url.resourceValues(forKeys: [
             .ubiquitousItemDownloadingStatusKey,
             .ubiquitousItemIsDownloadingKey,
@@ -1102,26 +1313,13 @@ actor DirectoryScanner {
             }
         }
 
-        let fileName = url.lastPathComponent
-        if fileName.hasPrefix(".") && url.pathExtension == "icloud" {
-            return .cloudOnly
-        }
-
-        if googleDriveNativeExtensions.contains(url.pathExtension.lowercased()) {
-            return .synced
-        }
-
-        let xattrLength = getxattr(url.path, "com.dropbox.attrs", nil, 0, 0, 0)
-        if xattrLength > 0 {
+        if Self.isLikelyDropboxPath(url),
+           getxattr(url.path, "com.dropbox.attrs", nil, 0, 0, 0) > 0 {
             let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? -1
             if size == 0 {
                 return .cloudOnly
             }
             return .synced
-        }
-
-        if url.pathExtension == "cloud" {
-            return .cloudOnly
         }
 
         if cloudProviderName(for: url) != nil {
@@ -1288,7 +1486,9 @@ actor DirectoryScanner {
             try Task.checkCancellation()
             await Task.yield()
             await checkMemoryPressure()
-            try? await Task.sleep(for: .milliseconds(100))
+            // Coarse 750 ms cadence instead of a 100 ms spin: memory pressure
+            // changes slowly, and each iteration costs a task_info syscall.
+            try? await Task.sleep(for: .milliseconds(750))
         }
     }
 }

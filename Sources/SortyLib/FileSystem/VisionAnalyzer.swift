@@ -113,17 +113,22 @@ public actor VisionAnalyzer {
             return nil
         }
 
-        let initialResult = await performOCR(on: cgImage)
+        let initialResult = await performOCR(on: cgImage, recognitionLevel: .fast)
         var result = initialResult
 
         if shouldRetryOCR(initialResult),
            imageExceedsInitialPixelBudget(source),
-           !Task.isCancelled,
-           let higherResolutionImage = loadCGImage(
-            from: source,
-            maximumPixelDimension: retryOCRMaximumPixelDimension
-           ) {
-            result = await performOCR(on: higherResolutionImage) ?? initialResult
+           !Task.isCancelled {
+            guard !Task.isCancelled else { return initialResult }
+            if let higherResolutionImage = loadCGImage(
+                from: source,
+                maximumPixelDimension: retryOCRMaximumPixelDimension
+            ) {
+                // The 4K second pass stays accurate: it runs only when the
+                // fast scan pass found too little, and only for images that
+                // actually exceed the initial pixel budget.
+                result = await performOCR(on: higherResolutionImage, recognitionLevel: .accurate) ?? initialResult
+            }
         }
 
         if let result {
@@ -132,9 +137,9 @@ public actor VisionAnalyzer {
         return result
     }
 
-    /// Perform OCR on CGImage data
+    /// Perform OCR on CGImage data (on-demand path: full accuracy)
     public func analyzeImage(_ cgImage: CGImage) async -> OCRResult? {
-        return await performOCR(on: cgImage)
+        return await performOCR(on: cgImage, recognitionLevel: .accurate)
     }
 
     // MARK: - Private Methods
@@ -170,7 +175,7 @@ public actor VisionAnalyzer {
         return max(width, height) > initialOCRMaximumPixelDimension
     }
 
-    private func performOCR(on cgImage: CGImage) async -> OCRResult? {
+    private func performOCR(on cgImage: CGImage, recognitionLevel: VNRequestTextRecognitionLevel) async -> OCRResult? {
         let minimumConfidence = self.minimumConfidence
         let maxTextLength = self.maxTextLength
         let recognitionLanguages = self.recognitionLanguages
@@ -239,8 +244,9 @@ public actor VisionAnalyzer {
                 resumeOnce(result)
             }
 
-            // Configure the request for better accuracy
-            request.recognitionLevel = .accurate
+            // Scan passes use .fast; only explicit on-demand analysis and the
+            // budgeted 4K retry use .accurate.
+            request.recognitionLevel = recognitionLevel
             request.usesLanguageCorrection = true
             request.recognitionLanguages = recognitionLanguages
 

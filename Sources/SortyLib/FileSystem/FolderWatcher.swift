@@ -108,6 +108,10 @@ public final class FolderWatcher: @unchecked Sendable {
     private var cursorPersistenceWorkItem: DispatchWorkItem?
     private var persistedEventID: FSEventStreamEventId?
     private var latestProcessedEventID: FSEventStreamEventId?
+    /// Event cursor at the last full reconciliation. When the cursor has not
+    /// advanced since then, the stream is live, and no recovery is pending,
+    /// there is nothing to rescan (FSEvents guarantees delivery).
+    private var eventIDAtLastReconciliation: FSEventStreamEventId?
     private var replayFromEventID: FSEventStreamEventId?
     private var hasCompletedInitialSync = false
     private var folderSnapshots: [UUID: [String: FileFingerprint]] = [:]
@@ -997,6 +1001,15 @@ public final class FolderWatcher: @unchecked Sendable {
         absolutePaths.reserveCapacity(Self.maximumFilesPerBatch)
 
         for case let fileURL as URL in enumerator {
+            let fileName = fileURL.lastPathComponent
+            if Self.isIgnoredFile(fileName) {
+                // Ignored names skip the full 7-key resource fetch; a single
+                // directory bit is enough to decide whether to prune the subtree.
+                if (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
             guard let values = try? fileURL.resourceValues(forKeys: [
                 .isRegularFileKey,
                 .isDirectoryKey,
@@ -1010,18 +1023,16 @@ public final class FolderWatcher: @unchecked Sendable {
             }
 
             if values.isDirectory == true {
-                if Self.isIgnoredFile(fileURL.lastPathComponent)
-                    || exclusionMatcher.shouldPruneDirectory(
-                        at: fileURL,
-                        finderLabelNumber: values.labelNumber
-                    ) {
+                if exclusionMatcher.shouldPruneDirectory(
+                    at: fileURL,
+                    finderLabelNumber: values.labelNumber
+                ) {
                     enumerator.skipDescendants()
                 }
                 continue
             }
 
-            guard !Self.isIgnoredFile(fileURL.lastPathComponent),
-                  values.isRegularFile == true,
+            guard values.isRegularFile == true,
                   !Self.shouldIgnoreCloudPlaceholder(at: fileURL, resourceValues: values),
                   !exclusionMatcher.shouldExcludeFile(
                       at: fileURL,
@@ -1088,6 +1099,15 @@ public final class FolderWatcher: @unchecked Sendable {
         }
 
         for case let fileURL as URL in enumerator {
+            let fileName = fileURL.lastPathComponent
+            if Self.isIgnoredFile(fileName) {
+                // Ignored names skip the full 7-key resource fetch; a single
+                // directory bit is enough to decide whether to prune the subtree.
+                if (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
             guard let values = try? fileURL.resourceValues(forKeys: [
                 .isRegularFileKey,
                 .isDirectoryKey,
@@ -1099,17 +1119,15 @@ public final class FolderWatcher: @unchecked Sendable {
             ]) else { continue }
 
             if values.isDirectory == true {
-                if Self.isIgnoredFile(fileURL.lastPathComponent)
-                    || exclusionMatcher.shouldPruneDirectory(
-                        at: fileURL,
-                        finderLabelNumber: values.labelNumber
-                    ) {
+                if exclusionMatcher.shouldPruneDirectory(
+                    at: fileURL,
+                    finderLabelNumber: values.labelNumber
+                ) {
                     enumerator.skipDescendants()
                 }
                 continue
             }
-            guard !Self.isIgnoredFile(fileURL.lastPathComponent),
-                  values.isRegularFile == true,
+            guard values.isRegularFile == true,
                   !Self.shouldIgnoreCloudPlaceholder(at: fileURL, resourceValues: values),
                   !exclusionMatcher.shouldExcludeFile(
                       at: fileURL,
@@ -1184,35 +1202,44 @@ public final class FolderWatcher: @unchecked Sendable {
         }
     }
 
-    private func ingestScannedPathsWithBackpressure(_ paths: [String]) {
-        var didIngest = false
-        while !didIngest {
-            didIngest = performOnQueueSyncIfNeeded {
-                guard !watchedFolders.isEmpty else { return true }
-                guard pendingFileCount + paths.count <= Self.maximumPendingFiles else {
-                    suspendForBackpressure()
-                    return false
-                }
-
-                for path in paths {
-                    guard let folderID = mostSpecificFolderID(containing: path),
-                          let folder = watchedFolders[folderID],
-                          !pausedFolders.contains(folderID),
-                          let relativePath = Self.relativePath(
-                              of: path,
-                              within: rootPath(for: folderID, folder: folder)
-                          ),
-                          !relativePath.isEmpty else {
-                        continue
-                    }
-                    enqueue(relativePath, for: folderID)
-                }
-                return true
+    private func ingestScannedPathsWithBackpressure(_ paths: [String], attempt: Int = 0) {
+        let didIngest = performOnQueueSyncIfNeeded {
+            guard !watchedFolders.isEmpty else { return true }
+            guard pendingFileCount + paths.count <= Self.maximumPendingFiles else {
+                suspendForBackpressure()
+                return false
             }
 
-            if !didIngest {
-                Thread.sleep(forTimeInterval: Self.retryDelay)
+            for path in paths {
+                guard let folderID = mostSpecificFolderID(containing: path),
+                      let folder = watchedFolders[folderID],
+                      !pausedFolders.contains(folderID),
+                      let relativePath = Self.relativePath(
+                          of: path,
+                          within: rootPath(for: folderID, folder: folder)
+                      ),
+                      !relativePath.isEmpty else {
+                    continue
+                }
+                enqueue(relativePath, for: folderID)
             }
+            return true
+        }
+
+        guard !didIngest else { return }
+        // Bounded async retry with exponential backoff instead of a
+        // Thread.sleep spin on the scan queue: each retry waits longer
+        // (0.25s, 0.5s, 1s...) and gives up after ~8 attempts so a stuck
+        // consumer cannot pin a thread forever. Dropped batches are picked up
+        // by the next reconciliation pass, which rebuilds from snapshots.
+        let nextAttempt = attempt + 1
+        guard nextAttempt <= 8, !paths.isEmpty else {
+            DebugLogger.log("FSEvents: Dropping \(paths.count) scanned paths after sustained backpressure")
+            return
+        }
+        let delay = min(4.0, Self.retryDelay * Double(1 << min(nextAttempt, 4)))
+        queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.ingestScannedPathsWithBackpressure(paths, attempt: nextAttempt)
         }
     }
 
@@ -1373,6 +1400,22 @@ public final class FolderWatcher: @unchecked Sendable {
 
     private func scheduleFullReconciliation() {
         guard !watchedFolders.isEmpty else { return }
+        // Event-ID short-circuit: with a live stream, no pending scans, and a
+        // cursor that has not advanced since the last pass, skip the
+        // full-tree rescan. The deadline still backs off exponentially via
+        // currentReconciliationInterval.
+        if hasCompletedInitialSync,
+           stream != nil,
+           !requiresFullRecoveryScan,
+           pendingScanPaths.isEmpty,
+           activeScanPath == nil,
+           let lastEventID = latestProcessedEventID,
+           eventIDAtLastReconciliation == lastEventID {
+            lastReconciliationAt = Date()
+            scheduleReconciliationDeadline()
+            return
+        }
+        eventIDAtLastReconciliation = latestProcessedEventID
         scheduleRecoveryScans(affectedBy: "/")
         lastReconciliationAt = Date()
         scheduleReconciliationDeadline()
@@ -1614,12 +1657,42 @@ public final class FolderWatcher: @unchecked Sendable {
             return true
         }
 
-        if resourceValues?.fileSize == 0,
-           getxattr(url.path, "com.dropbox.attrs", nil, 0, 0, 0) > 0 {
-            return true
+        guard resourceValues?.fileSize == 0 else { return false }
+        // getxattr is a syscall per zero-byte file; negative results are
+        // cached briefly because re-scans revisit the same files.
+        if Self.cachedDropboxNegative(for: url.path) {
+            return false
         }
+        let hasAttr = getxattr(url.path, "com.dropbox.attrs", nil, 0, 0, 0) > 0
+        if !hasAttr {
+            Self.cacheDropboxNegative(for: url.path)
+        }
+        return hasAttr
+    }
 
-        return false
+    private static let dropboxNegativeCacheLock = NSLock()
+    private static var dropboxNegativeCache: [String: Date] = [:]
+    private static let dropboxNegativeCacheTTL: TimeInterval = 60
+
+    private static func cachedDropboxNegative(for path: String) -> Bool {
+        dropboxNegativeCacheLock.lock()
+        defer { dropboxNegativeCacheLock.unlock() }
+        guard let expires = dropboxNegativeCache[path] else { return false }
+        if expires < Date() {
+            dropboxNegativeCache.removeValue(forKey: path)
+            return false
+        }
+        return true
+    }
+
+    private static func cacheDropboxNegative(for path: String) {
+        dropboxNegativeCacheLock.lock()
+        defer { dropboxNegativeCacheLock.unlock() }
+        if dropboxNegativeCache.count > 4_096 {
+            let cutoff = Date()
+            dropboxNegativeCache = dropboxNegativeCache.filter { $0.value > cutoff }
+        }
+        dropboxNegativeCache[path] = Date().addingTimeInterval(dropboxNegativeCacheTTL)
     }
 
     private func performOnQueueSyncIfNeeded<T>(_ block: () -> T) -> T {

@@ -174,7 +174,7 @@ private actor SharedContentMetadataCache {
         for key: Key,
         operation: @escaping @Sendable () async -> ContentMetadata?
     ) async -> ContentMetadata? {
-        loadIfNeeded()
+        await loadIfNeeded()
         if var entry = entries[key] {
             entry.lastAccessedAt = Date()
             entries[key] = entry
@@ -201,7 +201,7 @@ private actor SharedContentMetadataCache {
     func scheduleFlush() {
         flushTask?.cancel()
         let currentGeneration = generation
-        flushTask = Task { [weak self] in
+        flushTask = Task(priority: .utility) { [weak self] in
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
             await self?.flushIfCurrent(currentGeneration)
@@ -239,19 +239,26 @@ private actor SharedContentMetadataCache {
 
     private func trimIfNeeded() {
         guard totalByteCost > maximumByteCost else { return }
+        // Amortized trim: drop to 75% of the budget so the next insert does
+        // not immediately re-sort the whole table.
+        let targetByteCost = maximumByteCost * 3 / 4
         for entry in entries.values.sorted(by: { $0.lastAccessedAt < $1.lastAccessedAt }) {
-            guard totalByteCost > maximumByteCost else { break }
+            guard totalByteCost > targetByteCost else { break }
             entries.removeValue(forKey: entry.key)
             totalByteCost -= entry.byteCost
         }
     }
 
-    private func loadIfNeeded() {
+    private func loadIfNeeded() async {
         guard !hasLoaded else { return }
         hasLoaded = true
-        guard let diskURL,
-              let data = try? Data(contentsOf: diskURL),
-              let decoded = try? JSONDecoder().decode([Entry].self, from: data) else { return }
+        // Disk decoding happens off this actor on .utility; only the bounded
+        // insert runs here. Data(contentsOf:) must never run on the main actor.
+        guard let diskURL else { return }
+        guard let decoded = await Task.detached(priority: .utility) { () -> [Entry]? in
+            guard let data = try? Data(contentsOf: diskURL) else { return nil }
+            return try? JSONDecoder().decode([Entry].self, from: data)
+        }.value else { return }
         for entry in decoded.sorted(by: { $0.lastAccessedAt > $1.lastAccessedAt }) {
             guard totalByteCost + entry.byteCost <= maximumByteCost else { continue }
             entries[entry.key] = entry
@@ -405,7 +412,7 @@ public actor ContentAnalyzer {
 
             let batchResults = await withTaskGroup(of: (URL, ContentMetadata?).self) { group in
                 for url in batch {
-                    group.addTask {
+                    group.addTask(priority: .utility) {
                         let metadata = await self.analyze(fileURL: url, enableOCR: enableOCR)
                         return (url, metadata)
                     }
@@ -423,8 +430,12 @@ public actor ContentAnalyzer {
             results.merge(batchResults) { _, new in new }
             progressHandler?(batchEnd, total)
 
-            // Yield for UI updates between batches
-            await Task.yield()
+            // Yield for UI updates between batches, and cooperatively every
+            // 50 files on .utility so large runs stay cancellable.
+            if batchEnd.isMultiple(of: 50) || batchEnd == total {
+                await Task.yield()
+            }
+            guard !Task.isCancelled else { break }
         }
 
         // Save cache after batch analysis

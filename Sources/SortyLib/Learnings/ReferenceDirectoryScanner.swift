@@ -28,11 +28,11 @@ public struct ReferenceDirectoryScanner: Sendable {
     /// Scan a directory and return a snapshot. Safe to call off the main actor.
     public static func scan(url: URL) async throws -> ReferenceDirectorySnapshot {
         try await Task.detached(priority: .utility) {
-            try performScan(url: url)
+            try await performScan(url: url)
         }.value
     }
     
-    private static func performScan(url: URL) throws -> ReferenceDirectorySnapshot {
+    private static func performScan(url: URL) async throws -> ReferenceDirectorySnapshot {
         let fm = FileManager.default
         var isDirectory: ObjCBool = false
         guard fm.fileExists(atPath: url.path, isDirectory: &isDirectory),
@@ -49,8 +49,20 @@ public struct ReferenceDirectoryScanner: Sendable {
         var encounteredReadFailure = false
         var reachedDepthLimit = false
         var reachedFolderLimit = false
+        // Yield cooperatively every 20 files; the nested scan is async so it
+        // can suspend without blocking its executor thread.
+        var scannedSinceYield = 0
+
+        func scannedOneFile() async throws {
+            scannedSinceYield += 1
+            if scannedSinceYield >= 20 {
+                scannedSinceYield = 0
+                await Task.yield()
+            }
+            try Task.checkCancellation()
+        }
         
-        func scanDirectory(_ scanURL: URL, depth: Int, prefix: String) {
+        func scanDirectory(_ scanURL: URL, depth: Int, prefix: String) async throws {
             guard !Task.isCancelled else {
                 return
             }
@@ -72,7 +84,7 @@ public struct ReferenceDirectoryScanner: Sendable {
                         .fileSizeKey,
                         .ubiquitousItemDownloadingStatusKey,
                     ],
-                    options: [.skipsHiddenFiles]
+                    options: [.skipsHiddenFiles, .skipsPackageDescendants]
                 )
             } catch {
                 encounteredReadFailure = true
@@ -111,6 +123,7 @@ public struct ReferenceDirectoryScanner: Sendable {
             var typeDistribution: [String: Int] = [:]
             
             for file in files {
+                try await scannedOneFile()
                 let ext = file.pathExtension.lowercased()
                 let key = ext.isEmpty ? "(none)" : ext
                 typeDistribution[key, default: 0] += 1
@@ -148,11 +161,11 @@ public struct ReferenceDirectoryScanner: Sendable {
                     return
                 }
                 let name = prefix.isEmpty ? subdir.lastPathComponent : "\(prefix)/\(subdir.lastPathComponent)"
-                scanDirectory(subdir, depth: depth + 1, prefix: name)
+                try await scanDirectory(subdir, depth: depth + 1, prefix: name)
             }
         }
         
-        scanDirectory(url, depth: 0, prefix: "")
+        try await scanDirectory(url, depth: 0, prefix: "")
         try Task.checkCancellation()
         guard fm.fileExists(atPath: url.path, isDirectory: &isDirectory),
               isDirectory.boolValue,
@@ -208,13 +221,14 @@ public struct ReferenceDirectoryScanner: Sendable {
         var datePatternCount = 0
         var uppercaseCount = 0
         
+        // Compiled once per pass over both convention inputs, not once per name.
         let dateRegex = try? NSRegularExpression(pattern: #"\d{4}[-_]\d{2}[-_]\d{2}"#)
         let kebabRegex = try? NSRegularExpression(pattern: #"^[a-z0-9]+(-[a-z0-9]+)+$"#)
         let snakeRegex = try? NSRegularExpression(pattern: #"^[a-z0-9]+(_[a-z0-9]+)+$"#)
         
         for name in folderNames {
             let range = NSRange(name.startIndex..., in: name)
-            
+
             if let dateRegex, dateRegex.firstMatch(in: name, range: range) != nil {
                 datePatternCount += 1
             }

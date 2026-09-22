@@ -51,6 +51,18 @@ public enum HashUtility {
 
     private static let streamingBufferSize = 1024 * 1024
     private static let sampleSize = 64 * 1024
+    /// Cooperative yield interval while streaming a file. Hashing runs on
+    /// `.utility` tasks (see callers); yielding every 8 MB keeps long hashes
+    /// from monopolizing a cooperative thread without awaiting (this type is
+    /// intentionally synchronous so tests and single-file scans keep a
+    /// non-async entry point).
+    private static let bytesPerThreadYield = 8 * 1024 * 1024
+
+    private static func yieldThreadIfNeeded(_ bytesSinceYield: inout Int) {
+        guard bytesSinceYield >= bytesPerThreadYield else { return }
+        bytesSinceYield = 0
+        Thread.sleep(forTimeInterval: 0)
+    }
 
     /// Compute SHA-256 hash for a file at the given URL using streaming to avoid memory issues
     public static func computeSHA256(for url: URL) -> String? {
@@ -70,7 +82,8 @@ public enum HashUtility {
         }
         
         var hasher = SHA256()
-        
+        var bytesSinceYield = 0
+
         while true {
             if Task.isCancelled {
                 return .cancelled
@@ -81,6 +94,8 @@ public enum HashUtility {
                     break
                 }
                 hasher.update(data: data)
+                bytesSinceYield += data.count
+                yieldThreadIfNeeded(&bytesSinceYield)
             } catch {
                 return .failure(ReadFailure(error))
             }
@@ -114,6 +129,7 @@ public enum HashUtility {
 
             if fileSize <= UInt64(sampleSize * 2) {
                 var hasher = SHA256()
+                var bytesSinceYield = 0
                 while true {
                     if Task.isCancelled {
                         return .cancelled
@@ -124,6 +140,8 @@ public enum HashUtility {
                         break
                     }
                     hasher.update(data: data)
+                    bytesSinceYield += data.count
+                    yieldThreadIfNeeded(&bytesSinceYield)
                 }
 
                 return .success(

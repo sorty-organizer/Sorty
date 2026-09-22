@@ -28,6 +28,35 @@ public class LearningsAnalyzer: ObservableObject {
     
     public init() {}
     
+    // MARK: - Compiled rule regex cache
+
+    private static let ruleRegexCacheLock = NSLock()
+    private static var ruleRegexCache: [String: NSRegularExpression] = [:]
+
+    /// Compiles each unique rule pattern once; proposeMapping used to compile
+    /// every pattern for every file.
+    nonisolated private static func cachedRuleRegex(for pattern: String) -> NSRegularExpression? {
+        ruleRegexCacheLock.lock()
+        if let cached = ruleRegexCache[pattern] {
+            ruleRegexCacheLock.unlock()
+            return cached
+        }
+        ruleRegexCacheLock.unlock()
+        guard let compiled = try? NSRegularExpression(pattern: pattern) else { return nil }
+        ruleRegexCacheLock.lock()
+        if ruleRegexCache.count > 512 {
+            ruleRegexCache.removeAll()
+        }
+        ruleRegexCache[pattern] = compiled
+        ruleRegexCacheLock.unlock()
+        return compiled
+    }
+
+    nonisolated private static func ruleMatches(_ rule: InferredRule, filename: String) -> Bool {
+        guard let regex = cachedRuleRegex(for: rule.pattern) else { return false }
+        return regex.firstMatch(in: filename, range: NSRange(filename.startIndex..., in: filename)) != nil
+    }
+
     // Configure with AI Client for advanced learning
     public func configure(aiClient: AIClientProtocol) {
         self.llmInducer = LLMRuleInducer(aiClient: aiClient)
@@ -105,17 +134,27 @@ public class LearningsAnalyzer: ObservableObject {
             
             progress = 0.5
             
-            // Step 3: Generate proposals for each file
+            // Step 3: Generate proposals for each file in 20-file chunks on
+            // .utility. Regex matching stays off the main actor, progress
+            // updates stay coarse, and cancellation is honored between chunks.
             currentStatus = "Generating proposals..."
             var destinationCounts: [String: [String]] = [:]
+            let proposalChunkSize = 20
             
-            for (index, fileURL) in allFiles.enumerated() {
-                let mapping = await proposeMapping(for: fileURL, using: rules, rootPath: primaryRootPath)
-                mappings.append(mapping)
+            for chunkStart in stride(from: 0, to: allFiles.count, by: proposalChunkSize) {
+                try Task.checkCancellation()
+                let chunkEnd = min(chunkStart + proposalChunkSize, allFiles.count)
+                let chunk = Array(allFiles[chunkStart..<chunkEnd])
+                let chunkMappings = await Task.detached(priority: .utility) {
+                    Self.mappings(for: chunk, using: rules, rootPath: primaryRootPath)
+                }.value
+                for mapping in chunkMappings {
+                    mappings.append(mapping)
+                    destinationCounts[mapping.proposedDstPath, default: []].append(mapping.srcPath)
+                }
                 
-                destinationCounts[mapping.proposedDstPath, default: []].append(mapping.srcPath)
-                
-                progress = 0.5 + (Double(index + 1) / Double(allFiles.count)) * 0.4
+                progress = 0.5 + (Double(chunkEnd) / Double(allFiles.count)) * 0.4
+                await Task.yield()
             }
             
             // Step 4: Detect conflicts
@@ -154,16 +193,35 @@ public class LearningsAnalyzer: ObservableObject {
         return result
     }
     
-    /// Generate proposal for a single file
-    public func proposeMapping(
+    /// Generate proposal for a single file.
+    /// Nonisolated so batch inference can run on `.utility` tasks; the pure
+    /// mapping core is `makeMapping`.
+    nonisolated public func proposeMapping(
         for fileURL: URL,
         using rules: [InferredRule],
         rootPath: String
     ) async -> ProposedMapping {
+        Self.makeMapping(for: fileURL, using: rules, rootPath: rootPath, now: Date())
+    }
+
+    nonisolated private static func mappings(
+        for files: [URL],
+        using rules: [InferredRule],
+        rootPath: String
+    ) -> [ProposedMapping] {
+        let now = Date()
+        return files.map { makeMapping(for: $0, using: rules, rootPath: rootPath, now: now) }
+    }
+
+    nonisolated private static func makeMapping(
+        for fileURL: URL,
+        using rules: [InferredRule],
+        rootPath: String,
+        now: Date
+    ) -> ProposedMapping {
         let filename = fileURL.lastPathComponent
         let ext = fileURL.pathExtension
         let category = FileCategory.from(extension: ext)
-        let now = Date()
 
         var bestMatch: (rule: InferredRule, confidence: Double)?
         var alternatives: [AlternativeMapping] = []
@@ -171,21 +229,16 @@ public class LearningsAnalyzer: ObservableObject {
         // Only enabled, active, non-cooldown rules may influence mappings.
         let eligibleRules = rules.filter { $0.isEligible(at: now) }
 
-        func ruleMatches(_ rule: InferredRule) -> Bool {
-            guard let regex = try? NSRegularExpression(pattern: rule.pattern) else { return false }
-            return regex.firstMatch(in: filename, range: NSRange(filename.startIndex..., in: filename)) != nil
-        }
-
         // Folders that matching avoid rules veto for this file. Avoid rules are never
         // destinations themselves; they only suppress candidates.
         let avoidedFolders = Set(
             eligibleRules
-                .filter { $0.isAvoidRule && ruleMatches($0) }
+                .filter { $0.isAvoidRule && ruleMatches($0, filename: filename) }
                 .compactMap { $0.avoidedFolderName?.lowercased() }
         )
 
         for rule in eligibleRules where !rule.isAvoidRule {
-            guard ruleMatches(rule) else { continue }
+            guard ruleMatches(rule, filename: filename) else { continue }
 
             let dst = applyTemplate(rule.template, to: fileURL, rootPath: rootPath)
             let destinationFolder = URL(fileURLWithPath: dst).deletingLastPathComponent().lastPathComponent.lowercased()
@@ -252,12 +305,14 @@ public class LearningsAnalyzer: ObservableObject {
         guard let enumerator = fm.enumerator(
             at: url,
             includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) else { return [] }
         
         var files: [URL] = []
+        var scannedSinceYield = 0
         
         while let fileURL = enumerator.nextObject() as? URL {
+            guard !Task.isCancelled else { break }
             let isDirectory = (try? fileURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
             if !isDirectory {
                 files.append(fileURL)
@@ -267,13 +322,18 @@ public class LearningsAnalyzer: ObservableObject {
                     break
                 }
             }
+            scannedSinceYield += 1
+            if scannedSinceYield >= 20 {
+                scannedSinceYield = 0
+                await Task.yield()
+            }
         }
         
         return files
     }
     
     /// Apply template to generate destination path
-    private func applyTemplate(_ template: String, to fileURL: URL, rootPath: String) -> String {
+    nonisolated private static func applyTemplate(_ template: String, to fileURL: URL, rootPath: String) -> String {
         var result = template
         let filename = fileURL.lastPathComponent
         let ext = fileURL.pathExtension
