@@ -193,22 +193,89 @@ const PREVIOUS_RELEASES = [
   {
     version: 'Sorty 1.0.6',
     date: 'February 1, 2026',
-    sections: [],
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'In-app automatic updates with download and install progress plus a daily background check on launch.',
+          'An Organize Finder Selection button that organizes only the files currently selected in Finder.',
+          'A Diagnostics and Logs help section with step-by-step troubleshooting guides.',
+        ],
+      },
+      {
+        title: 'Changed',
+        items: [
+          'The update dialog now downloads and installs updates in place instead of opening a browser.',
+          'Finder windows refresh and reveal newly created folders after organizing, when Automation permission is granted.',
+          'Faster AI setup with shorter model-list timeouts and connection prewarming.',
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'The onboarding Automation permission step now detects granted or denied status instead of always showing unknown.',
+        ],
+      },
+    ],
   },
   {
     version: 'Sorty 1.0.5',
     date: 'January 31, 2026',
-    sections: [],
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'One-click CLI install from Help with installation status and version verification.',
+          'Onboarding now requires Files and Folders access before continuing.',
+        ],
+      },
+      {
+        title: 'Changed',
+        items: [
+          'Long-analysis notice with Try Faster Model and Cancel actions.',
+          'Folder insights now show the real macOS folder icon.',
+          'Files and Folders access is requested through a folder picker and labeled Required, with Automation and Notifications marked Optional.',
+          'Provider connection errors now name the specific response problem and suggest likely causes.',
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Continuous learning no longer drops steering and file-move events while the Learnings view is locked.',
+        ],
+      },
+    ],
   },
   {
     version: 'Sorty 1.0.4',
     date: 'January 29, 2026',
-    sections: [],
+    sections: [
+      {
+        title: 'Added',
+        items: [
+          'A Software Update dialog with checking progress, release notes, and download for available updates.',
+          'A Help downloads section for fetching the CLI tool and source archives from GitHub Releases.',
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'AI provider logos now load reliably in both Xcode and distributed builds.',
+        ],
+      },
+    ],
   },
   {
     version: 'Sorty 1.0.3',
     date: 'January 29, 2026',
-    sections: [],
+    sections: [
+      {
+        title: 'Fixed',
+        items: [
+          'Fixed a crash when clicking Get Started during onboarding in the downloaded app.',
+        ],
+      },
+    ],
   },
   {
     version: 'Sorty 1.0.2',
