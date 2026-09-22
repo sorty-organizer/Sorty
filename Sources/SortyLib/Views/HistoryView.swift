@@ -1122,10 +1122,11 @@ private struct HistoryStatItem: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(isEmphasized ? 0.12 : 0), lineWidth: 1)
+                .stroke(
+                    Color.primary.opacity(isHovered ? 0.18 : (isEmphasized ? 0.12 : 0)),
+                    lineWidth: 1
+                )
         )
-        .scaleEffect(isHovered ? 1.03 : 1.0)
-        .animation(.subtleBounce, value: isHovered)
         .onHover { hovering in
             isHovered = hovering
         }
@@ -1238,6 +1239,15 @@ private struct HistorySessionCard: View {
         }
     }
 
+    // Border/glow carries hover and selection. No scaleEffect: scaling cards
+    // re-rasterizes the glass surface every hover frame.
+    private var cardBorderColor: Color {
+        if isSelected {
+            return SortyDesignSystem.Colors.resolvedAccent.opacity(0.5)
+        }
+        return Color.white.opacity(isHovered ? 0.22 : 0.1)
+    }
+
     var body: some View {
         let timestampText = entry.timestamp.formatted(date: .abbreviated, time: .shortened)
 
@@ -1270,16 +1280,13 @@ private struct HistorySessionCard: View {
         .systemLiquidGlassBackground(cornerRadius: 16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.5) : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
+                .stroke(cardBorderColor, lineWidth: isSelected ? 2 : 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
-        .scaleEffect(isHovered ? 1.01 : 1.0)
-        .animation(.subtleBounce, value: isHovered)
+        .animation(.easeOut(duration: 0.15), value: isHovered)
         .onHover { hovering in
+            guard hovering != isHovered else { return }
             isHovered = hovering
-            if hovering {
-                HapticFeedbackManager.shared.selection()
-            }
         }
     }
 }
@@ -1346,7 +1353,6 @@ private struct QuickFeedbackButtons: View {
                 .animation(.spring(response: 0.2, dampingFraction: 0.6), value: usefulHovered)
                 .onHover { hovering in
                     usefulHovered = hovering
-                    if hovering { HapticFeedbackManager.shared.selection() }
                 }
                 .accessibilityLabel("Mark as helpful")
                 .accessibilityIdentifier("FeedbackUsefulButton")
@@ -1375,7 +1381,6 @@ private struct QuickFeedbackButtons: View {
                 .animation(.spring(response: 0.2, dampingFraction: 0.6), value: notUsefulHovered)
                 .onHover { hovering in
                     notUsefulHovered = hovering
-                    if hovering { HapticFeedbackManager.shared.selection() }
                 }
                 .accessibilityLabel("Mark as not helpful")
                 .accessibilityIdentifier("FeedbackNotUsefulButton")
@@ -2309,7 +2314,7 @@ struct ProcessingOverlay: View {
                 .accessibilityHidden(true)
 
             VStack(spacing: 12) {
-                BouncingSpinner(size: 24, color: .accentColor)
+                LoadingDotsView(dotCount: 3, dotSize: 8, color: .accentColor)
 
                 Text(stage)
                     .font(.body)
