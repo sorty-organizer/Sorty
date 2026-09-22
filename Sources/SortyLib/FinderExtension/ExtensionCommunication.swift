@@ -74,7 +74,6 @@ public struct ExtensionCommunication {
     private static let userApplicationsDirectoryName = "Applications"
     private static let finderRepairEntitlementsResourceName = "SortyAppRepair.entitlements"
     private static let finderRepairVerificationTimeout: TimeInterval = 8
-    private static let finderRepairVerificationPollInterval: TimeInterval = 0.5
     private static let finderRepairRequiredAppGroup = "group.com.sorty.app"
     private static let pbsDomain = "pbs"
     private static let activeSortyServices: [(bundleIdentifier: String, menuTitle: String)] = [
@@ -205,19 +204,22 @@ public struct ExtensionCommunication {
             object: nil,
             queue: .main
         ) { notification in
-            if let userInfo = notification.userInfo,
-               let path = userInfo["path"] as? String {
-                UserDefaults(suiteName: appGroupIdentifier)?.removeObject(forKey: directoryKey)
-                // DistributedNotificationCenter is unauthenticated: any local
-                // process can post SortyDirectorySelected. Validate like a
-                // deeplink before handing the URL to the UI.
-                guard let validated = IncomingPathValidator.validatedDirectoryURLIfValid(path: path) else {
+            guard let userInfo = notification.userInfo,
+                  let path = userInfo["path"] as? String else {
+                return
+            }
+            UserDefaults(suiteName: appGroupIdentifier)?.removeObject(forKey: directoryKey)
+            // DistributedNotificationCenter is unauthenticated: any local
+            // process can post SortyDirectorySelected. Validate like a
+            // deeplink on a worker, and hop to the main actor only for
+            // confirmed URLs.
+            Task.detached(priority: .utility) {
+                guard let validated = await IncomingPathValidator.validatedDirectoryURLIfValidAsync(path: path) else {
                     DebugLogger.log("Rejected invalid directory notification payload")
                     return
                 }
-                let url = validated
-                Task { @MainActor in
-                    handler(url)
+                await MainActor.run {
+                    handler(validated)
                 }
             }
         }
@@ -382,6 +384,15 @@ public struct ExtensionCommunication {
         }
     }
 
+    /// Sync counterpart for callers that must keep a synchronous contract
+    /// (services-registry refresh, uninstall): the spawn + waitUntilExit
+    /// executes on a utility queue, never on the caller thread.
+    private static func runCommandOnUtilityQueue(executablePath: String, arguments: [String]) -> CommandResult {
+        DispatchQueue.global(qos: .utility).sync {
+            runCommand(executablePath: executablePath, arguments: arguments)
+        }
+    }
+
     private static func commandFailureSummary(_ result: CommandResult) -> String? {
         guard result.exitCode != 0 else { return nil }
         let raw = combinedCommandOutput(result)
@@ -399,10 +410,12 @@ public struct ExtensionCommunication {
         pattern: #"(/.+?/SortyFinderSync\.appex)/Contents/MacOS/SortyFinderSync\b"#
     )
 
-    private static func runningFinderSyncExtensionPath() -> String? {
+    /// Async probe for the running extension process. Uses runCommandAsync so
+    /// diagnostics never block the caller thread on pgrep.
+    private static func runningFinderSyncExtensionPathAsync() async -> String? {
         guard let finderSyncProcessPathRegex else { return nil }
 
-        let result = runCommand(executablePath: "/usr/bin/pgrep", arguments: ["-fl", "SortyFinderSync"])
+        let result = await runCommandAsync(executablePath: "/usr/bin/pgrep", arguments: ["-fl", "SortyFinderSync"])
         guard result.exitCode == 0 else { return nil }
 
         let output = combinedCommandOutput(result).joined(separator: "\n")
@@ -1004,13 +1017,29 @@ public struct ExtensionCommunication {
     }
 
     private static func waitForFinderSyncDiagnosticsVerificationAsync(timeout: TimeInterval) async -> FinderSyncDiagnostics {
+        // Cancellable poll with 0.5s -> 1s -> 2s backoff inside the timeout
+        // budget (sums to ~7s of sleeps plus probe time).
+        let backoff: [TimeInterval] = [0.5, 0.5, 1.0, 1.0, 2.0, 2.0]
         let deadline = Date().addingTimeInterval(timeout)
         var latest = await getFinderSyncDiagnosticsAsync()
+        var step = 0
         while Date() < deadline {
             if latest.isVerifiedWorking {
                 return latest
             }
-            try? await Task.sleep(nanoseconds: UInt64(finderRepairVerificationPollInterval * 1_000_000_000))
+            if Task.isCancelled {
+                return latest
+            }
+            let delay = step < backoff.count ? backoff[step] : 2.0
+            step += 1
+            do {
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            } catch {
+                return latest
+            }
+            if Task.isCancelled {
+                return latest
+            }
             latest = await getFinderSyncDiagnosticsAsync()
         }
         return latest
@@ -1142,7 +1171,7 @@ public struct ExtensionCommunication {
             entries: entries,
             preferredPath: await preferredFinderSyncExtensionURLForRegistration()?.path,
             heartbeat: cachedFinderSyncRuntimeHeartbeat(),
-            runningProcessPath: runningFinderSyncExtensionPath(),
+            runningProcessPath: await runningFinderSyncExtensionPathAsync(),
             appBundleMissingEntitlements: await currentAppMissingFinderIntegrationEntitlementsAsync()
         )
     }
@@ -1849,7 +1878,6 @@ public struct ExtensionCommunication {
 
         pbsDomainValues["NSServicesStatus"] = serviceStatus
         UserDefaults.standard.setPersistentDomain(pbsDomainValues, forName: pbsDomain)
-        UserDefaults.standard.synchronize()
     }
 
     private static func isEnabledValue(_ value: Any?) -> Bool {
@@ -1909,16 +1937,11 @@ public struct ExtensionCommunication {
         NSUpdateDynamicServices()
 
         // A plain NSUpdateDynamicServices call is sometimes not enough for Finder
-        // to immediately refresh the Quick Actions registry.
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/pbs")
-        process.arguments = ["-flush"]
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            // Best-effort refresh only.
-        }
+        // to immediately refresh the Quick Actions registry. Best-effort only.
+        _ = runCommandOnUtilityQueue(
+            executablePath: "/System/Library/CoreServices/pbs",
+            arguments: ["-flush"]
+        )
 
         forceEnableSortyServiceEntries()
         UserDefaults.standard.set(Date(), forKey: servicesRegistryRefreshDefaultsKey)
@@ -1942,7 +1965,6 @@ public struct ExtensionCommunication {
 
         pbsDomainValues["NSServicesStatus"] = serviceStatus
         UserDefaults.standard.setPersistentDomain(pbsDomainValues, forName: pbsDomain)
-        UserDefaults.standard.synchronize()
     }
 
     private static func removeLegacyServiceStatusEntries() {
@@ -1955,18 +1977,11 @@ public struct ExtensionCommunication {
         removeServiceStatusEntries(activeSortyServices + deprecatedSortyServices)
         NSUpdateDynamicServices()
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/pbs")
-        process.arguments = ["-flush"]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            return false
-        }
+        let result = runCommandOnUtilityQueue(
+            executablePath: "/System/Library/CoreServices/pbs",
+            arguments: ["-flush"]
+        )
+        return result.exitCode == 0
     }
 
     /// Install an "Organize with Sorty" Quick Action workflow to ~/Library/Services.
