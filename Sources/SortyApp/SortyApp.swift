@@ -929,6 +929,7 @@ struct SortyApp: App {
         async let customPersonaLoad: Void = customPersonaStore.loadPersistedState()
         async let namingPresetLoad: Void = namingPresetManager.loadPersistedState()
         async let steeringPromptLoad: Void = steeringPromptManager.loadPersistedState()
+        async let notificationLoad: Void = notificationSettings.loadPersistedState()
         _ = await (
             settingsLoad,
             watchedFoldersLoad,
@@ -936,7 +937,8 @@ struct SortyApp: App {
             personaLoad,
             customPersonaLoad,
             namingPresetLoad,
-            steeringPromptLoad
+            steeringPromptLoad,
+            notificationLoad
         )
 
         extensionListener.drainHandoffSlot()
