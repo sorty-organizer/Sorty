@@ -23,7 +23,13 @@ public class ExtensionListener: ObservableObject {
             }
             self?.incomingURL = url
         }
+    }
 
+    /// Drains the app-group handoff slot after first paint. Reads the shared
+    /// defaults slot and validates the payload; call from
+    /// `configureGlobalsIfNeeded` rather than init to keep scene creation free
+    /// of IPC validation and filesystem checks.
+    public func drainHandoffSlot() {
         if let existingURL = ExtensionCommunication.receiveFromExtension() {
             incomingURL = existingURL
         }

@@ -939,6 +939,8 @@ struct SortyApp: App {
             steeringPromptLoad
         )
 
+        extensionListener.drainHandoffSlot()
+
         appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
         loginItemManager.startUp()
         syncLoginItemState()
