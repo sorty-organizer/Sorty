@@ -44,7 +44,9 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
     private func applyOrganizeTimeout(to request: inout URLRequest) {
         // Respect the configured request timeout so large organize calls fail
-        // fast instead of hanging on the URLRequest default.
+        // fast instead of hanging on the URLRequest default. Resource time is
+        // capped per batch (120-180s) and waitsForConnectivity is set on the
+        // session configuration (URLRequest has no such flag).
         request.timeoutInterval = max(30, min(config.requestTimeout, 300))
     }
     
@@ -126,16 +128,17 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         var contentArray: [[String: Any]] = [
             ["type": "text", "text": userPrompt]
         ]
-        
-        // Add images as base64
+
+        // Add images as cached base64 so retries never re-encode multi-MB data.
+        let visionDetail = AIRequestSupport.effectiveVisionDetail(for: config)
         for name in orderedImageNames {
             guard let data = imageData[name] else { continue }
-            let base64 = data.base64EncodedString()
+            let base64 = ImageBase64Cache.shared.base64(for: name, data: data)
             contentArray.append([
                 "type": "image_url",
                 "image_url": [
                     "url": "data:image/jpeg;base64,\(base64)",
-                    "detail": config.effectiveVisionDetailLevel.rawValue
+                    "detail": visionDetail
                 ]
             ])
         }
@@ -159,6 +162,20 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 files: files,
                 promptTokens: estimatedPromptTokens,
                 isMultimodal: true
+            )
+        } catch where AIRequestSupport.isPayloadTooLarge(error) {
+            // Strip images first on 400/413/422 (payload too large or
+            // unsupported media) instead of re-sending the same megabytes.
+            LogManager.shared.log(
+                "Multimodal request rejected (\(error.localizedDescription)); retrying once with file metadata only.",
+                level: .warning,
+                category: "OpenAIClient"
+            )
+            return try await analyze(
+                files: files,
+                customInstructions: customInstructions,
+                personaPrompt: personaPrompt,
+                temperature: temperature
             )
         } catch where config.provider == .openRouter && Self.shouldRetryOpenRouterWithoutImages(error) {
             LogManager.shared.log(
@@ -487,36 +504,36 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             guard (200...299).contains(httpResponse.statusCode) else {
                 // For streaming errors, we need to collect the error message
                 var errorData = Data()
-                for try await byte in bytes {
-                    errorData.append(byte)
-                }
+                try await withTaskCancellationHandler {
+                    for try await byte in bytes {
+                        try Task.checkCancellation()
+                        errorData.append(byte)
+                    }
+                } onCancel: {}
                 let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
                 throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
             }
-            
-            // Process SSE stream
-            for try await line in bytes.lines {
-                guard let jsonString = AIRequestSupport.sseDataPayload(from: line) else { continue }
+
+            // Process SSE stream (per-line cancellation; task cancel stops bytes)
+            var openRouterStreamFallback = false
+            try await AIRequestSupport.consumeSSELines(bytes) { line in
+                guard let jsonString = AIRequestSupport.sseDataPayload(from: line) else { return true }
 
                 // Check for stream end
                 if jsonString == "[DONE]" {
-                    break
+                    return false
                 }
 
                 // Parse the JSON chunk
                 guard let jsonData = jsonString.data(using: .utf8),
                       let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-                    continue
+                    return true
                 }
 
                 if let streamError = Self.streamError(from: json) {
                     if config.provider == .openRouter, Self.isTransientStreamError(streamError.statusCode) {
-                        return try await retryOpenRouterWithoutStreaming(
-                            url: url,
-                            requestBody: requestBody,
-                            files: files,
-                            promptTokens: promptTokens
-                        )
+                        openRouterStreamFallback = true
+                        return false
                     }
                     throw AIClientError.apiError(
                         statusCode: streamError.statusCode,
@@ -532,7 +549,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 }
 
                 guard let completionChunk = AIRequestSupport.streamCompletionChunk(from: json),
-                      !completionChunk.isEmpty else { continue }
+                      !completionChunk.isEmpty else { return true }
 
                 if firstTokenTime == nil {
                     firstTokenTime = Date()
@@ -543,6 +560,15 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 await MainActor.run {
                     streamingDelegate?.didReceiveChunk(completionChunk)
                 }
+                return true
+            }
+            if openRouterStreamFallback {
+                return try await retryOpenRouterWithoutStreaming(
+                    url: url,
+                    requestBody: requestBody,
+                    files: files,
+                    promptTokens: promptTokens
+                )
             }
             
             let endTime = Date()
@@ -646,7 +672,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             url: url,
             requestBody: fallbackBody,
             files: files,
-            promptTokens: promptTokens
+            promptTokens: promptTokens,
+            totalFileSize: totalFileSize
         )
     }
 

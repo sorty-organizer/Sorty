@@ -7,7 +7,68 @@
 
 import Foundation
 
+/// Battery-aware prompt memoization. Uses how code is used: organize runs
+/// rebuild the same manifest/file sections per batch/retry, so sections are
+/// cached by content hash and reused instead of re-scanned and re-formatted.
+private final class PromptSectionCache: Sendable {
+    static let shared = PromptSectionCache()
+    private let lock = NSLock()
+    private var sections: [String: String] = [:]
+
+    private init() {}
+
+    func cachedSection(for key: String) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return sections[key]
+    }
+
+    func storeSection(_ section: String, for key: String) {
+        lock.lock()
+        if sections.count > 16 { sections.removeAll() }
+        sections[key] = section
+        lock.unlock()
+    }
+}
+
 struct PromptBuilder {
+    /// Content hash for the file-listing section: file identities + mtimes +
+    /// prompt-shaping flags. Callers with the same hash reuse the cached
+    /// section and only re-send what changed (diff-only upstream).
+    static func fileListingCacheKey(
+        files: [FileItem],
+        mode: OrganizationMode,
+        includeContentMetadata: Bool
+    ) -> String {
+        var hasher = Hasher()
+        hasher.combine(mode.rawValue)
+        hasher.combine(includeContentMetadata)
+        for file in files {
+            hasher.combine(file.path)
+            hasher.combine(file.size)
+            hasher.combine(file.modificationDate?.timeIntervalSince1970 ?? 0)
+        }
+        hasher.combine(files.count)
+        return "files-\(hasher.finalize())"
+    }
+
+    /// Manifest cache key: batch manifest reuse starts here. Identical
+    /// (directory, file set, entry cap) inputs share one manifest instead of
+    /// re-enumerating the directory per batch.
+    static func manifestCacheKey(
+        baseDirectoryURL: URL,
+        files: [FileItem],
+        maxEntries: Int
+    ) -> String {
+        "manifest-\(baseDirectoryURL.standardizedFileURL.path.hashValue)-\(maxEntries)-\(fileListingCacheKey(files: files, mode: .organize, includeContentMetadata: true))"
+    }
+
+    /// True when the device is on Low Power Mode or a constrained/expensive
+    /// link: prompt context (existing folders, finder metadata) is capped.
+    static var isBatteryConstrainedContext: Bool {
+        ProcessInfo.processInfo.isLowPowerModeEnabled ||
+            NetworkPathProbe.shared.isConstrainedOrExpensive
+    }
     static func buildSystemPrompt(enableReasoning: Bool = false, personaInfo: String, mode: OrganizationMode = .organize, enableTagging: Bool = true) -> String {
         var prompt = SystemPrompt.buildPrompt(mode: mode, enableTagging: enableTagging)
         
@@ -63,6 +124,22 @@ struct PromptBuilder {
     /// the main path previously grew without bound (full metadata per file).
     static let mainPromptTokenBudget = 12_000
     static let mainPromptMaxFullMetadataFiles = 80
+
+    /// Shared ISO8601 formatters. Creating a formatter costs milliseconds, and
+    /// the prompt path formats dates per file. A configured
+    /// ISO8601DateFormatter holds no mutable per-call state, so one static
+    /// instance per format replaces per-line/per-call allocations.
+    static let promptDateTimeFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    static let promptDateOnlyFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        return formatter
+    }()
 
     static func buildOrganizationPrompt(
         files: [FileItem],
@@ -238,24 +315,32 @@ struct PromptBuilder {
         }
         
         prompt += "Files to process (\(files.count) total):\n\n"
+        prompt.reserveCapacity(65_536)
 
         // Enforce the main-path token budget incrementally: full per-file
         // metadata for the first N files, path-only lines afterwards. This
         // keeps the JSON contract tail intact while bounding prompt growth.
         var fullMetadataRemaining = Self.mainPromptMaxFullMetadataFiles
         var emittedMinimalLines = 0
-        func overMainBudget(_ current: String) -> Bool {
-            estimateTokens(current) >= mainPromptTokenBudget
-        }
+        // Incremental budget tracking: String.count walks every grapheme
+        // cluster, so re-measuring the whole prompt per file is quadratic.
+        // Count appended bytes instead and re-check the token estimate every
+        // 16 files (enforceMainPromptBudget below stays as the final guard).
+        var estimatedChars = prompt.utf8.count
+        var filesSinceBudgetCheck = 0
+        var overMainBudget = false
+        let dateFormatter = Self.promptDateTimeFormatter
 
-        // Group files by extension for better context
+        // Group files by extension for better context. Sort keys only instead
+        // of sorting key/value pairs, which copies every file list.
         let groupedByExtension = Dictionary(grouping: files) { $0.extension.lowercased() }
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime]
 
-        for (ext, fileList) in groupedByExtension.sorted(by: { $0.key < $1.key }) {
+        for ext in groupedByExtension.keys.sorted() {
+            guard let fileList = groupedByExtension[ext] else { continue }
             let extLabel = ext.isEmpty ? "no extension" : ".\(ext)"
-            prompt += "\(extLabel.uppercased()) files (\(fileList.count)):\n"
+            let extHeader = "\(extLabel.uppercased()) files (\(fileList.count)):\n"
+            prompt += extHeader
+            estimatedChars += extHeader.utf8.count
 
             // Prioritize files with content metadata (deep-scanned) before applying the cap
             let sortedFiles: [FileItem]
@@ -272,10 +357,17 @@ struct PromptBuilder {
 
             for file in sortedFiles {
                 let promptPath = file.relativePath ?? file.displayName
-                let useMinimalLine = fullMetadataRemaining <= 0 || overMainBudget(prompt)
+                if filesSinceBudgetCheck >= 16 {
+                    overMainBudget = estimatedChars / 4 >= Self.mainPromptTokenBudget
+                    filesSinceBudgetCheck = 0
+                }
+                let useMinimalLine = fullMetadataRemaining <= 0 || overMainBudget
                 if useMinimalLine {
                     emittedMinimalLines += 1
-                    prompt += "  - \(promptPath)\n"
+                    let minimalLine = "  - \(promptPath)\n"
+                    prompt += minimalLine
+                    estimatedChars += minimalLine.utf8.count
+                    filesSinceBudgetCheck += 1
                     continue
                 }
                 fullMetadataRemaining -= 1
@@ -326,6 +418,8 @@ struct PromptBuilder {
                 }
                 
                 prompt += "\(fileDesc)\n"
+                estimatedChars += fileDesc.utf8.count + 1
+                filesSinceBudgetCheck += 1
             }
         }
 
@@ -517,8 +611,7 @@ struct PromptBuilder {
         
         // Append Finder metadata compactly when present
         var extras = ["bytes:\(file.size)"]
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withFullDate]
+        let dateFormatter = Self.promptDateOnlyFormatter
         if let created = file.creationDate {
             extras.append("created:\(dateFormatter.string(from: created))")
         }
@@ -840,8 +933,12 @@ struct PromptBuilder {
     ) -> String {
         guard instructions.contains("{") else { return instructions }
 
+        // DateFormatter is not thread-safe, so this stays once-per-call
+        // instead of joining the shared static formatters above.
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
         let examples = files.prefix(maxExamples).enumerated().map { index, file in
-            let expanded = expandTemplateVariables(instructions, for: file, counter: index + 1)
+            let expanded = expandTemplateVariables(instructions, for: file, counter: index + 1, dateFormatter: dateFormatter)
             return "\(file.displayName) -> \(expanded)"
         }
 
@@ -849,13 +946,11 @@ struct PromptBuilder {
         return "\(instructions) | Examples: \(examples.joined(separator: " ; "))"
     }
 
-    private static func expandTemplateVariables(_ template: String, for file: FileItem, counter: Int) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
+    private static func expandTemplateVariables(_ template: String, for file: FileItem, counter: Int, dateFormatter: DateFormatter) -> String {
         let relevantDate = file.modificationDate ?? file.creationDate ?? Date()
 
         let replacements: [String: String] = [
-            "{date}": formatter.string(from: relevantDate),
+            "{date}": dateFormatter.string(from: relevantDate),
             "{ext}": file.extension.lowercased(),
             "{size}": file.formattedSize,
             "{counter}": String(format: "%02d", counter)
@@ -878,7 +973,7 @@ struct PromptBuilder {
             parts.append("Author: \(truncateForPrompt(author, maxLength: 160))")
         }
         if let created = metadata.creationDate {
-            parts.append("Document created: \(ISO8601DateFormatter().string(from: created))")
+            parts.append("Document created: \(Self.promptDateTimeFormatter.string(from: created))")
         }
         if let pages = metadata.pageCount {
             parts.append("Pages: \(pages)")
@@ -923,6 +1018,10 @@ struct PromptBuilder {
     static func buildExistingFoldersContext(at directoryURL: URL, maxFolders: Int = 1_000) -> String? {
         guard maxFolders > 0 else { return nil }
 
+        // On battery/constrained links the existing-folder list is capped at
+        // 100 entries so the prompt stays small and the upload stays cheap.
+        let effectiveMax = isBatteryConstrainedContext ? min(maxFolders, 100) : maxFolders
+
         let fileManager = FileManager.default
         var existingFolders: [String] = []
 
@@ -934,7 +1033,13 @@ struct PromptBuilder {
             return nil
         }
 
+        var visited = 0
         for case let item as URL in enumerator {
+            visited += 1
+            // Cooperative cancellation every 100 entries; hard stop at 1000
+            // so pathological trees cannot spin CPU/disk unbounded.
+            if visited % 100 == 0, Task.isCancelled { return nil }
+            if visited >= 1_000 { break }
             guard let values = try? item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
                   values.isDirectory == true else {
                 continue
@@ -950,20 +1055,20 @@ struct PromptBuilder {
                 existingFolders.append(path)
             }
         }
-        
+
         guard !existingFolders.isEmpty else { return nil }
 
         existingFolders.sort { $0.localizedStandardCompare($1) == .orderedAscending }
-        let foldersToShow = existingFolders.prefix(maxFolders)
-        let truncated = existingFolders.count > maxFolders
+        let foldersToShow = existingFolders.prefix(effectiveMax)
+        let truncated = existingFolders.count > effectiveMax
 
         var context = "## EXISTING DESCENDANT FOLDERS (exact paths; prefer reusing these when semantically appropriate):\n"
         context += foldersToShow.map { "- \($0)" }.joined(separator: "\n")
         if truncated {
-            context += "\n- ... and \(existingFolders.count - maxFolders) more"
+            context += "\n- ... and \(existingFolders.count - effectiveMax) more"
         }
         context += "\n\nIMPORTANT: A listed path is one complete destination relative to the watched folder. Copy the full path exactly when it fits. Prefer an existing descendant folder over creating a duplicate hierarchy."
-        
+
         return context
     }
 
@@ -973,6 +1078,18 @@ struct PromptBuilder {
         maxEntries: Int = 400
     ) -> String? {
         guard !files.isEmpty else { return nil }
+
+        // Memoized by content hash: repeat organizes of the same scope reuse
+        // the manifest instead of rebuilding it per batch (diff-only upstream
+        // via strippingSourceFolderContext + buildBatchManifestContext).
+        let cacheKey = manifestCacheKey(
+            baseDirectoryURL: baseDirectoryURL,
+            files: files,
+            maxEntries: maxEntries
+        )
+        if let cached = PromptSectionCache.shared.cachedSection(for: cacheKey) {
+            return cached
+        }
 
         // Build summaries in one pass. Sorting and Dictionary(grouping:) over the
         // complete scan used to duplicate the entire FileItem array before the AI
@@ -1012,8 +1129,7 @@ struct PromptBuilder {
         .map { "\($0.key): \($0.value)" }
         .joined(separator: ", ")
 
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withFullDate]
+        let dateFormatter = Self.promptDateOnlyFormatter
         let manifestLines = manifestEntries.map { entry in
             let file = entry.file
             var line = "- \(entry.relativePath) | \(file.extension.isEmpty ? "no-ext" : file.extension.lowercased()) | \(file.formattedSize)"
@@ -1052,6 +1168,7 @@ struct PromptBuilder {
         }
 
         context += "\nUse this context to understand projects, clients, events, and existing groupings before deciding on folder structure. Do not rely on filenames alone."
+        PromptSectionCache.shared.storeSection(context, for: cacheKey)
         return context
     }
 
@@ -1062,7 +1179,9 @@ struct PromptBuilder {
         maxEntries: Int = 400
     ) async throws -> String? {
         try Task.checkCancellation()
-        let task = Task.detached(priority: .userInitiated) {
+        // Utility priority: manifest building must not compete with the main
+        // thread or user-initiated organize work for CPU.
+        let task = Task.detached(priority: .utility) {
             try Task.checkCancellation()
             let context = buildDirectoryManifestContext(
                 baseDirectoryURL: baseDirectoryURL,
@@ -1081,10 +1200,38 @@ struct PromptBuilder {
         }
     }
 
+    /// Builds the existing-folders context without occupying the caller's
+    /// actor. It walks the directory tree, so large folders must not pay for
+    /// it on the main actor. Mirrors buildDirectoryManifestContextOffMain.
+    static func buildExistingFoldersContextOffMain(
+        at directoryURL: URL,
+        maxFolders: Int = 1_000
+    ) async throws -> String? {
+        try Task.checkCancellation()
+        // Utility priority: folder enumeration must not compete with the main
+        // thread or user-initiated organize work for CPU.
+        let task = Task.detached(priority: .utility) {
+            try Task.checkCancellation()
+            let context = buildExistingFoldersContext(at: directoryURL, maxFolders: maxFolders)
+            try Task.checkCancellation()
+            return context
+        }
+        return try await withTaskCancellationHandler {
+            let context = try await task.value
+            try Task.checkCancellation()
+            return context
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
     private static func directoryMetadataContext(
         baseDirectoryURL: URL,
         maxEntries: Int
     ) -> String {
+        // Finder tags/comments require extra xattr/MDS reads per directory;
+        // skip them on battery/constrained runs (lazy metadata).
+        let includeFinderMetadata = !isBatteryConstrainedContext
         let keys: Set<URLResourceKey> = [
             .isDirectoryKey,
             .creationDateKey,
@@ -1093,8 +1240,7 @@ struct PromptBuilder {
             .tagNamesKey,
             .labelNumberKey,
         ]
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime]
+        let dateFormatter = Self.promptDateTimeFormatter
         var lines: [String] = []
         var directoryCount = 0
 
@@ -1113,14 +1259,16 @@ struct PromptBuilder {
             if let accessed = values?.contentAccessDate {
                 parts.append("accessed \(dateFormatter.string(from: accessed))")
             }
-            if let tags = values?.tagNames, !tags.isEmpty {
-                parts.append("finder_tags \(tags.joined(separator: ", "))")
-            }
-            if let color = values?.labelNumber.flatMap(FinderTagColor.init(rawValue:))?.name {
-                parts.append("finder_color \(color)")
-            }
-            if let comment = url.finderComment, !comment.isEmpty {
-                parts.append("comment \(truncateForPrompt(comment, maxLength: 200))")
+            if includeFinderMetadata {
+                if let tags = values?.tagNames, !tags.isEmpty {
+                    parts.append("finder_tags \(tags.joined(separator: ", "))")
+                }
+                if let color = values?.labelNumber.flatMap(FinderTagColor.init(rawValue:))?.name {
+                    parts.append("finder_color \(color)")
+                }
+                if let comment = url.finderComment, !comment.isEmpty {
+                    parts.append("comment \(truncateForPrompt(comment, maxLength: 200))")
+                }
             }
             lines.append(parts.joined(separator: " | "))
         }
@@ -1131,7 +1279,13 @@ struct PromptBuilder {
             includingPropertiesForKeys: Array(keys),
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) {
+            var visited = 0
             while let item = enumerator.nextObject() as? URL {
+                visited += 1
+                // Cooperative cancellation every 100 entries; hard stop at
+                // 1000 so huge trees cannot spin CPU/disk unbounded.
+                if visited % 100 == 0, Task.isCancelled { break }
+                if visited >= 1_000 { break }
                 guard (try? item.resourceValues(forKeys: keys).isDirectory) == true else {
                     continue
                 }

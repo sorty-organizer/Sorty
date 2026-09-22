@@ -20,10 +20,14 @@ public struct ImproveInstructionsTool: Sendable {
         originalInstructions: String,
         workflow: String
     ) async throws -> ImproveInstructionsOutcome {
-        let response = try await client.generateText(
-            prompt: userPrompt(originalInstructions: originalInstructions, workflow: workflow),
-            systemPrompt: systemPrompt(workflow: workflow)
-        )
+        // Editor-linked: debounce rapid edits; non-essential request.
+        try await EditorLinkedDebouncer.shared.debounce(key: "improve-instructions-\(workflow)")
+        let response = try await AIRequestSupport.withNonEssentialRequest {
+            try await client.generateText(
+                prompt: userPrompt(originalInstructions: originalInstructions, workflow: workflow),
+                systemPrompt: systemPrompt(workflow: workflow)
+            )
+        }
 
         return parse(response)
     }
@@ -165,11 +169,15 @@ public struct NaturalLanguageExclusionResolver: Sendable {
         client: any AIClientProtocol,
         description: String
     ) async throws -> Resolution {
-        let response = try await client.generateText(
-            prompt: "Select and configure exclusion tools for this request:\n<request>\(description)</request>",
-            systemPrompt: systemPrompt,
-            responseFormat: .jsonObject
-        )
+        // Editor-linked: debounce rapid edits; non-essential request.
+        try await EditorLinkedDebouncer.shared.debounce(key: "exclusion-resolver")
+        let response = try await AIRequestSupport.withNonEssentialRequest {
+            try await client.generateText(
+                prompt: "Select and configure exclusion tools for this request:\n<request>\(description)</request>",
+                systemPrompt: systemPrompt,
+                responseFormat: .jsonObject
+            )
+        }
         return try decodeResolution(from: response)
     }
 

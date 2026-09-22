@@ -131,7 +131,19 @@ public final class CodexCLIAuthManager: ObservableObject {
 
             do {
                 try process.run()
-                process.waitUntilExit()
+                // Never block indefinitely on the CLI: 15s deadline, then
+                // terminate and fall back to the auth.json file probe.
+                let deadline = Date().addingTimeInterval(15)
+                while process.isRunning, Date() < deadline {
+                    Thread.sleep(forTimeInterval: 0.05)
+                }
+                if process.isRunning {
+                    process.terminate()
+                    if let fallback = readFileBackedSubscriptionStatus() {
+                        return fallback
+                    }
+                    return .unavailable("Codex CLI did not respond. Run `codex login status` in Terminal.")
+                }
 
                 let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
                 let output = String(data: outputData, encoding: .utf8)?
@@ -272,7 +284,13 @@ public final class CodexCLIAuthManager: ObservableObject {
             process.standardError = Pipe()
             do {
                 try process.run()
-                process.waitUntilExit()
+                let deadline = Date().addingTimeInterval(15)
+                while process.isRunning, Date() < deadline {
+                    Thread.sleep(forTimeInterval: 0.05)
+                }
+                if process.isRunning {
+                    process.terminate()
+                }
             } catch {
                 // Fall through to local cache cleanup.
             }

@@ -61,11 +61,14 @@ public class PersonaHoningEngine: ObservableObject {
     """
     
     public func generateQuestions(from description: String, config: AIConfig) async throws -> [HoningQuestion] {
+        // Editor-linked: debounce keystrokes and reuse the pooled session;
+        // non-essential, so constrained/expensive links fail fast.
+        try await EditorLinkedDebouncer.shared.debounce(key: "persona-honing-questions")
         var genConfig = config
         genConfig.maxTokens = 4000
-        
+
         let client = try AIClientFactory.createClient(config: genConfig)
-        
+
         let prompt = """
         USER DESCRIPTION BEGIN
         \(description.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -73,12 +76,14 @@ public class PersonaHoningEngine: ObservableObject {
 
         Generate only the clarification questions still needed.
         """
-        
-        let response = try await client.generateText(
-            prompt: prompt,
-            systemPrompt: metaQuestionPrompt,
-            responseFormat: .jsonArray
-        )
+
+        let response = try await AIRequestSupport.withNonEssentialRequest {
+            try await client.generateText(
+                prompt: prompt,
+                systemPrompt: metaQuestionPrompt,
+                responseFormat: .jsonArray
+            )
+        }
         let jsonString = LLMJSONExtractor.firstArray(in: response) ?? response
         
         guard let questions = Self.validatedQuestions(from: jsonString) else {

@@ -62,9 +62,9 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         ]
 
         if config.enableStreaming {
-            return try await analyzeWithStreaming(url: url, requestBody: requestBody, headers: headers, files: files)
+            return try await analyzeWithStreaming(url: url, requestBody: requestBody, headers: headers, files: files, totalFileSize: AIRequestSupport.totalFileSize(of: files))
         } else {
-            return try await analyzeStandard(url: url, requestBody: requestBody, headers: headers, files: files)
+            return try await analyzeStandard(url: url, requestBody: requestBody, headers: headers, files: files, totalFileSize: AIRequestSupport.totalFileSize(of: files))
         }
     }
 
@@ -97,10 +97,10 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             ["type": "text", "text": userPrompt]
         ]
         
-        // Add images in Claude's format
+        // Add images in Claude's format (cached base64 so retries skip re-encode)
         for name in orderedImageNames {
             guard let data = imageData[name] else { continue }
-            let base64 = data.base64EncodedString()
+            let base64 = ImageBase64Cache.shared.base64(for: name, data: data)
             contentArray.append([
                 "type": "image",
                 "source": [
@@ -120,11 +120,26 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             ],
             "temperature": AIConfig.organizationTemperature
         ]
-        
-        if config.enableStreaming {
-            return try await analyzeWithStreaming(url: url, requestBody: requestBody, headers: headers, files: files)
-        } else {
-            return try await analyzeStandard(url: url, requestBody: requestBody, headers: headers, files: files)
+
+        do {
+            if config.enableStreaming {
+                return try await analyzeWithStreaming(url: url, requestBody: requestBody, headers: headers, files: files, totalFileSize: AIRequestSupport.totalFileSize(of: files))
+            } else {
+                return try await analyzeStandard(url: url, requestBody: requestBody, headers: headers, files: files, totalFileSize: AIRequestSupport.totalFileSize(of: files))
+            }
+        } catch where AIRequestSupport.isPayloadTooLarge(error) {
+            // Strip images first on 400/413/422 instead of re-sending megabytes.
+            LogManager.shared.log(
+                "Anthropic multimodal request rejected; retrying text-only.",
+                level: .warning,
+                category: "AnthropicClient"
+            )
+            return try await analyze(
+                files: files,
+                customInstructions: customInstructions,
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
         }
     }
 
@@ -132,12 +147,14 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         imageData.keys.sorted()
     }
     
-    private func analyzeStandard(url: URL, requestBody: [String: Any], headers: [String: String], files: [FileItem]) async throws -> OrganizationPlan {
-        let request = try AIRequestSupport.makeJSONRequest(
+    private func analyzeStandard(url: URL, requestBody: [String: Any], headers: [String: String], files: [FileItem], totalFileSize: Int64) async throws -> OrganizationPlan {
+        var request = try AIRequestSupport.makeJSONRequest(
             url: url,
             headers: headers,
             body: requestBody
         )
+        // Explicit organize timeout: never inherit the 600s resource default.
+        request.timeoutInterval = AIRequestSupport.organizeTimeout(for: config)
 
         let session = await AIRequestSupport.session(for: config)
         do {
@@ -163,15 +180,17 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         }
     }
     
-    private func analyzeWithStreaming(url: URL, requestBody: [String: Any], headers: [String: String], files: [FileItem]) async throws -> OrganizationPlan {
+    private func analyzeWithStreaming(url: URL, requestBody: [String: Any], headers: [String: String], files: [FileItem], totalFileSize: Int64) async throws -> OrganizationPlan {
         var streamingRequestBody = requestBody
         streamingRequestBody["stream"] = true
 
-        let request = try AIRequestSupport.makeJSONRequest(
+        var request = try AIRequestSupport.makeJSONRequest(
             url: url,
             headers: headers,
             body: streamingRequestBody
         )
+        // Explicit organize timeout: never inherit the 600s resource default.
+        request.timeoutInterval = AIRequestSupport.organizeTimeout(for: config)
 
         let session = await AIRequestSupport.session(for: config)
         do {
@@ -185,19 +204,24 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             
             if httpResponse.statusCode != 200 {
                 var errorData = Data()
-                for try await byte in bytes {
-                    errorData.append(byte)
-                }
+                try await withTaskCancellationHandler {
+                    for try await byte in bytes {
+                        try Task.checkCancellation()
+                        errorData.append(byte)
+                    }
+                } onCancel: {}
                 let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown streaming error"
                 throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
             }
-            
+
             var accumulatedContent = ""
-            
-            for try await line in bytes.lines {
-                guard line.hasPrefix("data:") else { continue }
+            // Coalesce off-actor: one MainActor hop per 100ms/4KB, not per delta.
+            var coalescer = StreamingChunkCoalescer()
+
+            try await AIRequestSupport.consumeSSELines(bytes) { line in
+                guard line.hasPrefix("data:") else { return true }
                 let jsonString = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-                if jsonString == "[DONE]" { break }
+                if jsonString == "[DONE]" { return false }
 
                 if let data = jsonString.data(using: .utf8),
                 let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -224,10 +248,19 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
 
                     if let chunk = chunkText, !chunk.isEmpty {
                         accumulatedContent += chunk
-                        await MainActor.run { [weak self] in
-                            self?.streamingDelegate?.didReceiveChunk(chunk)
+                        if let payload = coalescer.append(chunk) {
+                            await MainActor.run { [weak self] in
+                                self?.streamingDelegate?.didReceiveChunk(payload)
+                            }
                         }
                     }
+                }
+                return true
+            }
+
+            if let tail = coalescer.flush() {
+                await MainActor.run { [weak self] in
+                    self?.streamingDelegate?.didReceiveChunk(tail)
                 }
             }
             
@@ -272,6 +305,9 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             headers: headers
         )
         request.timeoutInterval = min(config.requestTimeout, 60)
+        // Health checks never wake constrained/expensive radios.
+        request.allowsConstrainedNetworkAccess = false
+        request.allowsExpensiveNetworkAccess = false
 
         let session = await AIRequestSupport.session(for: config)
         let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
@@ -295,11 +331,13 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             "temperature": AIConfig.organizationTemperature
         ]
         
-        let request = try AIRequestSupport.makeJSONRequest(
+        var request = try AIRequestSupport.makeJSONRequest(
             url: url,
             headers: headers,
             body: requestBody
         )
+        // Explicit timeout: never inherit the 600s resource default.
+        request.timeoutInterval = AIRequestSupport.interactiveTimeout(for: config)
 
         let session = await AIRequestSupport.session(for: config)
         let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {

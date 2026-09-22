@@ -252,22 +252,43 @@ public class GitHubCopilotAuthManager: ObservableObject {
         }
 
         LogManager.shared.log("Starting polling for access token", level: .debug, category: "AuthManager")
-        // Start polling
-        startPolling(interval: Double(codeResponse.interval), deviceCode: codeResponse.deviceCode)
+        // Start polling (bounded by the device-code expiry; see startPolling)
+        startPolling(interval: Double(codeResponse.interval), expiresIn: codeResponse.expiresIn, deviceCode: codeResponse.deviceCode)
     }
-    
-    private func startPolling(interval: Double, deviceCode: String) {
+
+    private func startPolling(interval: Double, expiresIn: Int, deviceCode: String) {
+        // Cancel any in-flight poll before starting a new one so overlapping
+        // device flows can never fan out duplicate token requests.
         pollTask?.cancel()
+        pollTask = nil
         if !isPolling {
             isPolling = true
         }
-        
+
+        // Cap attempts by the device-code lifetime so polling always stops on
+        // its own even if the user never completes or cancels the flow.
+        let safeInterval = min(max(interval, 5), 30)
+        let maxAttempts = max(1, Int(Double(max(expiresIn, 0)) / safeInterval))
+
         pollTask = Task {
-            while !Task.isCancelled {
+            var attempt = 0
+            while !Task.isCancelled, attempt < maxAttempts {
+                attempt += 1
+                // Jitter (capped at 30s total) avoids lockstep polling storms.
+                let jitter = Double.random(in: 0...min(5, safeInterval))
+                let wait = min(safeInterval + jitter, 30)
                 do {
-                    try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                    try await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
                 } catch {
                     return
+                }
+                guard !Task.isCancelled else { return }
+
+                // Pause on constrained/expensive links instead of burning radio.
+                if NetworkPathProbe.shared.isConstrainedOrExpensive {
+                    try? await Task.sleep(nanoseconds: 10 * 1_000_000_000)
+                    guard !Task.isCancelled else { return }
+                    continue
                 }
                 
                 do {
@@ -313,6 +334,16 @@ public class GitHubCopilotAuthManager: ObservableObject {
                     }
                     return
                 }
+            }
+            // Attempts exhausted (device code expired): stop polling with a
+            // clear message instead of spinning forever.
+            guard !Task.isCancelled else { return }
+            let message = "Your authorization has expired. Please sign in again."
+            if self.authError != message {
+                self.authError = message
+            }
+            if self.isPolling {
+                self.isPolling = false
             }
         }
     }

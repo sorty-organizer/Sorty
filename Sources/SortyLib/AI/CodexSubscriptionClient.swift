@@ -212,91 +212,115 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         try AIRequestSupport.ensureNetworkAllowed(url: serviceURL)
 
         return try await Task.detached(priority: .userInitiated) {
-            guard let codexPath = resolveCodexExecutablePath() else {
-                throw AIClientError.apiError(
-                    statusCode: 501,
-                    message: "Codex CLI is required. Install with: npm i -g @openai/codex"
-                )
-            }
-
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: codexPath)
-            process.arguments = ["app-server", "--stdio"]
-
-            let inputPipe = Pipe()
-            let outputPipe = Pipe()
-            process.standardInput = inputPipe
-            process.standardOutput = outputPipe
-            process.standardError = FileHandle.nullDevice
-
-            try process.run()
-            defer {
-                inputPipe.fileHandleForWriting.closeFile()
-                if process.isRunning {
-                    process.terminate()
-                }
-            }
-
-            let requests = [
-                #"{"id":1,"method":"initialize","params":{"clientInfo":{"name":"sorty","title":"Sorty","version":"1"}}}"#,
-                #"{"id":2,"method":"model/list","params":{"includeHidden":false,"limit":100}}"#
-            ].joined(separator: "\n") + "\n"
-            try inputPipe.fileHandleForWriting.write(contentsOf: Data(requests.utf8))
-
-            var bufferedData = Data()
-            while process.isRunning {
-                let chunk = outputPipe.fileHandleForReading.availableData
-                guard !chunk.isEmpty else { break }
-                bufferedData.append(chunk)
-
-                while let newline = bufferedData.firstIndex(of: 0x0A) {
-                    let lineData = bufferedData[..<newline]
-                    bufferedData.removeSubrange(...newline)
-                    guard
-                        let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                        (json["id"] as? Int) == 2
-                    else {
-                        continue
-                    }
-
-                    if let error = json["error"] as? [String: Any] {
-                        let message = error["message"] as? String ?? "Codex could not provide its model list."
-                        throw AIClientError.apiError(statusCode: 500, message: message)
-                    }
-
-                    guard
-                        let result = json["result"] as? [String: Any],
-                        let models = result["data"] as? [[String: Any]]
-                    else {
-                        throw AIClientError.jsonDecodingError(context: "Invalid Codex model-list response")
-                    }
-
-                    let availableModels: [CodexAvailableModel] = models.compactMap { model -> CodexAvailableModel? in
-                        guard let id = model["id"] as? String else { return nil }
-                        return CodexAvailableModel(
-                            id: id,
-                            displayName: model["displayName"] as? String ?? id,
-                            inputModalities: model["inputModalities"] as? [String] ?? [],
-                            serviceTiers: (model["serviceTiers"] as? [[String: Any]])?
-                                .compactMap { $0["id"] as? String } ?? [],
-                            supportedReasoningEfforts: (model["supportedReasoningEfforts"] as? [[String: Any]])?
-                                .compactMap { item in
-                                    guard let value = item["reasoningEffort"] as? String else { return nil }
-                                    return ReasoningEffort(rawValue: value)
-                                } ?? [],
-                            defaultReasoningEffort: (model["defaultReasoningEffort"] as? String)
-                                .map(ReasoningEffort.init(rawValue:))
-                        )
-                    }
-                    return availableModels
-                }
-            }
-
-            throw AIClientError.apiError(
-                statusCode: 500,
-                message: "Codex ended before returning its model list."
-            )
+            try await fetchModelsViaAppServer()
         }.value
+    }
+
+    private nonisolated static func fetchModelsViaAppServer() async throws -> [CodexAvailableModel] {
+        try Task.checkCancellation()
+        guard let codexPath = resolveCodexExecutablePath() else {
+            throw AIClientError.apiError(
+                statusCode: 501,
+                message: "Codex CLI is required. Install with: npm i -g @openai/codex"
+            )
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: codexPath)
+        process.arguments = ["app-server", "--stdio"]
+
+        let inputPipe = Pipe()
+        let outputPipe = Pipe()
+        process.standardInput = inputPipe
+        process.standardOutput = outputPipe
+        process.standardError = FileHandle.nullDevice
+
+        try process.run()
+        // Watchdog: 15s global timeout. A silent app-server blocks inside
+        // availableData below, which ignores task cancellation, so the
+        // watchdog terminates the CLI to force EOF and unblock the loop.
+        // Without this a hung CLI pins the task (and CPU) indefinitely.
+        let deadline = Date().addingTimeInterval(15)
+        let watchdog = Task.detached {
+            try? await Task.sleep(for: .seconds(15))
+            if process.isRunning {
+                process.terminate()
+            }
+        }
+        defer {
+            watchdog.cancel()
+            inputPipe.fileHandleForWriting.closeFile()
+            if process.isRunning {
+                process.terminate()
+            }
+        }
+
+        let requests = [
+            #"{"id":1,"method":"initialize","params":{"clientInfo":{"name":"sorty","title":"Sorty","version":"1"}}}"#,
+            #"{"id":2,"method":"model/list","params":{"includeHidden":false,"limit":100}}"#
+        ].joined(separator: "\n") + "\n"
+        try inputPipe.fileHandleForWriting.write(contentsOf: Data(requests.utf8))
+
+        var bufferedData = Data()
+        while process.isRunning {
+            try Task.checkCancellation()
+            let chunk = outputPipe.fileHandleForReading.availableData
+            guard !chunk.isEmpty else { break }
+            bufferedData.append(chunk)
+
+            while let newline = bufferedData.firstIndex(of: 0x0A) {
+                let lineData = bufferedData[..<newline]
+                bufferedData.removeSubrange(...newline)
+                guard
+                    let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                    (json["id"] as? Int) == 2
+                else {
+                    continue
+                }
+
+                if let error = json["error"] as? [String: Any] {
+                    let message = error["message"] as? String ?? "Codex could not provide its model list."
+                    throw AIClientError.apiError(statusCode: 500, message: message)
+                }
+
+                guard
+                    let result = json["result"] as? [String: Any],
+                    let models = result["data"] as? [[String: Any]]
+                else {
+                    throw AIClientError.jsonDecodingError(context: "Invalid Codex model-list response")
+                }
+
+                let availableModels: [CodexAvailableModel] = models.compactMap { model -> CodexAvailableModel? in
+                    guard let id = model["id"] as? String else { return nil }
+                    return CodexAvailableModel(
+                        id: id,
+                        displayName: model["displayName"] as? String ?? id,
+                        inputModalities: model["inputModalities"] as? [String] ?? [],
+                        serviceTiers: (model["serviceTiers"] as? [[String: Any]])?
+                            .compactMap { $0["id"] as? String } ?? [],
+                        supportedReasoningEfforts: (model["supportedReasoningEfforts"] as? [[String: Any]])?
+                            .compactMap { item in
+                                guard let value = item["reasoningEffort"] as? String else { return nil }
+                                return ReasoningEffort(rawValue: value)
+                            } ?? [],
+                        defaultReasoningEffort: (model["defaultReasoningEffort"] as? String)
+                            .map(ReasoningEffort.init(rawValue:))
+                    )
+                }
+                return availableModels
+            }
+        }
+
+        if Date() >= deadline {
+            throw AIClientError.apiError(
+                statusCode: 504,
+                message: "Codex model list timed out. The CLI may be busy; try again."
+            )
+        }
+        throw AIClientError.apiError(
+            statusCode: 500,
+            message: "Codex ended before returning its model list."
+        )
     }
 
     private func runCodex(
@@ -684,7 +708,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     private static let executablePathCacheLock = NSLock()
     nonisolated(unsafe) private static var executablePathCache: (path: String?, resolvedAt: Date)?
     /// Bounds how often a missing install re-runs the `which` subprocess.
-    private static let executablePathCacheLifetime: TimeInterval = 10
+    /// 60s TTL so clustered launch/setup probes share one lookup.
+    private static let executablePathCacheLifetime: TimeInterval = 60
 
     /// Locates the Codex CLI, caching the outcome briefly so the status probes
     /// clustered around launch and setup reconciliation do not each spawn

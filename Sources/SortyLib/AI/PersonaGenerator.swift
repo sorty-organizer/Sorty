@@ -119,6 +119,8 @@ Allowed icons:
         }
 
         do {
+            // Editor-linked: debounce rapid edits; non-essential request.
+            try await EditorLinkedDebouncer.shared.debounce(key: "persona-polish")
             var generationConfig = config
             generationConfig.maxTokens = 2600
             generationConfig.requestTimeout = max(generationConfig.requestTimeout, 90)
@@ -131,11 +133,13 @@ Allowed icons:
 
             Clean up these instructions without changing what the user wants.
             """
-            let response = try await client.generateText(
-                prompt: prompt,
-                systemPrompt: polishInstructionsSystemPrompt,
-                responseFormat: .jsonObject
-            )
+            let response = try await AIRequestSupport.withNonEssentialRequest {
+                try await client.generateText(
+                    prompt: prompt,
+                    systemPrompt: polishInstructionsSystemPrompt,
+                    responseFormat: .jsonObject
+                )
+            }
             let polished = try Self.decodePolishedInstructions(from: response)
 
             guard (100...2400).contains(polished.count),
@@ -184,6 +188,8 @@ Allowed icons:
         }
         
         do {
+            // Editor-linked: debounce rapid edits; non-essential request.
+            try await EditorLinkedDebouncer.shared.debounce(key: "persona-generate")
             var genConfig = config
             genConfig.maxTokens = 2600
             genConfig.requestTimeout = max(genConfig.requestTimeout, 120)
@@ -210,11 +216,13 @@ Allowed icons:
 
             prompt += "\n\nCreate the persona JSON now."
 
-            let response = try await client.generateText(
-                prompt: prompt,
-                systemPrompt: metaSystemPrompt,
-                responseFormat: .jsonObject
-            )
+            let response = try await AIRequestSupport.withNonEssentialRequest {
+                try await client.generateText(
+                    prompt: prompt,
+                    systemPrompt: metaSystemPrompt,
+                    responseFormat: .jsonObject
+                )
+            }
             let generated = try Self.decodeGeneratedPersona(from: response)
             let generatedName = enforceNameLength(generated.name)
             let generatedPrompt = generated.prompt

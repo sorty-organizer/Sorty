@@ -14,7 +14,7 @@ import Foundation
 import FoundationModels
 
 @available(macOS 26.0, *)
-public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
+public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
     public let config: AIConfig
     @MainActor public weak var streamingDelegate: StreamingDelegate?
     
@@ -272,7 +272,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
             totalTokens: totalTokens,
             model: "Apple Foundation Model",
             filesScanned: files.count,
-            totalFileSize: files.reduce(0) { $0 + $1.size },
+            totalFileSize: AIRequestSupport.totalFileSize(of: files),
             promptTokens: nil
         )
 
@@ -305,7 +305,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
             totalTokens: estimatedTokens,
             model: "Apple Foundation Model",
             filesScanned: files.count,
-            totalFileSize: files.reduce(0) { $0 + $1.size },
+            totalFileSize: AIRequestSupport.totalFileSize(of: files),
             promptTokens: nil
         )
     }

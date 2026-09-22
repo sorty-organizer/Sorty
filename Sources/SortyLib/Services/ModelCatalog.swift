@@ -73,16 +73,26 @@ public final class ModelCatalog: ObservableObject {
     private var codexModelsTimestamp: Date?
     private var cachedOpenAIAuthMethod: ProviderAuthMethod?
     private var refreshIDs: [AIProvider: UUID] = [:]
+    /// Coalesces refreshAllAvailable fan-out; latest non-forced call wins.
+    private var refreshAllTask: Task<Void, Never>?
+    /// Per-model Ollama capability cache so /api/tags stays a single call.
+    private var ollamaCapabilityCache: [String: [String]] = [:]
     
     private static let cloudTTL: TimeInterval = 24 * 60 * 60
     private static let ollamaTTL: TimeInterval = 10 * 60
     private let configKey = "aiConfig"
     
-    private var cacheDirectory: URL {
+    /// Nonisolated so disk-cache snapshots decode off the MainActor.
+    nonisolated private static var sharedCacheDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         return base.appendingPathComponent("Sorty/ModelCache")
     }
+
+    /// Set once the background snapshot starts. Fallback models serve
+    /// meanwhile via `cachedModels(for:)`; the snapshot only fills providers
+    /// that have no fresher in-memory state.
+    private var didStartCacheLoad = false
     
     public convenience init() {
         self.init(codexModelLoader: Self.fetchCodexSubscriptionModels)
@@ -96,15 +106,22 @@ public final class ModelCatalog: ObservableObject {
         config.timeoutIntervalForRequest = 10
         config.timeoutIntervalForResource = 15
         config.httpMaximumConnectionsPerHost = 6
+        // Catalog probes never wake constrained or expensive radios; stale
+        // cache + fallback models cover offline/low-data states.
+        config.allowsConstrainedNetworkAccess = false
+        config.allowsExpensiveNetworkAccess = false
         config.httpAdditionalHeaders = [
             "Accept-Encoding": "gzip, deflate",
             "Connection": "keep-alive"
         ]
         self.session = NetworkPrivacyPolicy.makeSession(configuration: config)
-        loadCacheFromDisk()
+        // Disk cache loads lazily in the background (see ensureCacheLoaded);
+        // fallback models serve until the snapshot lands. Never block init on
+        // file I/O: the catalog is constructed on the MainActor at launch.
     }
     
     public func cachedModels(for provider: AIProvider) -> [ModelInfo] {
+        ensureCacheLoaded()
         let cached = modelsByProvider[provider] ?? []
         if cached.isEmpty {
             return fallbackModels(for: provider)
@@ -178,6 +195,7 @@ public final class ModelCatalog: ObservableObject {
         force: Bool = false,
         authMethod: ProviderAuthMethod? = nil
     ) async {
+        ensureCacheLoaded()
         let resolvedAuth = provider == .openAI
             ? (authMethod ?? ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: storedAIConfig() ?? .default))
             : nil
@@ -248,6 +266,29 @@ public final class ModelCatalog: ObservableObject {
     }
     
     public func refreshAllAvailable(force: Bool = false) async {
+        // Coalesce fan-out: UI appear paths can fire this repeatedly while
+        // navigating settings. Non-forced calls debounce 500ms (latest wins);
+        // force=true is reserved for the explicit Retry button and runs now.
+        // Per-provider TTL checks inside refresh() still skip fresh entries.
+        if !force {
+            refreshAllTask?.cancel()
+            let task = Task<Void, Never> { [weak self] in
+                do {
+                    try await Task.sleep(nanoseconds: 500_000_000)
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                await self?.runRefreshAll(force: false)
+            }
+            refreshAllTask = task
+            await task.value
+            return
+        }
+        await runRefreshAll(force: true)
+    }
+
+    private func runRefreshAll(force: Bool) async {
         await withTaskGroup(of: Void.self) { group in
             for provider in AIProvider.allCases where provider.isAvailable {
                 group.addTask {
@@ -281,13 +322,15 @@ public final class ModelCatalog: ObservableObject {
         return try? JSONDecoder().decode(AIConfig.self, from: data)
     }
 
-    private func configForProvider(_ provider: AIProvider) -> AIConfig {
+    /// Off-main config load for catalog fetches: the keychain read goes
+    /// through `getAsync` (already detached) instead of blocking the MainActor.
+    private func configForProviderAsync(_ provider: AIProvider) async -> AIConfig {
         var config = storedAIConfig() ?? .default
         config.provider = provider
         config.apiURL = provider.defaultAPIURL
         config.model = provider.defaultModel
         config.requiresAPIKey = provider.typicallyRequiresAPIKey
-        config.apiKey = KeychainManager.get(key: provider.keychainKey)
+        config.apiKey = await KeychainManager.getAsync(key: provider.keychainKey)
         return config
     }
     
@@ -354,7 +397,7 @@ public final class ModelCatalog: ObservableObject {
     }
     
     private func fetchOpenAIModels(force: Bool, authMethod: ProviderAuthMethod?, refreshID: UUID) async throws -> (models: [ModelInfo], isFallback: Bool) {
-        var config = configForProvider(.openAI)
+        var config = await configForProviderAsync(.openAI)
         if let authMethod {
             config.setAuthMethod(authMethod, for: .openAI)
         }
@@ -421,7 +464,7 @@ public final class ModelCatalog: ObservableObject {
             throw ModelCatalogError.fetchFailed
         }
         
-        let models = try decodeOpenAICompatibleModels(from: data, provider: .openAI)
+        let models = try await Self.decodedOpenAICompatibleModels(from: data, provider: .openAI)
         return (models, false)
     }
 
@@ -446,7 +489,7 @@ public final class ModelCatalog: ObservableObject {
         }
         try ensureNetworkAllowed(url)
         
-        guard let groqAPIKey = KeychainManager.get(key: AIProvider.groq.keychainKey), !groqAPIKey.isEmpty else {
+        guard let groqAPIKey = await KeychainManager.getAsync(key: AIProvider.groq.keychainKey), !groqAPIKey.isEmpty else {
             throw ModelCatalogError.fetchFailed
         }
         
@@ -461,7 +504,7 @@ public final class ModelCatalog: ObservableObject {
             throw ModelCatalogError.fetchFailed
         }
         
-        return try decodeOpenAICompatibleModels(from: data, provider: .groq)
+        return try await Self.decodedOpenAICompatibleModels(from: data, provider: .groq)
     }
     
     private func fetchOpenRouterModels() async throws -> [ModelInfo] {
@@ -474,7 +517,7 @@ public final class ModelCatalog: ObservableObject {
         request.httpMethod = "GET"
         request.timeoutInterval = 10
 
-        if let apiKey = KeychainManager.get(key: AIProvider.openRouter.keychainKey), !apiKey.isEmpty {
+        if let apiKey = await KeychainManager.getAsync(key: AIProvider.openRouter.keychainKey), !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
 
@@ -577,14 +620,50 @@ public final class ModelCatalog: ObservableObject {
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
+        // Bounded parallel capability probes (max 5 in flight, 1.5s each):
+        // /api/tags often omits capabilities, and sequential /api/show calls
+        // stall the whole list behind slow local models. A per-id cache means
+        // repeat refreshes stay a single /api/tags call; /api/show runs only
+        // for models with no cached or inline capabilities.
         var capabilityByModel: [String: [String]] = [:]
-        for model in decoded.models.prefix(40) {
+        let tagModels = Array(decoded.models.prefix(40))
+        for model in tagModels {
             if let capabilities = normalizedCapabilityTags(from: model.capabilities) {
                 capabilityByModel[model.name] = capabilities
-                continue
+                ollamaCapabilityCache[model.name] = capabilities
+            } else if let cached = ollamaCapabilityCache[model.name] {
+                capabilityByModel[model.name] = cached
             }
-            if let capabilities = await fetchOllamaModelCapabilities(modelName: model.name) {
-                capabilityByModel[model.name] = capabilities
+        }
+        let missingNames = tagModels
+            .map(\.name)
+            .filter { capabilityByModel[$0] == nil }
+        if !missingNames.isEmpty {
+            let session = self.session
+            let fetched = await withTaskGroup(of: (String, [String]?).self) { group in
+                var iterator = missingNames.makeIterator()
+                for _ in 0..<min(5, missingNames.count) {
+                    guard let name = iterator.next() else { break }
+                    group.addTask {
+                        await (name, Self.ollamaShowCapabilities(session: session, modelName: name))
+                    }
+                }
+                var collected: [(String, [String]?)] = []
+                for await result in group {
+                    collected.append(result)
+                    if let next = iterator.next() {
+                        group.addTask {
+                            await (next, Self.ollamaShowCapabilities(session: session, modelName: next))
+                        }
+                    }
+                }
+                return collected
+            }
+            for (name, capabilities) in fetched {
+                if let capabilities {
+                    capabilityByModel[name] = capabilities
+                    ollamaCapabilityCache[name] = capabilities
+                }
             }
         }
         
@@ -600,7 +679,12 @@ public final class ModelCatalog: ObservableObject {
         }
     }
 
-    private func fetchOllamaModelCapabilities(modelName: String) async -> [String]? {
+    /// Nonisolated so bounded TaskGroup children can call it without
+    /// capturing the MainActor-isolated catalog. 1.5s timeout each.
+    nonisolated private static func ollamaShowCapabilities(
+        session: URLSession,
+        modelName: String
+    ) async -> [String]? {
         guard let url = URL(string: "http://localhost:11434/api/show"),
               NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
             return nil
@@ -625,7 +709,7 @@ public final class ModelCatalog: ObservableObject {
                 return nil
             }
             let decoded = try JSONDecoder().decode(ShowResponse.self, from: data)
-            return normalizedCapabilityTags(from: decoded.capabilities)
+            return Self.mergedCapabilityTags([decoded.capabilities])
         } catch {
             return nil
         }
@@ -639,7 +723,7 @@ public final class ModelCatalog: ObservableObject {
             return (anthropicFallbackModels(), true)
         }
 
-        let config = configForProvider(.anthropic)
+        let config = await configForProviderAsync(.anthropic)
         guard let authHeader = ProviderAuthResolver.authHeader(for: .anthropic, config: config) else {
             return (anthropicFallbackModels(), true)
         }
@@ -654,6 +738,13 @@ public final class ModelCatalog: ObservableObject {
             let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                // Fallback list stays visible, but the underlying status is
+                // surfaced in lastError instead of silently going stale.
+                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+                lastError[.anthropic] = AIClientError.apiError(
+                    statusCode: status,
+                    message: "Anthropic model list request failed."
+                )
                 return (anthropicFallbackModels(), true)
             }
             
@@ -683,6 +774,14 @@ public final class ModelCatalog: ObservableObject {
             }
             return (models, false)
         } catch {
+            // Fallback list stays visible, but the underlying error is kept in
+            // lastError (refresh() only fills a generic reason when nil).
+            lastError[.anthropic] = error
+            ReliabilityManager.shared.capture(
+                error: error,
+                feature: "model_catalog",
+                operation: "fetch_anthropic_models"
+            )
             return (anthropicFallbackModels(), true)
         }
     }
@@ -704,7 +803,7 @@ public final class ModelCatalog: ObservableObject {
             }
         }
         
-        apiKey = KeychainManager.get(key: AIProvider.openAICompatible.keychainKey)
+        apiKey = await KeychainManager.getAsync(key: AIProvider.openAICompatible.keychainKey)
         
         var urlString = apiURL.trimmingCharacters(in: .whitespacesAndNewlines)
         if !urlString.contains("://") && !urlString.isEmpty {
@@ -741,7 +840,7 @@ public final class ModelCatalog: ObservableObject {
                 return (openAICompatibleFallback(), true)
             }
             
-            let models = try decodeOpenAICompatibleModels(
+            let models = try await Self.decodedOpenAICompatibleModels(
                 from: data,
                 provider: .openAICompatible,
                 usesCreatedTimestamp: false
@@ -1027,7 +1126,7 @@ public final class ModelCatalog: ObservableObject {
             return (geminiFallbackModels(), true)
         }
         
-        guard let geminiAPIKey = KeychainManager.get(key: AIProvider.gemini.keychainKey), !geminiAPIKey.isEmpty else {
+        guard let geminiAPIKey = await KeychainManager.getAsync(key: AIProvider.gemini.keychainKey), !geminiAPIKey.isEmpty else {
              return (geminiFallbackModels(), true)
         }
 
@@ -1040,6 +1139,13 @@ public final class ModelCatalog: ObservableObject {
             let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                // Fallback list stays visible, but the underlying status is
+                // surfaced in lastError instead of silently going stale.
+                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+                lastError[.gemini] = AIClientError.apiError(
+                    statusCode: status,
+                    message: "Gemini model list request failed."
+                )
                 return (geminiFallbackModels(), true)
             }
             
@@ -1073,6 +1179,14 @@ public final class ModelCatalog: ObservableObject {
             }
             return (models, false)
         } catch {
+            // Fallback list stays visible, but the underlying error is kept in
+            // lastError (refresh() only fills a generic reason when nil).
+            lastError[.gemini] = error
+            ReliabilityManager.shared.capture(
+                error: error,
+                feature: "model_catalog",
+                operation: "fetch_gemini_models"
+            )
             return (geminiFallbackModels(), true)
         }
     }
@@ -1159,50 +1273,93 @@ public final class ModelCatalog: ObservableObject {
         return sanitized
     }
     
-    private func loadCacheFromDisk() {
-        let fm = FileManager.default
-        guard fm.fileExists(atPath: cacheDirectory.path) else { return }
-        
-        for provider in AIProvider.allCases {
-            let cacheFile = cacheDirectory.appendingPathComponent("\(provider.rawValue).json")
-            guard fm.fileExists(atPath: cacheFile.path) else { continue }
-            
-            do {
-                let data = try Data(contentsOf: cacheFile)
-                let wrapper = try JSONDecoder().decode(CacheWrapper.self, from: data)
-                modelsByProvider[provider] = wrapper.models
-                cacheTimestamps[provider] = wrapper.timestamp
-            } catch {
-                ReliabilityManager.shared.capture(
-                    error: error,
-                    feature: "model_catalog",
-                    operation: "load_cache"
-                )
-                continue
+    /// Starts the one-time background disk-cache load. File I/O and JSON
+    /// decoding run detached; only the @Published assignment hops to main.
+    private func ensureCacheLoaded() {
+        guard !didStartCacheLoad else { return }
+        didStartCacheLoad = true
+        let directory = Self.sharedCacheDirectory
+        Task.detached(priority: .utility) {
+            let snapshot = Self.readCacheSnapshot(cacheDirectory: directory)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                for (provider, models) in snapshot.models {
+                    // Never overwrite fresher in-memory state (e.g. a refresh
+                    // that finished while the snapshot was being decoded).
+                    if self.modelsByProvider[provider] == nil {
+                        self.modelsByProvider[provider] = models
+                    }
+                }
+                for (provider, timestamp) in snapshot.timestamps {
+                    if self.cacheTimestamps[provider] == nil {
+                        self.cacheTimestamps[provider] = timestamp
+                    }
+                }
+                for failure in snapshot.failures {
+                    ReliabilityManager.shared.capture(
+                        error: failure,
+                        feature: "model_catalog",
+                        operation: "load_cache"
+                    )
+                }
             }
         }
     }
+
+    /// Nonisolated snapshot read: pure file I/O + decoding, no publishes.
+    nonisolated private static func readCacheSnapshot(
+        cacheDirectory: URL
+    ) -> (models: [AIProvider: [ModelInfo]], timestamps: [AIProvider: Date], failures: [Error]) {
+        var models: [AIProvider: [ModelInfo]] = [:]
+        var timestamps: [AIProvider: Date] = [:]
+        var failures: [Error] = []
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: cacheDirectory.path) else {
+            return (models, timestamps, failures)
+        }
+
+        for provider in AIProvider.allCases {
+            let cacheFile = cacheDirectory.appendingPathComponent("\(provider.rawValue).json")
+            guard fm.fileExists(atPath: cacheFile.path) else { continue }
+
+            do {
+                let data = try Data(contentsOf: cacheFile)
+                let wrapper = try JSONDecoder().decode(CacheWrapper.self, from: data)
+                models[provider] = wrapper.models
+                timestamps[provider] = wrapper.timestamp
+            } catch {
+                failures.append(error)
+                continue
+            }
+        }
+        return (models, timestamps, failures)
+    }
     
     private func saveCacheToDisk(provider: AIProvider, models: [ModelInfo]) {
-        let fm = FileManager.default
-        
-        if !fm.fileExists(atPath: cacheDirectory.path) {
-            try? fm.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-        }
-        
-        let cacheFile = cacheDirectory.appendingPathComponent("\(provider.rawValue).json")
+        let directory = Self.sharedCacheDirectory
+        let cacheFile = directory.appendingPathComponent("\(provider.rawValue).json")
         let wrapper = CacheWrapper(models: models, timestamp: Date())
-        
-        do {
-            let data = try JSONEncoder().encode(wrapper)
-            try data.write(to: cacheFile)
-        } catch {
-            ReliabilityManager.shared.capture(
-                error: error,
-                feature: "model_catalog",
-                operation: "save_cache"
-            )
-            return
+
+        // Encode + write off the MainActor; only @Published-adjacent state
+        // (cacheTimestamps, set by the caller) stays on main.
+        Task.detached(priority: .utility) {
+            do {
+                let fm = FileManager.default
+                if !fm.fileExists(atPath: directory.path) {
+                    try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+                }
+                let data = try JSONEncoder().encode(wrapper)
+                try data.write(to: cacheFile, options: .atomic)
+            } catch {
+                await MainActor.run {
+                    ReliabilityManager.shared.capture(
+                        error: error,
+                        feature: "model_catalog",
+                        operation: "save_cache"
+                    )
+                }
+                return
+            }
         }
     }
 
@@ -1215,10 +1372,16 @@ public final class ModelCatalog: ObservableObject {
     }
 
     private func normalizedCapabilityTags(from rawCapabilities: [String]?) -> [String]? {
-        mergeCapabilityTags([rawCapabilities])
+        Self.mergedCapabilityTags([rawCapabilities])
     }
 
     private func mergeCapabilityTags(_ groups: [[String]?]) -> [String]? {
+        Self.mergedCapabilityTags(groups)
+    }
+
+    /// Nonisolated tag merge so background decode/probe paths share the exact
+    /// same normalization without touching MainActor state.
+    nonisolated private static func mergedCapabilityTags(_ groups: [[String]?]) -> [String]? {
         var tags = Set<String>()
 
         for group in groups {
@@ -1242,13 +1405,40 @@ public final class ModelCatalog: ObservableObject {
         provider: AIProvider,
         usesCreatedTimestamp: Bool = true
     ) throws -> [ModelInfo] {
+        try Self.decodedOpenAICompatibleModelsSync(
+            from: data,
+            provider: provider,
+            usesCreatedTimestamp: usesCreatedTimestamp
+        )
+    }
+
+    /// Detached decode so large model lists never parse on the MainActor.
+    nonisolated private static func decodedOpenAICompatibleModels(
+        from data: Data,
+        provider: AIProvider,
+        usesCreatedTimestamp: Bool = true
+    ) async throws -> [ModelInfo] {
+        try await Task.detached(priority: .utility) {
+            try Self.decodedOpenAICompatibleModelsSync(
+                from: data,
+                provider: provider,
+                usesCreatedTimestamp: usesCreatedTimestamp
+            )
+        }.value
+    }
+
+    nonisolated private static func decodedOpenAICompatibleModelsSync(
+        from data: Data,
+        provider: AIProvider,
+        usesCreatedTimestamp: Bool = true
+    ) throws -> [ModelInfo] {
         let decoded = try JSONDecoder().decode(OpenAICompatibleModelsResponse.self, from: data)
         return decoded.data.map { model in
             ModelInfo(
                 id: model.id,
                 displayName: model.id,
                 provider: provider,
-                capabilities: mergeCapabilityTags([
+                capabilities: Self.mergedCapabilityTags([
                     model.modalities,
                     model.capabilities,
                     model.input_modalities,

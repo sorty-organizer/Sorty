@@ -87,6 +87,8 @@ public class NamingInstructionsGenerator: ObservableObject {
         }
         
         do {
+            // Editor-linked: debounce rapid edits; non-essential request.
+            try await EditorLinkedDebouncer.shared.debounce(key: "naming-instructions")
             var genConfig = config
             genConfig.maxTokens = 1000
             genConfig.requestTimeout = 60
@@ -108,7 +110,9 @@ public class NamingInstructionsGenerator: ObservableObject {
                 referenceFileNames: referenceFileNames
             )
             
-            let result = try await client.generateText(prompt: prompt, systemPrompt: metaSystemPrompt)
+            let result = try await AIRequestSupport.withNonEssentialRequest {
+                try await client.generateText(prompt: prompt, systemPrompt: metaSystemPrompt)
+            }
             
             return result.trimmingCharacters(in: .whitespacesAndNewlines)
             

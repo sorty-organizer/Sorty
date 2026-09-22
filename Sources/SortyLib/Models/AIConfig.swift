@@ -604,6 +604,14 @@ public enum VisionBatchStrategy: String, Codable, CaseIterable, Sendable {
 public struct AIConfig: Codable, Sendable, Equatable {
     public static let organizationTemperature = 0.7
 
+    /// Battery guard: a single organize batch must never hold the radio for
+    /// the legacy 600s resource timeout. Per-batch resource timeout is capped
+    /// at 120-180s; multi-batch runs share one global deadline below.
+    public static let maxOrganizeResourceTimeout: TimeInterval = 180
+    public static let minOrganizeResourceTimeout: TimeInterval = 120
+    /// Global deadline for a whole organize run across all batches/retries.
+    public static let globalOrganizeDeadline: TimeInterval = 600
+
     public var provider: AIProvider {
         didSet {
             if provider != oldValue {
@@ -703,7 +711,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.apiKey = apiKey
         self.model = model
         self.requestTimeout = requestTimeout
-        self.resourceTimeout = resourceTimeout
+        // Clamp legacy persisted 600s values into the 120-180s per-batch cap.
+        self.resourceTimeout = min(max(resourceTimeout, Self.minOrganizeResourceTimeout), Self.maxOrganizeResourceTimeout)
         self.systemPromptOverride = systemPromptOverride
         self.maxTokens = maxTokens
         self.enableStreaming = enableStreaming
@@ -976,6 +985,18 @@ public extension AIConfig {
             return .low
         }
         return visionDetailLevel
+    }
+
+    /// Per-batch resource timeout capped to 120-180s so one organize call
+    /// cannot pin the radio for the legacy 600s default.
+    var effectiveOrganizeResourceTimeout: TimeInterval {
+        min(max(resourceTimeout, Self.minOrganizeResourceTimeout), Self.maxOrganizeResourceTimeout)
+    }
+
+    /// Deadline for a whole organize run; callers capture `Date() + deadline`
+    /// before the first batch and check `Date() > deadline` per batch/retry.
+    func organizeDeadlineDate(from start: Date = Date()) -> Date {
+        start.addingTimeInterval(Self.globalOrganizeDeadline)
     }
 
     var duplicateHandlingMode: DuplicateHandlingMode {

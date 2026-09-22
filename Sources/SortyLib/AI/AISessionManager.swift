@@ -34,6 +34,13 @@ public class AISessionManager: ObservableObject {
     
     /// Last usage time for cleanup
     private var lastUsed: [AIProvider: Date] = [:]
+
+    /// Single-flight prewarm tasks per provider so rapid folder selection
+    /// cannot fan out duplicate connection storms.
+    private var prewarmTasks: [AIProvider: Task<Void, Never>] = [:]
+    /// Last prewarm verdict per provider; fresh verdicts (<5m) skip network I/O.
+    private var prewarmVerdicts: [AIProvider: (at: Date, success: Bool, error: String?)] = [:]
+    private static let prewarmTTL: TimeInterval = 5 * 60
     
     /// Prewarming status
     @Published public private(set) var prewarmingProviders: Set<AIProvider> = []
@@ -59,6 +66,9 @@ public class AISessionManager: ObservableObject {
     /// connection task.
     public func resetPrewarmState(for provider: AIProvider) {
         prewarmGenerations[provider, default: 0] += 1
+        prewarmTasks[provider]?.cancel()
+        prewarmTasks[provider] = nil
+        prewarmVerdicts[provider] = nil
         prewarmError = nil
         isPrewarmed = false
     }
@@ -118,8 +128,37 @@ public class AISessionManager: ObservableObject {
         return session
     }
     
-    /// Prewarm connection for a provider (call when user selects folder)
+    /// Prewarm connection for a provider (call when user selects folder).
+    /// Single-flight with a <5m TTL: concurrent callers join the in-flight
+    /// task and fresh verdicts skip network I/O entirely. This is also the
+    /// merged connection-check entry point — callers should use `prewarm`
+    /// instead of a separate testConnection call.
     public func prewarm(provider: AIProvider, config: AIConfig) async {
+        if let verdict = prewarmVerdicts[provider],
+           Date().timeIntervalSince(verdict.at) < Self.prewarmTTL {
+            isPrewarmed = verdict.success
+            prewarmError = verdict.error
+            return
+        }
+        if let inFlight = prewarmTasks[provider] {
+            await inFlight.value
+            return
+        }
+        let task = Task { [weak self] in
+            await self?.runPrewarm(provider: provider, config: config)
+        }
+        prewarmTasks[provider] = task
+        await task.value
+        prewarmTasks[provider] = nil
+    }
+
+    /// Merged connection check: identical to `prewarm`, kept as the single
+    /// named entry point so call sites do not fan out testConnection + prewarm.
+    public func verifyConnection(provider: AIProvider, config: AIConfig) async {
+        await prewarm(provider: provider, config: config)
+    }
+
+    private func runPrewarm(provider: AIProvider, config: AIConfig) async {
         guard !prewarmingProviders.contains(provider) else { return }
 
         prewarmingProviders.insert(provider)
@@ -152,6 +191,7 @@ public class AISessionManager: ObservableObject {
                 isPrewarmed = true
                 prewarmError = nil
             }
+            prewarmVerdicts[provider] = (at: Date(), success: isPrewarmed, error: prewarmError)
             return
         }
 
@@ -159,6 +199,7 @@ public class AISessionManager: ObservableObject {
         switch provider {
         case .ollama, .appleFoundationModel:
             isPrewarmed = true
+            prewarmVerdicts[provider] = (at: Date(), success: true, error: nil)
             return
         default:
             break
@@ -183,9 +224,14 @@ public class AISessionManager: ObservableObject {
 
         // Try each URL in order (specific endpoint first, then root)
         for (index, url) in allowedPrewarmURLs.enumerated() {
+            if Task.isCancelled { return }
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
             request.timeoutInterval = 5
+            // Prewarm/catalog/health must never wake constrained or expensive
+            // radios: fail fast on Low Data Mode / cellular instead.
+            request.allowsConstrainedNetworkAccess = false
+            request.allowsExpensiveNetworkAccess = false
 
             addAuthHeaders(to: &request, provider: provider, config: config)
 
@@ -204,6 +250,7 @@ public class AISessionManager: ObservableObject {
                         guard generation == prewarmGenerations[provider, default: 0] else { return }
                         isPrewarmed = true
                         prewarmError = nil
+                        prewarmVerdicts[provider] = (at: Date(), success: true, error: nil)
                         return
                     } else {
                         // Non-success status, try next URL
@@ -211,6 +258,7 @@ public class AISessionManager: ObservableObject {
                     }
                 }
             } catch {
+                if (error as? URLError)?.code == .cancelled { return }
                 // This URL failed, try the next one
                 LogManager.shared.log("Prewarm attempt \(index + 1) failed for \(provider.displayName): \(error.localizedDescription)", level: .debug, category: "AISessionManager")
                 continue
@@ -221,6 +269,7 @@ public class AISessionManager: ObservableObject {
         guard generation == prewarmGenerations[provider, default: 0] else { return }
         prewarmError = "Could not establish connection to \(provider.displayName)"
         isPrewarmed = false
+        prewarmVerdicts[provider] = (at: Date(), success: false, error: prewarmError)
 
     }
     
@@ -279,7 +328,10 @@ public class AISessionManager: ObservableObject {
             retire(session)
             LogManager.shared.log("Removed session for \(provider.displayName)", category: "AISessionManager")
         }
-        
+
+        prewarmTasks[provider]?.cancel()
+        prewarmTasks[provider] = nil
+        prewarmVerdicts[provider] = nil
         prewarmingProviders.remove(provider)
         scheduleCleanup()
     }
@@ -303,32 +355,44 @@ public class AISessionManager: ObservableObject {
     
     private func createSessionConfiguration(for provider: AIProvider, aiConfig: AIConfig) -> URLSessionConfiguration {
         let config = URLSessionConfiguration.default
-        
+
+        // Localhost (Ollama) keeps a deeper pool; remote AI hosts stay narrow
+        // (2-3 connections) so organize batches cannot hold the radio open.
+        let isLocalhost: Bool = {
+            guard let rawURL = (aiConfig.apiURL?.isEmpty ?? true) ? provider.defaultAPIURL : aiConfig.apiURL,
+                  let host = URL(string: rawURL.contains("://") ? rawURL : "https://" + rawURL)?.host?.lowercased()
+            else { return provider == .ollama }
+            return host == "localhost" || host.hasPrefix("127.") || host == "[::1]" || host == "::1"
+        }()
+
         // Enable HTTP/2 for better performance
         config.httpAdditionalHeaders = [
             "Accept-Encoding": "gzip, deflate",
             "Connection": "keep-alive"
         ]
-        
-        // Use user's configured timeout values from AIConfig
-        // requestTimeout: time to establish connection and receive response headers
-        // resourceTimeout: total time allowed for streaming/large responses
+
+        // Use user's configured timeout values from AIConfig, capped per batch
+        // so a single organize call cannot pin the radio for 10 minutes.
         config.timeoutIntervalForRequest = aiConfig.requestTimeout  // User's setting (default 120s)
-        config.timeoutIntervalForResource = aiConfig.resourceTimeout  // User's setting (default 600s)
-        
+        config.timeoutIntervalForResource = aiConfig.effectiveOrganizeResourceTimeout
+
         // Enable connection reuse - critical for performance
-        config.httpMaximumConnectionsPerHost = 6
+        config.httpMaximumConnectionsPerHost = isLocalhost ? 6 : 3
         config.urlCache = nil  // No caching for AI requests
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        
+
         // Enable TLS 1.2+ for security and performance
         config.tlsMinimumSupportedProtocolVersion = .TLSv12
         config.tlsMaximumSupportedProtocolVersion = .TLSv13
-        
-        // TCP connection optimization
-        config.shouldUseExtendedBackgroundIdleMode = true
+
+        // Organize calls wait for connectivity instead of failing instantly on
+        // transient drops; prewarm/health requests opt out per-request via
+        // allowsConstrained/Expensive=false. Never keep the radio awake in the
+        // background for AI polling.
+        config.waitsForConnectivity = true
+        config.shouldUseExtendedBackgroundIdleMode = false
         config.sessionSendsLaunchEvents = false
-        
+
         return config
     }
 

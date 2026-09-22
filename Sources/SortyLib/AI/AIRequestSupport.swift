@@ -1,6 +1,101 @@
 import Foundation
+import Network
+
+/// Shared low-overhead network-path probe for battery-aware retries.
+/// Uses how code is used: call `isConstrainedOrExpensive()` before sleeping
+/// between retries, and `isConstrained()` to downgrade vision payloads.
+/// A single shared NWPathMonitor avoids spawning a monitor per retry.
+final class NetworkPathProbe: Sendable {
+    static let shared = NetworkPathProbe()
+
+    private let monitor: NWPathMonitor
+    private let queue = DispatchQueue(label: "com.sorty.network-path-probe")
+    private let lock = NSLock()
+    private nonisolated(unsafe) var lastPath: NWPath?
+
+    private init() {
+        monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            self?.lock.lock()
+            self?.lastPath = path
+            self?.lock.unlock()
+        }
+        monitor.start(queue: queue)
+    }
+
+    var currentPath: NWPath? {
+        lock.lock()
+        defer { lock.unlock() }
+        return lastPath
+    }
+
+    /// True on Low Data Mode or expensive (cellular/hotspot) links.
+    var isConstrainedOrExpensive: Bool {
+        guard let path = currentPath else { return false }
+        return path.isConstrained || path.isExpensive
+    }
+
+    var isConstrained: Bool {
+        currentPath?.isConstrained ?? false
+    }
+}
+
+/// Coalesces streaming deltas off-actor so clients make one MainActor hop
+/// per 100ms/4KB instead of one per SSE delta.
+struct StreamingChunkCoalescer: Sendable {
+    private var buffer = ""
+    private var lastFlush = Date()
+    private static let maxBufferedChars = 4_096
+    private static let maxBufferedInterval: TimeInterval = 0.1
+
+    mutating func append(_ chunk: String) -> String? {
+        buffer += chunk
+        if buffer.count >= Self.maxBufferedChars || Date().timeIntervalSince(lastFlush) >= Self.maxBufferedInterval {
+            return flush()
+        }
+        return nil
+    }
+
+    mutating func flush() -> String? {
+        guard !buffer.isEmpty else { return nil }
+        let payload = buffer
+        buffer = ""
+        lastFlush = Date()
+        return payload
+    }
+}
 
 enum AIRequestSupport {
+    /// Marks editor-linked, non-essential work (persona/naming/instruction
+    /// helpers). Generators set it around `generateText` so the shared
+    /// request builder can fail fast on constrained/expensive links.
+    @TaskLocal static var isNonEssentialRequest = false
+
+    /// Runs `operation` flagged as non-essential (see above).
+    static func withNonEssentialRequest<R>(
+        _ operation: () async throws -> R
+    ) async throws -> R {
+        try await $isNonEssentialRequest.withValue(true) {
+            try await operation()
+        }
+    }
+
+    /// Total byte size of an organize batch without re-walking the files.
+    static func totalFileSize(of files: [FileItem]) -> Int64 {
+        files.reduce(0) { $0 + $1.size }
+    }
+
+    /// Per-batch organize timeout capped to 120-180s so one call cannot pin
+    /// the radio for the legacy 600s resource default.
+    static func organizeTimeout(for config: AIConfig) -> TimeInterval {
+        config.effectiveOrganizeResourceTimeout
+    }
+
+    /// Short timeout for interactive catalog/health probes: fail fast and use
+    /// cached fallbacks instead of holding the radio.
+    static func interactiveTimeout(for config: AIConfig) -> TimeInterval {
+        min(config.requestTimeout, 15)
+    }
     nonisolated(unsafe) static var sessionOverride: (@Sendable (AIConfig) async -> URLSession)?
 
     static func session(for config: AIConfig) async -> URLSession {
@@ -114,6 +209,13 @@ enum AIRequestSupport {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
+        // Non-essential editor-linked requests (persona/naming/instructions)
+        // never wake constrained or expensive radios; they fail fast and the
+        // editor keeps the last good value.
+        if isNonEssentialRequest {
+            request.allowsConstrainedNetworkAccess = false
+            request.allowsExpensiveNetworkAccess = false
+        }
 
         for (field, value) in headers {
             request.setValue(value, forHTTPHeaderField: field)
@@ -227,8 +329,12 @@ enum AIRequestSupport {
     /// HTTP status inspection deliberately happens inside this wrapper. URLSession considers
     /// responses such as 502 successful network calls, so validating them after this function
     /// returns prevents the retry policy from ever seeing them.
+    /// Uses exponential backoff with jitter (1s/2s/4s); honors Retry-After capped at 10s.
+    /// Never retries offline errors (notConnectedToInternet/dataNotAllowed/roamingOff);
+    /// checks the shared NWPathMonitor probe before sleeping so constrained or
+    /// expensive links pause instead of spinning the radio.
     static func withTransientHTTPRetry<Payload>(
-        delays: [Duration] = [.milliseconds(500), .seconds(1)],
+        delays: [Duration] = [.seconds(1), .seconds(2), .seconds(4)],
         _ operation: () async throws -> (Payload, URLResponse)
     ) async throws -> (Payload, URLResponse) {
         var attempt = 0
@@ -244,23 +350,41 @@ enum AIRequestSupport {
                     return result
                 }
 
-                let delay = retryDelay(from: response, fallback: delays[attempt])
+                let delay = retryDelay(from: response, fallback: jitteredDelay(delays[attempt]))
                 attempt += 1
-                try await Task.sleep(for: delay)
+                try await sleepBeforeRetry(delay)
             } catch is CancellationError {
                 throw CancellationError()
             } catch let error as AIClientError {
                 guard shouldRetry(error), attempt < delays.count else { throw error }
-                let delay = delays[attempt]
+                let delay = jitteredDelay(delays[attempt])
                 attempt += 1
-                try await Task.sleep(for: delay)
+                try await sleepBeforeRetry(delay)
             } catch let error as URLError {
                 guard shouldRetry(error), attempt < delays.count else { throw error }
-                let delay = delays[attempt]
+                let delay = jitteredDelay(delays[attempt])
                 attempt += 1
-                try await Task.sleep(for: delay)
+                try await sleepBeforeRetry(delay)
             }
         }
+    }
+
+    /// Sleeps between retries; re-checks cancellation and the shared path probe
+    /// first so offline/constrained links fail fast instead of waking the radio.
+    private static func sleepBeforeRetry(_ delay: Duration) async throws {
+        try Task.checkCancellation()
+        if NetworkPathProbe.shared.isConstrainedOrExpensive {
+            throw AIClientError.networkError(URLError(.dataNotAllowed))
+        }
+        try await Task.sleep(for: delay)
+        try Task.checkCancellation()
+    }
+
+    /// Adds +/-25% jitter so fleet retries do not thundering-herd the provider.
+    private static func jitteredDelay(_ base: Duration) -> Duration {
+        let seconds = Double(base.components.seconds) + Double(base.components.attoseconds) / 1e18
+        let resolved = max(0.25, seconds * Double.random(in: 0.75...1.25))
+        return .milliseconds(Int64(resolved * 1_000))
     }
 
     /// Whether a given error is transient and worth retrying
@@ -277,15 +401,17 @@ enum AIRequestSupport {
 
     private static func shouldRetry(_ error: URLError) -> Bool {
         switch error.code {
+        case .notConnectedToInternet,
+             .dataNotAllowed,
+             .internationalRoamingOff:
+            // Offline or user-forbidden links: fail fast, never spin the radio.
+            return false
         case .timedOut,
              .cannotFindHost,
              .cannotConnectToHost,
              .dnsLookupFailed,
              .networkConnectionLost,
-             .notConnectedToInternet,
-             .internationalRoamingOff,
              .callIsActive,
-             .dataNotAllowed,
              .secureConnectionFailed:
             return true
         default:
@@ -305,6 +431,100 @@ enum AIRequestSupport {
         }
 
         return .milliseconds(Int64(min(max(seconds, 0.25), 10) * 1_000))
+    }
+
+    // MARK: - Battery-aware streaming + vision payloads
+
+    /// Iterates SSE lines with per-line cancellation so a cancelled organize
+    /// stops the byte loop immediately instead of draining the stream.
+    static func consumeSSELines(
+        _ bytes: URLSession.AsyncBytes,
+        handle: (String) async throws -> Bool
+    ) async throws {
+        // The AsyncBytes stream is tied to the task: cancelling the task
+        // stops the underlying transfer, so the handler only needs to ensure
+        // the per-line check runs even when the caller drops the task.
+        try await withTaskCancellationHandler {
+            for try await line in bytes.lines {
+                try Task.checkCancellation()
+                let shouldContinue = try await handle(line)
+                if !shouldContinue { break }
+            }
+            try Task.checkCancellation()
+        } onCancel: {}
+    }
+
+    /// Payload too large / unsupported media: strip images and retry text-only.
+    static func isPayloadTooLarge(_ error: Error) -> Bool {
+        guard case let AIClientError.apiError(statusCode, message) = error else { return false }
+        guard [400, 413, 422].contains(statusCode) else { return false }
+        let normalized = message.lowercased()
+        return normalized.contains("image") ||
+            normalized.contains("vision") ||
+            normalized.contains("payload") ||
+            normalized.contains("too large") ||
+            normalized.contains("content") ||
+            [400, 413, 422].contains(statusCode)
+    }
+
+    /// Downgrades vision detail on constrained links to shrink uploads.
+    static func effectiveVisionDetail(for config: AIConfig) -> String {
+        if NetworkPathProbe.shared.isConstrained {
+            return VisionDetailLevel.low.rawValue
+        }
+        return config.effectiveVisionDetailLevel.rawValue
+    }
+}
+
+/// Debounces editor-linked AI helpers (persona/naming/instruction fields).
+/// Uses how code is used: every keystroke can trigger a generateText call,
+/// so callers await `debounce(key:)` first — a newer call with the same key
+/// cancels the earlier one within 300-500ms instead of firing N requests.
+actor EditorLinkedDebouncer: Sendable {
+    static let shared = EditorLinkedDebouncer()
+    private var generations: [String: Int] = [:]
+
+    private init() {}
+
+    func debounce(key: String, delay: Duration = .milliseconds(400)) async throws {
+        let generation = (generations[key, default: 0]) + 1
+        generations[key] = generation
+        try await Task.sleep(for: delay)
+        try Task.checkCancellation()
+        guard generations[key] == generation else { throw CancellationError() }
+    }
+}
+
+/// Caches base64 image payloads per (filename, content hash) so retries do not
+/// re-encode multi-MB images and drain battery on repeated attempts.
+final class ImageBase64Cache: Sendable {
+    static let shared = ImageBase64Cache()
+    private let lock = NSLock()
+    private var cache: [String: String] = [:]
+
+    private init() {}
+
+    func base64(for name: String, data: Data) -> String {
+        let key = "\(name)#\(data.count)#\(data.hashValue)"
+        lock.lock()
+        if let hit = cache[key] {
+            lock.unlock()
+            return hit
+        }
+        lock.unlock()
+        let encoded = data.base64EncodedString()
+        lock.lock()
+        // Bound the cache so a huge folder cannot grow it without limit.
+        if cache.count > 32 { cache.removeAll() }
+        cache[key] = encoded
+        lock.unlock()
+        return encoded
+    }
+
+    func clear() {
+        lock.lock()
+        cache.removeAll()
+        lock.unlock()
     }
 }
 
