@@ -127,7 +127,10 @@ struct HUDNotificationCard: View {
         .padding(.leading, 12)
         .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
-        .systemLiquidGlassBackground(cornerRadius: 14)
+        // Single glass surface: hudFallbackBackground already applies the
+        // sanctioned liquid-glass background (or a solid fallback when
+        // transparency is reduced). A second glass layer here doubles the
+        // backdrop sampling cost and draws a visible inner edge.
         .hudFallbackBackground(cornerRadius: 14)
         .overlay(alignment: .bottom) {
             if !notification.isPersistent {
@@ -307,7 +310,10 @@ private struct HUDNotificationActionGrid: View {
         VStack(spacing: 8) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 8) {
-                    ForEach(row) { action in
+                    // Identity by stable action id, never the row offset: an
+                    // action list that reorders mid-flight must keep each
+                    // button's state instead of recycling it by position.
+                    ForEach(row, id: \.id) { action in
                         actionButton(action)
                     }
                 }
@@ -378,14 +384,19 @@ private struct HUDNotificationProgress: View {
     let color: Color
     let remaining: CGFloat
 
+    // How dismissal reads: the bar shrinks by width, not scaleEffect. Scaling
+    // re-rasterizes the layer every frame of the countdown; a width change
+    // only relayouts this 2pt strip.
     var body: some View {
-        Capsule()
-            .fill(color.opacity(0.4))
-            .frame(maxWidth: .infinity)
-            .scaleEffect(x: remaining, anchor: .leading)
-            .frame(height: 2)
-            .padding(.horizontal, 6)
-            .padding(.bottom, 3)
+        GeometryReader { geometry in
+            Capsule()
+                .fill(color.opacity(0.4))
+                .frame(width: max(0, geometry.size.width * min(max(remaining, 0), 1)), alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(height: 2)
+        .padding(.horizontal, 6)
+        .padding(.bottom, 3)
     }
 }
 
