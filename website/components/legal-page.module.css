@@ -8,18 +8,22 @@
   overflow: hidden;
   border-radius: 999px;
   padding: 0 22px;
-  color: #fdeaff;
-  background: linear-gradient(180deg, #2a0a45 0%, #a01fd0 100%);
+  color: oklch(0.99 0 0);
+  background: linear-gradient(
+    180deg,
+    var(--brand-bright) 0%,
+    var(--brand) 100%
+  );
   box-shadow:
-    inset 0 -1.5px 2px #d67bff,
-    inset 0 0 10px #b01ffb,
-    inset 0 0 8px #b01ffb,
-    0 2px 6px rgb(140 20 200 / 35%);
+    inset 0 -1.5px 2px oklch(1 0 0 / 35%),
+    inset 0 0 10px oklch(0.7 0.16 240 / 55%),
+    inset 0 0 8px oklch(0.7 0.16 240 / 45%),
+    0 2px 6px oklch(0.62 0.19 256 / 55%);
   font-size: 0.9375rem;
   font-weight: 500;
   letter-spacing: 0.01em;
   line-height: 1;
-  text-shadow: 0 1px 2px rgb(40 0 48 / 55%);
+  text-shadow: 0 1px 2px oklch(0.25 0.08 260 / 55%);
   -webkit-tap-highlight-color: transparent;
   transition:
     filter 0.2s ease,
@@ -31,13 +35,17 @@
   z-index: 1;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(180deg, #45108a 9%, #c31ffb 100%);
+  background: linear-gradient(
+    180deg,
+    var(--brand) 9%,
+    var(--brand-bright) 100%
+  );
   box-shadow:
-    inset 0 -0.5px 1px #ff8cf0,
-    inset 0 -1px 3px #ff8cf0,
-    inset 0 -1.5px 5px #ff9ce8,
-    inset 0 0 12px #d155ff,
-    inset 0 0 10px #d155ff;
+    inset 0 -0.5px 1px oklch(1 0 0 / 50%),
+    inset 0 -1px 3px oklch(1 0 0 / 35%),
+    inset 0 -1.5px 5px oklch(0.85 0.12 245 / 45%),
+    inset 0 0 12px oklch(0.7 0.16 240 / 60%),
+    inset 0 0 10px oklch(0.7 0.16 240 / 50%);
   content: '';
   opacity: 0;
   pointer-events: none;
