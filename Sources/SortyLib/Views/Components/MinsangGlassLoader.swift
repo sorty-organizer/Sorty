@@ -1,11 +1,20 @@
 import SwiftUI
 
 /// The recovered Minsang Glass Loader, scaled for compact progress surfaces.
+///
+/// How it stays cheap: the Metal shader library is a single shared instance,
+/// the timeline runs at 20fps and pauses offscreen, and small sizes fall back
+/// to CometLoader (the glass shader is wasted below ~20pt). Never embed this
+/// in LazyVStack rows: one shared loader per surface, not one per row.
 struct MinsangGlassLoader: View {
     @SortyHotReload private var hotReload
     let textChangeTrigger: String
     var size: CGFloat = 54
     var isActive = true
+
+    /// Below this size the glass shader costs more than it shows.
+    /// Callers get the lightweight comet instead.
+    static let cometFallbackThreshold: CGFloat = 20
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -36,7 +45,9 @@ struct MinsangGlassLoader: View {
 
     var body: some View {
         Group {
-            if let shaderLibrary = Self.shaderLibrary {
+            if size < Self.cometFallbackThreshold {
+                CometLoader(size: size, lineWidth: 2, color: .secondary)
+            } else if let shaderLibrary = Self.shaderLibrary {
                 glassLoader(shaderLibrary: shaderLibrary)
             } else {
                 CometLoader(size: size, lineWidth: 2, color: .secondary)
