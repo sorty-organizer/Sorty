@@ -139,13 +139,14 @@ public class LoginItemManager: ObservableObject {
     private func syncLaunchAtLoginRegistration() {
         let shouldLaunchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
 
-        Task.detached { [weak self] in
-            let status = Self.updateMainAppRegistration(enabled: shouldLaunchAtLogin)
-            await MainActor.run {
-                guard let self else { return }
-                self.isLaunchAtLoginEnabled = (status == .enabled)
-                self.registrationStatus = Self.describe(status)
-            }
+        Task { [weak self] in
+            let status = await Task.detached(priority: .utility) {
+                Self.updateMainAppRegistration(enabled: shouldLaunchAtLogin)
+            }.value
+
+            guard let self else { return }
+            self.isLaunchAtLoginEnabled = (status == .enabled)
+            self.registrationStatus = Self.describe(status)
         }
     }
 
