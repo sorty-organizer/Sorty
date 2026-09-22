@@ -1251,6 +1251,7 @@
 				3353FCC42F0124320097CD23 /* AppCoordinator.swift in Sources */,
 				CC220002000000000000A001 /* MainWindowRootView.swift in Sources */,
 				D4A500200000000000000001 /* SortyWidgetSyncManager.swift in Sources */,
+				D4A500200000000000000002 /* SortyShortcuts.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

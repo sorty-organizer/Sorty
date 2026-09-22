@@ -272,7 +272,7 @@ struct DeeplinkSettingsView: View {
     private let groupSpacing: CGFloat = 0
 
     private var groups: [DeeplinkGroup] {
-        var organizationEntries = [
+        let organizationEntries = [
             DeeplinkEntry(title: "Organize Folder", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Open Organize with an optional path, persona, mode, and autostart.", focusTarget: .deeplinksOrganizeFolder),
             DeeplinkEntry(title: "Duplicates", url: "sorty://duplicates?path=/Users/me/Downloads&autostart=true", summary: "Open Duplicate Files with an optional path and autostart.", focusTarget: .deeplinksDuplicates),
             DeeplinkEntry(title: "Storage", url: "sorty://storage?action=add&path=/Volumes/Archive", summary: "Open storage locations and optionally add a path.", focusTarget: .deeplinksStorage)

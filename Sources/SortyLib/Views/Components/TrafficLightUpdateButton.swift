@@ -313,25 +313,33 @@ final class UpdateButtonNSView: NSView {
 
         windowFocusObservations.append(
             nc.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self] _ in
-                self?.refreshWindowFocus(animated: true)
+                MainActor.assumeIsolated {
+                    self?.refreshWindowFocus(animated: true)
+                }
             }
         )
 
         windowFocusObservations.append(
             nc.addObserver(forName: NSWindow.didResignKeyNotification, object: window, queue: .main) { [weak self] _ in
-                self?.refreshWindowFocus(animated: true)
+                MainActor.assumeIsolated {
+                    self?.refreshWindowFocus(animated: true)
+                }
             }
         )
 
         windowFocusObservations.append(
             nc.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-                self?.refreshWindowFocus(animated: true)
+                MainActor.assumeIsolated {
+                    self?.refreshWindowFocus(animated: true)
+                }
             }
         )
 
         windowFocusObservations.append(
             nc.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
-                self?.refreshWindowFocus(animated: true)
+                MainActor.assumeIsolated {
+                    self?.refreshWindowFocus(animated: true)
+                }
             }
         )
 

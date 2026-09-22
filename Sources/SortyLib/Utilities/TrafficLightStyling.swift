@@ -48,15 +48,19 @@ public struct TrafficLightStyling: NSViewRepresentable {
 
             observations.append(
                 nc.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self, weak window] _ in
-                    guard let window else { return }
-                    self?.restoreButtons(in: window)
+                    MainActor.assumeIsolated {
+                        guard let window else { return }
+                        self?.restoreButtons(in: window)
+                    }
                 }
             )
 
             observations.append(
                 nc.addObserver(forName: NSWindow.didResignKeyNotification, object: window, queue: .main) { [weak self, weak window] _ in
-                    guard let window else { return }
-                    self?.styleInactiveButtons(in: window)
+                    MainActor.assumeIsolated {
+                        guard let window else { return }
+                        self?.styleInactiveButtons(in: window)
+                    }
                 }
             )
 
@@ -68,8 +72,10 @@ public struct TrafficLightStyling: NSViewRepresentable {
             ] {
                 observations.append(
                     nc.addObserver(forName: name, object: window, queue: .main) { [weak self, weak window] _ in
-                        guard let self, let window, !window.isKeyWindow else { return }
-                        self.styleInactiveButtons(in: window)
+                        MainActor.assumeIsolated {
+                            guard let self, let window, !window.isKeyWindow else { return }
+                            self.styleInactiveButtons(in: window)
+                        }
                     }
                 )
             }

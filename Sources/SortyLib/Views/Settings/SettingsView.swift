@@ -40,7 +40,9 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .searchable(text: $searchText, prompt: "Search settings")
         .environment(\.windowLinkHoverUpdate) { hovering, url, sourceID in
-            windowLinkHoverState.setHovering(hovering, url: url, sourceID: sourceID)
+            MainActor.assumeIsolated {
+                windowLinkHoverState.setHovering(hovering, url: url, sourceID: sourceID)
+            }
         }
         .onAppear {
             if let section = appState.selectedSettingsSection {

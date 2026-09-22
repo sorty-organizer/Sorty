@@ -885,7 +885,7 @@ private struct ConfettiParticlesView: View {
         .onAppear {
             guard !reduceMotion else { return }
             for particle in particles {
-                withAnimation(.easeOut(duration: Double.random(in: 0.5...0.9)).delay(particle.delay)) {
+                _ = withAnimation(.easeOut(duration: Double.random(in: 0.5...0.9)).delay(particle.delay)) {
                     burstedParticles.insert(particle.id)
                 }
             }

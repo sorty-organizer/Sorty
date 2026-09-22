@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AdvancedSettingsView: View {
     @SortyHotReload private var hotReload
@@ -140,7 +141,7 @@ struct AdvancedSettingsView: View {
                         let panel = NSSavePanel()
                         panel.title = "Save Diagnostic Report"
                         panel.nameFieldStringValue = "Sorty-Diagnostic.zip"
-                        panel.allowedFileTypes = ["zip"]
+                        panel.allowedContentTypes = [.zip]
                         panel.canCreateDirectories = true
                         guard panel.runModal() == .OK, let destination = panel.url else { return }
                         guard !isGeneratingDiagnosticReport else { return }

@@ -26,6 +26,12 @@ public struct DiagnosticReportResult: Sendable {
     public let sentryEventID: String?
 }
 
+/// Best-effort log context ferried to the logging queue. The payload is only
+/// JSON-serialized there, so shared mutable values are never touched off-queue.
+private struct UncheckedLogPayload: @unchecked Sendable {
+    let data: [String: Any]?
+}
+
 public final class LogManager: @unchecked Sendable {
     public static let shared = LogManager()
     
@@ -69,9 +75,11 @@ public final class LogManager: @unchecked Sendable {
     ) {
         guard shouldPersist(level) else { return }
         let resolvedMessage = message()
-
+        // The context payload is serialized on the logging queue; box it so the
+        // @Sendable work item below captures only Sendable state.
+        let payload = UncheckedLogPayload(data: data)
         queue.async {
-            self.writeLog(resolvedMessage, level: level, category: category, data: data)
+            self.writeLog(resolvedMessage, level: level, category: category, data: payload.data)
         }
     }
     
@@ -628,7 +636,7 @@ public final class LogManager: @unchecked Sendable {
                 fileManager.createFile(atPath: logFile.path, contents: nil)
             }
             logFileHandle = try? FileHandle(forWritingTo: logFile)
-            try? logFileHandle?.seekToEnd()
+            _ = try? logFileHandle?.seekToEnd()
         }
 
         guard let logFileHandle else { return }
@@ -733,7 +741,7 @@ public final class LogManager: @unchecked Sendable {
     }
 }
 
-public enum LogLevel: String, Comparable {
+public enum LogLevel: String, Comparable, Sendable {
     case debug
     case info
     case warning

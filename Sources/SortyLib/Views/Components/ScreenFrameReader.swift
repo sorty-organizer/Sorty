@@ -70,7 +70,9 @@ final class ProbeView: NSView {
     }
 
     deinit {
-        removeObservers()
+        MainActor.assumeIsolated {
+            removeObservers()
+        }
     }
 
     func reportFrameIfNeeded() {
@@ -93,7 +95,9 @@ final class ProbeView: NSView {
         observers = names.map { name in
             notificationCenter.addObserver(forName: name, object: window, queue: .main) {
                 [weak self] _ in
-                self?.reportFrameIfNeeded()
+                MainActor.assumeIsolated {
+                    self?.reportFrameIfNeeded()
+                }
             }
         }
     }

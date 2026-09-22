@@ -845,7 +845,7 @@ private struct OnboardingIntroContentLayer: View {
     @State private var isHoveringButton = false
     @State private var hoverExitTask: Task<Void, Never>?
 
-    private static let coordinateSpace = "OnboardingIntroContentLayer"
+    private nonisolated static let coordinateSpace = "OnboardingIntroContentLayer"
 
     var body: some View {
         ZStack {
@@ -2815,6 +2815,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         Coordinator()
     }
 
+    @MainActor
     final class Coordinator {
         private weak var configuredWindow: NSWindow?
         private var originalTitleVisibility: NSWindow.TitleVisibility?
@@ -2914,7 +2915,9 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         }
 
         deinit {
-            restore()
+            MainActor.assumeIsolated {
+                restore()
+            }
         }
     }
 

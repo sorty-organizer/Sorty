@@ -535,7 +535,7 @@ private class WelcomeRevealAudio: ObservableObject {
         var sampleCounter: Int = 0
     }
 
-    nonisolated(unsafe) private let state = AudioState()
+    private let state = AudioState()
     private var stopWorkItem: DispatchWorkItem?
 
     func playRevealSwell() {

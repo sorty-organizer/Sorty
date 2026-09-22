@@ -400,7 +400,7 @@ struct LearningsView: View {
                 exportProfile()
             }
         }
-        .onChange(of: manager.showingImportPicker) { showing in
+        .onChange(of: manager.showingImportPicker) { _, showing in
             guard showing else { return }
             manager.showingImportPicker = false
             activeFileImporter = .learningsProfile
@@ -1603,7 +1603,7 @@ struct LearningsView: View {
                     .tint(.primary)
                     .frame(width: 120)
                     .labelsHidden()
-                    .onChange(of: manager.dataRetentionDays) { _ in
+                    .onChange(of: manager.dataRetentionDays) {
                         HapticFeedbackManager.shared.selection()
                     }
                 }

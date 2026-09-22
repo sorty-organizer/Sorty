@@ -504,7 +504,7 @@ public class ContinuousLearningObserver: ObservableObject {
         
         let recentEntries = history.entries.prefix(50)
         
-        var matchedSession = findRelevantSession(for: path)
+        let matchedSession = findRelevantSession(for: path)
         var foundMatch = false
         
         for summary in recentEntries where summary.storedOperationCount > 0 {

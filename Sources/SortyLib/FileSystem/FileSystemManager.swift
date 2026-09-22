@@ -1162,7 +1162,7 @@ public actor FileSystemManager {
 
                 for folderPath in sortedFolders {
                     if folderPath != baseURL.path && folderPath.hasPrefix(baseURL.path) {
-                        try? removeEmptyFolder(at: folderPath)
+                        _ = try? removeEmptyFolder(at: folderPath)
                     }
                 }
 
@@ -1563,7 +1563,7 @@ public actor FileSystemManager {
                 try? cleanupEmptySubdirectories(at: item, excluding: protectedPaths)
 
                 // Then try to remove this folder if it's empty
-                try? removeEmptyFolder(at: item.path)
+                _ = try? removeEmptyFolder(at: item.path)
             }
         }
     }
@@ -1647,7 +1647,7 @@ public actor FileSystemManager {
                         if fileManager.fileExists(atPath: finalSourcePath) {
                             var isDirectory: ObjCBool = false
                             if fileManager.fileExists(atPath: finalSourcePath, isDirectory: &isDirectory), isDirectory.boolValue {
-                                try? removeEmptyFolder(at: finalSourcePath)
+                                _ = try? removeEmptyFolder(at: finalSourcePath)
                             }
                         }
                         if fileManager.fileExists(atPath: finalSourcePath) {
@@ -1816,7 +1816,7 @@ public actor FileSystemManager {
                     if fileManager.fileExists(atPath: finalSourcePath) {
                         var isDirectory: ObjCBool = false
                         if fileManager.fileExists(atPath: finalSourcePath, isDirectory: &isDirectory), isDirectory.boolValue {
-                            try? removeEmptyFolder(at: finalSourcePath)
+                            _ = try? removeEmptyFolder(at: finalSourcePath)
                         }
                     }
                     if fileManager.fileExists(atPath: finalSourcePath) {
@@ -1841,7 +1841,7 @@ public actor FileSystemManager {
 
                     let parentFolder = URL(fileURLWithPath: destinationPath).deletingLastPathComponent().path
                     if !protectedFolders.contains(normalizedPath(parentFolder)) {
-                        try? removeEmptyFolder(at: parentFolder)
+                        _ = try? removeEmptyFolder(at: parentFolder)
                     }
                 } else {
                     let filename = URL(fileURLWithPath: destinationPath).lastPathComponent

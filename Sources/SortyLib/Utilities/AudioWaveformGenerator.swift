@@ -169,7 +169,7 @@ public final class AudioWaveformGenerator {
     }
 
     private nonisolated static func readAmplitudes(for url: URL) async -> [Float]? {
-        let asset = AVAsset(url: url)
+        let asset = AVURLAsset(url: url)
         guard !Task.isCancelled,
               let track = try? await asset.loadTracks(withMediaType: .audio).first,
               let reader = try? AVAssetReader(asset: asset) else { return nil }

@@ -615,7 +615,8 @@ struct WindowVisibilityReader: NSViewRepresentable {
         nsView.onWindowChange = nil
     }
 
-    final class Coordinator {
+    @MainActor
+    final class Coordinator: NSObject {
         var isVisible: Binding<Bool>
         private weak var observedWindow: NSWindow?
         private var observers: [NSObjectProtocol] = []
@@ -640,7 +641,9 @@ struct WindowVisibilityReader: NSViewRepresentable {
                 NSWindow.didDeminiaturizeNotification,
             ] {
                 observers.append(center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
-                    self?.refresh()
+                    MainActor.assumeIsolated {
+                        self?.refresh()
+                    }
                 })
             }
             refresh()
@@ -657,8 +660,11 @@ struct WindowVisibilityReader: NSViewRepresentable {
         }
 
         deinit {
-            let center = NotificationCenter.default
-            observers.forEach(center.removeObserver)
+            // Representable coordinators are main-confined; clean up synchronously.
+            MainActor.assumeIsolated {
+                let center = NotificationCenter.default
+                observers.forEach(center.removeObserver)
+            }
         }
     }
 

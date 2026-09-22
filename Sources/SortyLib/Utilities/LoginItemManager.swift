@@ -21,11 +21,11 @@ private struct LoginItemServiceStatus: Sendable {
 public class LoginItemManager: ObservableObject {
 
     public static let shared = LoginItemManager()
-    public nonisolated(unsafe) static let backgroundAgentPlistName = "com.sorty.app.background-agent.plist"
-    public nonisolated(unsafe) static let legacyBackgroundAgentPlistName = "com.sorty.app.plist"
-    public nonisolated(unsafe) static let backgroundAgentServiceLabel = "com.sorty.app.background-agent"
-    public nonisolated(unsafe) static let backgroundAgentBundleProgram = "Contents/MacOS/Sorty"
-    private nonisolated(unsafe) static let registeredBackgroundAgentBundleProgramKey = "registeredBackgroundAgentBundleProgram"
+    public nonisolated static let backgroundAgentPlistName = "com.sorty.app.background-agent.plist"
+    public nonisolated static let legacyBackgroundAgentPlistName = "com.sorty.app.plist"
+    public nonisolated static let backgroundAgentServiceLabel = "com.sorty.app.background-agent"
+    public nonisolated static let backgroundAgentBundleProgram = "Contents/MacOS/Sorty"
+    private nonisolated static let registeredBackgroundAgentBundleProgramKey = "registeredBackgroundAgentBundleProgram"
 
     @Published public var isLaunchAtLoginEnabled: Bool = false
     @Published public var isBackgroundAgentEnabled: Bool = false

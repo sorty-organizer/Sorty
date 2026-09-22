@@ -55,9 +55,9 @@ final class WindowLinkHoverState: ObservableObject, @unchecked Sendable {
         cancelPendingHideTask()
         let delay = hoverHandoffGraceNanoseconds
 
-        pendingHideTask = Task { [weak self, delay] in
+        pendingHideTask = Task { @MainActor [weak self, delay] in
             try? await Task.sleep(nanoseconds: delay)
-            await self?.applyPendingHideIfNeeded()
+            self?.applyPendingHideIfNeeded()
         }
     }
 
@@ -148,7 +148,9 @@ private struct WindowLinkHoverPillHostModifier: ViewModifier {
             WindowLinkHoverPillOverlay(hoverState: hoverState)
         }
         .environment(\.windowLinkHoverUpdate) { hovering, url, sourceID in
-            hoverState.setHovering(hovering, url: url, sourceID: sourceID)
+            MainActor.assumeIsolated {
+                hoverState.setHovering(hovering, url: url, sourceID: sourceID)
+            }
         }
         .onDisappear {
             hoverState.clearAllHover()

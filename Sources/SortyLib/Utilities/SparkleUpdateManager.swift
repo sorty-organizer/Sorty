@@ -325,7 +325,7 @@ public class SparkleUpdateManager: ObservableObject {
         initializeIfNeeded()
 
         #if canImport(Sparkle)
-        guard let updater = self.updater as? SPUUpdater else {
+        guard let updater = self.updater else {
             LogManager.shared.log("Cannot check for updates in background - Sparkle is disabled", level: .warning, category: "SparkleUpdateManager")
             return
         }

@@ -1,8 +1,8 @@
 #if DEBUG && SORTY_HOT_RELOAD
 import Combine
 import Foundation
-import InjectionLite
 import SwiftUI
+import InjectionLite
 
 @MainActor
 private final class SortyInjectionObserver: @MainActor ObservableObject {

@@ -771,7 +771,6 @@ actor DirectoryScanner {
             logger.info("Hash computation disabled due to memory pressure")
         }
 
-        var lastBatchTime = Date()
         var visitedDirectoryIDs = Set<String>()
         if let rootID = try? url.resourceValues(forKeys: [.fileResourceIdentifierKey]),
            let key = Self.visitedDirectoryKey(for: rootID) {

@@ -59,7 +59,9 @@ public struct ContentView: View {
             }
         }
         .environment(\.windowLinkHoverUpdate) { hovering, url, sourceID in
-            windowLinkHoverState.setHovering(hovering, url: url, sourceID: sourceID)
+            MainActor.assumeIsolated {
+                windowLinkHoverState.setHovering(hovering, url: url, sourceID: sourceID)
+            }
         }
         .onDisappear {
             windowLinkHoverState.clearAllHover()

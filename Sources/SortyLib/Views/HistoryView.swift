@@ -508,7 +508,9 @@ struct HistoryView: View {
     }
 
     private func historySessionRows(_ entries: ArraySlice<HistorySessionRow>) -> some View {
-        ForEach(entries) { entry in
+        // Snapshot main-actor view state for the Sendable scroll-transition closure below.
+        let reduceMotionSnapshot = reduceMotion
+        return ForEach(entries) { entry in
             HistorySessionCard(
                 entry: entry,
                 isSelected: selectedEntry?.id == entry.id,
@@ -527,9 +529,9 @@ struct HistoryView: View {
                 axis: .vertical
             ) { content, phase in
                 content
-                    .opacity(!reduceMotion && phase == .bottomTrailing ? 0.86 : 1)
+                    .opacity(!reduceMotionSnapshot && phase == .bottomTrailing ? 0.86 : 1)
                     .scaleEffect(
-                        !reduceMotion && phase == .bottomTrailing ? 0.988 : 1,
+                        !reduceMotionSnapshot && phase == .bottomTrailing ? 0.988 : 1,
                         anchor: .top
                     )
             }
@@ -694,7 +696,7 @@ struct HistoryHeader: View {
     @State private var stacksRunCount = false
 
     // Includes the fixed-width navigator, compact Clear action, and both safety gaps.
-    private static let stackedRunCountThreshold: CGFloat = 780
+    private nonisolated static let stackedRunCountThreshold: CGFloat = 780
 
     var body: some View {
         Group {

@@ -8,23 +8,22 @@
 //
 
 import AppKit
-import AVFoundation
+@preconcurrency import AVFoundation
 import Combine
 import Foundation
 
 @MainActor
 class OnboardingAudioManager: ObservableObject {
-    nonisolated(unsafe) private static let defaultMelodyVolume: Float = 0.20
-    nonisolated(unsafe) private static let defaultBassVolume: Float = 0.12
+    nonisolated private static let defaultMelodyVolume: Float = 0.20
+    nonisolated private static let defaultBassVolume: Float = 0.12
 
     private(set) var isPlaying = false
 
-    // MARK: - Audio Engine State (nonisolated(unsafe) for audio-thread access)
+    // MARK: - Audio Engine State (isolated in @unchecked Sendable AudioState)
 
-    /// All mutable state touched by the audio render thread lives here so we
-    /// can mark it `nonisolated(unsafe)` in one place.  The render callback
-    /// is the only writer while the engine is running; main-thread code only
-    /// writes when the engine is stopped.
+    /// All mutable state touched by the audio render thread lives here. The
+    /// render callback is the only writer while the engine is running;
+    /// main-thread code only writes when the engine is stopped.
     private final class AudioState: @unchecked Sendable {
         // Engine & nodes
         var engine: AVAudioEngine?
@@ -50,14 +49,14 @@ class OnboardingAudioManager: ObservableObject {
         var fanfareEnvelopeSample: Int = 0
     }
 
-    nonisolated(unsafe) private let state = AudioState()
+    private let state = AudioState()
 
     private var audioPlayer: AVAudioPlayer?
 
     // MARK: - Constants
 
     /// Suspended-quality pentatonic scale rooted on C4 (Hz) for a warm, ambient feel.
-    nonisolated(unsafe) private static let melodyNotes: [Double] = [
+    nonisolated private static let melodyNotes: [Double] = [
         261.63,  // C4
         293.66,  // D4
         349.23,  // F4
@@ -66,7 +65,7 @@ class OnboardingAudioManager: ObservableObject {
     ]
 
     /// A meditative, repeating melodic pattern (indices into melodyNotes).
-    nonisolated(unsafe) private static let melodyPattern: [Int] = [
+    nonisolated private static let melodyPattern: [Int] = [
         0, 2, 3, 4,   // C F G A   (rising)
         3, 2, 0, 2,   // G F C F   (settling)
         0, 3, 4, 2,   // C G A F   (gentle movement)
@@ -74,7 +73,7 @@ class OnboardingAudioManager: ObservableObject {
     ]
 
     /// Gentle rising arpeggio for completion (Hz values).
-    nonisolated(unsafe) private static let fanfareNotes: [Double] = [
+    nonisolated private static let fanfareNotes: [Double] = [
         261.63,  // C4
         349.23,  // F4
         440.00,  // A4
@@ -82,13 +81,13 @@ class OnboardingAudioManager: ObservableObject {
     ]
 
     /// Bass drone frequency: C3.
-    nonisolated(unsafe) private static let bassFrequency: Double = 130.81
+    nonisolated private static let bassFrequency: Double = 130.81
 
     /// Duration of each melody note in seconds (slow for ambient pacing).
-    nonisolated(unsafe) private static let noteDuration: Double = 0.55
+    nonisolated private static let noteDuration: Double = 0.55
 
     /// Duration of each fanfare note in seconds.
-    nonisolated(unsafe) private static let fanfareNoteDuration: Double = 0.30
+    nonisolated private static let fanfareNoteDuration: Double = 0.30
 
     // MARK: - Public API
 
@@ -267,7 +266,7 @@ class OnboardingAudioManager: ObservableObject {
                 }
 
                 state.isRunning = false
-                engine?.stop()
+                state.engine?.stop()
 
                 // Reset for next play.
                 state.melodyVolume = OnboardingAudioManager.defaultMelodyVolume

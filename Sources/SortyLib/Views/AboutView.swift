@@ -416,6 +416,7 @@ private enum AboutAppIconVariant: String, CaseIterable {
 
     /// Slot 0 is always the running app icon; the remaining slots are the other
     /// variants, excluding the one this build already ships so nothing duplicates.
+    @MainActor
     static func cycleImages(current: AboutAppIconVariant?) -> [NSImage] {
         let appIcon = AboutIconImageNormalizer.normalized(
             NSApplication.shared.applicationIconImage,
