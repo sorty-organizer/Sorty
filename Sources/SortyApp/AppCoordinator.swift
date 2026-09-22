@@ -162,6 +162,9 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     private var retryTask: Task<Void, Never>?
     private let pendingWorkPersistence = PendingWorkPersistence()
     private var pendingWorkPersistenceRevision = 0
+    /// Gates retry/resume/reconcile until the detached restore finishes, so
+    /// pre-restore empty state never clobbers persisted batches.
+    private var hasRestoredPendingWork = false
     private let candidateStabilityDelay: TimeInterval = 1.5
     private let retryBaseDelay: TimeInterval = 3
     private let maximumStabilityRetryDelay: TimeInterval = 60
@@ -1120,9 +1123,15 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
 
     private func reconcilePendingWork(with folders: [WatchedFolder]) {
+        let currentlySnoozedFolderIDs = Set(folders.filter(\.isSnoozed).map(\.id))
+        // Gate on restore so pre-restore reconciliation never drops
+        // persisted batches that have not been published yet.
+        guard hasRestoredPendingWork else {
+            snoozedFolderIDs = currentlySnoozedFolderIDs
+            return
+        }
         let configuredFolders = Dictionary(uniqueKeysWithValues: folders.map { ($0.id, $0) })
         let enabledFolders = configuredFolders.filter { $0.value.isEnabled }
-        let currentlySnoozedFolderIDs = Set(folders.filter(\.isSnoozed).map(\.id))
         var changed = false
 
         for folderID in Array(pendingFiles.keys) where enabledFolders[folderID] == nil {
@@ -1171,6 +1180,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
 
     private func resumePendingWorkAfterConfiguration() {
+        guard hasRestoredPendingWork else { return }
         folderWatcher.reconcileNow()
         let now = Date()
         for folderID in Array(pendingFiles.keys) {
@@ -1182,21 +1192,37 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
 
     private func restorePendingWatchWork() {
-        guard let pendingWorkURL,
-              let data = try? Data(contentsOf: pendingWorkURL) else {
+        guard let url = pendingWorkURL else {
+            hasRestoredPendingWork = true
             return
         }
-
-        let decoder = JSONDecoder()
-        let persistedWork: PersistedOutstandingWatchWork
-        if let decoded = try? decoder.decode(PersistedOutstandingWatchWork.self, from: data) {
-            persistedWork = decoded
-        } else if let legacyBatches = try? decoder.decode([PersistedPendingWatchBatch].self, from: data) {
-            persistedWork = PersistedOutstandingWatchWork(batches: legacyBatches, reviews: [])
-        } else {
-            return
+        Task { @MainActor [weak self] in
+            // Decode off the main actor; `OrganizationPlan` payloads can be large.
+            let persistedWork: PersistedOutstandingWatchWork? = await Task.detached(priority: .userInitiated) {
+                guard let data = try? Data(contentsOf: url) else { return nil }
+                let decoder = JSONDecoder()
+                if let decoded = try? decoder.decode(PersistedOutstandingWatchWork.self, from: data) {
+                    return decoded
+                }
+                if let legacyBatches = try? decoder.decode([PersistedPendingWatchBatch].self, from: data) {
+                    return PersistedOutstandingWatchWork(batches: legacyBatches, reviews: [])
+                }
+                return nil
+            }.value
+            guard let self else { return }
+            if let persistedWork {
+                self.applyRestoredWatchWork(persistedWork)
+            }
+            self.hasRestoredPendingWork = true
+            if self.organizer.aiClient != nil {
+                self.resumePendingWorkAfterConfiguration()
+            }
+            self.scheduleRetry()
         }
+    }
 
+    @MainActor
+    private func applyRestoredWatchWork(_ persistedWork: PersistedOutstandingWatchWork) {
         let configuredFolders = Dictionary(
             uniqueKeysWithValues: watchedFoldersManager.folders.map { ($0.id, $0) }
         )
@@ -1515,6 +1541,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
     
     private func scheduleRetry() {
+        guard hasRestoredPendingWork else { return }
         retryTask?.cancel()
         retryTask = nil
         guard organizer.aiClient != nil,
