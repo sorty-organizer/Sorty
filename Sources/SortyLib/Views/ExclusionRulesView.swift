@@ -1941,7 +1941,7 @@ struct AddExclusionRuleView: View {
             }
         }
         .padding()
-        .background(.ultraThinMaterial)
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
     }
 
     private var intentPicker: some View {

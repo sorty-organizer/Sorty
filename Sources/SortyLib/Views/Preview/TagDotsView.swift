@@ -10,6 +10,7 @@ struct TagDotsView: View {
     let tags: [String]
 
     @State private var isShowingHoverPopover = false
+    @FocusState private var isKeyboardFocused: Bool
 
     private var colorTags: [(String, Color)] {
         tags.compactMap { tag -> (String, Color)? in
@@ -39,8 +40,13 @@ struct TagDotsView: View {
         }
         .frame(minWidth: 12, minHeight: 20)
         .contentShape(Rectangle())
+        .focusable()
+        .focused($isKeyboardFocused)
         .onHover { isHovering in
             isShowingHoverPopover = isHovering
+        }
+        .onChange(of: isKeyboardFocused) { _, isFocused in
+            isShowingHoverPopover = isFocused
         }
         .popover(isPresented: $isShowingHoverPopover, arrowEdge: .bottom) {
             Text(hoverText)
@@ -49,9 +55,11 @@ struct TagDotsView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
                 .fixedSize()
-                .systemLiquidGlassPopover(cornerRadius: 10)
+                .systemLiquidGlassPopover(cornerRadius: 12)
         }
         .accessibilityLabel("Tags: \(hoverText)")
+        .accessibilityHint("Shows tag details on hover or keyboard focus")
+        .accessibilityIdentifier("TagDotsView")
     }
 
     private func finderTagColor(_ tag: String) -> Color? {

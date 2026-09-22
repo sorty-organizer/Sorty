@@ -164,8 +164,8 @@ struct AIProviderSettingsView: View {
                 copiedID: codexDeviceCodeCopiedID
             )
             .frame(width: 610)
-            .systemLiquidGlassBackground(cornerRadius: 28, interactive: false)
-            .systemLiquidGlassPopover(cornerRadius: 28)
+            .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+            .systemLiquidGlassPopover(cornerRadius: 12)
         }
         .onChange(of: codexAuth.isAuthenticated) { _, isAuthenticated in
             guard isAuthenticated, isShowingCodexDeviceAuth else { return }

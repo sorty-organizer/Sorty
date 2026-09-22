@@ -1590,9 +1590,11 @@ struct ReadyToOrganizeView: View {
 
                             HStack {
                                 Button("Cancel") {
+                                    HapticFeedbackManager.shared.tap()
                                     showSavePromptDialog = false
                                 }
                                 .buttonStyle(.sortyBordered)
+                                .accessibilityIdentifier("SavePromptCancelButton")
 
                                 Spacer()
 
@@ -1606,6 +1608,7 @@ struct ReadyToOrganizeView: View {
                                     HapticFeedbackManager.shared.success()
                                 }
                                 .buttonStyle(.sortyProminent)
+                                .accessibilityIdentifier("SavePromptSaveButton")
                                 .disabled(
                                     savePromptName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                         || steeringManager.hasPrompt(named: savePromptName)
@@ -3739,16 +3742,20 @@ struct SubmittableTextEditor: NSViewRepresentable {
             object: textView,
             queue: .main
         ) { [weak textView, weak coordinator = context.coordinator] _ in
-            guard let textView, let coordinator else { return }
-            coordinator.updateFocusState(for: textView)
-            coordinator.updateSelectedRange(from: textView)
+            MainActor.assumeIsolated {
+                guard let textView, let coordinator else { return }
+                coordinator.updateFocusState(for: textView)
+                coordinator.updateSelectedRange(from: textView)
+            }
         }
         
         let monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak textView, weak coordinator = context.coordinator] event in
             guard let tv = textView else { return event }
 
             DispatchQueue.main.async {
-                coordinator?.updateFocusState(for: tv)
+                MainActor.assumeIsolated {
+                    coordinator?.updateFocusState(for: tv)
+                }
             }
 
             guard event.type == .keyDown else { return event }
@@ -3814,6 +3821,7 @@ struct SubmittableTextEditor: NSViewRepresentable {
         )
     }
     
+    @MainActor
     class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var isFocused: Binding<Bool>?
@@ -3838,11 +3846,14 @@ struct SubmittableTextEditor: NSViewRepresentable {
         }
         
         deinit {
-            if let monitor = eventMonitor {
-                NSEvent.removeMonitor(monitor)
-            }
-            if let selectionObserver {
-                NotificationCenter.default.removeObserver(selectionObserver)
+            // The coordinator is main-confined; clean up synchronously.
+            MainActor.assumeIsolated {
+                if let monitor = eventMonitor {
+                    NSEvent.removeMonitor(monitor)
+                }
+                if let selectionObserver {
+                    NotificationCenter.default.removeObserver(selectionObserver)
+                }
             }
         }
         

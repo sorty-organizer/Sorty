@@ -161,21 +161,8 @@ private struct LiquidSurface: ViewModifier {
     let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
-                .overlay {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.white.opacity(0.16), lineWidth: 1)
-                }
-        } else {
-            content
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.white.opacity(0.20), lineWidth: 1)
-                }
-        }
+        content
+            .systemLiquidGlassBackground(cornerRadius: cornerRadius, interactive: true)
     }
 }
 

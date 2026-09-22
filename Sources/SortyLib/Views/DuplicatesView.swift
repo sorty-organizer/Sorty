@@ -7,8 +7,8 @@
 //
 
 import AppKit
-import Beam
 import SwiftUI
+import Beam
 
 struct DuplicatesView: View {
     @SortyHotReload private var hotReload
@@ -229,7 +229,7 @@ struct DuplicatesView: View {
             .accessibilityIdentifier("DuplicatesBaseChooseDirectory")
         }
         .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
     }
 
     @ViewBuilder

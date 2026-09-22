@@ -5,9 +5,9 @@
 //  Folder selection with drag-drop support and enhanced animations
 //
 
-import Beam
 import SwiftUI
 import UniformTypeIdentifiers
+import Beam
 
 struct DirectorySelectionView: View {
     @SortyHotReload private var hotReload

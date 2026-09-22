@@ -163,7 +163,7 @@ struct InternetAccessPolicyView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .frame(maxWidth: 250)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .systemLiquidGlassBackground(cornerRadius: 10, interactive: false)
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(internetPrivacyModeEnabled ? Color.green.opacity(0.35) : Color.secondary.opacity(0.18), lineWidth: 1)
@@ -221,7 +221,7 @@ private struct ConnectionCard: View {
             }
         }
         .padding(12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(relevanceAccent.opacity(0.35), lineWidth: 1)

@@ -5,10 +5,10 @@
 //  Real-time organization display with streaming progress
 //
 
-import Beam
 import Combine
 import SwiftUI
 import UniformTypeIdentifiers
+import Beam
 
 // MARK: - Analysis Icon Provider
 
@@ -2684,7 +2684,8 @@ private struct InsightHistorySection: View {
 
 // MARK: - Inline Notice
 
-struct InlineNoticeAction {
+struct InlineNoticeAction: Identifiable {
+    let id = UUID()
     let title: String
     let systemImage: String?
     let action: () -> Void
@@ -2831,8 +2832,8 @@ private struct InlineNoticeActions: View {
                 Spacer(minLength: 0)
             }
 
-            ForEach(actions.indices, id: \.self) { index in
-                InlineNoticeActionButton(action: actions[index], color: color)
+            ForEach(actions) { action in
+                InlineNoticeActionButton(action: action, color: color)
             }
 
             if isCentered {
@@ -2844,11 +2845,16 @@ private struct InlineNoticeActions: View {
 
 private struct InlineNoticeActionButton: View {
     @SortyHotReload private var hotReload
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let action: InlineNoticeAction
     let color: Color
+    @State private var isHovering = false
 
     var body: some View {
-        Button(action: action.action) {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            action.action()
+        } label: {
             HStack(spacing: 4) {
                 if let systemImage = action.systemImage {
                     Image(systemName: systemImage)
@@ -2865,8 +2871,21 @@ private struct InlineNoticeActionButton: View {
         .padding(.vertical, 4)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(color.opacity(0.12))
+                .fill(color.opacity(isHovering ? 0.2 : 0.12))
         )
+        .scaleEffect(reduceMotion ? 1 : (isHovering ? 1.03 : 1))
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isHovering)
+        .onHover { hovering in
+            if hovering != isHovering {
+                isHovering = hovering
+                if hovering {
+                    HapticFeedbackManager.shared.selection()
+                }
+            }
+        }
+        .accessibilityLabel(action.title)
+        .accessibilityIdentifier("InlineNoticeAction-\(action.title)")
+        .accessibilityHint("Activates \(action.title.lowercased()) action")
     }
 }
 

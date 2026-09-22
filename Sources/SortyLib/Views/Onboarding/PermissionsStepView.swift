@@ -953,7 +953,7 @@ struct PermissionEducationView: View {
                     .padding(.bottom, 8)
             }
         }
-        .systemLiquidGlassPopover(cornerRadius: 18)
+        .systemLiquidGlassPopover(cornerRadius: 12)
         .animation(.easeOut(duration: 0.18), value: currentPage)
     }
 

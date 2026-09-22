@@ -72,13 +72,8 @@ struct TimelineView: View {
             }
         }
         .padding()
-        .background(.ultraThinMaterial)
-        .cornerRadius(12)
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
         .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(.white.opacity(0.2), lineWidth: 1)
-        )
     }
 }
 
@@ -346,8 +341,7 @@ struct CompactTimelineView: View {
                 if isProcessing {
                     SortyGradientLoadingBar(width: 160, height: 10)
                         .padding(20)
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(10)
+                        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
                 }
             }
             .alert("Timeline", isPresented: $showAlert) {

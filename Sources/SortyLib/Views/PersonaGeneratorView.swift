@@ -104,9 +104,9 @@ struct PersonaGeneratorView: View {
             .animation(.easeInOut(duration: 0.22), value: currentGenerationStatus)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.ultraThinMaterial)
+        .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
         .overlay {
-            PersonaGenerationBorderBeam(cornerRadius: 18)
+            PersonaGenerationBorderBeam(cornerRadius: 16)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }
