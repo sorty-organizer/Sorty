@@ -448,9 +448,12 @@ public class NotificationManager: ObservableObject {
     @Published public private(set) var analyticsEvents: [NotificationAnalyticsEvent] = []
     
     private var settings: NotificationSettingsManager { NotificationSettingsManager.shared }
-    private var dismissTask: Task<Void, Never>?
-    private var queueTask: Task<Void, Never>?
+    /// Timer tasks below run on the main actor; closures capture self weakly
+    /// so a queued dismiss/advance never retains the manager.
+    @MainActor private var dismissTask: Task<Void, Never>?
+    @MainActor private var queueTask: Task<Void, Never>?
     private var permissionCached: Bool = false
+    private var hasPerformedLazySetup = false
     private let nativeNotificationDelegate = NativeNotificationDelegate()
     private var pendingNativeActionHandlers: [String: NotificationActionHandler] = [:]
     private var pendingNativeNotificationTypes: [String: NotificationType] = [:]
@@ -458,9 +461,19 @@ public class NotificationManager: ObservableObject {
     private var registeredNativeCategories: [String: UNNotificationCategory] = [:]
     
     private init() {
+        // Keep construction free of system probes and async work: the delegate
+        // assignment is cheap, and permission setup runs lazily on first use
+        // (after the first frame), never pre-frame.
         if isSafeToUseSystemNotifications {
             UNUserNotificationCenter.current().delegate = nativeNotificationDelegate
         }
+    }
+
+    /// Starts the permission check once, on first actual use rather than at
+    /// launch, so `shared` can be touched without waking system services.
+    private func ensureLazySetup() {
+        guard !hasPerformedLazySetup else { return }
+        hasPerformedLazySetup = true
         Task {
             await setupNotificationSystem()
         }
@@ -499,6 +512,7 @@ public class NotificationManager: ObservableObject {
     
     /// Check current notification permission status
     public func checkNotificationPermission() async {
+        ensureLazySetup()
         guard isSafeToUseSystemNotifications else { return }
         
         let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -509,6 +523,7 @@ public class NotificationManager: ObservableObject {
     
     /// Request notification permission
     public func requestPermission() async -> Bool {
+        ensureLazySetup()
         guard isSafeToUseSystemNotifications else { return false }
 
         await checkNotificationPermission()
@@ -550,6 +565,7 @@ public class NotificationManager: ObservableObject {
     
     /// Show a notification based on type and user preferences
     public func show(_ type: NotificationType) {
+        ensureLazySetup()
         let settingsValue = settings.settings
         
         DebugLogger.log("NotificationManager: show() called with type, inAppHUD=\(settingsValue.inAppHUD), systemNotifications=\(settingsValue.systemNotifications)")
@@ -661,6 +677,7 @@ public class NotificationManager: ObservableObject {
     
     /// Show a notification with a custom action handler
     public func show(_ type: NotificationType, actionHandler: @escaping NotificationActionHandler) {
+        ensureLazySetup()
         let settingsValue = settings.settings
         
         // Create notification content
@@ -717,6 +734,7 @@ public class NotificationManager: ObservableObject {
         isPersistent: Bool = false,
         actions: [HUDNotificationAction] = []
     ) {
+        ensureLazySetup()
         showHUD(
             identifier: identifier,
             title: title,
@@ -1113,11 +1131,10 @@ public class NotificationManager: ObservableObject {
         guard !notification.isPersistent else { return }
 
         // Auto-dismiss transient HUDs after the shared HUD duration.
-        dismissTask = Task {
+        dismissTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(Self.transientHUDDuration))
-            if !Task.isCancelled {
-                dismissHUD()
-            }
+            guard !Task.isCancelled else { return }
+            self?.dismissHUD()
         }
     }
 
@@ -1132,8 +1149,8 @@ public class NotificationManager: ObservableObject {
         return { [weak self] in
             guard let self else { return }
             self.dismissHUD()
-            Task {
-                await self.handleDefaultNotificationActivation(
+            Task { [weak self] in
+                await self?.handleDefaultNotificationActivation(
                     for: type,
                     actionHandler: actionHandler,
                     backend: "native"
@@ -1147,12 +1164,12 @@ public class NotificationManager: ObservableObject {
         queueTask?.cancel()
         
         // Small delay before showing next notification
-        queueTask = Task {
+        queueTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: delayNanoseconds)
-            guard !Task.isCancelled else { return }
-            if let next = hudNotificationQueue.first {
-                hudNotificationQueue.removeFirst()
-                presentHUD(next)
+            guard !Task.isCancelled, let self else { return }
+            if let next = self.hudNotificationQueue.first {
+                self.hudNotificationQueue.removeFirst()
+                self.presentHUD(next)
             }
         }
     }

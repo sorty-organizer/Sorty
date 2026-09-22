@@ -49,9 +49,26 @@ final class SortyWidgetSyncManager {
     private let syncWorker = WidgetSnapshotSyncWorker()
     private var observers: [NSObjectProtocol] = []
     private var scheduledSyncTask: Task<Void, Never>?
+    private var initialSyncTask: Task<Void, Never>?
     private var scheduledSyncRequiresReload = false
 
     private init() {}
+
+    deinit {
+        scheduledSyncTask?.cancel()
+        initialSyncTask?.cancel()
+        observers.forEach(NotificationCenter.default.removeObserver)
+    }
+
+    /// Cancels pending sync work and drops observers (call on logout/reset).
+    func stop() {
+        scheduledSyncTask?.cancel()
+        scheduledSyncTask = nil
+        initialSyncTask?.cancel()
+        initialSyncTask = nil
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers = []
+    }
 
     func startIfNeeded(
         watchedFoldersManager: WatchedFoldersManager,
@@ -84,7 +101,8 @@ final class SortyWidgetSyncManager {
             }
         }
 
-        Task { @MainActor [weak self, weak watchedFoldersManager, weak storageLocationsManager] in
+        initialSyncTask?.cancel()
+        initialSyncTask = Task { @MainActor [weak self, weak watchedFoldersManager, weak storageLocationsManager] in
             try? await Task.sleep(for: .seconds(30))
             guard !Task.isCancelled else { return }
             guard let self, let watchedFoldersManager, let storageLocationsManager else { return }
@@ -94,12 +112,14 @@ final class SortyWidgetSyncManager {
             if watchedFoldersManager.folders.isEmpty,
                storageLocationsManager.locations.isEmpty,
                SortyWidgetSnapshotStore.load().hasNoContent {
+                self.initialSyncTask = nil
                 return
             }
             await self.sync(
                 watchedFoldersManager: watchedFoldersManager,
                 storageLocationsManager: storageLocationsManager
             )
+            self.initialSyncTask = nil
         }
     }
 

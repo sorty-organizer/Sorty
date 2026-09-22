@@ -346,17 +346,14 @@ public class SettingsViewModel: ObservableObject {
             self.setInMemoryAPIKey(apiKey)
             self.isConfiguredCredentialHydrating = false
             // The provider-switch verification may have already run with a
-            // keyless config while hydration was in flight; drop that verdict
-            // and re-verify with the hydrated credential.
+            // keyless config while hydration was in flight; drop that verdict.
+            // No auto-prewarm here: post-hydration network belongs to explicit
+            // user intent (organize, provider switch), not launch hydration.
             if provider != .githubCopilot,
                provider.typicallyRequiresAPIKey,
                authMethod == .apiKey,
                apiKey != nil {
                 AISessionManager.shared.resetPrewarmState(for: provider)
-                Task { [weak self] in
-                    guard let self, self.config.provider == provider else { return }
-                    await AISessionManager.shared.prewarm(provider: provider, config: self.config)
-                }
             }
         }
     }

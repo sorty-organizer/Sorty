@@ -29,7 +29,10 @@ public final class AutomationManager: ObservableObject {
     private var selectionCheckTimer: Timer?
     private var selectionRefreshTask: Task<Void, Never>?
     private var selectionMonitoringDemandCount = 0
-    private let selectionCheckInterval: TimeInterval = 8.0
+    // Battery-friendly poll: 45s with 30% tolerance. Freshness comes from
+    // explicit refresh triggers (app/Finder activation, manual refresh), not
+    // from a tight timer.
+    private let selectionCheckInterval: TimeInterval = 45.0
     private var isInitializing = true
     private var isStartedUp = false
     private var automationChecksEnabled = false
@@ -88,6 +91,7 @@ public final class AutomationManager: ObservableObject {
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
     
     // MARK: - Lifecycle
@@ -112,6 +116,14 @@ public final class AutomationManager: ObservableObject {
             self,
             selector: #selector(appDidResignActive),
             name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+        // Prefer event-driven refresh over polling: when Finder activates,
+        // refresh the selection once instead of waiting for the next tick.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(workspaceAppDidActivate(_:)),
+            name: NSWorkspace.didActivateApplicationNotification,
             object: nil
         )
     }
@@ -391,6 +403,22 @@ public final class AutomationManager: ObservableObject {
     @objc private func appDidResignActive() {
         isApplicationActive = false
         pauseSelectionMonitoring()
+    }
+
+    /// Event-driven refresh: when Finder comes forward, pull the selection
+    /// once (manual-refresh path) instead of polling faster.
+    @objc private func workspaceAppDidActivate(_ notification: Notification) {
+        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+              app.bundleIdentifier == "com.apple.finder" else { return }
+        Task { @MainActor [weak self] in
+            guard let self,
+                  self.isStartedUp,
+                  self.isApplicationActive,
+                  self.enableSelectionMonitoring,
+                  self.selectionMonitoringDemandCount > 0,
+                  self.automationStatus == .granted else { return }
+            self.updateFinderSelection()
+        }
     }
 }
 

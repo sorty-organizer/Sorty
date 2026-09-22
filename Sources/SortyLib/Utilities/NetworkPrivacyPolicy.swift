@@ -98,23 +98,43 @@ public enum NetworkPrivacyPolicy {
 final class NetworkPrivacyURLSessionDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var tasks: [Int: URLSessionTask] = [:]
-    private var defaultsObserver: NSObjectProtocol?
 
     override init() {
         super.init()
-        defaultsObserver = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification,
-            object: nil,
-            queue: nil
-        ) { [weak self] _ in
-            self?.cancelBlockedTasksIfNeeded()
-        }
+        // Scoped KVO on the single privacy-mode key: unlike
+        // UserDefaults.didChangeNotification (which fires for any write),
+        // this wakes only when the flag itself changes.
+        UserDefaults.standard.addObserver(
+            self,
+            forKeyPath: NetworkPrivacyPolicy.internetPrivacyModeKey,
+            options: [.new],
+            context: nil
+        )
     }
 
     deinit {
-        if let defaultsObserver {
-            NotificationCenter.default.removeObserver(defaultsObserver)
+        UserDefaults.standard.removeObserver(
+            self,
+            forKeyPath: NetworkPrivacyPolicy.internetPrivacyModeKey
+        )
+    }
+
+    override func observeValue(
+        forKeyPath keyPath: String?,
+        of object: Any?,
+        change: [NSKeyValueChangeKey: Any]?,
+        context: UnsafeMutableRawPointer?
+    ) {
+        guard keyPath == NetworkPrivacyPolicy.internetPrivacyModeKey else {
+            super.observeValue(
+                forKeyPath: keyPath,
+                of: object,
+                change: change,
+                context: context
+            )
+            return
         }
+        cancelBlockedTasksIfNeeded()
     }
 
     func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {

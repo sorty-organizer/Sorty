@@ -10,20 +10,6 @@ import Foundation
 import AppKit
 import Darwin
 
-private actor FinderSyncAutoRepairGate {
-    static let shared = FinderSyncAutoRepairGate()
-
-    private var isRunning = false
-
-    func run(_ operation: () async -> Void) async {
-        guard !isRunning else { return }
-        isRunning = true
-        defer { isRunning = false }
-
-        await operation()
-    }
-}
-
 /// Shares one expensive Finder registration probe between callers that ask at
 /// the same time, such as Settings and the troubleshooting check.
 private actor FinderSyncDiagnosticsGate {
@@ -74,7 +60,6 @@ public struct ExtensionCommunication {
     private static let userApplicationsDirectoryName = "Applications"
     private static let finderRepairEntitlementsResourceName = "SortyAppRepair.entitlements"
     private static let finderRepairVerificationTimeout: TimeInterval = 8
-    private static let finderRepairVerificationPollInterval: TimeInterval = 0.5
     private static let finderRepairRequiredAppGroup = "group.com.sorty.app"
     private static let pbsDomain = "pbs"
     private static let activeSortyServices: [(bundleIdentifier: String, menuTitle: String)] = [
@@ -343,12 +328,23 @@ public struct ExtensionCommunication {
             object: nil,
             queue: .main
         ) { notification in
+            // Cheap parse inline; filesystem validation + JSON encode + cache
+            // write run detached at utility so heartbeat traffic never blocks
+            // the main thread.
             guard let heartbeat = finderSyncRuntimeHeartbeat(from: notification.userInfo) else { return }
-            cacheFinderSyncRuntimeHeartbeat(heartbeat)
+            Task.detached(priority: .utility) {
+                guard !Task.isCancelled,
+                      FileManager.default.fileExists(atPath: heartbeat.path) else { return }
+                cacheFinderSyncRuntimeHeartbeat(heartbeat)
+            }
         }
     }
 
-    private static func runCommand(executablePath: String, arguments: [String]) -> CommandResult {
+    private static func runCommand(
+        executablePath: String,
+        arguments: [String],
+        timeout: TimeInterval = 15
+    ) -> CommandResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executablePath)
         process.arguments = arguments
@@ -358,11 +354,18 @@ public struct ExtensionCommunication {
         process.standardOutput = outputPipe
         process.standardError = errorPipe
 
+        // Timeout-guarded wait: never block the caller past `timeout`.
+        let semaphore = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in semaphore.signal() }
         do {
             try process.run()
-            process.waitUntilExit()
         } catch {
             return CommandResult(exitCode: -1, stdout: "", stderr: error.localizedDescription)
+        }
+        if semaphore.wait(timeout: .now() + timeout) == .timedOut {
+            process.terminate()
+            _ = semaphore.wait(timeout: .now() + 2)
+            return CommandResult(exitCode: -1, stdout: "", stderr: "command timed out after \(Int(timeout))s")
         }
 
         let stdoutData = outputPipe.fileHandleForReading.readDataToEndOfFile()
@@ -373,13 +376,23 @@ public struct ExtensionCommunication {
         return CommandResult(exitCode: process.terminationStatus, stdout: stdout, stderr: stderr)
     }
 
-    private static func runCommandAsync(executablePath: String, arguments: [String]) async -> CommandResult {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let result = runCommand(executablePath: executablePath, arguments: arguments)
-                continuation.resume(returning: result)
-            }
+    private static func runCommandAsync(
+        executablePath: String,
+        arguments: [String],
+        timeout: TimeInterval = 15
+    ) async -> CommandResult {
+        // Cooperative cancellation before paying for a subprocess.
+        guard !Task.isCancelled else {
+            return CommandResult(exitCode: -1, stdout: "", stderr: "cancelled")
         }
+        // Utility QoS: Finder probes and repair subprocesses must never
+        // compete with user-initiated organization work.
+        return await Task.detached(priority: .utility) {
+            guard !Task.isCancelled else {
+                return CommandResult(exitCode: -1, stdout: "", stderr: "cancelled")
+            }
+            return runCommand(executablePath: executablePath, arguments: arguments, timeout: timeout)
+        }.value
     }
 
     private static func commandFailureSummary(_ result: CommandResult) -> String? {
@@ -399,11 +412,16 @@ public struct ExtensionCommunication {
         pattern: #"(/.+?/SortyFinderSync\.appex)/Contents/MacOS/SortyFinderSync\b"#
     )
 
-    private static func runningFinderSyncExtensionPath() -> String? {
+    private static func runningFinderSyncExtensionPathAsync() async -> String? {
         guard let finderSyncProcessPathRegex else { return nil }
 
-        let result = runCommand(executablePath: "/usr/bin/pgrep", arguments: ["-fl", "SortyFinderSync"])
-        guard result.exitCode == 0 else { return nil }
+        // Async .utility probe with timeout; never blocks the caller thread.
+        let result = await runCommandAsync(
+            executablePath: "/usr/bin/pgrep",
+            arguments: ["-fl", "SortyFinderSync"],
+            timeout: 5
+        )
+        guard !Task.isCancelled, result.exitCode == 0 else { return nil }
 
         let output = combinedCommandOutput(result).joined(separator: "\n")
         let searchRange = NSRange(output.startIndex..<output.endIndex, in: output)
@@ -442,15 +460,15 @@ public struct ExtensionCommunication {
         // DistributedNotificationCenter is unauthenticated: reject spoofed
         // heartbeats before they can drive diagnostics or auto-repair.
         // Timestamps must be plausible (no far-future, max age enforced by
-        // isRecent) and the path must be an existing .appex bundle.
+        // isRecent). Path existence is validated off-thread by the caller
+        // so this parser stays free of filesystem I/O.
         let now = Date()
         guard reportedAt <= now.addingTimeInterval(60),
               reportedAt >= now.addingTimeInterval(-finderSyncHeartbeatMaxAge - 60) else {
             return nil
         }
         let standardizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
-        guard standardizedPath.hasSuffix(".appex"),
-              FileManager.default.fileExists(atPath: standardizedPath) else {
+        guard standardizedPath.hasSuffix(".appex") else {
             return nil
         }
         let expectedIdentifier = finderSyncBundleIdentifier()
@@ -467,26 +485,46 @@ public struct ExtensionCommunication {
         )
     }
 
+    private static func heartbeatDefaults() -> UserDefaults {
+        // Heartbeat writes happen on every Finder event (throttled to 30s).
+        // Keep them in the app-group suite so they never post
+        // UserDefaults.didChangeNotification on .standard and wake scoped
+        // observers (Sparkle, privacy policy) on an unrelated write.
+        UserDefaults(suiteName: appGroupIdentifier) ?? .standard
+    }
+
     private static func cacheFinderSyncRuntimeHeartbeat(_ heartbeat: FinderSyncRuntimeHeartbeat) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(heartbeat) else { return }
-        UserDefaults.standard.set(data, forKey: finderSyncHeartbeatDefaultsKey)
+        heartbeatDefaults().set(data, forKey: finderSyncHeartbeatDefaultsKey)
+        // Drop any legacy copy so .standard stops churning on heartbeats.
+        if heartbeatDefaults() !== UserDefaults.standard {
+            UserDefaults.standard.removeObject(forKey: finderSyncHeartbeatDefaultsKey)
+        }
     }
 
     private static func clearCachedFinderSyncRuntimeHeartbeat() {
+        heartbeatDefaults().removeObject(forKey: finderSyncHeartbeatDefaultsKey)
         UserDefaults.standard.removeObject(forKey: finderSyncHeartbeatDefaultsKey)
     }
 
     private static func cachedFinderSyncRuntimeHeartbeat() -> FinderSyncRuntimeHeartbeat? {
-        guard let data = UserDefaults.standard.data(forKey: finderSyncHeartbeatDefaultsKey) else {
+        // Prefer the group suite; migrate a legacy .standard copy once.
+        let groupData = heartbeatDefaults().data(forKey: finderSyncHeartbeatDefaultsKey)
+        let legacyData = UserDefaults.standard.data(forKey: finderSyncHeartbeatDefaultsKey)
+        guard let data = groupData ?? legacyData else {
             return nil
+        }
+        if groupData == nil, legacyData != nil {
+            heartbeatDefaults().set(legacyData!, forKey: finderSyncHeartbeatDefaultsKey)
+            UserDefaults.standard.removeObject(forKey: finderSyncHeartbeatDefaultsKey)
         }
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let heartbeat = try? decoder.decode(FinderSyncRuntimeHeartbeat.self, from: data) else {
-            UserDefaults.standard.removeObject(forKey: finderSyncHeartbeatDefaultsKey)
+            heartbeatDefaults().removeObject(forKey: finderSyncHeartbeatDefaultsKey)
             return nil
         }
 
@@ -1004,13 +1042,21 @@ public struct ExtensionCommunication {
     }
 
     private static func waitForFinderSyncDiagnosticsVerificationAsync(timeout: TimeInterval) async -> FinderSyncDiagnostics {
+        // Backoff polling (0.5s -> 1s -> 2s) with cooperative cancellation:
+        // Finder loads extensions lazily, so early polls are cheap and later
+        // ones give macOS time to settle without a hot 0.5s loop.
+        let backoffIntervals: [TimeInterval] = [0.5, 1.0, 2.0]
         let deadline = Date().addingTimeInterval(timeout)
         var latest = await getFinderSyncDiagnosticsAsync()
+        var attempt = 0
         while Date() < deadline {
-            if latest.isVerifiedWorking {
+            if latest.isVerifiedWorking || Task.isCancelled {
                 return latest
             }
-            try? await Task.sleep(nanoseconds: UInt64(finderRepairVerificationPollInterval * 1_000_000_000))
+            let interval = backoffIntervals[min(attempt, backoffIntervals.count - 1)]
+            attempt += 1
+            try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            guard !Task.isCancelled else { return latest }
             latest = await getFinderSyncDiagnosticsAsync()
         }
         return latest
@@ -1137,13 +1183,22 @@ public struct ExtensionCommunication {
 
     private static func collectFinderSyncDiagnostics() async -> FinderSyncDiagnostics {
         beginMonitoringFinderSyncRuntime()
-        let entries = await registeredFinderSyncExtensionEntriesAsync()
+        // Probes run concurrently; the heartbeat cache read (file decode)
+        // and the pgrep probe run detached at utility so diagnostics never
+        // block the caller thread on filesystem or subprocess I/O.
+        async let entries = registeredFinderSyncExtensionEntriesAsync()
+        async let preferredPath = preferredFinderSyncExtensionURLForRegistration()?.path
+        async let heartbeat = Task.detached(priority: .utility) {
+            cachedFinderSyncRuntimeHeartbeat()
+        }.value
+        async let runningProcessPath = runningFinderSyncExtensionPathAsync()
+        async let entitlements = currentAppMissingFinderIntegrationEntitlementsAsync()
         return finderSyncDiagnostics(
-            entries: entries,
-            preferredPath: await preferredFinderSyncExtensionURLForRegistration()?.path,
-            heartbeat: cachedFinderSyncRuntimeHeartbeat(),
-            runningProcessPath: runningFinderSyncExtensionPath(),
-            appBundleMissingEntitlements: await currentAppMissingFinderIntegrationEntitlementsAsync()
+            entries: await entries,
+            preferredPath: await preferredPath,
+            heartbeat: await heartbeat,
+            runningProcessPath: await runningProcessPath,
+            appBundleMissingEntitlements: await entitlements
         )
     }
 
@@ -1247,35 +1302,6 @@ public struct ExtensionCommunication {
         }
         messageParts.append(message)
         return (true, messageParts.filter { !$0.isEmpty }.joined(separator: " "))
-    }
-
-    /// Silently re-registers the Finder Sync extension on launch when the
-    /// currently registered path doesn't match this build.  This prevents
-    /// the extension from going missing after a rebuild or after switching
-    /// between release and debug builds.
-    /// Rate-limited (once per 24h) and never restarts Finder on its own:
-    /// destructive repair (pkill/pluginkit/killall Finder) requires explicit
-    /// user consent via the Settings Repair button.
-    public static func autoRepairFinderSyncIfNeeded() async {
-        await FinderSyncAutoRepairGate.shared.run {
-            let lastAutoRepair = UserDefaults.standard.object(forKey: "finderSyncLastAutoRepairAt") as? Date
-            if let lastAutoRepair, Date().timeIntervalSince(lastAutoRepair) < 24 * 60 * 60 {
-                return
-            }
-            guard let currentExtensionURL = currentFinderSyncExtensionURL() else {
-                return
-            }
-            let currentPath = currentExtensionURL.path
-
-            let diagnostics = await getFinderSyncDiagnosticsAsync()
-
-            if !shouldAutoRepairFinderSync(diagnostics: diagnostics, currentPath: currentPath) {
-                return
-            }
-
-            UserDefaults.standard.set(Date(), forKey: "finderSyncLastAutoRepairAt")
-            _ = await repairFinderSyncExtensionRegistrationAsync(restartFinder: false)
-        }
     }
 
     // MARK: - Quick Action Installation
@@ -1683,14 +1709,10 @@ public struct ExtensionCommunication {
             // Best-effort only.
         }
 
-        // Clear Finder's icon cache for this workflow
+        // Clear Finder's icon cache for this workflow (best-effort, timeout-guarded).
         let lsregister = "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
         if FileManager.default.fileExists(atPath: lsregister) {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: lsregister)
-            process.arguments = ["-f", workflowDir.path]
-            try? process.run()
-            process.waitUntilExit()
+            _ = runCommand(executablePath: lsregister, arguments: ["-f", workflowDir.path], timeout: 10)
         }
     }
 
@@ -1909,14 +1931,14 @@ public struct ExtensionCommunication {
         NSUpdateDynamicServices()
 
         // A plain NSUpdateDynamicServices call is sometimes not enough for Finder
-        // to immediately refresh the Quick Actions registry.
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/pbs")
-        process.arguments = ["-flush"]
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
+        // to immediately refresh the Quick Actions registry. Best-effort
+        // timeout-guarded refresh via the shared subprocess helper.
+        let pbsResult = runCommand(
+            executablePath: "/System/Library/CoreServices/pbs",
+            arguments: ["-flush"],
+            timeout: 10
+        )
+        if pbsResult.exitCode != 0 {
             // Best-effort refresh only.
         }
 
@@ -1955,18 +1977,13 @@ public struct ExtensionCommunication {
         removeServiceStatusEntries(activeSortyServices + deprecatedSortyServices)
         NSUpdateDynamicServices()
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/pbs")
-        process.arguments = ["-flush"]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            return false
-        }
+        // Timeout-guarded via the shared helper; never blocks past 10s.
+        let result = runCommand(
+            executablePath: "/System/Library/CoreServices/pbs",
+            arguments: ["-flush"],
+            timeout: 10
+        )
+        return result.exitCode == 0
     }
 
     /// Install an "Organize with Sorty" Quick Action workflow to ~/Library/Services.
@@ -2311,7 +2328,7 @@ public struct ExtensionCommunication {
 
     public static func ensureQuickActionInstalledAsync(forceRefreshServices: Bool = false) async -> (installed: Bool, message: String) {
         await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .utility).async {
                 let result = ensureQuickActionInstalled(forceRefreshServices: forceRefreshServices)
                 continuation.resume(returning: result)
             }
@@ -2345,7 +2362,7 @@ public struct ExtensionCommunication {
     /// Check if Quick Action is installed (async)
     public static func isQuickActionInstalledAsync() async -> Bool {
         await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .utility).async {
                 let result = isQuickActionInstalled()
                 continuation.resume(returning: result)
             }
@@ -2963,7 +2980,7 @@ public struct ExtensionCommunication {
 
     public static func isQuickWatchActionInstalledAsync() async -> Bool {
         await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .utility).async {
                 let result = isQuickWatchActionInstalled()
                 continuation.resume(returning: result)
             }
@@ -2972,7 +2989,7 @@ public struct ExtensionCommunication {
 
     public static func isQuickExcludeActionInstalledAsync() async -> Bool {
         await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .utility).async {
                 let result = isQuickExcludeActionInstalled()
                 continuation.resume(returning: result)
             }
@@ -3485,7 +3502,7 @@ public struct ExtensionCommunication {
         let quickWatchActionInstalled = await isQuickWatchActionInstalledAsync()
         let quickExcludeActionInstalled = await isQuickExcludeActionInstalledAsync()
         let toolbarAppInstalled = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .utility).async {
                 continuation.resume(returning: isToolbarAppInstalled())
             }
         }

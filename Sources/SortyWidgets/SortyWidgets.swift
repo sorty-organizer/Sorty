@@ -32,10 +32,10 @@ private struct SortyWidgetProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SortyWidgetEntry>) -> Void) {
         let entry = currentEntry()
-        // TTL refresh so the widget does not stay stale until the next organize.
-        // The app also calls WidgetCenter.reloadAllTimelines() after each run.
-        let nextRefresh = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
-        completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
+        // Push-only: the app calls WidgetCenter.reloadTimelines() after each
+        // organize/revert/clear (coalesced 250ms, content-equality skipped).
+        // No periodic refresh — content only changes on those events.
+        completion(Timeline(entries: [entry], policy: .never))
     }
 
     private func currentEntry() -> SortyWidgetEntry {
