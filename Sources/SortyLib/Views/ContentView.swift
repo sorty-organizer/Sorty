@@ -17,7 +17,10 @@ public struct ContentView: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
 
-    @ObservedObject private var analytics = AnalyticsManager.shared
+    // Plain shared reference, never observed: analytics publishes (consent
+    // flips, event batches) must not rebuild the navigation tree. The consent
+    // overlay below owns the only observation, scoped to itself.
+    private var analytics: AnalyticsManager { AnalyticsManager.shared }
     @State private var previousView: AppState.AppView?
     @State private var showCommandNumbers = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -54,9 +57,10 @@ public struct ContentView: View {
             // Shared HUD notifications must remain visible during onboarding.
             HUDNotificationOverlay()
 
-            if appState.hasCompletedOnboarding, analytics.consent == .undecided {
-                AnalyticsConsentView()
-            }
+            AnalyticsConsentOverlay(
+                hasCompletedOnboarding: appState.hasCompletedOnboarding,
+                onGranted: { captureMainScreen(appState.currentView, source: "consent") }
+            )
         }
         .environment(\.windowLinkHoverUpdate) { hovering, url, sourceID in
             MainActor.assumeIsolated {
@@ -66,10 +70,6 @@ public struct ContentView: View {
         .onDisappear {
             windowLinkHoverState.clearAllHover()
             personaHighlightDismissalTask?.cancel()
-        }
-        .onChange(of: analytics.consent) { _, newConsent in
-            guard newConsent == .granted, appState.hasCompletedOnboarding else { return }
-            captureMainScreen(appState.currentView, source: "consent")
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: appState.hasCompletedOnboarding)
         .sheet(item: $appState.personaGeneratorPresentationContext) { context in
@@ -400,6 +400,27 @@ public struct ContentView: View {
 }
 
 // MARK: - Preview
+
+/// Owns the analytics-consent observation so consent publishes rebuild only
+/// this overlay, never the whole navigation tree.
+private struct AnalyticsConsentOverlay: View {
+    @SortyHotReload private var hotReload
+    @ObservedObject private var analytics = AnalyticsManager.shared
+    let hasCompletedOnboarding: Bool
+    let onGranted: () -> Void
+
+    var body: some View {
+        Group {
+            if hasCompletedOnboarding, analytics.consent == .undecided {
+                AnalyticsConsentView()
+            }
+        }
+        .onChange(of: analytics.consent) { _, newConsent in
+            guard newConsent == .granted, hasCompletedOnboarding else { return }
+            onGranted()
+        }
+    }
+}
 
 #Preview("Content View - Main") {
     ContentView()
