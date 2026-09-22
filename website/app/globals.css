@@ -189,37 +189,32 @@
   justify-content: center;
 }
 
-/* Blur reveal on scroll */
+/* Keep scroll reveals cheap and stable. Animating blur across large cards can
+   flash as the browser promotes and repaints each glass layer. */
 .reveal {
   opacity: 0;
-  filter: blur(16px);
-  transform: translateY(28px) scale(0.985);
+  transform: translateY(18px);
   transition:
-    opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1),
-    filter 0.9s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: opacity, filter, transform;
+    opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .reveal.is-visible {
   opacity: 1;
-  filter: blur(0);
-  transform: translateY(0) scale(1);
+  transform: translateY(0);
 }
 
 /* Immediate page content starts in its entrance state before the first paint,
-   so it travels toward sharp exactly once instead of pulsing backward. */
+   so it moves into place exactly once instead of pulsing backward. */
 @starting-style {
   .reveal.reveal-on-enter.is-visible {
     opacity: 0;
-    filter: blur(12px);
-    transform: translateY(18px) scale(0.99);
+    transform: translateY(12px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .reveal {
     opacity: 1;
-    filter: none;
     transform: none;
     transition: none;
   }
