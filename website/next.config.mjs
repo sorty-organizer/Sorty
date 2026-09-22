@@ -7,9 +7,6 @@ const nextConfig = {
   basePath,
   assetPrefix: basePath,
   productionBrowserSourceMaps: true,
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   images: {
     unoptimized: true,
   },
