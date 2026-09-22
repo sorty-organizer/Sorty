@@ -30,6 +30,13 @@ struct PreviewView: View {
     @State private var activeNotificationApplyRequestID: UUID?
     @State private var activeNotificationRedoRequestID: UUID?
     @FocusState private var instructionsFocused: Bool
+    // Memoized rename/diff derivations. The body observes the organizer, so
+    // without this every organizer publish would rebuild the planHistory
+    // arrays and reduce the rename mappings, even for unrelated state.
+    @State private var memoizedRenameCount: Int
+    @State private var memoizedCurrentDiff: OrganizationPlanDiff.Source?
+    @State private var memoizedPreviousDiff: OrganizationPlanDiff.Source?
+    @State private var memoizedNextDiff: OrganizationPlanDiff.Source?
 
     private var displayedPlan: OrganizationPlan {
         Self.planForApply(
@@ -63,31 +70,19 @@ struct PreviewView: View {
     }
 
     private var currentDiffSource: OrganizationPlanDiff.Source? {
-        if viewingHistoryIndex == nil, hasEdits {
-            return OrganizationPlanDiff.Source(
-                oldPlan: plan,
-                newPlan: editablePlan,
-                fromLabel: "Preview \(plan.version)",
-                toLabel: "Edited"
-            )
-        }
-        if displayedVersionIndex > 0 {
-            return diff(from: displayedVersionIndex - 1, to: displayedVersionIndex)
-        }
-        return diff(from: displayedVersionIndex, to: displayedVersionIndex + 1)
+        memoizedCurrentDiff
     }
 
     private var previousDiffSource: OrganizationPlanDiff.Source? {
-        guard displayedVersionIndex > 0 else { return nil }
-        return diff(from: displayedVersionIndex - 1, to: displayedVersionIndex)
+        memoizedPreviousDiff
     }
 
     private var nextDiffSource: OrganizationPlanDiff.Source? {
-        diff(from: displayedVersionIndex, to: displayedVersionIndex + 1)
+        memoizedNextDiff
     }
-    
+
     private var renameCount: Int {
-        displayedPlan.suggestions.reduce(0) { $0 + $1.renameCount }
+        memoizedRenameCount
     }
     private var shouldDisableButtons: Bool { isApplying || organizer.state == .scanning || organizer.state == .organizing }
     private var isOrganizing: Bool { isApplying || organizer.state == .applying }
@@ -109,6 +104,7 @@ struct PreviewView: View {
         self.onApplyStarted = onApplyStarted
         _previewStore = StateObject(wrappedValue: PreviewStore(plan: plan))
         _editablePlan = State(initialValue: plan)
+        _memoizedRenameCount = State(initialValue: plan.suggestions.reduce(0) { $0 + $1.renameCount })
     }
     
     var body: some View {
@@ -158,6 +154,7 @@ struct PreviewView: View {
                 onPlanChanged: {
                     hasEdits = true
                     editablePlan = previewStore.plan
+                    refreshDerivedPlanStats()
                 },
                 emptyStateType: emptyStateType,
                 onFocusInstructions: { instructionsFocused = true },
@@ -209,15 +206,23 @@ struct PreviewView: View {
             previewStore.dragDropManager = dragDropManager
             previewStore.learningsManager = learningsManager
             learningsManager.loadProfileIfNeededForCollection()
+            refreshDerivedPlanStats()
             consumePendingNotificationActionIfNeeded()
         }
-        .onChange(of: plan) { _, newPlan in editablePlan = newPlan; previewStore.updatePlan(newPlan); previewStore.resetEditsCaptured(); hasEdits = false }
+        .onChange(of: plan) { _, newPlan in editablePlan = newPlan; previewStore.updatePlan(newPlan); previewStore.resetEditsCaptured(); hasEdits = false; refreshDerivedPlanStats() }
         .onChange(of: viewingHistoryIndex) { _, newIndex in
             if let idx = newIndex, idx < organizer.planHistory.count {
                 previewStore.updatePlan(organizer.planHistory[idx])
             } else {
                 previewStore.updatePlan(editablePlan)
             }
+            refreshDerivedPlanStats()
+        }
+        .onChange(of: organizer.planHistory) { _, _ in
+            refreshDerivedPlanStats()
+        }
+        .onChange(of: hasEdits) { _, _ in
+            refreshDerivedPlanStats()
         }
         .onChange(of: appState.pendingNotificationActionRequest?.id) { _, _ in
             consumePendingNotificationActionIfNeeded()
@@ -264,6 +269,30 @@ struct PreviewView: View {
             toLabel: "Preview \(versions[newIndex].version)"
         )
     }
+
+    // How derived plan stats stay fresh: recomputed only when the plan, its
+    // history, the viewed version, or the edit flag changes — never on
+    // unrelated organizer publishes (progress ticks, stage strings).
+    private func refreshDerivedPlanStats() {
+        let shown = displayedPlan
+        memoizedRenameCount = shown.suggestions.reduce(0) { $0 + $1.renameCount }
+        if viewingHistoryIndex == nil, hasEdits {
+            memoizedCurrentDiff = OrganizationPlanDiff.Source(
+                oldPlan: plan,
+                newPlan: editablePlan,
+                fromLabel: "Preview \(plan.version)",
+                toLabel: "Edited"
+            )
+        } else if displayedVersionIndex > 0 {
+            memoizedCurrentDiff = diff(from: displayedVersionIndex - 1, to: displayedVersionIndex)
+        } else {
+            memoizedCurrentDiff = diff(from: displayedVersionIndex, to: displayedVersionIndex + 1)
+        }
+        memoizedPreviousDiff = displayedVersionIndex > 0
+            ? diff(from: displayedVersionIndex - 1, to: displayedVersionIndex)
+            : nil
+        memoizedNextDiff = diff(from: displayedVersionIndex, to: displayedVersionIndex + 1)
+    }
     
     @ViewBuilder
     private var bottomToolbar: some View {
@@ -273,7 +302,16 @@ struct PreviewView: View {
                 Divider()
             }
             if isOrganizing {
-                PreviewProgressView(progress: organizer.progress, stage: organizer.organizationStage, estimatedTimeRemaining: calculateTimeRemaining(), onCancel: cancelToStart)
+                PreviewProgressView(
+                    progress: organizer.progress,
+                    stage: organizer.organizationStage,
+                    estimatedTimeRemaining: calculateTimeRemaining(),
+                    onCancel: cancelToStart,
+                    // TODO(perf/rendering): source from FolderOrganizer as an
+                    // explicit isAIWaiting Bool (read-only hook). The organizer
+                    // is intentionally not edited here.
+                    isAIWaiting: false
+                )
             } else {
                 PreviewActionsView(
                     isApplying: isApplying,
@@ -282,7 +320,6 @@ struct PreviewView: View {
                     isRedoingWithModel: isRedoingWithModel,
                     shouldDisableButtons: shouldDisableButtons,
                     editsCapturedCount: previewStore.editsCapturedCount,
-                    editsCapturedPulse: previewStore.editCapturedPulse,
                     mode: mode,
                     onCancel: { recordCancelledOrganization(); cancelToStart() },
                     onReset: { HapticFeedbackManager.shared.tap(); editablePlan = plan; previewStore.updatePlan(plan); previewStore.resetEditsCaptured(); hasEdits = false },
@@ -450,7 +487,8 @@ struct PreviewView: View {
     private func calculateTimeRemaining() -> TimeInterval? {
         let remaining = editablePlan.totalFiles - Int(organizer.progress * Double(editablePlan.totalFiles))
         guard remaining > 0, organizer.progress > 0 else { return nil }
-        return Double(remaining) * 0.3
+        // Whole seconds: fractional churn would relabel the eta every tick.
+        return (Double(remaining) * 0.3).rounded()
     }
     
     private func recordCancelledOrganization() {

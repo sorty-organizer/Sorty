@@ -15,7 +15,6 @@ struct PreviewActionsView: View {
     let isRedoingWithModel: Bool
     let shouldDisableButtons: Bool
     let editsCapturedCount: Int
-    let editsCapturedPulse: Bool
     let mode: OrganizationMode
     
     let onCancel: () -> Void
@@ -27,6 +26,10 @@ struct PreviewActionsView: View {
     @State private var isHoveringCancel = false
     @State private var isHoveringEditsCaptured = false
     @State private var showEditsCapturedPopover = false
+    // Local pulse: driven by the count, not by a store-published Bool that
+    // would invalidate the whole preview tree on every edit.
+    @State private var editsPulse = false
+    @State private var editsPulseTask: Task<Void, Never>?
     
     var body: some View {
         HStack(spacing: 12) {
@@ -83,17 +86,26 @@ struct PreviewActionsView: View {
                             .stroke(Color.green.opacity(0.2), lineWidth: 1)
                     )
             )
-            .scaleEffect(editsCapturedPulse ? 1.08 : (isHoveringEditsCaptured ? 1.02 : 1.0))
-            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: editsCapturedPulse)
+            .scaleEffect(editsPulse ? 1.08 : (isHoveringEditsCaptured ? 1.02 : 1.0))
+            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: editsPulse)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHoveringEditsCaptured = hovering
             }
-            if hovering {
-                HapticFeedbackManager.shared.selection()
+        }
+        .onChange(of: editsCapturedCount) { _, _ in
+            editsPulseTask?.cancel()
+            editsPulse = true
+            editsPulseTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                guard !Task.isCancelled else { return }
+                editsPulse = false
             }
+        }
+        .onDisappear {
+            editsPulseTask?.cancel()
         }
         .popover(isPresented: $showEditsCapturedPopover, arrowEdge: .bottom) {
             EditsCapturedPopoverContent(editsCapturedCount: editsCapturedCount)
@@ -252,21 +264,49 @@ struct PreviewActionsView: View {
 
 // MARK: - Progress Actions View (shown during organization)
 
+/// Lightweight progress snapshot. The progress view observes only these
+/// quantized values, never the full organizer, so organizer publishes that
+/// don't move progress can't retrigger the progress layout.
+struct PreviewProgressState: Equatable {
+    /// Whole percent points (0...100).
+    var percentPoints: Int
+    var stage: String
+    var estimatedTimeText: String?
+    var isAIWaiting: Bool
+}
+
 struct PreviewProgressView: View {
     @SortyHotReload private var hotReload
     let progress: Double
     let stage: String
     let estimatedTimeRemaining: TimeInterval?
     let onCancel: () -> Void
-    
-    private var progressPercentText: String {
-        "\(Int(progress * 100))%"
+    /// Explicit AI-waiting flag.
+    /// TODO(perf/rendering): source from FolderOrganizer (read-only hook) and
+    /// drop the default. The organizer is intentionally not edited here.
+    var isAIWaiting: Bool = false
+
+    private var quantizedProgress: Double {
+        (min(max(progress, 0), 1) * 100).rounded() / 100
     }
-    
+
+    private var progressPercentText: String {
+        "\(Int((quantizedProgress * 100).rounded()))%"
+    }
+
+    var snapshot: PreviewProgressState {
+        PreviewProgressState(
+            percentPoints: Int((quantizedProgress * 100).rounded()),
+            stage: stage,
+            estimatedTimeText: estimatedTimeText,
+            isAIWaiting: isAIWaiting
+        )
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             PreviewProgressControls(
-                progress: progress,
+                progress: quantizedProgress,
                 progressPercentText: progressPercentText,
                 estimatedTimeText: estimatedTimeText,
                 onCancel: cancel
@@ -274,7 +314,7 @@ struct PreviewProgressView: View {
 
             PreviewProgressStatus(
                 stage: stage,
-                showsAILoadingIndicator: showsAILoadingIndicator
+                showsAILoadingIndicator: isAIWaiting
             )
         }
         .padding(.horizontal, 16)
@@ -290,14 +330,6 @@ struct PreviewProgressView: View {
         return formatTime(estimatedTimeRemaining)
     }
 
-    private var showsAILoadingIndicator: Bool {
-        let lowercased = stage.lowercased()
-        return lowercased.contains("ai") ||
-               lowercased.contains("receiving") ||
-               lowercased.contains("analyzing") ||
-               lowercased.contains("reasoning")
-    }
-    
     private func formatTime(_ interval: TimeInterval) -> String {
         if interval < 60 {
             return String(format: "%.0fs", interval)
@@ -326,14 +358,16 @@ private struct PreviewProgressControls: View {
             ApplyProgressBar(progress: progress, height: 12)
                 .frame(maxWidth: .infinity)
 
-            if let estimatedTimeText {
-                Text(estimatedTimeText)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .monospacedDigit()
-                    .numericTextTransition(animationValue: estimatedTimeText)
-                    .help("Estimated time remaining")
-            }
+            // Reserved eta slot: opacity instead of conditional layout, so the
+            // eta appearing or disappearing never shifts the percent and Stop.
+            Text(estimatedTimeText ?? "0s")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .monospacedDigit()
+                .numericTextTransition(animationValue: estimatedTimeText ?? "")
+                .help("Estimated time remaining")
+                .opacity(estimatedTimeText == nil ? 0 : 1)
+                .accessibilityHidden(estimatedTimeText == nil)
 
             Text(progressPercentText)
                 .font(.caption.weight(.medium))
@@ -405,7 +439,9 @@ private struct ApplyProgressBar: View {
     var height: CGFloat = 10
 
     private var clampedProgress: CGFloat {
-        CGFloat(min(max(progress, 0), 1))
+        // Quantized to 1% with no implicit animation: the parent drives
+        // progress in whole-percent steps, and each frame lands directly.
+        CGFloat((min(max(progress, 0), 1) * 100).rounded() / 100)
     }
 
     var body: some View {
@@ -424,7 +460,6 @@ private struct ApplyProgressBar: View {
             Capsule()
                 .fill(Color.secondary.opacity(0.1))
         )
-        .animation(.easeInOut(duration: 0.25), value: clampedProgress)
     }
 }
 
@@ -543,7 +578,6 @@ private struct EditsCapturedPopoverContent: View {
         isRedoingWithModel: false,
         shouldDisableButtons: false,
         editsCapturedCount: 0,
-        editsCapturedPulse: false,
         mode: .organize,
         onCancel: {},
         onReset: {},
@@ -562,7 +596,6 @@ private struct EditsCapturedPopoverContent: View {
         isRedoingWithModel: false,
         shouldDisableButtons: false,
         editsCapturedCount: 3,
-        editsCapturedPulse: false,
         mode: .organizeAndRename,
         onCancel: {},
         onReset: {},
@@ -581,7 +614,6 @@ private struct EditsCapturedPopoverContent: View {
         isRedoingWithModel: false,
         shouldDisableButtons: false,
         editsCapturedCount: 0,
-        editsCapturedPulse: false,
         mode: .renameOnly,
         onCancel: {},
         onReset: {},
@@ -600,7 +632,6 @@ private struct EditsCapturedPopoverContent: View {
         isRedoingWithModel: false,
         shouldDisableButtons: false,
         editsCapturedCount: 7,
-        editsCapturedPulse: true,
         mode: .organize,
         onCancel: {},
         onReset: {},
