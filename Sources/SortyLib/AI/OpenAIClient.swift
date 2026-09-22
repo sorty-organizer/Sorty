@@ -45,7 +45,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     private func applyOrganizeTimeout(to request: inout URLRequest) {
         // Respect the configured request timeout so large organize calls fail
         // fast instead of hanging on the URLRequest default.
-        request.timeoutInterval = max(30, min(config.requestTimeout, 300))
+        request.timeoutInterval = AIRequestSupport.organizeTimeout(for: config)
     }
     
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
@@ -84,13 +84,16 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         requestBody["max_tokens"] = resolvedMaxTokens()
         configureStructuredOrganizationOutput(in: &requestBody)
 
+        // Single size pass per request; stats paths reuse it (no per-batch reduce).
+        let totalFileSize = AIRequestSupport.totalFileSize(of: files)
         do {
             return try await performOrganizationRequest(
                 url: url,
                 requestBody: requestBody,
                 files: files,
                 promptTokens: estimatedPromptTokens,
-                isMultimodal: false
+                isMultimodal: false,
+                totalFileSize: totalFileSize
             )
         } catch {
             await notifyStreamingFailure(error)
@@ -152,13 +155,16 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         requestBody["max_tokens"] = resolvedMaxTokens()
         configureStructuredOrganizationOutput(in: &requestBody)
 
+        // Single size pass per request; stats paths reuse it (no per-batch reduce).
+        let totalFileSize = AIRequestSupport.totalFileSize(of: files)
         do {
             return try await performOrganizationRequest(
                 url: url,
                 requestBody: requestBody,
                 files: files,
                 promptTokens: estimatedPromptTokens,
-                isMultimodal: true
+                isMultimodal: true,
+                totalFileSize: totalFileSize
             )
         } catch where config.provider == .openRouter && Self.shouldRetryOpenRouterWithoutImages(error) {
             LogManager.shared.log(
@@ -347,7 +353,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         requestBody: [String: Any],
         files: [FileItem],
         promptTokens: Int?,
-        isMultimodal: Bool
+        isMultimodal: Bool,
+        totalFileSize: Int64
     ) async throws -> OrganizationPlan {
         do {
             if config.enableStreaming {
@@ -355,14 +362,16 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                     url: url,
                     requestBody: requestBody,
                     files: files,
-                    promptTokens: promptTokens
+                    promptTokens: promptTokens,
+                    totalFileSize: totalFileSize
                 )
             }
             return try await analyzeNonStreaming(
                 url: url,
                 requestBody: requestBody,
                 files: files,
-                promptTokens: promptTokens
+                promptTokens: promptTokens,
+                totalFileSize: totalFileSize
             )
         } catch {
             guard config.provider == .openRouter,
@@ -375,7 +384,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 url: url,
                 requestBody: requestBody,
                 files: files,
-                promptTokens: promptTokens
+                promptTokens: promptTokens,
+                totalFileSize: totalFileSize
             )
         }
     }
@@ -388,7 +398,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     
     // MARK: - Non-Streaming Implementation
     
-    private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem], promptTokens: Int?) async throws -> OrganizationPlan {
+    private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem], promptTokens: Int?, totalFileSize: Int64) async throws -> OrganizationPlan {
         let startTime = Date()
         let headers = authHeaders()
 
@@ -433,7 +443,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 totalTokens: estimatedTokens,
                 model: config.model,
                 filesScanned: files.count,
-                totalFileSize: files.reduce(0) { $0 + $1.size },
+                totalFileSize: totalFileSize,
                 promptTokens: promptTokens
             )
             
@@ -461,7 +471,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     
     // MARK: - Streaming Implementation
     
-    private func analyzeWithStreaming(url: URL, requestBody: [String: Any], files: [FileItem], promptTokens: Int?) async throws -> OrganizationPlan {
+    private func analyzeWithStreaming(url: URL, requestBody: [String: Any], files: [FileItem], promptTokens: Int?, totalFileSize: Int64) async throws -> OrganizationPlan {
         var streamingRequestBody = requestBody
         streamingRequestBody["stream"] = true
         
@@ -473,6 +483,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         let startTime = Date()
         var firstTokenTime: Date?
         var accumulatedContent = ""
+        // Coalesced delivery: buffer off-actor, hop to MainActor per flush.
+        var coalescer = StreamingChunkCoalescer()
         
         let session = await AIRequestSupport.session(for: config)
         do {
@@ -515,7 +527,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                             url: url,
                             requestBody: requestBody,
                             files: files,
-                            promptTokens: promptTokens
+                            promptTokens: promptTokens,
+                            totalFileSize: totalFileSize
                         )
                     }
                     throw AIClientError.apiError(
@@ -540,8 +553,17 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
                 accumulatedContent += completionChunk
 
+                // Coalesce off-actor: one MainActor hop per 100ms/4KB, not per token.
+                if let payload = coalescer.append(completionChunk) {
+                    await MainActor.run {
+                        streamingDelegate?.didReceiveChunk(payload)
+                    }
+                }
+            }
+
+            if let tail = coalescer.flush() {
                 await MainActor.run {
-                    streamingDelegate?.didReceiveChunk(completionChunk)
+                    streamingDelegate?.didReceiveChunk(tail)
                 }
             }
             
@@ -560,7 +582,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 totalTokens: estimatedTokens,
                 model: config.model,
                 filesScanned: files.count,
-                totalFileSize: files.reduce(0) { $0 + $1.size },
+                totalFileSize: totalFileSize,
                 promptTokens: promptTokens
             )
             
@@ -576,7 +598,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                         url: url,
                         requestBody: requestBody,
                         files: files,
-                        promptTokens: promptTokens
+                        promptTokens: promptTokens,
+                        totalFileSize: totalFileSize
                     )
                 } else {
                     let clientError = AIClientError.jsonDecodingError(context: error.localizedDescription)
@@ -609,7 +632,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         url: URL,
         requestBody: [String: Any],
         files: [FileItem],
-        promptTokens: Int?
+        promptTokens: Int?,
+        totalFileSize: Int64
     ) async throws -> OrganizationPlan {
         var fallbackBody = requestBody
         fallbackBody["plugins"] = [["id": "response-healing"]]
@@ -617,7 +641,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             url: url,
             requestBody: fallbackBody,
             files: files,
-            promptTokens: promptTokens
+            promptTokens: promptTokens,
+            totalFileSize: totalFileSize
         )
     }
 
@@ -625,7 +650,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         url: URL,
         requestBody: [String: Any],
         files: [FileItem],
-        promptTokens: Int?
+        promptTokens: Int?,
+        totalFileSize: Int64
     ) async throws -> OrganizationPlan {
         var fallbackBody = requestBody
         fallbackBody.removeValue(forKey: "provider")
@@ -646,7 +672,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             url: url,
             requestBody: fallbackBody,
             files: files,
-            promptTokens: promptTokens
+            promptTokens: promptTokens,
+            totalFileSize: totalFileSize
         )
     }
 

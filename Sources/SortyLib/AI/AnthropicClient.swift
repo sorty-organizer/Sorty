@@ -62,9 +62,9 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         ]
 
         if config.enableStreaming {
-            return try await analyzeWithStreaming(url: url, requestBody: requestBody, headers: headers, files: files)
+            return try await analyzeWithStreaming(url: url, requestBody: requestBody, headers: headers, files: files, totalFileSize: AIRequestSupport.totalFileSize(of: files))
         } else {
-            return try await analyzeStandard(url: url, requestBody: requestBody, headers: headers, files: files)
+            return try await analyzeStandard(url: url, requestBody: requestBody, headers: headers, files: files, totalFileSize: AIRequestSupport.totalFileSize(of: files))
         }
     }
 
@@ -122,9 +122,9 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         ]
         
         if config.enableStreaming {
-            return try await analyzeWithStreaming(url: url, requestBody: requestBody, headers: headers, files: files)
+            return try await analyzeWithStreaming(url: url, requestBody: requestBody, headers: headers, files: files, totalFileSize: AIRequestSupport.totalFileSize(of: files))
         } else {
-            return try await analyzeStandard(url: url, requestBody: requestBody, headers: headers, files: files)
+            return try await analyzeStandard(url: url, requestBody: requestBody, headers: headers, files: files, totalFileSize: AIRequestSupport.totalFileSize(of: files))
         }
     }
 
@@ -132,12 +132,14 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         imageData.keys.sorted()
     }
     
-    private func analyzeStandard(url: URL, requestBody: [String: Any], headers: [String: String], files: [FileItem]) async throws -> OrganizationPlan {
-        let request = try AIRequestSupport.makeJSONRequest(
+    private func analyzeStandard(url: URL, requestBody: [String: Any], headers: [String: String], files: [FileItem], totalFileSize: Int64) async throws -> OrganizationPlan {
+        var request = try AIRequestSupport.makeJSONRequest(
             url: url,
             headers: headers,
             body: requestBody
         )
+        // Explicit organize timeout: never inherit the 600s resource default.
+        request.timeoutInterval = AIRequestSupport.organizeTimeout(for: config)
 
         let session = await AIRequestSupport.session(for: config)
         do {
@@ -163,15 +165,17 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         }
     }
     
-    private func analyzeWithStreaming(url: URL, requestBody: [String: Any], headers: [String: String], files: [FileItem]) async throws -> OrganizationPlan {
+    private func analyzeWithStreaming(url: URL, requestBody: [String: Any], headers: [String: String], files: [FileItem], totalFileSize: Int64) async throws -> OrganizationPlan {
         var streamingRequestBody = requestBody
         streamingRequestBody["stream"] = true
 
-        let request = try AIRequestSupport.makeJSONRequest(
+        var request = try AIRequestSupport.makeJSONRequest(
             url: url,
             headers: headers,
             body: streamingRequestBody
         )
+        // Explicit organize timeout: never inherit the 600s resource default.
+        request.timeoutInterval = AIRequestSupport.organizeTimeout(for: config)
 
         let session = await AIRequestSupport.session(for: config)
         do {
@@ -193,6 +197,8 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             }
             
             var accumulatedContent = ""
+            // Coalesce off-actor: one MainActor hop per 100ms/4KB, not per delta.
+            var coalescer = StreamingChunkCoalescer()
             
             for try await line in bytes.lines {
                 guard line.hasPrefix("data:") else { continue }
@@ -224,10 +230,18 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
 
                     if let chunk = chunkText, !chunk.isEmpty {
                         accumulatedContent += chunk
-                        await MainActor.run { [weak self] in
-                            self?.streamingDelegate?.didReceiveChunk(chunk)
+                        if let payload = coalescer.append(chunk) {
+                            await MainActor.run { [weak self] in
+                                self?.streamingDelegate?.didReceiveChunk(payload)
+                            }
                         }
                     }
+                }
+            }
+
+            if let tail = coalescer.flush() {
+                await MainActor.run { [weak self] in
+                    self?.streamingDelegate?.didReceiveChunk(tail)
                 }
             }
             
@@ -295,11 +309,13 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             "temperature": AIConfig.organizationTemperature
         ]
         
-        let request = try AIRequestSupport.makeJSONRequest(
+        var request = try AIRequestSupport.makeJSONRequest(
             url: url,
             headers: headers,
             body: requestBody
         )
+        // Explicit timeout: never inherit the 600s resource default.
+        request.timeoutInterval = AIRequestSupport.interactiveTimeout(for: config)
 
         let session = await AIRequestSupport.session(for: config)
         let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
