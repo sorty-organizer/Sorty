@@ -83,6 +83,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         let duration = Date().timeIntervalSince(start)
 
         var plan = try parseOrganizationResponse(response, files: files)
+        let totalFileSize = AIRequestSupport.totalFileSize(of: files)
         plan.generationStats = GenerationStats(
             duration: duration,
             tps: duration > 0 ? Double(response.count / 4) / duration : 0,
@@ -90,7 +91,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             totalTokens: response.count / 4,
             model: config.model,
             filesScanned: files.count,
-            totalFileSize: files.reduce(0) { $0 + $1.size },
+            totalFileSize: totalFileSize,
             promptTokens: estimatedPromptTokens,
             provider: AIProvider.openAI.displayName
         )
@@ -141,6 +142,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         let duration = Date().timeIntervalSince(start)
 
         var plan = try parseOrganizationResponse(response, files: files)
+        let totalFileSize = AIRequestSupport.totalFileSize(of: files)
         plan.generationStats = GenerationStats(
             duration: duration,
             tps: duration > 0 ? Double(response.count / 4) / duration : 0,
@@ -148,7 +150,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             totalTokens: response.count / 4,
             model: config.model,
             filesScanned: files.count,
-            totalFileSize: files.reduce(0) { $0 + $1.size },
+            totalFileSize: totalFileSize,
             promptTokens: estimatedPromptTokens,
             provider: AIProvider.openAI.displayName
         )
@@ -172,37 +174,56 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     }
 
     public func checkHealth() async throws {
-        guard let serviceURL = URL(string: "https://api.openai.com") else {
-            throw AIClientError.invalidURL
-        }
-        try AIRequestSupport.ensureNetworkAllowed(url: serviceURL)
+        // Blocking `which`/`codex login status` probes must never run on the
+        // caller's executor (often MainActor). Offload and cache the success
+        // verdict briefly so clustered prewarm/setup checks share one probe.
+        try await Self.checkHealthDetached()
+    }
 
-        guard Self.resolveCodexExecutablePath() != nil else {
-            throw AIClientError.apiError(
-                statusCode: 501,
-                message: "Codex CLI is required. Install with: npm i -g @openai/codex"
-            )
-        }
-
-        switch CodexCLIAuthManager.readLoginStatus() {
-        case .chatGPT, .accessToken:
+    private static func checkHealthDetached() async throws {
+        healthVerdictLock.lock()
+        let cachedAt = healthVerdictAt
+        healthVerdictLock.unlock()
+        if let cachedAt,
+           Date().timeIntervalSince(cachedAt) < healthVerdictLifetime {
             return
-        case .apiKey:
-            throw AIClientError.apiError(
-                statusCode: 401,
-                message: "Codex CLI is signed in with an API key. Use ChatGPT sign-in or a Codex access token for subscription-backed inference."
-            )
-        case .notLoggedIn:
-            throw AIClientError.apiError(
-                statusCode: 401,
-                message: "Codex CLI sign-in is required. Reauthenticate your ChatGPT subscription in Sorty settings."
-            )
-        case .unavailable(let message):
-            throw AIClientError.apiError(
-                statusCode: 401,
-                message: message ?? "Codex CLI sign-in could not be verified. Run `codex login status` in Terminal."
-            )
         }
+        try await Task.detached(priority: .userInitiated) {
+            guard let serviceURL = URL(string: "https://api.openai.com") else {
+                throw AIClientError.invalidURL
+            }
+            try AIRequestSupport.ensureNetworkAllowed(url: serviceURL)
+
+            guard resolveCodexExecutablePath() != nil else {
+                throw AIClientError.apiError(
+                    statusCode: 501,
+                    message: "Codex CLI is required. Install with: npm i -g @openai/codex"
+                )
+            }
+
+            switch CodexCLIAuthManager.readLoginStatus() {
+            case .chatGPT, .accessToken:
+                return
+            case .apiKey:
+                throw AIClientError.apiError(
+                    statusCode: 401,
+                    message: "Codex CLI is signed in with an API key. Use ChatGPT sign-in or a Codex access token for subscription-backed inference."
+                )
+            case .notLoggedIn:
+                throw AIClientError.apiError(
+                    statusCode: 401,
+                    message: "Codex CLI sign-in is required. Reauthenticate your ChatGPT subscription in Sorty settings."
+                )
+            case .unavailable(let message):
+                throw AIClientError.apiError(
+                    statusCode: 401,
+                    message: message ?? "Codex CLI sign-in could not be verified. Run `codex login status` in Terminal."
+                )
+            }
+        }.value
+        healthVerdictLock.lock()
+        healthVerdictAt = Date()
+        healthVerdictLock.unlock()
     }
 
     public nonisolated static func availableModels() async throws -> [CodexAvailableModel] {
@@ -686,6 +707,12 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     /// Bounds how often a missing install re-runs the `which` subprocess.
     private static let executablePathCacheLifetime: TimeInterval = 10
 
+    private static let healthVerdictLock = NSLock()
+    nonisolated(unsafe) private static var healthVerdictAt: Date?
+    /// Success verdicts are shared briefly so prewarm + organize back-to-back
+    /// share one `codex login status` probe instead of spawning two.
+    private static let healthVerdictLifetime: TimeInterval = 30
+
     /// Locates the Codex CLI, caching the outcome briefly so the status probes
     /// clustered around launch and setup reconciliation do not each spawn
     /// `which`. A cached hit is re-validated against the file system.
@@ -748,9 +775,20 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
 }
 
 private final class CodexOutputStreamer: @unchecked Sendable {
+    // NSLock stays: readabilityHandler fires on arbitrary background threads
+    // and mutates line/pending buffers synchronously; a lock is the smallest
+    // correct primitive (no actor hop on this hot path).
     private let lock = NSLock()
     private var lineBuffer = ""
+    private var pendingChunk = ""
+    private var pendingBytes = 0
+    private var lastEmit = Date()
     private let onChunk: @Sendable (String) -> Void
+
+    /// Coalesces visible chunks off-actor: at most one MainActor hop per
+    /// 100ms or 4KB. The caller's Task{@MainActor} hop stays, just batched.
+    private static let emitInterval: TimeInterval = 0.1
+    private static let maxPendingBytes = 4 * 1024
 
     init(onChunk: @escaping @Sendable (String) -> Void) {
         self.onChunk = onChunk
@@ -780,6 +818,21 @@ private final class CodexOutputStreamer: @unchecked Sendable {
         if !pending.isEmpty {
             processLine(pending)
         }
+        flushPending()
+    }
+
+    private func flushPending() {
+        lock.lock()
+        guard !pendingChunk.isEmpty else {
+            lock.unlock()
+            return
+        }
+        let payload = pendingChunk
+        pendingChunk = ""
+        pendingBytes = 0
+        lastEmit = Date()
+        lock.unlock()
+        onChunk(payload)
     }
 
     private func processLine(_ line: String) {
@@ -788,8 +841,24 @@ private final class CodexOutputStreamer: @unchecked Sendable {
 
         if let data = trimmed.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let chunk = Self.extractVisibleChunk(from: json) {
-            onChunk(chunk)
+           let chunk = Self.extractVisibleChunk(from: json),
+           !chunk.isEmpty {
+            lock.lock()
+            pendingChunk += chunk
+            pendingBytes += chunk.utf8.count
+            let shouldEmit = pendingBytes >= Self.maxPendingBytes
+                || Date().timeIntervalSince(lastEmit) >= Self.emitInterval
+            var payload: String?
+            if shouldEmit {
+                payload = pendingChunk
+                pendingChunk = ""
+                pendingBytes = 0
+                lastEmit = Date()
+            }
+            lock.unlock()
+            if let payload {
+                onChunk(payload)
+            }
         }
     }
 
