@@ -1453,11 +1453,11 @@ public class ExclusionRulesManager: ObservableObject {
     }
 
     private func saveRules() {
+        rebuildMatcher()
         guard hasLoadedPersistedState else {
             hasPendingChanges = true
             return
         }
-        rebuildMatcher()
         if let encoded = try? JSONEncoder().encode(rules) {
             userDefaults.set(encoded, forKey: rulesKey)
         }

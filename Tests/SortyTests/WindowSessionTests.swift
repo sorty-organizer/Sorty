@@ -150,14 +150,14 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(capture.value, targetSessionID.uuidString)
     }
 
-    func testWatchedAddDeeplinkAddsMissingFolder() {
+    func testWatchedAddDeeplinkRejectsMissingFolder() {
         let missingPath = "/tmp/sorty-missing-\(UUID().uuidString)"
 
         handle(.watched(action: "add", path: missingPath))
 
         XCTAssertEqual(session.appState.currentView, .watchedFolders)
-        XCTAssertEqual(watchedFoldersManager.folders.map(\.path), [missingPath])
-        XCTAssertEqual(session.appState.highlightedWatchedFolderID, watchedFoldersManager.folders.first?.id)
+        XCTAssertTrue(watchedFoldersManager.folders.isEmpty)
+        XCTAssertNil(session.appState.highlightedWatchedFolderID)
     }
 
     func testWatchedAddDeeplinkAddsNewFolder() throws {

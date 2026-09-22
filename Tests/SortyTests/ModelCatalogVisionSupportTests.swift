@@ -4,10 +4,10 @@ import XCTest
 @MainActor
 final class ModelCatalogVisionSupportTests: XCTestCase {
     func testCodexRefreshClearsErrorsAndFallbackAfterRecovery() async {
-        var shouldFail = true
+        let loaderState = CodexModelLoaderFailureState()
         let models = [ModelInfo(id: "subscription-model", displayName: "Subscription model", provider: .openAI)]
         let catalog = ModelCatalog(codexModelLoader: {
-            if shouldFail { throw URLError(.notConnectedToInternet) }
+            if await loaderState.shouldFail { throw URLError(.notConnectedToInternet) }
             return models
         })
 
@@ -15,18 +15,18 @@ final class ModelCatalogVisionSupportTests: XCTestCase {
         XCTAssertNotNil(catalog.lastCodexError)
         XCTAssertEqual(catalog.isFetching[.openAI], false)
 
-        shouldFail = false
+        await loaderState.setShouldFail(false)
         await catalog.refreshCodexSubscriptionModels(force: true)
         XCTAssertNil(catalog.lastCodexError)
         XCTAssertEqual(catalog.codexSubscriptionModels, models)
         XCTAssertEqual(catalog.usingFallback[.openAI], false)
 
-        shouldFail = true
+        await loaderState.setShouldFail(true)
         await catalog.refreshCodexSubscriptionModels(force: true)
         XCTAssertEqual(catalog.codexSubscriptionModels, models)
         XCTAssertEqual(catalog.usingFallback[.openAI], true)
 
-        shouldFail = false
+        await loaderState.setShouldFail(false)
         await catalog.refreshCodexSubscriptionModels(force: true)
         XCTAssertNil(catalog.lastCodexError)
         XCTAssertEqual(catalog.usingFallback[.openAI], false)
@@ -197,5 +197,13 @@ final class ModelCatalogVisionSupportTests: XCTestCase {
         XCTAssertEqual(configuration?.efforts, [.low, .xhigh, providerLevel])
         XCTAssertEqual(configuration?.defaultEffort, .xhigh)
         XCTAssertNil(catalog.reasoningConfiguration(for: "unknown", provider: .openRouter))
+    }
+}
+
+private actor CodexModelLoaderFailureState {
+    var shouldFail = true
+
+    func setShouldFail(_ shouldFail: Bool) {
+        self.shouldFail = shouldFail
     }
 }
