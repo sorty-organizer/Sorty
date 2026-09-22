@@ -120,6 +120,7 @@ struct SortyGradientProgressBar: View {
 struct SortyGradientLoadingBar: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
 
     var accent: Color = SortyDesignSystem.Colors.resolvedAccent
     var width: CGFloat = 150
@@ -127,9 +128,17 @@ struct SortyGradientLoadingBar: View {
     var segmentWidthRatio: CGFloat = 0.34
 
     @State private var travelPhase: CGFloat = 0
+    @State private var isWindowVisible = true
 
     private var clampedSegmentRatio: CGFloat {
         min(max(segmentWidthRatio, 0.15), 0.75)
+    }
+
+    // How the sweep pauses: the repeatForever transaction only runs while the
+    // window is visible and active. Occlusion freezes the segment mid-track
+    // instead of burning frames behind other windows.
+    private var sweepPaused: Bool {
+        reduceMotion || !isWindowVisible || controlActiveState == .inactive
     }
 
     var body: some View {
@@ -158,22 +167,37 @@ struct SortyGradientLoadingBar: View {
             .clipShape(Capsule(style: .continuous))
         }
         .frame(width: width, height: height)
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .onAppear {
-            travelPhase = reduceMotion ? 0.5 : 0
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
-                travelPhase = 1
+            startSweepIfNeeded()
+        }
+        .onDisappear {
+            travelPhase = 0
+        }
+        .onChange(of: sweepPaused) { _, paused in
+            if paused {
+                // Freeze in place; the next resume restarts the sweep.
+                travelPhase = 0
+            } else {
+                startSweepIfNeeded()
             }
         }
         .onChange(of: reduceMotion) { _, shouldReduceMotion in
-            if shouldReduceMotion {
+            travelPhase = shouldReduceMotion ? 0.5 : 0
+            startSweepIfNeeded()
+        }
+    }
+
+    private func startSweepIfNeeded() {
+        guard !sweepPaused else {
+            if reduceMotion {
                 travelPhase = 0.5
-            } else {
-                travelPhase = 0
-                withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
-                    travelPhase = 1
-                }
             }
+            return
+        }
+        travelPhase = 0
+        withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
+            travelPhase = 1
         }
     }
 }
@@ -196,7 +220,8 @@ struct SortyGradientCircularProgress: View {
     @State private var isWindowVisible = true
 
     private var clampedProgress: Double {
-        min(max(progress, 0), 1)
+        // Quantized to 1%: sub-percent updates only repaint without moving pixels.
+        (min(max(progress, 0), 1) * 100).rounded() / 100
     }
 
     private var shimmerPaused: Bool {
@@ -272,13 +297,14 @@ struct SortyGradientCircularLoader: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
     @Environment(\.scenePhase) private var scenePhase
+    @State private var isWindowVisible = true
 
     var body: some View {
         SwiftUI.TimelineView(
             .animation(
                 minimumInterval: 1.0 / 30.0,
-                paused: reduceMotion || reduceTransparency || controlActiveState == .inactive
-                    || scenePhase != .active
+                paused: reduceMotion || reduceTransparency || !isWindowVisible
+                    || controlActiveState == .inactive || scenePhase != .active
             )
         ) { context in
             let time = context.date.timeIntervalSinceReferenceDate
@@ -313,5 +339,6 @@ struct SortyGradientCircularLoader: View {
             }
         }
         .frame(width: size, height: size)
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
     }
 }
