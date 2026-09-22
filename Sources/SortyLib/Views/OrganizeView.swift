@@ -876,7 +876,8 @@ struct DirectoryHeader: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(.bar)
+        .overlay(Divider(), alignment: .bottom)
     }
 
     private func revealSelectedDirectory() {
