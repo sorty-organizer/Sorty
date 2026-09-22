@@ -30,15 +30,18 @@ public struct LearningsFileManager {
     
     // MARK: - Public API
     
-    /// Save profile to encrypted .learning file
+    /// Save profile to encrypted .learning file.
+    /// Call from a worker (Task.detached/serial queue), never the main actor:
+    /// encoding, Keychain access, AES, and the file write all block.
     public static func save(profile: LearningsProfile) throws {
         // Ensure directory exists
         try ensureDirectoryExists()
         
-        // Encode profile to JSON
+        // Encode profile to JSON. Compact at rest (.sortedKeys only):
+        // .prettyPrinted bloats every save with whitespace; exports keep it.
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.outputFormatting = [.sortedKeys]
         let jsonData = try encoder.encode(profile)
         
         // Get or create encryption key
@@ -102,8 +105,9 @@ public struct LearningsFileManager {
     ) throws {
         let targetDirectory = directory ?? learningsDirectory
         try deleteStoredFiles(fileManager: fileManager, directory: targetDirectory)
+        invalidateCachedKey()
 
-        guard KeychainManager.delete(key: "learnings_encryption_key") else {
+        guard KeychainManager.delete(key: encryptionKeychainKey) else {
             throw LearningsFileError.keychainDeleteFailed
         }
 
@@ -131,9 +135,36 @@ public struct LearningsFileManager {
     }
     
     // MARK: - Encryption
+
+    private static let encryptionKeychainKey = "learnings_encryption_key"
+
+    /// In-memory SymmetricKey bytes so saves do not hit the Keychain on
+    /// every write. Guarded by a lock; cleared on deleteAllData.
+    private static let keyCacheLock = NSLock()
+    nonisolated(unsafe) private static var cachedKeyData: Data?
+
+    private static func cachedKey() -> SymmetricKey? {
+        keyCacheLock.lock()
+        defer { keyCacheLock.unlock() }
+        guard let cachedKeyData else { return nil }
+        return SymmetricKey(data: cachedKeyData)
+    }
+
+    private static func cacheKey(_ key: SymmetricKey) {
+        let keyData = key.withUnsafeBytes { Data($0) }
+        keyCacheLock.lock()
+        cachedKeyData = keyData
+        keyCacheLock.unlock()
+    }
+
+    private static func invalidateCachedKey() {
+        keyCacheLock.lock()
+        cachedKeyData = nil
+        keyCacheLock.unlock()
+    }
     
     private static func getOrCreateEncryptionKey() throws -> SymmetricKey {
-        if let existing = getEncryptionKey() {
+        if let existing = cachedKey() ?? getEncryptionKey() {
             return existing
         }
 
@@ -149,18 +180,25 @@ public struct LearningsFileManager {
         let keyData = key.withUnsafeBytes { Data($0) }
         
         // Store in Keychain
-        guard KeychainManager.save(key: "learnings_encryption_key", value: keyData.base64EncodedString()) else {
+        guard KeychainManager.save(key: encryptionKeychainKey, value: keyData.base64EncodedString()) else {
             throw LearningsFileError.keychainSaveFailed
         }
-        
+
+        cacheKey(key)
         return key
     }
     
     private static func getEncryptionKey() -> SymmetricKey? {
-        guard let base64Key = KeychainManager.get(key: "learnings_encryption_key"),
+        if let cached = cachedKey() {
+            return cached
+        }
+        guard let base64Key = KeychainManager.get(key: encryptionKeychainKey),
               let keyData = Data(base64Encoded: base64Key) else {
             return nil
         }
+        keyCacheLock.lock()
+        cachedKeyData = keyData
+        keyCacheLock.unlock()
         return SymmetricKey(data: keyData)
     }
     
