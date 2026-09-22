@@ -8,6 +8,14 @@
 import Foundation
 
 public struct AIClientFactory {
+    /// Detached creation helper so pipeline setup never blocks the MainActor
+    /// on provider resolution (auth-method lookup, availability probes).
+    public static func createClientDetached(config: AIConfig) async throws -> AIClientProtocol {
+        try await Task.detached(priority: .userInitiated) {
+            try createClient(config: config)
+        }.value
+    }
+
     public static func createClient(config: AIConfig) throws -> AIClientProtocol {
         switch config.provider {
         case .openAI:

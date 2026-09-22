@@ -7,9 +7,11 @@
 
 import Foundation
 
-public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
+public final class GitHubCopilotClient: AIClientProtocol, Sendable {
     public let config: AIConfig
     @MainActor public weak var streamingDelegate: StreamingDelegate?
+    // @Sendable closure is itself Sendable, so checked Sendable holds
+    // (same shape as OpenAIClient/AnthropicClient; no @unchecked needed).
     private let testHeadersProvider: (@Sendable () async throws -> [String: String])?
     
     public init(
@@ -85,11 +87,13 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         Self.configureReasoningEffort(in: &requestBody, effort: config.reasoningEffort)
         
         let finalRequestBody = requestBody // Fix mutating warning by assigning to let
+        // Single size pass per request; stats paths reuse it (no per-batch reduce).
+        let totalFileSize = AIRequestSupport.totalFileSize(of: files)
         
         if config.enableStreaming {
-            return try await analyzeWithStreaming(url: url, requestBody: finalRequestBody, files: files)
+            return try await analyzeWithStreaming(url: url, requestBody: finalRequestBody, files: files, totalFileSize: totalFileSize)
         } else {
-            return try await analyzeNonStreaming(url: url, requestBody: finalRequestBody, files: files)
+            return try await analyzeNonStreaming(url: url, requestBody: finalRequestBody, files: files, totalFileSize: totalFileSize)
         }
     }
     
@@ -154,10 +158,12 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         }
         Self.configureReasoningEffort(in: &requestBody, effort: config.reasoningEffort)
         
+        // Single size pass per request; stats paths reuse it (no per-batch reduce).
+        let totalFileSize = AIRequestSupport.totalFileSize(of: files)
         if config.enableStreaming {
-            return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files)
+            return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files, totalFileSize: totalFileSize)
         } else {
-            return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files)
+            return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files, totalFileSize: totalFileSize)
         }
     }
 
@@ -182,11 +188,12 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             "gemini-3.1-pro",
             "gemini-3-flash"
         ]
-        var didRetryAfterAuthFailure = false
-
-        while true {
+        // Bounded auth-retry loop (max 2 attempts): 401/403 refreshes once,
+        // 429/5xx delegate to withTransientHTTPRetry with backoff.
+        for authAttempt in 0..<2 {
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
+            request.timeoutInterval = AIRequestSupport.interactiveTimeout(for: config)
 
             let headers = try await getHeaders()
             for (key, value) in headers {
@@ -194,7 +201,9 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             }
 
             do {
-                let (data, response) = try await session.data(for: request)
+                let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
+                    try await session.data(for: request)
+                }
 
                 guard let httpResponse = response as? HTTPURLResponse else {
                     return fallbackModels
@@ -202,8 +211,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
 
                 if !(200...299).contains(httpResponse.statusCode) {
                     if shouldRetryAfterAuthFailure(statusCode: httpResponse.statusCode),
-                       !didRetryAfterAuthFailure {
-                        didRetryAfterAuthFailure = true
+                       authAttempt == 0 {
                         try await refreshAuthForRetry()
                         continue
                     }
@@ -228,18 +236,20 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 return fallbackModels
             }
         }
+        return fallbackModels
     }
     
     public func checkHealth() async throws {
         let url = URL(string: "https://api.githubcopilot.com/models")!
         try ensureNetworkAllowed(url)
         let session = await getSession()
-        var didRetryAfterAuthFailure = false
 
-        while true {
+        // Bounded auth-retry loop (max 2 attempts); 429/5xx back off inside
+        // withTransientHTTPRetry.
+        for authAttempt in 0..<2 {
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
-            request.timeoutInterval = min(config.requestTimeout, 60)
+            request.timeoutInterval = AIRequestSupport.interactiveTimeout(for: config)
 
             let headers = try await getHeaders()
             for (key, value) in headers {
@@ -259,8 +269,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             }
 
             if shouldRetryAfterAuthFailure(statusCode: httpResponse.statusCode),
-               !didRetryAfterAuthFailure {
-                didRetryAfterAuthFailure = true
+               authAttempt == 0 {
                 try await refreshAuthForRetry()
                 continue
             }
@@ -284,11 +293,13 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         Self.configureReasoningEffort(in: &requestBody, effort: config.reasoningEffort)
         
         let session = await getSession()
-        var didRetryAfterAuthFailure = false
 
-        while true {
+        // Bounded auth-retry loop (max 2 attempts); 429/5xx back off inside
+        // withTransientHTTPRetry.
+        for authAttempt in 0..<2 {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
+            request.timeoutInterval = AIRequestSupport.interactiveTimeout(for: config)
 
             let headers = try await getHeaders()
             for (key, value) in headers {
@@ -307,8 +318,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
 
             if !(200...299).contains(httpResponse.statusCode) {
                 if shouldRetryAfterAuthFailure(statusCode: httpResponse.statusCode),
-                   !didRetryAfterAuthFailure {
-                    didRetryAfterAuthFailure = true
+                   authAttempt == 0 {
                     try await refreshAuthForRetry()
                     continue
                 }
@@ -328,6 +338,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
 
             return content
         }
+        throw AIClientError.invalidResponse
     }
 
     static func configureReasoningEffort(
@@ -341,15 +352,17 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     
     // MARK: - Non-Streaming Implementation
     
-    private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem]) async throws -> OrganizationPlan {
+    private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem], totalFileSize: Int64) async throws -> OrganizationPlan {
         try ensureNetworkAllowed(url)
         let startTime = Date()
         let session = await getSession()
-        var didRetryAfterAuthFailure = false
 
-        while true {
+        // Bounded auth-retry loop (max 2 attempts); 429/5xx back off inside
+        // withTransientHTTPRetry.
+        for authAttempt in 0..<2 {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
+            request.timeoutInterval = AIRequestSupport.organizeTimeout(for: config)
 
             let headers = try await getHeaders()
             for (key, value) in headers {
@@ -371,8 +384,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
 
                 if !(200...299).contains(httpResponse.statusCode) {
                     if shouldRetryAfterAuthFailure(statusCode: httpResponse.statusCode),
-                       !didRetryAfterAuthFailure {
-                        didRetryAfterAuthFailure = true
+                       authAttempt == 0 {
                         try await refreshAuthForRetry()
                         continue
                     }
@@ -400,7 +412,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                     totalTokens: estimatedTokens,
                     model: config.model,
                     filesScanned: files.count,
-                    totalFileSize: files.reduce(0) { $0 + $1.size }
+                    totalFileSize: totalFileSize
                 )
 
                 var plan = try ResponseParser.parseResponse(content, originalFiles: files, mode: config.mode)
@@ -414,22 +426,25 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 throw AIClientError.networkError(error)
             }
         }
+        throw AIClientError.invalidResponse
     }
     
     // MARK: - Streaming Implementation
     
-    private func analyzeWithStreaming(url: URL, requestBody: [String: Any], files: [FileItem]) async throws -> OrganizationPlan {
+    private func analyzeWithStreaming(url: URL, requestBody: [String: Any], files: [FileItem], totalFileSize: Int64) async throws -> OrganizationPlan {
         try ensureNetworkAllowed(url)
         var streamingRequestBody = requestBody
         streamingRequestBody["stream"] = true
 
         let startTime = Date()
         let session = await getSession()
-        var didRetryAfterAuthFailure = false
 
-        while true {
+        // Bounded auth-retry loop (max 2 attempts); 429/5xx back off inside
+        // withTransientHTTPRetry.
+        for authAttempt in 0..<2 {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
+            request.timeoutInterval = AIRequestSupport.organizeTimeout(for: config)
 
             let headers = try await getHeaders()
             for (key, value) in headers {
@@ -439,6 +454,8 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
 
             var firstTokenTime: Date?
             var accumulatedContentBuffer = ""
+            // Coalesce off-actor: one MainActor hop per 100ms/4KB, not per token.
+            var coalescer = StreamingChunkCoalescer()
 
             do {
                 let (bytes, response) = try await AIRequestSupport.withTransientHTTPRetry {
@@ -455,8 +472,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                         errorData.append(byte)
                     }
                     if shouldRetryAfterAuthFailure(statusCode: httpResponse.statusCode),
-                       !didRetryAfterAuthFailure {
-                        didRetryAfterAuthFailure = true
+                       authAttempt == 0 {
                         try await refreshAuthForRetry()
                         continue
                     }
@@ -488,9 +504,17 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                     }
 
                     if let visibleChunk = parsedChunk.visibleChunk, !visibleChunk.isEmpty {
-                        await MainActor.run {
-                            streamingDelegate?.didReceiveChunk(visibleChunk)
+                        if let payload = coalescer.append(visibleChunk) {
+                            await MainActor.run {
+                                streamingDelegate?.didReceiveChunk(payload)
+                            }
                         }
+                    }
+                }
+
+                if let tail = coalescer.flush() {
+                    await MainActor.run {
+                        streamingDelegate?.didReceiveChunk(tail)
                     }
                 }
 
@@ -507,7 +531,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                     totalTokens: estimatedTokens,
                     model: config.model,
                     filesScanned: files.count,
-                    totalFileSize: files.reduce(0) { $0 + $1.size }
+                    totalFileSize: totalFileSize
                 )
 
                 let finalContent = accumulatedContentBuffer
@@ -550,6 +574,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 throw clientError
             }
         }
+        throw AIClientError.invalidResponse
     }
 
     private struct StreamChunk {
