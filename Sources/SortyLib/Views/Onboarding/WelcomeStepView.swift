@@ -18,7 +18,6 @@ struct AnimatedGradientBackground: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
     @Environment(\.scenePhase) private var scenePhase
-    @State private var animate = false
     @State private var isWindowVisible = true
     var revealed: Bool = true
     var color1: Color = .purple
@@ -30,50 +29,70 @@ struct AnimatedGradientBackground: View {
             || controlActiveState == .inactive || scenePhase != .active
     }
 
+    // How ambient blobs are drawn: one Canvas pass inside a single 30fps
+    // timeline. Radial gradients already fade to clear, so no blur passes
+    // are needed. A frozen timeline frame doubles as the reduced-motion pose.
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(colors: [color1.opacity(revealed ? 0.3 : 0), .clear], center: .center, startRadius: 0, endRadius: 200)
+        SwiftUI.TimelineView(
+            .animation(minimumInterval: 1.0 / 30.0, paused: motionPaused)
+        ) { timeline in
+            Canvas { context, size in
+                let seconds = timeline.date.timeIntervalSinceReferenceDate
+                let drift = motionPaused ? 0 : seconds * .pi * 2 / 12
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                Self.blob(
+                    context: &context,
+                    center: CGPoint(
+                        x: center.x + 50 * sin(drift),
+                        y: center.y - 30 * cos(drift)
+                    ),
+                    radius: 200,
+                    color: color1.opacity(revealed ? 0.3 : 0)
                 )
-                .frame(width: 400, height: 400)
-                .offset(x: animate ? 50 : -50, y: animate ? -30 : 30)
-                .blur(radius: reduceTransparency ? 0 : 28)
-
-            Circle()
-                .fill(
-                    RadialGradient(colors: [color2.opacity(revealed ? 0.2 : 0), .clear], center: .center, startRadius: 0, endRadius: 250)
+                Self.blob(
+                    context: &context,
+                    center: CGPoint(
+                        x: center.x - 40 * cos(drift * 0.8),
+                        y: center.y + 40 * sin(drift * 0.8)
+                    ),
+                    radius: 250,
+                    color: color2.opacity(revealed ? 0.2 : 0)
                 )
-                .frame(width: 500, height: 500)
-                .offset(x: animate ? -40 : 60, y: animate ? 40 : -20)
-                .blur(radius: reduceTransparency ? 0 : 32)
-
-            Circle()
-                .fill(
-                    RadialGradient(colors: [color3.opacity(revealed ? 0.15 : 0), .clear], center: .center, startRadius: 0, endRadius: 180)
+                Self.blob(
+                    context: &context,
+                    center: CGPoint(
+                        x: center.x + 30 * cos(drift * 1.2),
+                        y: center.y + 50 * sin(drift * 1.2)
+                    ),
+                    radius: 180,
+                    color: color3.opacity(revealed ? 0.15 : 0)
                 )
-                .frame(width: 350, height: 350)
-                .offset(x: animate ? 30 : -30, y: animate ? 50 : -50)
-                .blur(radius: reduceTransparency ? 0 : 24)
+            }
         }
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
-        .onAppear {
-            guard !motionPaused else { return }
-            withAnimation(.easeInOut(duration: 6).repeatForever(autoreverses: true)) {
-                animate = true
-            }
-        }
-        .onChange(of: motionPaused) { _, paused in
-            if paused {
-                withAnimation(nil) {
-                    animate = false
-                }
-            } else {
-                withAnimation(.easeInOut(duration: 6).repeatForever(autoreverses: true)) {
-                    animate = true
-                }
-            }
-        }
+    }
+
+    private static func blob(
+        context: inout GraphicsContext,
+        center: CGPoint,
+        radius: CGFloat,
+        color: Color
+    ) {
+        let rect = CGRect(
+            x: center.x - radius,
+            y: center.y - radius,
+            width: radius * 2,
+            height: radius * 2
+        )
+        context.fill(
+            Path(ellipseIn: rect),
+            with: .radialGradient(
+                with: Gradient(colors: [color, .clear]),
+                center: center,
+                startRadius: 0,
+                endRadius: radius
+            )
+        )
     }
 }
 
@@ -88,88 +107,90 @@ private struct RevealGradientBlob: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
-    @State private var colorPhase: Double = 0
     @State private var isWindowVisible = true
 
     private var motionPaused: Bool {
         reduceMotion || reduceTransparency || !isWindowVisible || controlActiveState == .inactive
     }
 
+    // How the reveal blob is drawn: one Canvas pass inside a single 30fps
+    // timeline. Radial gradients already fade to clear, so no blur passes
+    // are needed. A frozen timeline frame doubles as the reduced-motion pose.
     var body: some View {
-        ZStack {
-            // Primary blob - purple/indigo
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.purple.opacity(0.7),
-                            Color.indigo.opacity(0.5),
-                            Color.blue.opacity(0.3),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 300
-                    )
+        SwiftUI.TimelineView(
+            .animation(minimumInterval: 1.0 / 30.0, paused: motionPaused)
+        ) { timeline in
+            Canvas { context, size in
+                let seconds = timeline.date.timeIntervalSinceReferenceDate
+                let sway = motionPaused ? 0 : seconds * .pi * 2 / 8
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                Self.blob(
+                    context: &context,
+                    center: center,
+                    radiusX: 300,
+                    radiusY: 250,
+                    colors: [
+                        Color.purple.opacity(0.7),
+                        Color.indigo.opacity(0.5),
+                        Color.blue.opacity(0.3),
+                        Color.clear
+                    ]
                 )
-                .frame(width: 600, height: 500)
-                .blur(radius: reduceTransparency ? 0 : 24)
-
-            // Secondary blob - shifting hue
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.blue.opacity(0.5),
-                            Color.purple.opacity(0.3),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 250
-                    )
+                Self.blob(
+                    context: &context,
+                    center: CGPoint(
+                        x: center.x + 30 * sin(sway),
+                        y: center.y - 20 * cos(sway)
+                    ),
+                    radiusX: 225,
+                    radiusY: 200,
+                    colors: [
+                        Color.blue.opacity(0.5),
+                        Color.purple.opacity(0.3),
+                        Color.clear
+                    ]
                 )
-                .frame(width: 450, height: 400)
-                .offset(x: 30 * sin(colorPhase), y: -20 * cos(colorPhase))
-                .blur(radius: reduceTransparency ? 0 : 20)
-
-            // Bright core
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.white.opacity(0.15),
-                            Color.purple.opacity(0.2),
-                            Color.clear
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 120
-                    )
+                Self.blob(
+                    context: &context,
+                    center: center,
+                    radiusX: 120,
+                    radiusY: 120,
+                    colors: [
+                        Color.white.opacity(0.15),
+                        Color.purple.opacity(0.2),
+                        Color.clear
+                    ]
                 )
-                .frame(width: 240, height: 240)
-                .blur(radius: reduceTransparency ? 0 : 12)
+            }
         }
+        .frame(width: 600, height: 500)
         .scaleEffect(scale)
         .opacity(opacity)
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
-        .onAppear {
-            guard !motionPaused else { return }
-            withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
-                colorPhase = .pi * 2
-            }
-        }
-        .onChange(of: motionPaused) { _, paused in
-            if paused {
-                withAnimation(nil) {
-                    colorPhase = 0
-                }
-            } else {
-                withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
-                    colorPhase = .pi * 2
-                }
-            }
-        }
+    }
+
+    private static func blob(
+        context: inout GraphicsContext,
+        center: CGPoint,
+        radiusX: CGFloat,
+        radiusY: CGFloat,
+        colors: [Color]
+    ) {
+        let rect = CGRect(
+            x: center.x - radiusX,
+            y: center.y - radiusY,
+            width: radiusX * 2,
+            height: radiusY * 2
+        )
+        context.fill(
+            Path(ellipseIn: rect),
+            with: .radialGradient(
+                with: Gradient(colors: colors),
+                center: center,
+                startRadius: 0,
+                endRadius: max(radiusX, radiusY)
+            )
+        )
     }
 }
 
