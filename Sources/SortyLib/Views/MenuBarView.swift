@@ -536,9 +536,6 @@ private struct MenuBarButton: View {
         .animation(.easeOut(duration: 0.15), value: isHovered)
         .onHover { hovering in
             isHovered = hovering
-            if hovering {
-                HapticFeedbackManager.shared.selection()
-            }
         }
     }
 }
@@ -639,7 +636,6 @@ private struct WatchedFolderMenuItem: View {
             .onHover { hovering in
                 isHovered = hovering
                 if hovering {
-                    HapticFeedbackManager.shared.selection()
                     NSCursor.pointingHand.push()
                 } else {
                     NSCursor.pop()
