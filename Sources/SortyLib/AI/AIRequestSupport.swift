@@ -306,6 +306,120 @@ enum AIRequestSupport {
 
         return .milliseconds(Int64(min(max(seconds, 0.25), 10) * 1_000))
     }
+
+    /// Computes the file-size total once per request so streaming/non-streaming
+    /// stats paths share a single pass instead of reducing per batch.
+    static func totalFileSize(of files: [FileItem]) -> Int64 {
+        files.reduce(0) { $0 + $1.size }
+    }
+
+    /// Slice overload so batch callers can pass `files[start..<end]` counts
+    /// without materializing `Array(slice)` copies where trivial.
+    static func totalFileSize(of slice: ArraySlice<FileItem>) -> Int64 {
+        slice.reduce(0) { $0 + $1.size }
+    }
+
+    /// Bounded organize timeout: fails large organize calls fast instead of
+    /// hanging on the URLRequest/session default (up to 600s resource timeout).
+    static func organizeTimeout(for config: AIConfig) -> TimeInterval {
+        max(30, min(config.requestTimeout, 300))
+    }
+
+    /// Short timeout for health checks and single-turn generation.
+    static func interactiveTimeout(for config: AIConfig) -> TimeInterval {
+        min(config.requestTimeout, 60)
+    }
+}
+
+/// Coalesces streaming chunks off-actor before a single MainActor hop.
+/// Flushes when ~4KB accumulates or 100ms elapses since the last flush.
+/// The outer 0.55s display throttle in FolderOrganizer remains the UI bound;
+/// this only reduces MainActor traffic from per-token to per-flush.
+struct StreamingChunkCoalescer: Sendable {
+    private var buffer = ""
+    private var bufferedBytes = 0
+    private var lastFlush: Date
+
+    static let flushInterval: TimeInterval = 0.1
+    static let maxBufferedBytes = 4 * 1024
+
+    init(now: Date = Date()) {
+        lastFlush = now
+    }
+
+    mutating func append(_ chunk: String, now: Date = Date()) -> String? {
+        guard !chunk.isEmpty else { return nil }
+        buffer += chunk
+        bufferedBytes += chunk.utf8.count
+        if bufferedBytes >= Self.maxBufferedBytes
+            || now.timeIntervalSince(lastFlush) >= Self.flushInterval {
+            return flush(now: now)
+        }
+        return nil
+    }
+
+    mutating func flush(now: Date = Date()) -> String? {
+        guard !buffer.isEmpty else { return nil }
+        let payload = buffer
+        buffer = ""
+        bufferedBytes = 0
+        lastFlush = now
+        return payload
+    }
+}
+
+/// Accounts base64 image payloads against the 32MB prepared-vision cap.
+/// Base64 inflates ~4/3, so budgets are estimated on the encoded size.
+public enum VisionPayloadBudget {
+    public static let maximumPreparedVisionBytes = 32 * 1_024 * 1_024
+
+    public static func totalBase64Bytes(for payload: [String: Data]) -> Int {
+        payload.values.reduce(0) { $0 + $1.count * 4 / 3 }
+    }
+
+    /// Drops trailing sorted keys until the estimated encoded size fits.
+    /// Keeps deterministic survivors so retries behave identically.
+    public static func clamped(
+        _ payload: [String: Data],
+        cap: Int = maximumPreparedVisionBytes
+    ) -> [String: Data] {
+        var kept: [String: Data] = [:]
+        var budgeted = 0
+        for key in payload.keys.sorted() {
+            guard let data = payload[key] else { continue }
+            let encoded = data.count * 4 / 3
+            if budgeted + encoded > cap { continue }
+            kept[key] = data
+            budgeted += encoded
+        }
+        return kept
+    }
+}
+
+/// Single entry point for vision preparation: calls
+/// `prepareFilesForVision` once per request (maxConcurrent 4 stays inside
+/// ImageVisionAnalyzer) and clamps the result to the 32MB budget.
+/// The pipeline agent wires this into the organizer batch loop.
+public func prepareVisionBatch(
+    files: [FileItem],
+    base: URL?,
+    pdfPageLimit: Int = 2,
+    progress: (@Sendable (Int, Int) async -> Void)? = nil
+) async -> [String: Data] {
+    let prepared = await ImageVisionAnalyzer().prepareFilesForVision(
+        files: files,
+        baseDirectoryURL: base,
+        pdfPageLimit: pdfPageLimit,
+        progress: progress
+    )
+    return VisionPayloadBudget.clamped(prepared)
+}
+
+/// Releases per-batch image payloads after the request finishes.
+/// Call sites must not retain the full payload in resume checkpoints;
+/// re-prepare from the ImageVisionAnalyzer disk cache on resume instead.
+public func clearVisionBatch(_ payload: inout [String: Data]) {
+    payload.removeAll(keepingCapacity: false)
 }
 
 /// Extracts JSON from free-form LLM output.
