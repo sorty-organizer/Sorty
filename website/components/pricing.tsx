@@ -49,7 +49,7 @@ export function Pricing() {
         </Reveal>
 
         <Reveal delay={120} className="mt-12">
-          <div className="relative overflow-hidden rounded-3xl border border-primary/30 bg-card/50 p-8 backdrop-blur-xl sm:p-10">
+          <div className="glass-surface relative overflow-hidden rounded-3xl border border-primary/30 bg-card/75 p-8 sm:p-10">
             <div
               aria-hidden
               className="pointer-events-none absolute -top-24 left-1/2 h-44 w-[28rem] -translate-x-1/2 rounded-[999px] bg-primary/15 blur-3xl"
@@ -93,7 +93,7 @@ export function Pricing() {
                 href={GITHUB_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="group flex w-full items-center justify-center gap-2 rounded-full border border-border bg-secondary/50 px-6 py-3 text-sm font-medium text-foreground backdrop-blur-md transition-colors hover:border-amber-300/50 hover:bg-amber-300/10 motion-reduce:transition-none"
+                className="group flex w-full items-center justify-center gap-2 rounded-full border border-border bg-secondary/80 px-6 py-3 text-sm font-medium text-foreground transition-colors hover:border-amber-300/50 hover:bg-amber-300/10 motion-reduce:transition-none"
                 data-analytics-action="source_opened"
                 data-analytics-component="cta"
                 data-analytics-location="pricing"

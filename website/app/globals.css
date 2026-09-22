@@ -189,14 +189,25 @@
   justify-content: center;
 }
 
+/* A static highlight keeps the glass depth without sampling and blurring the
+   moving page behind every card. */
+.glass-surface {
+  background-image: linear-gradient(
+    145deg,
+    oklch(1 0 0 / 5%),
+    transparent 48%
+  );
+  box-shadow: 0 1px 0 oklch(1 0 0 / 6%) inset;
+}
+
 /* Keep scroll reveals cheap and stable. Animating blur across large cards can
    flash as the browser promotes and repaints each glass layer. */
 .reveal {
-  opacity: 0;
-  transform: translateY(18px);
+  opacity: 0.82;
+  transform: translateY(10px);
   transition:
-    opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.36s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.36s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .reveal.is-visible {
   opacity: 1;
@@ -207,8 +218,8 @@
    so it moves into place exactly once instead of pulsing backward. */
 @starting-style {
   .reveal.reveal-on-enter.is-visible {
-    opacity: 0;
-    transform: translateY(12px);
+    opacity: 0.85;
+    transform: translateY(8px);
   }
 }
 
@@ -223,24 +234,31 @@
   }
 }
 
+/* The glow uses a painted gradient instead of a large live blur. Transform and
+   opacity can stay on the compositor while preserving the ambient motion. */
 @keyframes hero-glow-float {
   0%, 100% {
-    opacity: 0.55;
+    opacity: 0.48;
     transform: translateX(-50%) translateY(0) scale(1);
   }
   50% {
-    opacity: 0.8;
-    transform: translateX(-50%) translateY(-24px) scale(1.05);
+    opacity: 0.72;
+    transform: translateX(-50%) translateY(-18px) scale(1.04);
   }
 }
 .hero-glow {
-  opacity: 0.65;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in oklch, var(--brand) 38%, transparent) 0%,
+    color-mix(in oklch, var(--brand-bright) 16%, transparent) 42%,
+    transparent 72%
+  );
+  opacity: 0.58;
   transform: translateX(-50%);
 }
 @media (hover: hover) and (pointer: fine) {
   .hero-glow {
-    animation: hero-glow-float 9s ease-in-out infinite;
-    will-change: opacity, transform;
+    animation: hero-glow-float 10s ease-in-out infinite;
   }
 }
 
@@ -480,11 +498,10 @@
 .hero-screenshot-card {
   transform-origin: 50% 18%;
   transform: perspective(900px) rotateX(4deg);
-  transform-style: preserve-3d;
 }
 @keyframes hero-screenshot-settle {
   from {
-    transform: perspective(900px) rotateX(16deg) scale(0.985);
+    transform: perspective(900px) rotateX(12deg) scale(0.99);
   }
   to {
     transform: perspective(900px) rotateX(0deg) scale(1);
@@ -494,8 +511,7 @@
   .hero-screenshot-card {
     animation: hero-screenshot-settle linear both;
     animation-timeline: view();
-    animation-range: entry 0% cover 45%;
-    will-change: transform;
+    animation-range: entry 0% cover 42%;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -503,14 +519,42 @@
     opacity: 0;
     transition: none;
   }
+  .hero-glow,
   .hero-screenshot-card {
     animation: none;
     transform: none;
   }
-  .hero-glow {
+}
+
+/* The footer keeps its rise effect, but the browser now transforms one cached
+   SVG layer. No scroll listener or per-frame React work is involved. */
+.dia-gradient {
+  height: 100%;
+  width: 100%;
+  transform-origin: bottom;
+}
+@keyframes dia-gradient-rise {
+  from {
+    opacity: 0.72;
+    transform: scaleY(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+@supports (animation-timeline: view()) {
+  .dia-gradient-scroll {
+    animation: dia-gradient-rise linear both;
+    animation-timeline: view(block);
+    animation-range: entry 0% entry 90%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dia-gradient-scroll {
     animation: none;
-    opacity: 0.65;
-    transform: translateX(-50%);
+    opacity: 1;
+    transform: none;
   }
 }
 .download-beam {

@@ -34,10 +34,10 @@ export function SiteNav() {
       <div className="relative w-full max-w-3xl">
       <nav
         className={cn(
-          'flex w-full items-center justify-between gap-2 rounded-full border px-2 py-2 pl-4 transition-all duration-500',
+          'flex w-full items-center justify-between gap-2 rounded-full border px-2 py-2 pl-4 transition-[background-color,border-color,box-shadow] duration-300',
           scrolled
-            ? 'border-border bg-background/70 shadow-lg shadow-black/30 backdrop-blur-xl'
-            : 'border-transparent bg-background/30 backdrop-blur-md',
+            ? 'border-border bg-background/95 shadow-lg shadow-black/30'
+            : 'border-transparent bg-background/85',
         )}
       >
         <Link
@@ -137,7 +137,7 @@ export function SiteNav() {
       <div
         aria-hidden={!open}
         className={cn(
-          'absolute inset-x-0 top-full mt-2 origin-top rounded-3xl border border-border bg-background/80 p-2 backdrop-blur-xl transition-all duration-300 ease-out md:hidden',
+          'absolute inset-x-0 top-full mt-2 origin-top rounded-3xl border border-border bg-background/95 p-2 transition-[transform,opacity] duration-300 ease-out md:hidden',
           open
             ? 'visible translate-y-0 scale-100 opacity-100'
             : 'invisible -translate-y-2 scale-[0.97] opacity-0',

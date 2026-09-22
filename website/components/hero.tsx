@@ -43,9 +43,8 @@ export function Hero() {
       />
       <div
         aria-hidden
-        className="hero-glow pointer-events-none absolute left-1/2 top-24 -z-10 h-[420px] w-[680px] max-w-[90vw] rounded-full bg-primary/25 blur-[120px]"
+        className="hero-glow pointer-events-none absolute left-1/2 top-24 -z-10 h-[420px] w-[680px] max-w-[90vw] rounded-full"
       />
-
       <div className="mx-auto max-w-3xl text-center">
         <h1 className="mt-6 text-balance text-5xl font-semibold leading-[0.95] tracking-tight text-foreground sm:text-7xl">
           AI folder{' '}
@@ -97,7 +96,7 @@ export function Hero() {
             href={GITHUB_URL}
             target="_blank"
             rel="noreferrer"
-            className="group flex w-full items-center justify-center gap-2 rounded-full border border-border bg-secondary/50 px-6 py-3 text-sm font-medium text-foreground backdrop-blur-md transition-colors hover:border-amber-300/50 hover:bg-amber-300/10 sm:w-auto"
+            className="group flex w-full items-center justify-center gap-2 rounded-full border border-border bg-secondary/80 px-6 py-3 text-sm font-medium text-foreground transition-colors hover:border-amber-300/50 hover:bg-amber-300/10 sm:w-auto"
             data-analytics-action="source_opened"
             data-analytics-component="cta"
             data-analytics-location="hero"
@@ -128,7 +127,7 @@ export function Hero() {
           {TRUST_ITEMS.map(({ icon: Icon, label }) => (
             <span
               key={label}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/45 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-md"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/75 px-3 py-1.5 text-xs text-muted-foreground"
             >
               <Icon className="size-3.5 text-primary" />
               {label}
@@ -140,7 +139,7 @@ export function Hero() {
       {/* App screenshot */}
       <Reveal delay={120} className="mx-auto mt-12 max-w-5xl">
         <div
-          className="hero-screenshot-card relative rounded-2xl border border-border bg-card/40 p-2 shadow-2xl shadow-black/50 backdrop-blur-xl sm:rounded-3xl sm:p-3"
+          className="glass-surface hero-screenshot-card relative rounded-2xl border border-border bg-card/75 p-2 shadow-2xl shadow-black/50 sm:rounded-3xl sm:p-3"
         >
           <div
             aria-hidden

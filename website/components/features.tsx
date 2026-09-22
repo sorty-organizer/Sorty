@@ -142,7 +142,7 @@ export function Features() {
             <Reveal
               key={f.title}
               delay={(i % 3) * 80}
-              className="rounded-3xl border border-border bg-card/40 p-6 backdrop-blur-md transition-colors hover:border-primary/40"
+              className="glass-surface rounded-3xl border border-border bg-card/70 p-6 transition-colors hover:border-primary/40"
             >
               <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
                 <f.icon className="size-5" />
@@ -156,7 +156,7 @@ export function Features() {
         </div>
 
         <Reveal className="mt-8">
-          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2.5 rounded-3xl border border-border bg-card/35 px-4 py-4 backdrop-blur-md sm:gap-3 sm:px-5">
+          <div className="glass-surface flex flex-wrap items-center justify-center gap-x-2 gap-y-2.5 rounded-3xl border border-border bg-card/65 px-4 py-4 sm:gap-3 sm:px-5">
             {PROVIDERS.map((provider) => (
               <span
                 key={provider.name}
@@ -183,7 +183,7 @@ export function Features() {
             <Reveal
               key={shot.title}
               delay={i * 100}
-              className="overflow-hidden rounded-3xl border border-border bg-card/40 backdrop-blur-md"
+              className="glass-surface overflow-hidden rounded-3xl border border-border bg-card/70"
             >
               <div className="border-b border-border p-6">
                 <div className="flex items-center gap-3">

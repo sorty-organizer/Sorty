@@ -46,7 +46,7 @@ export function Privacy() {
 
         {/* headline emphasis banner */}
         <Reveal delay={80} className="mt-12">
-          <div className="relative overflow-hidden rounded-3xl border border-primary/30 bg-card/50 p-6 text-center backdrop-blur-xl sm:p-8">
+          <div className="glass-surface relative overflow-hidden rounded-3xl border border-primary/30 bg-card/75 p-6 text-center sm:p-8">
             <div
               aria-hidden
               className="pointer-events-none absolute inset-0 -z-10"
@@ -72,7 +72,7 @@ export function Privacy() {
             <Reveal
               key={p.title}
               delay={(i % 2) * 80}
-              className="rounded-3xl border border-border bg-card/40 p-6 backdrop-blur-md transition-colors hover:border-primary/40"
+              className="glass-surface rounded-3xl border border-border bg-card/70 p-6 transition-colors hover:border-primary/40"
             >
               <div className="flex items-start gap-4">
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
@@ -90,7 +90,7 @@ export function Privacy() {
         </div>
 
         <Reveal className="mt-6">
-          <p className="rounded-3xl border border-border bg-card/30 p-5 text-center text-sm text-muted-foreground backdrop-blur-md">
+          <p className="glass-surface rounded-3xl border border-border bg-card/60 p-5 text-center text-sm text-muted-foreground">
             Sorty is{' '}
             <a
               href={GITHUB_URL}

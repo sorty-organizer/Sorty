@@ -55,7 +55,13 @@ export function SiteFooter() {
           footer so the glow blends into the previous section instead of ending
           at a visible rectangular edge. */}
       <div className="pointer-events-none absolute inset-x-[-10vw] top-[6vh] bottom-[-16vh] -z-10 [mask-image:linear-gradient(to_bottom,transparent_0%,black_34%,black_100%)]">
-        <DiaGradient blur={15} peak={0.98} valley={0.55} strength={0.72} />
+        <DiaGradient
+          blur={15}
+          peak={0.98}
+          valley={0.55}
+          strength={0.72}
+          animateOnScroll
+        />
       </div>
 
       <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-8 gap-y-10 lg:grid-cols-5 lg:gap-10">

@@ -1,21 +1,14 @@
-'use client'
-
-// Dia Browser's signature gradient — a self-contained drop-in.
+// Dia Browser's signature gradient as a static SVG.
 //
 // A row of N tall, heavily-blurred columns share one vertical rainbow gradient
 // and are arranged in a symmetric bell curve (short at the edges, tallest in the
-// middle). The whole field is anchored to the bottom and RISES UP FROM THE FLOOR
-// the first time it scrolls into view via a one-shot scaleY(0) → 1 + opacity 0 → 1
-// reveal (transform-origin: bottom), then stays put — it doesn't fade back out
-// when you scroll up, so the bloom is always present at the footer. It's one
-// inline <svg> — no canvas, no per-frame work.
+// middle). The field stays static so scrolling never rerasterizes a large
+// blurred layer.
 //
 // Usage:
 //   <div className="absolute inset-x-0 bottom-0 h-[55vh] pointer-events-none">
 //     <DiaGradient />
 //   </div>
-
-import { useEffect, useRef, useState } from 'react'
 
 type Stop = { offset: number; color: string }
 
@@ -54,183 +47,26 @@ export function DiaGradient({
   peak = 0.98,
   valley = 0.55,
   stops = DIA_STOPS,
-  riseMs = 1100,
   strength = 1,
-  flattenOnScroll = true,
+  animateOnScroll = false,
 }: {
   bars?: number
   blur?: number
   peak?: number
   valley?: number
   stops?: Stop[]
-  riseMs?: number
-  /** Peak opacity of the painted field (0..1). Applied to the <svg> so the
-   *  wrapper's 0→1 rise opacity still animates independently on top of it. */
+  /** Peak opacity of the painted field (0..1). */
   strength?: number
-  flattenOnScroll?: boolean
+  animateOnScroll?: boolean
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const [shown, setShown] = useState(false)
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null)
-
-  // Track the rendered size. preserveAspectRatio="none" stretches the viewBox
-  // to fit, which distorts anything specified in viewBox units — most
-  // noticeably the blur: on a phone the horizontal blur collapses to a few
-  // pixels and the columns turn into hard-edged stripes. Knowing the real
-  // size lets us compensate below.
-  useEffect(() => {
-    const el = wrapRef.current
-    if (!el) return
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0]
-      if (!entry) return
-      const { width, height } = entry.contentRect
-      if (width > 0 && height > 0) setSize({ w: width, h: height })
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
-
-  useEffect(() => {
-    const prefersReduced = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
-    ).matches
-    if (prefersReduced) {
-      const id = requestAnimationFrame(() => setShown(true))
-      return () => cancelAnimationFrame(id)
-    }
-    // Double-rAF so the browser paints the flat (scaleY 0) state first, then
-    // transitions up — otherwise the initial state is never painted and the
-    // rise animation is skipped.
-    const id = requestAnimationFrame(() =>
-      requestAnimationFrame(() => setShown(true)),
-    )
-    return () => cancelAnimationFrame(id)
-  }, [])
-
-  // Scroll flatten lives on its own inner element, driven imperatively by a
-  // rAF loop that eases the current scale/opacity toward a scroll-derived
-  // target each frame (exponential smoothing). No React state and no CSS
-  // transition here: state-per-scroll-frame plus a restarting transition is
-  // what made the old version feel stepped and abrupt.
-  useEffect(() => {
-    if (!flattenOnScroll) return
-
-    const prefersReduced = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
-    ).matches
-    if (prefersReduced) return
-
-    const anim = { scale: 1, opacity: 1, targetScale: 1, targetOpacity: 1 }
-    let frame = 0
-    let lastTime = 0
-
-    const computeTargets = () => {
-      const el = wrapRef.current
-      if (!el) return
-      // rect.bottom is invariant under our bottom-origin scaleY, so measuring
-      // the (possibly mid-animation) wrapper is safe — no feedback loop.
-      const rect = el.getBoundingClientRect()
-      const viewportHeight = window.innerHeight || 1
-      const awayDistance = viewportHeight * 0.52
-      const p = Math.max(
-        0,
-        Math.min(1, (rect.bottom - viewportHeight) / awayDistance),
-      )
-      // Smoothstep: zero slope at both ends, so the effect ramps in and out
-      // gently instead of kicking in abruptly at the boundaries.
-      const eased = p * p * (3 - 2 * p)
-      anim.targetScale = 1 - eased * 0.34
-      anim.targetOpacity = 1 - eased * 0.22
-    }
-
-    const apply = () => {
-      const el = scrollRef.current
-      if (!el) return
-      el.style.transform = `scaleY(${anim.scale})`
-      el.style.opacity = String(anim.opacity)
-    }
-
-    const step = (now: number) => {
-      frame = 0
-      const dt = lastTime ? Math.min(now - lastTime, 64) : 16
-      lastTime = now
-      // Exponential smoothing toward the target (time constant ~120ms):
-      // frame-rate independent, always converging, never restarts.
-      const k = 1 - Math.exp(-dt / 120)
-      anim.scale += (anim.targetScale - anim.scale) * k
-      anim.opacity += (anim.targetOpacity - anim.opacity) * k
-      const settled =
-        Math.abs(anim.targetScale - anim.scale) < 0.0005 &&
-        Math.abs(anim.targetOpacity - anim.opacity) < 0.0005
-      if (settled) {
-        anim.scale = anim.targetScale
-        anim.opacity = anim.targetOpacity
-      }
-      apply()
-      if (!settled) {
-        frame = requestAnimationFrame(step)
-      } else {
-        lastTime = 0
-      }
-    }
-
-    const kick = () => {
-      computeTargets()
-      if (!frame) frame = requestAnimationFrame(step)
-    }
-
-    // Start at the current target so initial paint doesn't animate — the
-    // one-shot rise on the outer wrapper owns the entrance.
-    computeTargets()
-    anim.scale = anim.targetScale
-    anim.opacity = anim.targetOpacity
-    apply()
-
-    window.addEventListener('scroll', kick, { passive: true })
-    window.addEventListener('resize', kick)
-    return () => {
-      if (frame) cancelAnimationFrame(frame)
-      window.removeEventListener('scroll', kick)
-      window.removeEventListener('resize', kick)
-    }
-  }, [flattenOnScroll])
-
-  // On narrow screens, fewer columns keep the same chunky rhythm the field
-  // has on desktop instead of squeezing all of them into skinny stripes.
-  const effectiveBars = size && size.w < 640 ? Math.min(bars, 6) : bars
-  // Anisotropic blur compensation: never let the on-screen blur drop below
-  // what desktop gets. When the viewBox is squeezed (narrow/tall phone
-  // layouts), scale the stdDeviation up per-axis so the bloom stays soft.
-  const blurX = size ? blur * Math.max(1, Math.min(4, VBW / size.w)) : blur
-  const blurY = size ? blur * Math.max(1, Math.min(4, VBH / size.h)) : blur
-
-  const heights = bellHeights(effectiveBars, peak, valley)
-  const colW = VBW / effectiveBars
+  const heights = bellHeights(bars, peak, valley)
+  const colW = VBW / bars
 
   return (
     <div
-      ref={wrapRef}
       aria-hidden
-      style={{
-        height: '100%',
-        width: '100%',
-        transformOrigin: 'bottom',
-        transform: `scaleY(${shown ? 1 : 0})`,
-        opacity: shown ? 1 : 0,
-        transition: `transform ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1), opacity ${riseMs}ms cubic-bezier(0.16, 1, 0.3, 1)`,
-      }}
+      className={animateOnScroll ? 'dia-gradient dia-gradient-scroll' : 'dia-gradient'}
     >
-      <div
-        ref={scrollRef}
-        style={{
-          height: '100%',
-          width: '100%',
-          transformOrigin: 'bottom',
-          willChange: 'transform, opacity',
-        }}
-      >
       <svg
         style={{ height: '100%', width: '100%', opacity: strength }}
         viewBox={`0 0 ${VBW} ${VBH}`}
@@ -248,22 +84,22 @@ export function DiaGradient({
             ))}
           </linearGradient>
           <filter id="dia-blur" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation={`${blurX} ${blurY}`} />
+            <feGaussianBlur stdDeviation={blur} />
           </filter>
         </defs>
-        {heights.map((h, i) => (
-          <g key={i} filter="url(#dia-blur)">
+        <g filter="url(#dia-blur)">
+          {heights.map((h, i) => (
             <rect
+              key={i}
               x={i * colW}
               y={VBH - h}
               width={colW * 1.23}
               height={h}
               fill="url(#dia-grad)"
             />
-          </g>
-        ))}
+          ))}
+        </g>
       </svg>
-      </div>
     </div>
   )
 }

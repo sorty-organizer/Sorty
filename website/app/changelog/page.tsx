@@ -295,7 +295,6 @@ export default function ChangelogPage() {
             peak={0.92}
             valley={0.5}
             strength={0.62}
-            flattenOnScroll={false}
           />
         </div>
         <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_24%,oklch(0.66_0.2_12_/_0.22),transparent_26%),radial-gradient(circle_at_82%_18%,oklch(0.68_0.16_250_/_0.18),transparent_30%),linear-gradient(180deg,transparent_0%,var(--background)_88%)]" />

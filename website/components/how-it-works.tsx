@@ -61,7 +61,7 @@ export function HowItWorks() {
               className="relative flex gap-5 pb-10 last:pb-0"
             >
               <div className="relative z-10 shrink-0">
-                <span className="flex size-12 items-center justify-center rounded-2xl border border-primary/30 bg-card text-primary shadow-lg shadow-black/30 backdrop-blur-md">
+                <span className="flex size-12 items-center justify-center rounded-2xl border border-primary/30 bg-card text-primary shadow-lg shadow-black/30">
                   <step.icon className="size-5" />
                 </span>
                 <span className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
