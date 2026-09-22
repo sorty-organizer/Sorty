@@ -35,6 +35,7 @@ public final class AnalyticsManager: ObservableObject {
 
     private let defaults: UserDefaults
     private var activeProjectToken: String?
+    private var isStarting = false
     private var captureRateLimiter = AnalyticsCaptureRateLimiter()
     private var lastFeatureFlagReloadAt: TimeInterval?
 
@@ -55,7 +56,8 @@ public final class AnalyticsManager: ObservableObject {
         guard consent == .granted,
               !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
               !Self.isAnalyticsSuppressedForThisProcess,
-              !isActive
+              !isActive,
+              !isStarting
         else {
             return
         }
@@ -65,21 +67,39 @@ public final class AnalyticsManager: ObservableObject {
         let host = configuration.host
         guard !projectToken.isEmpty else { return }
 
-        let config = PostHogConfig(projectToken: projectToken, host: host)
-        config.personProfiles = .never
-        config.setDefaultPersonProperties = false
-        config.captureApplicationLifecycleEvents = false
-        config.captureScreenViews = false
-        config.enableSwizzling = false
-        config.preloadFeatureFlags = false
-        config.sendFeatureFlagEvent = false
-        config.flushAt = 20
-        config.maxQueueSize = 250
-        config.setBeforeSend { event in
-            Self.sanitized(event: event)
-        }
+        // Keep consent gating on the main actor; hop PostHog setup off
+        // launch. Preserve the launchDuration timestamp across the hop.
+        isStarting = true
+        let capturedLaunchDuration = launchDuration
 
-        PostHogSDK.shared.setup(config)
+        Task.detached(priority: .utility) {
+            let config = PostHogConfig(projectToken: projectToken, host: host)
+            config.personProfiles = .never
+            config.setDefaultPersonProperties = false
+            config.captureApplicationLifecycleEvents = false
+            config.captureScreenViews = false
+            config.enableSwizzling = false
+            config.preloadFeatureFlags = false
+            config.sendFeatureFlagEvent = false
+            config.flushAt = 20
+            config.maxQueueSize = 250
+            config.setBeforeSend { event in
+                Self.sanitized(event: event)
+            }
+
+            PostHogSDK.shared.setup(config)
+            await MainActor.run {
+                AnalyticsManager.shared.finishStarting(
+                    projectToken: projectToken,
+                    launchDuration: capturedLaunchDuration
+                )
+            }
+        }
+    }
+
+    private func finishStarting(projectToken: String, launchDuration: TimeInterval?) {
+        isStarting = false
+        guard !isActive, consent == .granted else { return }
         activeProjectToken = projectToken
         isActive = true
         var sessionProperties: [String: Any] = [
@@ -320,6 +340,7 @@ public final class AnalyticsManager: ObservableObject {
     private func stopAndClear() {
         experimentalFeatures = []
         isLoadingExperimentalFeatures = false
+        isStarting = false
         let projectToken = activeProjectToken
             ?? Self.productionProjectToken
 

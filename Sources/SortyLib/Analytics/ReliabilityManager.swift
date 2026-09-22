@@ -17,6 +17,7 @@ public final class ReliabilityManager {
 
     private let defaults: UserDefaults
     private var isActive = false
+    private var isStarting = false
     private var captureRateLimiter = ReliabilityCaptureRateLimiter()
     private var launchSpan: ReliabilitySpan?
 
@@ -45,48 +46,73 @@ public final class ReliabilityManager {
         }
 
         guard !isActive,
+              !isStarting,
               !Self.isReliabilitySuppressedForThisProcess,
               let dsn = Self.configuredDSN()
         else {
             return
         }
 
+        // Keep consent gating on the main actor; hop SDK start off launch.
+        isStarting = true
         let cacheDirectory = Self.cacheDirectory
+        let releaseName = Self.releaseName
+        let buildNumber = Self.buildNumber
+        let environmentName = Self.environmentName
+        let tracesSampleRate = Self.tracesSampleRate
+        let telemetryAttributes = Self.telemetryAttributes
+        let metricAttributes = Self.metricAttributes
         try? FileManager.default.createDirectory(
             at: cacheDirectory,
             withIntermediateDirectories: true
         )
 
-        let options = Options()
-        options.dsn = dsn
-        options.cacheDirectoryPath = cacheDirectory.path
-        options.releaseName = Self.releaseName
-        options.dist = Self.buildNumber
-        options.environment = Self.environmentName
-        options.sendDefaultPii = false
-        options.enableCrashHandler = true
-        options.enableAppHangTracking = true
-        options.enableAutoSessionTracking = true
-        options.enableWatchdogTerminationTracking = true
-        options.enableNetworkTracking = false
-        options.enableFileIOTracing = false
-        options.enableAutoPerformanceTracing = false
-        options.enableCoreDataTracing = false
-        options.enableSwizzling = false
-        options.enableMetricKitRawPayload = false
-        options.enableLogs = true
-        options.enableMetrics = true
-        options.tracesSampleRate = Self.tracesSampleRate
+        Task.detached(priority: .utility) {
+            let options = Options()
+            options.dsn = dsn
+            options.cacheDirectoryPath = cacheDirectory.path
+            options.releaseName = releaseName
+            options.dist = buildNumber
+            options.environment = environmentName
+            options.sendDefaultPii = false
+            options.enableCrashHandler = true
+            options.enableAppHangTracking = true
+            options.enableAutoSessionTracking = true
+            options.enableWatchdogTerminationTracking = true
+            options.enableNetworkTracking = false
+            options.enableFileIOTracing = false
+            options.enableAutoPerformanceTracing = false
+            options.enableCoreDataTracing = false
+            options.enableSwizzling = false
+            options.enableMetricKitRawPayload = false
+            options.enableLogs = true
+            options.enableMetrics = true
+            options.tracesSampleRate = tracesSampleRate
 
-        SentrySDK.start(options: options)
+            SentrySDK.start(options: options)
+            await MainActor.run {
+                ReliabilityManager.shared.finishStarting(
+                    telemetryAttributes: telemetryAttributes,
+                    metricAttributes: metricAttributes
+                )
+            }
+        }
+    }
+
+    private func finishStarting(
+        telemetryAttributes: [String: Any],
+        metricAttributes: [String: SentryAttributeValue]
+    ) {
+        isStarting = false
+        guard !isActive, consent == .granted else { return }
         isActive = true
         SentrySDK.logger.info(
             "sorty.reliability.started",
-            attributes: Self.telemetryAttributes
+            attributes: telemetryAttributes
         )
         SentrySDK.metrics.count(
             key: "sorty.app.launch",
-            attributes: Self.metricAttributes
+            attributes: metricAttributes
         )
         launchSpan = startSpan(
             name: "app.launch",
@@ -235,6 +261,7 @@ public final class ReliabilityManager {
 
     public func stopAndClear() {
         launchSpan = nil
+        isStarting = false
         if isActive {
             isActive = false
             SentrySDK.close()
