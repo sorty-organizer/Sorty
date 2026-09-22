@@ -751,6 +751,137 @@
 .copy-command-button.is-copied .copy-command-shine {
   animation: copy-command-shine 0.7s ease-out 0.1s;
 }
+/* AI prompt pill buttons reuse the copy-command motion language: a springy pop
+   on the button, a rotating check swap, a sheen sweep, and a status line that
+   drifts in. Transform/opacity only, so it stays on the compositor. */
+.ai-prompt-button {
+  position: relative;
+  overflow: hidden;
+  transform: translateZ(0);
+  will-change: transform;
+  transition:
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.3s ease;
+}
+.ai-prompt-button:hover {
+  transform: translateY(-1px) translateZ(0);
+}
+.ai-prompt-button:active {
+  transform: scale(0.96) translateZ(0);
+  transition-duration: 0.1s;
+}
+.ai-prompt-button.is-copied {
+  border-color: oklch(0.62 0.19 256 / 45%);
+  background-color: oklch(0.62 0.19 256 / 14%);
+  box-shadow:
+    0 0 0 1px oklch(0.62 0.19 256 / 30%),
+    0 0 22px -6px oklch(0.62 0.19 256 / 70%);
+  animation: ai-prompt-pop 0.45s cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+.ai-prompt-icon {
+  position: relative;
+  display: inline-grid;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  place-items: center;
+}
+.ai-prompt-icon-copy,
+.ai-prompt-icon-check {
+  grid-area: 1 / 1;
+  width: 1rem;
+  height: 1rem;
+  transition:
+    opacity 0.18s ease,
+    transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.ai-prompt-icon-copy {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+.ai-prompt-icon-copy.is-hidden {
+  opacity: 0;
+  transform: scale(0.5) rotate(-10deg);
+}
+.ai-prompt-icon-check {
+  color: var(--brand-bright);
+  opacity: 0;
+  transform: scale(0.4) rotate(-14deg);
+}
+.ai-prompt-icon-check.is-visible {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+  animation: ai-prompt-check-pop 0.45s cubic-bezier(0.22, 1.4, 0.36, 1) 0.05s backwards;
+}
+.ai-prompt-shine {
+  position: absolute;
+  inset: -30% -40%;
+  pointer-events: none;
+  transform: translateX(-130%) skewX(-18deg);
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    oklch(1 0 0 / 45%) 50%,
+    transparent 70%
+  );
+  opacity: 0;
+}
+.ai-prompt-button.is-copied .ai-prompt-shine {
+  animation: ai-prompt-shine 0.7s ease-out 0.1s;
+}
+.ai-prompt-status {
+  animation: ai-prompt-status-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes ai-prompt-pop {
+  0% {
+    transform: scale(0.92) translateZ(0);
+  }
+  55% {
+    transform: scale(1.05) translateZ(0);
+  }
+  100% {
+    transform: scale(1) translateZ(0);
+  }
+}
+@keyframes ai-prompt-check-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotate(-14deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.18) rotate(4deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+@keyframes ai-prompt-shine {
+  0% {
+    opacity: 0;
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(130%) skewX(-18deg);
+  }
+}
+@keyframes ai-prompt-status-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 .modal-action-highlight::before {
   content: "";
   position: absolute;
@@ -944,12 +1075,16 @@
     animation: none;
   }
   .download-modal-backdrop,
-  .download-modal-panel {
+  .download-modal-panel,
+  .ai-prompt-status {
     animation: none;
   }
   .copy-command-button.is-copied,
   .copy-command-label.is-copied .copy-command-check,
-  .copy-command-button.is-copied .copy-command-shine {
+  .copy-command-button.is-copied .copy-command-shine,
+  .ai-prompt-button.is-copied,
+  .ai-prompt-icon-check.is-visible,
+  .ai-prompt-button.is-copied .ai-prompt-shine {
     animation: none;
   }
   .copy-command-label.is-copied .copy-command-check {
@@ -959,11 +1094,17 @@
   .copy-command-row::after,
   .copy-command-button,
   .copy-command-label,
+  .ai-prompt-button,
+  .ai-prompt-icon-copy,
+  .ai-prompt-icon-check,
+  .ai-prompt-status,
   .modal-action-highlight::before {
     transition: none;
   }
   .copy-command-button:hover,
-  .copy-command-button:active {
+  .copy-command-button:active,
+  .ai-prompt-button:hover,
+  .ai-prompt-button:active {
     transform: translateZ(0);
   }
 }

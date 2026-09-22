@@ -42,16 +42,24 @@ export function AiPrompts() {
           Copy a prompt into ChatGPT, Claude, Codex, or Claude Code for help with Sorty.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
-          {PROMPTS.map(({ id, label, request }) => (
-            <button key={id} type="button" onClick={() => copyPrompt(id, SOURCE_INSTRUCTIONS + request)}
-              aria-label={`Copy prompt: ${label}`}
-              className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2.5 text-sm font-medium transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary">
-              {copied === id ? <Check aria-hidden className="size-4 text-primary" /> : <Copy aria-hidden className="size-4" />}
-              {label}
-            </button>
-          ))}
+          {PROMPTS.map(({ id, label, request }) => {
+            const isCopied = copied === id
+            return (
+              <button key={id} type="button" onClick={() => copyPrompt(id, SOURCE_INSTRUCTIONS + request)}
+                aria-label={`Copy prompt: ${label}`}
+                aria-live="off"
+                className={`ai-prompt-button inline-flex items-center gap-2 rounded-full border border-border px-4 py-2.5 text-sm font-medium transition-colors hover:border-primary/40 hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary${isCopied ? ' is-copied' : ''}`}>
+                <span aria-hidden className="ai-prompt-icon">
+                  <Copy className={`ai-prompt-icon-copy${isCopied ? ' is-hidden' : ''}`} />
+                  <Check className={`ai-prompt-icon-check${isCopied ? ' is-visible' : ''}`} />
+                </span>
+                {label}
+                <span aria-hidden className="ai-prompt-shine" />
+              </button>
+            )
+          })}
         </div>
-        <p role="status" className="mt-3 text-sm text-muted-foreground">
+        <p role="status" key={copied ?? fallback ?? 'idle'} className="ai-prompt-status mt-3 text-sm text-muted-foreground">
           {copied ? `${PROMPTS.find((prompt) => prompt.id === copied)?.label} prompt copied.` : fallback ? 'Copy failed. Select and copy the prompt below.' : 'Choose a topic to copy its prompt.'}
         </p>
         {fallback && <textarea aria-label="Prompt to copy" readOnly value={fallback} onFocus={(event) => event.currentTarget.select()} className="mt-3 min-h-40 w-full rounded-xl border border-border bg-background p-3 text-sm" />}
