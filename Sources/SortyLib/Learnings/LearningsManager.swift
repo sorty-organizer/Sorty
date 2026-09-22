@@ -2981,7 +2981,41 @@ public class LearningsManager: ObservableObject {
                 options: .withSecurityScope,
                 relativeTo: nil,
                 bookmarkDataIsStale: &isStale
-            ), url.startAccessingSecurityScopedResource() else {
+            ) else {
+                return ModelDirectoryBookmarkResult(
+                    id: snapshot.id,
+                    originalBookmark: bookmarkData,
+                    resolvedURL: nil,
+                    renewedBookmark: nil,
+                    didAccess: false,
+                    isAccessible: false
+                )
+            }
+            if !SandboxEnvironment.isSandboxed {
+                // Outside the sandbox, security-scoped access is a no-op and
+                // startAccessingSecurityScopedResource() returns false for
+                // valid bookmarks. Resolve by path instead of marking every
+                // bookmarked directory inaccessible (matches
+                // WatchedFoldersManager and StorageLocationsManager).
+                var isDirectory = ObjCBool(false)
+                let exists = FileManager.default.fileExists(
+                    atPath: url.path, isDirectory: &isDirectory
+                ) && isDirectory.boolValue
+                let renewedBookmark = isStale ? try? url.bookmarkData(
+                    options: .withSecurityScope,
+                    includingResourceValuesForKeys: nil,
+                    relativeTo: nil
+                ) : nil
+                return ModelDirectoryBookmarkResult(
+                    id: snapshot.id,
+                    originalBookmark: bookmarkData,
+                    resolvedURL: url,
+                    renewedBookmark: renewedBookmark,
+                    didAccess: false,
+                    isAccessible: exists
+                )
+            }
+            guard url.startAccessingSecurityScopedResource() else {
                 return ModelDirectoryBookmarkResult(
                     id: snapshot.id,
                     originalBookmark: bookmarkData,
@@ -3031,21 +3065,26 @@ public class LearningsManager: ObservableObject {
                 for: modelDirectories[index],
                 isAccessible: result.isAccessible
             )
-            guard result.didAccess, let resolvedURL = result.resolvedURL else { continue }
-            activeModelDirectoryURLs[result.id] = resolvedURL
-            let resolvedPath = resolvedURL.standardizedFileURL.path
-            if modelDirectories[index].path != resolvedPath {
-                let directory = modelDirectories[index]
-                modelDirectories[index] = ReferenceModelDirectory(
-                    id: directory.id,
-                    path: resolvedPath,
-                    displayName: directory.displayName,
-                    isEnabled: directory.isEnabled,
-                    bookmarkData: directory.bookmarkData,
-                    lastScannedAt: directory.lastScannedAt,
-                    scanSnapshot: directory.scanSnapshot
-                )
-                didUpdate = true
+            if result.didAccess, let resolvedURL = result.resolvedURL {
+                activeModelDirectoryURLs[result.id] = resolvedURL
+            }
+            // Renewed bookmarks and moved-folder paths apply whether or not a
+            // security session was held (outside the sandbox nothing is held).
+            if let resolvedURL = result.resolvedURL {
+                let resolvedPath = resolvedURL.standardizedFileURL.path
+                if modelDirectories[index].path != resolvedPath {
+                    let directory = modelDirectories[index]
+                    modelDirectories[index] = ReferenceModelDirectory(
+                        id: directory.id,
+                        path: resolvedPath,
+                        displayName: directory.displayName,
+                        isEnabled: directory.isEnabled,
+                        bookmarkData: directory.bookmarkData,
+                        lastScannedAt: directory.lastScannedAt,
+                        scanSnapshot: directory.scanSnapshot
+                    )
+                    didUpdate = true
+                }
             }
             if let renewedBookmark = result.renewedBookmark {
                 modelDirectories[index].bookmarkData = renewedBookmark

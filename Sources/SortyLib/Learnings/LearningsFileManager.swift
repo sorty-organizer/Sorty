@@ -47,8 +47,9 @@ public struct LearningsFileManager {
         // Encrypt data
         let encryptedData = try encrypt(data: jsonData, using: key)
         
-        // Write to file
-        try encryptedData.write(to: profileURL)
+        // Write to file atomically so a crash or power loss can never
+        // leave a truncated profile behind.
+        try encryptedData.write(to: profileURL, options: .atomic)
         
         LogManager.shared.log("Saved profile to \(profileURL.lastPathComponent)", category: "LearningsFile")
     }
@@ -62,21 +63,32 @@ public struct LearningsFileManager {
         // Read encrypted data
         let encryptedData = try Data(contentsOf: profileURL)
         
-        // Get encryption key
+        // Get encryption key. A missing key alongside an existing file means
+        // the data is currently undecryptable (e.g. Keychain unavailable);
+        // leave the file in place so a later launch with the key can read it.
         guard let key = getEncryptionKey() else {
             throw LearningsFileError.noEncryptionKey
         }
-        
-        // Decrypt data
-        let jsonData = try decrypt(data: encryptedData, using: key)
-        
-        // Decode profile
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let profile = try decoder.decode(LearningsProfile.self, from: jsonData)
-        
-        LogManager.shared.log("Loaded profile from \(profileURL.lastPathComponent)", category: "LearningsFile")
-        return profile
+
+        do {
+            // Decrypt data
+            let jsonData = try decrypt(data: encryptedData, using: key)
+
+            // Decode profile
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let profile = try decoder.decode(LearningsProfile.self, from: jsonData)
+
+            LogManager.shared.log("Loaded profile from \(profileURL.lastPathComponent)", category: "LearningsFile")
+            return profile
+        } catch {
+            // The key is available yet the contents are unreadable (truncated
+            // write, corruption, unknown schema). Quarantine the file before
+            // callers fall back to an empty profile whose next save would
+            // otherwise destroy the evidence silently.
+            quarantineCorruptProfile()
+            throw LearningsFileError.corruptProfileQuarantined
+        }
     }
     
     /// Delete all persisted Learnings files and destroy the encryption key.
@@ -124,7 +136,14 @@ public struct LearningsFileManager {
         if let existing = getEncryptionKey() {
             return existing
         }
-        
+
+        // A profile file without a readable key is orphaned (Keychain reset or
+        // transiently unavailable). Quarantine it before rotating so the bytes
+        // survive for forensics instead of being overwritten silently.
+        if FileManager.default.fileExists(atPath: profileURL.path) {
+            quarantineCorruptProfile()
+        }
+
         // Generate new key
         let key = SymmetricKey(size: .bits256)
         let keyData = key.withUnsafeBytes { Data($0) }
@@ -166,6 +185,29 @@ public struct LearningsFileManager {
             try fm.createDirectory(at: learningsDirectory, withIntermediateDirectories: true)
         }
     }
+
+    /// Moves an unreadable or orphaned profile aside (single slot) so a fresh
+    /// profile can be written without destroying evidence. Never throws: the
+    /// worst case is the corrupt file staying where the next save overwrites it.
+    private static func quarantineCorruptProfile() {
+        let quarantineURL = learningsDirectory
+            .appendingPathComponent("\(userIdentifier).corrupt.learning")
+        do {
+            try FileManager.default.createDirectory(
+                at: learningsDirectory, withIntermediateDirectories: true)
+            if FileManager.default.fileExists(atPath: quarantineURL.path) {
+                try FileManager.default.removeItem(at: quarantineURL)
+            }
+            try FileManager.default.moveItem(at: profileURL, to: quarantineURL)
+            LogManager.shared.log(
+                "Quarantined unreadable profile to \(quarantineURL.lastPathComponent)",
+                level: .warning, category: "LearningsFile")
+        } catch {
+            LogManager.shared.log(
+                "Failed to quarantine unreadable profile: \(error.localizedDescription)",
+                level: .error, category: "LearningsFile")
+        }
+    }
 }
 
 // MARK: - Errors
@@ -176,7 +218,8 @@ public enum LearningsFileError: LocalizedError {
     case keychainDeleteFailed
     case encryptionFailed
     case decryptionFailed
-    
+    case corruptProfileQuarantined
+
     public var errorDescription: String? {
         switch self {
         case .noEncryptionKey:
@@ -189,6 +232,8 @@ public enum LearningsFileError: LocalizedError {
             return "Failed to encrypt learning data."
         case .decryptionFailed:
             return "Failed to decrypt learning data."
+        case .corruptProfileQuarantined:
+            return "Saved learnings were unreadable, so Sorty set them aside and started fresh."
         }
     }
 }
