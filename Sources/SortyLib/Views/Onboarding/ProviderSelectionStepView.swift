@@ -1201,15 +1201,53 @@ private struct ProviderTestConnectionButton: View {
             isIntensified: isHovering,
             includesInteriorGlow: isHovering
         )
-        .onHover { hovering in
-            isHovering = hovering
-        }
+        .debouncedHover($isHovering)
         .disabled(!canTest)
         .opacity(canTest ? 1 : 0.5)
         .animation(
             reduceMotion ? nil : .easeInOut(duration: 0.16),
             value: isHovering
         )
+    }
+}
+
+/// Hover state with CompletionStepView's 40/90ms debounce: a short enter
+/// delay filters sub-40ms swipes that would otherwise flash hover visuals,
+/// and a longer leave delay keeps the exit from jittering on edge brushes.
+/// Haptics never fire from hover — only from clicks.
+struct DebouncedHoverModifier: ViewModifier {
+    @Binding var isHovering: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hoverTask: Task<Void, Never>?
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovering in
+                hoverTask?.cancel()
+                let delayMs = hovering ? 40 : 90
+                hoverTask = Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(delayMs))
+                    guard !Task.isCancelled else { return }
+                    if reduceMotion {
+                        isHovering = hovering
+                    } else {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            isHovering = hovering
+                        }
+                    }
+                }
+            }
+            .onDisappear {
+                hoverTask?.cancel()
+            }
+    }
+}
+
+extension View {
+    /// Debounced hover shared across onboarding surfaces (40ms enter to
+    /// filter swipe-throughs, 90ms leave to settle edge brushes).
+    func debouncedHover(_ isHovering: Binding<Bool>) -> some View {
+        modifier(DebouncedHoverModifier(isHovering: isHovering))
     }
 }
 
@@ -1241,11 +1279,7 @@ private struct CopilotUsernameRevealText: View {
                 : (isHovering ? .easeOut(duration: 0.34) : .easeInOut(duration: 0.24)),
             value: isHovering
         )
-        .onHover { hovering in
-            guard hovering != isHovering else { return }
-            isHovering = hovering
-            HapticFeedbackManager.shared.light()
-        }
+        .debouncedHover($isHovering)
     }
 }
 
@@ -1295,12 +1329,7 @@ private struct OnboardingCodexActionButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(accessibilityIdentifier)
-        .onHover { hovering in
-            if hovering && !isHovering {
-                HapticFeedbackManager.shared.selection()
-            }
-            isHovering = hovering
-        }
+        .debouncedHover($isHovering)
     }
 }
 

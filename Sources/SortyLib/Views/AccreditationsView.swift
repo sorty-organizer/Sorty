@@ -37,16 +37,14 @@ struct AccreditationsView: View {
             Image(systemName: "c.circle.fill")
                 .font(.system(size: 54, weight: .semibold))
                 .foregroundStyle(.secondary)
-                .scaleEffect(iconHovered ? 1.06 : 1.0)
+                // Glow carries hover, never scale: scaling re-rasterizes the
+                // rolling-credits surface below on every hover frame.
+                .shadow(
+                    color: .secondary.opacity(iconHovered ? 0.35 : 0),
+                    radius: iconHovered ? 10 : 0
+                )
                 .accessibilityIdentifier("AccreditationsIcon")
-                .onHover { hovering in
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) {
-                        iconHovered = hovering
-                    }
-                    if hovering {
-                        HapticFeedbackManager.shared.selection()
-                    }
-                }
+                .debouncedHover($iconHovered)
 
             Text("Accreditations")
                 .font(.system(size: 26, weight: .bold, design: .rounded))
