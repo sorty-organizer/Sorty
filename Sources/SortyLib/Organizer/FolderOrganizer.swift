@@ -123,8 +123,6 @@ public enum OrganizationState: Equatable, Sendable {
             switch to {
             case .completed, .idle, .scanning, .organizing, .ready, .applying, .error:
                 return true
-            default:
-                return false
             }
         }
         
@@ -1826,7 +1824,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     private func performOrganization(directory: URL, customPrompt: String?, temperature: Double?) async throws {
         let analyticsStartedAt = Date()
-        guard let client = aiClient else {
+        guard aiClient != nil else {
             let error = OrganizationError.clientNotConfigured
             ReliabilityManager.shared.capture(
                 error: error,
@@ -3790,11 +3788,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // MARK: - State Updates with Progress
 
     @MainActor
-    private func updateState(_ newState: OrganizationState, stage: String, progress: Double) {
+    private func updateState(_ newState: OrganizationState, stage: String, progress: Double, force: Bool = false) {
         guard !isCancellationRequested else { return }
         
         // Validate state transition
-        let didTransition = transition(to: newState)
+        let didTransition = transition(to: newState, force: force)
         guard didTransition else { return }
         
         // Update other properties
@@ -4507,6 +4505,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
         guard currentPlan != nil else {
             throw OrganizationError.noCurrentPlan
+        }
+        // Claim .applying synchronously (before the first await) so a second
+        // apply() observes .applying and no-ops instead of cancelling this run
+        // via cancelInternal and starting a concurrent file-move pass.
+        // performApply validates off-main afterwards; a validation failure
+        // still surfaces as .error from here.
+        withBatchUpdates {
+            transition(to: .applying, force: true)
+            organizationStage = "Applying changes to your files..."
+            progress = 0.0
         }
         // Run the apply inside the tracked task so cancel() aborts the
         // file moves (FileSystemManager polls Task cancellation per file).
@@ -5316,7 +5324,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     private func performRegeneratePreview(allFiles: [FileItem], basePlan: OrganizationPlan) async throws {
         let currentPlan = basePlan
-        var allFiles = allFiles
 
         // Reset streaming state
         await MainActor.run {
@@ -5547,7 +5554,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return FileSystemManager.RestoreResult(successfulOperations: 0, missingFiles: [])
         }
 
-        updateState(.applying, stage: "Verifying files before undo...", progress: 0.1)
+        // A revert is a new operation: clear any stale cancellation flag left
+        // by reset()/cancel() and claim .applying (forced) so a concurrent
+        // organize() observes real work in flight instead of racing the moves.
+        // From .idle the plain transition is invalid, so this must be forced.
+        isCancellationRequested = false
+        updateState(.applying, stage: "Verifying files before undo...", progress: 0.1, force: true)
 
         let moveOps = operations.filter { $0.type == .moveFile || $0.type == .renameFile }
         var preCheckMissing: [String] = []
@@ -5680,7 +5692,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             entryIDs: entriesToUndo.map(\.id),
             path: path
         ) {
-            self.updateState(.applying, stage: "Rolling back states...", progress: 0.1)
+            self.isCancellationRequested = false
+            self.updateState(.applying, stage: "Rolling back states...", progress: 0.1, force: true)
 
             let total = Double(max(entriesToUndo.count, 1))
             var combinedSuccessCount = 0
@@ -5719,6 +5732,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let detailedEntry = await history.details(for: entry)
         let currentOperation = detailedEntry.operations?.first { $0.id == operation.id } ?? operation
         return try await withRevertGuard(entryIDs: [detailedEntry.id], path: detailedEntry.directoryPath) {
+            // Single-file revert is still file work: track it like the batch
+            // paths so organize() cannot start mid-restore. Forced because the
+            // plain idle->applying transition is invalid.
+            self.isCancellationRequested = false
+            self.updateState(.applying, stage: "Undoing change...", progress: 0.3, force: true)
+
             let siblingOperations = (detailedEntry.operations ?? []).filter { $0.id != currentOperation.id }
             let result = try await self.fileSystemManager.restoreSingleOperation(
                 currentOperation,
@@ -5743,6 +5762,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
                 self.history.updateEntry(updatedEntry)
             }
+            self.updateState(.idle, stage: "Undo complete", progress: 1.0, force: true)
 
             return result
         }
