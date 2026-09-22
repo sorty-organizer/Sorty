@@ -647,12 +647,9 @@ public class AppState: ObservableObject {
         self.hasCompletedOnboarding = onboardingCompleted && !mustRepeatOnboarding
         self.requiresSetupRepair = requiresSetupRepair
         self.setupRepairMessage = setupRepairMessage
-        
-        // Multiple windows construct AppState, but only the first state for a
-        // new build needs to update the launch stamp.
-        if userDefaults.string(forKey: "lastLaunchedVersion") != currentVersion {
-            userDefaults.set(currentVersion, forKey: "lastLaunchedVersion")
-        }
+
+        // `lastLaunchedVersion` is written by the first window's post-launch
+        // task, not here, so multi-window init never blocks on a defaults write.
     }
 
     public func recordOnboardingCompletion() {

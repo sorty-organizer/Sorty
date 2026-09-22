@@ -135,9 +135,8 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        #if canImport(SortyLib)
-            _ = NotificationManager.shared
-        #endif
+        // Keep pre-frame work minimal: NotificationManager and other services
+        // start lazily after the first frame (see scheduleIdleStartupWorkIfNeeded).
         ApplicationMover.offerToMoveToApplicationsIfNeeded()
     }
 
@@ -702,7 +701,8 @@ struct SortyApp: App {
 
         SortyUninstaller.discardLegacyRequest()
 
-        configureUITestStateIfNeeded()
+        // UI-test seeding stays off the init path; the harness task seeds
+        // after first paint before any persisted-state load.
 
         #if DEBUG
             SortyAppLog.log("SortyLaunch: SortyApp.init total \((CFAbsoluteTimeGetCurrent() - launchInitStart) * 1000)ms")
@@ -712,7 +712,9 @@ struct SortyApp: App {
     @SceneBuilder
     var body: some Scene {
         productionScenes
+#if DEBUG
         accentPrototypeScenes
+#endif
 
         MenuBarExtra(
             isInserted: Binding(
@@ -756,6 +758,7 @@ struct SortyApp: App {
         }
     }
 
+    #if DEBUG
     @SceneBuilder
     private var accentPrototypeScenes: some Scene {
         accentPrototypeWindow("Rose", id: "accent-rose", color: Color(red: 0.85, green: 0.235, blue: 0.353))
@@ -768,11 +771,7 @@ struct SortyApp: App {
 
     private func accentPrototypeWindow(_ name: String, id: String, color: Color) -> some Scene {
         WindowGroup("Sorty · \(name)", id: id) {
-            // Gating the content (not the scenes) keeps the SceneBuilder
-            // body free of conditionals — wrapping six WindowGroups in
-            // _ConditionalContent crashes the type checker. Closed prototype
-            // windows stay invisible in production: suppressed at launch and
-            // never opened without SORTY_ACCENT_PROTOTYPE=1.
+            // Debug-only prototypes, never registered in Release.
             if ProcessInfo.processInfo.environment["SORTY_ACCENT_PROTOTYPE"] == "1" {
                 mainWindowContent(launchRequest: .constant(nil), accent: color)
                     .environment(\.isAccentPrototypeWindow, true)
@@ -782,6 +781,7 @@ struct SortyApp: App {
         .defaultSize(width: 900, height: 680)
         .defaultLaunchBehavior(.suppressed)
     }
+    #endif
 
     @ViewBuilder
     private func mainWindowContent(
@@ -834,6 +834,11 @@ struct SortyApp: App {
                 }
             }
             .onChange(of: watchedFoldersManager.activeFolderCount) { _, _ in
+                // Debounced downstream: operational services are single-flight
+                // and widget sync coalesces bursts (250ms) with a content-
+                // equality skip, so rapid hydration publishes cost one pass.
+                // Skip entirely before globals hydration to avoid pre-frame I/O.
+                guard hasConfiguredGlobals else { return }
                 if watchedFoldersManager.activeFolderCount > 0 {
                     Task {
                         await configureOperationalServicesIfNeeded()
@@ -846,6 +851,7 @@ struct SortyApp: App {
                 )
             }
             .onChange(of: storageLocationsManager.locations) { _, _ in
+                guard hasConfiguredGlobals else { return }
                 widgetSyncManager.scheduleSync(
                     watchedFoldersManager: watchedFoldersManager,
                     storageLocationsManager: storageLocationsManager
@@ -914,6 +920,11 @@ struct SortyApp: App {
         // Let the first window reach the screen before restoring folders,
         // initializing telemetry, or starting automation.
         await Task.yield()
+
+        // Harness/UI-test seeding runs here, not in `init`, so file and
+        // defaults writes never block scene creation. Seeding stays before
+        // loads so hydrated state observes the seeded values.
+        configureUITestStateIfNeeded()
 
         // Harness mode: skip heavy initialization for fast iteration
         if FeatureFlags.harnessMode {
@@ -1046,6 +1057,11 @@ struct SortyApp: App {
             try? await Task.sleep(for: .seconds(30))
             guard !Task.isCancelled else { return }
 
+            // Deferred touch: NotificationManager construction and its system
+            // permission setup stay off the launch path until 30s idle.
+            #if canImport(SortyLib)
+                _ = NotificationManager.shared
+            #endif
             AnalyticsManager.shared.reloadExperimentalFeatures()
             if hasCompletedOnboarding, finderIntegrationEnabled {
                 let defaults = UserDefaults.standard

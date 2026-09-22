@@ -1554,14 +1554,14 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         let stateDelay = isOrganizerBusyForAutomation() ? retryBaseDelay : 0
         let delay = max(max(earliestAttempt.timeIntervalSinceNow, stateDelay), 0.05)
         let delayNanoseconds = UInt64(delay * 1_000_000_000)
-        retryTask = Task {
+        retryTask = Task(priority: .utility) { @MainActor [weak self] in
             do {
                 try await Task.sleep(nanoseconds: delayNanoseconds)
             } catch {
                 return
             }
-            guard !Task.isCancelled else { return }
-            processPendingFiles()
+            guard !Task.isCancelled, let self else { return }
+            self.processPendingFiles()
         }
     }
 

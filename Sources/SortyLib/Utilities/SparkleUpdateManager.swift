@@ -162,56 +162,16 @@ public class SparkleUpdateManager: ObservableObject {
 
     // UserDefaults key for persisting last check date
     private static let lastAutoCheckKey = "lastSparkleUpdateCheckDate"
-    private var lastObservedUpdateChannel = UpdateChannel.current
     private var hasRequestedLaunchCheck = false
     private var hasInitialized = false
-    private var updateChannelRefreshTask: Task<Void, Never>?
 
     public init() {
         if let savedDate = UserDefaults.standard.object(forKey: Self.lastAutoCheckKey) as? Date {
             self.lastCheckDate = savedDate
         }
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleUserDefaultsDidChangeNotification(_:)),
-            name: UserDefaults.didChangeNotification,
-            object: nil
-        )
-    }
-
-    deinit {
-        NotificationCenter.default.removeObserver(
-            self,
-            name: UserDefaults.didChangeNotification,
-            object: nil
-        )
-    }
-
-    @objc nonisolated private func handleUserDefaultsDidChangeNotification(_ notification: Notification) {
-        Task { @MainActor [weak self] in
-            self?.scheduleUpdateChannelRefresh()
-        }
-    }
-
-    private func scheduleUpdateChannelRefresh() {
-        updateChannelRefreshTask?.cancel()
-        updateChannelRefreshTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled else { return }
-            self?.handleUserDefaultsDidChange()
-            self?.updateChannelRefreshTask = nil
-        }
-    }
-
-    private func handleUserDefaultsDidChange() {
-        let currentUpdateChannel = UpdateChannel.current
-
-        if currentUpdateChannel != lastObservedUpdateChannel {
-            lastObservedUpdateChannel = currentUpdateChannel
-            updateChannel = currentUpdateChannel
-            LogManager.shared.log("Sparkle update channel changed to \(currentUpdateChannel.displayName)", category: "SparkleUpdateManager")
-        }
+        // No UserDefaults.didChangeNotification observer: updateChannel is a
+        // build-time constant, and a blanket observer would wake on every
+        // defaults write (including high-frequency caches).
     }
 
     private func initializeIfNeeded() {

@@ -19,6 +19,9 @@ struct MainWindowRootView: View {
     @State private var handledLaunchRequestID: UUID?
     @State private var handledUITestDeepLink = false
     @State private var isShowingWhatsNew = false
+    @State private var importPickerDelayTask: Task<Void, Never>?
+    @State private var whatsNewDelayTask: Task<Void, Never>?
+    @State private var uiTestDeeplinkTask: Task<Void, Never>?
 
     let launchRequest: WindowLaunchRequest?
     let coordinator: AppCoordinator?
@@ -177,9 +180,12 @@ struct MainWindowRootView: View {
             .onReceive(NotificationCenter.default.publisher(for: .importLearningsProfile)) { notification in
                 guard notification.targetsWindowSession(windowSession.id) else { return }
                 windowSession.appState.currentView = .learnings
-                Task { @MainActor in
+                importPickerDelayTask?.cancel()
+                importPickerDelayTask = Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 100_000_000)
+                    guard !Task.isCancelled else { return }
                     learningsManager.showingImportPicker = true
+                    importPickerDelayTask = nil
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .clearLearningsData)) { notification in
@@ -252,6 +258,9 @@ struct MainWindowRootView: View {
     private var contentWithLifecycle: some View {
         contentWithEnvironment
             .task {
+                // First-window launch stamp moves off AppState.init so
+                // multi-window init never blocks on a defaults write.
+                recordFirstWindowLaunchVersionIfNeeded()
                 let calibrate: ((WatchedFolder) -> Void)? = coordinator.map { coord in
                     { folder in coord.calibrateFolder(folder) }
                 }
@@ -332,6 +341,12 @@ struct MainWindowRootView: View {
                 handleExternalDeeplink(url)
             }
             .onDisappear {
+                importPickerDelayTask?.cancel()
+                importPickerDelayTask = nil
+                whatsNewDelayTask?.cancel()
+                whatsNewDelayTask = nil
+                uiTestDeeplinkTask?.cancel()
+                uiTestDeeplinkTask = nil
                 coordinator?.finishManualOrganization(sessionID: windowSession.id)
                 menuBarController.setActivity(
                     nil,
@@ -357,6 +372,16 @@ struct MainWindowRootView: View {
             windowSession.appState.duplicateManager.isScanning ? .duplicateScanning : nil,
             sourceID: "window.\(windowSession.id.uuidString).duplicates"
         )
+    }
+
+    /// Writes the launch stamp once per build from the first window's
+    /// post-launch task. Keeps AppState.init free of defaults writes.
+    private func recordFirstWindowLaunchVersionIfNeeded() {
+        let currentVersion = BuildInfo.version
+        let defaults = UserDefaults.standard
+        if defaults.string(forKey: "lastLaunchedVersion") != currentVersion {
+            defaults.set(currentVersion, forKey: "lastLaunchedVersion")
+        }
     }
 
     private var contentWithEnvironment: some View {
@@ -417,8 +442,10 @@ struct MainWindowRootView: View {
         guard !currentIdentifier.isEmpty else { return }
         guard forceShowWhatsNewOnLaunch || lastSeenWhatsNewBuild != currentIdentifier else { return }
 
-        Task { @MainActor in
+        whatsNewDelayTask?.cancel()
+        whatsNewDelayTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 700_000_000)
+            guard !Task.isCancelled else { return }
             await SortyResources.preloadImages(named: [
                 "whats-new-preview.png",
                 "whats-new-design-system-1.png",
@@ -430,6 +457,7 @@ struct MainWindowRootView: View {
             if forceShowWhatsNewOnLaunch || lastSeenWhatsNewBuild != currentIdentifier {
                 isShowingWhatsNew = true
             }
+            whatsNewDelayTask = nil
         }
     }
 
@@ -471,9 +499,12 @@ struct MainWindowRootView: View {
 
         handledUITestDeepLink = true
 
-        Task { @MainActor in
+        uiTestDeeplinkTask?.cancel()
+        uiTestDeeplinkTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
             processDeeplink(url)
+            uiTestDeeplinkTask = nil
         }
     }
 

@@ -17,6 +17,11 @@ public final class WindowSession: ObservableObject {
         updateManager: SparkleUpdateManager = SparkleUpdateManager(),
         history: OrganizationHistory = OrganizationHistory()
     ) {
+        // Lightweight init with in-memory defaults only. MainWindowRootView
+        // always passes the shared SparkleUpdateManager and history; the
+        // defaults cover previews and tests. Heavy restoration runs in
+        // `configureIfNeeded` after the first yield so init never blocks
+        // first paint.
         self.id = id
         self.history = history
         self.appState = AppState(windowSessionID: id, updateManager: updateManager)

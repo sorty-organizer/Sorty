@@ -47,21 +47,10 @@ public class SecurityManager: ObservableObject {
     
     // MARK: - Init
 
-    public init() {
-        // Defer the LAContext probe off the launch path. `biometryType`
-        // stays `.none` until the first background check or auth request.
-        Task { @MainActor [weak self] in
-            let probed = await Task.detached(priority: .utility) {
-                let context = LAContext()
-                var error: NSError?
-                guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
-                    return LABiometryType.none
-                }
-                return context.biometryType
-            }.value
-            self?.biometryType = probed
-        }
-    }
+    /// Construction stays cheap for fast launch; biometry resolves lazily on
+    /// first authentication (see `authenticateForSensitiveAction`), never in
+    /// `init` and never via a fire-and-forget task at construction.
+    public init() {}
     
     // MARK: - Authentication Methods
     
