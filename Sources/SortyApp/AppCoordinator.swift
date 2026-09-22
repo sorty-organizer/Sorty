@@ -1182,20 +1182,27 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
 
     private func restorePendingWatchWork() {
-        guard let pendingWorkURL,
-              let data = try? Data(contentsOf: pendingWorkURL) else {
-            return
+        guard let url = pendingWorkURL else { return }
+        Task { @MainActor [weak self] in
+            // Decode off the main actor; `OrganizationPlan` payloads can be large.
+            let persistedWork: PersistedOutstandingWatchWork? = await Task.detached(priority: .userInitiated) {
+                guard let data = try? Data(contentsOf: url) else { return nil }
+                let decoder = JSONDecoder()
+                if let decoded = try? decoder.decode(PersistedOutstandingWatchWork.self, from: data) {
+                    return decoded
+                }
+                if let legacyBatches = try? decoder.decode([PersistedPendingWatchBatch].self, from: data) {
+                    return PersistedOutstandingWatchWork(batches: legacyBatches, reviews: [])
+                }
+                return nil
+            }.value
+            guard let self, let persistedWork else { return }
+            await self.applyRestoredWatchWork(persistedWork)
         }
+    }
 
-        let decoder = JSONDecoder()
-        let persistedWork: PersistedOutstandingWatchWork
-        if let decoded = try? decoder.decode(PersistedOutstandingWatchWork.self, from: data) {
-            persistedWork = decoded
-        } else if let legacyBatches = try? decoder.decode([PersistedPendingWatchBatch].self, from: data) {
-            persistedWork = PersistedOutstandingWatchWork(batches: legacyBatches, reviews: [])
-        } else {
-            return
-        }
+    @MainActor
+    private func applyRestoredWatchWork(_ persistedWork: PersistedOutstandingWatchWork) {
 
         let configuredFolders = Dictionary(
             uniqueKeysWithValues: watchedFoldersManager.folders.map { ($0.id, $0) }
@@ -1231,6 +1238,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             )
         }
         persistOutstandingWatchWork()
+        scheduleRetry()
     }
 
     private func persistOutstandingWatchWork() {

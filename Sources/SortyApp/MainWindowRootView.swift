@@ -417,8 +417,12 @@ struct MainWindowRootView: View {
         guard !currentIdentifier.isEmpty else { return }
         guard forceShowWhatsNewOnLaunch || lastSeenWhatsNewBuild != currentIdentifier else { return }
 
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 700_000_000)
+        Task { @MainActor [weak windowSession] in
+            // Defer past first-frame interaction so Dock-click-to-organize
+            // never hits a modal sheet or image-decode burst on launch.
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard let windowSession else { return }
+            guard !windowSession.organizer.state.isOperationInProgress else { return }
             await SortyResources.preloadImages(named: [
                 "whats-new-preview.png",
                 "whats-new-design-system-1.png",

@@ -225,7 +225,9 @@ struct ReadyToOrganizeStartButton: View {
                 isConnecting: isConnecting
             )
         }
-        .buttonStyle(.metalFxPrimary(isPaused: isConnecting, usesSubtleIdleBeam: true))
+        // Pause the Metal idle beam until the view has appeared so the first
+        // frame renders statically without mounting a TimelineView.
+        .buttonStyle(.metalFxPrimary(isPaused: isConnecting || !hasAppeared, usesSubtleIdleBeam: hasAppeared))
         .controlSize(.large)
         .keyboardShortcut(.return, modifiers: [])
         .disabled(isConnecting)

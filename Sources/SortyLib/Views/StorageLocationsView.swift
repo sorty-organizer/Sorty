@@ -100,7 +100,7 @@ struct StorageLocationConfigView: View {
                 .buttonStyle(.sortyProminent)
             }
             .padding()
-            .background(.ultraThinMaterial)
+            .systemLiquidGlassBackground(cornerRadius: 12)
             
             Divider()
             

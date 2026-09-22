@@ -452,7 +452,9 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 
     func scheduleRecoveryWindow(rootView: @escaping @MainActor () -> AnyView) {
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(750))
+            // Wait past slow cold launches so a late main window does not
+            // trigger a duplicate recovery window.
+            try? await Task.sleep(for: .milliseconds(2000))
             let hasMainWindow = NSApplication.shared.windows.contains { window in
                 window.canBecomeMain && (window.isVisible || window.isMiniaturized)
             }
@@ -712,7 +714,9 @@ struct SortyApp: App {
     @SceneBuilder
     var body: some Scene {
         productionScenes
+#if DEBUG
         accentPrototypeScenes
+#endif
 
         MenuBarExtra(
             isInserted: Binding(
@@ -728,6 +732,9 @@ struct SortyApp: App {
                 .environmentObject(notificationSettings)
                 .environmentObject(menuBarController)
                 .task {
+                    // Main window also triggers hydration; skip the duplicate
+                    // when the menu bar is hidden so cold launch does one pass.
+                    guard showMenuBarExtra || keepInBackground else { return }
                     await configureGlobalsIfNeeded()
                 }
         } label: {
@@ -756,6 +763,7 @@ struct SortyApp: App {
         }
     }
 
+#if DEBUG
     @SceneBuilder
     private var accentPrototypeScenes: some Scene {
         accentPrototypeWindow("Rose", id: "accent-rose", color: Color(red: 0.85, green: 0.235, blue: 0.353))
@@ -768,11 +776,7 @@ struct SortyApp: App {
 
     private func accentPrototypeWindow(_ name: String, id: String, color: Color) -> some Scene {
         WindowGroup("Sorty · \(name)", id: id) {
-            // Gating the content (not the scenes) keeps the SceneBuilder
-            // body free of conditionals — wrapping six WindowGroups in
-            // _ConditionalContent crashes the type checker. Closed prototype
-            // windows stay invisible in production: suppressed at launch and
-            // never opened without SORTY_ACCENT_PROTOTYPE=1.
+            // Debug-only prototypes, never registered in Release.
             if ProcessInfo.processInfo.environment["SORTY_ACCENT_PROTOTYPE"] == "1" {
                 mainWindowContent(launchRequest: .constant(nil), accent: color)
                     .environment(\.isAccentPrototypeWindow, true)
@@ -782,6 +786,7 @@ struct SortyApp: App {
         .defaultSize(width: 900, height: 680)
         .defaultLaunchBehavior(.suppressed)
     }
+#endif
 
     @ViewBuilder
     private func mainWindowContent(
@@ -929,6 +934,7 @@ struct SortyApp: App {
         async let customPersonaLoad: Void = customPersonaStore.loadPersistedState()
         async let namingPresetLoad: Void = namingPresetManager.loadPersistedState()
         async let steeringPromptLoad: Void = steeringPromptManager.loadPersistedState()
+        async let notificationLoad: Void = notificationSettings.loadPersistedState()
         _ = await (
             settingsLoad,
             watchedFoldersLoad,
@@ -936,8 +942,11 @@ struct SortyApp: App {
             personaLoad,
             customPersonaLoad,
             namingPresetLoad,
-            steeringPromptLoad
+            steeringPromptLoad,
+            notificationLoad
         )
+
+        extensionListener.drainHandoffSlot()
 
         appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
         loginItemManager.startUp()
