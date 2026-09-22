@@ -390,6 +390,8 @@ public struct MetalFxPrimaryButtonStyle: ButtonStyle {
 
 private struct MetalFxPillSurface: View {
     @SortyHotReload private var hotReload
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isWindowVisible = true
     @State private var accumulatedAnimationTime: TimeInterval = 0
     @State private var animationStartedAt: TimeInterval?
@@ -411,6 +413,7 @@ private struct MetalFxPillSurface: View {
 
     private var shouldAnimateSurface: Bool {
         !isPaused && isEnabled && !reduceMotion && isWindowVisible
+            && controlActiveState != .inactive && scenePhase == .active
     }
 
     private var animationFrameInterval: TimeInterval {

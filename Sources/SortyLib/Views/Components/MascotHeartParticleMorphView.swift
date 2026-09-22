@@ -17,27 +17,48 @@ struct MascotHeartParticleMorphView: View {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var animationStart: Date?
     @State private var animationRun = 0
     @State private var replayStartProgress = 1.0
+    @State private var isSettled = false
+    @State private var isWindowVisible = true
 
     // `color` kept for API compat but mascot uses its true palette, not the accent.
     let color: Color
 
     var body: some View {
         Button(action: replayAnimation) {
-            SwiftUI.TimelineView(
-                .animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || animationStart == nil)
-            ) { timeline in
-                let elapsed = animationStart.map { timeline.date.timeIntervalSince($0) } ?? 0
-                let isReplay = animationRun > 0
-                let isHeartComplete = reduceMotion || heartIsComplete(at: elapsed, isReplay: isReplay)
+            Group {
+                if isSettled || reduceMotion {
+                    // Settled heart renders once with no timeline; the looping
+                    // heartbeat below is paused instead of ticking forever.
+                    ParticleMorphCanvas(
+                        progress: 1,
+                        heartbeatScale: 1,
+                        isHeartComplete: true
+                    )
+                } else {
+                    SwiftUI.TimelineView(
+                        .animation(
+                            minimumInterval: 1.0 / 30.0,
+                            paused: reduceMotion || animationStart == nil || isSettled
+                                || !isWindowVisible || controlActiveState == .inactive
+                                || scenePhase != .active
+                        )
+                    ) { timeline in
+                        let elapsed = animationStart.map { timeline.date.timeIntervalSince($0) } ?? 0
+                        let isReplay = animationRun > 0
+                        let isHeartComplete = reduceMotion || heartIsComplete(at: elapsed, isReplay: isReplay)
 
-                ParticleMorphCanvas(
-                    progress: isHeartComplete ? 1 : morphProgress(at: elapsed, isReplay: isReplay),
-                    heartbeatScale: reduceMotion ? 1 : heartbeatScale(at: elapsed, isReplay: isReplay),
-                    isHeartComplete: isHeartComplete
-                )
+                        ParticleMorphCanvas(
+                            progress: isHeartComplete ? 1 : morphProgress(at: elapsed, isReplay: isReplay),
+                            heartbeatScale: reduceMotion ? 1 : heartbeatScale(at: elapsed, isReplay: isReplay),
+                            isHeartComplete: isHeartComplete
+                        )
+                    }
+                }
             }
             .contentShape(Rectangle())
             .accessibilityHidden(true)
@@ -46,15 +67,25 @@ struct MascotHeartParticleMorphView: View {
         .help("Replay animation")
         .accessibilityLabel("Replay mascot animation") // [VERIFY] User-facing name for the visual control.
         .accessibilityHint("Plays the mascot-to-heart animation again")
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .task(id: AnimationTaskID(reduceMotion: reduceMotion, run: animationRun)) {
             animationStart = nil
+            isSettled = reduceMotion
             guard !reduceMotion else { return }
 
             try? await Task.sleep(for: .milliseconds(120))
             guard !Task.isCancelled else { return }
             animationStart = Date()
 
-            guard animationRun > 0 else { return }
+            guard animationRun > 0 else {
+                // First run: settle shortly after the morph completes so the
+                // heartbeat does not tick the timeline indefinitely.
+                let settleDelay = Timing.mascotHold + Timing.morphDuration + 2 * Timing.heartbeatDuration
+                try? await Task.sleep(for: .seconds(settleDelay))
+                guard !Task.isCancelled else { return }
+                isSettled = true
+                return
+            }
             let reverseDuration = Timing.reverseDuration * replayStartProgress
             try? await Task.sleep(for: .seconds(reverseDuration))
             guard !Task.isCancelled else { return }
@@ -67,11 +98,16 @@ struct MascotHeartParticleMorphView: View {
             try? await Task.sleep(for: .seconds(Timing.morphDuration))
             guard !Task.isCancelled else { return }
             HapticFeedbackManager.shared.success()
+
+            try? await Task.sleep(for: .seconds(2 * Timing.heartbeatDuration))
+            guard !Task.isCancelled else { return }
+            isSettled = true
         }
     }
 
     private func replayAnimation() {
         HapticFeedbackManager.shared.tap()
+        isSettled = false
         if let animationStart {
             replayStartProgress = morphProgress(
                 at: Date().timeIntervalSince(animationStart),

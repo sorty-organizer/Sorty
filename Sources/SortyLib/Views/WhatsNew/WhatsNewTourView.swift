@@ -7,6 +7,8 @@ public struct WhatsNewTourView: View {
     private let onFinish: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var currentPage = 0
     @State private var workflowImageIndex = 0
     @State private var isActionHovering = false
@@ -41,13 +43,16 @@ public struct WhatsNewTourView: View {
             id: ImageRotationTaskID(
                 page: currentPage,
                 reduceMotion: reduceMotion,
-                isWindowVisible: isWindowVisible
+                isWindowVisible: isWindowVisible,
+                controlActiveState: controlActiveState,
+                scenePhase: scenePhase
             )
         ) {
-            guard !reduceMotion, isWindowVisible, page.imageNames.count > 1 else { return }
+            guard !reduceMotion, isWindowVisible, controlActiveState != .inactive,
+                  scenePhase == .active, page.imageNames.count > 1 else { return }
 
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(3_800))
+                try? await Task.sleep(for: .milliseconds(8_000))
                 guard !Task.isCancelled else { return }
                 withAnimation(imageTransitionAnimation) {
                     workflowImageIndex = (workflowImageIndex + 1) % page.imageNames.count
@@ -815,6 +820,8 @@ private struct ImageRotationTaskID: Hashable {
     let page: Int
     let reduceMotion: Bool
     let isWindowVisible: Bool
+    let controlActiveState: ControlActiveState
+    let scenePhase: ScenePhase
 }
 
 private struct WhatsNewPage: Hashable {

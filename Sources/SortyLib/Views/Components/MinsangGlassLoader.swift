@@ -9,7 +9,9 @@ struct MinsangGlassLoader: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var phase = LoaderPhase.base
     @State private var hasPresented = false
     @State private var nextAlternatePhase = LoaderPhase.dual
@@ -31,12 +33,17 @@ struct MinsangGlassLoader: View {
     private static let fullTurnDuration = (2 * Double.pi) / Double(moverSpeed)
 
     private var shouldAnimate: Bool {
-        isActive && !reduceMotion && controlActiveState != .inactive && isWindowVisible
+        isActive && !reduceMotion && !reduceTransparency && controlActiveState != .inactive
+            && scenePhase == .active && isWindowVisible
     }
 
     var body: some View {
         Group {
-            if let shaderLibrary = Self.shaderLibrary {
+            if reduceTransparency || Self.shaderLibrary == nil {
+                // Static-cost fallback: the Metal ink shader is skipped when
+                // transparency is reduced.
+                CometLoader(size: size, lineWidth: 2, color: .secondary)
+            } else if let shaderLibrary = Self.shaderLibrary {
                 glassLoader(shaderLibrary: shaderLibrary)
             } else {
                 CometLoader(size: size, lineWidth: 2, color: .secondary)
@@ -74,7 +81,7 @@ struct MinsangGlassLoader: View {
 
     private func glassLoader(shaderLibrary: ShaderLibrary) -> some View {
         SwiftUI.TimelineView(
-            .animation(minimumInterval: 1.0 / 20.0, paused: !shouldAnimate)
+            .animation(minimumInterval: 1.0 / 12.0, paused: !shouldAnimate)
         ) { timeline in
             GeometryReader { proxy in
                 let time = shouldAnimate ? timeline.date.timeIntervalSinceReferenceDate : 0
@@ -86,7 +93,7 @@ struct MinsangGlassLoader: View {
                             time: time,
                             size: proxy.size
                         ),
-                        maxSampleOffset: CGSize(width: 24, height: 24)
+                        maxSampleOffset: CGSize(width: 12, height: 12)
                     )
 
                 if colorScheme == .dark {

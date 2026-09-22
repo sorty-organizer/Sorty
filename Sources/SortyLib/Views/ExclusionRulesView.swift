@@ -15,6 +15,8 @@ struct ExclusionRulesView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var learningsManager: LearningsManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     /// Injected for tests (MockAIClient); defaults to the factory in production.
     var injectedAIClient: (any AIClientProtocol)? = nil
     @State private var showingAddRule = false
@@ -720,11 +722,12 @@ struct ExclusionRulesView: View {
                 }
             }
         }
-        .task(id: NaturalLanguageSuggestionTaskID(isEmpty: newNLException.isEmpty, isVisible: isWindowVisible)) {
-            guard newNLException.isEmpty, isWindowVisible else { return }
+        .task(id: NaturalLanguageSuggestionTaskID(isEmpty: newNLException.isEmpty, isVisible: isWindowVisible, controlActiveState: controlActiveState, scenePhase: scenePhase)) {
+            guard newNLException.isEmpty, isWindowVisible, !reduceMotion,
+                  controlActiveState != .inactive, scenePhase == .active else { return }
 
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(4))
+                try? await Task.sleep(for: .seconds(8))
                 guard !Task.isCancelled, newNLException.isEmpty else { return }
 
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
@@ -1081,6 +1084,8 @@ struct ExclusionRulesView: View {
 private struct NaturalLanguageSuggestionTaskID: Hashable {
     let isEmpty: Bool
     let isVisible: Bool
+    let controlActiveState: ControlActiveState
+    let scenePhase: ScenePhase
 }
 
 private struct ExclusionEditorTransitionModifier: ViewModifier {

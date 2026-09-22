@@ -383,6 +383,7 @@ struct WatchedFolderCard: View {
     @State private var pendingFullOrganization: WatchedFolder?
     @State private var isHovered = false
     @State private var highlightPulse = false
+    @State private var isWindowVisible = true
     @State private var accessRecoveryError: AccessRecoveryError?
     @State private var isConfirmingReviewDiscard = false
     @State private var isConfirmingFolderRemoval = false
@@ -955,6 +956,7 @@ struct WatchedFolderCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(cardBorderColor, lineWidth: isHighlighted ? 1.6 : 1)
         )
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .shadow(color: cardShadowColor, radius: cardShadowRadius, x: 0, y: 1)
         .opacity(folderExists ? 1.0 : 0.8)
         .scaleEffect(isHighlighted && highlightPulse ? 1.008 : 1.0)
@@ -970,6 +972,9 @@ struct WatchedFolderCard: View {
         }
         .onChange(of: isHighlighted) { _, newValue in
             updateHighlightAnimation(newValue)
+        }
+        .onChange(of: isWindowVisible) { _, _ in
+            updateHighlightAnimation(isHighlighted)
         }
         .onChange(of: controlActiveState) { _, _ in
             updateHighlightAnimation(isHighlighted)
@@ -1037,9 +1042,11 @@ struct WatchedFolderCard: View {
     }
 
     private func updateHighlightAnimation(_ isActive: Bool) {
-        if isActive, controlActiveState != .inactive, !reduceMotion {
+        if isActive, controlActiveState != .inactive, isWindowVisible, !reduceMotion {
             highlightPulse = false
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+            // Three pulses, then settle on the highlighted state instead of
+            // ticking a repeatForever for the row's lifetime.
+            withAnimation(.easeInOut(duration: 0.9).repeatCount(3, autoreverses: true)) {
                 highlightPulse = true
             }
         } else {
@@ -1226,6 +1233,8 @@ struct WatchedFolderConfigView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @Environment(\.dismiss) var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var steeringManager = SteeringPromptManager.shared
 
     @State private var customPrompt: String
@@ -1246,6 +1255,19 @@ struct WatchedFolderConfigView: View {
     @State private var instructionSuggestionIndex = 0
     @State private var instructionSelection = NSRange(location: 0, length: 0)
     @State private var showNerdStats = false
+    @State private var isWindowVisible = true
+
+    /// Suggestion cycling runs at 8s only while the prompt is empty and the
+    /// window is visible, active, and foregrounded.
+    private var shouldCycleInstructionSuggestions: Bool {
+        customPrompt.isEmpty && !reduceMotion && isWindowVisible
+            && controlActiveState != .inactive && scenePhase == .active
+    }
+
+    private struct InstructionSuggestionCycleID: Equatable {
+        let suggestions: [String]
+        let shouldCycle: Bool
+    }
 
     init(
         folder: WatchedFolder,
@@ -1446,12 +1468,14 @@ struct WatchedFolderConfigView: View {
                                     .padding(.trailing, 10)
                                     .padding(.vertical, 9)
                                     .allowsHitTesting(false)
-                                    .task(id: instructionSuggestions) {
+                                    .task(id: InstructionSuggestionCycleID(suggestions: instructionSuggestions, shouldCycle: shouldCycleInstructionSuggestions)) {
                                         instructionSuggestionIndex = 0
+                                        guard shouldCycleInstructionSuggestions else { return }
 
                                         while !Task.isCancelled {
-                                            try? await Task.sleep(for: .seconds(3.5))
-                                            guard !Task.isCancelled else { return }
+                                            try? await Task.sleep(for: .seconds(8))
+                                            guard !Task.isCancelled,
+                                                  shouldCycleInstructionSuggestions else { return }
                                             instructionSuggestionIndex =
                                                 (instructionSuggestionIndex + 1)
                                                 % instructionSuggestions.count
@@ -1591,6 +1615,7 @@ struct WatchedFolderConfigView: View {
         }
         .frame(width: 560, height: 680)
         .background(Color(NSColor.windowBackgroundColor))
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .onAppear {
             primeModelSelectionFromGlobalDefaultsIfNeeded()
         }

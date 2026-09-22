@@ -997,7 +997,7 @@ private final class RetainedIntroGlowView: NSView {
         setAccessibilityElement(false)
 
         blurFilter.name = "introGlowBlur"
-        blurFilter.radius = 28
+        blurFilter.radius = 16
         glowShapeLayer.backgroundColor = NSColor(SortyDesignSystem.Colors.resolvedAccent)
             .withAlphaComponent(0.30)
             .cgColor
@@ -1068,19 +1068,12 @@ private final class RetainedIntroGlowView: NSView {
         opacity.timingFunction = CAMediaTimingFunction(name: .easeOut)
         glowLayer.add(opacity, forKey: "introGlowOpacity")
 
-        let blur = CABasicAnimation(keyPath: "filters.introGlowBlur.inputRadius")
-        blur.fromValue = 28
-        blur.toValue = 38
-        blur.beginTime = now + 0.4
-        blur.duration = 1.5
-        blur.fillMode = .backwards
-        blur.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        glowLayer.add(blur, forKey: "introGlowRadius")
-
+        // The blur radius stays fixed; only opacity animates so the GPU
+        // never re-rasterizes the blurred layer mid-reveal.
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         glowLayer.opacity = 1
-        blurFilter.radius = 38
+        blurFilter.radius = 16
         CATransaction.commit()
     }
 
@@ -1090,7 +1083,7 @@ private final class RetainedIntroGlowView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         glowLayer.opacity = isVisible ? 1 : 0
-        blurFilter.radius = 38
+        blurFilter.radius = 16
         CATransaction.commit()
     }
 
@@ -1100,7 +1093,7 @@ private final class RetainedIntroGlowView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         glowLayer.opacity = 0
-        blurFilter.radius = 28
+        blurFilter.radius = 16
         CATransaction.commit()
     }
 
@@ -1546,8 +1539,8 @@ private struct OnboardingOrbitField: NSViewRepresentable {
 /// compositor keyframes. The display link runs only during hover transitions.
 @MainActor
 private final class OnboardingOrbitFieldView: NSView {
-    private static let interactionFrameRate: Float = 120
-    nonisolated private static let idleSampleRate = 120.0
+    private static let interactionFrameRate: Float = 60
+    nonisolated private static let idleSampleRate = 60.0
     private static let springResponse = 0.48
     private static let springDamping = 0.90
 
@@ -1765,7 +1758,7 @@ private final class OnboardingOrbitFieldView: NSView {
             selector: #selector(displayLinkDidFire(_:))
         )
         displayLink.preferredFrameRateRange = CAFrameRateRange(
-            minimum: 60,
+            minimum: 30,
             maximum: Self.interactionFrameRate,
             preferred: Self.interactionFrameRate
         )
@@ -1777,8 +1770,13 @@ private final class OnboardingOrbitFieldView: NSView {
     private func updateMotionState() {
         let springIsMoving = abs(collapseProgress - collapseTarget) > 0.0005
             || abs(collapseVelocity) > 0.0005
+        // The display link only drives hover-transition springs; idle drift
+        // runs on compositor keyframes. Paused while inactive, occluded, or
+        // under Reduce Motion so no frames burn offscreen.
+        let isOccluded = window.map { !$0.occlusionState.contains(.visible) } ?? false
         let shouldRunIdleAnimations = filesVisible
             && isActive
+            && !isOccluded
             && !reduceMotion
             && collapseTarget == 0
             && !springIsMoving
@@ -1798,7 +1796,7 @@ private final class OnboardingOrbitFieldView: NSView {
             stopIdleAnimations(preservingPhase: !reduceMotion)
         }
 
-        let shouldDriveSpring = filesVisible && isActive && !reduceMotion && springIsMoving
+        let shouldDriveSpring = filesVisible && isActive && !isOccluded && !reduceMotion && springIsMoving
         orbitDisplayLink?.isPaused = !shouldDriveSpring
         if !shouldDriveSpring {
             lastTimestamp = nil
@@ -2027,7 +2025,7 @@ private struct OnboardingScreenEdgeGlow: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .compositingGroup()
-        .blur(radius: 22)
+        .blur(radius: 12)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

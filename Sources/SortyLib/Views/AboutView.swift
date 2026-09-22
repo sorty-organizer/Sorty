@@ -201,6 +201,8 @@ struct AboutView: View {
 private struct AboutAppIconEasterEgg: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var carousel = AboutIconCarousel()
     @State private var iconHovered = false
     @State private var isWindowVisible = true
@@ -215,7 +217,10 @@ private struct AboutAppIconEasterEgg: View {
         } label: {
             ZStack {
                 if carousel.isBursting && !reduceMotion {
-                    IconBurst(startDate: carousel.burstStart)
+                    IconBurst(
+                        startDate: carousel.burstStart,
+                        isWindowVisible: isWindowVisible
+                    )
                         .frame(width: 220, height: 220)
                         .allowsHitTesting(false)
                         .transition(.opacity)
@@ -258,6 +263,8 @@ private struct AboutAppIconEasterEgg: View {
             updateAutoCycle()
         }
         .onChange(of: isWindowVisible) { _, _ in updateAutoCycle() }
+        .onChange(of: scenePhase) { _, _ in updateAutoCycle() }
+        .onChange(of: controlActiveState) { _, _ in updateAutoCycle() }
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .onDisappear { carousel.stop() }
     }
@@ -268,7 +275,10 @@ private struct AboutAppIconEasterEgg: View {
     }
 
     private func updateAutoCycle() {
-        carousel.setAutoCycleEnabled(!reduceMotion && isWindowVisible)
+        carousel.setAutoCycleEnabled(
+            !reduceMotion && isWindowVisible && controlActiveState != .inactive
+                && scenePhase == .active
+        )
     }
 }
 
@@ -290,7 +300,7 @@ private final class AboutIconCarousel: ObservableObject {
     private var burstTask: Task<Void, Never>?
     private var lastManualTapDate: Date?
 
-    private let autoCycleInterval: Duration = .seconds(3)
+    private let autoCycleInterval: Duration = .seconds(8)
     private let burstHoldInterval: Duration = .milliseconds(1700)
     private let manualPauseInterval: TimeInterval = 1.8
 
@@ -568,11 +578,22 @@ private enum AboutIconImageNormalizer {
 private struct IconBurst: View {
     @SortyHotReload private var hotReload
     let startDate: Date
+    var isWindowVisible = true
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
 
     private let particles = IconBurst.makeParticles()
 
     var body: some View {
-        SwiftUI.TimelineView(.animation) { context in
+        SwiftUI.TimelineView(
+            .animation(
+                minimumInterval: 1.0 / 30.0,
+                paused: reduceMotion || !isWindowVisible || controlActiveState == .inactive
+                    || scenePhase != .active
+            )
+        ) { context in
             Canvas { ctx, size in
                 let t = max(0, context.date.timeIntervalSince(startDate))
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)

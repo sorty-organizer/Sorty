@@ -1146,13 +1146,16 @@ private struct PermissionDemoVideoView: View {
     let permission: PermissionType
     let resourceName: String
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         ZStack {
             Color.black
 
-            if let videoURL {
+            if let videoURL, !reduceMotion {
                 LoopingPermissionVideoView(url: videoURL)
             } else {
+                // Static poster under Reduce Motion: no AVPlayerLooper runs.
                 permissionDemoFallback
             }
         }
@@ -1278,11 +1281,49 @@ private struct LoopingPermissionVideoView: NSViewRepresentable {
                     queue: .main
                 ) { [weak self] _ in
                     Task { @MainActor in
-                        guard self?.playerView?.window?.isVisible == true else { return }
-                        self?.player?.play()
+                        self?.refreshPlayback()
                     }
+                },
+                center.addObserver(
+                    forName: NSWindow.didChangeOcclusionStateNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.refreshPlayback() }
+                },
+                center.addObserver(
+                    forName: NSWindow.didMiniaturizeNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.player?.pause() }
+                },
+                center.addObserver(
+                    forName: NSWindow.didDeminiaturizeNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.refreshPlayback() }
                 }
             ]
+        }
+
+        /// Plays only when the app is active and the hosting window is
+        /// visible, unoccluded, and unminiaturized; pauses otherwise.
+        private func refreshPlayback() {
+            guard let window = playerView?.window else {
+                player?.pause()
+                return
+            }
+            let isRunnable = NSApplication.shared.isActive
+                && window.isVisible
+                && !window.isMiniaturized
+                && window.occlusionState.contains(.visible)
+            if isRunnable {
+                player?.play()
+            } else {
+                player?.pause()
+            }
         }
     }
 }

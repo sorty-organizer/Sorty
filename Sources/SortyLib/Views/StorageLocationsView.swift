@@ -25,6 +25,7 @@ struct StorageLocationConfigView: View {
     @State private var isWindowVisible = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
 
     private let descriptionSuggestions = [
         "Archive for completed projects older than 6 months",
@@ -100,7 +101,7 @@ struct StorageLocationConfigView: View {
                 .buttonStyle(.sortyProminent)
             }
             .padding()
-            .background(.ultraThinMaterial)
+            .systemLiquidGlassBackground(cornerRadius: 12)
             
             Divider()
             
@@ -168,7 +169,7 @@ struct StorageLocationConfigView: View {
                                     .task(id: shouldCycleDescriptionSuggestions) {
                                         guard shouldCycleDescriptionSuggestions else { return }
                                         while !Task.isCancelled {
-                                            try? await Task.sleep(for: .seconds(3.5))
+                                            try? await Task.sleep(for: .seconds(8))
                                             guard !Task.isCancelled,
                                                   shouldCycleDescriptionSuggestions else { return }
                                             descriptionSuggestionIndex =
@@ -215,8 +216,10 @@ struct StorageLocationConfigView: View {
     private var shouldCycleDescriptionSuggestions: Bool {
         description.isEmpty
             && !isDescriptionFocused
+            && !reduceMotion
             && isWindowVisible
             && controlActiveState != .inactive
+            && scenePhase == .active
     }
 
     private var currentDescriptionSuggestion: String {

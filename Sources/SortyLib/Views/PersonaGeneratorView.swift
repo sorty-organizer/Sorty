@@ -24,6 +24,7 @@ struct PersonaGeneratorView: View {
     @State private var promptSuggestionIndex: Int = 0
     @State private var isWindowVisible = true
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     
     @StateObject private var honingEngine = PersonaHoningEngine()
     @State private var questions: [HoningQuestion] = []
@@ -181,7 +182,7 @@ struct PersonaGeneratorView: View {
                             promptSuggestionIndex = 0
 
                             while !Task.isCancelled {
-                                try? await Task.sleep(for: .seconds(2.5))
+                                try? await Task.sleep(for: .seconds(8))
                                 guard !Task.isCancelled,
                                       shouldCyclePromptSuggestions else { return }
                                 promptSuggestionIndex =
@@ -237,8 +238,10 @@ struct PersonaGeneratorView: View {
         prompt.isEmpty
             && !isHoning
             && !generator.isGenerating
+            && !reduceMotion
             && isWindowVisible
             && controlActiveState != .inactive
+            && scenePhase == .active
     }
     
     private func honingView(question: HoningQuestion) -> some View {
@@ -485,11 +488,13 @@ private struct PersonaGenerationBorderBeam: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isWindowVisible = true
 
     private let rotationDuration: TimeInterval = 2.4
 
     private var isAnimationActive: Bool {
-        controlActiveState != .inactive
+        controlActiveState != .inactive && scenePhase == .active && isWindowVisible
     }
 
     private var shouldAnimate: Bool {
@@ -515,17 +520,17 @@ private struct PersonaGenerationBorderBeam: View {
 
     private var fallbackBeam: some View {
         SwiftUI.TimelineView(
-            .animation(minimumInterval: 1.0 / 20.0, paused: !shouldAnimate)
+            .animation(minimumInterval: 1.0 / 12.0, paused: !shouldAnimate)
         ) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
             let phase = shouldAnimate ? time / rotationDuration : 0
 
-            ZStack {
-                beamInteriorGlow(phase: phase)
-                beamStroke(phase: phase)
-            }
-            .opacity(0.82)
+            // Stroke-only fallback: Beam supplies interior light; the glow's
+            // blurs were the dominant fallback cost.
+            beamStroke(phase: phase)
+                .opacity(0.82)
         }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
     }
 
     private func beamStroke(phase: TimeInterval) -> some View {
@@ -566,46 +571,6 @@ private struct PersonaGenerationBorderBeam: View {
                 ),
                 lineWidth: 1
             )
-    }
-
-    private func beamInteriorGlow(phase: TimeInterval) -> some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .inset(by: 3)
-            .fill(
-                AngularGradient(
-                    stops: [
-                        .init(color: .clear, location: 0.00),
-                        .init(
-                            color: Color(red: 0.08, green: 0.80, blue: 1.0)
-                                .opacity(0.10),
-                            location: 0.15
-                        ),
-                        .init(
-                            color: Color(red: 0.92, green: 0.16, blue: 0.58)
-                                .opacity(0.20),
-                            location: 0.25
-                        ),
-                        .init(color: .white.opacity(0.16), location: 0.32),
-                        .init(
-                            color: Color(red: 1.0, green: 0.34, blue: 0.18)
-                                .opacity(0.14),
-                            location: 0.40
-                        ),
-                        .init(color: .clear, location: 0.58),
-                        .init(color: .clear, location: 1.00),
-                    ],
-                    center: .center,
-                    angle: .degrees(
-                        (phase.truncatingRemainder(dividingBy: 1)) * 360
-                    )
-                )
-            )
-            .blur(radius: 9)
-            .mask {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(lineWidth: 22)
-                    .blur(radius: 7)
-            }
     }
 }
 

@@ -6,6 +6,8 @@ public struct ThinkingOrbLoaderView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isWindowVisible = true
 
     public init() {}
 
@@ -16,8 +18,9 @@ public struct ThinkingOrbLoaderView: View {
             let vertices = Self.sphereVertices(size: geometry.size)
             SwiftUI.TimelineView(
                 .animation(
-                    minimumInterval: 1.0 / 60.0,
-                    paused: reduceMotion || controlActiveState == .inactive
+                    minimumInterval: 1.0 / 20.0,
+                    paused: reduceMotion || !isWindowVisible || controlActiveState == .inactive
+                        || scenePhase != .active
                 )
             ) { timeline in
                 let raw = reduceMotion ? 0.6 : timeline.date.timeIntervalSinceReferenceDate
@@ -27,6 +30,7 @@ public struct ThinkingOrbLoaderView: View {
                 }
             }
         }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Thinking activity indicator")
     }
@@ -105,6 +109,9 @@ public struct ThinkingOrbLoaderView: View {
             let z1 = -x * sy + z * cyw
             let y1 = y * ct - z1 * st
             let z2 = y * st + z1 * ct
+            // Cull far-side dots before buffering so the depth sort below
+            // handles fewer entries at the reduced 20 Hz frame rate.
+            guard z2 > -0.55 else { continue }
             let depth = (z2 + 1) / 2
             let a = lon + t * spin - scan
             let d = atan2(sin(a), cos(a))
@@ -139,6 +146,8 @@ public struct ThinkingOrbLoaderView: View {
 public struct TextSweepModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isWindowVisible = true
 
     private let bandSize: CGFloat = 0.3
     private let sweepDuration: TimeInterval = 2.0
@@ -158,7 +167,8 @@ public struct TextSweepModifier: ViewModifier {
                     SwiftUI.TimelineView(
                         .animation(
                             minimumInterval: 1.0 / 30.0,
-                            paused: controlActiveState == .inactive
+                            paused: reduceMotion || !isWindowVisible || controlActiveState == .inactive
+                                || scenePhase != .active
                         )
                     ) { timeline in
                         let cycleDuration = sweepDuration + sweepDelay
@@ -180,6 +190,7 @@ public struct TextSweepModifier: ViewModifier {
                         )
                     }
                 )
+                .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         }
     }
 }

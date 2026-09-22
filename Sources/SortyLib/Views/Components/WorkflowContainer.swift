@@ -516,10 +516,7 @@ struct WorkflowCard<Content: View>: View {
         .padding(.horizontal, 16)
         .padding(.vertical, verticalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(.ultraThinMaterial)
-        )
+        .systemLiquidGlassBackground(cornerRadius: 14)
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)

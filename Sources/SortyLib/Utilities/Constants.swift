@@ -194,10 +194,18 @@ struct ShimmerModifier: ViewModifier {
     let isLoading: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isWindowVisible = true
 
     private let bandWidthRatio: CGFloat = 0.42
     private let shimmerAngle = Angle(degrees: 18)
     private let shimmerSpeed: Double = 1.15
+
+    private var shimmerPaused: Bool {
+        !isLoading || reduceMotion || !isWindowVisible || controlActiveState == .inactive
+            || scenePhase != .active
+    }
 
     func body(content: Content) -> some View {
         if isLoading, !reduceMotion {
@@ -209,7 +217,7 @@ struct ShimmerModifier: ViewModifier {
                         let bandWidth = width * bandWidthRatio
                         let travelDistance = width + (bandWidth * 2)
 
-                        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isLoading)) { context in
+                        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 15.0, paused: shimmerPaused)) { context in
                             let elapsed = context.date.timeIntervalSinceReferenceDate * shimmerSpeed
                             let progress = elapsed - floor(elapsed)
                             let offsetX = (progress * travelDistance) - bandWidth
@@ -233,6 +241,7 @@ struct ShimmerModifier: ViewModifier {
                 .blendMode(.screen)
                 .mask(content)
                 .drawingGroup(opaque: false)
+                .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         } else {
             content
         }
@@ -247,6 +256,9 @@ struct TextShimmerModifier: ViewModifier {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isWindowVisible = true
 
     private let bandWidthRatio: CGFloat = 0.62
     private let shimmerAngle = Angle(degrees: 8)
@@ -254,6 +266,11 @@ struct TextShimmerModifier: ViewModifier {
 
     private var clampedIntensity: Double {
         min(max(intensity, 0.5), 1.7)
+    }
+
+    private var textShimmerPaused: Bool {
+        !isLoading || reduceMotion || !isWindowVisible || controlActiveState == .inactive
+            || scenePhase != .active
     }
 
     func body(content: Content) -> some View {
@@ -280,7 +297,7 @@ struct TextShimmerModifier: ViewModifier {
                             .rotationEffect(shimmerAngle)
                             .offset(x: (width - bandWidth) * 0.18)
                         } else {
-                            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isLoading)) { context in
+                            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 15.0, paused: textShimmerPaused)) { context in
                                 let elapsed = (context.date.timeIntervalSinceReferenceDate + phaseOffset) * shimmerSpeed
                                 let progress = elapsed - floor(elapsed)
                                 let easedProgress = progress * progress * (3 - (2 * progress))
@@ -312,6 +329,7 @@ struct TextShimmerModifier: ViewModifier {
                 }
                 .mask(content)
                 .drawingGroup(opaque: false)
+                .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         } else {
             content
         }

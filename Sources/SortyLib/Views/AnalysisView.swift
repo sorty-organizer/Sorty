@@ -155,6 +155,9 @@ final class AnalysisRefreshManager: ObservableObject {
 
     private func cycleFunnyMessage() async {
         guard organizer != nil else { return }
+        // Fire only while an organization run is active; the timer itself is
+        // started/stopped with the view lifecycle (onAppear/onDisappear).
+        guard organizer?.state == .organizing else { return }
 
         withAnimation(.easeInOut(duration: 0.55)) {
             funnyMessageOpacity = 0
@@ -190,6 +193,7 @@ struct AnalysisView: View {
     @EnvironmentObject var learningsManager: LearningsManager
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("analysis.liveInsightsEnabled") private var liveInsightsEnabled = true
     @AppStorage("analysis.hideTakingLongerHUD") private var hideTakingLongerHUD = false
     @StateObject private var refreshManager = AnalysisRefreshManager()
@@ -323,6 +327,13 @@ struct AnalysisView: View {
         }
         .onDisappear {
             refreshManager.stop()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                refreshManager.resume()
+            } else {
+                refreshManager.pause()
+            }
         }
         .onChange(of: liveInsightsEnabled) { _, enabled in
             organizer.setLiveInsightsEnabled(enabled)
@@ -1502,7 +1513,7 @@ private struct RenameGenerationRow: View {
                     isShimmering: isActive && !isRevealed
                 )
 
-                RenameShiftIndicator(isActive: isActive, isUnchanged: isUnchanged)
+                RenameShiftIndicator(isActive: isActive, isUnchanged: isUnchanged, isMostRecent: isMostRecent)
 
                 RenameNamePill(
                     text: isRevealed ? finalName : "Waiting for suggested name...",
@@ -1511,7 +1522,6 @@ private struct RenameGenerationRow: View {
                     showRevealSweep: suggestedNameReveal && isRevealed
                 )
                 .opacity(isRevealed ? (suggestedNameReveal ? 1 : 0) : 0.62)
-                .blur(radius: reduceMotion ? 0 : (isRevealed ? (suggestedNameReveal ? 0 : 4) : 2))
                 .offset(x: reduceMotion ? 0 : (suggestedNameReveal ? 0 : -8))
                 .scaleEffect(isRevealed ? 1 : 0.985)
                 .animation(.easeInOut(duration: 0.18), value: isRevealed)
@@ -1594,8 +1604,27 @@ private struct RenameNamePill: View {
     }
 }
 
+/// Waveform icon whose repeating breathe is gated on Reduce Motion and
+/// window activation instead of running unconditionally.
+private struct BreatheWaveformIcon: View {
+    @SortyHotReload private var hotReload
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    var body: some View {
+        Image(systemName: "waveform")
+            .font(.callout)
+            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+            .symbolEffect(
+                .breathe,
+                options: reduceMotion || controlActiveState == .inactive ? .nonRepeating : .repeating
+            )
+    }
+}
+
 private struct RenameGenerationRevealSweep: View {
     @SortyHotReload private var hotReload
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var progress: CGFloat = -0.35
 
     var body: some View {
@@ -1613,7 +1642,7 @@ private struct RenameGenerationRevealSweep: View {
                 endPoint: .trailing
             )
             .frame(width: max(width * 0.26, 22), height: geometry.size.height * 1.8)
-            .blur(radius: 2.2)
+            .blur(radius: reduceTransparency ? 0 : 2.2)
             .offset(x: width * progress)
             .blendMode(.plusLighter)
             .onAppear {
@@ -1666,9 +1695,16 @@ private struct RenameShiftIndicator: View {
     @SortyHotReload private var hotReload
     let isActive: Bool
     let isUnchanged: Bool
+    /// Only the most-recent row pulses; older rows render static so a long
+    /// stream does not accumulate one repeatForever each.
+    var isMostRecent = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
+
+    private var shouldPulse: Bool {
+        isActive && isMostRecent && !reduceMotion
+    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -1688,13 +1724,24 @@ private struct RenameShiftIndicator: View {
         }
         .frame(width: 56)
         .onAppear {
-            guard isActive, !reduceMotion else { return }
+            guard shouldPulse else { return }
             withAnimation(.smooth(duration: 0.5).repeatForever(autoreverses: true)) {
                 pulse = true
             }
         }
         .onChange(of: isActive) { _, active in
-            if active, !reduceMotion {
+            if active, shouldPulse {
+                withAnimation(.smooth(duration: 0.5).repeatForever(autoreverses: true)) {
+                    pulse = true
+                }
+            } else {
+                withAnimation(.smooth(duration: 0.2)) {
+                    pulse = false
+                }
+            }
+        }
+        .onChange(of: isMostRecent) { _, _ in
+            if shouldPulse {
                 withAnimation(.smooth(duration: 0.5).repeatForever(autoreverses: true)) {
                     pulse = true
                 }
@@ -1850,7 +1897,7 @@ private struct StreamingProgressBeam: View {
             cornerRadius: 16,
             strength: 1.0
         )
-        .referenceBeamFallback(cornerRadius: 16, active: true, includesInteriorGlow: true)
+        .referenceBeamFallback(cornerRadius: 16, active: true)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -1874,14 +1921,12 @@ private struct StreamingProgressBeam: View {
 private extension View {
     func referenceBeamFallback(
         cornerRadius: CGFloat,
-        active: Bool,
-        includesInteriorGlow: Bool = false
+        active: Bool
     ) -> some View {
         overlay {
             ReferenceBeamFallback(
                 cornerRadius: cornerRadius,
-                active: active,
-                includesInteriorGlow: includesInteriorGlow
+                active: active
             )
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -1893,31 +1938,30 @@ private struct ReferenceBeamFallback: View {
     @SortyHotReload private var hotReload
     let cornerRadius: CGFloat
     let active: Bool
-    let includesInteriorGlow: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isWindowVisible = true
 
     private var shouldAnimate: Bool {
-        active && !reduceMotion && controlActiveState != .inactive
+        active && !reduceMotion && isWindowVisible && controlActiveState != .inactive
+            && scenePhase == .active
     }
 
     var body: some View {
         SwiftUI.TimelineView(
-            .animation(minimumInterval: 1.0 / 20.0, paused: !shouldAnimate)
+            .animation(minimumInterval: 1.0 / 12.0, paused: !shouldAnimate)
         ) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
             let phase = shouldAnimate ? time / 1.96 : 0
-            ZStack {
-                if includesInteriorGlow {
-                    beamInteriorGlow(phase: phase)
-                }
-
-                beamStroke(phase: phase)
-            }
-            .opacity(active ? 0.82 : 0)
-            .animation(.easeOut(duration: 0.6), value: active)
+            // Stroke-only fallback: Beam already supplies interior light, so
+            // the blurred interior glow is dropped entirely.
+            beamStroke(phase: phase)
+                .opacity(active ? 0.82 : 0)
+                .animation(.easeOut(duration: 0.6), value: active)
         }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
     }
 
     private func beamStroke(phase: TimeInterval) -> some View {
@@ -1941,32 +1985,6 @@ private struct ReferenceBeamFallback: View {
                 lineWidth: 1
             )
     }
-
-    private func beamInteriorGlow(phase: TimeInterval) -> some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .inset(by: 3)
-            .fill(
-                AngularGradient(
-                    stops: [
-                        .init(color: .clear, location: 0.00),
-                        .init(color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.10), location: 0.15),
-                        .init(color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.20), location: 0.25),
-                        .init(color: .white.opacity(0.16), location: 0.32),
-                        .init(color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.14), location: 0.40),
-                        .init(color: .clear, location: 0.58),
-                        .init(color: .clear, location: 1.00),
-                    ],
-                    center: .center,
-                    angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
-                )
-            )
-            .blur(radius: 9)
-            .mask {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(lineWidth: 22)
-                    .blur(radius: 7)
-            }
-    }
 }
 
 private struct AIReasoningStatus: View {
@@ -1978,6 +1996,15 @@ private struct AIReasoningStatus: View {
     let isRenameOnly: Bool
     let funnyMessage: String
     let funnyMessageOpacity: Double
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    /// Repeating symbol effects run only while motion is allowed and the
+    /// window is active; otherwise a single non-repeating pass plays.
+    private var symbolRepeatOptions: SymbolEffectOptions {
+        reduceMotion || controlActiveState == .inactive ? .nonRepeating : .repeating
+    }
 
     private var isAnalyzingStage: Bool {
         let stage = organizationStage.lowercased()
@@ -2026,7 +2053,6 @@ private struct AIReasoningStatus: View {
                         .textShimmer(isLoading: true, phaseOffset: 0.62, intensity: 1.65)
                         .opacity(funnyMessageOpacity)
                         .offset(y: funnyMessageOpacity > 0.5 ? 0 : 1)
-                        .blur(radius: funnyMessageOpacity > 0.5 ? 0 : 0.3)
                         .animation(.easeInOut(duration: 0.6), value: funnyMessageOpacity)
                         .transition(
                             .opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
@@ -2059,13 +2085,19 @@ private struct AIReasoningStatus: View {
             if isEstablishingConnection {
                 Image(systemName: "network")
                     .foregroundStyle(.orange)
-                    .symbolEffect(.variableColor.iterative, options: .repeating)
+                    .symbolEffect(
+                        .variableColor.iterative,
+                        options: symbolRepeatOptions
+                    )
             } else {
                 Image(systemName: isRenameOnly ? "textformat" : "sparkles")
                     .font(.system(size: 48, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
                     .symbolReplaceTransition(animationValue: isRenameOnly)
-                    .symbolEffect(.variableColor.iterative, options: .repeating)
+                    .symbolEffect(
+                        .variableColor.iterative,
+                        options: symbolRepeatOptions
+                    )
                     .accessibilityLabel(isRenameOnly ? "Renaming files" : "Organizing files")
             }
         } else if case .applying = state {
@@ -2112,10 +2144,7 @@ private struct InsightHistorySection: View {
             } label: {
                 HStack(spacing: 8) {
                     if isActive {
-                        Image(systemName: "waveform")
-                            .font(.callout)
-                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                            .symbolEffect(.breathe, options: .repeating)
+                        BreatheWaveformIcon()
                     } else {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.callout)

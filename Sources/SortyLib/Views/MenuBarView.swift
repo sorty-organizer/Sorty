@@ -579,9 +579,29 @@ private struct WatchedFolderMenuItem: View {
     }
 
     private var folderIcon: NSImage {
+        Self.cachedFolderIcon(for: folder.path)
+    }
+
+    /// Path-keyed icon cache so scrolling the menu never re-hits
+    /// NSWorkspace inside the view body (mirrors FileThumbnailView).
+    nonisolated(unsafe) private static let folderIconCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 64
+        cache.totalCostLimit = 2 * 1024 * 1024
+        return cache
+    }()
+
+    private static func cachedFolderIcon(for path: String) -> NSImage {
+        let key = path as NSString
+        if let cached = folderIconCache.object(forKey: key) {
+            return cached
+        }
         // Fetch at 32x32 for Retina crispness, display at 18x18
-        let icon = NSWorkspace.shared.icon(forFile: folder.path)
+        let icon = (NSWorkspace.shared.icon(forFile: path).copy() as? NSImage)
+            ?? NSWorkspace.shared.icon(forFile: path)
         icon.size = NSSize(width: 32, height: 32)
+        let pixels = max(1, Int(icon.size.width * 2 * icon.size.height * 2))
+        folderIconCache.setObject(icon, forKey: key, cost: pixels * 4)
         return icon
     }
 

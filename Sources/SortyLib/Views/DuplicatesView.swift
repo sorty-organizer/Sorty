@@ -1866,7 +1866,7 @@ private struct ScanningPulseIcon: View {
     }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPaused)) {
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: isPaused)) {
             timeline in
             let elapsed = timeline.date.timeIntervalSinceReferenceDate
             let pulse = isPaused ? 0.5 : (sin(elapsed * 3.2) + 1) / 2
@@ -1894,11 +1894,9 @@ private struct ScanningPulseIcon: View {
                     }
                     .opacity(isPaused ? 0.35 : 0.95)
                 }
-                .scaleEffect(isPaused ? 1 : 1 + pulse * 0.035)
                 .shadow(
-                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(
-                        isPaused ? 0.18 : 0.16 + pulse * 0.22),
-                    radius: isPaused ? 4 : 4 + pulse * 5
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.27),
+                    radius: 4
                 )
         }
         .frame(width: 72, height: 56)
@@ -2046,7 +2044,7 @@ struct ScanProgressViewNew: View {
             strength: 1.0
         )
         .scanProgressReferenceBeamFallback(
-            cornerRadius: 16, active: true, includesInteriorGlow: true
+            cornerRadius: 16, active: true
         )
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -2056,14 +2054,12 @@ struct ScanProgressViewNew: View {
 extension View {
     fileprivate func scanProgressReferenceBeamFallback(
         cornerRadius: CGFloat,
-        active: Bool,
-        includesInteriorGlow: Bool = false
+        active: Bool
     ) -> some View {
         overlay {
             ScanProgressReferenceBeamFallback(
                 cornerRadius: cornerRadius,
-                active: active,
-                includesInteriorGlow: includesInteriorGlow
+                active: active
             )
             .allowsHitTesting(false)
             .accessibilityHidden(true)
@@ -2075,32 +2071,31 @@ private struct ScanProgressReferenceBeamFallback: View {
     @SortyHotReload private var hotReload
     let cornerRadius: CGFloat
     let active: Bool
-    let includesInteriorGlow: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isWindowVisible = true
 
     private var shouldAnimate: Bool {
-        active && !reduceMotion && !reduceTransparency && controlActiveState != .inactive
+        active && !reduceMotion && !reduceTransparency && isWindowVisible
+            && controlActiveState != .inactive && scenePhase == .active
     }
 
     var body: some View {
         SwiftUI.TimelineView(
-            .animation(minimumInterval: 1.0 / 20.0, paused: !shouldAnimate)
+            .animation(minimumInterval: 1.0 / 12.0, paused: !shouldAnimate)
         ) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
             let phase = shouldAnimate ? time / 1.96 : 0
-            ZStack {
-                if includesInteriorGlow {
-                    beamInteriorGlow(phase: phase)
-                }
-
-                beamStroke(phase: phase)
-            }
-            .opacity(active ? 0.82 : 0)
-            .animation(.easeOut(duration: 0.6), value: active)
+            // Stroke-only fallback: Beam supplies interior light; the glow's
+            // blurs were the dominant fallback cost.
+            beamStroke(phase: phase)
+                .opacity(active ? 0.82 : 0)
+                .animation(.easeOut(duration: 0.6), value: active)
         }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
     }
 
     private func beamStroke(phase: TimeInterval) -> some View {
@@ -2131,37 +2126,5 @@ private struct ScanProgressReferenceBeamFallback: View {
                 ),
                 lineWidth: 1
             )
-    }
-
-    private func beamInteriorGlow(phase: TimeInterval) -> some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .inset(by: 3)
-            .fill(
-                AngularGradient(
-                    stops: [
-                        .init(color: .clear, location: 0.00),
-                        .init(
-                            color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.10),
-                            location: 0.15),
-                        .init(
-                            color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.20),
-                            location: 0.25),
-                        .init(color: .white.opacity(0.16), location: 0.32),
-                        .init(
-                            color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.14),
-                            location: 0.40),
-                        .init(color: .clear, location: 0.58),
-                        .init(color: .clear, location: 1.00),
-                    ],
-                    center: .center,
-                    angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
-                )
-            )
-            .blur(radius: reduceTransparency ? 0 : 4)
-            .mask {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(lineWidth: 22)
-                    .blur(radius: reduceTransparency ? 0 : 3)
-            }
     }
 }

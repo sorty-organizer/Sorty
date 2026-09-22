@@ -577,6 +577,9 @@ struct RollingCreditsView: View {
     let rowHeight: CGFloat
     let viewportHeight: CGFloat
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var hoveredRowKey: String?
     @State private var scrollStartDate: Date = .now
     @State private var pausedAt: Date?
@@ -624,7 +627,13 @@ struct RollingCreditsView: View {
                     if isScrollingSuspended {
                         creditRows(at: pausedAt ?? .now)
                     } else {
-                        SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 15.0)) { context in
+                        SwiftUI.TimelineView(
+                            .animation(
+                                minimumInterval: 1.0 / 15.0,
+                                paused: isScrollingSuspended || reduceMotion
+                                    || controlActiveState == .inactive || scenePhase != .active
+                            )
+                        ) { context in
                             creditRows(at: context.date)
                         }
                     }
@@ -640,8 +649,8 @@ struct RollingCreditsView: View {
             }
             .onChange(of: hoveredRowKey) { oldValue, newValue in
                 updateSuspension(
-                    wasSuspended: oldValue != nil || !isWindowVisible,
-                    isSuspended: newValue != nil || !isWindowVisible
+                    wasSuspended: oldValue != nil || isSuspendedIgnoringHover,
+                    isSuspended: newValue != nil || isSuspendedIgnoringHover
                 )
                 if oldValue == nil, newValue != nil {
                     HapticFeedbackManager.shared.selection()
@@ -649,9 +658,18 @@ struct RollingCreditsView: View {
             }
             .onChange(of: isWindowVisible) { oldValue, newValue in
                 updateSuspension(
-                    wasSuspended: hoveredRowKey != nil || !oldValue,
-                    isSuspended: hoveredRowKey != nil || !newValue
+                    wasSuspended: hoveredRowKey != nil || isSuspendedIgnoringVisibility(oldValue),
+                    isSuspended: hoveredRowKey != nil || isSuspendedIgnoringVisibility(newValue)
                 )
+            }
+            .onChange(of: scenePhase) { _, _ in
+                updateSuspensionForEnvironment()
+            }
+            .onChange(of: controlActiveState) { _, _ in
+                updateSuspensionForEnvironment()
+            }
+            .onChange(of: reduceMotion) { _, _ in
+                updateSuspensionForEnvironment()
             }
             .background(WindowVisibilityReader(isVisible: $isWindowVisible))
             .accessibilityIdentifier("RollingCreditsViewport")
@@ -660,7 +678,31 @@ struct RollingCreditsView: View {
     }
 
     private var isScrollingSuspended: Bool {
-        hoveredRowKey != nil || !isWindowVisible
+        hoveredRowKey != nil || !isWindowVisible || reduceMotion
+            || controlActiveState == .inactive || scenePhase != .active
+    }
+
+    /// Suspension state excluding hover, for hover-change bookkeeping.
+    private var isSuspendedIgnoringHover: Bool {
+        !isWindowVisible || reduceMotion
+            || controlActiveState == .inactive || scenePhase != .active
+    }
+
+    private func isSuspendedIgnoringVisibility(_ visible: Bool) -> Bool {
+        !visible || reduceMotion
+            || controlActiveState == .inactive || scenePhase != .active
+    }
+
+    /// Reconciles the scroll clock with the current suspension state when an
+    /// environment value (scene, activation, Reduce Motion) changes.
+    private func updateSuspensionForEnvironment() {
+        let suspended = isScrollingSuspended
+        if suspended, pausedAt == nil {
+            pausedAt = .now
+        } else if !suspended, let pausedAt {
+            accumulatedPauseDuration += Date().timeIntervalSince(pausedAt)
+            self.pausedAt = nil
+        }
     }
 
     private func creditRows(at date: Date) -> some View {

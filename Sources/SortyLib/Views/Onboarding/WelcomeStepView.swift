@@ -38,7 +38,7 @@ struct AnimatedGradientBackground: View {
                 )
                 .frame(width: 400, height: 400)
                 .offset(x: animate ? 50 : -50, y: animate ? -30 : 30)
-                .blur(radius: reduceTransparency ? 0 : 28)
+                .blur(radius: reduceTransparency ? 0 : 14)
 
             Circle()
                 .fill(
@@ -46,7 +46,7 @@ struct AnimatedGradientBackground: View {
                 )
                 .frame(width: 500, height: 500)
                 .offset(x: animate ? -40 : 60, y: animate ? 40 : -20)
-                .blur(radius: reduceTransparency ? 0 : 32)
+                .blur(radius: reduceTransparency ? 0 : 16)
 
             Circle()
                 .fill(
@@ -54,7 +54,7 @@ struct AnimatedGradientBackground: View {
                 )
                 .frame(width: 350, height: 350)
                 .offset(x: animate ? 30 : -30, y: animate ? 50 : -50)
-                .blur(radius: reduceTransparency ? 0 : 24)
+                .blur(radius: reduceTransparency ? 0 : 12)
         }
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .onAppear {
@@ -88,11 +88,13 @@ private struct RevealGradientBlob: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var colorPhase: Double = 0
     @State private var isWindowVisible = true
 
     private var motionPaused: Bool {
         reduceMotion || reduceTransparency || !isWindowVisible || controlActiveState == .inactive
+            || scenePhase != .active
     }
 
     var body: some View {
@@ -113,7 +115,7 @@ private struct RevealGradientBlob: View {
                     )
                 )
                 .frame(width: 600, height: 500)
-                .blur(radius: reduceTransparency ? 0 : 24)
+                .blur(radius: reduceTransparency ? 0 : 12)
 
             // Secondary blob - shifting hue
             Ellipse()
@@ -131,7 +133,7 @@ private struct RevealGradientBlob: View {
                 )
                 .frame(width: 450, height: 400)
                 .offset(x: 30 * sin(colorPhase), y: -20 * cos(colorPhase))
-                .blur(radius: reduceTransparency ? 0 : 20)
+                .blur(radius: reduceTransparency ? 0 : 10)
 
             // Bright core
             Circle()
@@ -183,11 +185,13 @@ private struct GlowRing: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var pulseScale: CGFloat = 1.0
     @State private var isWindowVisible = true
 
     private var motionPaused: Bool {
         reduceMotion || !isWindowVisible || controlActiveState == .inactive
+            || scenePhase != .active
     }
 
     var body: some View {
@@ -230,6 +234,7 @@ struct FloatingParticle: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var yOffset: CGFloat = 0
     @State private var opacity: Double = 0
     @State private var isWindowVisible = true
@@ -239,6 +244,7 @@ struct FloatingParticle: View {
 
     private var motionPaused: Bool {
         reduceMotion || !isWindowVisible || controlActiveState == .inactive
+            || scenePhase != .active
     }
 
     var body: some View {
@@ -259,10 +265,19 @@ struct FloatingParticle: View {
                 }
             }
             .onChange(of: motionPaused) { _, paused in
-                guard paused else { return }
-                withAnimation(nil) {
-                    yOffset = 0
-                    opacity = 0
+                if paused {
+                    withAnimation(nil) {
+                        yOffset = 0
+                        opacity = 0
+                    }
+                } else {
+                    withAnimation(.easeInOut(duration: Double.random(in: 3...6)).repeatForever(autoreverses: false).delay(delay)) {
+                        yOffset = -300
+                        opacity = 0
+                    }
+                    withAnimation(.easeIn(duration: 1).delay(delay)) {
+                        opacity = 0.6
+                    }
                 }
             }
     }

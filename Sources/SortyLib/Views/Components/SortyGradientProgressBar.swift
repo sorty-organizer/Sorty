@@ -120,16 +120,26 @@ struct SortyGradientProgressBar: View {
 struct SortyGradientLoadingBar: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
 
     var accent: Color = SortyDesignSystem.Colors.resolvedAccent
     var width: CGFloat = 150
     var height: CGFloat = 10
     var segmentWidthRatio: CGFloat = 0.34
 
-    @State private var travelPhase: CGFloat = 0
+    @State private var isWindowVisible = true
 
     private var clampedSegmentRatio: CGFloat {
         min(max(segmentWidthRatio, 0.15), 0.75)
+    }
+
+    // Timeline-driven sweep at 15 Hz; paused whenever the window is hidden,
+    // inactive, or the scene is backgrounded.
+    private var sweepPaused: Bool {
+        reduceMotion || !isWindowVisible || controlActiveState == .inactive
+            || scenePhase != .active
     }
 
     var body: some View {
@@ -145,36 +155,39 @@ struct SortyGradientLoadingBar: View {
                             .stroke(SortyBeamPalette.trackStroke, lineWidth: 1)
                     )
 
-                Capsule(style: .continuous)
-                    .fill(SortyBeamPalette.barGradient(accent: accent))
-                    .overlay(
+                if reduceMotion {
+                    Capsule(style: .continuous)
+                        .fill(SortyBeamPalette.barGradient(accent: accent))
+                        .frame(width: segmentWidth)
+                        .offset(x: (0.5 * travelDistance) - segmentWidth)
+                } else {
+                    SwiftUI.TimelineView(
+                        .animation(minimumInterval: 1.0 / 15.0, paused: sweepPaused)
+                    ) { timeline in
+                        let elapsed = timeline.date.timeIntervalSinceReferenceDate / 1.15
+                        let travelPhase = sweepPaused ? 0.5 : CGFloat(elapsed - floor(elapsed))
+
                         Capsule(style: .continuous)
-                            .fill(accent.opacity(0.16))
-                    )
-                    .frame(width: segmentWidth)
-                    .offset(x: (travelPhase * travelDistance) - segmentWidth)
-                    .shadow(color: accent.opacity(0.42), radius: 7, x: 0, y: 0)
+                            .fill(SortyBeamPalette.barGradient(accent: accent))
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .fill(accent.opacity(0.16))
+                            )
+                            .frame(width: segmentWidth)
+                            .offset(x: (travelPhase * travelDistance) - segmentWidth)
+                            .shadow(
+                                color: accent.opacity(reduceTransparency ? 0 : 0.42),
+                                radius: reduceTransparency ? 0 : 7,
+                                x: 0,
+                                y: 0
+                            )
+                    }
+                }
             }
             .clipShape(Capsule(style: .continuous))
         }
         .frame(width: width, height: height)
-        .onAppear {
-            travelPhase = reduceMotion ? 0.5 : 0
-            guard !reduceMotion else { return }
-            withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
-                travelPhase = 1
-            }
-        }
-        .onChange(of: reduceMotion) { _, shouldReduceMotion in
-            if shouldReduceMotion {
-                travelPhase = 0.5
-            } else {
-                travelPhase = 0
-                withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
-                    travelPhase = 1
-                }
-            }
-        }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
     }
 }
 
@@ -185,6 +198,7 @@ struct SortyGradientCircularProgress: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
 
     let progress: Double
     var accent: Color = SortyDesignSystem.Colors.resolvedAccent
@@ -201,7 +215,7 @@ struct SortyGradientCircularProgress: View {
 
     private var shimmerPaused: Bool {
         reduceMotion || reduceTransparency || !isWindowVisible
-            || controlActiveState == .inactive || animatedProgress == 0
+            || controlActiveState == .inactive || scenePhase != .active || animatedProgress == 0
     }
 
     var body: some View {
@@ -220,7 +234,7 @@ struct SortyGradientCircularProgress: View {
             }
 
             if showsShimmer, !reduceTransparency {
-                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: shimmerPaused)) { context in
+                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 15.0, paused: shimmerPaused)) { context in
                     let elapsed = context.date.timeIntervalSinceReferenceDate
                     let arcSpan = animatedProgress * 360
                     let phase = (elapsed * 120).truncatingRemainder(
@@ -272,18 +286,22 @@ struct SortyGradientCircularLoader: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
     @Environment(\.scenePhase) private var scenePhase
+    @State private var isWindowVisible = true
+
+    /// Paused whenever the window is hidden, inactive, or backgrounded, or
+    /// motion/transparency is reduced. The arc then renders static.
+    private var loaderPaused: Bool {
+        reduceMotion || reduceTransparency || !isWindowVisible
+            || controlActiveState == .inactive || scenePhase != .active
+    }
 
     var body: some View {
         SwiftUI.TimelineView(
-            .animation(
-                minimumInterval: 1.0 / 30.0,
-                paused: reduceMotion || reduceTransparency || controlActiveState == .inactive
-                    || scenePhase != .active
-            )
+            .animation(minimumInterval: 1.0 / 15.0, paused: loaderPaused)
         ) { context in
             let time = context.date.timeIntervalSinceReferenceDate
-            let rotation = reduceMotion ? 0 : (time * 280).truncatingRemainder(dividingBy: 360)
-            let pulse = (reduceMotion || reduceTransparency) ? 0.5 : (sin(time * 2.2) + 1) * 0.5
+            let rotation = loaderPaused ? 0 : (time * 280).truncatingRemainder(dividingBy: 360)
+            let pulse = loaderPaused ? 0.5 : (sin(time * 2.2) + 1) * 0.5
             let sweep = 0.24 + (0.34 * pulse)
             let trailEnd = 0.06 + ((1 - pulse) * 0.08)
             let leadEnd = min(trailEnd + sweep, 0.97)
@@ -313,5 +331,6 @@ struct SortyGradientCircularLoader: View {
             }
         }
         .frame(width: size, height: size)
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
     }
 }

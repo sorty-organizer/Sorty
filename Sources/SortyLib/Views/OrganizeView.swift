@@ -2011,24 +2011,38 @@ private struct PreviewHandoffDot: ViewModifier {
     let delay: Double
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isOn = false
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isWindowVisible = true
+
+    private var dotPaused: Bool {
+        reduceMotion || !isWindowVisible || controlActiveState == .inactive
+            || scenePhase != .active
+    }
 
     func body(content: Content) -> some View {
-        content
-            .scaleEffect(isOn ? 1.22 : 0.78)
-            .opacity(isOn ? 0.88 : 0.35)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.58).repeatForever().delay(delay)) {
-                    isOn = true
+        Group {
+            if reduceMotion {
+                content
+                    .scaleEffect(1)
+                    .opacity(0.6)
+            } else {
+                SwiftUI.TimelineView(
+                    .animation(minimumInterval: 1.0 / 15.0, paused: dotPaused)
+                ) { timeline in
+                    // Shared clock: each dot offsets the same 1.16s pulse
+                    // cycle instead of owning a repeatForever transaction.
+                    let cycle = 1.16
+                    let elapsed = timeline.date.timeIntervalSinceReferenceDate + delay
+                    let progress = dotPaused ? 0.5 : CGFloat((elapsed / cycle).truncatingRemainder(dividingBy: 1))
+                    let eased = progress * progress * (3 - 2 * progress)
+                    content
+                        .scaleEffect(0.78 + eased * 0.44)
+                        .opacity(0.35 + eased * 0.53)
                 }
             }
-            .onChange(of: reduceMotion) { _, shouldReduceMotion in
-                guard shouldReduceMotion else { return }
-                withAnimation(nil) {
-                    isOn = false
-                }
-            }
+        }
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
     }
 }
 
@@ -3565,6 +3579,7 @@ struct FocusedInstructionBeamBorder: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isWindowVisible = true
 
     var body: some View {
@@ -3572,6 +3587,7 @@ struct FocusedInstructionBeamBorder: View {
             .animation(
                 minimumInterval: 1.0 / 30.0,
                 paused: reduceMotion || !active || !isWindowVisible || controlActiveState == .inactive
+                    || scenePhase != .active
             )
         ) { timeline in
             let phase = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate / 1.96
@@ -3617,12 +3633,16 @@ private struct RotatingInstructionSuggestionEditor: View {
     @State private var suggestionIndex = 0
     @State private var isWindowVisible = true
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     private struct SuggestionCycleID: Equatable {
         let suggestions: [String]
         let isEmpty: Bool
         let isVisible: Bool
         let isActive: Bool
+        let reduceMotion: Bool
+        let scenePhase: ScenePhase
     }
 
     private var currentSuggestion: String {
@@ -3675,12 +3695,16 @@ private struct RotatingInstructionSuggestionEditor: View {
                 suggestions: suggestions,
                 isEmpty: text.isEmpty,
                 isVisible: isWindowVisible,
-                isActive: controlActiveState != .inactive
+                isActive: controlActiveState != .inactive,
+                reduceMotion: reduceMotion,
+                scenePhase: scenePhase
             )
         ) {
             guard text.isEmpty,
+                  !reduceMotion,
                   isWindowVisible,
                   controlActiveState != .inactive,
+                  scenePhase == .active,
                   suggestions.count > 1 else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(7))
