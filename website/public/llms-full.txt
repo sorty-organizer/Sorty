@@ -12,7 +12,7 @@ Sorty is best described as an AI folder organizer for Mac, a semantic file organ
 
 ## Requirements and distribution
 
-- macOS 15.1 or later.
+- macOS 15 or later.
 - Apple Silicon and Intel Macs are supported.
 - The latest prebuilt universal app is distributed from GitHub Releases as Sorty.zip.
 - Prebuilt releases are currently not code-signed or notarized. The official download flow explains the required macOS quarantine-removal step.

@@ -10,7 +10,7 @@ This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating
 
 ### Prerequisites
 
-- macOS 15.1 or later
+- macOS 15.0 or later
 - Xcode 16.0 or later (including Swift 6.0)
 - Git
 - Optional: Ollama for local AI testing

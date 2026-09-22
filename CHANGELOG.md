@@ -179,5 +179,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Requirements
 
-- macOS 15.1 or later
+- macOS 15.0 or later
 - For AI features: API key for your preferred provider, or Apple Intelligence enabled for on-device processing

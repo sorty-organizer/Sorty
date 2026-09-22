@@ -78,7 +78,7 @@ const SCREENSHOTS = [
 const FACTS = [
   ['Product', 'Sorty'],
   ['Category', 'Productivity / file management'],
-  ['Platform', 'macOS 15.1 or later'],
+  ['Platform', 'macOS 15 or later'],
   ['Current version', CURRENT_VERSION],
   ['Price', 'Free'],
   ['License', 'GNU GPL v3'],

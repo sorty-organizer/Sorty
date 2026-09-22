@@ -56,7 +56,7 @@ export function Pricing() {
             />
             <div className="flex flex-col items-start gap-1">
               <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary">
-                GPL v3 · macOS 15.1+
+                GPL v3 · macOS 15+
               </span>
               <div className="mt-5 flex items-end gap-2">
                 <span className="text-5xl font-semibold tracking-tight">$0</span>

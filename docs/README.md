@@ -36,7 +36,7 @@ Welcome to the official Sorty documentation. Sorty is a smart file organization 
 
 ### System Requirements
 
-- macOS 15.1 or later
+- macOS 15.0 or later
 - Apple Silicon or Intel Mac
 - An AI provider configured (Apple Intelligence, OpenAI, or local Ollama)
 

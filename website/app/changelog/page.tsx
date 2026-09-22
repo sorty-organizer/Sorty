@@ -257,7 +257,7 @@ const PREVIOUS_RELEASES = [
       {
         title: 'Requirements',
         items: [
-          'macOS 15.1 or later.',
+          'macOS 15.0 or later.',
           'An API key for your preferred provider, or Apple Intelligence for on-device AI features.',
         ],
       },
