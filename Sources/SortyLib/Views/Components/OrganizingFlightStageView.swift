@@ -49,6 +49,9 @@ struct OrganizingFlightStageView: View {
     @State private var shownFlightFileIDs: Set<UUID> = []
     @State private var flightQueue: [FlightCandidate] = []
     @State private var nextFlightIndex = 0
+    /// Throttles mid-flight retargets during streaming bursts: the row reflow
+    /// already animates, so re-aiming faster than 10Hz only repaints.
+    @State private var lastRetargetAt = Date.distantPast
 
     private let cardSize = CGSize(width: 24, height: 24)
     private let bucketSize = CGSize(width: 56, height: 56)
@@ -69,16 +72,22 @@ struct OrganizingFlightStageView: View {
                     VStack(spacing: 0) {
                         Spacer(minLength: 0)
                         HStack(spacing: 0) {
-                            ForEach(Array(visibleSuggestions.enumerated()), id: \.element.folderName) { index, suggestion in
+                            // Identity by stable suggestion id, never the
+                            // streaming folder name: names update mid-stream,
+                            // and name identity would recreate buckets (and
+                            // their animations) on every rename.
+                            ForEach(Array(visibleSuggestions.enumerated()), id: \.element.id) { index, suggestion in
                                 destinationView(suggestion: suggestion, index: index)
                                     .frame(maxWidth: .infinity)
+                                    // Opacity/scale only: blur in transitions
+                                    // forces a fullscreen blur pass per bucket.
                                     .transition(.asymmetric(
                                         insertion: .modifier(
-                                            active: FolderRevealModifier(blurRadius: 9, opacity: 0, scale: 0.4, yOffset: 14),
+                                            active: FolderRevealModifier(opacity: 0, scale: 0.4, yOffset: 14),
                                             identity: FolderRevealModifier()
                                         ),
                                         removal: .modifier(
-                                            active: FolderRevealModifier(blurRadius: 5, opacity: 0, scale: 0.85, yOffset: 0),
+                                            active: FolderRevealModifier(opacity: 0, scale: 0.85, yOffset: 0),
                                             identity: FolderRevealModifier()
                                         )
                                     ))
@@ -89,7 +98,7 @@ struct OrganizingFlightStageView: View {
                             systemReduceMotion
                                 ? .easeInOut(duration: 0.18)
                                 : .spring(response: 0.42, dampingFraction: 0.72),
-                            value: visibleSuggestions.map(\.folderName)
+                            value: visibleSuggestions.map(\.id)
                         )
                     }
 
@@ -120,7 +129,7 @@ struct OrganizingFlightStageView: View {
                 .onChange(of: suggestions) { _, _ in
                     mergeDisplayedSuggestions(animated: true)
                 }
-                .onChange(of: visibleSuggestions.map(\.folderName)) { _, _ in
+                .onChange(of: visibleSuggestions.map(\.id)) { _, _ in
                     retargetInFlightCard()
                 }
             }
@@ -190,7 +199,6 @@ struct OrganizingFlightStageView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .opacity(1 - Double(renameProgress))
-                        .blur(radius: renameProgress * 2.5)
 
                     Text(currentRenamedFileName)
                         .fontWeight(.medium)
@@ -202,7 +210,6 @@ struct OrganizingFlightStageView: View {
                             animation: .easeInOut(duration: 0.28)
                         )
                         .opacity(Double(renameProgress))
-                        .blur(radius: (1 - renameProgress) * 2.5)
                 }
             } else {
                 Text(currentFileName)
@@ -366,6 +373,10 @@ struct OrganizingFlightStageView: View {
     /// the same spring the row uses instead of landing where the folder was.
     private func retargetInFlightCard() {
         guard let target = flightTargetFolderName, cardOpacity > 0 else { return }
+        // Throttle: streaming name updates arrive in bursts, and the launch
+        // position is recomputed before the carry phase anyway.
+        guard Date().timeIntervalSince(lastRetargetAt) >= 0.1 else { return }
+        lastRetargetAt = Date()
         guard let index = visibleSuggestions.firstIndex(where: { $0.folderName == target }) else {
             // The target folder was evicted mid-flight: fade the card out
             // rather than dropping the file into a stranger's folder.
@@ -623,7 +634,6 @@ private struct GeneratingFolderNameLabel: View {
             .frame(maxWidth: maxWidth)
             .frame(height: 28, alignment: .top)
             .opacity(isRevealed ? 1 : 0.35)
-            .blur(radius: reduceMotion || isRevealed ? 0 : 7)
             .scaleEffect(isRevealed ? 1 : 0.94)
             .onAppear {
                 guard !reduceMotion else {
@@ -652,17 +662,15 @@ private struct GeneratingFolderNameLabel: View {
     }
 }
 
-/// Blur-backed appear/disappear for folder buckets: new folders resolve out of
-/// a soft blur while springing up, instead of only scaling in.
+/// Appear/disappear for folder buckets: new folders spring up instead of
+/// only scaling in. Opacity/scale/offset only — no blur passes.
 private struct FolderRevealModifier: ViewModifier {
-    var blurRadius: CGFloat = 0
     var opacity: Double = 1
     var scale: CGFloat = 1
     var yOffset: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
-            .blur(radius: blurRadius)
             .opacity(opacity)
             .scaleEffect(scale, anchor: .bottom)
             .offset(y: yOffset)
