@@ -450,6 +450,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 streamingDelegate?.didComplete(content: content)
             }
             return plan
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as AIClientError {
             throw error
         } catch {
@@ -588,6 +590,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             }
             return plan
             
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as AIClientError {
             throw error
         } catch {

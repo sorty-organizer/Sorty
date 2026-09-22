@@ -164,73 +164,64 @@ public class AISessionManager: ObservableObject {
             break
         }
 
-        do {
-            let session = session(for: provider, config: config)
+        let session = session(for: provider, config: config)
 
-            // Try the models endpoint first, then fallback to base URL if it fails
-            // This handles custom setups (Azure, proxies, enterprise gateways) where
-            // the standard /v1/models path may not exist
-            let prewarmURLs = getPrewarmURLs(for: provider, config: config)
-            let allowedPrewarmURLs = prewarmURLs.filter { NetworkPrivacyPolicy.isRequestAllowed(url: $0) }
+        // Try the models endpoint first, then fallback to base URL if it fails
+        // This handles custom setups (Azure, proxies, enterprise gateways) where
+        // the standard /v1/models path may not exist
+        let prewarmURLs = getPrewarmURLs(for: provider, config: config)
+        let allowedPrewarmURLs = prewarmURLs.filter { NetworkPrivacyPolicy.isRequestAllowed(url: $0) }
 
-            guard !allowedPrewarmURLs.isEmpty else {
-                if NetworkPrivacyPolicy.isInternetPrivacyModeEnabled {
-                    prewarmError = NetworkPrivacyPolicy.blockedMessage
-                } else {
-                    prewarmError = "Invalid API URL"
-                }
-                return
+        guard !allowedPrewarmURLs.isEmpty else {
+            if NetworkPrivacyPolicy.isInternetPrivacyModeEnabled {
+                prewarmError = NetworkPrivacyPolicy.blockedMessage
+            } else {
+                prewarmError = "Invalid API URL"
             }
-
-            // Try each URL in order (specific endpoint first, then root)
-            for (index, url) in allowedPrewarmURLs.enumerated() {
-                var request = URLRequest(url: url)
-                request.httpMethod = "GET"
-                request.timeoutInterval = 5
-
-                addAuthHeaders(to: &request, provider: provider, config: config)
-
-                do {
-                    let (_, response) = try await session.data(for: request)
-
-                    if let httpResponse = response as? HTTPURLResponse {
-                        // Any response (including 404) means connection is established
-                        // 404 on models endpoint is OK for custom/proxy setups
-                        let isSuccess = (200...299).contains(httpResponse.statusCode) || httpResponse.statusCode == 404
-
-                        if isSuccess {
-                            LogManager.shared.log("Prewarmed \(provider.displayName): HTTP \(httpResponse.statusCode)", level: .debug, category: "AISessionManager")
-                            // The config may have been fixed while the request was in
-                            // flight; only a verdict for the current generation applies.
-                            guard generation == prewarmGenerations[provider, default: 0] else { return }
-                            isPrewarmed = true
-                            prewarmError = nil
-                            return
-                        } else {
-                            // Non-success status, try next URL
-                            LogManager.shared.log("Prewarm attempt \(index + 1) for \(provider.displayName): HTTP \(httpResponse.statusCode)", level: .debug, category: "AISessionManager")
-                        }
-                    }
-                } catch {
-                    // This URL failed, try the next one
-                    LogManager.shared.log("Prewarm attempt \(index + 1) failed for \(provider.displayName): \(error.localizedDescription)", level: .debug, category: "AISessionManager")
-                    continue
-                }
-            }
-
-            // All URLs failed
-            guard generation == prewarmGenerations[provider, default: 0] else { return }
-            prewarmError = "Could not establish connection to \(provider.displayName)"
-            isPrewarmed = false
-
-        } catch {
-            // Connection failed, but that's okay - we tried
-            LogManager.shared.log("Prewarm failed for \(provider.displayName): \(error.localizedDescription)", level: .debug, category: "AISessionManager")
-            guard generation == prewarmGenerations[provider, default: 0] else { return }
-            prewarmError = error.localizedDescription
-            // Session is still created and may work when the actual request is made
-            isPrewarmed = false
+            return
         }
+
+        // Try each URL in order (specific endpoint first, then root)
+        for (index, url) in allowedPrewarmURLs.enumerated() {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 5
+
+            addAuthHeaders(to: &request, provider: provider, config: config)
+
+            do {
+                let (_, response) = try await session.data(for: request)
+
+                if let httpResponse = response as? HTTPURLResponse {
+                    // Any response (including 404) means connection is established
+                    // 404 on models endpoint is OK for custom/proxy setups
+                    let isSuccess = (200...299).contains(httpResponse.statusCode) || httpResponse.statusCode == 404
+
+                    if isSuccess {
+                        LogManager.shared.log("Prewarmed \(provider.displayName): HTTP \(httpResponse.statusCode)", level: .debug, category: "AISessionManager")
+                        // The config may have been fixed while the request was in
+                        // flight; only a verdict for the current generation applies.
+                        guard generation == prewarmGenerations[provider, default: 0] else { return }
+                        isPrewarmed = true
+                        prewarmError = nil
+                        return
+                    } else {
+                        // Non-success status, try next URL
+                        LogManager.shared.log("Prewarm attempt \(index + 1) for \(provider.displayName): HTTP \(httpResponse.statusCode)", level: .debug, category: "AISessionManager")
+                    }
+                }
+            } catch {
+                // This URL failed, try the next one
+                LogManager.shared.log("Prewarm attempt \(index + 1) failed for \(provider.displayName): \(error.localizedDescription)", level: .debug, category: "AISessionManager")
+                continue
+            }
+        }
+
+        // All URLs failed
+        guard generation == prewarmGenerations[provider, default: 0] else { return }
+        prewarmError = "Could not establish connection to \(provider.displayName)"
+        isPrewarmed = false
+
     }
     
     /// Get the appropriate URLs for prewarming (models endpoint and fallback to base URL)
@@ -331,8 +322,8 @@ public class AISessionManager: ObservableObject {
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         
         // Enable TLS 1.2+ for security and performance
-        config.tlsMinimumSupportedProtocol = .tlsProtocol12
-        config.tlsMaximumSupportedProtocol = .tlsProtocol13
+        config.tlsMinimumSupportedProtocolVersion = .TLSv12
+        config.tlsMaximumSupportedProtocolVersion = .TLSv13
         
         // TCP connection optimization
         config.shouldUseExtendedBackgroundIdleMode = true

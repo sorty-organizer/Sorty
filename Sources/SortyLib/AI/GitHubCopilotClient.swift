@@ -406,6 +406,8 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 var plan = try ResponseParser.parseResponse(content, originalFiles: files, mode: config.mode)
                 plan.generationStats = stats
                 return plan
+            } catch is CancellationError {
+                throw CancellationError()
             } catch let error as AIClientError {
                 throw error
             } catch {
@@ -530,6 +532,11 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 }
                 plan.generationStats = stats
                 return plan
+            } catch is CancellationError {
+                await MainActor.run {
+                    streamingDelegate?.didFail(error: CancellationError())
+                }
+                throw CancellationError()
             } catch let error as AIClientError {
                 await MainActor.run {
                     streamingDelegate?.didFail(error: error)

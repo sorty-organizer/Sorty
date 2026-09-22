@@ -201,6 +201,9 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
             throw Self.mapGenerationError(generationError)
         }
         if let error = lastError {
+            if error is ParserError {
+                throw AIClientError.jsonDecodingError(context: error.localizedDescription)
+            }
             throw AIClientError.networkError(error)
         }
         throw AIClientError.invalidResponse

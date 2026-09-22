@@ -154,6 +154,8 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             }
             
             return try ResponseParser.parseResponse(text, originalFiles: files, mode: config.mode)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as AIClientError {
             throw error
         } catch {
@@ -242,6 +244,11 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
                 }
                 throw AIClientError.jsonDecodingError(context: error.localizedDescription)
             }
+        } catch is CancellationError {
+            await MainActor.run { [weak self] in
+                self?.streamingDelegate?.didFail(error: CancellationError())
+            }
+            throw CancellationError()
         } catch let error as AIClientError {
             await MainActor.run { [weak self] in
                 self?.streamingDelegate?.didFail(error: error)
