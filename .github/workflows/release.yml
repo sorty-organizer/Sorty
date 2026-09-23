@@ -10,6 +10,10 @@ on:
         description: 'Version to release (e.g., 0.5.0 or 0.5.0-beta-1)'
         required: true
         type: string
+      reuse_test_run:
+        description: 'Successful release run whose unit tests can be reused when only release tooling changed'
+        required: false
+        type: string
 
 concurrency:
   group: sparkle-publishing
@@ -25,6 +29,7 @@ jobs:
   prepare-release:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
+      actions: read
       contents: write
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
@@ -37,6 +42,19 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate reused test run
+        if: github.event_name == 'workflow_dispatch' && inputs.reuse_test_run != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TEST_RUN: ${{ inputs.reuse_test_run }}
+        run: |
+          TESTED_SHA=$(gh run view "$TEST_RUN" --json headSha --jq '.headSha')
+          TEST_RESULT=$(gh run view "$TEST_RUN" --json jobs --jq '.jobs[] | select(.name == "unit-tests") | .conclusion')
+          test "$TEST_RESULT" = success
+          git merge-base --is-ancestor "$TESTED_SHA" HEAD
+          CHANGED_PRODUCT_FILES=$(git diff --name-only "$TESTED_SHA" HEAD | grep -Ev '^(\.github/workflows/release\.yml|scripts/build\.sh)$' || true)
+          test -z "$CHANGED_PRODUCT_FILES"
 
       - name: Get version
         id: version
@@ -99,6 +117,7 @@ jobs:
   unit-tests:
     runs-on: blacksmith-6vcpu-macos-15
     needs: prepare-release
+    if: inputs.reuse_test_run == ''
 
     steps:
       - name: Checkout
@@ -278,6 +297,7 @@ jobs:
       - prepare-release
       - unit-tests
       - build-universal
+    if: always() && needs.prepare-release.result == 'success' && needs.build-universal.result == 'success' && (needs.unit-tests.result == 'success' || inputs.reuse_test_run != '')
     permissions:
       contents: write
 

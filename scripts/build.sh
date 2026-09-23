@@ -550,7 +550,16 @@ run_quiet() {
     if is_truthy "${SORTY_VERBOSE}"; then
         "$@"
     else
-        "$@" >/dev/null 2>&1
+        local output_file
+        output_file=$(mktemp)
+        if "$@" >"${output_file}" 2>&1; then
+            rm -f "${output_file}"
+        else
+            local status=$?
+            cat "${output_file}" >&2
+            rm -f "${output_file}"
+            return "${status}"
+        fi
     fi
 }
 
