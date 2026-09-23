@@ -9,17 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New
 
-- Added guided organization workflows, watched-folder actions, richer exclusion rules, and in-app support checks.
+- Added in-app support checks and clearer diagnostics for watched folders and Finder integration.
 
 ### Improved
 
-- Reduced launch and idle work, streamlined organization and duplicate review, and improved AI request handling and progress feedback.
-- Refined onboarding, settings, Finder controls, accessibility, and update status throughout the Mac app.
+- Cut median time to the first window from 2,262 ms to 1,127 ms in a same-machine Release A/B test against v1.2.0 (8 runs per build, about 50% faster).
+- Cut settled idle CPU from a 51.4% mean to 0% in a 60-second visible-window test without an animated HUD. Timers now pause when hidden, and background scans, Finder checks, and AI retries do less work. Battery drain was not measured.
+- Reduced work during organization, duplicate review, AI streaming, and persisted-state loading.
 
 ### Fixed
 
-- Hardened organization and undo handling, including cancellation and concurrent-run edge cases.
-- Fixed Finder action routing, permission recovery, provider errors, and stale UI states after updates or configuration changes.
+- Fixed organization, cancellation, and undo edge cases, including overlapping runs.
+- Fixed Finder action routing, permission recovery, provider errors, and stale status after configuration changes.
 
 ## [1.2.0] - 2026-07-11
 

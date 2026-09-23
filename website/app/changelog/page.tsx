@@ -47,6 +47,32 @@ export const metadata: Metadata = {
 
 const RELEASES = [
   {
+    version: 'Sorty 1.2.1',
+    status: 'In preparation',
+    date: 'September 23, 2026',
+    title: 'Bug fixes and less work in the background',
+    summary:
+      'This maintenance update focuses on reliability and speed. Launch is faster, idle CPU work is sharply lower, and organization, Finder, permissions, and provider errors are more dependable.',
+    metrics: true,
+    highlights: [
+      {
+        icon: Sparkles,
+        title: 'Faster launch',
+        body: 'Median time to the first window fell from 2,262 ms to 1,127 ms in a same-machine Release A/B test.',
+      },
+      {
+        icon: FolderGit2,
+        title: 'Less idle work',
+        body: 'Settled idle CPU fell from a 51.4% mean to 0% in a 60-second visible-window test. Battery drain was not measured.',
+      },
+      {
+        icon: ShieldCheck,
+        title: 'More reliable',
+        body: 'Fixes cover organization, undo, Finder actions, permission recovery, provider errors, and stale status.',
+      },
+    ],
+  },
+  {
     version: 'Sorty 1.2.0',
     status: 'Latest release',
     date: 'July 11, 2026',
@@ -437,16 +463,66 @@ export default function ChangelogPage() {
                     </div>
 
                     <div className="relative p-3 sm:p-4">
-                      <div className="changelog-image-frame">
-                        <Image
-                          src={sitePath(release.image)}
-                          alt={release.imageAlt}
-                          width={1123}
-                          height={896}
-                          priority
-                          className="w-full rounded-[1.35rem] border border-white/10 object-cover"
-                        />
-                      </div>
+                      {'metrics' in release ? (
+                        <div className="flex h-full flex-col justify-center rounded-[1.35rem] border border-white/10 bg-[radial-gradient(circle_at_15%_10%,oklch(0.68_0.16_250_/_0.14),transparent_45%),radial-gradient(circle_at_85%_90%,oklch(0.7_0.15_155_/_0.12),transparent_48%)] p-5 sm:p-7">
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            Measured against 1.2.0
+                          </p>
+                          <div className="mt-6 space-y-8" role="group" aria-label="Pre-release performance comparison">
+                            <div>
+                              <div className="flex items-baseline justify-between gap-3">
+                                <h3 className="text-sm font-medium">Time to first window</h3>
+                                <span className="text-sm font-semibold text-sky-300">50% faster</span>
+                              </div>
+                              <div className="mt-4 space-y-3 text-xs">
+                                <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
+                                  <span className="text-muted-foreground">1.2.0</span>
+                                  <span className="h-3 rounded-full bg-slate-500/30"><span className="block h-full w-full rounded-full bg-slate-400" /></span>
+                                  <span className="text-right tabular-nums">2,262 ms</span>
+                                </div>
+                                <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
+                                  <span className="text-muted-foreground">Preview</span>
+                                  <span className="h-3 rounded-full bg-sky-500/15"><span className="block h-full w-1/2 rounded-full bg-sky-400" /></span>
+                                  <span className="text-right font-semibold tabular-nums text-sky-300">1,127 ms</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex items-baseline justify-between gap-3">
+                                <h3 className="text-sm font-medium">Settled idle CPU</h3>
+                                <span className="text-sm font-semibold text-emerald-300">Near zero</span>
+                              </div>
+                              <div className="mt-4 space-y-3 text-xs">
+                                <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
+                                  <span className="text-muted-foreground">1.2.0</span>
+                                  <span className="h-3 rounded-full bg-slate-500/30"><span className="block h-full w-full rounded-full bg-slate-400" /></span>
+                                  <span className="text-right tabular-nums">51.4%</span>
+                                </div>
+                                <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
+                                  <span className="text-muted-foreground">Preview</span>
+                                  <span className="h-3 rounded-full bg-emerald-500/15"><span className="block h-full w-[2px] rounded-full bg-emerald-400" /></span>
+                                  <span className="text-right font-semibold tabular-nums text-emerald-300">0.0%</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <p className="mt-7 text-xs leading-5 text-muted-foreground">
+                            Pre-release A/B benchmark, 8 launch runs per build and 60 seconds of idle CPU samples on the same Mac. Battery drain was not measured.{' '}
+                            <a href="https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md#8-re-measurement-at-62ba6cbf-2026-09-23-v120-vs-latest-commit" className="text-sky-300 underline-offset-4 hover:underline">Method and results</a>
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="changelog-image-frame">
+                          <Image
+                            src={sitePath(release.image)}
+                            alt={release.imageAlt}
+                            width={1123}
+                            height={896}
+                            priority
+                            className="w-full rounded-[1.35rem] border border-white/10 object-cover"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 
