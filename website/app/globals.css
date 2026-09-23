@@ -939,8 +939,8 @@
 .release-chart-fill-sky {
   box-shadow: 0 0 12px 2px oklch(0.72 0.16 235 / 45%);
 }
-.release-chart-fill-emerald {
-  box-shadow: 0 0 10px 2px oklch(0.76 0.16 155 / 45%);
+.release-chart-zero-track {
+  box-shadow: 0 0 10px 1px oklch(0.76 0.16 155 / 35%);
 }
 @keyframes release-chart-grow {
   from { transform: scaleX(0); }

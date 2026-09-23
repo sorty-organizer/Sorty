@@ -118,6 +118,12 @@ def performance_chart(version: str) -> str:
         before = metric["before"]
         after = metric["after"]
         width = max(0, min(100, after / before * 100))
+        after_bar = (
+            f'<div class="bar after" style="width: {width:.1f}%"></div>'
+            if width > 0
+            else ""
+        )
+        after_track_class = "track" if width > 0 else "track zero"
         color = metric["color"] if metric["color"] in ("blue", "green") else "blue"
         name = html.escape(metric["name"])
         unit = html.escape(metric["unit"])
@@ -126,7 +132,7 @@ def performance_chart(version: str) -> str:
         rows.append(f"""<div class="metric {color}">
           <div class="metric-heading"><strong>{name}</strong><strong>{improvement}</strong></div>
           <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>{before:,g}{suffix}</span></div>
-          <div class="bar-row"><span>{html.escape(version)}</span><div class="track"><div class="bar after" style="width: {width:.1f}%"></div></div><span>{after:,g}{suffix}</span></div>
+          <div class="bar-row"><span>{html.escape(version)}</span><div class="{after_track_class}">{after_bar}</div><span>{after:,g}{suffix}</span></div>
         </div>""")
     source = html.escape(data["source"], quote=True)
     return f"""<section class="performance" aria-label="Sorty {html.escape(version)} performance comparison">
@@ -185,7 +191,8 @@ def html_document(
     .bar {{ height: 100%; border-radius: 10px; }}
     .before {{ width: 100%; background: #8794a8; }}
     .blue .after {{ background: #3997e8; }}
-    .green .after {{ background: #29a77a; min-width: 2px; }}
+    .green .after {{ background: #29a77a; }}
+    .green .track.zero {{ background: rgba(41, 167, 122, 0.15); box-shadow: 0 0 10px 1px rgba(41, 167, 122, 0.35); }}
     .after {{ transform-origin: left; animation: fill-bar 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }}
     @keyframes fill-bar {{ from {{ transform: scaleX(0); }} to {{ transform: scaleX(1); }} }}
     @media (prefers-reduced-motion: reduce) {{ .after {{ animation: none; }} }}
