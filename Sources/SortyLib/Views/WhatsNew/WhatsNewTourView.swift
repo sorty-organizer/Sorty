@@ -239,7 +239,7 @@ public struct WhatsNewTourView: View {
     }
 
     private var performanceSummary: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "sparkles")
                     .foregroundStyle(.cyan)
@@ -267,9 +267,9 @@ public struct WhatsNewTourView: View {
                 .frame(maxWidth: .infinity, alignment: .top)
             }
         }
-        .padding(.horizontal, 26)
-        .padding(.top, 56)
-        .padding(.bottom, 12)
+        .padding(.horizontal, 20)
+        .padding(.top, 68)
+        .padding(.bottom, 10)
         .frame(width: 640, height: 416, alignment: .top)
         .background {
             ZStack {
@@ -311,27 +311,10 @@ public struct WhatsNewTourView: View {
             HapticFeedbackManager.shared.tap()
             NSWorkspace.shared.open(benchmarkNotesURL)
         } label: {
-            HStack(spacing: 5) {
-                Text("See full benchmark notes")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .background {
-                Capsule(style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
-                    .systemLiquidGlassBackground(cornerRadius: 999)
-            }
-            .overlay {
-                Capsule(style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-            }
+            Label("See full benchmark notes", systemImage: "arrow.up.right")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
         }
-        .buttonStyle(.plain)
+        .systemLiquidGlassButton()
         .accessibilityLabel("See full benchmark notes")
         .accessibilityHint("Opens the benchmark notes in your browser")
         .trackHoveredURL(benchmarkNotesURL)
@@ -343,16 +326,16 @@ public struct WhatsNewTourView: View {
     }
 
     private func performanceBar(_ metric: WhatsNewPerformanceMetric) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 5) {
                 Text(metric.title)
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer(minLength: 0)
                 Text(metric.improvement)
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(metric.color)
                     .lineLimit(1)
             }
@@ -361,51 +344,57 @@ public struct WhatsNewTourView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
                             Text(series.title)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                             Spacer(minLength: 2)
                             Text(series.improvement)
                                 .foregroundStyle(metric.color)
+                                .lineLimit(1)
                         }
-                        .font(.system(size: 8, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(.primary.opacity(0.88))
                         WhatsNewComparisonBar(fraction: series.afterFraction, color: metric.color, animates: true)
-                            .frame(height: 4)
+                            .frame(height: 5)
                     }
                 } else {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 3) {
                         HStack {
                             Text(series.title)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                             Spacer(minLength: 2)
                             Text(series.improvement)
                                 .foregroundStyle(metric.color)
+                                .lineLimit(1)
                         }
-                        .font(.system(size: 8, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(.primary.opacity(0.88))
                         comparisonBar(label: "1.2.0", value: series.beforeLabel, fraction: 1, color: .secondary.opacity(0.60))
                         comparisonBar(label: "1.2.1", value: series.afterLabel, fraction: series.afterFraction, color: metric.color)
                     }
                 }
             }
         }
-        .padding(.horizontal, 9)
+        .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(metric.color.opacity(0.045), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(metric.color.opacity(0.16), lineWidth: 1))
+        .background(metric.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(metric.color.opacity(0.22), lineWidth: 1))
     }
 
     private func comparisonBar(label: String, value: String, fraction: CGFloat, color: Color) -> some View {
         HStack(spacing: 5) {
             Text(label)
-                .font(.system(size: 7, weight: .medium, design: .rounded))
+                .font(.system(size: 9, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
-                .frame(width: 26, alignment: .leading)
+                .frame(width: 24, alignment: .leading)
             WhatsNewComparisonBar(fraction: fraction, color: color, animates: label == "1.2.1")
-                .frame(height: 4)
+                .frame(height: 5)
             Text(value)
-                .font(.system(size: 7, weight: .semibold, design: .rounded).monospacedDigit())
-                .foregroundStyle(.secondary)
+                .font(.system(size: 9, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .frame(width: 62, alignment: .trailing)
+                .frame(width: 74, alignment: .trailing)
         }
     }
 
