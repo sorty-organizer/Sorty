@@ -64,6 +64,45 @@ struct PromptBuilder {
     static let mainPromptTokenBudget = 12_000
     static let mainPromptMaxFullMetadataFiles = 80
 
+    // Shared formatters: constructing ISO8601DateFormatter/DateFormatter per
+    // file (or per group) costs ~ms each and dominates prompt building for
+    // large folders. These are guarded by a lock because formatters are not
+    // thread-safe; callers use the helpers below, never the formatters direct.
+    private static let sharedInternetDateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+    private static let sharedFullDateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        return formatter
+    }()
+    private static let sharedTemplateDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+    private static let sharedPromptFormatterLock = NSLock()
+
+    private static func internetDateString(from date: Date) -> String {
+        sharedPromptFormatterLock.lock()
+        defer { sharedPromptFormatterLock.unlock() }
+        return sharedInternetDateFormatter.string(from: date)
+    }
+
+    private static func fullDateString(from date: Date) -> String {
+        sharedPromptFormatterLock.lock()
+        defer { sharedPromptFormatterLock.unlock() }
+        return sharedFullDateFormatter.string(from: date)
+    }
+
+    private static func templateDateString(from date: Date) -> String {
+        sharedPromptFormatterLock.lock()
+        defer { sharedPromptFormatterLock.unlock() }
+        return sharedTemplateDateFormatter.string(from: date)
+    }
+
     static func buildOrganizationPrompt(
         files: [FileItem],
         mode: OrganizationMode = .organize,
@@ -238,59 +277,91 @@ struct PromptBuilder {
         }
         
         prompt += "Files to process (\(files.count) total):\n\n"
+        prompt.reserveCapacity(prompt.count + files.count * 128)
 
         // Enforce the main-path token budget incrementally: full per-file
         // metadata for the first N files, path-only lines afterwards. This
         // keeps the JSON contract tail intact while bounding prompt growth.
+        // estimatedChars tracks prompt size incrementally so the budget check
+        // stays O(1); it runs every 16 files because the prompt only grows
+        // and the latched over-budget state never clears mid-run.
         var fullMetadataRemaining = Self.mainPromptMaxFullMetadataFiles
         var emittedMinimalLines = 0
-        func overMainBudget(_ current: String) -> Bool {
-            estimateTokens(current) >= mainPromptTokenBudget
+        var estimatedChars = prompt.count
+        var filesSinceBudgetCheck = 0
+        var isOverMainBudget = estimatedChars / 4 >= mainPromptTokenBudget
+        func refreshMainBudgetState() {
+            isOverMainBudget = estimatedChars / 4 >= mainPromptTokenBudget
+        }
+        func appendPromptLine(_ line: String) {
+            prompt += line
+            estimatedChars += line.count
         }
 
-        // Group files by extension for better context
-        let groupedByExtension = Dictionary(grouping: files) { $0.extension.lowercased() }
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime]
-
-        for (ext, fileList) in groupedByExtension.sorted(by: { $0.key < $1.key }) {
+        // Walk files grouped by extension without duplicating the FileItem
+        // array: sort lightweight indices once, then visit contiguous runs.
+        // The old Dictionary(grouping:) + sorted-groups + per-group sort
+        // copied every FileItem several times before the AI request.
+        let orderByExtension = files.indices.sorted {
+            files[$0].extension.lowercased() < files[$1].extension.lowercased()
+        }
+        var runStart = orderByExtension.startIndex
+        while runStart < orderByExtension.endIndex {
+            let ext = files[orderByExtension[runStart]].extension.lowercased()
+            var runEnd = runStart
+            while runEnd < orderByExtension.endIndex,
+                  files[orderByExtension[runEnd]].extension.lowercased() == ext {
+                runEnd += 1
+            }
+            let runIndices = orderByExtension[runStart..<runEnd]
             let extLabel = ext.isEmpty ? "no extension" : ".\(ext)"
-            prompt += "\(extLabel.uppercased()) files (\(fileList.count)):\n"
+            let headerLine = "\(extLabel.uppercased()) files (\(runIndices.count)):\n"
+            appendPromptLine(headerLine)
 
-            // Prioritize files with content metadata (deep-scanned) before applying the cap
-            let sortedFiles: [FileItem]
+            // Prioritize files with content metadata (deep-scanned) before
+            // applying the cap. Two stable passes over the run preserve input
+            // order within each partition without sorting.
+            let runMetadataFirst: [Int]
             if includeContentMetadata {
-                sortedFiles = fileList.sorted { a, b in
-                    let aHasMetadata = a.contentMetadata != nil && !a.contentMetadata!.isEmpty
-                    let bHasMetadata = b.contentMetadata != nil && !b.contentMetadata!.isEmpty
-                    if aHasMetadata != bHasMetadata { return aHasMetadata }
-                    return false
+                let withMetadata = runIndices.filter {
+                    files[$0].contentMetadata != nil && !files[$0].contentMetadata!.isEmpty
+                }
+                if withMetadata.count != runIndices.count, !withMetadata.isEmpty {
+                    let withMetadataSet = Set(withMetadata)
+                    runMetadataFirst = withMetadata + runIndices.filter { !withMetadataSet.contains($0) }
+                } else {
+                    runMetadataFirst = Array(runIndices)
                 }
             } else {
-                sortedFiles = fileList
+                runMetadataFirst = Array(runIndices)
             }
 
-            for file in sortedFiles {
+            for index in runMetadataFirst {
+                let file = files[index]
+                filesSinceBudgetCheck += 1
+                if filesSinceBudgetCheck >= 16 {
+                    filesSinceBudgetCheck = 0
+                    refreshMainBudgetState()
+                }
                 let promptPath = file.relativePath ?? file.displayName
-                let useMinimalLine = fullMetadataRemaining <= 0 || overMainBudget(prompt)
-                if useMinimalLine {
+                if fullMetadataRemaining <= 0 || isOverMainBudget {
                     emittedMinimalLines += 1
-                    prompt += "  - \(promptPath)\n"
+                    appendPromptLine("  - \(promptPath)\n")
                     continue
                 }
                 fullMetadataRemaining -= 1
                 var fileDesc = "  - \(promptPath)"
-                
+
                 fileDesc += " [\(file.isDirectory ? "directory" : "file"), \(file.size) bytes / \(file.formattedSize)]"
 
                 if let created = file.creationDate {
-                    fileDesc += ", created: \(dateFormatter.string(from: created))"
+                    fileDesc += ", created: \(Self.internetDateString(from: created))"
                 }
                 if let modified = file.modificationDate {
-                    fileDesc += ", modified: \(dateFormatter.string(from: modified))"
+                    fileDesc += ", modified: \(Self.internetDateString(from: modified))"
                 }
                 if let accessed = file.lastAccessDate {
-                    fileDesc += ", accessed: \(dateFormatter.string(from: accessed))"
+                    fileDesc += ", accessed: \(Self.internetDateString(from: accessed))"
                 }
                 if let resolution = file.resolutionString {
                     fileDesc += ", dimensions: \(resolution)"
@@ -325,8 +396,9 @@ struct PromptBuilder {
                     }
                 }
                 
-                prompt += "\(fileDesc)\n"
+                appendPromptLine("\(fileDesc)\n")
             }
+            runStart = runEnd
         }
 
         if includeContentMetadata {
@@ -517,16 +589,14 @@ struct PromptBuilder {
         
         // Append Finder metadata compactly when present
         var extras = ["bytes:\(file.size)"]
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withFullDate]
         if let created = file.creationDate {
-            extras.append("created:\(dateFormatter.string(from: created))")
+            extras.append("created:\(Self.fullDateString(from: created))")
         }
         if let modified = file.modificationDate {
-            extras.append("modified:\(dateFormatter.string(from: modified))")
+            extras.append("modified:\(Self.fullDateString(from: modified))")
         }
         if let accessed = file.lastAccessDate {
-            extras.append("accessed:\(dateFormatter.string(from: accessed))")
+            extras.append("accessed:\(Self.fullDateString(from: accessed))")
         }
         if let resolution = file.resolutionString {
             extras.append("dimensions:\(resolution)")
@@ -850,12 +920,10 @@ struct PromptBuilder {
     }
 
     private static func expandTemplateVariables(_ template: String, for file: FileItem, counter: Int) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
         let relevantDate = file.modificationDate ?? file.creationDate ?? Date()
 
         let replacements: [String: String] = [
-            "{date}": formatter.string(from: relevantDate),
+            "{date}": templateDateString(from: relevantDate),
             "{ext}": file.extension.lowercased(),
             "{size}": file.formattedSize,
             "{counter}": String(format: "%02d", counter)
@@ -878,7 +946,7 @@ struct PromptBuilder {
             parts.append("Author: \(truncateForPrompt(author, maxLength: 160))")
         }
         if let created = metadata.creationDate {
-            parts.append("Document created: \(ISO8601DateFormatter().string(from: created))")
+            parts.append("Document created: \(Self.fullDateString(from: created))")
         }
         if let pages = metadata.pageCount {
             parts.append("Pages: \(pages)")
@@ -967,6 +1035,66 @@ struct PromptBuilder {
         return context
     }
 
+    /// Derives the existing-folder list from a single scan result instead of
+    /// re-enumerating the directory. Parent folders of scanned files are, by
+    /// construction, the descendant folders an organization would reuse; this
+    /// avoids a second full enumeration alongside the manifest pass. Empty
+    /// folders are not represented here — callers fall back to the
+    /// filesystem enumeration only when this returns nil.
+    static func buildExistingFoldersContext(
+        fromFiles files: [FileItem],
+        baseDirectoryURL: URL,
+        maxFolders: Int = 1_000
+    ) -> String? {
+        guard maxFolders > 0, !files.isEmpty else { return nil }
+
+        var folders = Set<String>()
+        for file in files {
+            let relative = relativePath(for: file, baseDirectoryURL: baseDirectoryURL)
+            var parent = URL(fileURLWithPath: relative).deletingLastPathComponent().path
+            while parent != ".", parent != "/", !parent.isEmpty {
+                folders.insert(parent)
+                let next = URL(fileURLWithPath: parent).deletingLastPathComponent().path
+                guard next != parent else { break }
+                parent = next
+            }
+        }
+        guard !folders.isEmpty else { return nil }
+
+        let sorted = folders.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        let foldersToShow = sorted.prefix(maxFolders)
+        var context = "## EXISTING DESCENDANT FOLDERS (exact paths; prefer reusing these when semantically appropriate):\n"
+        context += foldersToShow.map { "- \($0)" }.joined(separator: "\n")
+        if sorted.count > maxFolders {
+            context += "\n- ... and \(sorted.count - maxFolders) more"
+        }
+        context += "\n\nIMPORTANT: A listed path is one complete destination relative to the watched folder. Copy the full path exactly when it fits. Prefer an existing descendant folder over creating a duplicate hierarchy."
+        return context
+    }
+
+    /// Filesystem existing-folder enumeration without occupying the caller's
+    /// actor. Mirrors the buildDirectoryManifestContextOffMain detached
+    /// pattern so FolderOrganizer keeps both passes off the main actor.
+    static func buildExistingFoldersContextOffMain(
+        at directoryURL: URL,
+        maxFolders: Int = 1_000
+    ) async throws -> String? {
+        try Task.checkCancellation()
+        let task = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let context = buildExistingFoldersContext(at: directoryURL, maxFolders: maxFolders)
+            try Task.checkCancellation()
+            return context
+        }
+        return try await withTaskCancellationHandler {
+            let context = try await task.value
+            try Task.checkCancellation()
+            return context
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
     static func buildDirectoryManifestContext(
         baseDirectoryURL: URL,
         files: [FileItem],
@@ -1012,13 +1140,11 @@ struct PromptBuilder {
         .map { "\($0.key): \($0.value)" }
         .joined(separator: ", ")
 
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withFullDate]
         let manifestLines = manifestEntries.map { entry in
             let file = entry.file
             var line = "- \(entry.relativePath) | \(file.extension.isEmpty ? "no-ext" : file.extension.lowercased()) | \(file.formattedSize)"
             if let modified = file.modificationDate {
-                line += " | modified \(dateFormatter.string(from: modified))"
+                line += " | modified \(Self.fullDateString(from: modified))"
             }
             if let tags = file.finderTags, !tags.isEmpty {
                 line += " | finder_tags \(tags.joined(separator: ", "))"
@@ -1093,9 +1219,8 @@ struct PromptBuilder {
             .tagNamesKey,
             .labelNumberKey,
         ]
-        let dateFormatter = ISO8601DateFormatter()
-        dateFormatter.formatOptions = [.withInternetDateTime]
         var lines: [String] = []
+        lines.reserveCapacity(min(maxEntries, 64))
         var directoryCount = 0
 
         func appendDirectory(_ url: URL, relativePath: String) {
@@ -1105,13 +1230,13 @@ struct PromptBuilder {
             let values = try? url.resourceValues(forKeys: keys)
             var parts = ["- \(relativePath)"]
             if let created = values?.creationDate {
-                parts.append("created \(dateFormatter.string(from: created))")
+                parts.append("created \(Self.internetDateString(from: created))")
             }
             if let modified = values?.contentModificationDate {
-                parts.append("modified \(dateFormatter.string(from: modified))")
+                parts.append("modified \(Self.internetDateString(from: modified))")
             }
             if let accessed = values?.contentAccessDate {
-                parts.append("accessed \(dateFormatter.string(from: accessed))")
+                parts.append("accessed \(Self.internetDateString(from: accessed))")
             }
             if let tags = values?.tagNames, !tags.isEmpty {
                 parts.append("finder_tags \(tags.joined(separator: ", "))")
@@ -1119,7 +1244,12 @@ struct PromptBuilder {
             if let color = values?.labelNumber.flatMap(FinderTagColor.init(rawValue:))?.name {
                 parts.append("finder_color \(color)")
             }
-            if let comment = url.finderComment, !comment.isEmpty {
+            // Finder comments need an xattr round-trip per directory; only
+            // pay for it on tagged directories where selection instructions
+            // actually consult comments.
+            let isTaggedDirectory = (values?.tagNames?.isEmpty == false)
+                || values?.labelNumber != nil
+            if isTaggedDirectory, let comment = url.finderComment, !comment.isEmpty {
                 parts.append("comment \(truncateForPrompt(comment, maxLength: 200))")
             }
             lines.append(parts.joined(separator: " | "))
