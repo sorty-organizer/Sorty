@@ -150,6 +150,42 @@ final class GitHubContributorsFetcher: ObservableObject {
     private var scheduledFetchTask: Task<Void, Never>?
     private var contributorFetchEnabled = true
 
+    // In-memory overlay so a just-saved payload reads back synchronously
+    // while the file write below is still in flight.
+    private var contributorCacheOverlay: [CreditItem]?
+    private var endpointCacheOverlay: [String: CachedEndpointRecord] = [:]
+
+    // MARK: - File Cache (large payloads live here, not UserDefaults)
+
+    /// Large contributor/endpoint payloads are written atomically to
+    /// Application Support; UserDefaults keeps only tiny scalars (timestamps,
+    /// retry counters). All file I/O runs off the main actor.
+    private nonisolated static var creditsCacheDirectory: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.sorty.app"
+        return base.appendingPathComponent(bundleID).appendingPathComponent("Credits")
+    }
+
+    private nonisolated static func creditsFileURL(forKey key: String) -> URL {
+        let sanitized = key.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+        return creditsCacheDirectory.appendingPathComponent("credits-\(sanitized).json")
+    }
+
+    private nonisolated static func writeCreditsFile(key: String, data: Data) {
+        let url = creditsFileURL(forKey: key)
+        // Best-effort cache: failures just mean refetching later.
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try? data.write(to: url, options: .atomic)
+    }
+
+    private nonisolated static func readCreditsFile(key: String) -> Data? {
+        try? Data(contentsOf: creditsFileURL(forKey: key))
+    }
+
     func fetchIfNeeded(enabled: Bool = true, forceRefresh: Bool = false) {
         contributorFetchEnabled = enabled
 
@@ -157,6 +193,7 @@ final class GitHubContributorsFetcher: ObservableObject {
             scheduledFetchTask?.cancel()
             scheduledFetchTask = nil
             contributors = []
+            contributorCacheOverlay = nil
             isLoading = false
             return
         }
@@ -523,21 +560,44 @@ final class GitHubContributorsFetcher: ObservableObject {
     private func saveCache(_ items: [CreditItem]) {
         guard !items.isEmpty else { return }
 
+        contributorCacheOverlay = items
         let payload = items.map {
             CachedContributorRecord(name: $0.name, role: $0.license, profileURL: $0.url.absoluteString)
         }
-        guard let encoded = try? JSONEncoder().encode(payload) else { return }
-
-        UserDefaults.standard.set(encoded, forKey: Self.cacheKey)
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.cacheTimestampKey)
+        Task.detached(priority: .utility) {
+            guard let encoded = try? JSONEncoder().encode(payload) else { return }
+            Self.writeCreditsFile(key: Self.cacheKey, data: encoded)
+        }
     }
 
     private func loadCache() -> [CreditItem]? {
         let timestamp = UserDefaults.standard.double(forKey: Self.cacheTimestampKey)
         guard timestamp > 0, Date().timeIntervalSince1970 - timestamp < Self.cacheTTL else { return nil }
 
-        guard let raw = UserDefaults.standard.data(forKey: Self.cacheKey),
-              let decoded = try? JSONDecoder().decode([CachedContributorRecord].self, from: raw) else {
+        if let overlay = contributorCacheOverlay, !overlay.isEmpty {
+            return overlay
+        }
+        if let raw = Self.readCreditsFile(key: Self.cacheKey),
+           let items = decodeContributorRecords(raw), !items.isEmpty {
+            contributorCacheOverlay = items
+            return items
+        }
+        // Legacy UserDefaults payload: adopt once into the file cache.
+        if let raw = UserDefaults.standard.data(forKey: Self.cacheKey),
+           let items = decodeContributorRecords(raw), !items.isEmpty {
+            contributorCacheOverlay = items
+            UserDefaults.standard.removeObject(forKey: Self.cacheKey)
+            Task.detached(priority: .utility) {
+                Self.writeCreditsFile(key: Self.cacheKey, data: raw)
+            }
+            return items
+        }
+        return nil
+    }
+
+    private func decodeContributorRecords(_ raw: Data) -> [CreditItem]? {
+        guard let decoded = try? JSONDecoder().decode([CachedContributorRecord].self, from: raw) else {
             return nil
         }
 
@@ -555,16 +615,33 @@ final class GitHubContributorsFetcher: ObservableObject {
     }
 
     private func saveEndpointCache(_ payload: CachedEndpointRecord, forKey key: String) {
-        guard let encoded = try? JSONEncoder().encode(payload) else { return }
-        UserDefaults.standard.set(encoded, forKey: key)
+        endpointCacheOverlay[key] = payload
+        Task.detached(priority: .utility) {
+            guard let encoded = try? JSONEncoder().encode(payload) else { return }
+            Self.writeCreditsFile(key: key, data: encoded)
+        }
     }
 
     private func loadEndpointCache(forKey key: String) -> CachedEndpointRecord? {
-        guard let raw = UserDefaults.standard.data(forKey: key),
-              let decoded = try? JSONDecoder().decode(CachedEndpointRecord.self, from: raw) else {
-            return nil
+        if let overlay = endpointCacheOverlay[key] {
+            return overlay
         }
-        return decoded
+        if let raw = Self.readCreditsFile(key: key),
+           let decoded = try? JSONDecoder().decode(CachedEndpointRecord.self, from: raw) {
+            endpointCacheOverlay[key] = decoded
+            return decoded
+        }
+        // Legacy UserDefaults payload: adopt once into the file cache.
+        if let raw = UserDefaults.standard.data(forKey: key),
+           let decoded = try? JSONDecoder().decode(CachedEndpointRecord.self, from: raw) {
+            endpointCacheOverlay[key] = decoded
+            UserDefaults.standard.removeObject(forKey: key)
+            Task.detached(priority: .utility) {
+                Self.writeCreditsFile(key: key, data: raw)
+            }
+            return decoded
+        }
+        return nil
     }
 }
 

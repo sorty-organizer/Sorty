@@ -133,4 +133,13 @@ public struct IncomingPathValidator {
         }
         return nil
     }
+
+    /// Off-main variant for IPC/deeplink observers: fileExists/readability
+    /// probes run on a utility worker so notification delivery never blocks
+    /// the main thread. Hop back to MainActor only for confirmed URLs.
+    public static func validatedDirectoryURLIfValidAsync(path: String?) async -> URL? {
+        await Task.detached(priority: .utility) {
+            validatedDirectoryURLIfValid(path: path)
+        }.value
+    }
 }

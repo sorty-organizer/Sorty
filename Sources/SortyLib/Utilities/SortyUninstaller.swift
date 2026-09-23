@@ -681,7 +681,6 @@ public enum SortyUninstaller {
         for identifier in knownComponentBundleIdentifiers {
             defaults.removePersistentDomain(forName: identifier)
         }
-        defaults.synchronize()
 
         var success = knownComponentBundleIdentifiers.allSatisfy {
             defaults.persistentDomain(forName: $0) == nil
@@ -689,7 +688,6 @@ public enum SortyUninstaller {
 
         if let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) {
             sharedDefaults.removePersistentDomain(forName: appGroupIdentifier)
-            sharedDefaults.synchronize()
             success = sharedDefaults.persistentDomain(forName: appGroupIdentifier) == nil && success
         }
 

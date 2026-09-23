@@ -13,6 +13,31 @@ struct KeychainManager {
     // and bundle ID changes during development
     private static let primaryService = "com.sorty.app.credentials"
 
+    // In-memory cache so hot paths (Learnings saves, provider-key reads) do
+    // not hit Security.framework on every call. Security.framework can block
+    // while macOS unlocks or searches a keychain; the cache keeps those calls
+    // off the main thread after the first read. Invalidated on save/delete.
+    private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var cachedValues: [String: String] = [:]
+
+    private static func cacheGet(key: String) -> String? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return cachedValues[key]
+    }
+
+    private static func cacheSet(key: String, value: String) {
+        cacheLock.lock()
+        cachedValues[key] = value
+        cacheLock.unlock()
+    }
+
+    private static func cacheRemove(key: String) {
+        cacheLock.lock()
+        cachedValues.removeValue(forKey: key)
+        cacheLock.unlock()
+    }
+
     // Accessibility choice: AfterFirstUnlock keeps API keys available to
     // background automation (watched folders, login item) after a restart
     // once the user has unlocked once, without requiring an unlock prompt on
@@ -57,6 +82,7 @@ struct KeychainManager {
 
         let status = SecItemAdd(query as CFDictionary, nil)
         if status == errSecSuccess {
+            cacheSet(key: key, value: value)
             cleanupFallbackServices(for: key)
             return true
         }
@@ -73,6 +99,7 @@ struct KeychainManager {
 
             let updateStatus = SecItemUpdate(updateQuery as CFDictionary, attributesToUpdate as CFDictionary)
             if updateStatus == errSecSuccess {
+                cacheSet(key: key, value: value)
                 cleanupFallbackServices(for: key)
                 return true
             }
@@ -94,7 +121,12 @@ struct KeychainManager {
     }
     
     static func get(key: String) -> String? {
+        if let cached = cacheGet(key: key) {
+            return cached
+        }
+
         if let value = readValue(key: key, service: primaryService) {
+            cacheSet(key: key, value: value)
             return value
         }
 
@@ -113,13 +145,21 @@ struct KeychainManager {
         return nil
     }
 
+    /// Cached read: returns the in-memory value without leaving the caller
+    /// thread, and only hops to a detached worker on a cache miss.
     static func getAsync(key: String) async -> String? {
-        await Task.detached(priority: .userInitiated) {
+        if let cached = cacheGet(key: key) {
+            return cached
+        }
+        return await Task.detached(priority: .userInitiated) {
             get(key: key)
         }.value
     }
 
     static func delete(key: String) -> Bool {
+        // Invalidate the cache up front so a failed delete can never serve
+        // a stale credential to later reads.
+        cacheRemove(key: key)
         var success = true
 
         for service in allServices {
@@ -147,6 +187,9 @@ struct KeychainManager {
     }
 
     static func deleteAll() -> Bool {
+        cacheLock.lock()
+        cachedValues.removeAll()
+        cacheLock.unlock()
         var success = true
 
         for service in allServices {

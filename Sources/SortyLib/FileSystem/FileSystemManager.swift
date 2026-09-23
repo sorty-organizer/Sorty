@@ -2534,20 +2534,76 @@ public class DuplicateRestorationManager: ObservableObject {
     
     /// Delete all stored history data
     public func clearAllData() {
+        historySaveTask?.cancel()
+        historySaveTask = nil
+        historyGeneration &+= 1
         restoredItems.removeAll()
+        try? fileManager.removeItem(at: Self.historyFileURL)
         UserDefaults.standard.removeObject(forKey: persistenceKey)
     }
-    
+
     private func loadHistory() {
+        if let data = try? Data(contentsOf: Self.historyFileURL),
+           let decoded = try? JSONDecoder().decode([RestorableDuplicate].self, from: data) {
+            restoredItems = decoded
+            return
+        }
+        // Legacy UserDefaults payload: adopt once, then persist to file.
         if let data = UserDefaults.standard.data(forKey: persistenceKey),
            let decoded = try? JSONDecoder().decode([RestorableDuplicate].self, from: data) {
             restoredItems = decoded
+            UserDefaults.standard.removeObject(forKey: persistenceKey)
+            saveHistory()
         }
     }
-    
+
+    private var historySaveTask: Task<Void, Never>?
+    private var historyWriteTask: Task<Void, Never>?
+    private var historyGeneration = 0
+
+    /// Coalesced file write: per-item moveToTrash loops collapse into a
+    /// single encode + atomic write on a worker. In-memory state updates
+    /// stay synchronous on main; only the encode/write moves off-main.
+    /// Writes are chained so rapid saves land in order.
     private func saveHistory() {
-        if let encoded = try? JSONEncoder().encode(restoredItems) {
-            UserDefaults.standard.set(encoded, forKey: persistenceKey)
+        historySaveTask?.cancel()
+        let generation = historyGeneration
+        historySaveTask = Task {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled, generation == historyGeneration else { return }
+            let snapshot = restoredItems
+            let previousWrite = historyWriteTask
+            let write = Task.detached(priority: .utility) {
+                await previousWrite?.value
+                guard !Task.isCancelled else { return }
+                Self.writeHistoryFile(snapshot)
+            }
+            historyWriteTask = write
+            await write.value
+        }
+    }
+
+    private nonisolated static var historyFileURL: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return base.appendingPathComponent("Sorty/DuplicateRestorationHistory.json")
+    }
+
+    private nonisolated static func writeHistoryFile(_ items: [RestorableDuplicate]) {
+        let fileURL = historyFileURL
+        do {
+            let encoded = try JSONEncoder().encode(items)
+            try FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try encoded.write(to: fileURL, options: .atomic)
+        } catch {
+            LogManager.shared.log(
+                "Failed to save duplicate restoration history: \(error.localizedDescription)",
+                level: .error,
+                category: "DuplicateRestoration"
+            )
         }
     }
     

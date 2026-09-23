@@ -132,6 +132,9 @@ public class LearningsManager: ObservableObject {
     public let consentManager: LearningsConsentManager
     
     // Learning Controls
+    // NOTE: didSet writes stay synchronous: they are trivial scalar writes
+    // and tests assert UserDefaults immediately after set. The expensive
+    // follow-ups (retention prune, profile save) are debounced/off-main.
     @Published public var learningStrength: Double = 0.5 {
         didSet {
             userDefaults.set(learningStrength, forKey: "learningStrength")
@@ -159,7 +162,20 @@ public class LearningsManager: ObservableObject {
         didSet {
             userDefaults.set(dataRetentionDays, forKey: "learningDataRetentionDays")
             guard dataRetentionDays != oldValue else { return }
-            Task { await applyDataRetentionPolicy() }
+            scheduleRetentionPrune()
+        }
+    }
+
+    private var retentionPruneTask: Task<Void, Never>?
+
+    /// Coalesces rapid retention-day changes; the prune itself runs off-main
+    /// in applyDataRetentionPolicy.
+    private func scheduleRetentionPrune() {
+        retentionPruneTask?.cancel()
+        retentionPruneTask = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            await applyDataRetentionPolicy()
         }
     }
     
@@ -497,6 +513,17 @@ public class LearningsManager: ObservableObject {
     @discardableResult
     public func clearAllData() async -> Bool {
         do {
+            // Cancel pending writes first so a debounced save cannot
+            // resurrect state after the delete below.
+            saveTask?.cancel()
+            saveTask = nil
+            retentionPruneTask?.cancel()
+            retentionPruneTask = nil
+            modelDirectoriesSaveTask?.cancel()
+            modelDirectoriesSaveTask = nil
+            persistenceTask?.cancel()
+            persistenceTask = nil
+
             try await consentManager.deleteAllData()
 
             currentProfile = nil
@@ -522,6 +549,10 @@ public class LearningsManager: ObservableObject {
             modelDirectoryScanStates = [:]
             learningStrength = 0.5
             dataRetentionDays = 0
+            // dataRetentionDays.didSet schedules a prune above; kill it so
+            // reset stays deleted.
+            retentionPruneTask?.cancel()
+            retentionPruneTask = nil
 
             [
                 "learningStrength",
@@ -551,7 +582,11 @@ public class LearningsManager: ObservableObject {
         var loadOutcome = "success"
         isLoading = true
         do {
-            if let profile = try LearningsFileManager.load() {
+            // Decrypt + decode off the main actor; assignment stays on main.
+            let loaded = try await Task.detached(priority: .userInitiated) {
+                try LearningsFileManager.load()
+            }.value
+            if let profile = loaded {
                 currentProfile = prepareLoadedProfile(profile)
             } else {
                 currentProfile = prepareLoadedProfile(LearningsProfile())
@@ -578,7 +613,9 @@ public class LearningsManager: ObservableObject {
     }
     
     /// Load profile synchronously for background collection (without authentication)
-    /// This allows data collection to work even when the UI is locked
+    /// This allows data collection to work even when the UI is locked.
+    /// Cold path only (until currentProfile is cached); record* hot paths
+    /// stay in-memory with debouncedSave.
     public func loadProfileIfNeededForCollection() {
         guard currentProfile == nil else { return }
         
@@ -601,9 +638,10 @@ public class LearningsManager: ObservableObject {
     
     private func saveProfile() async {
         guard let profile = currentProfile else { return }
-        
+
         // Prune before saving to keep file size manageable
         pruneOldData()
+
         
         // File I/O runs on .utility: this manager lives on the main actor and
         // must never block it with encrypted-profile writes.
@@ -619,6 +657,7 @@ public class LearningsManager: ObservableObject {
                 operation: "save_profile"
             )
             self.error = "Failed to save profile: \(error.localizedDescription)"
+
         }
     }
 
@@ -1057,7 +1096,7 @@ public class LearningsManager: ObservableObject {
             )
         }
         currentProfile = profile
-        Task { await saveProfile() }
+        debouncedSave()
     }
     
     /// Record guiding instructions for next attempt
@@ -1487,7 +1526,7 @@ public class LearningsManager: ObservableObject {
         }
     }
     
-    /// Force immediate save (for critical operations)
+    /// Force immediate save (for critical operations).
     public func forceSave() async {
         saveTask?.cancel()
         promptContextCacheKey = nil
@@ -1496,18 +1535,28 @@ public class LearningsManager: ObservableObject {
         await saveProfile()
     }
 
+    /// Synchronous save for termination only. macOS does not wait for
+    /// unstructured tasks started from termination callbacks, so this path
+    /// runs encode/encrypt/write on a worker queue and blocks the caller
+    /// until the bytes land. Do NOT use for routine saves.
     public func forceSaveSynchronously() {
         saveTask?.cancel()
+
         promptContextCacheKey = nil
         promptContextCacheValue = nil
+
         pruneOldData()
         guard let profile = currentProfile else { return }
-        do {
-            try LearningsFileManager.save(profile: profile)
-        } catch {
-            self.error = "Failed to save profile: \(error.localizedDescription)"
+        learningsTerminationIOQueue.sync {
+            try? LearningsFileManager.save(profile: profile)
         }
     }
+
+    /// Worker queue for termination saves; never the main thread.
+    private let learningsTerminationIOQueue = DispatchQueue(
+        label: "com.sorty.learnings.io",
+        qos: .utility
+    )
     
     /// Caps history arrays at 100 items to prevent bloat
     private func pruneOldData() {
@@ -1518,18 +1567,34 @@ public class LearningsManager: ObservableObject {
 
     /// Applies the selected retention period immediately and persists the deletion.
     /// This is also used after loading so expired records are never exposed or reused.
+    /// Date filtering runs on a worker; assignment and save stay on main.
     public func applyDataRetentionPolicy(now: Date = Date()) async {
-        guard var profile = currentProfile else { return }
+        guard let profile = currentProfile else { return }
         let previousSnapshot = learningProfileSnapshot(profile)
-        pruneOldData(in: &profile, now: now)
-        guard learningProfileSnapshot(profile) != previousSnapshot else { return }
-        currentProfile = profile
+        let retentionDays = dataRetentionDays
+        let pruned = await Task.detached(priority: .utility) {
+            var copy = profile
+            Self.pruneProfile(&copy, retentionDays: retentionDays, now: now)
+            return copy
+        }.value
+        guard learningProfileSnapshot(pruned) != previousSnapshot else { return }
+        currentProfile = pruned
         await saveProfile()
     }
 
     private func pruneOldData(in profile: inout LearningsProfile, now: Date = Date()) {
-        if dataRetentionDays > 0,
-           let cutoff = Calendar.current.date(byAdding: .day, value: -dataRetentionDays, to: now) {
+        Self.pruneProfile(&profile, retentionDays: dataRetentionDays, now: now)
+    }
+
+    /// Pure retention + cap pass over a profile copy. Runs on a worker via
+    /// applyDataRetentionPolicy; never touches actor state.
+    private nonisolated static func pruneProfile(
+        _ profile: inout LearningsProfile,
+        retentionDays: Int,
+        now: Date
+    ) {
+        if retentionDays > 0,
+           let cutoff = Calendar.current.date(byAdding: .day, value: -retentionDays, to: now) {
             profile.additionalInstructionsHistory.removeAll { $0.timestamp < cutoff }
             profile.guidingInstructionsHistory.removeAll { $0.timestamp < cutoff }
             profile.steeringPrompts.removeAll { $0.timestamp < cutoff }
@@ -1646,10 +1711,8 @@ public class LearningsManager: ObservableObject {
             profile.rejections = Array(profile.rejections.suffix(Self.maxLabeledExamplesPerList))
         }
         currentProfile = profile
-        Task { 
-            await saveProfile() 
-            await checkAndTriggerAutoInference()
-        }
+        debouncedSave()
+        Task { await checkAndTriggerAutoInference() }
     }
     
     // MARK: - Legacy Project Method Removals
@@ -1710,11 +1773,9 @@ public class LearningsManager: ObservableObject {
         }
 
         currentProfile = profile
-        Task { 
-            await saveProfile()
-            // Trigger auto-inference check after adding example
-            await checkAndTriggerAutoInference()
-        }
+        debouncedSave()
+        // Trigger auto-inference check after adding example
+        Task { await checkAndTriggerAutoInference() }
     }
     
     // MARK: - Analysis
@@ -2843,21 +2904,44 @@ public class LearningsManager: ObservableObject {
         return effectiveConfig
     }
     
+    private var modelDirectoriesSaveTask: Task<Void, Never>?
+
+    /// Coalesced 250ms-debounced write: rescan completions, batch adds, and
+    /// rapid toggles collapse into a single encode. The (potentially large)
+    /// snapshot encode runs on a worker; the UserDefaults set stays on main.
     private func saveModelDirectories() {
         guard hasLoadedPersistedState else {
             hasPendingModelDirectoryChanges = true
             return
         }
-        do {
-            let data = try JSONEncoder().encode(modelDirectories)
-            userDefaults.set(data, forKey: Self.modelDirectoriesKey)
-        } catch {
-            ReliabilityManager.shared.capture(
-                error: error,
-                feature: "learnings",
-                operation: "save_model_directories"
-            )
-            DebugLogger.log("Failed to save model directories: \(error.localizedDescription)")
+        modelDirectoriesSaveTask?.cancel()
+        let snapshot = modelDirectories
+        modelDirectoriesSaveTask = Task {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            let outcome = await Task.detached(priority: .utility) { () -> (Data?, String?) in
+                do {
+                    return (try JSONEncoder().encode(snapshot), nil)
+                } catch {
+                    return (nil, error.localizedDescription)
+                }
+            }.value
+            guard !Task.isCancelled else { return }
+            if let encoded = outcome.0 {
+                userDefaults.set(encoded, forKey: Self.modelDirectoriesKey)
+            } else {
+                let description = outcome.1 ?? "encoding failed"
+                ReliabilityManager.shared.capture(
+                    error: NSError(
+                        domain: "LearningsManager",
+                        code: 1,
+                        userInfo: [NSLocalizedDescriptionKey: description]
+                    ),
+                    feature: "learnings",
+                    operation: "save_model_directories"
+                )
+                DebugLogger.log("Failed to save model directories: \(description)")
+            }
         }
     }
     
@@ -3468,7 +3552,7 @@ public class LearningsManager: ObservableObject {
         return filtered
     }
 
-    private func learningProfileSnapshot(_ profile: LearningsProfile) -> [Int] {
+    private nonisolated func learningProfileSnapshot(_ profile: LearningsProfile) -> [Int] {
         [
             profile.additionalInstructionsHistory.count,
             profile.guidingInstructionsHistory.count,

@@ -97,8 +97,14 @@ public final class LogManager: @unchecked Sendable {
         at destinationURL: URL
     ) async throws -> DiagnosticReportResult {
         guard let logsDirectory else { throw DiagnosticReportError.unavailable }
-        queue.sync {
-            try? logFileHandle?.synchronize()
+        // Flush pending log writes without blocking the main actor: the
+        // serial logging queue drains ahead of this async barrier, then the
+        // file handle is synchronized for a consistent snapshot.
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            queue.async {
+                try? self.logFileHandle?.synchronize()
+                continuation.resume()
+            }
         }
         let reportID = UUID().uuidString.lowercased()
         let sentryEventID = ReliabilityManager.shared.captureDiagnosticReport(reportID: reportID)
