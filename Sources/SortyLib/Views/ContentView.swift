@@ -123,6 +123,7 @@ public struct ContentView: View {
         } detail: {
             // Render the selected page in the same update as the sidebar selection.
             contentView(for: appState.currentView)
+                .padding(.leading, 8)
                 .accessibilityIdentifier(contentAccessibilityIdentifier(for: appState.currentView))
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
