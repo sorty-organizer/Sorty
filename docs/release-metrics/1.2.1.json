@@ -16,6 +16,78 @@
       "unit": "%",
       "improvement": "Near zero",
       "color": "green"
+    },
+    {
+      "name": "Idle CPU when minimized",
+      "before": 55,
+      "after": 0,
+      "unit": "%",
+      "improvement": "Timers pause",
+      "color": "green"
+    },
+    {
+      "name": "Idle CPU with animated HUD",
+      "before": 51.4,
+      "after": 16.5,
+      "unit": "%",
+      "improvement": "About 3× lower",
+      "color": "green"
+    },
+    {
+      "name": "1,000-file prompt size",
+      "before": 132059,
+      "after": 11961,
+      "unit": "tokens",
+      "improvement": "91% fewer",
+      "color": "blue"
+    },
+    {
+      "name": "1,000-file prompt preparation",
+      "before": 12.1,
+      "after": 5.0,
+      "unit": "ms",
+      "improvement": "59% faster",
+      "color": "blue"
+    },
+    {
+      "name": "Repeated batch manifest",
+      "before": 13686,
+      "after": 2627,
+      "unit": "tokens",
+      "improvement": "81% fewer",
+      "color": "blue"
+    },
+    {
+      "name": "Duplicate text-feature work",
+      "before": 100,
+      "after": 14,
+      "unit": "% of old work",
+      "improvement": "86% less work",
+      "color": "purple"
+    },
+    {
+      "name": "Progress-line parsing work",
+      "before": 100,
+      "after": 55,
+      "unit": "% of old work",
+      "improvement": "45% less work",
+      "color": "blue"
+    },
+    {
+      "name": "Flight queue work over 120 frames",
+      "before": 100,
+      "after": 0,
+      "unit": "% of old work",
+      "improvement": "O(1) per frame",
+      "color": "purple"
+    },
+    {
+      "name": "Unicode stream counting, 100 runs",
+      "before": 40.6,
+      "after": 0,
+      "unit": "s",
+      "improvement": "About 40.6 s saved",
+      "color": "blue"
     }
   ]
 }

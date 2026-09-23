@@ -939,6 +939,12 @@
 .release-chart-fill-sky {
   box-shadow: 0 0 12px 2px oklch(0.72 0.16 235 / 45%);
 }
+.release-chart-fill-emerald {
+  box-shadow: 0 0 12px 2px oklch(0.76 0.16 155 / 50%);
+}
+.release-chart-fill-violet {
+  box-shadow: 0 0 12px 2px oklch(0.68 0.19 300 / 50%);
+}
 .release-chart-zero-track {
   box-shadow: 0 0 10px 1px oklch(0.76 0.16 155 / 35%);
 }

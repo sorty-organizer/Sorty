@@ -124,7 +124,7 @@ def performance_chart(version: str) -> str:
             else ""
         )
         after_track_class = "track" if width > 0 else "track zero"
-        color = metric["color"] if metric["color"] in ("blue", "green") else "blue"
+        color = metric["color"] if metric["color"] in ("blue", "green", "purple") else "blue"
         name = html.escape(metric["name"])
         unit = html.escape(metric["unit"])
         suffix = f" {unit}" if unit != "%" else unit
@@ -137,7 +137,7 @@ def performance_chart(version: str) -> str:
     source = html.escape(data["source"], quote=True)
     return f"""<section class="performance" aria-label="Sorty {html.escape(version)} performance comparison">
       <h2>Measured against 1.2.0</h2>
-      {''.join(rows)}
+      <div class="metrics">{''.join(rows)}</div>
       <p><a href="{source}">How we measured</a></p>
     </section>"""
 
@@ -179,11 +179,13 @@ def html_document(
     .performance {{ margin: 24px 0; padding: 18px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 16px; background: radial-gradient(circle at 12% 5%, rgba(57, 151, 232, 0.12), transparent 50%), radial-gradient(circle at 88% 95%, rgba(41, 167, 122, 0.10), transparent 48%), color-mix(in srgb, CanvasText 5%, Canvas); box-shadow: 0 0 34px -20px rgba(57, 151, 232, 0.65); }}
     .performance h2 {{ margin: 0 0 20px; font-size: 1em; }}
     .performance p {{ margin: 18px 0 0; font-size: 0.85em; }}
-    .metric + .metric {{ margin-top: 20px; }}
+    .performance .metrics {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }}
+    .performance .metric {{ min-width: 0; border: 1px solid color-mix(in srgb, CanvasText 12%, transparent); border-radius: 12px; padding: 12px; background: color-mix(in srgb, CanvasText 3%, Canvas); }}
     .metric-heading, .bar-row {{ display: flex; align-items: center; justify-content: space-between; gap: 10px; }}
     .metric-heading {{ margin-bottom: 10px; }}
     .metric-heading strong:last-child {{ color: #3997e8; }}
     .green .metric-heading strong:last-child {{ color: #238f6a; }}
+    .purple .metric-heading strong:last-child {{ color: #8756d9; }}
     .bar-row {{ margin-top: 8px; font-size: 0.85em; font-variant-numeric: tabular-nums; }}
     .bar-row span:first-child {{ width: 55px; color: color-mix(in srgb, CanvasText 70%, transparent); }}
     .bar-row span:last-child {{ width: 72px; text-align: right; }}
@@ -191,7 +193,8 @@ def html_document(
     .bar {{ height: 100%; border-radius: 10px; }}
     .before {{ width: 100%; background: #8794a8; }}
     .blue .after {{ background: #3997e8; box-shadow: 0 0 12px 2px rgba(57, 151, 232, 0.45); }}
-    .green .after {{ background: #29a77a; }}
+    .green .after {{ background: #29a77a; box-shadow: 0 0 12px 2px rgba(41, 167, 122, 0.4); }}
+    .purple .after {{ background: #8756d9; box-shadow: 0 0 12px 2px rgba(135, 86, 217, 0.4); }}
     .green .track.zero {{ background: rgba(41, 167, 122, 0.15); box-shadow: 0 0 10px 1px rgba(41, 167, 122, 0.35); }}
     .after {{ transform-origin: left; animation: fill-bar 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }}
     @keyframes fill-bar {{ from {{ transform: scaleX(0); }} to {{ transform: scaleX(1); }} }}

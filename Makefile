@@ -12,19 +12,18 @@ PARALLEL_FLAGS := -j $(CORES)
 SORTY_BUILD_DIR ?= $(HOME)/Library/Caches/Sorty/build
 SWIFTPM_SCRATCH_FLAG := --scratch-path "$(SORTY_BUILD_DIR)"
 SWIFTPM_CACHE_FLAG := --disable-dependency-cache
+# SwiftPM's explicit switch is local-only; keep CI's existing indexing behavior.
+SWIFTPM_INDEX_STORE_FLAG := $(if $(filter 1 true True TRUE yes Yes YES on On ON,$(CI)),,--disable-index-store)
 
 # Package.swift owns compiler and linker settings so builds and tests share one
 # incremental compilation signature instead of invalidating each other.
-SWIFT_DEBUG_FLAGS := --disable-sandbox
-SWIFT_RELEASE_FLAGS := --disable-sandbox
+SWIFT_DEBUG_FLAGS := --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
+SWIFT_RELEASE_FLAGS := --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
 # Keep local app identity stable across rebuilds so macOS continues granting the
 # replacement binary access to Keychain credentials created by the prior build.
 FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_FINDER_EXTENSION=true ENABLE_ADHOC_SIGNING=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
 VERBOSE ?= false
 BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE) SORTY_BUILD_DIR="$(SORTY_BUILD_DIR)"
-
-# Disable index store for local debug builds (saves ~10-15% compile time)
-export SWIFTPM_DISABLE_INDEXING ?= 1
 
 build:
 	@chmod +x scripts/build.sh
@@ -60,11 +59,11 @@ test:
 # Quick test run - excludes slow UI/integration tests
 test-fast:
 	@echo "🧪 Running fast unit tests only..."
-	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox --filter SortyTests
+	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG) --filter SortyTests
 
 test-full:
 	@echo "🧪 Running unit tests with coverage..."
-	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox
+	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
 	@echo "✅ All tests completed. Coverage reports available in $(SORTY_BUILD_DIR)/debug/codecov"
 
 # Profile build times to identify slow-compiling files
@@ -206,7 +205,7 @@ harness-accent:
 QUALITY_CORPUS ?= QualityCorpus/private
 
 quality-report:
-	@swift run $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --disable-sandbox SortyQuality --corpus "$(QUALITY_CORPUS)"
+	@swift run $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG) SortyQuality --corpus "$(QUALITY_CORPUS)"
 
 help:
 	@echo "Sorty Build System (Optimized)"
