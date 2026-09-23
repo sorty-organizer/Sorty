@@ -433,7 +433,7 @@ public actor DuplicateDetector {
     /// Reads run two at a time on `.utility` tasks (never serially on the
     /// caller), progress reports are throttled to ~4 Hz, and cancellation
     /// stops scheduling new reads.
-    public func computeHashes(for files: inout [FileItem], progressHandler: ((Int, Int) -> Void)? = nil) async {
+    public func computeHashes(for files: inout [FileItem], progressHandler: (@Sendable (Int, Int) -> Void)? = nil) async {
         let missing = files.indices.filter { files[$0].sha256Hash == nil }
         guard !missing.isEmpty else {
             progressHandler?(files.count, files.count)
