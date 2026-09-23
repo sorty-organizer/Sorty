@@ -86,6 +86,7 @@ struct FileOrganizationValidator {
     static func checkConflicts(_ plan: OrganizationPlan, at baseURL: URL) throws {
         var existingPaths: Set<String> = []
         let fileManager = FileManager.default
+        var checkedCount = 0
         
         func checkSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) throws {
             let folderURL: URL
@@ -98,6 +99,11 @@ struct FileOrganizationValidator {
             
             if existingPaths.contains(folderPath) {
                 throw ValidationError.pathConflict(folderPath)
+            }
+
+            checkedCount += 1
+            if checkedCount.isMultiple(of: 64) {
+                try Task.checkCancellation()
             }
             
             // Allow organizing into existing directories - only reject paths that exist as files
@@ -125,35 +131,43 @@ struct FileOrganizationValidator {
     
     static func validateFileExistence(_ plan: OrganizationPlan) throws {
         let fileManager = FileManager.default
-        
+        // Validated incrementally in strides so a large plan stays abortable
+        // instead of blocking the off-main validation task in one pass.
+        var checkedCount = 0
+        func checkExists(url: URL, displayPath: String) throws {
+            checkedCount += 1
+            if checkedCount.isMultiple(of: 64) {
+                try Task.checkCancellation()
+            }
+            guard fileManager.fileExists(atPath: url.path) else {
+                throw ValidationError.fileNotFound(displayPath)
+            }
+        }
+
         func validateFiles(_ suggestion: FolderSuggestion) throws {
             for file in suggestion.files {
                 guard let url = file.url else {
                     throw ValidationError.fileNotFound(file.path)
                 }
-                
-                if !fileManager.fileExists(atPath: url.path) {
-                    throw ValidationError.fileNotFound(file.path)
-                }
+
+                try checkExists(url: url, displayPath: file.path)
             }
-            
+
             for subfolder in suggestion.subfolders {
                 try validateFiles(subfolder)
             }
         }
-        
+
         for suggestion in plan.suggestions {
             try validateFiles(suggestion)
         }
-        
+
         for file in plan.unorganizedFiles {
             guard let url = file.url else {
                 throw ValidationError.fileNotFound(file.path)
             }
-            
-            if !fileManager.fileExists(atPath: url.path) {
-                throw ValidationError.fileNotFound(file.path)
-            }
+
+            try checkExists(url: url, displayPath: file.path)
         }
     }
     
