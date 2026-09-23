@@ -916,7 +916,7 @@ public actor FileSystemManager {
         }
     }
 
-    private func applyTagsAndComment(to url: URL, tags: [String], comment: String?, dryRun: Bool) -> FileOperation? {
+    private func applyTagsAndComment(to url: URL, tags: [String], comment: String?, dryRun: Bool, skipExistenceCheck: Bool = false) -> FileOperation? {
         let hasComment = comment != nil && !(comment ?? "").isEmpty
         guard !tags.isEmpty || hasComment else { return nil }
 
@@ -932,11 +932,18 @@ public actor FileSystemManager {
             )
         }
 
-        guard fileManager.fileExists(atPath: url.path) else { return nil }
+        // Just-moved destinations are known to exist (the move phase recorded
+        // them); only files that stayed in place pay the existence syscall.
+        if !skipExistenceCheck {
+            guard fileManager.fileExists(atPath: url.path) else { return nil }
+        }
 
         let resourceValues = try? url.resourceValues(forKeys: [.tagNamesKey])
         let originalTags = resourceValues?.tagNames ?? []
-        let originalComment = url.finderComment
+        // The Finder-comment xattr round-trip is the costliest read here.
+        // Only pay it when this op sets a comment: restore consults
+        // originalComment solely when newComment != nil.
+        let originalComment = hasComment ? url.finderComment : nil
 
         var finalTags = originalTags
         if !tags.isEmpty {
@@ -1112,6 +1119,7 @@ public actor FileSystemManager {
         enableTagging: Bool = true,
         strictExclusions: Bool = true,
         exclusionManager: ExclusionRulesManager? = nil,
+        skipPreValidation: Bool = false,
         progress: (@Sendable (Double, String) -> Void)? = nil
     ) async throws -> [FileOperation] {
         _ = startAccessing(baseURL)
@@ -1131,7 +1139,13 @@ public actor FileSystemManager {
             allOperations.reserveCapacity(totalFiles + totalFolders)
             var operationProgress = OrganizationProgress(totalOperations: totalOps, handler: progress)
 
-            if !dryRun {
+            // skipPreValidation lets a caller that just validated the same
+            // plan (FolderOrganizer.performApply runs validateOffMain
+            // immediately before this) avoid stat-ing every source a second
+            // time. Move-time existence checks below remain as the safety net,
+            // turning a vanished source into a per-file skip instead of a
+            // fatal abort.
+            if !dryRun && !skipPreValidation {
                 progress?(0.02, "Validating files...")
                 let validationIssues = await preValidatePlan(plan, at: baseURL)
                 if !validationIssues.isEmpty {
@@ -1166,6 +1180,12 @@ public actor FileSystemManager {
             // Shared across suggestions so two files targeting the same name
             // in one run never share a destination.
             var reservedDestinations = Set<String>()
+            // Single-enumeration existence snapshot so the move/tag phases
+            // don't pay a fileExists syscall per source on top of the
+            // validator and pre-validation passes. Sources only disappear
+            // mid-apply, so a snapshot hit skips the syscall while a miss
+            // still confirms via fileExists.
+            let existingPathsSnapshot: Set<String> = dryRun ? [] : snapshotExistingPaths(at: baseURL)
             for suggestion in plan.suggestions {
                 let result = try await moveFilesInSuggestionWithProgress(
                     suggestion,
@@ -1174,7 +1194,8 @@ public actor FileSystemManager {
                     exclusionManager: exclusionManager,
                     operationProgress: &operationProgress,
                     failures: &allFailures,
-                    reserved: &reservedDestinations
+                    reserved: &reservedDestinations,
+                    existingPaths: existingPathsSnapshot
                 )
                 allOperations.append(contentsOf: result.operations)
             }
@@ -1359,7 +1380,8 @@ public actor FileSystemManager {
         exclusionManager: ExclusionRulesManager? = nil,
         operationProgress: inout OrganizationProgress,
         failures: inout [OperationFailure],
-        reserved: inout Set<String>
+        reserved: inout Set<String>,
+        existingPaths: Set<String> = []
     ) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
@@ -1407,16 +1429,22 @@ public actor FileSystemManager {
                             invalidateListingCache(forParent: folderURL.deletingLastPathComponent())
                         }
 
-                        guard fileManager.fileExists(atPath: sourceURL.path) else {
-                            failures.append(OperationFailure(
-                                sourcePath: sourceURL.path,
-                                destinationPath: destinationURL.path,
-                                error: "Source file no longer exists",
-                                isRetryable: false
-                            ))
-                            operationProgress.report("Skipped \(finalFilename) (not found)...")
-                            processedCount += 1
-                            continue
+                        // Snapshot fast path: sources only disappear mid-apply,
+                        // so a snapshot hit skips the per-file syscall. A miss
+                        // still confirms via fileExists (the file may have
+                        // appeared after the snapshot or live outside it).
+                        if !existingPaths.contains(normalizedPath(sourceURL.path)) {
+                            guard fileManager.fileExists(atPath: sourceURL.path) else {
+                                failures.append(OperationFailure(
+                                    sourcePath: sourceURL.path,
+                                    destinationPath: destinationURL.path,
+                                    error: "Source file no longer exists",
+                                    isRetryable: false
+                                ))
+                                operationProgress.report("Skipped \(finalFilename) (not found)...")
+                                processedCount += 1
+                                continue
+                            }
                         }
 
                         // Uniquifies against disk + batch reservations, retries
@@ -1480,13 +1508,39 @@ public actor FileSystemManager {
                 exclusionManager: exclusionManager,
                 operationProgress: &operationProgress,
                 failures: &failures,
-                reserved: &reserved
+                reserved: &reserved,
+                existingPaths: existingPaths
             )
             operations.append(contentsOf: subResult.operations)
             processedCount += subResult.processedCount
         }
         
         return OperationResult(operations: operations, processedCount: processedCount)
+    }
+
+    /// Single-enumeration snapshot of every path under baseURL for the apply
+    /// phases. One enumeration replaces thousands of per-file fileExists
+    /// syscalls when callers pre-check source existence.
+    private func snapshotExistingPaths(at baseURL: URL) -> Set<String> {
+        var paths = Set<String>()
+        guard let enumerator = fileManager.enumerator(
+            at: baseURL,
+            includingPropertiesForKeys: [.isSymbolicLinkKey, .isDirectoryKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return paths
+        }
+        for case let item as URL in enumerator {
+            // Never follow symlinked directories: they can escape the apply
+            // root and would bloat (or loop) the snapshot.
+            if (try? item.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true {
+                if (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                    enumerator.skipDescendants()
+                }
+            }
+            paths.insert(normalizedPath(item.path))
+        }
+        return paths
     }
 
     private func progressMessage(
@@ -1540,10 +1594,16 @@ public actor FileSystemManager {
             
             let finalFilename = finalFilenames[mapping.originalFile.id] ?? mapping.originalFile.displayName
             let sourcePath = mapping.originalFile.url.map { normalizedPath($0.path) }
-            let fileURL = sourcePath.flatMap { movedDestinations[$0] }
+            // A destination resolved through movedDestinations was written by
+            // this apply's move phase, so it skips the existence syscall and
+            // the comment xattr read below is already gated on hasComment.
+            // Batching tag writes this way keeps per-file work to the two
+            // metadata writes (tags, comment) with no extra stats.
+            let movedURL = sourcePath.flatMap { movedDestinations[$0] }
+            let fileURL = movedURL
                 ?? folderURL.appendingPathComponent(finalFilename)
             
-            if let op = applyTagsAndComment(to: fileURL, tags: mapping.tags, comment: mapping.comment, dryRun: dryRun) {
+            if let op = applyTagsAndComment(to: fileURL, tags: mapping.tags, comment: mapping.comment, dryRun: dryRun, skipExistenceCheck: movedURL != nil) {
                 operations.append(op)
             }
             operationProgress.report("Tagging \(finalFilename)...")
@@ -2140,9 +2200,12 @@ public actor FileSystemManager {
             issues.append(issue)
         }
         
+        // Validate incrementally per top-level suggestion, yielding between
+        // them so a thousand-folder plan never blocks the caller in one go.
         for suggestion in plan.suggestions {
             let suggestionIssues = await preValidateSuggestion(suggestion, parentURL: baseURL)
             issues.append(contentsOf: suggestionIssues)
+            await Task.yield()
         }
 
         var capacityRequirements: [String: DestinationCapacityRequirement] = [:]
