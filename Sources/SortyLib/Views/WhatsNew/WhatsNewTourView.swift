@@ -452,17 +452,12 @@ public struct WhatsNewTourView: View {
     private var releaseSummary: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("WHAT'S NEW")
-                    .font(.system(.caption2, design: .rounded, weight: .semibold))
-                    .tracking(1.5)
-                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-
                 Text("Sorty 1.2.1")
                     .font(.system(.title, design: .rounded, weight: .bold))
                     .foregroundStyle(.primary)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("A faster launch, live organization insights, clearer duplicate review, and stronger recovery across Sorty.")
+                Text("A refreshed app icon, a faster launch, live progress while organizing, clearer duplicate review, and stronger recovery.")
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
