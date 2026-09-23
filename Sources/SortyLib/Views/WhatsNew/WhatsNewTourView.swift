@@ -286,8 +286,12 @@ public struct WhatsNewTourView: View {
         }
     }
 
+    private var benchmarkNotesURL: URL {
+        URL(string: "https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md")!
+    }
+
     private var performanceCopy: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             Text(pages[1].title)
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
@@ -295,14 +299,42 @@ public struct WhatsNewTourView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
 
-            Text(pages[1].description)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(1)
-                .fixedSize(horizontal: false, vertical: true)
+            benchmarkNotesPill
         }
         .frame(height: 48, alignment: .bottom)
+    }
+
+    private var benchmarkNotesPill: some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            NSWorkspace.shared.open(benchmarkNotesURL)
+        } label: {
+            HStack(spacing: 5) {
+                Text("See full benchmark notes")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(Capsule(style: .continuous).fill(Color.primary.opacity(0.06)))
+            .systemLiquidGlassBackground(cornerRadius: 999)
+            .overlay {
+                Capsule(style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("See full benchmark notes")
+        .accessibilityHint("Opens the benchmark notes in your browser")
+        .trackHoveredURL(benchmarkNotesURL)
+        .onHover { hovering in
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
+        }
     }
 
     // One hero metric per card: big improvement value in its color,
