@@ -128,7 +128,7 @@ jobs:
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: 'latest-stable'
+          xcode-version: '26.3' # Pinned: pre-Xcode-27 SDK
 
       - name: Compute toolchain cache key
         id: toolchain
@@ -190,7 +190,7 @@ jobs:
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: 'latest-stable'
+          xcode-version: '26.3' # Pinned: pre-Xcode-27 SDK
 
       - name: Compute toolchain cache key
         id: toolchain
@@ -311,7 +311,7 @@ jobs:
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: 'latest-stable'
+          xcode-version: '26.3' # Pinned: pre-Xcode-27 SDK
 
       - name: Download universal artifacts
         env:
