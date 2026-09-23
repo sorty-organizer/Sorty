@@ -1,0 +1,22 @@
+{
+  "source": "https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md#8-re-measurement-at-62ba6cbf-2026-09-23-v120-vs-latest-commit",
+  "method": "Pre-release A/B benchmark on the same Mac: 8 launch runs per build and 60 seconds of idle CPU samples. Battery drain was not measured.",
+  "metrics": [
+    {
+      "name": "Time to first window",
+      "before": 2262,
+      "after": 1127,
+      "unit": "ms",
+      "improvement": "50% faster",
+      "color": "blue"
+    },
+    {
+      "name": "Settled idle CPU",
+      "before": 51.4,
+      "after": 0,
+      "unit": "%",
+      "improvement": "Near zero",
+      "color": "green"
+    }
+  ]
+}

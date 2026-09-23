@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import os
 import re
 import subprocess
@@ -106,15 +107,47 @@ def inline_html(markdown_text: str) -> str:
     return re.sub(r"`(.+?)`", r"<code>\1</code>", escaped)
 
 
+def performance_chart(version: str) -> str:
+    path = Path(f"docs/release-metrics/{version}.json")
+    if not path.exists():
+        return ""
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    rows = []
+    for metric in data["metrics"]:
+        before = metric["before"]
+        after = metric["after"]
+        width = max(0, min(100, after / before * 100))
+        color = metric["color"] if metric["color"] in ("blue", "green") else "blue"
+        name = html.escape(metric["name"])
+        unit = html.escape(metric["unit"])
+        suffix = f" {unit}" if unit != "%" else unit
+        improvement = html.escape(metric["improvement"])
+        rows.append(f"""<div class="metric {color}">
+          <div class="metric-heading"><strong>{name}</strong><strong>{improvement}</strong></div>
+          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>{before:,g}{suffix}</span></div>
+          <div class="bar-row"><span>Preview</span><div class="track"><div class="bar after" style="width: {width:.1f}%"></div></div><span>{after:,g}{suffix}</span></div>
+        </div>""")
+    method = html.escape(data["method"])
+    source = html.escape(data["source"], quote=True)
+    return f"""<section class="performance" aria-label="Pre-release performance comparison">
+      <h2>Measured against 1.2.0</h2>
+      {''.join(rows)}
+      <p>{method} <a href="{source}">Method and results</a></p>
+    </section>"""
+
+
 def html_document(
     title: str,
     summary: str,
     release_tag: str,
     sections: dict[str, list[str]],
+    version: str,
 ) -> str:
     repository = os.environ.get("GITHUB_REPOSITORY", "sorty-organizer/Sorty")
     release_url = f"https://github.com/{repository}/releases/tag/{release_tag}"
     rendered_sections = []
+    chart = performance_chart(version)
     for heading in REQUIRED_SECTIONS:
         items = "".join(f"<li>{inline_html(item)}</li>" for item in sections[heading])
         rendered_sections.append(f"<section><h2>{heading}</h2><ul>{items}</ul></section>")
@@ -138,6 +171,22 @@ def html_document(
     .callout {{ margin: 22px 0 8px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 14px; padding: 14px 16px; background: color-mix(in srgb, CanvasText 7%, Canvas); }}
     code {{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; }}
     a {{ color: LinkText; }}
+    .performance {{ margin: 24px 0; padding: 18px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 16px; background: color-mix(in srgb, CanvasText 5%, Canvas); }}
+    .performance h2 {{ margin: 0 0 20px; font-size: 1em; }}
+    .performance p {{ margin: 18px 0 0; font-size: 0.85em; }}
+    .metric + .metric {{ margin-top: 20px; }}
+    .metric-heading, .bar-row {{ display: flex; align-items: center; justify-content: space-between; gap: 10px; }}
+    .metric-heading {{ margin-bottom: 10px; }}
+    .metric-heading strong:last-child {{ color: #3997e8; }}
+    .green .metric-heading strong:last-child {{ color: #238f6a; }}
+    .bar-row {{ margin-top: 8px; font-size: 0.85em; font-variant-numeric: tabular-nums; }}
+    .bar-row span:first-child {{ width: 55px; color: color-mix(in srgb, CanvasText 70%, transparent); }}
+    .bar-row span:last-child {{ width: 72px; text-align: right; }}
+    .track {{ flex: 1; height: 10px; border-radius: 10px; background: color-mix(in srgb, CanvasText 12%, Canvas); }}
+    .bar {{ height: 100%; border-radius: 10px; }}
+    .before {{ width: 100%; background: #8794a8; }}
+    .blue .after {{ background: #3997e8; }}
+    .green .after {{ background: #29a77a; min-width: 2px; }}
   </style>
 </head>
 <body>
@@ -145,6 +194,7 @@ def html_document(
     <h1>{html.escape(title)}</h1>
     <p class="summary">{html.escape(summary)}</p>
     <div class="callout"><strong>Update:</strong> Install this release in Sorty with <strong>Check for Updates</strong>, or download <code>Sorty.zip</code> for a new installation.</div>
+    {chart}
     {''.join(rendered_sections)}
     <p><a href="{html.escape(release_url)}">View this release on GitHub</a></p>
   </main>
@@ -176,7 +226,7 @@ def main() -> None:
         encoding="utf-8",
     )
     Path(args.html).write_text(
-        html_document(args.title, args.summary, release_tag, sections),
+        html_document(args.title, args.summary, release_tag, sections, args.version),
         encoding="utf-8",
     )
 
