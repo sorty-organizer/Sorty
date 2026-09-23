@@ -428,23 +428,57 @@ public actor DuplicateDetector {
         )
     }
     
-    /// Compute hashes for files that don't have them
+    /// Compute hashes for files that don't have them.
+    /// Mirrors the bounded TaskGroup pattern of the sampling/full-hash passes
+    /// above instead of hashing serially: hashing is I/O-bound and the old
+    /// loop also invoked the progress handler per file.
     public func computeHashes(for files: inout [FileItem], progressHandler: ((Int, Int) -> Void)? = nil) async {
-        for i in 0..<files.count {
-            if Task.isCancelled {
-                return
-            }
+        let pending = files.indices.filter { files[$0].sha256Hash == nil }
+        guard !pending.isEmpty else {
+            progressHandler?(files.count, files.count)
+            return
+        }
+        // Snapshot (index, path) pairs: TaskGroup children cannot capture the
+        // inout array, and URL is Sendable.
+        let work = pending.map { ($0, files[$0].path) }
+        let total = files.count
+        let width = min(maximumConcurrentHashers, work.count)
+        var completedMissing = 0
+        var lastReported = 0
 
-            if files[i].sha256Hash == nil {
-                files[i].sha256Hash = HashUtility.computeSHA256(for: URL(fileURLWithPath: files[i].path))
-            }
-            progressHandler?(i + 1, files.count)
-            
-            // Yield periodically for UI updates
-            if i % 10 == 0 {
-                await Task.yield()
+        func maybeReport(_ done: Int) {
+            guard let progressHandler else { return }
+            // Coalesce to 25-file intervals (and always report completion) so
+            // large backfills don't spam the caller per file.
+            if done - lastReported >= 25 {
+                lastReported = done
+                progressHandler(total - (work.count - done), total)
             }
         }
+
+        await withTaskGroup(of: (Int, String?).self) { group in
+            var iterator = work.makeIterator()
+            for _ in 0..<width {
+                guard let (index, path) = iterator.next() else { break }
+                group.addTask(priority: .utility) {
+                    (index, HashUtility.computeSHA256(for: URL(fileURLWithPath: path)))
+                }
+            }
+            while let (index, hash) = await group.next() {
+                if Task.isCancelled { group.cancelAll(); break }
+                if let hash {
+                    files[index].sha256Hash = hash
+                }
+                completedMissing += 1
+                maybeReport(completedMissing)
+                if let (nextIndex, nextPath) = iterator.next(), !Task.isCancelled {
+                    group.addTask(priority: .utility) {
+                        (nextIndex, HashUtility.computeSHA256(for: URL(fileURLWithPath: nextPath)))
+                    }
+                }
+            }
+        }
+        progressHandler?(total, total)
     }
     
     private static func cacheKey(for file: FileItem) -> HashCacheKey {
