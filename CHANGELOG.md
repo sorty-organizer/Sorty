@@ -9,13 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New
 
+- Updated the main Sorty app icon with the new release artwork.
 - Added in-app support checks and clearer diagnostics for watched folders and Finder integration.
 
 ### Improved
 
-- Cut median time to the first window from 2,262 ms to 1,127 ms in a same-machine Release A/B test against v1.2.0 (8 runs per build, about 50% faster).
-- Cut settled idle CPU from a 51.4% mean to 0% in a 60-second visible-window test without an animated HUD. Timers now pause when hidden, and background scans, Finder checks, and AI retries do less work.
-- Reduced work during organization, duplicate review, AI streaming, and persisted-state loading.
+- Cut median time to the first visible window from 2,262 ms to 1,127 ms in a same-machine Release comparison with eight runs per build.
+- Reduced settled idle CPU from a 51.4% mean to 0% in a 60-second visible-window test with no animated HUD. Timelines pause when hidden, and background scans, Finder checks, and AI retries do less work.
+- Capped organization prompts for very large folders. In a 1,000-file deep-scan benchmark, the prompt fell from 132,059 tokens to 11,961, and preparation time fell from 12.1 ms to 5.0 ms.
+- Reduced repeated context in multi-batch AI requests by 81% in a 1,050-file benchmark, and cut repeated text-feature work in the duplicate-detection benchmark by 86%.
+- Reduced repeated work during organization, AI streaming, duplicate review, and persisted-state loading.
 
 ### Fixed
 

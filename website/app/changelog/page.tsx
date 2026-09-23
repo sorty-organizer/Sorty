@@ -50,7 +50,7 @@ const RELEASES = [
     date: 'September 23, 2026',
     title: 'Bug fixes and less work in the background',
     summary:
-      'This maintenance update focuses on reliability and speed. Launch is faster, idle CPU work is sharply lower, and organization, Finder, permissions, and provider errors are more dependable.',
+      'This maintenance update brings a refreshed app icon, faster launch, lower idle CPU use, more efficient large-folder planning, and fixes across organization, Finder, permissions, and AI providers.',
     highlights: [
       {
         icon: Sparkles,
@@ -59,13 +59,18 @@ const RELEASES = [
       },
       {
         icon: FolderGit2,
-        title: 'Less idle work',
-        body: 'Settled idle CPU fell from a 51.4% mean to 0% in a 60-second visible-window test.',
+        title: 'Less background work',
+        body: 'Settled idle CPU fell from a 51.4% mean to 0% in a 60-second visible-window test. Hidden timelines, scans, and Finder checks also do less work.',
+      },
+      {
+        icon: Sparkles,
+        title: 'Faster large-folder planning',
+        body: 'A 1,000-file deep-scan prompt fell from 132,059 tokens to 11,961, and preparation time fell from 12.1 ms to 5.0 ms.',
       },
       {
         icon: ShieldCheck,
-        title: 'More reliable',
-        body: 'Fixes cover organization, undo, Finder actions, permission recovery, provider errors, and stale status.',
+        title: 'Refreshed icon and reliability fixes',
+        body: 'The main Sorty app icon has new release artwork. Fixes also cover organization, undo, Finder actions, permission recovery, provider errors, and stale status.',
       },
     ],
   },
@@ -500,12 +505,12 @@ export default function ChangelogPage() {
                               </div>
                             </div>
                           </div>
-                          <a href="https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md#8-re-measurement-at-62ba6cbf-2026-09-23-v120-vs-latest-commit" className="mt-7 w-fit text-xs text-sky-300 underline-offset-4 hover:underline">How we measured</a>
+                          <a href="https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md" className="mt-7 w-fit text-xs text-sky-300 underline-offset-4 hover:underline">See all performance measurements</a>
                         </div>
                     </div>
                   </div>
 
-                  <div className="grid gap-px border-t border-border bg-border md:grid-cols-3">
+                  <div className="grid gap-px border-t border-border bg-border md:grid-cols-2 xl:grid-cols-4">
                     {release.highlights.map((highlight) => (
                       <div
                         key={highlight.title}
