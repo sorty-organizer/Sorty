@@ -133,6 +133,32 @@ actor DirectoryScanner {
     private let pauseTimeout: Duration = .seconds(30)
     private let duplicateScanBatchSize = 2_048
     private let maximumCompleteSemanticFileCount = 5_000
+    /// Deep-content analyses in flight at once during a scan. Content
+    /// extraction (OCR, PDF text, EXIF) is I/O- and CPU-bound per file, so a
+    /// small bounded TaskGroup keeps all cores busy without the memory spike
+    /// of one task per file.
+    private let deepScanConcurrencyLimit = 4
+    /// Files buffered for concurrent analysis before a flush. Small enough to
+    /// keep the deep-scan file budget precise and results near enumeration
+    /// order; large enough to keep the 4-wide group saturated.
+    private let deepScanFlushThreshold = 8
+
+    /// Lightweight scan descriptor buffered for concurrent content analysis.
+    /// FileItem construction stays on the scanner actor after analysis so
+    /// ordering and progress accounting match the serial path.
+    private struct PendingDeepScan: Sendable {
+        let fileURL: URL
+        let relativePath: String
+        let fileName: String
+        let pathExtension: String
+        let size: Int64
+        let creationDate: Date?
+        let modificationDate: Date?
+        let lastAccessDate: Date?
+        let cloudStatus: CloudFileStatus?
+        let finderTags: [String]?
+        let finderLabelNumber: Int?
+    }
 
     /// Whether the last scan was degraded due to memory pressure
     private(set) var lastScanWasDegraded = false
@@ -265,6 +291,9 @@ actor DirectoryScanner {
     /// semantic inventory while it remains safely bounded. Large directories
     /// use a second metadata-only pass that materializes only files whose sizes
     /// occur more than once, so unique files never enter the hashing pipeline.
+    /// Small directories (fewer than maximumCompleteSemanticFileCount eligible
+    /// files) reuse the lightweight first-pass items directly and skip the
+    /// second enumeration entirely.
     func scanDirectoryForDuplicates(
         at url: URL,
         settings: DuplicateSettings,
@@ -353,6 +382,12 @@ actor DirectoryScanner {
         var eligibleFileCount = 0
         var exactCandidateCount = 0
         var unavailableFiles: [UnavailableDuplicateFile] = []
+        // Lightweight first-pass items kept only while the eligible set stays
+        // small. Small folders then filter these in memory instead of walking
+        // the directory tree a second time; large folders drop them and use
+        // the metadata-only second pass below.
+        var retainedEligibleItems: [FileItem] = []
+        retainedEligibleItems.reserveCapacity(1_024)
         // Directory identities already descended into. Symlinked directories
         // are skipped outright, so this only trips on hardlink/bind cycles.
         var visitedDirectoryIDs = Set<String>()
@@ -430,6 +465,18 @@ actor DirectoryScanner {
             eligibleFileCount += 1
             scannedCount = eligibleFileCount
 
+            if eligibleFileCount <= maximumCompleteSemanticFileCount {
+                retainedEligibleItems.append(
+                    makeDuplicateFileItem(
+                        at: fileURL,
+                        fileSize: fileSize,
+                        resourceValues: resourceValues
+                    )
+                )
+            } else if !retainedEligibleItems.isEmpty {
+                retainedEligibleItems.removeAll(keepingCapacity: false)
+            }
+
             if duplicateSizes.contains(fileSize) {
                 exactCandidateCount += 1
             } else {
@@ -483,6 +530,23 @@ actor DirectoryScanner {
                 semanticCandidates: semanticCandidates,
                 scannedFileCount: eligibleFileCount,
                 semanticSkippedFileCount: 0,
+                unavailableFiles: unavailableFiles
+            )
+        }
+
+        if eligibleFileCount < maximumCompleteSemanticFileCount {
+            // Single-pass fast path: every eligible file is already retained
+            // above, so filter by duplicate size in memory instead of
+            // enumerating the directory tree a second time.
+            let exactCandidates = retainedEligibleItems.filter { duplicateSizes.contains($0.size) }
+            logger.info(
+                "Duplicate inventory completed in a single pass: \(eligibleFileCount) eligible files, \(exactCandidates.count) exact candidates"
+            )
+            return DuplicateScanInventory(
+                exactCandidates: exactCandidates,
+                semanticCandidates: [],
+                scannedFileCount: eligibleFileCount,
+                semanticSkippedFileCount: semanticLimitExceeded ? eligibleFileCount : 0,
                 unavailableFiles: unavailableFiles
             )
         }
@@ -649,8 +713,13 @@ actor DirectoryScanner {
         }
         let cloudStatus = hasCloudSignals ? detectCloudStatus(at: url) : nil
 
-        // Read Finder comment via extended attribute
-        let finderComment = url.finderComment
+        // Read Finder comment via extended attribute (tagged subset only;
+        // untagged files skip the per-file xattr round-trip).
+        let finderComment = Self.finderCommentIfTagged(
+            at: url,
+            finderTags: finderTags,
+            finderLabelNumber: finderLabelNumber
+        )
 
         // Deep scan: extract content metadata
         var contentMetadata: ContentMetadata?
@@ -777,6 +846,12 @@ actor DirectoryScanner {
             visitedDirectoryIDs.insert(key)
         }
 
+        // Files awaiting concurrent content analysis. Buffering keeps the
+        // 4-wide TaskGroup saturated while FileItem construction (and its
+        // progress accounting) stays ordered on this actor.
+        var pendingAnalyses: [PendingDeepScan] = []
+        pendingAnalyses.reserveCapacity(deepScanFlushThreshold)
+
         while let fileURL = enumerator.nextObject() as? URL {
             // Check and wait if paused due to memory pressure
             try await waitIfPaused()
@@ -854,75 +929,64 @@ actor DirectoryScanner {
             // Determine cloud status for the file
             let cloudStatus = hasCloudSignals ? detectCloudStatus(at: fileURL) : nil
 
-            // Deep scan: extract content metadata (skipped under memory pressure)
-            var contentMetadata: ContentMetadata?
+            // Deep scan: buffer for concurrent content analysis (flushed in
+            // bounded 4-wide TaskGroups below). Files outside the deep-scan
+            // budget or with analysis disabled build their FileItem inline.
             let isWithinDeepScanBudget = deepScanFileLimit.map {
-                deepScanAnalyzedCount < max(0, $0)
+                deepScanAnalyzedCount + pendingAnalyses.count < max(0, $0)
             } ?? true
             if effectiveDeepScan && isWithinDeepScanBudget {
-                contentMetadata = await contentAnalyzer.analyze(fileURL: fileURL)
-                deepScanAnalyzedCount += 1
-                deepScanProgressCallback?(deepScanAnalyzedCount, 0)
-            } else if effectiveDeepScan && !isWithinDeepScanBudget && degradationReason == nil {
-                lastScanWasDegraded = true
-                degradationReason =
-                    "Deep content analysis was limited to \(deepScanAnalyzedCount) files to keep this large folder responsive"
-            }
-
-            // Finder comments are lightweight filesystem metadata and remain useful
-            // even when content extraction is disabled.
-            let finderComment = fileURL.finderComment
-
-            let extractedOCRText = contentMetadata?.ocrText
-            let extractedDimensions = Self.extractImageDimensions(from: contentMetadata)
-
-            // Hash computation for duplicate detection (skipped under memory pressure)
-            var sha256Hash: String?
-            if effectiveComputeHashes {
-                sha256Hash = HashUtility.computeSHA256(for: fileURL)
-            }
-
-            let fileItem = FileItem(
-                path: fileURL.path,
-                relativePath: Self.relativePath(for: fileURL, under: baseDirectoryURL),
-                name: fileName,
-                extension: pathExtension,
-                size: Int64(size),
-                isDirectory: false,
-                creationDate: creationDate,
-                modificationDate: modificationDate,
-                lastAccessDate: lastAccessDate,
-                contentMetadata: contentMetadata,
-                sha256Hash: sha256Hash,
-                ocrText: extractedOCRText,
-                imageWidth: extractedDimensions?.width,
-                imageHeight: extractedDimensions?.height,
-                cloudStatus: cloudStatus,
-                finderComment: finderComment,
-                finderTags: finderTags,
-                finderLabelNumber: finderLabelNumber
-            )
-
-            files.append(fileItem)
-            scannedCount += 1
-
-            // Yield in small batches, but avoid a task_info syscall and progress
-            // publication for every batch. The memory-pressure dispatch source
-            // still handles urgent pressure changes immediately.
-            if scannedCount.isMultiple(of: getCurrentBatchSize()) {
-                await Task.yield()
-
-                if scannedCount.isMultiple(of: enumerationProgressInterval) {
-                    scanProgressCallback?(scannedCount)
-                    await checkMemoryPressure()
-                    if memoryPressureState != .normal {
-                        logger.info(
-                            "Scan progress: \(self.scannedCount) files, pressure: \(self.memoryPressureState.rawValue)"
-                        )
-                    }
+                pendingAnalyses.append(PendingDeepScan(
+                    fileURL: fileURL,
+                    relativePath: Self.relativePath(for: fileURL, under: baseDirectoryURL),
+                    fileName: fileName,
+                    pathExtension: pathExtension,
+                    size: Int64(size),
+                    creationDate: creationDate,
+                    modificationDate: modificationDate,
+                    lastAccessDate: lastAccessDate,
+                    cloudStatus: cloudStatus,
+                    finderTags: finderTags,
+                    finderLabelNumber: finderLabelNumber
+                ))
+                if pendingAnalyses.count >= deepScanFlushThreshold {
+                    try await flushPendingDeepScans(
+                        &pendingAnalyses,
+                        effectiveComputeHashes: effectiveComputeHashes,
+                        files: &files
+                    )
                 }
+            } else {
+                if effectiveDeepScan && !isWithinDeepScanBudget && degradationReason == nil {
+                    lastScanWasDegraded = true
+                    degradationReason =
+                        "Deep content analysis was limited to \(deepScanAnalyzedCount) files to keep this large folder responsive"
+                }
+                appendScannedFile(
+                    to: &files,
+                    fileURL: fileURL,
+                    relativePath: Self.relativePath(for: fileURL, under: baseDirectoryURL),
+                    fileName: fileName,
+                    pathExtension: pathExtension,
+                    size: size,
+                    creationDate: creationDate,
+                    modificationDate: modificationDate,
+                    lastAccessDate: lastAccessDate,
+                    cloudStatus: cloudStatus,
+                    finderTags: finderTags,
+                    finderLabelNumber: finderLabelNumber,
+                    contentMetadata: nil,
+                    effectiveComputeHashes: effectiveComputeHashes
+                )
+                await reportScanProgressIfNeeded()
             }
         }
+
+        try await flushPendingDeepScans(
+            &pendingAnalyses,
+            effectiveComputeHashes: effectiveComputeHashes,
+            files: &files
+        )
 
         scanProgressCallback?(scannedCount)
 
@@ -930,6 +994,159 @@ actor DirectoryScanner {
         if memoryPressureState != .normal {
             logger.info("Scan completed under memory pressure: \(self.scannedCount) files total")
         }
+    }
+
+    /// Analyzes buffered files concurrently (bounded 4-wide, utility priority)
+    /// and appends their FileItems in enumeration order. Progress and budget
+    /// accounting mirror the old serial path; only the analysis itself runs
+    /// off the enumeration critical path.
+    private func flushPendingDeepScans(
+        _ pending: inout [PendingDeepScan],
+        effectiveComputeHashes: Bool,
+        files: inout [FileItem]
+    ) async throws {
+        guard !pending.isEmpty else { return }
+        try Task.checkCancellation()
+        let batch = pending
+        pending.removeAll(keepingCapacity: true)
+
+        let analyzer = contentAnalyzer
+        var orderedMetadata: [ContentMetadata?] = Array(repeating: nil, count: batch.count)
+        await withTaskGroup(of: (Int, ContentMetadata?).self) { group in
+            var iterator = batch.indices.makeIterator()
+            for _ in 0..<min(deepScanConcurrencyLimit, batch.count) {
+                guard let index = iterator.next() else { break }
+                let url = batch[index].fileURL
+                group.addTask(priority: .utility) {
+                    let metadata = await analyzer.analyze(fileURL: url)
+                    return (index, metadata)
+                }
+            }
+            for await (index, metadata) in group {
+                orderedMetadata[index] = metadata
+                if Task.isCancelled {
+                    group.cancelAll()
+                } else if let nextIndex = iterator.next() {
+                    let url = batch[nextIndex].fileURL
+                    group.addTask(priority: .utility) {
+                        let nextMetadata = await analyzer.analyze(fileURL: url)
+                        return (nextIndex, nextMetadata)
+                    }
+                }
+            }
+        }
+
+        for (index, descriptor) in batch.enumerated() {
+            try Task.checkCancellation()
+            deepScanAnalyzedCount += 1
+            deepScanProgressCallback?(deepScanAnalyzedCount, 0)
+            appendScannedFile(
+                to: &files,
+                fileURL: descriptor.fileURL,
+                relativePath: descriptor.relativePath,
+                fileName: descriptor.fileName,
+                pathExtension: descriptor.pathExtension,
+                size: Int(descriptor.size),
+                creationDate: descriptor.creationDate,
+                modificationDate: descriptor.modificationDate,
+                lastAccessDate: descriptor.lastAccessDate,
+                cloudStatus: descriptor.cloudStatus,
+                finderTags: descriptor.finderTags,
+                finderLabelNumber: descriptor.finderLabelNumber,
+                contentMetadata: orderedMetadata[index],
+                effectiveComputeHashes: effectiveComputeHashes
+            )
+            await reportScanProgressIfNeeded()
+        }
+    }
+
+    /// Builds one scanned FileItem and advances the enumeration count.
+    /// Shared by the inline (no-analysis) path and the concurrent flush so
+    /// both produce identical items.
+    private func appendScannedFile(
+        to files: inout [FileItem],
+        fileURL: URL,
+        relativePath: String,
+        fileName: String,
+        pathExtension: String,
+        size: Int,
+        creationDate: Date?,
+        modificationDate: Date?,
+        lastAccessDate: Date?,
+        cloudStatus: CloudFileStatus?,
+        finderTags: [String]?,
+        finderLabelNumber: Int?,
+        contentMetadata: ContentMetadata?,
+        effectiveComputeHashes: Bool
+    ) {
+        let finderComment = Self.finderCommentIfTagged(
+            at: fileURL,
+            finderTags: finderTags,
+            finderLabelNumber: finderLabelNumber
+        )
+        let extractedOCRText = contentMetadata?.ocrText
+        let extractedDimensions = Self.extractImageDimensions(from: contentMetadata)
+
+        // Hash computation for duplicate detection (skipped under memory pressure)
+        var sha256Hash: String?
+        if effectiveComputeHashes {
+            sha256Hash = HashUtility.computeSHA256(for: fileURL)
+        }
+
+        files.append(FileItem(
+            path: fileURL.path,
+            relativePath: relativePath,
+            name: fileName,
+            extension: pathExtension,
+            size: Int64(size),
+            isDirectory: false,
+            creationDate: creationDate,
+            modificationDate: modificationDate,
+            lastAccessDate: lastAccessDate,
+            contentMetadata: contentMetadata,
+            sha256Hash: sha256Hash,
+            ocrText: extractedOCRText,
+            imageWidth: extractedDimensions?.width,
+            imageHeight: extractedDimensions?.height,
+            cloudStatus: cloudStatus,
+            finderComment: finderComment,
+            finderTags: finderTags,
+            finderLabelNumber: finderLabelNumber
+        ))
+        scannedCount += 1
+    }
+
+    /// Yield in small batches, but avoid a task_info syscall and progress
+    /// publication for every batch. The memory-pressure dispatch source
+    /// still handles urgent pressure changes immediately.
+    private func reportScanProgressIfNeeded() async {
+        if scannedCount.isMultiple(of: getCurrentBatchSize()) {
+            await Task.yield()
+
+            if scannedCount.isMultiple(of: enumerationProgressInterval) {
+                scanProgressCallback?(scannedCount)
+                await checkMemoryPressure()
+                if memoryPressureState != .normal {
+                    logger.info(
+                        "Scan progress: \(self.scannedCount) files, pressure: \(self.memoryPressureState.rawValue)"
+                    )
+                }
+            }
+        }
+    }
+
+    /// Reads the Finder comment xattr only for the tagged subset. The xattr
+    /// round-trip costs a syscall per file; untagged files almost never carry
+    /// comments the planner would consult, so they skip it.
+    private static func finderCommentIfTagged(
+        at url: URL,
+        finderTags: [String]?,
+        finderLabelNumber: Int?
+    ) -> String? {
+        let hasTags = finderTags?.isEmpty == false
+        let hasLabel = (finderLabelNumber ?? 0) != 0
+        guard hasTags || hasLabel else { return nil }
+        return url.finderComment
     }
 
     func setDeepScanProgressCallback(
