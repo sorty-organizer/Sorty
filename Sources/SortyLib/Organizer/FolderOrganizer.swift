@@ -671,6 +671,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     nonisolated private static let deepScanFileLimit = 2_000
     nonisolated private static let organizeAnalysisBatchSize = 350
     nonisolated private static let renameAnalysisBatchSize = 120
+    nonisolated private static let analysisBatchConcurrency = 2
     nonisolated private static let minimumAdaptiveAnalysisBatchSize = 8
     nonisolated private static let previewVersionFileLimit = 20_000
     nonisolated private static let maximumPreparedVisionBytes = 32 * 1_024 * 1_024
@@ -2350,98 +2351,106 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
         }
 
-        for batchIndex in (checkpoint?.nextBatchIndex ?? 0)..<batchCount {
-            try checkCancellation()
+        // Bounded concurrency: up to analysisBatchConcurrency batches in
+        // flight. Requests execute concurrently off the main actor while
+        // merges stay ordered through the accumulator, so the merged plan,
+        // taxonomy, progress, and resume checkpoint match serial order.
+        // Merged batches accumulate in completedPlans as they land; when a
+        // batch ultimately fails, the group aborts but those good batches
+        // stay cached in the resume checkpoint, and the halve-and-retry
+        // inside requestBatchPlans retries only the failed batch.
+        // (Concurrent batches share the diagnostic stream buffer; completion
+        // order determines its retained tail. Parsed plans are unaffected.)
+        let startBatchIndex = checkpoint?.nextBatchIndex ?? 0
+        startTimeoutTimer()
+        // Throwing-group scope exit cancels stragglers on failure; merged
+        // batches are already cached in the resume checkpoint above.
+        try await withThrowingTaskGroup(of: (Int, [OrganizationPlan]).self) { group in
+            var nextDispatch = startBatchIndex
+            var nextMerge = startBatchIndex
+            var bufferedPlans: [Int: [OrganizationPlan]] = [:]
 
-            let start = batchIndex * batchSize
-            let end = min(start + batchSize, files.count)
-            let batch = Array(files[start..<end])
-            let completedBeforeRequest = batchIndex
-            let phaseProgress = 0.30 + (Double(completedBeforeRequest) / Double(batchCount)) * 0.52
-            let suggestionAction = mode == .renameOnly ? "Finding better names" : "Finding the best folders"
-            let planningStage = batchCount > 1
-                ? "\(suggestionAction) for \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files..."
-                : "\(suggestionAction) for \(GenerationStats.formatCount(files.count)) files..."
-            updateMeasuredProgress(
-                completed: completedBeforeRequest,
-                total: batchCount,
-                estimatedOverallProgress: phaseProgress,
-                stage: planningStage
-            )
-
-            var batchInstructions = completeInstructions
-            if batchCount > 1 {
-                // Avoid repeating the full 400-entry manifest on every 350-file
-                // batch: replace it with a small batch-scoped manifest.
-                if let resolvedDirectory,
-                   batchInstructions.contains("## SOURCE FOLDER CONTEXT") {
-                    batchInstructions = PromptBuilder.strippingSourceFolderContext(from: batchInstructions)
-                    if let batchManifest = PromptBuilder.buildBatchManifestContext(
-                        baseDirectoryURL: resolvedDirectory,
-                        batchFiles: batch
-                    ) {
-                        batchInstructions += "\n\n" + batchManifest
+            while nextMerge < batchCount {
+                try checkCancellation()
+                while nextDispatch < batchCount,
+                      nextDispatch - nextMerge < Self.analysisBatchConcurrency {
+                    let batchIndex = nextDispatch
+                    let start = batchIndex * batchSize
+                    let end = min(start + batchSize, files.count)
+                    let job = try await makeBatchAnalysisJob(
+                        batchIndex: batchIndex,
+                        batch: Array(files[start..<end]),
+                        batchCount: batchCount,
+                        mode: mode,
+                        completeInstructions: completeInstructions,
+                        taxonomySnapshot: taxonomy,
+                        imagePayload: imagePayload,
+                        visionFiles: visionFiles,
+                        visionBaseDirectory: resolvedDirectory,
+                        personaPrompt: personaPrompt,
+                        temperature: temperature
+                    )
+                    nextDispatch += 1
+                    let phaseProgress = 0.30 + (Double(batchIndex) / Double(batchCount)) * 0.52
+                    let suggestionAction = mode == .renameOnly ? "Finding better names" : "Finding the best folders"
+                    updateMeasuredProgress(
+                        completed: batchIndex,
+                        total: batchCount,
+                        estimatedOverallProgress: phaseProgress,
+                        stage: batchCount > 1
+                            ? "\(suggestionAction) for \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files..."
+                            : "\(suggestionAction) for \(GenerationStats.formatCount(files.count)) files..."
+                    )
+                    group.addTask {
+                        let plans = try await Self.requestBatchPlans(client: client, job: job)
+                        return (job.batchIndex, plans)
                     }
                 }
-                batchInstructions += Self.largeFolderBatchContext(
-                    batchIndex: batchIndex,
-                    batchCount: batchCount,
-                    taxonomy: taxonomy,
-                    mode: mode
-                )
+
+                guard let (completedIndex, plans) = try await group.next() else { break }
+                try checkCancellation()
+                bufferedPlans[completedIndex] = plans
+                while let ready = bufferedPlans.removeValue(forKey: nextMerge) {
+                    try checkCancellation()
+                    completedAnalysisBatchCount += ready.count
+                    for batchPlan in ready {
+                        if let stats = batchPlan.generationStats {
+                            totalResponseTokens += stats.totalTokens
+                            if let promptTokens = stats.promptTokens {
+                                totalPromptTokens += promptTokens
+                                hasPromptTokenCount = true
+                            }
+                            if firstTTFT == nil {
+                                firstTTFT = stats.ttft
+                            }
+                            if let cost = stats.estimatedCost {
+                                estimatedCost += cost
+                                hasEstimatedCost = true
+                            }
+                        }
+                        let note = batchPlan.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !note.isEmpty, retainedNotes.count < 3, !retainedNotes.contains(note) {
+                            retainedNotes.append(note)
+                        }
+                        taxonomy = await accumulator.merge(batchPlan)
+                    }
+                    completedPlans.append(contentsOf: ready)
+                    resumeCheckpoint?.completedPlans = completedPlans
+                    resumeCheckpoint?.nextBatchIndex = nextMerge + 1
+
+                    let completed = nextMerge + 1
+                    let completedEnd = min(completed * batchSize, files.count)
+                    let completedProgress = 0.30 + (Double(completed) / Double(batchCount)) * 0.52
+                    updateMeasuredProgress(
+                        completed: completed,
+                        total: batchCount,
+                        estimatedOverallProgress: completedProgress,
+                        stage: "Found suggestions for \(GenerationStats.formatCount(completedEnd)) of \(GenerationStats.formatCount(files.count)) files"
+                    )
+                    nextMerge += 1
+                }
             }
-
-            startTimeoutTimer()
-            let batchPlans = try await analyzeBatchAdaptively(
-                files: batch,
-                client: client,
-                imagePayload: imagePayload,
-                visionFiles: visionFiles,
-                visionBaseDirectory: resolvedDirectory,
-                instructions: batchInstructions,
-                personaPrompt: personaPrompt,
-                temperature: temperature
-            )
-
-            try checkCancellation()
-            completedAnalysisBatchCount += batchPlans.count
-
-            for batchPlan in batchPlans {
-                if let stats = batchPlan.generationStats {
-                    totalResponseTokens += stats.totalTokens
-                    if let promptTokens = stats.promptTokens {
-                        totalPromptTokens += promptTokens
-                        hasPromptTokenCount = true
-                    }
-                    if firstTTFT == nil {
-                        firstTTFT = stats.ttft
-                    }
-                    if let cost = stats.estimatedCost {
-                        estimatedCost += cost
-                        hasEstimatedCost = true
-                    }
-                }
-                let note = batchPlan.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !note.isEmpty, retainedNotes.count < 3, !retainedNotes.contains(note) {
-                    retainedNotes.append(note)
-                }
-
-                taxonomy = await accumulator.merge(batchPlan)
-            }
-            completedPlans.append(contentsOf: batchPlans)
-            resumeCheckpoint?.completedPlans = completedPlans
-            resumeCheckpoint?.nextBatchIndex = batchIndex + 1
-
-            let completed = batchIndex + 1
-            let completedProgress = 0.30 + (Double(completed) / Double(batchCount)) * 0.52
-            updateMeasuredProgress(
-                completed: completed,
-                total: batchCount,
-                estimatedOverallProgress: completedProgress,
-                stage: "Found suggestions for \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files"
-            )
         }
-
         var mergedPlan = await accumulator.result()
         let duration = Date().timeIntervalSince(analysisStart)
         let totalFileSize = await Task.detached(priority: .utility) {
@@ -2551,6 +2560,164 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
         let nsError = error as NSError
         return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorTimedOut
+    }
+
+    /// Sendable unit of AI batch work. Built on the main actor (prompt
+    /// slicing, taxonomy snapshot, vision prep) and executed concurrently off
+    /// it, so TaskGroup children never capture the organizer.
+    private struct BatchAnalysisJob: Sendable {
+        let batchIndex: Int
+        var files: [FileItem]
+        let batchImages: [String: Data]
+        var requestInstructions: String
+        let personaPrompt: String?
+        let temperature: Double?
+        /// Main-actor cancellation flag sampled at dispatch; Task.isCancelled
+        /// covers task-tree cancellation.
+        let cancellationRequested: Bool
+    }
+
+    /// Builds one batch job: stream ID table, batch-scoped instructions with
+    /// a taxonomy snapshot, and vision payload. Runs on the main actor at
+    /// dispatch time; the returned job is self-contained for concurrent
+    /// execution. The taxonomy snapshot may lag already-dispatched batches by
+    /// up to (concurrency - 1); the merge stays strictly ordered.
+    private func makeBatchAnalysisJob(
+        batchIndex: Int,
+        batch: [FileItem],
+        batchCount: Int,
+        mode: OrganizationMode,
+        completeInstructions: String,
+        taxonomySnapshot: [String],
+        imagePayload: [String: Data],
+        visionFiles: [FileItem],
+        visionBaseDirectory: URL?,
+        personaPrompt: String?,
+        temperature: Double?
+    ) async throws -> BatchAnalysisJob {
+        try checkCancellation()
+
+        // Compact prompts number this request's files 1-based; publish the same
+        // mapping so the live-stream UI can resolve `file_ids` while streaming.
+        streamFileIDTable = Dictionary(
+            uniqueKeysWithValues: batch.enumerated().map { ($0.offset + 1, $0.element) }
+        )
+
+        var batchInstructions = completeInstructions
+        if batchCount > 1 {
+            // Avoid repeating the full 400-entry manifest on every 350-file
+            // batch: replace it with a small batch-scoped manifest.
+            if let visionBaseDirectory,
+               batchInstructions.contains("## SOURCE FOLDER CONTEXT") {
+                batchInstructions = PromptBuilder.strippingSourceFolderContext(from: batchInstructions)
+                if let batchManifest = PromptBuilder.buildBatchManifestContext(
+                    baseDirectoryURL: visionBaseDirectory,
+                    batchFiles: batch
+                ) {
+                    batchInstructions += "\n\n" + batchManifest
+                }
+            }
+            batchInstructions += Self.largeFolderBatchContext(
+                batchIndex: batchIndex,
+                batchCount: batchCount,
+                taxonomy: taxonomySnapshot,
+                mode: mode
+            )
+        }
+
+        let fileNames = Set(batch.map(visionAttachmentName))
+        var batchImages = imagePayload.filter { fileNames.contains($0.key) }
+        if batchImages.isEmpty, let visionBaseDirectory {
+            let selectedFiles = visionFiles.filter {
+                fileNames.contains(visionAttachmentName(for: $0))
+            }
+            batchImages = try await prepareVisionPayload(
+                for: selectedFiles,
+                baseDirectory: visionBaseDirectory
+            )
+        }
+        let requestInstructions = batchImages.isEmpty
+            ? batchInstructions
+            : batchInstructions + "\n\n" + visionPromptInstructions(
+                for: batchImages.keys.sorted()
+            )
+
+        return BatchAnalysisJob(
+            batchIndex: batchIndex,
+            files: batch,
+            batchImages: batchImages,
+            requestInstructions: requestInstructions,
+            personaPrompt: personaPrompt,
+            temperature: temperature,
+            cancellationRequested: isCancellationRequested
+        )
+    }
+
+    /// Executes one batch job against the AI client, halve-and-retrying only
+    /// that batch on splittable failures. Runs off the main actor; UI state
+    /// is never touched here (the merge loop owns progress and taxonomy).
+    nonisolated private static func requestBatchPlans(
+        client: AIClientProtocol,
+        job: BatchAnalysisJob,
+        adaptiveDepth: Int = 0
+    ) async throws -> [OrganizationPlan] {
+        // Cap halve-and-retry recursion so a persistently failing batch cannot
+        // recurse without bound; depth 4 splits 350 -> ~22 files minimum.
+        let maxAdaptiveDepth = 4
+        if job.cancellationRequested || Task.isCancelled {
+            throw CancellationError()
+        }
+
+        do {
+            if job.batchImages.isEmpty {
+                let plan = try await client.analyze(
+                    files: job.files,
+                    customInstructions: job.requestInstructions,
+                    personaPrompt: job.personaPrompt,
+                    temperature: job.temperature
+                )
+                return [plan]
+            }
+            let plan = try await client.analyzeWithImages(
+                files: job.files,
+                imageData: job.batchImages,
+                customInstructions: job.requestInstructions,
+                personaPrompt: job.personaPrompt,
+                temperature: job.temperature
+            )
+            return [plan]
+        } catch {
+            if job.cancellationRequested || Task.isCancelled {
+                throw CancellationError()
+            }
+            guard adaptiveDepth < maxAdaptiveDepth,
+                  Self.shouldSplitAnalysisBatch(after: error, fileCount: job.files.count) else {
+                throw error
+            }
+
+            let splitIndex = job.files.count / 2
+            LogManager.shared.log(
+                "Retrying a failed \(job.files.count)-file AI request as separate requests for \(splitIndex) and \(job.files.count - splitIndex) files.",
+                level: .warning,
+                category: "FolderOrganizer"
+            )
+            let recoveryInstructions = job.requestInstructions + """
+
+            ADAPTIVE RETRY
+            - The previous larger request could not produce a complete valid plan.
+            - Return a complete plan for only the files in this smaller request.
+            """
+            var firstJob = job
+            firstJob.files = Array(job.files[..<splitIndex])
+            firstJob.requestInstructions = recoveryInstructions
+            var secondJob = job
+            secondJob.files = Array(job.files[splitIndex...])
+            secondJob.requestInstructions = recoveryInstructions
+            // Halves stay sequential so their plans concatenate in order.
+            let firstPlans = try await requestBatchPlans(client: client, job: firstJob, adaptiveDepth: adaptiveDepth + 1)
+            let secondPlans = try await requestBatchPlans(client: client, job: secondJob, adaptiveDepth: adaptiveDepth + 1)
+            return firstPlans + secondPlans
+        }
     }
 
     private func analyzeBatchAdaptively(
