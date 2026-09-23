@@ -196,3 +196,66 @@ per-test is ~0.03 s.
 
 Launch/idle (§1–2) were not re-measured: the port touches no launch-path or
 timer code, so no delta is expected there.
+
+## 8. Re-measurement at `62ba6cbf` (2026-09-23): v1.2.0 vs latest commit
+
+Fresh A/B of the full v1.2.0 → latest-commit delta, same method as §1–2:
+detached worktrees at `9e3de29a` (v1.2.0) and `62ba6cbf` (HEAD, +48 commits
+past §1's HEAD), identical Release env (`BUILD_CONFIG=release`,
+`ENABLE_ADHOC_SIGNING=true`, `SKIP_TESTS=true`, no hot reload, separate
+scratch dirs), same machine/data, alternating run order, direct
+`Contents/MacOS/Sorty` spawn, compiled `CGWindowList` poll @50 ms for first
+visible frame, `ps -o %cpu,rss` 12×/60 s after a 30 s settle for idle.
+Builds: v1.2.0 41 MB app (~8 min), HEAD 48 MB (~10 min), both exit 0.
+
+### 8a. Launch to first visible frame
+
+| Round | v1.2.0 (5 / 3 runs) | HEAD (5 / 3 runs) |
+|---|---|---|
+| R1, post-build (thermally soaked) | 4137 / 1887 / 1877 / 3094 / 2633, median 2633 | 3626 / 2068 / 1235 / 2614 / 1019, median 2068 |
+| R2, cooled | 2954 / 1891 / 1735, median 1891 | 816 / 802 / 800, median 802 |
+
+All-run medians (n=8 each): 2262 ms → 1127 ms, **~50% faster**.
+Cooled medians: 1891 ms → 802 ms, **~58% faster**. The cooled HEAD runs
+(800–816 ms) reproduce §1's 854 ms median; the all-run v1.2.0 median (2262)
+reproduces §1's 2299 ms. Ranges do not overlap in either round.
+
+### 8b. Idle CPU and memory (visible window, 60 s, no HUD in either run)
+
+- v1.2.0: 50.8 / 48.1 / 50.4 / 49.9 / 49.7 / 48.9 / 52.3 / 50.1 / 53.2 /
+  53.0 / 56.4 / 54.4 (mean 51.4%), RSS ~142–153 MB.
+- HEAD: 2.8 (first settle sample) then 0.0% × 11, RSS flat ~149 MB.
+
+Third independent reproduction of the ~50-point idle elimination, this time
+with no move-suggestion HUD on screen — v1.2.0's burn is pure render-timer
+load. No memory regression.
+
+### 8c. Attribution of the 48 commits since `cc47c6f6`
+
+The bulk of the v1.2.0 → HEAD delta predates this window (the 125 `perf/*`
+commits in §1). The 12 startup/battery commits since hold the gain and
+extend it to background paths; the incremental first-paint delta (854 →
+802 ms cooled) is within cross-day noise:
+
+- Startup (7): `44b2269a` LAContext biometry probe off init
+  (`SecurityManager.swift:49`); `a8f38a28` extension-handoff drain post-paint;
+  `d0f945af` notification-settings detached decode; `236f8805` PostHog/Sentry
+  setup off main; `93a06fb9` debug scenes gated + launch stamp post-paint;
+  `e4cb19a8` detached pending-work restore; `1fee260a` deferred launch-time
+  services.
+- Battery (5): `b3a2490d` visibility-gated clocks 30→15 Hz, dropped
+  `repeatForever`; `c61263a9` scans/hashing on `.utility`, 4 Hz progress;
+  `745a604d` constrained-aware AI sessions, cancellable SSE, backoff, catalog
+  coalesce; `c0fe9c37` slower Finder poll, heartbeat move, widget push-only
+  (`.never`), dropped prewarm; `ae472ada` bounded Codex backoff, background
+  QoS, 200 ms debounce.
+
+### 8d. Not re-measured
+
+Usable-controls split: blocked, `osascript`/System Events lacks assistive
+access (`-25211`), so no AX-driven control check was possible — first-frame
++ idle match §1–2's actual scope. Minimized idle, GPU compositor,
+`powermetrics` drain, Instruments per-phase attribution, and test-suite
+throughput were not re-run. Harness (compiled `windowcheck`,
+`measure_launch.sh`, `measure_idle.sh`) and CSVs live outside the repo;
+worktrees were removed after the runs.
