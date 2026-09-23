@@ -145,7 +145,8 @@ public class AISessionManager: ObservableObject {
             return
         }
         let task = Task { [weak self] in
-            await self?.runPrewarm(provider: provider, config: config)
+            guard let self else { return }
+            await self.runPrewarm(provider: provider, config: config)
         }
         prewarmTasks[provider] = task
         await task.value

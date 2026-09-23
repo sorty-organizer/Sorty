@@ -672,8 +672,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             url: url,
             requestBody: fallbackBody,
             files: files,
-            promptTokens: promptTokens,
-            totalFileSize: totalFileSize
+            promptTokens: promptTokens
         )
     }
 

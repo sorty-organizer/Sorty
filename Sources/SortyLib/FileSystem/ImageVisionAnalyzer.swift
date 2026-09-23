@@ -381,10 +381,10 @@ public final class ImageVisionAnalyzer: Sendable {
 
         // Fast path: within count and size budgets with nothing expired, skip
         // the sort and second pass entirely.
-        let retainedSize = retained.reduce(0) { $0 + $1.size }
+        let totalRetainedSize = retained.reduce(0) { $0 + $1.size }
         guard expiredRemoved > 0
             || retained.count > maximumCachedFileCount
-            || retainedSize > maximumCacheSize else {
+            || totalRetainedSize > maximumCacheSize else {
             return
         }
 

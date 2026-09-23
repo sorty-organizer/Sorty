@@ -10,7 +10,7 @@ import Foundation
 /// Battery-aware prompt memoization. Uses how code is used: organize runs
 /// rebuild the same manifest/file sections per batch/retry, so sections are
 /// cached by content hash and reused instead of re-scanned and re-formatted.
-private final class PromptSectionCache: Sendable {
+private final class PromptSectionCache: @unchecked Sendable {
     static let shared = PromptSectionCache()
     private let lock = NSLock()
     private var sections: [String: String] = [:]
@@ -129,13 +129,13 @@ struct PromptBuilder {
     /// the prompt path formats dates per file. A configured
     /// ISO8601DateFormatter holds no mutable per-call state, so one static
     /// instance per format replaces per-line/per-call allocations.
-    static let promptDateTimeFormatter: ISO8601DateFormatter = {
+    nonisolated(unsafe) static let promptDateTimeFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
     }()
 
-    static let promptDateOnlyFormatter: ISO8601DateFormatter = {
+    nonisolated(unsafe) static let promptDateOnlyFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate]
         return formatter

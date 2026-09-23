@@ -216,9 +216,11 @@ Allowed icons:
 
             prompt += "\n\nCreate the persona JSON now."
 
+            let requestClient = client
+            let requestPrompt = prompt
             let response = try await AIRequestSupport.withNonEssentialRequest {
-                try await client.generateText(
-                    prompt: prompt,
+                try await requestClient.generateText(
+                    prompt: requestPrompt,
                     systemPrompt: metaSystemPrompt,
                     responseFormat: .jsonObject
                 )

@@ -75,6 +75,8 @@ Run `make quality-report` before prompt tuning. The report includes placement ac
 
 `OrganizationPlan.qualityAssessment` records the score, issues, affected file IDs, and whether a retry occurred. Keep this metadata when transforming or exporting a plan so preview and quality reporting can explain why Sorty held a file back.
 
+Multimodal AI requests retry without images only for HTTP 413 or a 400/422 response that identifies a payload or media problem. Other client errors must reach the user unchanged. The shared base64 image cache has a 24 MiB encoded-data limit; larger images are encoded for the request without being retained.
+
 ## Deeplinks
 URL scheme `sorty://` — see `DeeplinkHandler` for routes:
 - `sorty://organize?path=/path&persona=Developer&autostart=true`

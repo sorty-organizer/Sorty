@@ -1363,7 +1363,7 @@ public final class ModelCatalog: ObservableObject {
         }
     }
 
-    private static func normalizeCapabilityTag(_ raw: String) -> String? {
+    nonisolated private static func normalizeCapabilityTag(_ raw: String) -> String? {
         let normalized = raw
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()

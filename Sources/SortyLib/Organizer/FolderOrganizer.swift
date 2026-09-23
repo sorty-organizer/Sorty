@@ -3671,7 +3671,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         LogManager.shared.log("Retrying with enhanced exclusion prompt", category: "FolderOrganizer")
         restartPlanGenerationForRetry()
         await waitForPlanRetryBackoff()
-        try checkCancellation()
+        guard (try? checkCancellation()) != nil else { return nil }
         
         // Generate enhanced prompt with violation details
         let enhancedPrompt = instructions + enforcer.generateRetryPromptEnhancement(for: violations)
@@ -3745,7 +3745,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         let enhancedPrompt = instructions + enhancement
         await waitForPlanRetryBackoff()
-        try checkCancellation()
+        guard (try? checkCancellation()) != nil else { return nil }
         
         do {
             defer { stopTimeoutTimer() }
@@ -3799,7 +3799,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         restartPlanGenerationForRetry()
         await waitForPlanRetryBackoff()
-        try checkCancellation()
+        guard (try? checkCancellation()) != nil else { return nil }
         do {
             defer { stopTimeoutTimer() }
             let retryPlan = try await analyzeInBoundedBatches(

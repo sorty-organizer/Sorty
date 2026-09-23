@@ -443,12 +443,6 @@ public actor DuplicateDetector {
         let total = files.count
         var completed = total - missing.count
         var lastReport = Date.distantPast
-        func report(force: Bool = false) {
-            let now = Date()
-            guard force || now.timeIntervalSince(lastReport) >= 0.25 else { return }
-            lastReport = now
-            progressHandler?(completed, total)
-        }
 
         var next = 0
         await withTaskGroup(of: (Int, String?).self) { group in
@@ -468,7 +462,11 @@ public actor DuplicateDetector {
                 }
                 files[fileIndex].sha256Hash = hash
                 completed += 1
-                report()
+                let now = Date()
+                if now.timeIntervalSince(lastReport) >= 0.25 {
+                    lastReport = now
+                    progressHandler?(completed, total)
+                }
 
                 if next < missing.count {
                     let nextFileIndex = missing[next]
@@ -480,7 +478,7 @@ public actor DuplicateDetector {
                 }
             }
         }
-        report(force: true)
+        progressHandler?(completed, total)
     }
     
     private static func cacheKey(for file: FileItem) -> HashCacheKey {

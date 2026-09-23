@@ -15,6 +15,21 @@ private final class SuspendedNetworkPrivacyURLProtocol: URLProtocol {
 }
 
 final class NetworkPrivacyPolicyTests: XCTestCase {
+    func testTextOnlyFallbackRequiresPayloadOrMediaError() {
+        XCTAssertFalse(AIRequestSupport.isPayloadTooLarge(
+            AIClientError.apiError(statusCode: 400, message: "Invalid model")
+        ))
+        XCTAssertFalse(AIRequestSupport.isPayloadTooLarge(
+            AIClientError.apiError(statusCode: 422, message: "Invalid response format")
+        ))
+        XCTAssertTrue(AIRequestSupport.isPayloadTooLarge(
+            AIClientError.apiError(statusCode: 413, message: "Request rejected")
+        ))
+        XCTAssertTrue(AIRequestSupport.isPayloadTooLarge(
+            AIClientError.apiError(statusCode: 400, message: "Unsupported image format")
+        ))
+    }
+
     func testGeminiOpenAIEndpointDoesNotAddAnExtraV1PathComponent() throws {
         let url = try AIRequestSupport.openAIChatCompletionsURL(
             from: AIProvider.gemini.defaultAPIURL!

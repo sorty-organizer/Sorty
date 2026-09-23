@@ -73,7 +73,7 @@ enum AIRequestSupport {
 
     /// Runs `operation` flagged as non-essential (see above).
     static func withNonEssentialRequest<R>(
-        _ operation: () async throws -> R
+        _ operation: @Sendable () async throws -> R
     ) async throws -> R {
         try await $isNonEssentialRequest.withValue(true) {
             try await operation()
@@ -454,17 +454,17 @@ enum AIRequestSupport {
         } onCancel: {}
     }
 
-    /// Payload too large / unsupported media: strip images and retry text-only.
+    /// Retry without images only when the provider rejects the payload or media.
     static func isPayloadTooLarge(_ error: Error) -> Bool {
         guard case let AIClientError.apiError(statusCode, message) = error else { return false }
         guard [400, 413, 422].contains(statusCode) else { return false }
+        if statusCode == 413 { return true }
         let normalized = message.lowercased()
         return normalized.contains("image") ||
             normalized.contains("vision") ||
             normalized.contains("payload") ||
             normalized.contains("too large") ||
-            normalized.contains("content") ||
-            [400, 413, 422].contains(statusCode)
+            normalized.contains("unsupported media")
     }
 
     /// Downgrades vision detail on constrained links to shrink uploads.
@@ -497,10 +497,12 @@ actor EditorLinkedDebouncer: Sendable {
 
 /// Caches base64 image payloads per (filename, content hash) so retries do not
 /// re-encode multi-MB images and drain battery on repeated attempts.
-final class ImageBase64Cache: Sendable {
+final class ImageBase64Cache: @unchecked Sendable {
     static let shared = ImageBase64Cache()
+    private static let maxCachedBytes = 24 * 1_024 * 1_024
     private let lock = NSLock()
     private var cache: [String: String] = [:]
+    private var cachedBytes = 0
 
     private init() {}
 
@@ -513,10 +515,19 @@ final class ImageBase64Cache: Sendable {
         }
         lock.unlock()
         let encoded = data.base64EncodedString()
+        guard encoded.utf8.count <= Self.maxCachedBytes else { return encoded }
         lock.lock()
-        // Bound the cache so a huge folder cannot grow it without limit.
-        if cache.count > 32 { cache.removeAll() }
+        if let hit = cache[key] {
+            lock.unlock()
+            return hit
+        }
+        // Encoded images vary widely in size; an entry count is not a memory bound.
+        if cachedBytes + encoded.utf8.count > Self.maxCachedBytes {
+            cache.removeAll()
+            cachedBytes = 0
+        }
         cache[key] = encoded
+        cachedBytes += encoded.utf8.count
         lock.unlock()
         return encoded
     }
@@ -524,6 +535,7 @@ final class ImageBase64Cache: Sendable {
     func clear() {
         lock.lock()
         cache.removeAll()
+        cachedBytes = 0
         lock.unlock()
     }
 }

@@ -1671,7 +1671,7 @@ public final class FolderWatcher: @unchecked Sendable {
     }
 
     private static let dropboxNegativeCacheLock = NSLock()
-    private static var dropboxNegativeCache: [String: Date] = [:]
+    nonisolated(unsafe) private static var dropboxNegativeCache: [String: Date] = [:]
     private static let dropboxNegativeCacheTTL: TimeInterval = 60
 
     private static func cachedDropboxNegative(for path: String) -> Bool {

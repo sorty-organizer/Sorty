@@ -54,12 +54,6 @@ final class SortyWidgetSyncManager {
 
     private init() {}
 
-    deinit {
-        scheduledSyncTask?.cancel()
-        initialSyncTask?.cancel()
-        observers.forEach(NotificationCenter.default.removeObserver)
-    }
-
     /// Cancels pending sync work and drops observers (call on logout/reset).
     func stop() {
         scheduledSyncTask?.cancel()

@@ -60,8 +60,6 @@ public final class ReliabilityManager {
         let buildNumber = Self.buildNumber
         let environmentName = Self.environmentName
         let tracesSampleRate = Self.tracesSampleRate
-        let telemetryAttributes = Self.telemetryAttributes
-        let metricAttributes = Self.metricAttributes
         try? FileManager.default.createDirectory(
             at: cacheDirectory,
             withIntermediateDirectories: true
@@ -92,8 +90,8 @@ public final class ReliabilityManager {
             SentrySDK.start(options: options)
             await MainActor.run {
                 ReliabilityManager.shared.finishStarting(
-                    telemetryAttributes: telemetryAttributes,
-                    metricAttributes: metricAttributes
+                    telemetryAttributes: Self.telemetryAttributes,
+                    metricAttributes: Self.metricAttributes
                 )
             }
         }

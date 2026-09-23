@@ -87,6 +87,7 @@ public class NotificationSettingsManager: ObservableObject {
     }
 
     private let userDefaults = UserDefaults.standard
+    private let persistedDataReader = UserDefaultsDataReader(.standard)
     private let settingsKey = "notificationSettings"
     private var hasLoaded = false
     private var hasPendingChanges = false
@@ -110,10 +111,10 @@ public class NotificationSettingsManager: ObservableObject {
         if let loadTask {
             task = loadTask
         } else {
-            let userDefaults = userDefaults
+            let persistedDataReader = persistedDataReader
             let settingsKey = settingsKey
             task = Task.detached(priority: .userInitiated) {
-                guard let data = userDefaults.data(forKey: settingsKey) else { return nil }
+                guard let data = persistedDataReader.data(forKey: settingsKey) else { return nil }
                 return try? JSONDecoder().decode(NotificationSettings.self, from: data)
             }
             self.loadTask = task

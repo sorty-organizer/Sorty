@@ -44,8 +44,6 @@ public actor FileSystemManager {
         }
     }
 
-    private static let snapshotYieldIntervalBytes: UInt64 = 64 * 1024 * 1024
-
     private func transferSnapshot(at url: URL) throws -> TransferSnapshot {
         let rootValues = try url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
         guard rootValues.isDirectory == true else {
@@ -67,7 +65,6 @@ public actor FileSystemManager {
 
         var itemCount = 1
         var totalBytes: UInt64 = 0
-        var bytesSinceYield: UInt64 = 0
         var latestModificationDate = rootValues.contentModificationDate
         for case let itemURL as URL in enumerator {
             try Task.checkCancellation()
@@ -84,12 +81,6 @@ public actor FileSystemManager {
             if values.isDirectory != true {
                 let fileBytes = UInt64(max(values.fileSize ?? 0, 0))
                 totalBytes += fileBytes
-                // Cooperative yield every 64 MB so huge trees don't pin the actor.
-                bytesSinceYield += fileBytes
-                if bytesSinceYield >= Self.snapshotYieldIntervalBytes {
-                    bytesSinceYield = 0
-                    await Task.yield()
-                }
             }
             if let date = values.contentModificationDate,
                latestModificationDate == nil || date > latestModificationDate! {

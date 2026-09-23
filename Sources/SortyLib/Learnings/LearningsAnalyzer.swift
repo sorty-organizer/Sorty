@@ -30,8 +30,8 @@ public class LearningsAnalyzer: ObservableObject {
     
     // MARK: - Compiled rule regex cache
 
-    private static let ruleRegexCacheLock = NSLock()
-    private static var ruleRegexCache: [String: NSRegularExpression] = [:]
+    nonisolated(unsafe) private static var ruleRegexCache: [String: NSRegularExpression] = [:]
+    nonisolated(unsafe) private static let ruleRegexCacheLock = NSLock()
 
     /// Compiles each unique rule pattern once; proposeMapping used to compile
     /// every pattern for every file.
