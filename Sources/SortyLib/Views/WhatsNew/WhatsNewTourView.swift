@@ -123,7 +123,7 @@ public struct WhatsNewTourView: View {
             WhatsNewPage(
                 imageName: "AppIcon-Release.png",
                 title: "A refreshed Sorty icon",
-                description: "Sorty 1.2.1 brings a new app icon, with the same tools you already know."
+                description: "Sorty 1.2.1 brings a new app icon, with the same tools you already know…"
             ),
             WhatsNewPage(
                 title: "Less waiting, less background work",
