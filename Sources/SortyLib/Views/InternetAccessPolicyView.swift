@@ -5,6 +5,7 @@
 //  Dedicated policy window that describes network destinations and why they are used.
 //
 
+import Foundation
 import SwiftUI
 
 struct InternetAccessPolicyView: View {
@@ -300,7 +301,13 @@ private enum InternetAccessPolicyLoader {
             return url
         }
 
-        return Bundle.module.url(forResource: "InternetAccessPolicy", withExtension: "plist")
+        // Never touch Bundle.module here: its generated accessor traps with
+        // EXC_BREAKPOINT when the SPM bundle is absent from an Xcode-built app.
+        if let url = SortyResources.bundle.url(forResource: "InternetAccessPolicy", withExtension: "plist") {
+            return url
+        }
+
+        return SortyResources.urlForCopiedResource(named: "InternetAccessPolicy.plist")
     }
 }
 

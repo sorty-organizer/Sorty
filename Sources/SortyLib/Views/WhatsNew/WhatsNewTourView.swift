@@ -1,3 +1,4 @@
+import Foundation
 import AppKit
 import SwiftUI
 import Beam
@@ -1071,15 +1072,47 @@ private enum WhatsNewImageLoader {
         let resourceName = (name as NSString).deletingPathExtension
         let resourceExtension = (name as NSString).pathExtension
         let fileExtension = resourceExtension.isEmpty ? "png" : resourceExtension
-        if let iconURL = Bundle.module.url(
-            forResource: resourceName,
-            withExtension: fileExtension,
-            subdirectory: "AppIcons"
-        ), let image = NSImage(contentsOf: iconURL) {
+        // Never touch Bundle.module here: its generated accessor traps with
+        // EXC_BREAKPOINT when the SPM bundle is absent from an Xcode-built app.
+        if let url = appIconURL(resourceName: resourceName, fileExtension: fileExtension),
+           let image = NSImage(contentsOf: url) {
             return image
         }
         return SortyResources.image(named: resourceName, withExtension: fileExtension)
             ?? NSImage(named: name)
+    }
+
+    private static func appIconURL(resourceName: String, fileExtension: String) -> URL? {
+        let fileName = "\(resourceName).\(fileExtension)"
+        if let url = SortyResources.bundle.url(
+            forResource: resourceName,
+            withExtension: fileExtension,
+            subdirectory: "AppIcons"
+        ) {
+            return url
+        }
+        if let url = Bundle.main.url(
+            forResource: resourceName,
+            withExtension: fileExtension,
+            subdirectory: "AppIcons"
+        ) {
+            return url
+        }
+
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        let roots = [SortyResources.bundle.resourceURL, Bundle.main.resourceURL].compactMap { $0 }
+        var candidates: [URL] = []
+        for root in roots {
+            candidates.append(root.appendingPathComponent("AppIcons/\(fileName)"))
+            candidates.append(root.appendingPathComponent(fileName))
+        }
+        candidates.append(Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/AppIcons/\(fileName)"))
+        candidates.append(cwd.appendingPathComponent("Sources/SortyLib/Resources/AppIcons/\(fileName)"))
+
+        for candidate in candidates where FileManager.default.fileExists(atPath: candidate.path) {
+            return candidate
+        }
+        return nil
     }
 }
 

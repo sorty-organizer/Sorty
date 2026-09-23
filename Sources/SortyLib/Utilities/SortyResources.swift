@@ -281,6 +281,14 @@ public enum SortyResources {
             return cacheImage(nsImage, forKey: cacheKey)
         }
 
+        // Try 5b: AppIcons subdirectory (ships at Contents/Resources/AppIcons in
+        // Xcode builds; never use Bundle.module here — its generated accessor
+        // traps with EXC_BREAKPOINT when the SPM bundle is absent).
+        if let nsImage = loadImageFromAppIconsDirectories(named: name, withExtension: ext) {
+            logger.debug("Loaded image '\(name)' from AppIcons directory")
+            return cacheImage(nsImage, forKey: cacheKey)
+        }
+
         // Try 6: Images subdirectory (SPM .copy() resources)
         if let imageURL = bundle.url(forResource: name, withExtension: ext, subdirectory: "Images"),
               let nsImage = NSImage(contentsOf: imageURL),
@@ -368,6 +376,44 @@ public enum SortyResources {
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
                 .appendingPathComponent("Sources/SortyLib/Resources/Images/\(name).\(ext)")
         ]
+
+        for candidate in candidates where FileManager.default.fileExists(atPath: candidate.path) {
+            if let image = NSImage(contentsOf: candidate), isUsableImage(image) {
+                return image
+            }
+        }
+        return nil
+    }
+
+    private static func loadImageFromAppIconsDirectories(
+        named name: String,
+        withExtension ext: String
+    ) -> NSImage? {
+        let fileName = "\(name).\(ext)"
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        let roots = [bundle.resourceURL, Bundle.main.resourceURL].compactMap { $0 }
+
+        // Safe bundle API lookups first (never Bundle.module — it traps when
+        // the SPM bundle is absent from an Xcode-built app).
+        if let url = bundle.url(forResource: name, withExtension: ext, subdirectory: "AppIcons"),
+           let image = NSImage(contentsOf: url), isUsableImage(image) {
+            return image
+        }
+        if bundle != Bundle.main,
+           let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "AppIcons"),
+           let image = NSImage(contentsOf: url), isUsableImage(image) {
+            return image
+        }
+
+        var candidates: [URL] = []
+        for root in roots {
+            candidates.append(root.appendingPathComponent("AppIcons/\(fileName)"))
+            candidates.append(root.appendingPathComponent(fileName))
+            candidates.append(root.appendingPathComponent("Sorty_SortyLib.bundle/AppIcons/\(fileName)"))
+            candidates.append(root.appendingPathComponent("SortyLib_SortyLib.bundle/AppIcons/\(fileName)"))
+        }
+        candidates.append(Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/AppIcons/\(fileName)"))
+        candidates.append(cwd.appendingPathComponent("Sources/SortyLib/Resources/AppIcons/\(fileName)"))
 
         for candidate in candidates where FileManager.default.fileExists(atPath: candidate.path) {
             if let image = NSImage(contentsOf: candidate), isUsableImage(image) {

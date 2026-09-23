@@ -124,6 +124,17 @@ final class ResourceLoadingTests: XCTestCase {
         }
     }
 
+    func testWhatsNewAppIconLoadsWithoutBundleModule() {
+        // The What's New tour shows AppIcon-Release.png from Resources/AppIcons.
+        // Loading must use safe bundle lookups only — Bundle.module traps with
+        // EXC_BREAKPOINT in Xcode-built apps where the SPM bundle is absent.
+        for iconName in ["AppIcon-Release", "AppIcon-Debug"] {
+            let image = SortyResources.image(named: iconName, withExtension: "png")
+            XCTAssertNotNil(image, "\(iconName) should load from AppIcons without Bundle.module")
+            XCTAssertGreaterThan(image?.size.width ?? 0, 2, "\(iconName) should have a valid width")
+        }
+    }
+
     func testMenuBarLabelImageUsesNonTemplateMascot() {
         let image = SortyResources.menuBarLabelNSImage()
         XCTAssertGreaterThan(image.size.width, 0, "Menu bar label image should load with a valid width")
