@@ -5,14 +5,47 @@
 //  Modern watched folders management with rich folder cards and status indicators
 //
 
+import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
+
+/// Single shared 1s ticker for watched-folder countdown labels. One timer at
+/// the list level replaces N per-card TimelineViews ticking every second.
+/// Cards read `now` as a plain value; only text labels move, never layouts.
+@MainActor
+final class WatchedFoldersTicker: ObservableObject {
+    static let shared = WatchedFoldersTicker()
+
+    @Published private(set) var now = Date()
+    private var tickTask: Task<Void, Never>?
+
+    private init() {}
+
+    func start() {
+        guard tickTask == nil else { return }
+        tickTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                self?.now = Date()
+            }
+        }
+    }
+
+    func stop() {
+        tickTask?.cancel()
+        tickTask = nil
+    }
+}
 
 struct WatchedFoldersView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var controlActiveState
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var appState: AppState
+    // Shared singleton: observed, never state-owned.
+    @ObservedObject private var ticker = WatchedFoldersTicker.shared
     @State private var showingFolderPicker = false
     @State private var selectedFolderForEdit: WatchedFolder?
     @State private var isDropTargeted = false
@@ -52,7 +85,7 @@ struct WatchedFoldersView: View {
                                     Array(watchedFoldersManager.folders.enumerated()),
                                     id: \.element.id
                                 ) { index, folder in
-                                    WatchedFolderCard(folder: folder)
+                                    WatchedFolderCard(folder: folder, now: ticker.now)
                                     .id(folder.id)
                                     .animatedAppearance(
                                         delay: 0.05 + min(Double(index), 8) * 0.04
@@ -101,6 +134,19 @@ struct WatchedFoldersView: View {
         }
         .onAppear {
             watchedFoldersManager.refreshFolderExistence()
+            if controlActiveState != .inactive {
+                ticker.start()
+            }
+        }
+        .onDisappear {
+            ticker.stop()
+        }
+        .onChange(of: controlActiveState) { _, state in
+            if state == .inactive {
+                ticker.stop()
+            } else {
+                ticker.start()
+            }
         }
         .navigationTitle("Watched Folders")
     }
@@ -325,12 +371,8 @@ struct FolderSuggestionPill: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(isHovered ? .primary : .secondary)
-        .scaleEffect(isHovered ? 1.02 : 1)
         .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isHovered)
         .onHover { hovering in
-            if hovering && !isHovered {
-                HapticFeedbackManager.shared.selection()
-            }
             isHovered = hovering
         }
         .accessibilityLabel("Add \(name) to watched folders")
@@ -374,6 +416,9 @@ struct WatchedFolderCard: View {
     }
 
     let folder: WatchedFolder
+    /// Shared 1s tick from the list level. Plain value: only countdown text
+    /// reads it, so the tick never re-triggers card layout or animations.
+    var now: Date = .now
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
@@ -383,6 +428,7 @@ struct WatchedFolderCard: View {
     @State private var pendingFullOrganization: WatchedFolder?
     @State private var isHovered = false
     @State private var highlightPulse = false
+    @State private var isCardVisible = false
     @State private var isWindowVisible = true
     @State private var accessRecoveryError: AccessRecoveryError?
     @State private var isConfirmingReviewDiscard = false
@@ -647,27 +693,11 @@ struct WatchedFolderCard: View {
                 awaitingReviewLine(fileCount: count)
             } else if case .parked(let count) = activity {
                 parkedBatchLine(fileCount: count)
-            } else if activityHasCountdown(activity) {
-                SwiftUI.TimelineView(
-                    .animation(
-                        minimumInterval: 1,
-                        paused: controlActiveState == .inactive
-                    )
-                ) { context in
-                    activityStatusLabel(activity, now: context.date)
-                }
             } else {
-                activityStatusLabel(activity, now: .now)
+                // Countdowns read the shared list-level tick. No per-card
+                // TimelineView: one timer drives every label.
+                activityStatusLabel(activity, now: now)
             }
-        }
-    }
-
-    private func activityHasCountdown(_ activity: WatchedFolderActivity) -> Bool {
-        switch activity {
-        case .waitingForStability, .queued, .retrying:
-            true
-        case .parked, .running, .awaitingReview:
-            false
         }
     }
 
@@ -956,30 +986,34 @@ struct WatchedFolderCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(cardBorderColor, lineWidth: isHighlighted ? 1.6 : 1)
         )
-        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .shadow(color: cardShadowColor, radius: cardShadowRadius, x: 0, y: 1)
         .opacity(folderExists ? 1.0 : 0.8)
-        .scaleEffect(isHighlighted && highlightPulse ? 1.008 : 1.0)
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .onHover { hovering in
             guard hovering != isHovered else { return }
             isHovered = hovering
-            if hovering {
-                HapticFeedbackManager.shared.selection()
-            }
         }
         .onAppear {
+            isCardVisible = true
+            updateHighlightAnimation(isHighlighted)
+        }
+        .onDisappear {
+            // Offscreen cards hold their highlight state statically: the
+            // repeatForever pulse stops instead of animating inside the
+            // lazy buffer.
+            isCardVisible = false
             updateHighlightAnimation(isHighlighted)
         }
         .onChange(of: isHighlighted) { _, newValue in
             updateHighlightAnimation(newValue)
         }
-        .onChange(of: isWindowVisible) { _, _ in
-            updateHighlightAnimation(isHighlighted)
-        }
         .onChange(of: controlActiveState) { _, _ in
             updateHighlightAnimation(isHighlighted)
         }
         .onChange(of: reduceMotion) { _, _ in
+            updateHighlightAnimation(isHighlighted)
+        }
+        .onChange(of: isWindowVisible) { _, _ in
             updateHighlightAnimation(isHighlighted)
         }
         .contextMenu {
@@ -1042,16 +1076,14 @@ struct WatchedFolderCard: View {
     }
 
     private func updateHighlightAnimation(_ isActive: Bool) {
-        if isActive, controlActiveState != .inactive, isWindowVisible, !reduceMotion {
+        if isActive, isCardVisible, isWindowVisible, controlActiveState != .inactive, !reduceMotion {
             highlightPulse = false
-            // Three pulses, then settle on the highlighted state instead of
-            // ticking a repeatForever for the row's lifetime.
             withAnimation(.easeInOut(duration: 0.9).repeatCount(3, autoreverses: true)) {
                 highlightPulse = true
             }
         } else {
             withAnimation(nil) {
-                highlightPulse = isActive
+                highlightPulse = isActive && isCardVisible
             }
         }
     }
@@ -1073,11 +1105,38 @@ private struct WatchedFolderNerdStats: View {
     let activity: WatchedFolderActivity?
     @EnvironmentObject private var history: OrganizationHistory
 
+    /// Memoizes the history scan across rows and body evaluations. Keyed by
+    /// folder path + history revision: entries only change when the revision
+    /// bumps, and the filter walks every entry.
+    private final class NerdRunsCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storage: [String: [OrganizationHistoryEntry]] = [:]
+
+        func runs(for key: String, compute: () -> [OrganizationHistoryEntry]) -> [OrganizationHistoryEntry] {
+            lock.withLock {
+                if let cached = storage[key] {
+                    return cached
+                }
+                let built = compute()
+                if storage.count > 32 {
+                    storage.removeAll()
+                }
+                storage[key] = built
+                return built
+            }
+        }
+    }
+
+    private static let runsCache = NerdRunsCache()
+
     private var recentRuns: [OrganizationHistoryEntry] {
         let folderPath = URL(fileURLWithPath: folder.path).standardizedFileURL.path
-        return history.entries.filter {
-            $0.source == .watchedFolder
-                && URL(fileURLWithPath: $0.directoryPath).standardizedFileURL.path == folderPath
+        let key = "\(folderPath)#\(history.revision)"
+        return Self.runsCache.runs(for: key) {
+            history.entries.filter {
+                $0.source == .watchedFolder
+                    && URL(fileURLWithPath: $0.directoryPath).standardizedFileURL.path == folderPath
+            }
         }
     }
 
@@ -1235,7 +1294,8 @@ struct WatchedFolderConfigView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var steeringManager = SteeringPromptManager.shared
+    // Shared singleton: observed, never state-owned.
+    @ObservedObject private var steeringManager = SteeringPromptManager.shared
 
     @State private var customPrompt: String
     @State private var useCustomModel: Bool
@@ -1257,8 +1317,6 @@ struct WatchedFolderConfigView: View {
     @State private var showNerdStats = false
     @State private var isWindowVisible = true
 
-    /// Suggestion cycling runs at 8s only while the prompt is empty and the
-    /// window is visible, active, and foregrounded.
     private var shouldCycleInstructionSuggestions: Bool {
         customPrompt.isEmpty && !reduceMotion && isWindowVisible
             && controlActiveState != .inactive && scenePhase == .active

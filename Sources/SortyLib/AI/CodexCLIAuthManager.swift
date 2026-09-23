@@ -277,22 +277,24 @@ public final class CodexCLIAuthManager: ObservableObject {
 
     func signOut() {
         if let codexExecutablePath = CodexSubscriptionClient.resolveCodexExecutablePath() {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: codexExecutablePath)
-            process.arguments = ["logout"]
-            process.standardOutput = Pipe()
-            process.standardError = Pipe()
-            do {
-                try process.run()
-                let deadline = Date().addingTimeInterval(15)
-                while process.isRunning, Date() < deadline {
-                    Thread.sleep(forTimeInterval: 0.05)
+            Task.detached(priority: .utility) {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: codexExecutablePath)
+                process.arguments = ["logout"]
+                process.standardOutput = Pipe()
+                process.standardError = Pipe()
+                do {
+                    try process.run()
+                    let deadline = Date().addingTimeInterval(15)
+                    while process.isRunning, Date() < deadline {
+                        try? await Task.sleep(for: .milliseconds(50))
+                    }
+                    if process.isRunning {
+                        process.terminate()
+                    }
+                } catch {
+                    // Local auth state is cleared below even if logout fails.
                 }
-                if process.isRunning {
-                    process.terminate()
-                }
-            } catch {
-                // Fall through to local cache cleanup.
             }
         }
 
