@@ -411,6 +411,26 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
+    /// Coalesces high-frequency apply progress off the main actor so the
+    /// progress closure only hops for meaningful updates: the first report,
+    /// completion, or a >=1% advance. FileSystemManager still counts every
+    /// operation for its own progress math; this only gates the MainActor hop
+    /// (mirrors the scan-phase stride that guards per-file Task creation).
+    private final class ApplyProgressThrottle: @unchecked Sendable {
+        private let lock = NSLock()
+        private var lastReportedPercent: Double = -1
+
+        nonisolated func shouldReport(percent: Double) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            guard percent >= 1.0 || lastReportedPercent < 0 || percent - lastReportedPercent >= 0.01 else {
+                return false
+            }
+            lastReportedPercent = percent
+            return true
+        }
+    }
+
     private struct OrganizationResumeCheckpoint {
         let files: [FileItem]
         let directory: URL
@@ -671,6 +691,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     nonisolated private static let deepScanFileLimit = 2_000
     nonisolated private static let organizeAnalysisBatchSize = 350
     nonisolated private static let renameAnalysisBatchSize = 120
+    /// AI batches in flight at once. Two overlaps the next request's network
+    /// latency with the current one; more would interleave the shared
+    /// diagnostic stream buffer and strain rate limits for little gain.
+    nonisolated private static let analysisBatchConcurrency = 2
     nonisolated private static let minimumAdaptiveAnalysisBatchSize = 8
     nonisolated private static let previewVersionFileLimit = 20_000
     nonisolated private static let maximumPreparedVisionBytes = 32 * 1_024 * 1_024
@@ -869,6 +893,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
     private var scannedFilePathLookup: [String: [String]] = [:]
     private let scannedFilesUIPublishLimit = 200
+    /// Upper bound of scanned files indexed for @mention resolution. Covers
+    /// the deep-scan window without grouping the entire scan on the main actor.
+    nonisolated private static let scannedFileLookupLimit = 2_000
 
     /// Full scan results backing lookups, insights, and thumbnails.
     /// `scannedFiles` publishes only a bounded slice for UI; this keeps every
@@ -1682,8 +1709,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // (deep scan up to 2000).
         allScannedFiles = files
         scannedFiles = Array(files.prefix(scannedFilesUIPublishLimit))
-        scannedFilePathLookup = Dictionary(grouping: files, by: { $0.displayName.lowercased() })
-            .mapValues { $0.map { $0.path } }
+        // Build the mention-resolution lookup lazily over a bounded prefix:
+        // Dictionary(grouping:) over the entire scan duplicates every
+        // FileItem and stalls the main actor on very large folders, while
+        // mention resolution only needs recent/visible candidates.
+        let lookupSource = files.prefix(Self.scannedFileLookupLimit)
+        var lookup: [String: [String]] = [:]
+        lookup.reserveCapacity(lookupSource.count)
+        for file in lookupSource {
+            lookup[file.displayName.lowercased(), default: []].append(file.path)
+        }
+        scannedFilePathLookup = lookup
     }
     
     public func didComplete(content: String) {
@@ -1722,7 +1758,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         timeoutTask?.cancel()
         timeoutTask = Task { @MainActor [weak self] in
             while let self = self, !Task.isCancelled, !self.isCancellationRequested {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                // 5s cadence: the timer only drives the elapsed-time label and
+                // the 30s nudge, so waking the main actor every 2s was pure
+                // overhead during long AI requests.
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
                 if Task.isCancelled || self.isCancellationRequested { break }
 
                 if let start = self.startTime {
@@ -2112,7 +2151,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         let directInstructions = customPrompt ?? customInstructions
         var instructions = PromptBuilder.wrapDirectUserInstructions(directInstructions)
-        if let referenceContext = fileReferenceContext(from: directInstructions, in: directory) {
+        // @mention context resolves against the single scan result already in
+        // memory; the filesystem enumerator only runs for referenced files
+        // the scan did not return (e.g. excluded).
+        if let referenceContext = fileReferenceContext(from: directInstructions, files: files, in: directory) {
             instructions += "\n\n" + referenceContext
         }
         if !duplicateContext.isEmpty {
@@ -2169,9 +2211,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Injected Storage Locations context into prompt")
         }
 
-        if !isRenameOnly, let existingFoldersContext = PromptBuilder.buildExistingFoldersContext(at: directory) {
-            instructions += "\n\n" + existingFoldersContext
-            DebugLogger.log("Injected Existing Folders context into prompt")
+        if !isRenameOnly {
+            // Existing-folder context prefers the zero-I/O scan-derived list
+            // (parent folders of scanned files). The filesystem enumeration —
+            // which additionally covers empty folders — runs off-main and only
+            // when the scan implies no subfolders at all.
+            if let scanDerivedFolders = PromptBuilder.buildExistingFoldersContext(
+                fromFiles: files,
+                baseDirectoryURL: directory
+            ) {
+                instructions += "\n\n" + scanDerivedFolders
+                DebugLogger.log("Injected scan-derived Existing Folders context into prompt")
+            } else if let existingFoldersContext = try await PromptBuilder.buildExistingFoldersContextOffMain(at: directory) {
+                instructions += "\n\n" + existingFoldersContext
+                DebugLogger.log("Injected Existing Folders context into prompt")
+            }
         }
 
         let imagePayload: [String: Data] = [:]
@@ -2337,98 +2391,106 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
         }
 
-        for batchIndex in (checkpoint?.nextBatchIndex ?? 0)..<batchCount {
-            try checkCancellation()
+        // Bounded concurrency: up to analysisBatchConcurrency batches in
+        // flight. Requests execute concurrently off the main actor while
+        // merges stay ordered through the accumulator, so the merged plan,
+        // taxonomy, progress, and resume checkpoint match serial order.
+        // Merged batches accumulate in completedPlans as they land; when a
+        // batch ultimately fails, the group aborts but those good batches
+        // stay cached in the resume checkpoint, and the halve-and-retry
+        // inside requestBatchPlans retries only the failed batch.
+        // (Concurrent batches share the diagnostic stream buffer; completion
+        // order determines its retained tail. Parsed plans are unaffected.)
+        let startBatchIndex = checkpoint?.nextBatchIndex ?? 0
+        startTimeoutTimer()
+        // Throwing-group scope exit cancels stragglers on failure; merged
+        // batches are already cached in the resume checkpoint above.
+        try await withThrowingTaskGroup(of: (Int, [OrganizationPlan]).self) { group in
+            var nextDispatch = startBatchIndex
+            var nextMerge = startBatchIndex
+            var bufferedPlans: [Int: [OrganizationPlan]] = [:]
 
-            let start = batchIndex * batchSize
-            let end = min(start + batchSize, files.count)
-            let batch = Array(files[start..<end])
-            let completedBeforeRequest = batchIndex
-            let phaseProgress = 0.30 + (Double(completedBeforeRequest) / Double(batchCount)) * 0.52
-            let suggestionAction = mode == .renameOnly ? "Finding better names" : "Finding the best folders"
-            let planningStage = batchCount > 1
-                ? "\(suggestionAction) for \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files..."
-                : "\(suggestionAction) for \(GenerationStats.formatCount(files.count)) files..."
-            updateMeasuredProgress(
-                completed: completedBeforeRequest,
-                total: batchCount,
-                estimatedOverallProgress: phaseProgress,
-                stage: planningStage
-            )
-
-            var batchInstructions = completeInstructions
-            if batchCount > 1 {
-                // Avoid repeating the full 400-entry manifest on every 350-file
-                // batch: replace it with a small batch-scoped manifest.
-                if let resolvedDirectory,
-                   batchInstructions.contains("## SOURCE FOLDER CONTEXT") {
-                    batchInstructions = PromptBuilder.strippingSourceFolderContext(from: batchInstructions)
-                    if let batchManifest = PromptBuilder.buildBatchManifestContext(
-                        baseDirectoryURL: resolvedDirectory,
-                        batchFiles: batch
-                    ) {
-                        batchInstructions += "\n\n" + batchManifest
+            while nextMerge < batchCount {
+                try checkCancellation()
+                while nextDispatch < batchCount,
+                      nextDispatch - nextMerge < Self.analysisBatchConcurrency {
+                    let batchIndex = nextDispatch
+                    let start = batchIndex * batchSize
+                    let end = min(start + batchSize, files.count)
+                    let job = try await makeBatchAnalysisJob(
+                        batchIndex: batchIndex,
+                        batch: Array(files[start..<end]),
+                        batchCount: batchCount,
+                        mode: mode,
+                        completeInstructions: completeInstructions,
+                        taxonomySnapshot: taxonomy,
+                        imagePayload: imagePayload,
+                        visionFiles: visionFiles,
+                        visionBaseDirectory: resolvedDirectory,
+                        personaPrompt: personaPrompt,
+                        temperature: temperature
+                    )
+                    nextDispatch += 1
+                    let phaseProgress = 0.30 + (Double(batchIndex) / Double(batchCount)) * 0.52
+                    let suggestionAction = mode == .renameOnly ? "Finding better names" : "Finding the best folders"
+                    updateMeasuredProgress(
+                        completed: batchIndex,
+                        total: batchCount,
+                        estimatedOverallProgress: phaseProgress,
+                        stage: batchCount > 1
+                            ? "\(suggestionAction) for \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files..."
+                            : "\(suggestionAction) for \(GenerationStats.formatCount(files.count)) files..."
+                    )
+                    group.addTask {
+                        let plans = try await Self.requestBatchPlans(client: client, job: job)
+                        return (job.batchIndex, plans)
                     }
                 }
-                batchInstructions += Self.largeFolderBatchContext(
-                    batchIndex: batchIndex,
-                    batchCount: batchCount,
-                    taxonomy: taxonomy,
-                    mode: mode
-                )
+
+                guard let (completedIndex, plans) = try await group.next() else { break }
+                try checkCancellation()
+                bufferedPlans[completedIndex] = plans
+                while let ready = bufferedPlans.removeValue(forKey: nextMerge) {
+                    try checkCancellation()
+                    completedAnalysisBatchCount += ready.count
+                    for batchPlan in ready {
+                        if let stats = batchPlan.generationStats {
+                            totalResponseTokens += stats.totalTokens
+                            if let promptTokens = stats.promptTokens {
+                                totalPromptTokens += promptTokens
+                                hasPromptTokenCount = true
+                            }
+                            if firstTTFT == nil {
+                                firstTTFT = stats.ttft
+                            }
+                            if let cost = stats.estimatedCost {
+                                estimatedCost += cost
+                                hasEstimatedCost = true
+                            }
+                        }
+                        let note = batchPlan.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !note.isEmpty, retainedNotes.count < 3, !retainedNotes.contains(note) {
+                            retainedNotes.append(note)
+                        }
+                        taxonomy = await accumulator.merge(batchPlan)
+                    }
+                    completedPlans.append(contentsOf: ready)
+                    resumeCheckpoint?.completedPlans = completedPlans
+                    resumeCheckpoint?.nextBatchIndex = nextMerge + 1
+
+                    let completed = nextMerge + 1
+                    let completedEnd = min(completed * batchSize, files.count)
+                    let completedProgress = 0.30 + (Double(completed) / Double(batchCount)) * 0.52
+                    updateMeasuredProgress(
+                        completed: completed,
+                        total: batchCount,
+                        estimatedOverallProgress: completedProgress,
+                        stage: "Found suggestions for \(GenerationStats.formatCount(completedEnd)) of \(GenerationStats.formatCount(files.count)) files"
+                    )
+                    nextMerge += 1
+                }
             }
-
-            startTimeoutTimer()
-            let batchPlans = try await analyzeBatchAdaptively(
-                files: batch,
-                client: client,
-                imagePayload: imagePayload,
-                visionFiles: visionFiles,
-                visionBaseDirectory: resolvedDirectory,
-                instructions: batchInstructions,
-                personaPrompt: personaPrompt,
-                temperature: temperature
-            )
-
-            try checkCancellation()
-            completedAnalysisBatchCount += batchPlans.count
-
-            for batchPlan in batchPlans {
-                if let stats = batchPlan.generationStats {
-                    totalResponseTokens += stats.totalTokens
-                    if let promptTokens = stats.promptTokens {
-                        totalPromptTokens += promptTokens
-                        hasPromptTokenCount = true
-                    }
-                    if firstTTFT == nil {
-                        firstTTFT = stats.ttft
-                    }
-                    if let cost = stats.estimatedCost {
-                        estimatedCost += cost
-                        hasEstimatedCost = true
-                    }
-                }
-                let note = batchPlan.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !note.isEmpty, retainedNotes.count < 3, !retainedNotes.contains(note) {
-                    retainedNotes.append(note)
-                }
-
-                taxonomy = await accumulator.merge(batchPlan)
-            }
-            completedPlans.append(contentsOf: batchPlans)
-            resumeCheckpoint?.completedPlans = completedPlans
-            resumeCheckpoint?.nextBatchIndex = batchIndex + 1
-
-            let completed = batchIndex + 1
-            let completedProgress = 0.30 + (Double(completed) / Double(batchCount)) * 0.52
-            updateMeasuredProgress(
-                completed: completed,
-                total: batchCount,
-                estimatedOverallProgress: completedProgress,
-                stage: "Found suggestions for \(GenerationStats.formatCount(end)) of \(GenerationStats.formatCount(files.count)) files"
-            )
         }
-
         var mergedPlan = await accumulator.result()
         let duration = Date().timeIntervalSince(analysisStart)
         let totalFileSize = await Task.detached(priority: .utility) {
@@ -2540,29 +2602,70 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorTimedOut
     }
 
-    private func analyzeBatchAdaptively(
-        files: [FileItem],
-        client: AIClientProtocol,
+    /// Sendable unit of AI batch work. Built on the main actor (prompt
+    /// slicing, taxonomy snapshot, vision prep) and executed concurrently off
+    /// it, so TaskGroup children never capture the organizer.
+    private struct BatchAnalysisJob: Sendable {
+        let batchIndex: Int
+        var files: [FileItem]
+        let batchImages: [String: Data]
+        var requestInstructions: String
+        let personaPrompt: String?
+        let temperature: Double?
+        /// Main-actor cancellation flag sampled at dispatch; Task.isCancelled
+        /// covers task-tree cancellation.
+        let cancellationRequested: Bool
+    }
+
+    /// Builds one batch job: stream ID table, batch-scoped instructions with
+    /// a taxonomy snapshot, and vision payload. Runs on the main actor at
+    /// dispatch time; the returned job is self-contained for concurrent
+    /// execution. The taxonomy snapshot may lag already-dispatched batches by
+    /// up to (concurrency - 1); the merge stays strictly ordered.
+    private func makeBatchAnalysisJob(
+        batchIndex: Int,
+        batch: [FileItem],
+        batchCount: Int,
+        mode: OrganizationMode,
+        completeInstructions: String,
+        taxonomySnapshot: [String],
         imagePayload: [String: Data],
-        visionFiles: [FileItem] = [],
-        visionBaseDirectory: URL? = nil,
-        instructions: String,
+        visionFiles: [FileItem],
+        visionBaseDirectory: URL?,
         personaPrompt: String?,
-        temperature: Double?,
-        adaptiveDepth: Int = 0
-    ) async throws -> [OrganizationPlan] {
-        // Cap halve-and-retry recursion so a persistently failing batch cannot
-        // recurse without bound; depth 4 splits 350 -> ~22 files minimum.
-        let maxAdaptiveDepth = 4
+        temperature: Double?
+    ) async throws -> BatchAnalysisJob {
         try checkCancellation()
 
         // Compact prompts number this request's files 1-based; publish the same
         // mapping so the live-stream UI can resolve `file_ids` while streaming.
         streamFileIDTable = Dictionary(
-            uniqueKeysWithValues: files.enumerated().map { ($0.offset + 1, $0.element) }
+            uniqueKeysWithValues: batch.enumerated().map { ($0.offset + 1, $0.element) }
         )
 
-        let fileNames = Set(files.map(visionAttachmentName))
+        var batchInstructions = completeInstructions
+        if batchCount > 1 {
+            // Avoid repeating the full 400-entry manifest on every 350-file
+            // batch: replace it with a small batch-scoped manifest.
+            if let visionBaseDirectory,
+               batchInstructions.contains("## SOURCE FOLDER CONTEXT") {
+                batchInstructions = PromptBuilder.strippingSourceFolderContext(from: batchInstructions)
+                if let batchManifest = PromptBuilder.buildBatchManifestContext(
+                    baseDirectoryURL: visionBaseDirectory,
+                    batchFiles: batch
+                ) {
+                    batchInstructions += "\n\n" + batchManifest
+                }
+            }
+            batchInstructions += Self.largeFolderBatchContext(
+                batchIndex: batchIndex,
+                batchCount: batchCount,
+                taxonomy: taxonomySnapshot,
+                mode: mode
+            )
+        }
+
+        let fileNames = Set(batch.map(visionAttachmentName))
         var batchImages = imagePayload.filter { fileNames.contains($0.key) }
         if batchImages.isEmpty, let visionBaseDirectory {
             let selectedFiles = visionFiles.filter {
@@ -2574,77 +2677,118 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
         }
         let requestInstructions = batchImages.isEmpty
-            ? instructions
-            : instructions + "\n\n" + visionPromptInstructions(
+            ? batchInstructions
+            : batchInstructions + "\n\n" + visionPromptInstructions(
                 for: batchImages.keys.sorted()
             )
 
+        return BatchAnalysisJob(
+            batchIndex: batchIndex,
+            files: batch,
+            batchImages: batchImages,
+            requestInstructions: requestInstructions,
+            personaPrompt: personaPrompt,
+            temperature: temperature,
+            cancellationRequested: isCancellationRequested
+        )
+    }
+
+    /// Executes one batch job against the AI client, halve-and-retrying only
+    /// that batch on splittable failures. Runs off the main actor; UI state
+    /// is never touched here (the merge loop owns progress and taxonomy).
+    nonisolated private static func requestBatchPlans(
+        client: AIClientProtocol,
+        job: BatchAnalysisJob,
+        adaptiveDepth: Int = 0
+    ) async throws -> [OrganizationPlan] {
+        // Cap halve-and-retry recursion so a persistently failing batch cannot
+        // recurse without bound; depth 4 splits 350 -> ~22 files minimum.
+        let maxAdaptiveDepth = 4
+        if job.cancellationRequested || Task.isCancelled {
+            throw CancellationError()
+        }
+
         do {
-            let plan: OrganizationPlan
-            if batchImages.isEmpty {
-                plan = try await client.analyze(
-                    files: files,
-                    customInstructions: requestInstructions,
-                    personaPrompt: personaPrompt,
-                    temperature: temperature
+            if job.batchImages.isEmpty {
+                let plan = try await client.analyze(
+                    files: job.files,
+                    customInstructions: job.requestInstructions,
+                    personaPrompt: job.personaPrompt,
+                    temperature: job.temperature
                 )
-            } else {
-                plan = try await client.analyzeWithImages(
-                    files: files,
-                    imageData: batchImages,
-                    customInstructions: requestInstructions,
-                    personaPrompt: personaPrompt,
-                    temperature: temperature
-                )
+                return [plan]
             }
+            let plan = try await client.analyzeWithImages(
+                files: job.files,
+                imageData: job.batchImages,
+                customInstructions: job.requestInstructions,
+                personaPrompt: job.personaPrompt,
+                temperature: job.temperature
+            )
             return [plan]
         } catch {
-            try checkCancellation()
+            if job.cancellationRequested || Task.isCancelled {
+                throw CancellationError()
+            }
             guard adaptiveDepth < maxAdaptiveDepth,
-                  Self.shouldSplitAnalysisBatch(after: error, fileCount: files.count) else {
+                  Self.shouldSplitAnalysisBatch(after: error, fileCount: job.files.count) else {
                 throw error
             }
 
-            let splitIndex = files.count / 2
-            let firstFiles = Array(files[..<splitIndex])
-            let secondFiles = Array(files[splitIndex...])
+            let splitIndex = job.files.count / 2
             LogManager.shared.log(
-                "Retrying a failed \(files.count)-file AI request as separate requests for \(firstFiles.count) and \(secondFiles.count) files.",
+                "Retrying a failed \(job.files.count)-file AI request as separate requests for \(splitIndex) and \(job.files.count - splitIndex) files.",
                 level: .warning,
                 category: "FolderOrganizer"
             )
-            organizationStage = "Retrying with fewer files at a time..."
-
-            let recoveryInstructions = instructions + """
+            let recoveryInstructions = job.requestInstructions + """
 
             ADAPTIVE RETRY
             - The previous larger request could not produce a complete valid plan.
             - Return a complete plan for only the files in this smaller request.
             """
-            let firstPlans = try await analyzeBatchAdaptively(
-                files: firstFiles,
-                client: client,
-                imagePayload: batchImages,
-                visionFiles: [],
-                visionBaseDirectory: nil,
-                instructions: recoveryInstructions,
-                personaPrompt: personaPrompt,
-                temperature: temperature,
-                adaptiveDepth: adaptiveDepth + 1
-            )
-            let secondPlans = try await analyzeBatchAdaptively(
-                files: secondFiles,
-                client: client,
-                imagePayload: batchImages,
-                visionFiles: [],
-                visionBaseDirectory: nil,
-                instructions: recoveryInstructions,
-                personaPrompt: personaPrompt,
-                temperature: temperature,
-                adaptiveDepth: adaptiveDepth + 1
-            )
+            var firstJob = job
+            firstJob.files = Array(job.files[..<splitIndex])
+            firstJob.requestInstructions = recoveryInstructions
+            var secondJob = job
+            secondJob.files = Array(job.files[splitIndex...])
+            secondJob.requestInstructions = recoveryInstructions
+            // Halves stay sequential so their plans concatenate in order.
+            let firstPlans = try await requestBatchPlans(client: client, job: firstJob, adaptiveDepth: adaptiveDepth + 1)
+            let secondPlans = try await requestBatchPlans(client: client, job: secondJob, adaptiveDepth: adaptiveDepth + 1)
             return firstPlans + secondPlans
         }
+    }
+
+    private func analyzeBatchAdaptively(
+        files: [FileItem],
+        client: AIClientProtocol,
+        imagePayload: [String: Data],
+        visionFiles: [FileItem] = [],
+        visionBaseDirectory: URL? = nil,
+        instructions: String,
+        personaPrompt: String?,
+        temperature: Double?,
+        adaptiveDepth: Int = 0
+    ) async throws -> [OrganizationPlan] {
+        // Single-batch entry point for callers outside the bounded group
+        // (incremental runs, provider comparisons). Shares the job builder
+        // and request core with the concurrent path so behavior is identical.
+        try checkCancellation()
+        let job = try await makeBatchAnalysisJob(
+            batchIndex: 0,
+            batch: files,
+            batchCount: 1,
+            mode: aiConfig?.mode ?? client.config.mode,
+            completeInstructions: instructions,
+            taxonomySnapshot: [],
+            imagePayload: imagePayload,
+            visionFiles: visionFiles,
+            visionBaseDirectory: visionBaseDirectory,
+            personaPrompt: personaPrompt,
+            temperature: temperature
+        )
+        return try await Self.requestBatchPlans(client: client, job: job, adaptiveDepth: adaptiveDepth)
     }
 
     nonisolated private static func shouldSplitAnalysisBatch(
@@ -2950,30 +3094,49 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard !files.isEmpty else { return [:] }
 
         aiAnalysisActivity = .preparingImages
-        var payload: [String: Data] = [:]
-        var preparedByteCount = 0
+        // One batched call: prepareFilesForVision already fans out internally
+        // over a bounded TaskGroup. The old per-file loop re-entered it for
+        // every file, paying setup/teardown per image and sorting each
+        // single-entry result.
+        try checkCancellation()
+        let prepared = await visionAnalyzer.prepareFilesForVision(
+            files: files,
+            baseDirectoryURL: baseDirectory
+        )
 
-        for file in files {
+        var payload: [String: Data] = [:]
+        payload.reserveCapacity(prepared.count)
+        var preparedByteCount = 0
+        var byteSkippedNames = Set<String>()
+        for (name, data) in prepared.sorted(by: { $0.key < $1.key }) {
             try checkCancellation()
-            let prepared = await visionAnalyzer.prepareFilesForVision(
-                files: [file],
-                baseDirectoryURL: baseDirectory
-            )
-            if prepared.isEmpty {
-                visionPreparationFailureCount += 1
+            guard preparedByteCount + data.count <= Self.maximumPreparedVisionBytes else {
+                visionPreparationByteLimitSkipCount += 1
+                byteSkippedNames.insert(name)
                 continue
             }
-
-            for (name, data) in prepared.sorted(by: { $0.key < $1.key }) {
-                guard preparedByteCount + data.count <= Self.maximumPreparedVisionBytes else {
-                    visionPreparationByteLimitSkipCount += 1
-                    continue
-                }
-                payload[name] = data
-                preparedByteCount += data.count
-                preparedVisionAttachmentNames.insert(name)
+            payload[name] = data
+            preparedByteCount += data.count
+            preparedVisionAttachmentNames.insert(name)
+        }
+        // Per-file failure accounting from the merged result: a file failed
+        // when none of its attachments (or byte-limit skips) materialized.
+        // Attachment keys are approximate (PDF pages append " [Page N]"), so
+        // this stays a diagnostic counter, not control flow.
+        var failedFileCount = 0
+        for file in files {
+            let key = visionAttachmentName(for: file)
+            let materialized = prepared.keys.contains {
+                $0 == key || $0 == file.displayName || $0.hasPrefix(key + " [Page ")
+            }
+            let byteSkipped = byteSkippedNames.contains {
+                $0 == key || $0 == file.displayName || $0.hasPrefix(key + " [Page ")
+            }
+            if !materialized, !byteSkipped {
+                failedFileCount += 1
             }
         }
+        visionPreparationFailureCount += failedFileCount
 
         if let summary = visionAnalysisSummary {
             visionAnalysisSummary = VisionAnalysisSummary(
@@ -3047,30 +3210,36 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return instructions
     }
 
-    private func fileReferenceContext(from instructions: String, in directory: URL) -> String? {
+    /// Builds @mention context for files named in the instructions.
+    /// Resolves against the single scan result already in memory first, so
+    /// the common case performs no I/O. Only referenced names the scan did
+    /// not return (e.g. excluded files) fall back to a bounded filesystem
+    /// enumeration, which stops as soon as every name is found.
+    private func fileReferenceContext(from instructions: String, files: [FileItem], in directory: URL) -> String? {
         let referencedNames = referencedFileNames(in: instructions)
         guard !referencedNames.isEmpty else { return nil }
 
-        let resourceKeys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
-        guard let enumerator = FileManager.default.enumerator(
-            at: directory,
-            includingPropertiesForKeys: resourceKeys,
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else {
-            return nil
+        var matches: [String] = []
+        matches.reserveCapacity(referencedNames.count)
+        var unmatched = referencedNames
+        for file in files {
+            let relative = (file.relativePath ?? file.displayName).localizedLowercase
+            let name = file.displayName.localizedLowercase
+            guard unmatched.contains(relative) || unmatched.contains(name) else { continue }
+            matches.append Self.fileReferenceLine(
+                name: file.displayName,
+                relativePath: file.relativePath ?? file.displayName,
+                pathExtension: file.extension,
+                size: file.size,
+                modified: file.modificationDate
+            )
+            unmatched.remove(relative)
+            unmatched.remove(name)
+            if unmatched.isEmpty { break }
         }
 
-        var matches: [String] = []
-        for case let url as URL in enumerator {
-            guard let values = try? url.resourceValues(forKeys: Set(resourceKeys)),
-                  values.isRegularFile == true else { continue }
-
-            let relativePath = relativePath(for: url, baseDirectory: directory)
-            let name = url.lastPathComponent
-            guard referencedNames.contains(relativePath.localizedLowercase) || referencedNames.contains(name.localizedLowercase) else { continue }
-            let size = values.fileSize.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? "unknown size"
-            let modified = values.contentModificationDate.map { DateFormatter.localizedString(from: $0, dateStyle: .medium, timeStyle: .short) } ?? "unknown modified date"
-            matches.append("- @\(name): relative path \"\(relativePath)\", extension \"\(url.pathExtension)\", size \(size), modified \(modified)")
+        if !unmatched.isEmpty {
+            matches.append(contentsOf: fileReferenceLinesFromDisk(names: unmatched, in: directory, maxMatches: 50))
         }
 
         guard !matches.isEmpty else { return nil }
@@ -3081,6 +3250,60 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         The user explicitly mentioned these files in their instructions. Treat these file references as important examples or constraints, and resolve @mentions to these exact source files:
         \(matches.joined(separator: "\n"))
         """
+    }
+
+    nonisolated private static func fileReferenceLine(
+        name: String,
+        relativePath: String,
+        pathExtension: String,
+        size: Int64,
+        modified: Date?
+    ) -> String {
+        let sizeText = ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+        let modifiedText = modified.map {
+            DateFormatter.localizedString(from: $0, dateStyle: .medium, timeStyle: .short)
+        } ?? "unknown modified date"
+        return "- @\(name): relative path \"\(relativePath)\", extension \"\(pathExtension)\", size \(sizeText), modified \(modifiedText)"
+    }
+
+    /// Bounded fallback for referenced files the scan did not return.
+    nonisolated private static func fileReferenceLinesFromDisk(
+        names: Set<String>,
+        in directory: URL,
+        maxMatches: Int
+    ) -> [String] {
+        var remaining = names
+        var matches: [String] = []
+        let resourceKeys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: resourceKeys,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return []
+        }
+
+        for case let url as URL in enumerator {
+            guard let values = try? url.resourceValues(forKeys: Set(resourceKeys)),
+                  values.isRegularFile == true else { continue }
+
+            let relativePath = url.path.hasPrefix(directory.path + "/")
+                ? String(url.path.dropFirst(directory.path.count + 1))
+                : url.lastPathComponent
+            let name = url.lastPathComponent
+            guard remaining.contains(relativePath.localizedLowercase) || remaining.contains(name.localizedLowercase) else { continue }
+            matches.append(fileReferenceLine(
+                name: name,
+                relativePath: relativePath,
+                pathExtension: url.pathExtension,
+                size: Int64(values.fileSize ?? 0),
+                modified: values.contentModificationDate
+            ))
+            remaining.remove(relativePath.localizedLowercase)
+            remaining.remove(name.localizedLowercase)
+            if remaining.isEmpty || matches.count >= maxMatches { break }
+        }
+        return matches
     }
 
     private func referencedFileNames(in instructions: String) -> Set<String> {
@@ -3097,15 +3320,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let token = String(instructions[range]).trimmingCharacters(in: .whitespacesAndNewlines)
             return token.isEmpty ? nil : token.localizedLowercase
         })
-    }
-
-    private func relativePath(for url: URL, baseDirectory: URL) -> String {
-        let basePath = baseDirectory.standardizedFileURL.path
-        let path = url.standardizedFileURL.path
-        if path.hasPrefix(basePath + "/") {
-            return String(path.dropFirst(basePath.count + 1))
-        }
-        return url.lastPathComponent
     }
 
     private func validationPhase(
@@ -4017,7 +4231,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         do {
             try checkCancellation()
 
-            let existingFolderContext = PromptBuilder.buildExistingFoldersContext(at: directory)
+            // Scan-derived folders first (zero I/O); the filesystem pass for
+            // empty folders runs off-main only when the scan shows no subfolders.
+            let existingFolderContext = PromptBuilder.buildExistingFoldersContext(
+                fromFiles: files,
+                baseDirectoryURL: directory
+            ) ?? (try await PromptBuilder.buildExistingFoldersContextOffMain(at: directory))
                 ?? "No descendant folders currently exist."
             let contextPrompt: String
             switch mode {
@@ -4642,14 +4861,25 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         var completedOperationsBeforeHistory: [FileSystemManager.FileOperation] = []
 
         do {
+            // Coalesce apply progress before hopping to the main actor: the
+            // file-system phases report per operation, and a Task hop per file
+            // stalls large applies. The throttle box is Sendable so the
+            // progress closure stays off-main until a report is actually due
+            // (mirrors the scan-phase 25-file stride).
+            let applyProgressThrottle = ApplyProgressThrottle()
             let operations = try await fileSystemManager.applyOrganization(
                 planToApply,
-                at: baseURL, 
-                dryRun: dryRun, 
+                at: baseURL,
+                dryRun: dryRun,
                 enableTagging: enableTagging,
                 strictExclusions: aiConfig?.strictExclusions ?? true,
                 exclusionManager: exclusionRules,
+                // Validated via validator.validateOffMain immediately above,
+                // so skip the redundant pre-validation stat pass over every
+                // source. Move-time existence checks remain the safety net.
+                skipPreValidation: true,
                 progress: { [weak self] percent, message in
+                    guard applyProgressThrottle.shouldReport(percent: percent) else { return }
                     Task { @MainActor [weak self] in
                         guard let self, !Task.isCancelled, !self.isCancellationRequested else { return }
                         self.progress = min(percent, 1.0)
