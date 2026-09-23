@@ -190,7 +190,7 @@ def html_document(
     .track {{ flex: 1; height: 10px; border-radius: 10px; background: color-mix(in srgb, CanvasText 12%, Canvas); }}
     .bar {{ height: 100%; border-radius: 10px; }}
     .before {{ width: 100%; background: #8794a8; }}
-    .blue .after {{ background: #3997e8; }}
+    .blue .after {{ background: #3997e8; box-shadow: 0 0 12px 2px rgba(57, 151, 232, 0.45); }}
     .green .after {{ background: #29a77a; }}
     .green .track.zero {{ background: rgba(41, 167, 122, 0.15); box-shadow: 0 0 10px 1px rgba(41, 167, 122, 0.35); }}
     .after {{ transform-origin: left; animation: fill-bar 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }}
