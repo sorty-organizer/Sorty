@@ -241,20 +241,6 @@ public struct WhatsNewTourView: View {
 
     private var performanceSummary: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.cyan)
-                    .accessibilityHidden(true)
-                Text("MEASURED IMPROVEMENTS")
-                    .font(.system(.caption2, design: .rounded, weight: .semibold))
-                    .tracking(1.3)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("1.2.0  →  1.2.1")
-                    .font(.system(.caption2, design: .rounded, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            .accessibilityElement(children: .combine)
             // Three hero cards plus two wide rows fit without scrolling, so
             // nothing collides with the dots and copy underneath. Full
             // benchmark tables live in the linked notes.
