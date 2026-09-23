@@ -153,8 +153,8 @@ public struct WhatsNewTourView: View {
             VStack(spacing: 0) {
                 // The release summary uses the copy space that the image pages
                 // need. Both layouts still end at the same fixed action-button row.
-                // The performance page keeps the standard 416/152 split so its
-                // cards never overlap the dots or the copy below.
+                // Benchmark content fits within this region with room to spare,
+                // so it never reaches the fixed navigation and copy below.
                 Group {
                     if isReleaseSummary {
                         releaseSummary
@@ -239,33 +239,31 @@ public struct WhatsNewTourView: View {
     }
 
     private var performanceSummary: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "sparkles")
                     .foregroundStyle(.cyan)
+                    .accessibilityHidden(true)
                 Text("MEASURED IMPROVEMENTS")
                     .font(.system(.caption2, design: .rounded, weight: .semibold))
                     .tracking(1.3)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text("1.2.0  →  1.2.1")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded).monospacedDigit())
+                    .font(.system(.caption2, design: .rounded, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            // Two top-aligned columns so a short card never stretches or
-            // centers against a taller neighbor in the same row.
-            HStack(alignment: .top, spacing: 8) {
-                VStack(spacing: 8) {
-                    performanceBar(whatsNewPerformanceMetrics[0])
-                    performanceBar(whatsNewPerformanceMetrics[2])
+            .accessibilityElement(children: .combine)
+            // Three hero cards fit without scrolling, so nothing hides
+            // below the fold or collides with the dots and copy underneath.
+            // Full benchmark tables live in the linked notes.
+            HStack(alignment: .top, spacing: 12) {
+                ForEach(whatsNewPerformanceMetrics) { metric in
+                    heroPerformanceCard(metric)
+                        .frame(maxWidth: .infinity, alignment: .top)
                 }
-                .frame(maxWidth: .infinity, alignment: .top)
-                VStack(spacing: 8) {
-                    performanceBar(whatsNewPerformanceMetrics[1])
-                    performanceBar(whatsNewPerformanceMetrics[3])
-                }
-                .frame(maxWidth: .infinity, alignment: .top)
             }
+            .accessibilityIdentifier("WhatsNewPerformanceMetrics")
         }
         .padding(.horizontal, 20)
         .padding(.top, 68)
@@ -339,103 +337,70 @@ public struct WhatsNewTourView: View {
         }
     }
 
-    private func performanceBar(_ metric: WhatsNewPerformanceMetric) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 5) {
-                Text(metric.title)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Spacer(minLength: 0)
-                Text(metric.improvement)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(metric.color)
-                    .lineLimit(1)
-            }
-            ForEach(metric.series) { series in
-                if series.showsImprovementBar {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack {
-                            Text(series.title)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                            Spacer(minLength: 2)
-                            Text(series.improvement)
-                                .foregroundStyle(metric.color)
-                                .lineLimit(1)
-                        }
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundStyle(.primary.opacity(0.88))
-                        WhatsNewComparisonBar(fraction: series.afterFraction, color: metric.color, animates: true)
-                            .frame(height: 5)
-                    }
-                } else {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack {
-                            Text(series.title)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                            Spacer(minLength: 2)
-                            Text(series.improvement)
-                                .foregroundStyle(metric.color)
-                                .lineLimit(1)
-                        }
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundStyle(.primary.opacity(0.88))
-                        comparisonBar(label: "1.2.0", value: series.beforeLabel, fraction: 1, color: .secondary.opacity(0.60))
-                        comparisonBar(label: "1.2.1", value: series.afterLabel, fraction: series.afterFraction, color: metric.color)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(metric.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(metric.color.opacity(0.22), lineWidth: 1))
-    }
-
-    private func comparisonBar(label: String, value: String, fraction: CGFloat, color: Color) -> some View {
-        HStack(spacing: 5) {
-            Text(label)
-                .font(.system(size: 9, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .frame(width: 24, alignment: .leading)
-            WhatsNewComparisonBar(fraction: fraction, color: color, animates: label == "1.2.1")
-                .frame(height: 5)
-            Text(value)
-                .font(.system(size: 9, weight: .semibold, design: .rounded).monospacedDigit())
+    // One hero metric per card: big improvement value in its color,
+    // a single after-bar, and a concrete before → after line.
+    private func heroPerformanceCard(_ metric: WhatsNewPerformanceMetric) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(metric.title)
+                .font(.system(.callout, design: .rounded, weight: .semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(metric.improvement)
+                .font(.system(.title2, design: .rounded, weight: .bold))
+                .foregroundStyle(metric.color)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
+            WhatsNewComparisonBar(fraction: metric.afterFraction, color: metric.color, animates: true)
+                .frame(height: 8)
+            Text("\(metric.beforeLabel) → \(metric.afterLabel)")
+                .font(.system(.caption, design: .rounded, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(width: 74, alignment: .trailing)
+                .minimumScaleFactor(0.85)
+            Text(metric.detail)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(metric.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(metric.color.opacity(0.22), lineWidth: 1))
+        .accessibilityElement(children: .combine)
     }
 
     private var whatsNewPerformanceMetrics: [WhatsNewPerformanceMetric] {
         [
-            .init(title: "Time to first window", improvement: "50% faster", color: .cyan, series: [
-                .init(title: "Median", beforeLabel: "2,262 ms", afterLabel: "1,127 ms", afterFraction: 0.498, improvement: "")
-            ]),
-            .init(title: "Idle CPU", improvement: "near zero at rest", color: .green, series: [
-                .init(title: "Visible", beforeLabel: "51.4%", afterLabel: "0%", afterFraction: 0, improvement: ""),
-                .init(title: "Minimized", beforeLabel: "~55%", afterLabel: "0%", afterFraction: 0, improvement: ""),
-                .init(title: "Animated HUD", beforeLabel: "51.4%", afterLabel: "16.5%", afterFraction: 0.321, improvement: "")
-            ]),
-            .init(title: "Organization prompt tokens", improvement: "56–91% fewer", color: .purple, series: [
-                .init(title: "200 files", beforeLabel: "", afterLabel: "", afterFraction: 0.56, improvement: "56% fewer", showsImprovementBar: true),
-                .init(title: "350 files", beforeLabel: "", afterLabel: "", afterFraction: 0.74, improvement: "74% fewer", showsImprovementBar: true),
-                .init(title: "500 files", beforeLabel: "", afterLabel: "", afterFraction: 0.82, improvement: "82% fewer", showsImprovementBar: true),
-                .init(title: "1,000 files", beforeLabel: "", afterLabel: "", afterFraction: 0.91, improvement: "91% fewer", showsImprovementBar: true)
-            ]),
-            .init(title: "Other efficiency gains", improvement: "45–100% gains", color: .blue, series: [
-                .init(title: "Prompt preparation", beforeLabel: "", afterLabel: "", afterFraction: 0.59, improvement: "59% faster", showsImprovementBar: true),
-                .init(title: "Repeated batch manifest", beforeLabel: "", afterLabel: "", afterFraction: 0.81, improvement: "81% fewer", showsImprovementBar: true),
-                .init(title: "Duplicate text features", beforeLabel: "", afterLabel: "", afterFraction: 0.86, improvement: "86% less", showsImprovementBar: true),
-                .init(title: "Progress-line parsing", beforeLabel: "", afterLabel: "", afterFraction: 0.45, improvement: "45% less", showsImprovementBar: true),
-                .init(title: "Flight queue, 2,000 files × 120 frames", beforeLabel: "", afterLabel: "", afterFraction: 1, improvement: "~100% less", showsImprovementBar: true),
-                .init(title: "Unicode stream count, 100 runs", beforeLabel: "40.6 s", afterLabel: "~0 s", afterFraction: 0.01, improvement: "about 40.6 s saved")
-            ]),
+            .init(
+                title: "Time to first window",
+                improvement: "50% faster",
+                color: .cyan,
+                beforeLabel: "2,262 ms",
+                afterLabel: "1,127 ms",
+                afterFraction: 0.498,
+                detail: "Median on the same Mac"
+            ),
+            .init(
+                title: "Idle CPU at rest",
+                improvement: "Near zero",
+                color: .green,
+                beforeLabel: "51.4%",
+                afterLabel: "0%",
+                afterFraction: 0,
+                detail: "Settled, visible or minimized"
+            ),
+            .init(
+                title: "Organization prompt tokens",
+                improvement: "56–91% fewer",
+                color: .purple,
+                beforeLabel: "132,059",
+                afterLabel: "11,961",
+                afterFraction: 0.09,
+                detail: "Tokens at 1,000 files"
+            ),
         ]
     }
 
@@ -1055,18 +1020,10 @@ private struct WhatsNewPerformanceMetric: Identifiable {
     let title: String
     let improvement: String
     let color: Color
-    let series: [WhatsNewPerformanceSeries]
-
-    var id: String { title }
-}
-
-private struct WhatsNewPerformanceSeries: Identifiable {
-    let title: String
     let beforeLabel: String
     let afterLabel: String
     let afterFraction: CGFloat
-    let improvement: String
-    var showsImprovementBar = false
+    let detail: String
 
     var id: String { title }
 }
