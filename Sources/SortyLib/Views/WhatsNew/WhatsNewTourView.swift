@@ -255,9 +255,9 @@ public struct WhatsNewTourView: View {
                     .foregroundStyle(.secondary)
             }
             .accessibilityElement(children: .combine)
-            // Three hero cards fit without scrolling, so nothing hides
-            // below the fold or collides with the dots and copy underneath.
-            // Full benchmark tables live in the linked notes.
+            // Three hero cards plus two wide rows fit without scrolling, so
+            // nothing collides with the dots and copy underneath. Full
+            // benchmark tables live in the linked notes.
             HStack(alignment: .top, spacing: 12) {
                 ForEach(whatsNewPerformanceMetrics) { metric in
                     heroPerformanceCard(metric)
@@ -265,6 +265,13 @@ public struct WhatsNewTourView: View {
                 }
             }
             .accessibilityIdentifier("WhatsNewPerformanceMetrics")
+
+            VStack(spacing: 12) {
+                ForEach(whatsNewSecondaryPerformanceMetrics) { metric in
+                    horizontalPerformanceBar(metric)
+                }
+            }
+            .accessibilityIdentifier("WhatsNewAdditionalPerformanceMetrics")
         }
         .padding(.horizontal, 20)
         .padding(.top, 68)
@@ -373,6 +380,41 @@ public struct WhatsNewTourView: View {
         .accessibilityElement(children: .combine)
     }
 
+    private func horizontalPerformanceBar(_ metric: WhatsNewPerformanceMetric) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(metric.title)
+                    .font(.system(.callout, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 8)
+
+                Text(metric.improvement)
+                    .font(.system(.headline, design: .rounded, weight: .bold))
+                    .foregroundStyle(metric.color)
+                    .lineLimit(1)
+            }
+            WhatsNewComparisonBar(fraction: metric.afterFraction, color: metric.color, animates: true)
+                .frame(height: 8)
+            HStack(spacing: 12) {
+                Text("\(metric.beforeLabel) → \(metric.afterLabel)")
+                    .font(.system(.caption, design: .rounded, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                Text(metric.detail)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(metric.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(metric.color.opacity(0.22), lineWidth: 1))
+        .accessibilityElement(children: .combine)
+    }
+
     private var whatsNewPerformanceMetrics: [WhatsNewPerformanceMetric] {
         [
             .init(
@@ -401,6 +443,29 @@ public struct WhatsNewTourView: View {
                 afterLabel: "11,961",
                 afterFraction: 0.09,
                 detail: "Tokens at 1,000 files"
+            ),
+        ]
+    }
+
+    private var whatsNewSecondaryPerformanceMetrics: [WhatsNewPerformanceMetric] {
+        [
+            .init(
+                title: "Duplicate text-feature work",
+                improvement: "86% less work",
+                color: .orange,
+                beforeLabel: "100% work",
+                afterLabel: "14% work",
+                afterFraction: 0.14,
+                detail: "Identical groups in benchmark"
+            ),
+            .init(
+                title: "Repeated batch manifest",
+                improvement: "81% fewer",
+                color: .blue,
+                beforeLabel: "13,686 tokens",
+                afterLabel: "2,627 tokens",
+                afterFraction: 0.192,
+                detail: "3 batches across 1,050 files"
             ),
         ]
     }
