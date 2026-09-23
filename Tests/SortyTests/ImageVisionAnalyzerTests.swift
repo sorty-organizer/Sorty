@@ -7,6 +7,14 @@ import PDFKit
 final class ImageVisionAnalyzerTests: XCTestCase {
     private var tempDirectory: URL!
 
+    func testVisionPayloadBudgetUsesEncodedSize() {
+        let image = Data(repeating: 0, count: 3)
+        let payload = ["a": image, "b": image]
+
+        XCTAssertEqual(VisionPayloadBudget.totalBase64Bytes(for: payload), 8)
+        XCTAssertEqual(VisionPayloadBudget.clamped(payload, cap: 7), ["a": image])
+    }
+
     override func setUp() async throws {
         tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)

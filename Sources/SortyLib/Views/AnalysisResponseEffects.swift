@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 /// Dotted globe shown while analysis waits for an AI response.
@@ -15,7 +16,7 @@ public struct ThinkingOrbLoaderView: View {
         GeometryReader { geometry in
             // The sphere does not change as it rotates. Build its vertices outside
             // the timeline so frame updates only project and shade existing points.
-            let vertices = Self.sphereVertices(size: geometry.size)
+            let vertices = Self.cachedSphereVertices(size: geometry.size)
             SwiftUI.TimelineView(
                 .animation(
                     minimumInterval: 1.0 / 20.0,
@@ -37,6 +38,32 @@ public struct ThinkingOrbLoaderView: View {
 
     private struct SphereVertex: Sendable {
         let x, y, z, longitude: CGFloat
+    }
+
+    private final class SphereVertexCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storage: [String: [SphereVertex]] = [:]
+
+        func vertices(for key: String) -> [SphereVertex]? {
+            lock.withLock { storage[key] }
+        }
+
+        func store(_ vertices: [SphereVertex], for key: String) {
+            lock.withLock {
+                if storage.count > 24 { storage.removeAll() }
+                storage[key] = vertices
+            }
+        }
+    }
+
+    private static let vertexCache = SphereVertexCache()
+
+    private static func cachedSphereVertices(size: CGSize) -> [SphereVertex] {
+        let key = "\(Int(size.width / 8))x\(Int(size.height / 8))"
+        if let cached = vertexCache.vertices(for: key) { return cached }
+        let vertices = sphereVertices(size: size)
+        vertexCache.store(vertices, for: key)
+        return vertices
     }
 
     private static func sphereVertices(size: CGSize) -> [SphereVertex] {

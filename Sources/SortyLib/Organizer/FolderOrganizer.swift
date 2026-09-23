@@ -411,6 +411,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
+    /// Coalesces per-file apply progress before it schedules a main-actor update.
+    private final class ApplyProgressThrottle: @unchecked Sendable {
+        private let lock = NSLock()
+        private var lastReportedPercent: Double = -1
+
+        nonisolated func shouldReport(percent: Double) -> Bool {
+            lock.withLock {
+                guard percent >= 1.0 || lastReportedPercent < 0
+                    || percent - lastReportedPercent >= 0.01 else { return false }
+                lastReportedPercent = percent
+                return true
+            }
+        }
+    }
+
     private struct OrganizationResumeCheckpoint {
         let files: [FileItem]
         let directory: URL
@@ -3136,30 +3151,49 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard !files.isEmpty else { return [:] }
 
         aiAnalysisActivity = .preparingImages
-        var payload: [String: Data] = [:]
-        var preparedByteCount = 0
+        // One batched call: prepareFilesForVision already fans out internally
+        // over a bounded TaskGroup. The old per-file loop re-entered it for
+        // every file, paying setup/teardown per image and sorting each
+        // single-entry result.
+        try checkCancellation()
+        let prepared = await visionAnalyzer.prepareFilesForVision(
+            files: files,
+            baseDirectoryURL: baseDirectory
+        )
 
-        for file in files {
+        var payload: [String: Data] = [:]
+        payload.reserveCapacity(prepared.count)
+        var preparedByteCount = 0
+        var byteSkippedNames = Set<String>()
+        for (name, data) in prepared.sorted(by: { $0.key < $1.key }) {
             try checkCancellation()
-            let prepared = await visionAnalyzer.prepareFilesForVision(
-                files: [file],
-                baseDirectoryURL: baseDirectory
-            )
-            if prepared.isEmpty {
-                visionPreparationFailureCount += 1
+            guard preparedByteCount + VisionPayloadBudget.encodedByteCount(for: data) <= Self.maximumPreparedVisionBytes else {
+                visionPreparationByteLimitSkipCount += 1
+                byteSkippedNames.insert(name)
                 continue
             }
-
-            for (name, data) in prepared.sorted(by: { $0.key < $1.key }) {
-                guard preparedByteCount + data.count <= Self.maximumPreparedVisionBytes else {
-                    visionPreparationByteLimitSkipCount += 1
-                    continue
-                }
-                payload[name] = data
-                preparedByteCount += data.count
-                preparedVisionAttachmentNames.insert(name)
+            payload[name] = data
+            preparedByteCount += VisionPayloadBudget.encodedByteCount(for: data)
+            preparedVisionAttachmentNames.insert(name)
+        }
+        // Per-file failure accounting from the merged result: a file failed
+        // when none of its attachments (or byte-limit skips) materialized.
+        // Attachment keys are approximate (PDF pages append " [Page N]"), so
+        // this stays a diagnostic counter, not control flow.
+        var failedFileCount = 0
+        for file in files {
+            let key = visionAttachmentName(for: file)
+            let materialized = prepared.keys.contains {
+                $0 == key || $0 == file.displayName || $0.hasPrefix(key + " [Page ")
+            }
+            let byteSkipped = byteSkippedNames.contains {
+                $0 == key || $0 == file.displayName || $0.hasPrefix(key + " [Page ")
+            }
+            if !materialized, !byteSkipped {
+                failedFileCount += 1
             }
         }
+        visionPreparationFailureCount += failedFileCount
 
         if let summary = visionAnalysisSummary {
             visionAnalysisSummary = VisionAnalysisSummary(
@@ -3173,7 +3207,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 ),
                 failedCount: visionPreparationFailureCount,
                 warningMessage: visionPreparationByteLimitSkipCount > 0
-                    ? "Some images were skipped to keep vision memory below 32 MB per request."
+                    ? "Some images were skipped to keep encoded vision payloads below 32 MB per request."
                     : nil
             )
         }
@@ -4860,6 +4894,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         var completedOperationsBeforeHistory: [FileSystemManager.FileOperation] = []
 
         do {
+            let applyProgressThrottle = ApplyProgressThrottle()
             let operations = try await fileSystemManager.applyOrganization(
                 planToApply,
                 at: baseURL, 
@@ -4867,7 +4902,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 enableTagging: enableTagging,
                 strictExclusions: aiConfig?.strictExclusions ?? true,
                 exclusionManager: exclusionRules,
+                skipPreValidation: true,
                 progress: { [weak self] percent, message in
+                    guard applyProgressThrottle.shouldReport(percent: percent) else { return }
                     Task { @MainActor [weak self] in
                         guard let self, !Task.isCancelled, !self.isCancellationRequested else { return }
                         self.progress = min(percent, 1.0)

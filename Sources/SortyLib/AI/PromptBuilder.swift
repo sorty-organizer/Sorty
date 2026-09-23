@@ -141,6 +141,25 @@ struct PromptBuilder {
         return formatter
     }()
 
+    private static let templateDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+    private static let formatterLock = NSLock()
+
+    private static func internetDateString(from date: Date) -> String {
+        formatterLock.withLock { promptDateTimeFormatter.string(from: date) }
+    }
+
+    private static func fullDateString(from date: Date) -> String {
+        formatterLock.withLock { promptDateOnlyFormatter.string(from: date) }
+    }
+
+    private static func templateDateString(from date: Date) -> String {
+        formatterLock.withLock { templateDateFormatter.string(from: date) }
+    }
+
     static func buildOrganizationPrompt(
         files: [FileItem],
         mode: OrganizationMode = .organize,
@@ -329,7 +348,6 @@ struct PromptBuilder {
         var estimatedChars = prompt.utf8.count
         var filesSinceBudgetCheck = 0
         var overMainBudget = false
-        let dateFormatter = Self.promptDateTimeFormatter
 
         // Group files by extension for better context. Sort keys only instead
         // of sorting key/value pairs, which copies every file list.
@@ -376,13 +394,13 @@ struct PromptBuilder {
                 fileDesc += " [\(file.isDirectory ? "directory" : "file"), \(file.size) bytes / \(file.formattedSize)]"
 
                 if let created = file.creationDate {
-                    fileDesc += ", created: \(dateFormatter.string(from: created))"
+                    fileDesc += ", created: \(Self.internetDateString(from: created))"
                 }
                 if let modified = file.modificationDate {
-                    fileDesc += ", modified: \(dateFormatter.string(from: modified))"
+                    fileDesc += ", modified: \(Self.internetDateString(from: modified))"
                 }
                 if let accessed = file.lastAccessDate {
-                    fileDesc += ", accessed: \(dateFormatter.string(from: accessed))"
+                    fileDesc += ", accessed: \(Self.internetDateString(from: accessed))"
                 }
                 if let resolution = file.resolutionString {
                     fileDesc += ", dimensions: \(resolution)"
@@ -611,15 +629,14 @@ struct PromptBuilder {
         
         // Append Finder metadata compactly when present
         var extras = ["bytes:\(file.size)"]
-        let dateFormatter = Self.promptDateOnlyFormatter
         if let created = file.creationDate {
-            extras.append("created:\(dateFormatter.string(from: created))")
+            extras.append("created:\(Self.fullDateString(from: created))")
         }
         if let modified = file.modificationDate {
-            extras.append("modified:\(dateFormatter.string(from: modified))")
+            extras.append("modified:\(Self.fullDateString(from: modified))")
         }
         if let accessed = file.lastAccessDate {
-            extras.append("accessed:\(dateFormatter.string(from: accessed))")
+            extras.append("accessed:\(Self.fullDateString(from: accessed))")
         }
         if let resolution = file.resolutionString {
             extras.append("dimensions:\(resolution)")
@@ -933,12 +950,8 @@ struct PromptBuilder {
     ) -> String {
         guard instructions.contains("{") else { return instructions }
 
-        // DateFormatter is not thread-safe, so this stays once-per-call
-        // instead of joining the shared static formatters above.
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
         let examples = files.prefix(maxExamples).enumerated().map { index, file in
-            let expanded = expandTemplateVariables(instructions, for: file, counter: index + 1, dateFormatter: dateFormatter)
+            let expanded = expandTemplateVariables(instructions, for: file, counter: index + 1)
             return "\(file.displayName) -> \(expanded)"
         }
 
@@ -946,11 +959,11 @@ struct PromptBuilder {
         return "\(instructions) | Examples: \(examples.joined(separator: " ; "))"
     }
 
-    private static func expandTemplateVariables(_ template: String, for file: FileItem, counter: Int, dateFormatter: DateFormatter) -> String {
+    private static func expandTemplateVariables(_ template: String, for file: FileItem, counter: Int) -> String {
         let relevantDate = file.modificationDate ?? file.creationDate ?? Date()
 
         let replacements: [String: String] = [
-            "{date}": dateFormatter.string(from: relevantDate),
+            "{date}": Self.templateDateString(from: relevantDate),
             "{ext}": file.extension.lowercased(),
             "{size}": file.formattedSize,
             "{counter}": String(format: "%02d", counter)
@@ -973,7 +986,7 @@ struct PromptBuilder {
             parts.append("Author: \(truncateForPrompt(author, maxLength: 160))")
         }
         if let created = metadata.creationDate {
-            parts.append("Document created: \(Self.promptDateTimeFormatter.string(from: created))")
+            parts.append("Document created: \(Self.internetDateString(from: created))")
         }
         if let pages = metadata.pageCount {
             parts.append("Pages: \(pages)")
@@ -1129,12 +1142,11 @@ struct PromptBuilder {
         .map { "\($0.key): \($0.value)" }
         .joined(separator: ", ")
 
-        let dateFormatter = Self.promptDateOnlyFormatter
         let manifestLines = manifestEntries.map { entry in
             let file = entry.file
             var line = "- \(entry.relativePath) | \(file.extension.isEmpty ? "no-ext" : file.extension.lowercased()) | \(file.formattedSize)"
             if let modified = file.modificationDate {
-                line += " | modified \(dateFormatter.string(from: modified))"
+                line += " | modified \(Self.fullDateString(from: modified))"
             }
             if let tags = file.finderTags, !tags.isEmpty {
                 line += " | finder_tags \(tags.joined(separator: ", "))"
@@ -1240,7 +1252,6 @@ struct PromptBuilder {
             .tagNamesKey,
             .labelNumberKey,
         ]
-        let dateFormatter = Self.promptDateTimeFormatter
         var lines: [String] = []
         var directoryCount = 0
 
@@ -1251,13 +1262,13 @@ struct PromptBuilder {
             let values = try? url.resourceValues(forKeys: keys)
             var parts = ["- \(relativePath)"]
             if let created = values?.creationDate {
-                parts.append("created \(dateFormatter.string(from: created))")
+                parts.append("created \(Self.internetDateString(from: created))")
             }
             if let modified = values?.contentModificationDate {
-                parts.append("modified \(dateFormatter.string(from: modified))")
+                parts.append("modified \(Self.internetDateString(from: modified))")
             }
             if let accessed = values?.contentAccessDate {
-                parts.append("accessed \(dateFormatter.string(from: accessed))")
+                parts.append("accessed \(Self.internetDateString(from: accessed))")
             }
             if includeFinderMetadata {
                 if let tags = values?.tagNames, !tags.isEmpty {

@@ -540,6 +540,64 @@ final class ImageBase64Cache: @unchecked Sendable {
     }
 }
 
+/// Accounts base64 image payloads against the 32MB prepared-vision cap.
+/// Base64 inflates ~4/3, so budgets are estimated on the encoded size.
+public enum VisionPayloadBudget {
+    public static let maximumPreparedVisionBytes = 32 * 1_024 * 1_024
+
+    public static func totalBase64Bytes(for payload: [String: Data]) -> Int {
+        payload.values.reduce(0) { $0 + encodedByteCount(for: $1) }
+    }
+
+    public static func encodedByteCount(for data: Data) -> Int {
+        ((data.count + 2) / 3) * 4
+    }
+
+    /// Drops trailing sorted keys until the estimated encoded size fits.
+    /// Keeps deterministic survivors so retries behave identically.
+    public static func clamped(
+        _ payload: [String: Data],
+        cap: Int = maximumPreparedVisionBytes
+    ) -> [String: Data] {
+        var kept: [String: Data] = [:]
+        var budgeted = 0
+        for key in payload.keys.sorted() {
+            guard let data = payload[key] else { continue }
+            let encoded = encodedByteCount(for: data)
+            if budgeted + encoded > cap { continue }
+            kept[key] = data
+            budgeted += encoded
+        }
+        return kept
+    }
+}
+
+/// Single entry point for vision preparation: calls
+/// `prepareFilesForVision` once per request (maxConcurrent 4 stays inside
+/// ImageVisionAnalyzer) and clamps the result to the 32MB budget.
+/// The pipeline agent wires this into the organizer batch loop.
+public func prepareVisionBatch(
+    files: [FileItem],
+    base: URL?,
+    pdfPageLimit: Int = 2,
+    progress: (@Sendable (Int, Int) async -> Void)? = nil
+) async -> [String: Data] {
+    let prepared = await ImageVisionAnalyzer().prepareFilesForVision(
+        files: files,
+        baseDirectoryURL: base,
+        pdfPageLimit: pdfPageLimit,
+        progress: progress
+    )
+    return VisionPayloadBudget.clamped(prepared)
+}
+
+/// Releases per-batch image payloads after the request finishes.
+/// Call sites must not retain the full payload in resume checkpoints;
+/// re-prepare from the ImageVisionAnalyzer disk cache on resume instead.
+public func clearVisionBatch(_ payload: inout [String: Data]) {
+    payload.removeAll(keepingCapacity: false)
+}
+
 /// Extracts JSON from free-form LLM output.
 enum LLMJSONExtractor {
     /// Last balanced top-level JSON object in the text.
