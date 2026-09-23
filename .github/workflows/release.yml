@@ -357,7 +357,7 @@ jobs:
           python3 scripts/generate_sparkle_release_notes.py \
             --version "${{ needs.prepare-release.outputs.version }}" \
             --title "Sorty ${{ needs.prepare-release.outputs.version }}" \
-            --summary "Safer organization, honest progress, and a smoother install and update path." \
+            --summary "Faster startup and quieter background work, with safer organization and clearer status." \
             --changelog CHANGELOG.md \
             --markdown releases/release-notes.md \
             --html releases/release-notes.html
