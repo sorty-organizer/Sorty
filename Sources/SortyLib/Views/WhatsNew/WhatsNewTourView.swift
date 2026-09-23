@@ -12,6 +12,7 @@ public struct WhatsNewTourView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var currentPage = 0
     @State private var workflowImageIndex = 0
+    @State private var performanceNumbersVisible = false
     @State private var isActionHovering = false
     @State private var interactionMonitor: Any?
     @State private var isPointerInside = false
@@ -75,6 +76,9 @@ public struct WhatsNewTourView: View {
         .onDisappear {
             removeInteractionMonitor()
         }
+        .onChange(of: currentPage) { _, newPage in
+            performanceNumbersVisible = newPage == 1
+        }
     }
 
     private var imageTransitionAnimation: Animation? {
@@ -91,6 +95,19 @@ public struct WhatsNewTourView: View {
 
     private var resistedSwipeOffset: CGFloat {
         min(max(swipeAccumulatedTranslation * 0.20, -maximumSwipeOffset), maximumSwipeOffset)
+    }
+
+    private func displayedImprovement(_ metric: WhatsNewPerformanceMetric) -> String {
+        guard !reduceMotion, !performanceNumbersVisible else { return metric.improvement }
+        return metric.improvement.replacingOccurrences(
+            of: #"\d+"#,
+            with: "0",
+            options: .regularExpression
+        )
+    }
+
+    private func displayedAfterLabel(_ metric: WhatsNewPerformanceMetric) -> String {
+        reduceMotion || performanceNumbersVisible ? metric.afterLabel : metric.beforeLabel
     }
 
     private var pageTransition: AnyTransition {
@@ -333,7 +350,8 @@ public struct WhatsNewTourView: View {
                 .foregroundStyle(.primary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(metric.improvement)
+            Text(displayedImprovement(metric))
+                .numericTextTransition(animationValue: performanceNumbersVisible)
                 .font(.system(.title2, design: .rounded, weight: .bold))
                 .foregroundStyle(metric.color)
                 .lineLimit(2)
@@ -341,7 +359,8 @@ public struct WhatsNewTourView: View {
                 .fixedSize(horizontal: false, vertical: true)
             WhatsNewComparisonBar(fraction: metric.afterFraction, color: metric.color, animates: true)
                 .frame(height: 8)
-            Text("\(metric.beforeLabel) → \(metric.afterLabel)")
+            Text("\(metric.beforeLabel) → \(displayedAfterLabel(metric))")
+                .numericTextTransition(animationValue: performanceNumbersVisible)
                 .font(.system(.caption, design: .rounded, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.primary)
                 .lineLimit(1)
@@ -369,7 +388,8 @@ public struct WhatsNewTourView: View {
 
                 Spacer(minLength: 8)
 
-                Text(metric.improvement)
+                Text(displayedImprovement(metric))
+                    .numericTextTransition(animationValue: performanceNumbersVisible)
                     .font(.system(.headline, design: .rounded, weight: .bold))
                     .foregroundStyle(metric.color)
                     .lineLimit(1)
@@ -377,7 +397,8 @@ public struct WhatsNewTourView: View {
             WhatsNewComparisonBar(fraction: metric.afterFraction, color: metric.color, animates: true)
                 .frame(height: 8)
             HStack(spacing: 12) {
-                Text("\(metric.beforeLabel) → \(metric.afterLabel)")
+                Text("\(metric.beforeLabel) → \(displayedAfterLabel(metric))")
+                    .numericTextTransition(animationValue: performanceNumbersVisible)
                     .font(.system(.caption, design: .rounded, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.primary)
                 Spacer(minLength: 8)
