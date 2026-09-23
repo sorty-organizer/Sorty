@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-09-23
+
+### New
+
+- Added guided organization workflows, watched-folder actions, richer exclusion rules, and in-app support checks.
+
+### Improved
+
+- Reduced launch and idle work, streamlined organization and duplicate review, and improved AI request handling and progress feedback.
+- Refined onboarding, settings, Finder controls, accessibility, and update status throughout the Mac app.
+
+### Fixed
+
+- Hardened organization and undo handling, including cancellation and concurrent-run edge cases.
+- Fixed Finder action routing, permission recovery, provider errors, and stale UI states after updates or configuration changes.
+
 ## [1.2.0] - 2026-07-11
 
 ### New
