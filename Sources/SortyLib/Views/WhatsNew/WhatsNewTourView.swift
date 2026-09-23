@@ -793,6 +793,13 @@ public struct WhatsNewTourView: View {
         }
         .padding(.horizontal, 12)
         .padding(.top, 12)
+        .overlay {
+            if currentPage == 1 {
+                Text("1.2.0  →  1.2.1")
+                    .font(.system(.caption2, design: .rounded, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private var pageIndicator: some View {
