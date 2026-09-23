@@ -1806,6 +1806,7 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
 
     # 2. Sign the Finder Sync extension
     if [ -d "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" ]; then
+        run_quiet codesign_cmd "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex/Contents/MacOS/SortyFinderSync"
         if [ -f "${FINDER_SYNC_ENTITLEMENTS}" ]; then
             run_quiet codesign_cmd --entitlements "${FINDER_SYNC_ENTITLEMENTS}" "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex"
         else
