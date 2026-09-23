@@ -473,25 +473,6 @@ export default function PrivacyPolicyPage() {
           </a>
           .
         </p>
-        <p className="pt-2 text-xs text-muted-foreground/80">
-          © 2026 Sorty. Released under the GPL-3.0 license.{' '}
-          <a href={sitePath('/')} className="underline-offset-4 hover:underline">
-            Home
-          </a>{' '}
-          ·{' '}
-          <a href={sitePath('/terms/')} className="underline-offset-4 hover:underline">
-            Terms
-          </a>{' '}
-          ·{' '}
-          <a
-            href="https://github.com/sorty-organizer/Sorty/releases"
-            target="_blank"
-            rel="noreferrer"
-            className="underline-offset-4 hover:underline"
-          >
-            Changelog
-          </a>
-        </p>
       </LegalSection>
     </LegalPage>
   )
