@@ -98,8 +98,10 @@ class AppStateTests: XCTestCase {
         let state = AppState(userDefaults: userDefaults, currentVersion: "1.2.0")
 
         XCTAssertFalse(state.hasCompletedOnboarding)
-        XCTAssertEqual(userDefaults.string(forKey: versionKey), "1.2.0")
+        XCTAssertEqual(userDefaults.string(forKey: versionKey), "0.9.0")
 
+        // The first window records the launched version after initialization.
+        userDefaults.set("1.2.0", forKey: versionKey)
         state.recordOnboardingCompletion()
         let relaunchedState = AppState(userDefaults: userDefaults, currentVersion: "1.2.0")
         XCTAssertTrue(relaunchedState.hasCompletedOnboarding)
@@ -123,7 +125,7 @@ class AppStateTests: XCTestCase {
         let state = AppState(userDefaults: userDefaults)
 
         XCTAssertFalse(state.hasCompletedOnboarding)
-        XCTAssertEqual(userDefaults.string(forKey: versionKey), BuildInfo.version)
+        XCTAssertEqual(userDefaults.string(forKey: versionKey), "nightly")
     }
     
     func testOnboardingShownForFreshInstall() {
@@ -143,7 +145,7 @@ class AppStateTests: XCTestCase {
         let state = AppState(userDefaults: userDefaults)
 
         XCTAssertFalse(state.hasCompletedOnboarding, "Fresh install should show onboarding")
-        XCTAssertEqual(userDefaults.string(forKey: versionKey), BuildInfo.version)
+        XCTAssertNil(userDefaults.string(forKey: versionKey))
     }
 
     func testStartSetupRepairRoutesToProviderSettingsAndPersistsMessage() {

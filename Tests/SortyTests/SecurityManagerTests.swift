@@ -91,16 +91,19 @@ final class SecurityManagerTests: XCTestCase {
     }
     
     func testBiometryDisplayNameTouchID() {
+        manager.checkBiometryType()
         manager.biometryType = .touchID
         XCTAssertEqual(manager.biometryDisplayName, "Touch ID")
     }
     
     func testBiometryDisplayNameFaceID() {
+        manager.checkBiometryType()
         manager.biometryType = .faceID
         XCTAssertEqual(manager.biometryDisplayName, "Face ID")
     }
     
     func testBiometryDisplayNameOpticID() {
+        manager.checkBiometryType()
         manager.biometryType = .opticID
         XCTAssertEqual(manager.biometryDisplayName, "Optic ID")
     }

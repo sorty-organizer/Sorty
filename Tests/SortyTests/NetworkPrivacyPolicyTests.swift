@@ -158,7 +158,18 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
     }
 
     func testEnablingPrivacyModeCancelsAnInFlightRemoteRequest() async throws {
-        testDefaults.set(false, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        // The live session observes the standard defaults key for changes.
+        NetworkPrivacyPolicy.setTestDefaultsSuiteName(nil)
+        let key = NetworkPrivacyPolicy.internetPrivacyModeKey
+        let previousValue = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let previousValue {
+                UserDefaults.standard.set(previousValue, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+        UserDefaults.standard.set(false, forKey: key)
         let requestStarted = expectation(description: "Request started")
         SuspendedNetworkPrivacyURLProtocol.onStart = {
             requestStarted.fulfill()
@@ -172,8 +183,7 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
             try await session.data(from: URL(string: "https://example.com/private-upload")!)
         }
         await fulfillment(of: [requestStarted], timeout: 1)
-        testDefaults.set(true, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
-        NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: testDefaults)
+        UserDefaults.standard.set(true, forKey: key)
 
         do {
             _ = try await requestTask.value
