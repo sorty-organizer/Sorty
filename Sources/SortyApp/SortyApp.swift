@@ -465,8 +465,15 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 private enum ApplicationMover {
     private static let suggestionIdentifier = "move-to-applications"
     private static let suggestionDismissalKey = "hasDismissedMoveToApplicationsSuggestion"
+    private static let onboardingCompletionKey = "hasCompletedOnboarding"
 
     static func offerToMoveToApplicationsIfNeeded() {
+        // Defer until onboarding completes so the HUD never covers setup.
+        // The SortyApp onboarding-completion observer re-invokes this.
+        if !UserDefaults.standard.bool(forKey: onboardingCompletionKey) {
+            SortyAppLog.log("SortyMove: skipping suggestion (onboarding not complete)")
+            return
+        }
         let sourceURL = AppRelocationService.originalBundleURL()
         #if DEBUG
             // Do not nag when launching directly from the build output. A copied
@@ -498,11 +505,14 @@ private enum ApplicationMover {
         SortyAppLog.log("SortyMove: scheduling suggestion for \(bundlePath)")
 
         // Let the main window and HUD overlay appear before suggesting.
+        // Re-check onboarding here: a launch that skipped scheduling invokes
+        // this again on completion, and a restart into onboarding must not pop.
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
             if UserDefaults.standard.bool(forKey: suggestionDismissalKey) {
                 return
             }
+            guard UserDefaults.standard.bool(forKey: onboardingCompletionKey) else { return }
             guard !AppRelocationService.isInApplicationsFolder(AppRelocationService.originalBundleURL()) else { return }
             SortyAppLog.log("SortyMove: showing suggestion HUD")
             suggestMoveToApplications()
@@ -825,6 +835,9 @@ struct SortyApp: App {
                 }
             }
             .onChange(of: hasCompletedOnboarding) { _, isComplete in
+                if isComplete {
+                    ApplicationMover.offerToMoveToApplicationsIfNeeded()
+                }
                 Task {
                     if isComplete {
                         await configureOperationalServicesIfNeeded()
