@@ -12,28 +12,150 @@ import Combine
 /// Manages shared URLSession instances for AI providers
 @MainActor
 public class AISessionManager: ObservableObject {
+    // MARK: - Session storage (non-MainActor)
+
+    /// Pooled sessions live off the MainActor in a lock-protected store so
+    /// `session(for:)` never blocks publishes. Only @Published prewarm state
+    /// stays on the MainActor. NSLock stays: synchronous sync-context callers
+    /// (settings didSet) require sync access, which an actor cannot provide.
+    private final class AISessionStore: @unchecked Sendable {
+        private struct Signature: Equatable {
+            let requestTimeout: TimeInterval
+            let resourceTimeout: TimeInterval
+            let apiURL: String?
+        }
+
+        private let lock = NSLock()
+        private var sessions: [AIProvider: URLSession] = [:]
+        private var signatures: [AIProvider: Signature] = [:]
+        private var lastUsed: [AIProvider: Date] = [:]
+
+        func pooledSession(
+            for provider: AIProvider,
+            requestTimeout: TimeInterval,
+            resourceTimeout: TimeInterval,
+            apiURL: String?
+        ) -> URLSession {
+            let signature = Signature(
+                requestTimeout: requestTimeout,
+                resourceTimeout: resourceTimeout,
+                apiURL: apiURL
+            )
+            lock.lock()
+            lastUsed[provider] = Date()
+            if let existing = sessions[provider], signatures[provider] == signature {
+                lock.unlock()
+                return existing
+            }
+            let retired = sessions.removeValue(forKey: provider)
+            signatures.removeValue(forKey: provider)
+            lock.unlock()
+            if let retired {
+                AISessionManager.retireDetached(retired)
+            }
+
+            let sessionConfig = Self.makeConfiguration(
+                requestTimeout: requestTimeout,
+                resourceTimeout: resourceTimeout,
+                provider: provider,
+                apiURL: apiURL
+            )
+            let session = NetworkPrivacyPolicy.makeSession(configuration: sessionConfig)
+            lock.lock()
+            // A concurrent caller may have populated while we built; keep the
+            // newest and retire ours instead of leaking either.
+            if sessions[provider] == nil {
+                sessions[provider] = session
+                signatures[provider] = signature
+                lock.unlock()
+                return session
+            }
+            let winner = sessions[provider]
+            lock.unlock()
+            AISessionManager.retireDetached(session)
+            return winner!
+        }
+
+        func removeSession(for provider: AIProvider) -> URLSession? {
+            lock.lock()
+            defer { lock.unlock() }
+            signatures.removeValue(forKey: provider)
+            lastUsed.removeValue(forKey: provider)
+            return sessions.removeValue(forKey: provider)
+        }
+
+        func removeAllSessions() -> [URLSession] {
+            lock.lock()
+            defer { lock.unlock() }
+            let retired = Array(sessions.values)
+            sessions.removeAll()
+            signatures.removeAll()
+            lastUsed.removeAll()
+            return retired
+        }
+
+        func nextExpiry(timeout: TimeInterval) -> Date? {
+            lock.lock()
+            defer { lock.unlock() }
+            return lastUsed.values.min()?.addingTimeInterval(timeout)
+        }
+
+        func staleProviders(timeout: TimeInterval, now: Date = Date()) -> [AIProvider] {
+            lock.lock()
+            defer { lock.unlock() }
+            return lastUsed.compactMap { provider, lastAccess in
+                now.timeIntervalSince(lastAccess) >= timeout ? provider : nil
+            }
+        }
+
+        private static func makeConfiguration(
+            requestTimeout: TimeInterval,
+            resourceTimeout: TimeInterval,
+            provider: AIProvider,
+            apiURL: String?
+        ) -> URLSessionConfiguration {
+            let config = URLSessionConfiguration.default
+
+            // Enable HTTP/2 for better performance
+            config.httpAdditionalHeaders = [
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive"
+            ]
+
+            // Use user's configured timeout values from AIConfig
+            // requestTimeout: time to establish connection and receive response headers
+            // resourceTimeout: total time allowed for streaming/large responses
+            config.timeoutIntervalForRequest = requestTimeout
+            config.timeoutIntervalForResource = resourceTimeout
+
+            // Enable connection reuse - critical for performance
+            let rawURL = (apiURL?.isEmpty ?? true) ? provider.defaultAPIURL : apiURL
+            let host = rawURL.flatMap { URL(string: $0.contains("://") ? $0 : "https://" + $0)?.host?.lowercased() }
+            let isLocalhost = host == "localhost" || host == "::1" || host?.hasPrefix("127.") == true
+            config.httpMaximumConnectionsPerHost = isLocalhost ? 6 : 3
+            config.urlCache = nil  // No caching for AI requests
+            config.requestCachePolicy = .reloadIgnoringLocalCacheData
+
+            // Enable TLS 1.2+ for security and performance
+            config.tlsMinimumSupportedProtocolVersion = .TLSv12
+            config.tlsMaximumSupportedProtocolVersion = .TLSv13
+
+            // TCP connection optimization
+            config.waitsForConnectivity = true
+            config.shouldUseExtendedBackgroundIdleMode = false
+            config.sessionSendsLaunchEvents = false
+
+            return config
+        }
+    }
+
+    private let store = AISessionStore()
     
     // MARK: - Singleton
     
     public static let shared = AISessionManager()
     
     // MARK: - Properties
-    
-    /// Tracks config-relevant properties to detect when a session needs recreation
-    private struct SessionSignature: Equatable {
-        let requestTimeout: TimeInterval
-        let resourceTimeout: TimeInterval
-        let apiURL: String?
-    }
-    
-    /// Cached sessions per provider
-    private var sessions: [AIProvider: URLSession] = [:]
-    
-    /// Cached signatures per provider for change detection
-    private var sessionSignatures: [AIProvider: SessionSignature] = [:]
-    
-    /// Last usage time for cleanup
-    private var lastUsed: [AIProvider: Date] = [:]
 
     /// Single-flight prewarm tasks per provider so rapid folder selection
     /// cannot fan out duplicate connection storms.
@@ -41,7 +163,7 @@ public class AISessionManager: ObservableObject {
     /// Last prewarm verdict per provider; fresh verdicts (<5m) skip network I/O.
     private var prewarmVerdicts: [AIProvider: (at: Date, success: Bool, error: String?)] = [:]
     private static let prewarmTTL: TimeInterval = 5 * 60
-    
+
     /// Prewarming status
     @Published public private(set) var prewarmingProviders: Set<AIProvider> = []
     @Published public private(set) var isPrewarmed: Bool = false
@@ -69,6 +191,7 @@ public class AISessionManager: ObservableObject {
         prewarmTasks[provider]?.cancel()
         prewarmTasks[provider] = nil
         prewarmVerdicts[provider] = nil
+        ProviderAuthResolver.invalidateCredentialCache(for: provider)
         prewarmError = nil
         isPrewarmed = false
     }
@@ -97,34 +220,16 @@ public class AISessionManager: ObservableObject {
     
     // MARK: - Session Management
     
-    /// Get or create a URLSession for a provider
+    /// Get or create a URLSession for a provider. Storage lives in the
+    /// non-MainActor store; only logging happens here on the MainActor.
     public func session(for provider: AIProvider, config: AIConfig) -> URLSession {
-        lastUsed[provider] = Date()
-        scheduleCleanup()
-        
-        let currentSignature = SessionSignature(
+        let session = store.pooledSession(
+            for: provider,
             requestTimeout: config.requestTimeout,
-            resourceTimeout: config.resourceTimeout,
+            resourceTimeout: config.effectiveOrganizeResourceTimeout,
             apiURL: config.apiURL
         )
-        
-        if let existing = sessions[provider] {
-            if sessionSignatures[provider] == currentSignature {
-                return existing
-            }
-            LogManager.shared.log("Config changed for \(provider.displayName), recreating session", level: .debug, category: "AISessionManager")
-            let retiredSession = sessions.removeValue(forKey: provider)
-            sessionSignatures.removeValue(forKey: provider)
-            retire(retiredSession)
-        }
-        
-        let sessionConfig = createSessionConfiguration(for: provider, aiConfig: config)
-        let session = NetworkPrivacyPolicy.makeSession(configuration: sessionConfig)
-        sessions[provider] = session
-        sessionSignatures[provider] = currentSignature
-        
-        LogManager.shared.log("Created new session for \(provider.displayName)", level: .debug, category: "AISessionManager")
-        
+        scheduleCleanup()
         return session
     }
     
@@ -323,10 +428,8 @@ public class AISessionManager: ObservableObject {
     
     /// Invalidate session for a provider (e.g., after auth failure)
     public func invalidate(provider: AIProvider) {
-        if let session = sessions.removeValue(forKey: provider) {
-            sessionSignatures.removeValue(forKey: provider)
-            lastUsed.removeValue(forKey: provider)
-            retire(session)
+        if let retired = store.removeSession(for: provider) {
+            Self.retireDetached(retired)
             LogManager.shared.log("Removed session for \(provider.displayName)", category: "AISessionManager")
         }
 
@@ -336,66 +439,19 @@ public class AISessionManager: ObservableObject {
         prewarmingProviders.remove(provider)
         scheduleCleanup()
     }
-    
+
     /// Invalidate all sessions
     public func invalidateAll() {
-        for (provider, _) in sessions {
-            LogManager.shared.log("Removing session for \(provider.displayName)", category: "AISessionManager")
+        let retiredSessions = store.removeAllSessions()
+        for session in retiredSessions {
+            Self.retireDetached(session)
         }
-        let retiredSessions = Array(sessions.values)
-        sessions.removeAll()
-        sessionSignatures.removeAll()
-        lastUsed.removeAll()
         isPrewarmed = false
         cleanupTask?.cancel()
         cleanupTask = nil
-        retiredSessions.forEach(retire)
     }
-    
+
     // MARK: - Configuration
-    
-    private func createSessionConfiguration(for provider: AIProvider, aiConfig: AIConfig) -> URLSessionConfiguration {
-        let config = URLSessionConfiguration.default
-
-        // Localhost (Ollama) keeps a deeper pool; remote AI hosts stay narrow
-        // (2-3 connections) so organize batches cannot hold the radio open.
-        let isLocalhost: Bool = {
-            guard let rawURL = (aiConfig.apiURL?.isEmpty ?? true) ? provider.defaultAPIURL : aiConfig.apiURL,
-                  let host = URL(string: rawURL.contains("://") ? rawURL : "https://" + rawURL)?.host?.lowercased()
-            else { return provider == .ollama }
-            return host == "localhost" || host.hasPrefix("127.") || host == "[::1]" || host == "::1"
-        }()
-
-        // Enable HTTP/2 for better performance
-        config.httpAdditionalHeaders = [
-            "Accept-Encoding": "gzip, deflate",
-            "Connection": "keep-alive"
-        ]
-
-        // Use user's configured timeout values from AIConfig, capped per batch
-        // so a single organize call cannot pin the radio for 10 minutes.
-        config.timeoutIntervalForRequest = aiConfig.requestTimeout  // User's setting (default 120s)
-        config.timeoutIntervalForResource = aiConfig.effectiveOrganizeResourceTimeout
-
-        // Enable connection reuse - critical for performance
-        config.httpMaximumConnectionsPerHost = isLocalhost ? 6 : 3
-        config.urlCache = nil  // No caching for AI requests
-        config.requestCachePolicy = .reloadIgnoringLocalCacheData
-
-        // Enable TLS 1.2+ for security and performance
-        config.tlsMinimumSupportedProtocolVersion = .TLSv12
-        config.tlsMaximumSupportedProtocolVersion = .TLSv13
-
-        // Organize calls wait for connectivity instead of failing instantly on
-        // transient drops; prewarm/health requests opt out per-request via
-        // allowsConstrained/Expensive=false. Never keep the radio awake in the
-        // background for AI polling.
-        config.waitsForConnectivity = true
-        config.shouldUseExtendedBackgroundIdleMode = false
-        config.sessionSendsLaunchEvents = false
-
-        return config
-    }
 
     private func addAuthHeaders(to request: inout URLRequest, provider: AIProvider, config: AIConfig) {
         if let header = ProviderAuthResolver.authHeader(for: provider, config: config) {
@@ -409,7 +465,7 @@ public class AISessionManager: ObservableObject {
         cleanupTask?.cancel()
         cleanupTask = nil
 
-        guard let nextExpiry = lastUsed.values.min()?.addingTimeInterval(sessionTimeout) else {
+        guard let nextExpiry = store.nextExpiry(timeout: sessionTimeout) else {
             return
         }
 
@@ -426,22 +482,19 @@ public class AISessionManager: ObservableObject {
         }
     }
 
-    /// Stops pooling immediately, then gives freshly returned callers one run-loop turn
-    /// to create their task before the session rejects new work.
-    private func retire(_ session: URLSession?) {
-        guard let session else { return }
-        Task { @MainActor in
+    /// Stops pooling immediately, then gives freshly returned callers one
+    /// suspension point to create their task before the session rejects work.
+    /// Detached (never MainActor): invalidating a session must not bounce
+    /// through the main thread.
+    nonisolated private static func retireDetached(_ session: URLSession) {
+        Task.detached(priority: .utility) {
             await Task.yield()
             session.finishTasksAndInvalidate()
         }
     }
-    
-    private func cleanupStaleSessions() {
-        let now = Date()
 
-        let staleProviders = lastUsed.compactMap { provider, lastAccess in
-            now.timeIntervalSince(lastAccess) >= sessionTimeout ? provider : nil
-        }
+    private func cleanupStaleSessions() {
+        let staleProviders = store.staleProviders(timeout: sessionTimeout)
         for provider in staleProviders {
             LogManager.shared.log("Cleaning up stale session for \(provider.displayName)", category: "AISessionManager")
             invalidate(provider: provider)
