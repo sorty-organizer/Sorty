@@ -51,7 +51,7 @@ jobs:
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '26.3' # Pinned: pre-Xcode-27 SDK
+          xcode-version: 'latest-stable'
 
       - name: Compute toolchain cache key
         id: toolchain
