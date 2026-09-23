@@ -64,8 +64,7 @@ struct WatchedFoldersView: View {
                     .animatedAppearance(delay: 0.08)
 
                     emptyHeaderView
-                        .padding(.leading, 32)
-                        .padding(.trailing, 24)
+                        .padding(.horizontal, 24)
                         .padding(.vertical, 16)
                         .animatedAppearance(delay: 0.03)
                 }

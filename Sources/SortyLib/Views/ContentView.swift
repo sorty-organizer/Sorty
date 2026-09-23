@@ -118,8 +118,7 @@ public struct ContentView: View {
             }
             .navigationTitle("Sorty")
             .listStyle(.sidebar)
-            .frame(width: 220)
-            .navigationSplitViewColumnWidth(220)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
         } detail: {
             // Render the selected page in the same update as the sidebar selection.
             contentView(for: appState.currentView)
