@@ -202,7 +202,6 @@ private struct AboutAppIconEasterEgg: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
-    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var carousel = AboutIconCarousel()
     @State private var iconHovered = false
     @State private var isWindowVisible = true
@@ -263,7 +262,6 @@ private struct AboutAppIconEasterEgg: View {
             updateAutoCycle()
         }
         .onChange(of: isWindowVisible) { _, _ in updateAutoCycle() }
-        .onChange(of: scenePhase) { _, _ in updateAutoCycle() }
         .onChange(of: controlActiveState) { _, _ in updateAutoCycle() }
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .onDisappear { carousel.stop() }
@@ -275,9 +273,12 @@ private struct AboutAppIconEasterEgg: View {
     }
 
     private func updateAutoCycle() {
+        // Note: no scenePhase gate here. This view lives in a manually-created
+        // NSWindow (see AppState.showAbout), outside any SwiftUI Scene, so
+        // scenePhase never becomes .active and would permanently pause the
+        // carousel and the burst clock below.
         carousel.setAutoCycleEnabled(
             !reduceMotion && isWindowVisible && controlActiveState != .inactive
-                && scenePhase == .active
         )
     }
 }
@@ -582,7 +583,6 @@ private struct IconBurst: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
-    @Environment(\.scenePhase) private var scenePhase
 
     private let particles = IconBurst.makeParticles()
 
@@ -590,8 +590,9 @@ private struct IconBurst: View {
         SwiftUI.TimelineView(
             .animation(
                 minimumInterval: 1.0 / 30.0,
+                // No scenePhase gate: manual NSWindow hosting never reports
+                // .active, which would freeze the burst at t=0 (invisible).
                 paused: reduceMotion || !isWindowVisible || controlActiveState == .inactive
-                    || scenePhase != .active
             )
         ) { context in
             Canvas { ctx, size in
