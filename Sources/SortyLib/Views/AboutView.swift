@@ -181,7 +181,7 @@ struct AboutView: View {
         .padding(.top, 24)
         .padding(.bottom, 20)
         .frame(width: 420, height: 510)
-        .modifier(AboutGlassBackground())
+        .modifier(WindowGlassBackground())
         .windowLinkHoverPillHost()
         .transaction { transaction in
             if reduceMotion {
@@ -756,13 +756,6 @@ private struct BurstParticle: Identifiable {
     let wobblePhase: Double
     let gravity: Double
     let drag: Double
-}
-
-private struct AboutGlassBackground: ViewModifier {
-    func body(content: Content) -> some View {
-        // Sanctioned liquid-glass API only; pre-macOS 26 renders plain content.
-        content.systemLiquidGlassBackground(cornerRadius: 0)
-    }
 }
 
 #Preview {
