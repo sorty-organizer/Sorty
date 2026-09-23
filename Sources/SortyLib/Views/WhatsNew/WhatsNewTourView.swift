@@ -131,7 +131,7 @@ public struct WhatsNewTourView: View {
             ),
             WhatsNewPage(
                 title: "Sorty 1.2.1",
-                description: "A maintenance release with a refreshed icon, performance improvements, and reliability fixes."
+                description: "A faster launch, live organization insights, clearer duplicate review, and stronger recovery across Sorty."
             ),
         ]
     }
@@ -258,6 +258,13 @@ public struct WhatsNewTourView: View {
             // Three hero cards plus two wide rows fit without scrolling, so
             // nothing collides with the dots and copy underneath. Full
             // benchmark tables live in the linked notes.
+            VStack(spacing: 12) {
+                ForEach(whatsNewSecondaryPerformanceMetrics) { metric in
+                    horizontalPerformanceBar(metric)
+                }
+            }
+            .accessibilityIdentifier("WhatsNewAdditionalPerformanceMetrics")
+
             HStack(alignment: .top, spacing: 12) {
                 ForEach(whatsNewPerformanceMetrics) { metric in
                     heroPerformanceCard(metric)
@@ -265,13 +272,6 @@ public struct WhatsNewTourView: View {
                 }
             }
             .accessibilityIdentifier("WhatsNewPerformanceMetrics")
-
-            VStack(spacing: 12) {
-                ForEach(whatsNewSecondaryPerformanceMetrics) { metric in
-                    horizontalPerformanceBar(metric)
-                }
-            }
-            .accessibilityIdentifier("WhatsNewAdditionalPerformanceMetrics")
         }
         .padding(.horizontal, 20)
         .padding(.top, 68)
@@ -286,12 +286,8 @@ public struct WhatsNewTourView: View {
         }
     }
 
-    private var benchmarkNotesURL: URL {
-        URL(string: "https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md")!
-    }
-
     private var performanceCopy: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             Text(pages[1].title)
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
@@ -305,44 +301,8 @@ public struct WhatsNewTourView: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(1)
                 .fixedSize(horizontal: false, vertical: true)
-
-            benchmarkNotesPill
         }
-        .frame(height: 82, alignment: .bottom)
-        .offset(y: -8)
-    }
-
-    private var benchmarkNotesPill: some View {
-        Button {
-            HapticFeedbackManager.shared.tap()
-            NSWorkspace.shared.open(benchmarkNotesURL)
-        } label: {
-            HStack(spacing: 5) {
-                Text("See full benchmark notes")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .background(Capsule(style: .continuous).fill(Color.primary.opacity(0.06)))
-            .systemLiquidGlassBackground(cornerRadius: 999)
-            .overlay {
-                Capsule(style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("See full benchmark notes")
-        .accessibilityHint("Opens the benchmark notes in your browser")
-        .trackHoveredURL(benchmarkNotesURL)
-        .onHover { hovering in
-            if hovering {
-                HapticFeedbackManager.shared.selection()
-            }
-        }
+        .frame(height: 48, alignment: .bottom)
     }
 
     // One hero metric per card: big improvement value in its color,
@@ -483,7 +443,7 @@ public struct WhatsNewTourView: View {
                     .foregroundStyle(.primary)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("A faster launch, near-zero settled idle CPU, more efficient planning, and fixes across organization, Finder, and providers.")
+                Text("A faster launch, live organization insights, clearer duplicate review, and stronger recovery across Sorty.")
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -497,19 +457,40 @@ public struct WhatsNewTourView: View {
                         title: "New",
                         symbol: "sparkles",
                         color: SortyDesignSystem.Colors.resolvedAccent,
-                        items: ["Refreshed app icon", "Watched-folder and Finder support checks"]
+                        items: [
+                            "Refreshed app icon",
+                            "Live insights while Sorty organizes",
+                            "Decision evidence and plan diffs in Preview",
+                            "Watched-folder and Finder support checks",
+                            "Unavailable files in duplicate review",
+                            "Reasoning effort controls by provider and model"
+                        ]
                     )
                     releaseSection(
                         title: "Improved",
                         symbol: "arrow.up.right.circle.fill",
                         color: .green,
-                        items: ["First window: 50% faster", "Settled idle CPU: 51.4% to 0%", "Large-folder prompts capped", "Less repeated work in AI and duplicate scans"]
+                        items: [
+                            "First window: 50% faster",
+                            "Settled idle CPU: 51.4% to 0%",
+                            "Large-folder prompts: 56–91% fewer tokens",
+                            "Multi-batch AI context: 81% less repetition",
+                            "Duplicate text-feature work: 86% lower",
+                            "Progress parsing: 45% less work"
+                        ]
                     )
                     releaseSection(
                         title: "Fixed",
                         symbol: "wrench.and.screwdriver.fill",
                         color: .orange,
-                        items: ["Organization, cancellation, and undo edge cases", "Finder routing and permission recovery", "Provider errors and stale configuration status"]
+                        items: [
+                            "Overlapping organize, apply, and undo actions",
+                            "Cancellation during AI and file operations",
+                            "Finder actions open in the right window",
+                            "Finder exclusions and permission recovery",
+                            "Watched-folder recovery and failed-batch details",
+                            "Provider errors and stale configuration status"
+                        ]
                     )
                 }
             }
