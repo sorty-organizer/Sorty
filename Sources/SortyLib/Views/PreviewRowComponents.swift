@@ -6,6 +6,10 @@ struct RenameNameChangeView: View {
     let suggestedName: String
     let helpText: String
     var isRegenerating = false
+    /// Only the highlighted row plays the reveal sweep. Every other row
+    /// renders its final state directly: no GeometryReader sweep, no blur
+    /// bounce, no delayed dispatch hops.
+    var isHighlighted = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var suggestedNameReveal = true
@@ -21,16 +25,19 @@ struct RenameNameChangeView: View {
             .blur(radius: reduceMotion ? 0 : (isRegenerating ? 6 : (suggestedNameReveal ? 0 : 4)))
             .offset(x: reduceMotion ? 0 : (suggestedNameReveal ? 0 : -10))
             .overlay(alignment: .leading) {
-                if showRevealSweep && suggestedNameReveal && !isRegenerating && !reduceMotion {
+                if showRevealSweep && suggestedNameReveal && !isRegenerating && !reduceMotion && isHighlighted {
                     RenameNameRevealSweep()
                         .allowsHitTesting(false)
                 }
             }
-            .animation(.easeInOut(duration: 0.18), value: isRegenerating)
-            .animation(.spring(response: 0.42, dampingFraction: 0.82), value: suggestedNameReveal)
+            .animation(isHighlighted ? .easeInOut(duration: 0.18) : nil, value: isRegenerating)
+            .animation(isHighlighted ? .spring(response: 0.42, dampingFraction: 0.82) : nil, value: suggestedNameReveal)
             .help(helpText)
             .onChange(of: suggestedName) { _, _ in
-                guard !reduceMotion else { return }
+                guard !reduceMotion, isHighlighted else {
+                    suggestedNameReveal = true
+                    return
+                }
                 suggestedNameReveal = false
                 showRevealSweep = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
@@ -44,7 +51,7 @@ struct RenameNameChangeView: View {
                 }
             }
             .onChange(of: isRegenerating) { _, newValue in
-                guard !reduceMotion else { return }
+                guard !reduceMotion, isHighlighted else { return }
                 if newValue {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         suggestedNameReveal = false
@@ -169,6 +176,7 @@ struct FlatFileRowContent: View {
     let duplicateInfo: DuplicateInfo?
     let parentSuggestion: FolderSuggestion?
     let learningsManager: LearningsManager
+    let isHighlighted: Bool
     @Binding var isEditingName: Bool
     @Binding var editedName: String
     @Binding var isRegeneratingName: Bool
@@ -256,7 +264,8 @@ struct FlatFileRowContent: View {
                     RenameNameChangeView(
                         suggestedName: renameMapping.suggestedName ?? "",
                         helpText: renameHelpText ?? "",
-                        isRegenerating: isRegeneratingName
+                        isRegenerating: isRegeneratingName,
+                        isHighlighted: isHighlighted
                     )
 
                     Spacer(minLength: 12)

@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import Foundation
 import SwiftUI
 import Beam
 
@@ -1015,20 +1016,47 @@ struct UnifiedDuplicateGroupRow: View {
     @SortyHotReload private var hotReload
     let group: UnifiedDuplicateGroup
 
+    /// Memoizes the folder summary across rows and body evaluations. The
+    /// summary parses every file URL; the cache key is the full path list so
+    /// a changed group can never serve a stale label.
+    private final class FolderSummaryCache: Sendable {
+        private let lock = NSLock()
+        private var storage: [String: String] = [:]
+
+        func summary(for key: String, compute: () -> String) -> String {
+            lock.withLock {
+                if let cached = storage[key] {
+                    return cached
+                }
+                let built = compute()
+                if storage.count > 128 {
+                    storage.removeAll()
+                }
+                storage[key] = built
+                return built
+            }
+        }
+    }
+
+    private static let folderSummaryCache = FolderSummaryCache()
+
     private var firstFileURL: URL? {
         guard let path = group.files.first?.path else { return nil }
         return URL(fileURLWithPath: path)
     }
 
     private var folderSummary: String {
-        let folders = Set(
-            group.files.map {
-                URL(fileURLWithPath: $0.path).deletingLastPathComponent().lastPathComponent
-            })
-        if folders.count == 1, let folder = folders.first, !folder.isEmpty {
-            return folder
+        let key = "\(group.id)#\(group.files.map(\.path).joined(separator: "|"))"
+        return Self.folderSummaryCache.summary(for: key) {
+            let folders = Set(
+                group.files.map {
+                    URL(fileURLWithPath: $0.path).deletingLastPathComponent().lastPathComponent
+                })
+            if folders.count == 1, let folder = folders.first, !folder.isEmpty {
+                return folder
+            }
+            return "Across \(folders.count) folders"
         }
-        return "Across \(folders.count) folders"
     }
 
     private var badgeColor: Color {

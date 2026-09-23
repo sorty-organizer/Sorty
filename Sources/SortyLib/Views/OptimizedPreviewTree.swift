@@ -7,6 +7,7 @@
 //  and improve scrolling performance.
 //
 
+import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 import Combine
@@ -108,6 +109,12 @@ class PreviewStore: ObservableObject {
     private var cachedPlanVersion: Int = -1
     private var cachedMoveDestinations: [PreviewMoveDestination] = []
     
+    /// Cached row presentations keyed by row id. presentation(for:) runs per
+    /// row on every tree body evaluation; without this, tags, comments, and
+    /// counts rebuild for rows that didn't change. Cleared whenever the
+    /// visible rows or their metadata refresh.
+    private var presentationCache: [String: (planVersion: Int, highlighted: Bool, presentation: PreviewRowPresentation)] = [:]
+
     /// Throttling support
     private var throttleWorkItem: DispatchWorkItem?
     private let throttleInterval: TimeInterval = 0.2 // 200ms
@@ -257,6 +264,7 @@ class PreviewStore: ObservableObject {
         }
         lastPlanID = plan.id
         lastExpandedFolders = expandedFolders
+        presentationCache.removeAll(keepingCapacity: true)
 
         var rows: [FlattenedRow] = []
         var visibleFiles: [FileItem] = []
@@ -417,6 +425,26 @@ class PreviewStore: ObservableObject {
     }
 
     func presentation(for row: FlattenedRow) -> PreviewRowPresentation {
+        let highlighted = isRowHighlighted(row)
+        if let cached = presentationCache[row.id],
+           cached.planVersion == plan.version, cached.highlighted == highlighted {
+            return cached.presentation
+        }
+        let built = buildPresentation(for: row)
+        presentationCache[row.id] = (plan.version, highlighted, built)
+        return built
+    }
+
+    private func isRowHighlighted(_ row: FlattenedRow) -> Bool {
+        switch row.type {
+        case .file(let file, _), .unorganizedFile(let file):
+            return highlightedFileID == file.id
+        case .folder, .unorganizedHeader, .remainingFiles:
+            return false
+        }
+    }
+
+    private func buildPresentation(for row: FlattenedRow) -> PreviewRowPresentation {
         switch row.type {
         case .folder(let suggestion):
             return .folder(
@@ -538,6 +566,7 @@ class PreviewStore: ObservableObject {
 
         if cachedPlanVersion == plan.version, applyIncrementalToggle(id: id, wasExpanded: wasExpanded) {
             lastExpandedFolders = expandedFolders
+            presentationCache.removeAll(keepingCapacity: true)
             let visibleFiles = visibleFilesInRows()
             refreshVisibleFileMetadata(visibleFiles)
             duplicateMappings = computeDuplicateMappings(for: visibleFiles)
@@ -1016,6 +1045,7 @@ struct OptimizedPreviewTree: View {
     @ObservedObject var store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -1037,8 +1067,12 @@ struct OptimizedPreviewTree: View {
             .onChange(of: store.highlightedFileID) { _, highlightedFileID in
                 guard let highlightedFileID else { return }
                 guard let rowID = store.revealFileAndResolveRowID(highlightedFileID) else { return }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                if reduceMotion {
                     scrollProxy.scrollTo(rowID, anchor: .center)
+                } else {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        scrollProxy.scrollTo(rowID, anchor: .center)
+                    }
                 }
             }
         }
@@ -1147,8 +1181,31 @@ struct FlattenedRowView: View, @MainActor Equatable {
 
 struct FlatFolderRowView: View {
     @SortyHotReload private var hotReload
-    let suggestion: FolderSuggestion
-    let depth: Int
+
+    /// Memoizes storage-location matches across rows and body evaluations.
+    /// All access runs under the lock, so sharing one instance is safe.
+    private final class StorageMatchCache: Sendable {
+        private let lock = NSLock()
+        private var storage: [String: StorageLocation?] = [:]
+
+        func match(for key: String, compute: () -> StorageLocation?) -> StorageLocation? {
+            lock.withLock {
+                if let boxed = storage[key] {
+                    return boxed
+                }
+                let result = compute()
+                if storage.count > 64 {
+                    storage.removeAll()
+                }
+                storage[key] = result
+                return result
+            }
+        }
+    }
+
+    private static let storageMatchCache = StorageMatchCache()
+
+    let suggestion: FolderSuggestion    let depth: Int
     let isExpanded: Bool
     let rowID: String
     let folderTags: [String]
@@ -1172,9 +1229,15 @@ struct FlatFolderRowView: View {
 
     private var matchedStorageLocation: StorageLocation? {
         guard isStorageDestination else { return nil }
-        return storageLocationsManager.locations.lazy
-            .filter { StorageLocationPathResolver.isPath(suggestion.folderName, within: $0.path) }
-            .max { $0.path.count < $1.path.count }
+        // Memoized per folder + locations signature. The resolver walks every
+        // location per row per body evaluation; the signature rebuild is one
+        // string join, and hits skip the resolver entirely.
+        let key = suggestion.folderName + "#" + storageLocationsManager.locations.map(\.path).joined(separator: "|")
+        return Self.storageMatchCache.match(for: key) {
+            storageLocationsManager.locations.lazy
+                .filter { StorageLocationPathResolver.isPath(suggestion.folderName, within: $0.path) }
+                .max { $0.path.count < $1.path.count }
+        }
     }
 
     private var usedStorageURL: URL? {
@@ -1418,6 +1481,7 @@ struct FlatFileRowView: View {
             duplicateInfo: duplicateInfo,
             parentSuggestion: parentSuggestion,
             learningsManager: learningsManager,
+            isHighlighted: isHighlighted,
             isEditingName: $isEditingName,
             editedName: $editedName,
             isRegeneratingName: $isRegeneratingName,
