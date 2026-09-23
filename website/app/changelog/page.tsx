@@ -476,7 +476,7 @@ export default function ChangelogPage() {
                                 </div>
                                 <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
                                   <span className="text-muted-foreground">1.2.1</span>
-                                  <span className="h-3 rounded-full bg-sky-500/15"><span className="release-chart-fill block h-full w-1/2 origin-left rounded-full bg-sky-400" /></span>
+                                  <span className="h-3 rounded-full bg-sky-500/15"><span className="release-chart-fill release-chart-fill-sky block h-full w-1/2 origin-left rounded-full bg-sky-400" /></span>
                                   <span className="text-right font-semibold tabular-nums text-sky-300">1,127 ms</span>
                                 </div>
                               </div>
@@ -494,7 +494,7 @@ export default function ChangelogPage() {
                                 </div>
                                 <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
                                   <span className="text-muted-foreground">1.2.1</span>
-                                  <span className="h-3 rounded-full bg-emerald-500/15"><span className="release-chart-fill block h-full w-[2px] origin-left rounded-full bg-emerald-400" /></span>
+                                  <span className="h-3 rounded-full bg-emerald-500/15"><span className="release-chart-fill release-chart-fill-emerald block h-full w-[2px] origin-left rounded-full bg-emerald-400" /></span>
                                   <span className="text-right font-semibold tabular-nums text-emerald-300">0.0%</span>
                                 </div>
                               </div>
