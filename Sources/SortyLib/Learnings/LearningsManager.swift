@@ -521,6 +521,9 @@ public class LearningsManager: ObservableObject {
             retentionPruneTask = nil
             modelDirectoriesSaveTask?.cancel()
             modelDirectoriesSaveTask = nil
+            persistenceTask?.cancel()
+            await persistenceTask?.value
+            persistenceTask = nil
 
             try await consentManager.deleteAllData()
 
@@ -637,27 +640,32 @@ public class LearningsManager: ObservableObject {
     private func saveProfile() async {
         guard let profile = currentProfile else { return }
 
-        // Prune before saving to keep file size manageable
         pruneOldData()
-
-        
-        // File I/O runs on .utility: this manager lives on the main actor and
-        // must never block it with encrypted-profile writes.
         let snapshot = currentProfile ?? profile
-        do {
-            try await Task.detached(priority: .utility) {
-                try LearningsFileManager.save(profile: snapshot)
-            }.value
-        } catch {
-            ReliabilityManager.shared.capture(
-                error: error,
-                feature: "learnings",
-                operation: "save_profile"
-            )
-            self.error = "Failed to save profile: \(error.localizedDescription)"
-
+        let previous = persistenceTask
+        let queue = learningsTerminationIOQueue
+        let task = Task.detached(priority: .utility) {
+            await previous?.value
+            guard !Task.isCancelled else { return }
+            queue.sync {
+                guard !Task.isCancelled else { return }
+                do {
+                    try LearningsFileManager.save(profile: snapshot)
+                } catch {
+                    LogManager.shared.log(
+                        "Failed to save Learnings profile: \(error.localizedDescription)",
+                        level: .error,
+                        category: "LearningsFile"
+                    )
+                }
+            }
         }
+        persistenceTask = task
+        await task.value
     }
+
+    /// Orders profile writes so an older snapshot cannot replace a newer one.
+    private var persistenceTask: Task<Void, Never>?
 
     private func prepareLoadedProfile(_ profile: LearningsProfile) -> LearningsProfile {
         var prepared = migrateLegacySessionsIfNeeded(in: profile)
@@ -1539,6 +1547,7 @@ public class LearningsManager: ObservableObject {
     /// until the bytes land. Do NOT use for routine saves.
     public func forceSaveSynchronously() {
         saveTask?.cancel()
+        persistenceTask?.cancel()
 
         promptContextCacheKey = nil
         promptContextCacheValue = nil
