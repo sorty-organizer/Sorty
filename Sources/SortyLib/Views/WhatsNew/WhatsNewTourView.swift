@@ -277,7 +277,7 @@ public struct WhatsNewTourView: View {
     }
 
     private var performanceCopy: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             Text(pages[1].title)
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
@@ -287,7 +287,8 @@ public struct WhatsNewTourView: View {
 
             benchmarkNotesPill
         }
-        .frame(height: 48, alignment: .bottom)
+        .padding(.top, 8)
+        .frame(height: 68, alignment: .top)
     }
 
     private var benchmarkNotesPill: some View {
