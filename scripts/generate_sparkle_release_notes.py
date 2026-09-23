@@ -126,14 +126,13 @@ def performance_chart(version: str) -> str:
         rows.append(f"""<div class="metric {color}">
           <div class="metric-heading"><strong>{name}</strong><strong>{improvement}</strong></div>
           <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>{before:,g}{suffix}</span></div>
-          <div class="bar-row"><span>Preview</span><div class="track"><div class="bar after" style="width: {width:.1f}%"></div></div><span>{after:,g}{suffix}</span></div>
+          <div class="bar-row"><span>{html.escape(version)}</span><div class="track"><div class="bar after" style="width: {width:.1f}%"></div></div><span>{after:,g}{suffix}</span></div>
         </div>""")
-    method = html.escape(data["method"])
     source = html.escape(data["source"], quote=True)
-    return f"""<section class="performance" aria-label="Pre-release performance comparison">
+    return f"""<section class="performance" aria-label="Sorty {html.escape(version)} performance comparison">
       <h2>Measured against 1.2.0</h2>
       {''.join(rows)}
-      <p>{method} <a href="{source}">Method and results</a></p>
+      <p><a href="{source}">How we measured</a></p>
     </section>"""
 
 
@@ -171,7 +170,7 @@ def html_document(
     .callout {{ margin: 22px 0 8px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 14px; padding: 14px 16px; background: color-mix(in srgb, CanvasText 7%, Canvas); }}
     code {{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; }}
     a {{ color: LinkText; }}
-    .performance {{ margin: 24px 0; padding: 18px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 16px; background: color-mix(in srgb, CanvasText 5%, Canvas); }}
+    .performance {{ margin: 24px 0; padding: 18px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 16px; background: radial-gradient(circle at 12% 5%, rgba(57, 151, 232, 0.12), transparent 50%), radial-gradient(circle at 88% 95%, rgba(41, 167, 122, 0.10), transparent 48%), color-mix(in srgb, CanvasText 5%, Canvas); box-shadow: 0 0 34px -20px rgba(57, 151, 232, 0.65); }}
     .performance h2 {{ margin: 0 0 20px; font-size: 1em; }}
     .performance p {{ margin: 18px 0 0; font-size: 0.85em; }}
     .metric + .metric {{ margin-top: 20px; }}
@@ -187,6 +186,9 @@ def html_document(
     .before {{ width: 100%; background: #8794a8; }}
     .blue .after {{ background: #3997e8; }}
     .green .after {{ background: #29a77a; min-width: 2px; }}
+    .after {{ transform-origin: left; animation: fill-bar 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }}
+    @keyframes fill-bar {{ from {{ transform: scaleX(0); }} to {{ transform: scaleX(1); }} }}
+    @media (prefers-reduced-motion: reduce) {{ .after {{ animation: none; }} }}
   </style>
 </head>
 <body>

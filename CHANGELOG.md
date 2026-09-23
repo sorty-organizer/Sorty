@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Improved
 
 - Cut median time to the first window from 2,262 ms to 1,127 ms in a same-machine Release A/B test against v1.2.0 (8 runs per build, about 50% faster).
-- Cut settled idle CPU from a 51.4% mean to 0% in a 60-second visible-window test without an animated HUD. Timers now pause when hidden, and background scans, Finder checks, and AI retries do less work. Battery drain was not measured.
+- Cut settled idle CPU from a 51.4% mean to 0% in a 60-second visible-window test without an animated HUD. Timers now pause when hidden, and background scans, Finder checks, and AI retries do less work.
 - Reduced work during organization, duplicate review, AI streaming, and persisted-state loading.
 
 ### Fixed

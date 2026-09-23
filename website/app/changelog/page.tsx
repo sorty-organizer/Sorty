@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import Image from 'next/image'
 import {
   ArrowUpRight,
   FolderGit2,
@@ -11,7 +10,6 @@ import { Reveal } from '@/components/reveal'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteNav } from '@/components/site-nav'
 import { PageStructuredData } from '@/components/page-structured-data'
-import { sitePath } from '@/lib/site-paths'
 import { OG_IMAGE_PATH, SITE_URL } from '@/lib/site-metadata'
 
 export const metadata: Metadata = {
@@ -53,7 +51,6 @@ const RELEASES = [
     title: 'Bug fixes and less work in the background',
     summary:
       'This maintenance update focuses on reliability and speed. Launch is faster, idle CPU work is sharply lower, and organization, Finder, permissions, and provider errors are more dependable.',
-    metrics: true,
     highlights: [
       {
         icon: Sparkles,
@@ -63,7 +60,7 @@ const RELEASES = [
       {
         icon: FolderGit2,
         title: 'Less idle work',
-        body: 'Settled idle CPU fell from a 51.4% mean to 0% in a 60-second visible-window test. Battery drain was not measured.',
+        body: 'Settled idle CPU fell from a 51.4% mean to 0% in a 60-second visible-window test.',
       },
       {
         icon: ShieldCheck,
@@ -72,37 +69,33 @@ const RELEASES = [
       },
     ],
   },
-  {
-    version: 'Sorty 1.2.0',
-    status: 'Latest release',
-    date: 'July 11, 2026',
-    title: 'Safer organization, honest progress, and a smoother install',
-    summary:
-      'The refreshed 1.2.0 build adds cloud and external storage, AI clarification, richer generation stats, measured progress, stronger Finder integration, and a reliable path from download or Sorty 1.1.2 to a working app.',
-    image: '/sorty-1.2.0-changelog.png',
-    imageAlt:
-      'Sorty 1.2.0 promotional image showing the rebuilt macOS welcome screen and faster, cleaner, more reliable Sorty headline.',
-    highlights: [
-      {
-        icon: Sparkles,
-        title: 'New',
-        body: 'Cloud and external-storage organization, AI clarification before Improve, expanded copyable generation stats, Finder diagnostics, sensitive-action protection, and privacy-safe paths.',
-      },
-      {
-        icon: FolderGit2,
-        title: 'Improved',
-        body: 'Measured image-analysis progress, clearer live file movement, stronger OpenRouter and cloud reliability, refined storage controls, lower background rendering cost, and a smaller universal download.',
-      },
-      {
-        icon: ShieldCheck,
-        title: 'Fixed',
-        body: 'Fresh-download installation and launch, in-app updates from 1.1.2, Finder extension and volume actions, image-analysis feedback, cross-volume storage safety, and main-window recovery.',
-      },
-    ],
-  },
 ]
 
 const PREVIOUS_RELEASES = [
+  {
+    version: 'Sorty 1.2.0',
+    date: 'July 11, 2026',
+    sections: [
+      {
+        title: 'New',
+        items: [
+          'Cloud and external-storage organization, AI clarification before Improve, expanded generation stats, Finder diagnostics, sensitive-action protection, and privacy-safe paths.',
+        ],
+      },
+      {
+        title: 'Improved',
+        items: [
+          'Measured image-analysis progress, clearer live file movement, stronger OpenRouter and cloud reliability, refined storage controls, lower background rendering cost, and a smaller universal download.',
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Fresh-download installation and launch, in-app updates from 1.1.2, Finder extension and volume actions, image-analysis feedback, cross-volume storage safety, and main-window recovery.',
+        ],
+      },
+    ],
+  },
   {
     version: 'Sorty 1.1.2',
     date: 'March 1, 2026',
@@ -412,6 +405,8 @@ export default function ChangelogPage() {
             {RELEASES.map((release) => (
               <Reveal
                 key={release.version}
+                immediate
+                animateOnEnter
                 className="relative pl-12 md:pl-16"
               >
                 <span
@@ -423,7 +418,7 @@ export default function ChangelogPage() {
 
                 <article
                   id={versionAnchor(release.version)}
-                  className="scroll-mt-28 overflow-hidden rounded-3xl border border-border bg-card/40 shadow-2xl shadow-black/30 backdrop-blur-xl"
+                  className="release-feature-card scroll-mt-28 overflow-hidden rounded-3xl border border-border bg-card/40 shadow-2xl shadow-black/30 backdrop-blur-xl"
                 >
                   <div className="grid gap-0 lg:grid-cols-[0.88fr_1.12fr]">
                     <div className="flex flex-col justify-between border-b border-border p-6 sm:p-8 lg:border-b-0 lg:border-r">
@@ -463,12 +458,11 @@ export default function ChangelogPage() {
                     </div>
 
                     <div className="relative p-3 sm:p-4">
-                      {'metrics' in release ? (
-                        <div className="flex h-full flex-col justify-center rounded-[1.35rem] border border-white/10 bg-[radial-gradient(circle_at_15%_10%,oklch(0.68_0.16_250_/_0.14),transparent_45%),radial-gradient(circle_at_85%_90%,oklch(0.7_0.15_155_/_0.12),transparent_48%)] p-5 sm:p-7">
+                        <div className="release-metrics-card flex h-full flex-col justify-center rounded-[1.35rem] border border-white/10 p-5 sm:p-7">
                           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                             Measured against 1.2.0
                           </p>
-                          <div className="mt-6 space-y-8" role="group" aria-label="Pre-release performance comparison">
+                          <div className="mt-6 space-y-8" role="group" aria-label="Sorty 1.2.1 performance comparison">
                             <div>
                               <div className="flex items-baseline justify-between gap-3">
                                 <h3 className="text-sm font-medium">Time to first window</h3>
@@ -481,8 +475,8 @@ export default function ChangelogPage() {
                                   <span className="text-right tabular-nums">2,262 ms</span>
                                 </div>
                                 <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
-                                  <span className="text-muted-foreground">Preview</span>
-                                  <span className="h-3 rounded-full bg-sky-500/15"><span className="block h-full w-1/2 rounded-full bg-sky-400" /></span>
+                                  <span className="text-muted-foreground">1.2.1</span>
+                                  <span className="h-3 rounded-full bg-sky-500/15"><span className="release-chart-fill block h-full w-1/2 origin-left rounded-full bg-sky-400" /></span>
                                   <span className="text-right font-semibold tabular-nums text-sky-300">1,127 ms</span>
                                 </div>
                               </div>
@@ -499,30 +493,15 @@ export default function ChangelogPage() {
                                   <span className="text-right tabular-nums">51.4%</span>
                                 </div>
                                 <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
-                                  <span className="text-muted-foreground">Preview</span>
-                                  <span className="h-3 rounded-full bg-emerald-500/15"><span className="block h-full w-[2px] rounded-full bg-emerald-400" /></span>
+                                  <span className="text-muted-foreground">1.2.1</span>
+                                  <span className="h-3 rounded-full bg-emerald-500/15"><span className="release-chart-fill block h-full w-[2px] origin-left rounded-full bg-emerald-400" /></span>
                                   <span className="text-right font-semibold tabular-nums text-emerald-300">0.0%</span>
                                 </div>
                               </div>
                             </div>
                           </div>
-                          <p className="mt-7 text-xs leading-5 text-muted-foreground">
-                            Pre-release A/B benchmark, 8 launch runs per build and 60 seconds of idle CPU samples on the same Mac. Battery drain was not measured.{' '}
-                            <a href="https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md#8-re-measurement-at-62ba6cbf-2026-09-23-v120-vs-latest-commit" className="text-sky-300 underline-offset-4 hover:underline">Method and results</a>
-                          </p>
+                          <a href="https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md#8-re-measurement-at-62ba6cbf-2026-09-23-v120-vs-latest-commit" className="mt-7 w-fit text-xs text-sky-300 underline-offset-4 hover:underline">How we measured</a>
                         </div>
-                      ) : (
-                        <div className="changelog-image-frame">
-                          <Image
-                            src={sitePath(release.image)}
-                            alt={release.imageAlt}
-                            width={1123}
-                            height={896}
-                            priority
-                            className="w-full rounded-[1.35rem] border border-white/10 object-cover"
-                          />
-                        </div>
-                      )}
                     </div>
                   </div>
 
