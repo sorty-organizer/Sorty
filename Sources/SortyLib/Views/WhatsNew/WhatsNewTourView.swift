@@ -311,10 +311,24 @@ public struct WhatsNewTourView: View {
             HapticFeedbackManager.shared.tap()
             NSWorkspace.shared.open(benchmarkNotesURL)
         } label: {
-            Label("See full benchmark notes", systemImage: "arrow.up.right")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+            HStack(spacing: 5) {
+                Text("See full benchmark notes")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(Capsule(style: .continuous).fill(Color.primary.opacity(0.06)))
+            .systemLiquidGlassBackground(cornerRadius: 999)
+            .overlay {
+                Capsule(style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+            }
         }
-        .systemLiquidGlassButton()
+        .buttonStyle(.plain)
         .accessibilityLabel("See full benchmark notes")
         .accessibilityHint("Opens the benchmark notes in your browser")
         .trackHoveredURL(benchmarkNotesURL)
