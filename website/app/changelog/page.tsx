@@ -46,7 +46,7 @@ export const metadata: Metadata = {
 const RELEASES = [
   {
     version: 'Sorty 1.2.1',
-    status: 'In preparation',
+    status: 'Released',
     date: 'September 23, 2026',
     title: 'Bug fixes and less work in the background',
     summary:
@@ -74,6 +74,20 @@ const RELEASES = [
       },
     ],
   },
+]
+
+const RELEASE_METRICS = [
+  { name: 'Time to first window', before: 2262, after: 1127, unit: 'ms', improvement: '50% faster', color: 'sky' },
+  { name: 'Settled idle CPU', before: 51.4, after: 0, unit: '%', improvement: 'Near zero', color: 'emerald' },
+  { name: 'Idle CPU when minimized', before: 55, after: 0, unit: '%', improvement: 'Timers pause', color: 'emerald' },
+  { name: 'Idle CPU with animated HUD', before: 51.4, after: 16.5, unit: '%', improvement: 'About 3× lower', color: 'emerald' },
+  { name: '1,000-file prompt size', before: 132059, after: 11961, unit: 'tokens', improvement: '91% fewer', color: 'sky' },
+  { name: '1,000-file prompt preparation', before: 12.1, after: 5.0, unit: 'ms', improvement: '59% faster', color: 'sky' },
+  { name: 'Repeated batch manifest', before: 13686, after: 2627, unit: 'tokens', improvement: '81% fewer', color: 'sky' },
+  { name: 'Duplicate text-feature work', before: 100, after: 14, unit: '% of old work', improvement: '86% less work', color: 'violet' },
+  { name: 'Progress-line parsing work', before: 100, after: 55, unit: '% of old work', improvement: '45% less work', color: 'sky' },
+  { name: 'Flight queue work over 120 frames', before: 100, after: 0, unit: '% of old work', improvement: 'O(1) per frame', color: 'violet' },
+  { name: 'Unicode stream counting, 100 runs', before: 40.6, after: 0, unit: 's', improvement: 'About 40.6 s saved', color: 'sky' },
 ]
 
 const PREVIOUS_RELEASES = [
@@ -467,45 +481,37 @@ export default function ChangelogPage() {
                           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                             Measured against 1.2.0
                           </p>
-                          <div className="mt-6 space-y-8" role="group" aria-label="Sorty 1.2.1 performance comparison">
-                            <div>
-                              <div className="flex items-baseline justify-between gap-3">
-                                <h3 className="text-sm font-medium">Time to first window</h3>
-                                <span className="text-sm font-semibold text-sky-300">50% faster</span>
-                              </div>
-                              <div className="mt-4 space-y-3 text-xs">
-                                <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
-                                  <span className="text-muted-foreground">1.2.0</span>
-                                  <span className="h-3 rounded-full bg-slate-500/30"><span className="block h-full w-full rounded-full bg-slate-400" /></span>
-                                  <span className="text-right tabular-nums">2,262 ms</span>
+                          <div className="mt-6 grid gap-5 sm:grid-cols-2" role="group" aria-label="Sorty 1.2.1 performance comparison">
+                            {RELEASE_METRICS.map((metric) => {
+                              const ratio = Math.max(0, Math.min(100, metric.after / metric.before * 100))
+                              const tone = metric.color === 'emerald' ? 'emerald' : metric.color === 'violet' ? 'violet' : 'sky'
+                              const afterTone = tone === 'emerald' ? 'bg-emerald-400 text-emerald-300' : tone === 'violet' ? 'bg-violet-400 text-violet-300' : 'bg-sky-400 text-sky-300'
+                              const glow = tone === 'emerald' ? 'release-chart-fill-emerald' : tone === 'violet' ? 'release-chart-fill-violet' : 'release-chart-fill-sky'
+                              return (
+                                <div key={metric.name} className="rounded-xl border border-white/10 bg-background/30 p-4">
+                                  <div className="flex items-baseline justify-between gap-3">
+                                    <h3 className="text-sm font-medium">{metric.name}</h3>
+                                    <span className={`shrink-0 text-xs font-semibold ${afterTone.split(' ')[1]}`}>{metric.improvement}</span>
+                                  </div>
+                                  <div className="mt-3 space-y-2 text-xs">
+                                    {[
+                                      ['1.2.0', metric.before, 'bg-slate-400', 100],
+                                      ['1.2.1', metric.after, afterTone.split(' ')[0], ratio],
+                                    ].map(([version, value, color, width]) => (
+                                      <div key={String(version)} className="grid grid-cols-[3.5rem_1fr_auto] items-center gap-2">
+                                        <span className="text-muted-foreground">{version}</span>
+                                        <span className="h-2.5 rounded-full bg-white/10">
+                                          <span className={`block h-full rounded-full ${color} ${version === '1.2.1' && Number(width) > 0 ? `release-chart-fill ${glow}` : ''}`} style={{ width: `${width}%` }} />
+                                        </span>
+                                        <span className={`text-right tabular-nums ${version === '1.2.1' ? afterTone.split(' ')[1] : ''}`}>{Number(value).toLocaleString()} {metric.unit}</span>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
-                                <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
-                                  <span className="text-muted-foreground">1.2.1</span>
-                                  <span className="h-3 rounded-full bg-sky-500/15"><span className="release-chart-fill release-chart-fill-sky block h-full w-1/2 origin-left rounded-full bg-sky-400" /></span>
-                                  <span className="text-right font-semibold tabular-nums text-sky-300">1,127 ms</span>
-                                </div>
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex items-baseline justify-between gap-3">
-                                <h3 className="text-sm font-medium">Settled idle CPU</h3>
-                                <span className="text-sm font-semibold text-emerald-300">Near zero</span>
-                              </div>
-                              <div className="mt-4 space-y-3 text-xs">
-                                <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
-                                  <span className="text-muted-foreground">1.2.0</span>
-                                  <span className="h-3 rounded-full bg-slate-500/30"><span className="block h-full w-full rounded-full bg-slate-400" /></span>
-                                  <span className="text-right tabular-nums">51.4%</span>
-                                </div>
-                                <div className="grid grid-cols-[4.5rem_1fr_4.5rem] items-center gap-3">
-                                  <span className="text-muted-foreground">1.2.1</span>
-                                  <span className="release-chart-zero-track h-3 rounded-full bg-emerald-500/15" />
-                                  <span className="text-right font-semibold tabular-nums text-emerald-300">0.0%</span>
-                                </div>
-                              </div>
-                            </div>
+                              )
+                            })}
                           </div>
-                          <a href="https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md" className="mt-7 w-fit text-xs text-sky-300 underline-offset-4 hover:underline">See all performance measurements</a>
+                          <a href="https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md" target="_blank" rel="noreferrer" className="mt-7 inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-background/65 px-4 py-2 text-sm font-medium text-foreground/85 transition-colors hover:border-primary/40 hover:text-foreground">See full benchmark notes<ArrowUpRight className="size-4" /></a>
                         </div>
                     </div>
                   </div>

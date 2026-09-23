@@ -61,6 +61,7 @@ public struct WhatsNewTourView: View {
         }
         .contentShape(Rectangle())
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
+        .windowLinkHoverPillHost()
         .onHover { isInside in
             isPointerInside = isInside
             if !isInside {
@@ -119,18 +120,17 @@ public struct WhatsNewTourView: View {
     private var pages: [WhatsNewPage] {
         [
             WhatsNewPage(
-                imageName: "whats-new-preview.png",
-                title: "Choose the right flow",
-                description: "Start with Organize Only, Organize & Rename, or Rename Only from the same compact control."
+                imageName: "AppIcon-Release.png",
+                title: "A refreshed Sorty icon",
+                description: "Sorty 1.2.1 brings a new app icon, with the same tools you already know."
             ),
             WhatsNewPage(
-                imageNames: designSystemImages,
-                title: "A new design system",
-                description: "The organize and rename flows now share cleaner controls, calmer spacing, and the new mid-generation surface."
+                title: "Less waiting, less background work",
+                description: "Measured against 1.2.0 on the same Mac."
             ),
             WhatsNewPage(
-                title: "Everything in Sorty 1.2.0",
-                description: "A major release focused on capability, clarity, and reliability."
+                title: "Sorty 1.2.1",
+                description: "A maintenance release with a refreshed icon, performance improvements, and reliability fixes."
             ),
         ]
     }
@@ -147,45 +147,54 @@ public struct WhatsNewTourView: View {
 
     private func tourPage(_ page: WhatsNewPage) -> some View {
         let isReleaseSummary = currentPage == pages.count - 1
+        let isPerformancePage = currentPage == 1
 
         return ZStack(alignment: .top) {
             VStack(spacing: 0) {
                 // The release summary uses the copy space that the image pages
                 // need. Both layouts still end at the same fixed action-button row.
+                // The performance page keeps the standard 416/152 split so its
+                // cards never overlap the dots or the copy below.
                 Group {
                     if isReleaseSummary {
                         releaseSummary
+                    } else if isPerformancePage {
+                        performanceSummary
                     } else {
                         imageSection(page)
                     }
                 }
-                .frame(height: isReleaseSummary ? 496 : 416, alignment: .center)
+                .frame(height: isReleaseSummary ? 496 : 416, alignment: .top)
 
                 VStack(spacing: 0) {
                     pageIndicator
-                        .padding(.bottom, isReleaseSummary ? 8 : 16)
+                        .padding(.bottom, isReleaseSummary ? 8 : 10)
 
                     if !isReleaseSummary {
-                        // Align the copy by its bottom edge. A wrapped description
-                        // grows upward and keeps the same gap above the button.
-                        VStack(spacing: 4) {
-                            Text(page.title)
-                                .font(.system(size: 22, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
-                                .multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .accessibilityAddTraits(.isHeader)
+                        if isPerformancePage {
+                            performanceCopy
+                        } else {
+                            // Align the copy by its bottom edge. A wrapped description
+                            // grows upward and keeps the same gap above the button.
+                            VStack(spacing: 4) {
+                                Text(page.title)
+                                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityAddTraits(.isHeader)
 
-                            Text(page.description)
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .lineLimit(2)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.horizontal, 28)
+                                Text(page.description)
+                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.horizontal, 28)
+                            }
+                            .frame(height: 64, alignment: .bottom)
+                            .offset(y: -8)
                         }
-                        .frame(height: 64, alignment: .bottom)
-                        .offset(y: -8)
                     }
 
                     Spacer(minLength: 0)
@@ -229,6 +238,204 @@ public struct WhatsNewTourView: View {
         }
     }
 
+    private var performanceSummary: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(.cyan)
+                Text("MEASURED IMPROVEMENTS")
+                    .font(.system(.caption2, design: .rounded, weight: .semibold))
+                    .tracking(1.3)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("1.2.0  →  1.2.1")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            // Two top-aligned columns so a short card never stretches or
+            // centers against a taller neighbor in the same row.
+            HStack(alignment: .top, spacing: 8) {
+                VStack(spacing: 8) {
+                    performanceBar(whatsNewPerformanceMetrics[0])
+                    performanceBar(whatsNewPerformanceMetrics[2])
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+                VStack(spacing: 8) {
+                    performanceBar(whatsNewPerformanceMetrics[1])
+                    performanceBar(whatsNewPerformanceMetrics[3])
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
+        }
+        .padding(.horizontal, 26)
+        .padding(.top, 56)
+        .padding(.bottom, 12)
+        .frame(width: 640, height: 416, alignment: .top)
+        .background {
+            ZStack {
+                Color(nsColor: .windowBackgroundColor)
+                RadialGradient(colors: [.cyan.opacity(0.16), .clear], center: .topLeading, startRadius: 12, endRadius: 390)
+                RadialGradient(colors: [.purple.opacity(0.11), .clear], center: .bottomTrailing, startRadius: 4, endRadius: 340)
+            }
+        }
+    }
+
+    private var benchmarkNotesURL: URL {
+        URL(string: "https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md")!
+    }
+
+    private var performanceCopy: some View {
+        VStack(spacing: 6) {
+            Text(pages[1].title)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+
+            Text(pages[1].description)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
+
+            benchmarkNotesPill
+        }
+        .frame(height: 82, alignment: .bottom)
+        .offset(y: -8)
+    }
+
+    private var benchmarkNotesPill: some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            NSWorkspace.shared.open(benchmarkNotesURL)
+        } label: {
+            HStack(spacing: 5) {
+                Text("See full benchmark notes")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background {
+                Capsule(style: .continuous)
+                    .fill(Color.primary.opacity(0.06))
+                    .systemLiquidGlassBackground(cornerRadius: 999)
+            }
+            .overlay {
+                Capsule(style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("See full benchmark notes")
+        .accessibilityHint("Opens the benchmark notes in your browser")
+        .trackHoveredURL(benchmarkNotesURL)
+        .onHover { hovering in
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
+        }
+    }
+
+    private func performanceBar(_ metric: WhatsNewPerformanceMetric) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 5) {
+                Text(metric.title)
+                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+                Text(metric.improvement)
+                    .font(.system(size: 8, weight: .bold, design: .rounded))
+                    .foregroundStyle(metric.color)
+                    .lineLimit(1)
+            }
+            ForEach(metric.series) { series in
+                if series.showsImprovementBar {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Text(series.title)
+                            Spacer(minLength: 2)
+                            Text(series.improvement)
+                                .foregroundStyle(metric.color)
+                        }
+                        .font(.system(size: 8, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        WhatsNewComparisonBar(fraction: series.afterFraction, color: metric.color, animates: true)
+                            .frame(height: 4)
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(series.title)
+                            Spacer(minLength: 2)
+                            Text(series.improvement)
+                                .foregroundStyle(metric.color)
+                        }
+                        .font(.system(size: 8, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        comparisonBar(label: "1.2.0", value: series.beforeLabel, fraction: 1, color: .secondary.opacity(0.60))
+                        comparisonBar(label: "1.2.1", value: series.afterLabel, fraction: series.afterFraction, color: metric.color)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 8)
+        .background(metric.color.opacity(0.045), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(metric.color.opacity(0.16), lineWidth: 1))
+    }
+
+    private func comparisonBar(label: String, value: String, fraction: CGFloat, color: Color) -> some View {
+        HStack(spacing: 5) {
+            Text(label)
+                .font(.system(size: 7, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .frame(width: 26, alignment: .leading)
+            WhatsNewComparisonBar(fraction: fraction, color: color, animates: label == "1.2.1")
+                .frame(height: 4)
+            Text(value)
+                .font(.system(size: 7, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(width: 62, alignment: .trailing)
+        }
+    }
+
+    private var whatsNewPerformanceMetrics: [WhatsNewPerformanceMetric] {
+        [
+            .init(title: "Time to first window", improvement: "50% faster", color: .cyan, series: [
+                .init(title: "Median", beforeLabel: "2,262 ms", afterLabel: "1,127 ms", afterFraction: 0.498, improvement: "")
+            ]),
+            .init(title: "Idle CPU", improvement: "near zero at rest", color: .green, series: [
+                .init(title: "Visible", beforeLabel: "51.4%", afterLabel: "0%", afterFraction: 0, improvement: ""),
+                .init(title: "Minimized", beforeLabel: "~55%", afterLabel: "0%", afterFraction: 0, improvement: ""),
+                .init(title: "Animated HUD", beforeLabel: "51.4%", afterLabel: "16.5%", afterFraction: 0.321, improvement: "")
+            ]),
+            .init(title: "Organization prompt tokens", improvement: "56–91% fewer", color: .purple, series: [
+                .init(title: "200 files", beforeLabel: "", afterLabel: "", afterFraction: 0.56, improvement: "56% fewer", showsImprovementBar: true),
+                .init(title: "350 files", beforeLabel: "", afterLabel: "", afterFraction: 0.74, improvement: "74% fewer", showsImprovementBar: true),
+                .init(title: "500 files", beforeLabel: "", afterLabel: "", afterFraction: 0.82, improvement: "82% fewer", showsImprovementBar: true),
+                .init(title: "1,000 files", beforeLabel: "", afterLabel: "", afterFraction: 0.91, improvement: "91% fewer", showsImprovementBar: true)
+            ]),
+            .init(title: "Other efficiency gains", improvement: "45–100% gains", color: .blue, series: [
+                .init(title: "Prompt preparation", beforeLabel: "", afterLabel: "", afterFraction: 0.59, improvement: "59% faster", showsImprovementBar: true),
+                .init(title: "Repeated batch manifest", beforeLabel: "", afterLabel: "", afterFraction: 0.81, improvement: "81% fewer", showsImprovementBar: true),
+                .init(title: "Duplicate text features", beforeLabel: "", afterLabel: "", afterFraction: 0.86, improvement: "86% less", showsImprovementBar: true),
+                .init(title: "Progress-line parsing", beforeLabel: "", afterLabel: "", afterFraction: 0.45, improvement: "45% less", showsImprovementBar: true),
+                .init(title: "Flight queue, 2,000 files × 120 frames", beforeLabel: "", afterLabel: "", afterFraction: 1, improvement: "~100% less", showsImprovementBar: true),
+                .init(title: "Unicode stream count, 100 runs", beforeLabel: "40.6 s", afterLabel: "~0 s", afterFraction: 0.01, improvement: "about 40.6 s saved")
+            ]),
+        ]
+    }
+
     private var releaseSummary: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 4) {
@@ -237,12 +444,12 @@ public struct WhatsNewTourView: View {
                     .tracking(1.5)
                     .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
 
-                Text("Sorty 1.2.0")
+                Text("Sorty 1.2.1")
                     .font(.system(.title, design: .rounded, weight: .bold))
                     .foregroundStyle(.primary)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("Safer storage, honest progress, smoother controls, and a more reliable install and update path.")
+                Text("A faster launch, near-zero settled idle CPU, more efficient planning, and fixes across organization, Finder, and providers.")
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -256,40 +463,19 @@ public struct WhatsNewTourView: View {
                         title: "New",
                         symbol: "sparkles",
                         color: SortyDesignSystem.Colors.resolvedAccent,
-                        items: [
-                            "Cloud and external storage organization",
-                            "AI clarification before Improve",
-                            "Expanded generation stats",
-                            "Finder integration diagnostics",
-                            "Sensitive action protection",
-                            "Privacy-safe paths",
-                        ]
+                        items: ["Refreshed app icon", "Watched-folder and Finder support checks"]
                     )
                     releaseSection(
                         title: "Improved",
                         symbol: "arrow.up.right.circle.fill",
                         color: .green,
-                        items: [
-                            "Measured analysis progress",
-                            "Live file-movement feedback",
-                            "Storage and Finder controls",
-                            "AI and OpenRouter reliability",
-                            "Native Mac design and motion",
-                            "Speed and download size",
-                        ]
+                        items: ["First window: 50% faster", "Settled idle CPU: 51.4% to 0%", "Large-folder prompts capped", "Less repeated work in AI and duplicate scans"]
                     )
                     releaseSection(
                         title: "Fixed",
                         symbol: "wrench.and.screwdriver.fill",
                         color: .orange,
-                        items: [
-                            "Fresh-download install and launch",
-                            "Updates from Sorty 1.1.2",
-                            "Finder extension and volume actions",
-                            "Image-analysis feedback",
-                            "Storage safety",
-                            "Compatibility and lifecycle stability",
-                        ]
+                        items: ["Organization, cancellation, and undo edge cases", "Finder routing and permission recovery", "Provider errors and stale configuration status"]
                     )
                 }
             }
@@ -364,6 +550,15 @@ public struct WhatsNewTourView: View {
 
     private func imageSection(_ page: WhatsNewPage) -> some View {
         ZStack {
+            if currentPage == 0 {
+                RadialGradient(
+                    colors: [SortyDesignSystem.Colors.resolvedAccent.opacity(0.30), .clear],
+                    center: .center,
+                    startRadius: 24,
+                    endRadius: 270
+                )
+                .accessibilityHidden(true)
+            }
             if let imageName = page.activeImageName(at: imageIndex(for: page)) {
                 bundledImage(imageName, fillsFrame: page.imageNames.count > 1)
                     .frame(width: 640, height: 400)
@@ -853,11 +1048,76 @@ private struct WhatsNewPage: Hashable {
     }
 }
 
+private struct WhatsNewPerformanceMetric: Identifiable {
+    let title: String
+    let improvement: String
+    let color: Color
+    let series: [WhatsNewPerformanceSeries]
+
+    var id: String { title }
+}
+
+private struct WhatsNewPerformanceSeries: Identifiable {
+    let title: String
+    let beforeLabel: String
+    let afterLabel: String
+    let afterFraction: CGFloat
+    let improvement: String
+    var showsImprovementBar = false
+
+    var id: String { title }
+}
+
+private struct WhatsNewComparisonBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hasAppeared = false
+
+    let fraction: CGFloat
+    let color: Color
+    let animates: Bool
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(color.opacity(0.14))
+                Capsule()
+                    .fill(color)
+                    .frame(width: fillWidth(in: geometry.size.width))
+                    .shadow(color: color.opacity(0.68), radius: 5)
+            }
+            .animation(animation, value: hasAppeared)
+        }
+        .clipShape(Capsule())
+        .accessibilityHidden(true)
+        .onAppear {
+            hasAppeared = true
+        }
+    }
+
+    private var animation: Animation? {
+        guard animates, !reduceMotion else { return nil }
+        return .easeOut(duration: 0.9).delay(0.18)
+    }
+
+    private func fillWidth(in availableWidth: CGFloat) -> CGFloat {
+        let shouldShow = !animates || hasAppeared
+        guard shouldShow else { return 0 }
+        return max(3, availableWidth * min(max(fraction, 0), 1))
+    }
+}
+
 private enum WhatsNewImageLoader {
     static func image(named name: String) -> NSImage? {
         let resourceName = (name as NSString).deletingPathExtension
         let resourceExtension = (name as NSString).pathExtension
         let fileExtension = resourceExtension.isEmpty ? "png" : resourceExtension
+        if let iconURL = Bundle.module.url(
+            forResource: resourceName,
+            withExtension: fileExtension,
+            subdirectory: "AppIcons"
+        ), let image = NSImage(contentsOf: iconURL) {
+            return image
+        }
         return SortyResources.image(named: resourceName, withExtension: fileExtension)
             ?? NSImage(named: name)
     }
