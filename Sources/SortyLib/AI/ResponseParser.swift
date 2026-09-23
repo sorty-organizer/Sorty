@@ -16,14 +16,17 @@ struct ResponseParser {
         private let exactNames: [String: FileItem]
         private let foldedNames: [String: FileItem]
         private let extensions: [String: FileItem]
+        private let relativePaths: [String: FileItem]
 
         init(files: [FileItem]) {
             self.files = files
             var exactNames: [String: FileItem] = [:]
             var foldedNames: [String: FileItem] = [:]
             var extensions: [String: FileItem] = [:]
+            var relativePaths: [String: FileItem] = [:]
             exactNames.reserveCapacity(files.count * 2)
             foldedNames.reserveCapacity(files.count * 2)
+            relativePaths.reserveCapacity(files.count)
 
             for file in files {
                 if exactNames[file.displayName] == nil {
@@ -42,6 +45,18 @@ struct ResponseParser {
                     foldedNames[nameKey] = file
                 }
 
+                // Relative-path index so qualified references ("docs/report.pdf")
+                // resolve in O(1) without scanning every scanned file per lookup.
+                if let relative = file.relativePath?.lowercased(), !relative.isEmpty {
+                    if relativePaths[relative] == nil {
+                        relativePaths[relative] = file
+                    }
+                    let lastComponent = URL(fileURLWithPath: relative).lastPathComponent.lowercased()
+                    if !lastComponent.isEmpty, relativePaths[lastComponent] == nil {
+                        relativePaths[lastComponent] = file
+                    }
+                }
+
                 let extensionKey = file.extension.lowercased()
                 if !extensionKey.isEmpty, extensions[extensionKey] == nil {
                     extensions[extensionKey] = file
@@ -51,6 +66,7 @@ struct ResponseParser {
             self.exactNames = exactNames
             self.foldedNames = foldedNames
             self.extensions = extensions
+            self.relativePaths = relativePaths
         }
 
         func resolve(_ filename: String) -> FileItem? {
@@ -72,55 +88,74 @@ struct ResponseParser {
                     return extensionMatch
                 }
             }
+            // Relative-path hits cover qualified references exactly, so the
+            // O(files) scans below only run when the dictionaries missed.
+            for candidate in candidates {
+                if let relativeHit = relativePaths[candidate.lowercased()] {
+                    return relativeHit
+                }
+            }
 
             // Suffix/path match comes before any fuzzy logic, so qualified
             // paths bind to their exact file instead of a substring sibling.
             // Example: "docs/report.pdf" must prefer docs/report.pdf over report.pdf.
+            // It only adds value for path-qualified candidates; bare names are
+            // already covered by the dictionaries above.
             let loweredCandidates = candidates.map { $0.lowercased() }
-            var suffixMatches: [FileItem] = []
-            var seenSuffixIDs = Set<UUID>()
-            for file in files {
-                let fileLower = file.displayName.lowercased()
-                let nameLower = file.name.lowercased()
-                let matchesSuffix = loweredCandidates.contains { candidate in
-                    guard !candidate.isEmpty else { return false }
-                    return fileLower.hasSuffix("/" + candidate)
-                        || nameLower.hasSuffix("/" + candidate)
-                        || fileLower == candidate
-                        || nameLower == candidate
+            let hasPathCandidate = loweredCandidates.contains { $0.contains("/") }
+            if hasPathCandidate {
+                var suffixMatch: FileItem?
+                var suffixMatchCount = 0
+                for file in files {
+                    let fileLower = file.displayName.lowercased()
+                    let nameLower = file.name.lowercased()
+                    let matchesSuffix = loweredCandidates.contains { candidate in
+                        guard !candidate.isEmpty else { return false }
+                        return fileLower.hasSuffix("/" + candidate)
+                            || nameLower.hasSuffix("/" + candidate)
+                    }
+                    if matchesSuffix {
+                        suffixMatchCount += 1
+                        if suffixMatchCount > 1 {
+                            break
+                        }
+                        suffixMatch = file
+                    }
                 }
-                if matchesSuffix, seenSuffixIDs.insert(file.id).inserted {
-                    suffixMatches.append(file)
+                if suffixMatchCount == 1, let unique = suffixMatch {
+                    return unique
                 }
-            }
-            if suffixMatches.count == 1, let unique = suffixMatches.first {
-                return unique
-            }
-            if suffixMatches.count > 1 {
-                // Ambiguous suffix (e.g. two folders each hold report.pdf):
-                // fall through to no match rather than first-match-wins.
-                return nil
+                if suffixMatchCount > 1 {
+                    // Ambiguous suffix (e.g. two folders each hold report.pdf):
+                    // fall through to no match rather than first-match-wins.
+                    return nil
+                }
             }
 
             // Last-resort substring match requires a unique hit. Returning the
             // first of several "contains" hits misbinds siblings such as
             // report.pdf vs report_final.pdf, so ambiguity resolves to nil.
-            var substringMatches: [FileItem] = []
-            var seenSubstringIDs = Set<UUID>()
-            for candidate in candidates where candidate.count > 3 {
+            // Counts stop at two: any second hit already proves ambiguity.
+            var substringMatch: FileItem?
+            var substringMatchCount = 0
+            outer: for candidate in candidates where candidate.count > 3 {
                 let lowered = candidate.lowercased()
                 for file in files {
                     let displayLower = file.displayName.lowercased()
                     let nameLower = file.name.lowercased()
                     if displayLower.contains(lowered) || lowered.contains(displayLower)
                         || nameLower.contains(lowered) || lowered.contains(nameLower) {
-                        if seenSubstringIDs.insert(file.id).inserted {
-                            substringMatches.append(file)
+                        if substringMatch?.id != file.id {
+                            substringMatchCount += 1
+                            substringMatch = file
+                            if substringMatchCount > 1 {
+                                break outer
+                            }
                         }
                     }
                 }
             }
-            if substringMatches.count == 1, let unique = substringMatches.first {
+            if substringMatchCount == 1, let unique = substringMatch {
                 return unique
             }
             return nil
@@ -525,17 +560,11 @@ struct ResponseParser {
         }
 
         let decoder = JSONDecoder()
-        // Do NOT use convertFromSnakeCase here as we handle it in CodingKeys
-
-        let response: AIResponse
-
-        do {
-            response = try decoder.decode(AIResponse.self, from: jsonData)
-        } catch {
-            // Try with default key strategy
-            let defaultDecoder = JSONDecoder()
-            response = try defaultDecoder.decode(AIResponse.self, from: jsonData)
-        }
+        // Do NOT use convertFromSnakeCase here as we handle it in CodingKeys.
+        // A single decode attempt: the old fallback decoder was an identical
+        // plain JSONDecoder, so retrying it could never succeed after the
+        // first failure — it only doubled failure cost on large payloads.
+        let response = try decoder.decode(AIResponse.self, from: jsonData)
 
         let fileIdIndex = Dictionary(uniqueKeysWithValues: originalFiles.enumerated().map { ($0.offset + 1, $0.element) })
 
@@ -729,31 +758,33 @@ struct ResponseParser {
             }
         }
 
+        // Resolve each filename entry once and reuse the hit for files,
+        // renames, and tag mappings below. Resolving folder.files twice
+        // doubled the fuzzy-scan cost per folder.
+        var resolvedEntries: [(entry: FileEntry, file: FileItem)] = []
+        resolvedEntries.reserveCapacity(folder.files.count)
         for fileEntry in folder.files {
             if let file = fileLookup.resolve(fileEntry.filename) {
-                if seenFileIds.insert(file.id).inserted {
-                    files.append(file)
-                }
-
-                // Parse-level safeguard: strip all rename fields in organize-only mode.
-                if mode != .organize,
-                   let mapping = makeRenameMapping(
-                       for: file,
-                       suggestedName: fileEntry.suggestedName,
-                       renameReason: fileEntry.renameReason,
-                       renameConfidence: fileEntry.renameConfidence
-                   ) {
-                    storeRenameMapping(mapping)
-                }
-
-                // Add tags if present
-                if let tags = fileEntry.tags, !tags.isEmpty {
-                    // We'll collect these into a temporary list and add to FolderSuggestion logic below
-                    // NOTE: FolderSuggestion doesn't have a mutable 'addTag' during init easily without
-                    // accumulating them first. Let's create the FileTagMapping here.
-                }
+                resolvedEntries.append((fileEntry, file))
             } else {
                 diagnostics.unresolvedFilenames.append(fileEntry.filename)
+            }
+        }
+
+        for (fileEntry, file) in resolvedEntries {
+            if seenFileIds.insert(file.id).inserted {
+                files.append(file)
+            }
+
+            // Parse-level safeguard: strip all rename fields in organize-only mode.
+            if mode != .organize,
+               let mapping = makeRenameMapping(
+                   for: file,
+                   suggestedName: fileEntry.suggestedName,
+                   renameReason: fileEntry.renameReason,
+                   renameConfidence: fileEntry.renameConfidence
+               ) {
+                storeRenameMapping(mapping)
             }
         }
 
@@ -779,16 +810,14 @@ struct ResponseParser {
             }
         }
         
-        // Collect tag and comment mappings
+        // Collect tag and comment mappings from the same resolved entries.
         var tagMappings: [FileTagMapping] = []
-        for fileEntry in folder.files {
-           if let file = fileLookup.resolve(fileEntry.filename) {
-               let tags = fileEntry.tags ?? []
-               let comment = fileEntry.comment
-               if !tags.isEmpty || (comment != nil && !comment!.isEmpty) {
-                   tagMappings.append(FileTagMapping(originalFile: file, tags: tags, comment: comment))
-               }
-           }
+        for (fileEntry, file) in resolvedEntries {
+            let tags = fileEntry.tags ?? []
+            let comment = fileEntry.comment
+            if !tags.isEmpty || (comment != nil && !comment!.isEmpty) {
+                tagMappings.append(FileTagMapping(originalFile: file, tags: tags, comment: comment))
+            }
         }
 
         let subfolders = (folder.subfolders ?? []).map { subfolder in
