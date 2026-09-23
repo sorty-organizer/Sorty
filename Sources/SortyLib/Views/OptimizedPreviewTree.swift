@@ -1184,7 +1184,7 @@ struct FlatFolderRowView: View {
 
     /// Memoizes storage-location matches across rows and body evaluations.
     /// All access runs under the lock, so sharing one instance is safe.
-    private final class StorageMatchCache: Sendable {
+    private final class StorageMatchCache: @unchecked Sendable {
         private let lock = NSLock()
         private var storage: [String: StorageLocation?] = [:]
 
@@ -1205,7 +1205,8 @@ struct FlatFolderRowView: View {
 
     private static let storageMatchCache = StorageMatchCache()
 
-    let suggestion: FolderSuggestion    let depth: Int
+    let suggestion: FolderSuggestion
+    let depth: Int
     let isExpanded: Bool
     let rowID: String
     let folderTags: [String]

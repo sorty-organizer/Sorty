@@ -181,9 +181,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     }
 
     private static func checkHealthDetached() async throws {
-        healthVerdictLock.lock()
-        let cachedAt = healthVerdictAt
-        healthVerdictLock.unlock()
+        let cachedAt = healthVerdictLock.withLock { healthVerdictAt }
         if let cachedAt,
            Date().timeIntervalSince(cachedAt) < healthVerdictLifetime {
             return
@@ -221,9 +219,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                 )
             }
         }.value
-        healthVerdictLock.lock()
-        healthVerdictAt = Date()
-        healthVerdictLock.unlock()
+        healthVerdictLock.withLock { healthVerdictAt = Date() }
     }
 
     public nonisolated static func availableModels() async throws -> [CodexAvailableModel] {

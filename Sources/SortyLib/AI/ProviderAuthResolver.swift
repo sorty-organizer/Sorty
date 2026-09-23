@@ -131,18 +131,14 @@ public enum ProviderAuthResolver {
             return nil
         }
         let cacheKey = credentialCacheKey(for: provider, method: method, configAPIKey: nil)
-        credentialCacheLock.lock()
-        let cached = credentialCache[cacheKey]
-        credentialCacheLock.unlock()
+        let cached = credentialCacheLock.withLock { credentialCache[cacheKey] }
         if let cached, Date().timeIntervalSince(cached.cachedAt) < credentialCacheLifetime {
             return cached.value
         }
         let value = await KeychainManager.getAsync(key: provider.keychainKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let stored = (value?.isEmpty == false) ? value : nil
-        credentialCacheLock.lock()
-        credentialCache[cacheKey] = (stored, Date())
-        credentialCacheLock.unlock()
+        credentialCacheLock.withLock { credentialCache[cacheKey] = (stored, Date()) }
         return stored
     }
 
@@ -151,18 +147,14 @@ public enum ProviderAuthResolver {
         switch provider {
         case .githubCopilot:
             let cacheKey = credentialCacheKey(for: provider, method: .apiKey, configAPIKey: nil)
-            credentialCacheLock.lock()
-            let cached = credentialCache[cacheKey]
-            credentialCacheLock.unlock()
+            let cached = credentialCacheLock.withLock { credentialCache[cacheKey] }
             if let cached, Date().timeIntervalSince(cached.cachedAt) < credentialCacheLifetime {
                 return cached.value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             }
             let value = await KeychainManager.getAsync(key: provider.keychainKey)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let valid = value?.isEmpty == false
-            credentialCacheLock.lock()
-            credentialCache[cacheKey] = (valid ? value : nil, Date())
-            credentialCacheLock.unlock()
+            credentialCacheLock.withLock { credentialCache[cacheKey] = (valid ? value : nil, Date()) }
             return valid
         case .ollama, .appleFoundationModel:
             return true
@@ -206,9 +198,7 @@ public enum ProviderAuthResolver {
         // Resolve once per configure signature and memoize; invalidated by
         // `invalidateCredentialCache(for:)` on credential/auth changes.
         let cacheKey = credentialCacheKey(for: provider, method: .apiKey, configAPIKey: nil)
-        credentialCacheLock.lock()
-        let cached = credentialCache[cacheKey]
-        credentialCacheLock.unlock()
+        let cached = credentialCacheLock.withLock { credentialCache[cacheKey] }
         if let cached, Date().timeIntervalSince(cached.cachedAt) < credentialCacheLifetime {
             return cached.value
         }

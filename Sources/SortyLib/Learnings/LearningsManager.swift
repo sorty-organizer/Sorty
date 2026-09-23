@@ -521,8 +521,6 @@ public class LearningsManager: ObservableObject {
             retentionPruneTask = nil
             modelDirectoriesSaveTask?.cancel()
             modelDirectoriesSaveTask = nil
-            persistenceTask?.cancel()
-            persistenceTask = nil
 
             try await consentManager.deleteAllData()
 

@@ -110,7 +110,7 @@ final class GitHubContributorsFetcher: ObservableObject {
 
     private static let repoOwner = "sorty-organizer"
     private static let repoName = "Sorty"
-    private static let cacheKey = "cachedGitHubContributors"
+    nonisolated private static let cacheKey = "cachedGitHubContributors"
     private static let cacheTimestampKey = "cachedGitHubContributorsTimestamp"
     private static let repoEndpointCacheKey = "cachedGitHubContributorsRepoEndpoint"
     private static let prEndpointCacheKey = "cachedGitHubContributorsPREndpoint"

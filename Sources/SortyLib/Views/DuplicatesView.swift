@@ -1019,7 +1019,7 @@ struct UnifiedDuplicateGroupRow: View {
     /// Memoizes the folder summary across rows and body evaluations. The
     /// summary parses every file URL; the cache key is the full path list so
     /// a changed group can never serve a stale label.
-    private final class FolderSummaryCache: Sendable {
+    private final class FolderSummaryCache: @unchecked Sendable {
         private let lock = NSLock()
         private var storage: [String: String] = [:]
 
