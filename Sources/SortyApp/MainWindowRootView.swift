@@ -444,8 +444,10 @@ struct MainWindowRootView: View {
 
         whatsNewDelayTask?.cancel()
         whatsNewDelayTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 700_000_000)
+            // Keep image decoding and the sheet clear of first-frame interaction.
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard !Task.isCancelled else { return }
+            guard !windowSession.organizer.state.isOperationInProgress else { return }
             await SortyResources.preloadImages(named: [
                 "whats-new-preview.png",
                 "whats-new-design-system-1.png",

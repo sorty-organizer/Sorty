@@ -11,7 +11,7 @@ import Combine
 /// Notification settings model for user preferences
 public struct NotificationSettings: Codable, Equatable, Sendable {
     // MARK: - Delivery Method
-    
+
     /// Show notifications as subtle bottom-left overlays
     public var inAppHUD: Bool = true
     
@@ -78,6 +78,8 @@ public struct NotificationSettings: Codable, Equatable, Sendable {
 }
 
 /// Manager for notification settings
+/// Construction stays scalar-only for fast launch; persisted state loads
+/// via `loadPersistedState()` after the first frame.
 @MainActor
 public class NotificationSettingsManager: ObservableObject {
     @Published public var settings: NotificationSettings = .default {
@@ -86,57 +88,57 @@ public class NotificationSettingsManager: ObservableObject {
         }
     }
 
+    @Published public private(set) var hasLoadedPersistedState = false
+
     private let userDefaults = UserDefaults.standard
-    private let persistedDataReader = UserDefaultsDataReader(.standard)
+    private let persistedDataReader = UserDefaultsDataReader(UserDefaults.standard)
     private let settingsKey = "notificationSettings"
-    private var hasLoaded = false
-    private var hasPendingChanges = false
-    private var loadGeneration = 0
     private var loadTask: Task<NotificationSettings?, Never>?
+    private var loadGeneration = 0
+    private var hasPendingChanges = false
 
     public static let shared = NotificationSettingsManager()
 
     private init() {
-        // Lightweight init with in-memory defaults; persisted state arrives
-        // via `loadPersistedState()` after first paint.
         setupNotificationObservers()
     }
 
-    /// Decodes persisted settings off the main actor. Preserves edits made
-    /// before hydration finishes and invalidates stale results on reset.
+    /// Decodes settings away from the main actor. Idempotent; a second caller
+    /// awaits the existing task. Edits made during hydration win over disk.
     public func loadPersistedState() async {
-        guard !hasLoaded else { return }
+        guard !hasLoadedPersistedState else { return }
+
         let generation = loadGeneration
+        let initialSettings = settings
         let task: Task<NotificationSettings?, Never>
         if let loadTask {
             task = loadTask
         } else {
-            let persistedDataReader = persistedDataReader
-            let settingsKey = settingsKey
+            let reader = persistedDataReader
+            let key = settingsKey
             task = Task.detached(priority: .userInitiated) {
-                guard let data = persistedDataReader.data(forKey: settingsKey) else { return nil }
-                return try? JSONDecoder().decode(NotificationSettings.self, from: data)
+                guard let data = reader.data(forKey: key),
+                      let decoded = try? JSONDecoder().decode(NotificationSettings.self, from: data) else {
+                    return nil
+                }
+                return decoded
             }
             self.loadTask = task
         }
-        let preHydration = settings
-        let decoded = await task.value
-        guard !hasLoaded, generation == loadGeneration else { return }
-        // Preserve any preference edit made before hydration finishes.
-        if settings != preHydration {
-            hasLoaded = true
-            loadTask = nil
-            save()
-            return
+
+        let persisted = await task.value
+        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+
+        if settings != initialSettings {
+            // Edited during hydration; keep in-memory changes and persist them.
+            hasPendingChanges = true
+        } else if let persisted {
+            settings = persisted
         }
-        if let decoded {
-            // Suppress didSet save until hydrated flag is set.
-            hasLoaded = true
-            settings = decoded
-        } else {
-            hasLoaded = true
-        }
+
+        hasLoadedPersistedState = true
         loadTask = nil
+
         if hasPendingChanges {
             hasPendingChanges = false
             save()
@@ -150,9 +152,7 @@ public class NotificationSettingsManager: ObservableObject {
     }
 
     private func save() {
-        // Hold edits made before hydration so an early mutation cannot
-        // overwrite saved configuration with defaults.
-        guard hasLoaded else {
+        guard hasLoadedPersistedState else {
             hasPendingChanges = true
             return
         }
@@ -162,12 +162,12 @@ public class NotificationSettingsManager: ObservableObject {
     }
 
     public func reset() {
-        // Invalidate any in-flight load so deleted data cannot reappear.
         loadGeneration &+= 1
         loadTask?.cancel()
         loadTask = nil
-        hasLoaded = true
+        hasLoadedPersistedState = true
         hasPendingChanges = false
         settings = .default
+        userDefaults.removeObject(forKey: settingsKey)
     }
 }

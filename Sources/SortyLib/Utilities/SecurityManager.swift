@@ -48,9 +48,10 @@ public class SecurityManager: ObservableObject {
     // MARK: - Init
 
     /// Construction stays cheap for fast launch; biometry resolves lazily on
-    /// first authentication (see `authenticateForSensitiveAction`), never in
-    /// `init` and never via a fire-and-forget task at construction.
+    /// first authentication or settings presentation, not in `init`.
     public init() {}
+
+    private var hasResolvedBiometryType = false
     
     // MARK: - Authentication Methods
     
@@ -62,6 +63,7 @@ public class SecurityManager: ObservableObject {
     
     /// Checks what kind of biometry is available on the device
     public func checkBiometryType() {
+        hasResolvedBiometryType = true
         let context = LAContext()
         var error: NSError?
         
@@ -75,6 +77,9 @@ public class SecurityManager: ObservableObject {
     
     /// Display name for the available biometry type
     public var biometryDisplayName: String {
+        if !hasResolvedBiometryType {
+            checkBiometryType()
+        }
         switch biometryType {
         case .touchID:
             return "Touch ID"

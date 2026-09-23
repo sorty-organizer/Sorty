@@ -142,9 +142,16 @@ public final class FolderWatcher: @unchecked Sendable {
     init(persistenceRoot: URL?) {
         self.persistenceRootOverride = persistenceRoot
         queue.setSpecific(key: queueSpecificKey, value: ())
-        persistedEventID = readPersistedEventCursor()?.eventID
-        latestProcessedEventID = persistedEventID
-        replayFromEventID = persistedEventID
+        // Cursor restores on the watcher queue so `Data(contentsOf:)` never
+        // blocks the main thread. `syncWithFolders` also hops to this queue,
+        // so FIFO ordering preserves load-before-sync without a gate.
+        queue.async { [weak self] in
+            guard let self else { return }
+            let cursor = self.readPersistedEventCursor()
+            self.persistedEventID = cursor?.eventID
+            self.latestProcessedEventID = cursor?.eventID
+            self.replayFromEventID = cursor?.eventID
+        }
         installWorkspaceObservers()
     }
 
