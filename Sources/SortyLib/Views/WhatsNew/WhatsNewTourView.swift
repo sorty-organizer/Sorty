@@ -788,7 +788,6 @@ public struct WhatsNewTourView: View {
             .accessibilityLabel("Close What's New")
         }
         .padding(.horizontal, 12)
-        .padding(.top, 12)
         .overlay {
             if currentPage == 1 {
                 Text("1.2.0  →  1.2.1")
@@ -796,6 +795,7 @@ public struct WhatsNewTourView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .padding(.top, 12)
     }
 
     private var pageIndicator: some View {
