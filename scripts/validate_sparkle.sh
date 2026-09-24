@@ -315,6 +315,17 @@ if [ -d "$APP_PATH" ]; then
         fail "Sparkle Autoupdate missing from embedded framework"
     fi
 
+    # Lost executable bits (bad copy/unzip) make the installer job fail to
+    # launch with "An error occurred while launching the installer."
+    if [ -n "${SPARKLE_VERSION_DIR:-}" ]; then
+        if [ -f "${SPARKLE_VERSION_DIR}/Autoupdate" ] && [ ! -x "${SPARKLE_VERSION_DIR}/Autoupdate" ]; then
+            fail "Sparkle Autoupdate is not executable"
+        fi
+        if [ -f "${SPARKLE_VERSION_DIR}/Updater.app/Contents/MacOS/Updater" ] && [ ! -x "${SPARKLE_VERSION_DIR}/Updater.app/Contents/MacOS/Updater" ]; then
+            fail "Sparkle Updater is not executable"
+        fi
+    fi
+
     while IFS= read -r -d '' xpc_service; do
         require_hardened_runtime "$xpc_service" "Sparkle XPC service $(basename "$xpc_service")"
     done < <(find "$SPARKLE_FRAMEWORK" -path "*/XPCServices/*.xpc" -type d -print0 2>/dev/null)
