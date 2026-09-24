@@ -73,7 +73,7 @@ validate_sorty_app_linkage "${APP_PATH}"
 
 # 4. Validate code signature before packaging.
 print_step 4 5 "Validating Code Signature"
-if codesign --verify --strict --verbose=2 "${APP_PATH}" >/dev/null 2>&1; then
+if codesign --verify --deep --strict --verbose=2 "${APP_PATH}" >/dev/null 2>&1; then
     log_success "Code signature verified"
 else
     log_failure "Code signature is invalid; rebuild or re-sign ${APP_PATH} before packaging"
@@ -96,7 +96,7 @@ if [ -f "${ZIP_PATH}" ]; then
     ZIP_CHECK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/sorty-zip-check.XXXXXX")
     ditto -x -k "${ZIP_PATH}" "${ZIP_CHECK_DIR}"
     validate_sorty_app_linkage "${ZIP_CHECK_DIR}/${PROJECT_NAME}.app"
-    codesign --verify --strict --verbose=2 "${ZIP_CHECK_DIR}/${PROJECT_NAME}.app" >/dev/null
+    codesign --verify --deep --strict --verbose=2 "${ZIP_CHECK_DIR}/${PROJECT_NAME}.app" >/dev/null
     rm -rf "${ZIP_CHECK_DIR}"
     log_success "Created ${ZIP_NAME} ($(get_file_size "${ZIP_PATH}"))"
 else

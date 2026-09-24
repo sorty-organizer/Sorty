@@ -1832,6 +1832,13 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
         log_detail "Signed Sparkle.framework"
     fi
 
+    # Xcode embeds Sentry with a linker signature that does not seal its
+    # resources. Seal the framework before signing the containing app.
+    if [ -d "${FRAMEWORKS_DIR}/Sentry.framework" ]; then
+        run_quiet codesign_cmd_hardened_runtime "${FRAMEWORKS_DIR}/Sentry.framework"
+        log_detail "Signed Sentry.framework"
+    fi
+
     # 2. Sign the Finder Sync extension
     if [ -d "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" ]; then
         run_quiet codesign_cmd "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex/Contents/MacOS/SortyFinderSync"
