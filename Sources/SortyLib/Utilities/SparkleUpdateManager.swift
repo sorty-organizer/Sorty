@@ -633,8 +633,39 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
     }
 
     override func showUpdaterError(_ error: any Error, acknowledgement: @escaping () -> Void) {
-        stateCallback?(.error(error.localizedDescription))
-        super.showUpdaterError(error, acknowledgement: acknowledgement)
+        let message = error.localizedDescription
+        stateCallback?(.error(message))
+        let nsError = error as NSError
+        LogManager.shared.log(
+            "Sparkle updater error: \(message). Code: \(nsError.code) domain: \(nsError.domain)",
+            level: .error,
+            category: "SparkleUpdateManager"
+        )
+        presentUpdaterErrorRecovery(message: message, acknowledgement: acknowledgement)
+    }
+
+    /// Replaces Sparkle's dead-end "Cancel Update" alert with one that also
+    /// offers a manual download. In-app installation can fail after a good
+    /// download when the installer job cannot be submitted (for example an
+    /// ad-hoc signed build in /Applications needing admin rights), and those
+    /// users would otherwise have no path forward.
+    private func presentUpdaterErrorRecovery(
+        message: String,
+        acknowledgement: @escaping () -> Void
+    ) {
+        let alert = NSAlert()
+        alert.messageText = "Update Error!"
+        alert.informativeText = message
+            + "\n\nIf installing stays stuck, download the latest Sorty and replace the app in Applications."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Download Manually")
+        alert.addButton(withTitle: "Cancel Update")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn,
+           let url = URL(string: "https://github.com/sorty-organizer/Sorty/releases/latest") {
+            NSWorkspace.shared.open(url)
+        }
+        acknowledgement()
     }
 
     override func dismissUpdateInstallation() {
