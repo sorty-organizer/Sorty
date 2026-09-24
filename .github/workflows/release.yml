@@ -448,6 +448,8 @@ jobs:
         with:
           tag_name: v${{ needs.prepare-release.outputs.version }}
           name: ${{ env.PROJECT_NAME }} ${{ needs.prepare-release.outputs.version }}
+          overwrite_files: true
+          fail_on_unmatched_files: true
           files: |
             releases/Sorty.zip
             releases/appcast.xml
@@ -482,6 +484,10 @@ jobs:
 
           curl --fail --silent --show-error --location --head \
             "https://github.com/${{ github.repository }}/releases/latest/download/Sorty.zip" >/dev/null
+          curl --fail --silent --show-error --location \
+            "https://github.com/${{ github.repository }}/releases/latest/download/Sorty.zip" \
+            --output /tmp/Sorty.zip
+          cmp releases/Sorty.zip /tmp/Sorty.zip
           curl --fail --silent --show-error --location \
             "https://github.com/${{ github.repository }}/releases/latest/download/appcast-v2.xml" \
             --output /tmp/appcast-v2.xml
