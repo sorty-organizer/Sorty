@@ -141,6 +141,14 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The Dock can retain the previous app icon after an in-place update.
+        // Set the running tile from this build's declared icon resource.
+        if let iconName = Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") as? String,
+           let iconURL = Bundle.main.url(forResource: iconName, withExtension: "icns"),
+           let icon = NSImage(contentsOf: iconURL) {
+            NSApp.applicationIconImage = icon
+        }
+
         applicationRemovalMonitor = ApplicationRemovalMonitor { [weak self] movedApplicationURL in
             self?.finishExternalUninstall(movedApplicationURL: movedApplicationURL) ?? false
         }
