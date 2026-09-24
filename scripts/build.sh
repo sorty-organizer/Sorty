@@ -1026,6 +1026,17 @@ validate_adhoc_entitlements() {
     fi
 }
 
+sparkle_version_dir() {
+    local framework_path="$1"
+    local current_version="${framework_path}/Versions/Current"
+    if [ -e "${current_version}" ]; then
+        (cd "${current_version}" 2>/dev/null && pwd -P) || return 1
+        return 0
+    fi
+
+    find "${framework_path}/Versions" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -1
+}
+
 sparkle_resources_dir() {
     local framework_path="$1"
     local current_resources="${framework_path}/Versions/Current/Resources"
@@ -1085,6 +1096,23 @@ embed_sparkle_framework() {
 sign_sparkle_framework() {
     local framework_path="$1"
     [ -d "${framework_path}" ] || return 0
+
+    # Sparkle 2 keeps its installer helpers next to the framework executable
+    # (Versions/B/Autoupdate and Versions/B/Updater.app), not inside
+    # Resources. Sign those real locations so the helpers keep the same
+    # identity and flags as the framework; a mismatch breaks SMJobSubmit and
+    # surfaces as "An error occurred while launching the installer."
+    local version_dir=""
+    version_dir=$(sparkle_version_dir "${framework_path}" || true)
+
+    if [ -n "${version_dir}" ]; then
+        if [ -f "${version_dir}/Autoupdate" ]; then
+            run_quiet codesign_cmd_hardened_runtime "${version_dir}/Autoupdate"
+        fi
+        if [ -d "${version_dir}/Updater.app" ]; then
+            run_quiet codesign_cmd_hardened_runtime "${version_dir}/Updater.app"
+        fi
+    fi
 
     local resources_dir=""
     resources_dir=$(sparkle_resources_dir "${framework_path}" || true)
