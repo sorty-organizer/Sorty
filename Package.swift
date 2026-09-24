@@ -96,7 +96,8 @@ let package = Package(
         ),
         // Pinned InjectionLite sources with Sorty's reentrant-save protection.
         .package(path: "Packages/InjectionLite"),
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
+        // 2.9.3 fixes Sparkle's macOS 26 cache protection for bundle IDs ending in `.app`.
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.3")
     ],
     targets: [
         .target(
