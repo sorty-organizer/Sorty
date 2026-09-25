@@ -127,7 +127,7 @@ public struct ContentMetadata: Codable, Hashable, Sendable {
     }
 }
 
-private actor SharedContentMetadataCache {
+actor SharedContentMetadataCache {
     static let shared = SharedContentMetadataCache()
 
     struct Options: Codable, Hashable, Sendable {
@@ -159,21 +159,30 @@ private actor SharedContentMetadataCache {
 
     private var inFlight: [Key: InFlightRequest] = [:]
     private var totalByteCost = 0
-    private let maximumByteCost = 32 * 1024 * 1024
+    private let maximumByteCost: Int
+    private let maximumEntryCount = 10_000
+    private var isDirty = false
+    private var loadTask: Task<[Entry]?, Never>?
     private var hasLoaded = false
     private var flushTask: Task<Void, Never>?
     private var generation = 0
 
-    private var diskURL: URL? {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("com.sorty.app")
-            .appendingPathComponent("content-metadata-cache.json")
+    private let diskURL: URL?
+    private var legacyDiskURL: URL? {
+        diskURL?.deletingPathExtension()
+    }
+
+    init(directory: URL? = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+        .appendingPathComponent("com.sorty.app"), maximumByteCost: Int = 32 * 1024 * 1024) {
+        self.diskURL = directory?.appendingPathComponent("content-metadata-cache.json.lzfse")
+        self.maximumByteCost = maximumByteCost
     }
 
     func value(
         for key: Key,
         operation: @escaping @Sendable () async -> ContentMetadata?
     ) async -> ContentMetadata? {
+        let currentGeneration = generation
         await loadIfNeeded()
         if var entry = entries[key] {
             entry.lastAccessedAt = Date()
@@ -184,7 +193,6 @@ private actor SharedContentMetadataCache {
             return await request.task.value
         }
 
-        let currentGeneration = generation
         let requestID = UUID()
         let task = Task { await operation() }
         inFlight[key] = InFlightRequest(id: requestID, task: task)
@@ -199,6 +207,7 @@ private actor SharedContentMetadataCache {
     }
 
     func scheduleFlush() {
+        guard isDirty else { return }
         flushTask?.cancel()
         let currentGeneration = generation
         flushTask = Task(priority: .utility) { [weak self] in
@@ -209,11 +218,16 @@ private actor SharedContentMetadataCache {
     }
 
     func flush() {
+        flushTask?.cancel()
+        flushTask = nil
         saveToDisk()
     }
 
     func clear() {
         generation &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        isDirty = false
         flushTask?.cancel()
         flushTask = nil
         for request in inFlight.values { request.task.cancel() }
@@ -222,10 +236,15 @@ private actor SharedContentMetadataCache {
         totalByteCost = 0
         hasLoaded = true
         if let diskURL { try? FileManager.default.removeItem(at: diskURL) }
+        if let legacyDiskURL { try? FileManager.default.removeItem(at: legacyDiskURL) }
     }
 
     private func insert(_ metadata: ContentMetadata, for key: Key) {
-        let byteCost = (try? JSONEncoder().encode(metadata).count) ?? 0
+        // Include paths and analysis options in the budget, not just extracted text.
+        let candidate = Entry(key: key, metadata: metadata, lastAccessedAt: Date(), byteCost: 0)
+        guard let byteCost = try? JSONEncoder().encode(candidate).count,
+              byteCost <= maximumByteCost else { return }
+        isDirty = true
         if let previous = entries[key] { totalByteCost -= previous.byteCost }
         entries[key] = Entry(
             key: key,
@@ -238,12 +257,13 @@ private actor SharedContentMetadataCache {
     }
 
     private func trimIfNeeded() {
-        guard totalByteCost > maximumByteCost else { return }
+        guard totalByteCost > maximumByteCost || entries.count > maximumEntryCount else { return }
         // Amortized trim: drop to 75% of the budget so the next insert does
         // not immediately re-sort the whole table.
         let targetByteCost = maximumByteCost * 3 / 4
+        let targetEntryCount = entries.count > maximumEntryCount ? maximumEntryCount * 3 / 4 : maximumEntryCount
         for entry in entries.values.sorted(by: { $0.lastAccessedAt < $1.lastAccessedAt }) {
-            guard totalByteCost > targetByteCost else { break }
+            guard totalByteCost > targetByteCost || entries.count > targetEntryCount else { break }
             entries.removeValue(forKey: entry.key)
             totalByteCost -= entry.byteCost
         }
@@ -251,19 +271,40 @@ private actor SharedContentMetadataCache {
 
     private func loadIfNeeded() async {
         guard !hasLoaded else { return }
-        hasLoaded = true
-        // Disk decoding happens off this actor on .utility; only the bounded
-        // insert runs here. Data(contentsOf:) must never run on the main actor.
-        guard let diskURL else { return }
-        guard let decoded = await Task.detached(priority: .utility) { () -> [Entry]? in
-            guard let data = try? Data(contentsOf: diskURL) else { return nil }
-            return try? JSONDecoder().decode([Entry].self, from: data)
-        }.value else { return }
-        for entry in decoded.sorted(by: { $0.lastAccessedAt > $1.lastAccessedAt }) {
-            guard totalByteCost + entry.byteCost <= maximumByteCost else { continue }
-            entries[entry.key] = entry
-            totalByteCost += entry.byteCost
+        let currentGeneration = generation
+        if loadTask == nil {
+            let diskURL = diskURL
+            let legacyDiskURL = legacyDiskURL
+            loadTask = Task.detached(priority: .utility) { () -> [Entry]? in
+                if let diskURL, let data = try? Data(contentsOf: diskURL),
+                   let json = try? (data as NSData).decompressed(using: .lzfse),
+                   let entries = try? JSONDecoder().decode([Entry].self, from: json as Data) {
+                    return entries
+                }
+                guard let legacyDiskURL, let data = try? Data(contentsOf: legacyDiskURL) else { return nil }
+                return try? JSONDecoder().decode([Entry].self, from: data)
+            }
         }
+        let decoded = await loadTask?.value
+        // All callers await the same read; clear invalidates its result.
+        guard generation == currentGeneration, !hasLoaded else { return }
+        hasLoaded = true
+        loadTask = nil
+        let expiration = Date().addingTimeInterval(-14 * 24 * 60 * 60)
+        for entry in (decoded ?? []).sorted(by: { $0.lastAccessedAt > $1.lastAccessedAt }) {
+            guard entry.lastAccessedAt >= expiration, entries[entry.key] == nil,
+                  entries.count < maximumEntryCount,
+                  let byteCost = try? JSONEncoder().encode(entry).count,
+                  byteCost <= maximumByteCost - totalByteCost else { continue }
+            entries[entry.key] = Entry(key: entry.key, metadata: entry.metadata,
+                                       lastAccessedAt: entry.lastAccessedAt, byteCost: byteCost)
+            totalByteCost += byteCost
+        }
+        // Rewrite once for migration or expiration, but never for a read-only scan.
+        if let legacyDiskURL, FileManager.default.fileExists(atPath: legacyDiskURL.path) {
+            isDirty = true
+        }
+        if let decoded, decoded.count != entries.count { isDirty = true }
     }
 
     private func flushIfCurrent(_ expectedGeneration: Int) {
@@ -273,13 +314,17 @@ private actor SharedContentMetadataCache {
     }
 
     private func saveToDisk() {
-        guard let diskURL else { return }
+        guard isDirty, let diskURL else { return }
         do {
             try FileManager.default.createDirectory(
                 at: diskURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            try JSONEncoder().encode(Array(entries.values)).write(to: diskURL, options: .atomic)
+            let json = try JSONEncoder().encode(Array(entries.values))
+            let compressed = try (json as NSData).compressed(using: .lzfse)
+            try (compressed as Data).write(to: diskURL, options: .atomic)
+            isDirty = false
+            if let legacyDiskURL { try? FileManager.default.removeItem(at: legacyDiskURL) }
         } catch {
             DebugLogger.log("Failed to save content cache: \(error)")
         }
