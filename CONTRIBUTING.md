@@ -286,10 +286,31 @@ Prefer small, reviewable commits and push them early. The goal is to get Blacksm
 
 Releases are validated and built on Blacksmith. Do not create release confidence from local `make release`, `make prerelease`, or `make ci` output.
 
-1. Push the release branch and wait for **Swift CI** to pass on Blacksmith.
+1. Push `main` and wait for **Swift CI** to pass on Blacksmith.
 2. Trigger the **Release** workflow from GitHub Actions with the target version, or push the intended `v*` tag.
-3. Confirm the release workflow completed all required Blacksmith jobs: changelog preparation, current test inventory, parallel unit tests, universal app build, Sparkle appcast generation, and release publication.
+3. Confirm the release workflow completed all required Blacksmith jobs: changelog preparation, current test inventory, serial unit tests, universal app build, Sparkle appcast generation, and release publication.
 4. Use local release commands only to reproduce or debug a failure from the Blacksmith run.
+
+To check the release path without publishing, dispatch it on `main` with the
+current version from `Info.plist` and `validate_only=true`:
+
+```bash
+gh workflow run release.yml --ref main -f version=1.2.1 -f validate_only=true
+```
+
+This runs tests, builds both architectures, verifies the signed ZIP, launches the
+packaged app, and validates the Sparkle appcast. It skips Sentry publication,
+tag creation, and GitHub release publication. A successful run also saves the
+universal build cache on `main`, where subsequent releases can restore it.
+Normal releases leave `validate_only` off. Tests and the universal build run in
+parallel jobs; tests within the release test job run serially because they share
+macOS Trash and Keychain services.
+
+Sentry release metadata and symbols publish in a separate job after the GitHub
+release succeeds. Check that job before treating crash symbolication as ready;
+retry it if needed. Compilation jobs in CI and Release pin Xcode 26.3.
+Release builds retain both architectures and whole-module Swift optimization,
+with Thin LTO disabled.
 
 ## Commit Message Guidelines
 

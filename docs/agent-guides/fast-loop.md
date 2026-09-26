@@ -16,6 +16,18 @@ Optimized workflows for rapid iteration on Sorty.
 | Force cache pruning | `make cache-prune` | varies |
 | Benchmark all builds | `make benchmark` | ~5-10min |
 
+## Finder extension in the fast loop
+
+`make now`, `make dev`, `make daily`, `make hot`, and preview harnesses skip
+Finder Sync by default. Use `make now ENABLE_FINDER_EXTENSION=true` after
+editing the extension or when testing Finder integration. An app built without
+the extension does not provide Finder actions. Release builds still include it.
+
+Keep `PRESERVE_APP_BUNDLE=true` and avoid `make clean` during normal iteration.
+Unchanged signed bundles are reused; changed bundles are staged and signed
+before replacing the published app. Safe shutdown still waits for active file
+operations rather than interrupting them for a faster build.
+
 ## Hot reload
 
 Sorty vendors the InjectionLite runtime at InjectionNext 2.0.1's exact
@@ -109,14 +121,14 @@ These are already configured — no action needed:
 - **One normal SwiftPM cache** for `make now`, `make build`, `make test`, and local CI diagnostics, with matching indexing flags. Local CI honors `SORTY_BUILD_DIR` instead of creating a second cache in `.build`. Coverage, profiling, and hot reload still have distinct compiler settings and may require compilation.
 - **Parallel compilation** using all CPU cores (`-j $(CORES)`)
 - **Batch mode** for debug builds (SPM manages incremental compilation internally)
-- **Test target** depends only on `SortyLib` (not the executable target)
+- **Test target** depends on `SortyLib` and the independent `SortyQualitySupport` library
 - **Concurrency checking** set to `minimal` to reduce type-check overhead
-- **FinderSync extension cached** — only rebuilds when source files change (~33s saved on incremental builds)
+- **FinderSync is opt-in for the fast loop** with `ENABLE_FINDER_EXTENSION=true`
 - **Expensive SwiftUI expressions split into dedicated view types** so the compiler solves smaller generic graphs.
 - **Compatibility fingerprints** reset compiled outputs only when the Swift/Xcode toolchain changes. SwiftPM and Xcode handle package, project, plist, entitlement, and script changes incrementally.
 - **Batched fingerprint hashing** starts one hashing process per group of inputs instead of one per file. Content changes still invalidate the cache even when file size and modification time are unchanged.
 - **Sentry downloads only the linked variant** through `Packages/sentry-cocoa`. It uses the same upstream 9.23.0 binary, checksum, and linker helper. The six unused binary variants no longer consume cache space or download time. SwiftPM removes them when resolving the changed package graph.
-- **Content-addressed asset catalog cache** reuses `Assets.car` when the catalog, SDK, and `actool` are unchanged.
+- **Content-addressed resource caches** reuse `Assets.car` and Beam `default.metallib` when their inputs and toolchains are unchanged. Metal keys include shader headers and the build recipe.
 - **Scheduled cache pruning**: oversized build caches are pruned at most once per day by default, including `make now`, instead of growing unchecked or doing expensive cleanup every run.
 
 ## Cache Hygiene
@@ -125,13 +137,13 @@ The scripted build path uses `scripts/build_cache.sh` before compiling:
 
 - Clears compiled outputs only when the Swift/Xcode toolchain is incompatible.
 - Preserves package checkouts and binary artifacts by default; incomplete Sparkle artifacts are still detected and repaired.
-- Prunes stale logs, asset-catalog entries, inactive configurations, and inactive Finder/Xcode outputs before considering opt-in dependency removal.
-- Under size pressure, evicts older asset catalogs while preserving the most recently used catalog. Cache hits refresh catalog age.
+- Prunes stale logs, asset-catalog and Metal entries, inactive configurations, and inactive Finder/Xcode outputs before considering opt-in dependency removal.
+- Under size pressure, evicts older resource outputs while preserving the most recently used entry for each compiler. Cache hits refresh their age.
 - Measures the full cache once before eviction, then measures only each eviction candidate. A final full measurement reports actual disk usage.
 - Keeps pruning cheap for the fast loop by using `BUILD_CACHE_PRUNE_INTERVAL_SECONDS=86400` by default.
 - Uses `BUILD_CACHE_MAX_SIZE_MB=8192`, `BUILD_CACHE_TARGET_SIZE_MB=6144`, and `BUILD_CACHE_STALE_DAYS=30` unless overridden.
 
-CI disables SwiftPM indexing and the redundant global dependency download cache. Archives retain compiled products, package checkouts, and binary artifacts, but exclude indexes and logs. CI and release unit tests share a toolchain-specific cache; universal Xcode builds use a separate cache without falling back to SwiftPM test outputs. Editor builds in Xcode keep their own indexing settings.
+CI disables SwiftPM indexing and allows the standard dependency download cache. Local builds keep the shared `SORTY_BUILD_DIR` scratch directory and also allow dependency download reuse. Archives retain compiled products, package checkouts, and binary artifacts, but exclude indexes and logs. CI and release unit tests share a toolchain-specific cache; universal Xcode builds use a separate cache without falling back to SwiftPM test outputs. Editor builds in Xcode keep their own indexing settings.
 
 Each successful commit saves a fresh build cache. Restore first prefers the same
 toolchain and package manifests, then the most recent build for that toolchain
@@ -145,7 +157,19 @@ timestamps, so the compiler rebuilds them. Missing or invalid snapshots fall bac
 to normal builds. This avoids invalidating every source solely because checkout
 gave it a new timestamp.
 
-See [GitHub's cache behavior](https://github.com/actions/cache#cache-hit)
+Use the Release workflow's `validate_only=true` input on `main` to exercise the
+universal build, signed ZIP, launch smoke test, and appcast validation without
+publishing a release. This also populates the release cache on the default
+branch. GitHub lets tag runs restore default-branch caches, but a new tag cannot
+restore a cache saved only under a different tag. See the
+[release procedure](../../CONTRIBUTING.md#release-process).
+
+The release jobs transfer the packaged ZIP once and extract it for validation.
+They do not upload a second copy of the unpacked app, and artifact compression
+is disabled because the ZIP is already compressed.
+
+See [GitHub's cache access rules](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache),
+[artifact compression guidance](https://github.com/actions/upload-artifact#altering-compressions-level-speed-v-size),
 and the [Sentry package update procedure](../../Packages/sentry-cocoa/README.md).
 
 Useful commands:
@@ -194,14 +218,49 @@ make build-profile
 
 This runs an isolated clean build with Swift frontend debug-time diagnostics, deduplicates batched compiler entries, prints the slowest project function bodies and expressions, then removes the temporary build and diagnostic log. It never invalidates the normal development cache.
 
-## Future: Modularization
+## Module boundaries and compile hotspots
 
-SortyLib is a monolithic target (more than 220 Swift files). Splitting stable non-UI layers into smaller targets would reduce the invalidation surface and allow more target-level parallelism, but target boundaries should follow dependency analysis rather than file count alone:
+`SortyQualitySupport` contains the corpus models and evaluator. `SortyQuality`
+depends only on that library, so running a quality report does not compile
+`SortyLib` or its UI and telemetry dependencies. The app does not depend on the
+corpus library. Preview mocks and harness activation are Debug-only.
 
-- **SortyCore** — Models/, Utilities/, Services/
-- **SortyAI** — AI/ (depends on SortyCore)
-- **SortyOrganizer** — Organizer/, FileSystem/, Learnings/ (depends on SortyCore, SortyAI)
-- **SortyUI** — Views/, ViewModels/, DesignSystem/, Managers/ (depends on all above)
+The large screen files separate existing views into files for setup, saved
+prompts, errors, history details, streaming, progress, and insights. Supporting
+organization models, learning exclusion monitoring, and duplicate restoration
+also have their own files. The rename stream list has a separate view body and
+an explicitly typed enumerated collection to limit type inference.
+
+File extraction alone does not prove faster builds. Swift already tracks
+intra-module dependencies. A future Core/AI/Organizer/UI split needs an acyclic
+dependency graph and measurements of changed-file rebuilds before adopting it.
+Keep manager state and cancellation logic together until a measured hotspot
+justifies changing those boundaries.
+
+## CI and release choices
+
+- Compilation jobs in Swift CI and Release use Xcode 26.3. Update both
+  workflows together after validating a newer toolchain. The packaging job uses
+  the runner toolchain for its small Swift validation scripts.
+- Test discovery compiles the test bundle; execution uses `--skip-build`.
+  Swift CI separately assembles the app to exercise packaging. Release has one
+  universal app build plus a Debug test build with different compiler settings.
+- Release tests remain serial because they use shared Trash and
+  Keychain services. Sharding requires an audited isolation list first.
+- Reuse a successful release test run with `reuse_test_run` when the existing
+  source comparison permits it. Do not reuse tests across product changes.
+- Sentry receives its symbols in a separate Ubuntu job after publication.
+  Failure remains visible in the workflow and can be retried without building
+  the app again. `validate_only` skips this upload.
+- Publishing remains serialized because releases update the shared Sparkle
+  feed. The publisher still runs on macOS for Sparkle's signing tool, signature
+  validation, and launch testing. Published asset verification remains enabled.
+- Release triggers are version tags and manual dispatches. GitHub does not
+  evaluate path filters for tag pushes, so adding them would not save work.
+
+See [Swift's incremental compilation model](https://github.com/swiftlang/swift/blob/main/docs/Driver.md),
+[GitHub cache reuse](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching),
+and [tag and path filter rules](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore).
 
 ## Tips
 
@@ -219,3 +278,29 @@ Before merging any dropdown/popover changes that should be "system liquid glass"
 - Verify the implementation uses system presentation and `glassEffect` where available.
 - If `glassEffect` is unavailable on the target OS, keep default system presentation (no custom material simulation).
 - Do a runtime visual check; build success alone is not sufficient.
+
+- Release disables Thin LTO while retaining whole-module Swift optimization
+  and both arm64 and x86_64. This removes an optimization pass, but its effect
+  on build duration, app size, and runtime has not yet been measured.
+- Architecture builds stay together. Combining separate builds would require
+  merging and validating every nested Mach-O binary and its matching symbols,
+  then signing the assembled app. A `lipo` of only the main executable is not
+  sufficient.
+
+To see warnings for Debug expressions and function bodies taking over 100 ms:
+
+```bash
+SORTY_TYPECHECK_DIAGNOSTICS=true make dev
+```
+
+This opts both app targets into compiler diagnostics and removes SortyLib's
+warning suppression for that invocation. Normal builds stay quiet. Changing
+compiler flags can rebuild targets, so use `make build-profile` for a separate
+profiling cache.
+
+Do not infer a release speedup from an exact-key cache miss. Inspect the restore
+step, build step, and cache save separately. Keep per-commit keys with compatible
+restore prefixes, and run publish-free validation on `main` before a release to
+make warm universal outputs available to the tag. Directory timestamps alone
+cannot detect edits to existing resources; bundle reuse retains content hashes,
+including Beam shader headers and the bundled Sorty skill.

@@ -326,16 +326,23 @@ prune_stale_build_cache_paths() {
         find "${BUILD_LOG_DIR}" -type f -mtime +"${stale_days}" -exec rm -f {} + 2>/dev/null || true
     fi
 
-    if [ -d "${BUILD_CACHE_STATE_DIR}/assets" ]; then
-        find "${BUILD_CACHE_STATE_DIR}/assets" -mindepth 1 -maxdepth 1 -type d \
-            -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
-    fi
+    local resource_cache
+    for resource_cache in assets metal; do
+        if [ -d "${BUILD_CACHE_STATE_DIR}/${resource_cache}" ]; then
+            find "${BUILD_CACHE_STATE_DIR}/${resource_cache}" -mindepth 1 -maxdepth 1 -type d \
+                -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
+        fi
+    done
 }
 
 build_cache_prune_candidate_paths() {
-    # Old catalogs are cheap to regenerate; keep the most recently used one.
-    local asset_path newest_asset=""
-    if [ -d "${BUILD_CACHE_STATE_DIR}/assets" ]; then
+    # Keep the most recently used output for each resource compiler.
+    local asset_path newest_asset resource_cache
+    for resource_cache in assets metal; do
+        newest_asset=""
+        if [ ! -d "${BUILD_CACHE_STATE_DIR}/${resource_cache}" ]; then
+            continue
+        fi
         while IFS=$'\t' read -r _ asset_path; do
             if [ -z "${newest_asset}" ]; then
                 newest_asset="${asset_path}"
@@ -345,9 +352,9 @@ build_cache_prune_candidate_paths() {
         done < <(
             while IFS= read -r asset_path; do
                 printf '%s\t%s\n' "$(build_cache_path_mtime "${asset_path}")" "${asset_path}"
-            done < <(find "${BUILD_CACHE_STATE_DIR}/assets" -mindepth 1 -maxdepth 1 -type d -print) | sort -rn
+            done < <(find "${BUILD_CACHE_STATE_DIR}/${resource_cache}" -mindepth 1 -maxdepth 1 -type d -print) | sort -rn
         )
-    fi
+    done
 
     if [ "${BUILD_METHOD:-spm}" != "xcodebuild" ]; then
         printf '%s\n' "${BUILD_DIR}/DerivedData"

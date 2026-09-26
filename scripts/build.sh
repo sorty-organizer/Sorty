@@ -226,6 +226,11 @@ resolve_signing_identity() {
 }
 
 configure_keychain_session_for_signing() {
+    if [ "${SIGNING_SESSION_CONFIGURED:-false}" = "true" ]; then
+        return
+    fi
+    SIGNING_SESSION_CONFIGURED=true
+
     if [ "${SIGNING_IDENTITY}" = "-" ]; then
         return
     fi
@@ -285,18 +290,21 @@ resolve_codesign_identity() {
 }
 
 codesign_cmd() {
+    configure_keychain_session_for_signing
     local -a cmd=(codesign --force --options runtime --sign "${SIGNING_IDENTITY}")
     cmd+=("$@")
     "${cmd[@]}"
 }
 
 codesign_cmd_hardened_runtime() {
+    configure_keychain_session_for_signing
     local -a cmd=(codesign --force --options runtime --sign "${SIGNING_IDENTITY}")
     cmd+=("$@")
     "${cmd[@]}"
 }
 
 codesign_cmd_allow_failure() {
+    configure_keychain_session_for_signing
     local -a cmd=(codesign --force --options runtime --sign "${SIGNING_IDENTITY}")
     cmd+=("$@")
     "${cmd[@]}" || true
@@ -650,8 +658,11 @@ compute_bundle_fingerprint() {
             "${PROJECT_DIR}/Package.swift" \
             "${PROJECT_DIR}/Package.resolved" \
             "${PROJECT_DIR}/scripts/build.sh" \
+            "${PROJECT_DIR}/scripts/build_cache.sh" \
             "${PROJECT_DIR}/scripts/utils.sh"
         bundle_fingerprint_tree \
+            "${PROJECT_DIR}/.agents/skills/sorty" \
+            "${PROJECT_DIR}/Packages/Beam/Sources/Beam/Shaders" \
             "${PROJECT_DIR}/Resources" \
             "${PROJECT_DIR}/Sources/SortyLib/Resources" \
             "${PROJECT_DIR}/Sources/SortyFinderSync" \
@@ -720,7 +731,7 @@ reset_swiftpm_build_database() {
 
 reset_swiftpm_package_cache() {
     log_item "Resetting SwiftPM package cache"
-    swift package --package-path "${PROJECT_DIR}" --scratch-path "${BUILD_DIR}" --disable-dependency-cache reset >/dev/null 2>&1 || {
+    swift package --package-path "${PROJECT_DIR}" --scratch-path "${BUILD_DIR}" reset >/dev/null 2>&1 || {
         reset_cached_build_products
         reset_cached_dependency_products
     }
@@ -878,6 +889,25 @@ compile_beam_metal_library() {
         return 0
     fi
 
+    # Swift edits still assemble a new bundle. Reuse Metal output until its
+    # source, headers, SDK, compiler, or this build recipe changes.
+    local metal_cache_key cached_library
+    metal_cache_key="$({
+        xcrun --sdk macosx --show-sdk-path
+        xcrun --sdk macosx --show-sdk-version
+        xcrun --sdk macosx metal --version
+        shasum -a 256 "${SCRIPT_DIR}/build.sh"
+        (cd "${shader_dir}" && find -s . -type f -exec shasum -a 256 {} +)
+    } | build_cache_hash_stream)"
+    cached_library="${BUILD_CACHE_STATE_DIR}/metal/${metal_cache_key}/default.metallib"
+    if [ -s "${cached_library}" ]; then
+        cp "${cached_library}" "${metal_library}"
+        touch "$(dirname "${cached_library}")"
+        rm -f "${bundle_dir}"/*.metal
+        log_detail "Beam shaders unchanged, using compiled Metal cache"
+        return 0
+    fi
+
     local temp_dir
     temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/sorty-beam.XXXXXX")"
     local air_files=()
@@ -901,6 +931,11 @@ compile_beam_metal_library() {
     fi
 
     rm -rf "${temp_dir}"
+    mkdir -p "$(dirname "${cached_library}")"
+    local cached_temporary
+    cached_temporary="$(mktemp "${cached_library}.XXXXXX")"
+    cp "${metal_library}" "${cached_temporary}"
+    mv -f "${cached_temporary}" "${cached_library}"
     rm -f "${bundle_dir}"/*.metal
     log_detail "Compiled Beam default.metallib"
 }
@@ -1247,10 +1282,6 @@ if [ "${SIGNING_IDENTITY}" = "-" ]; then
     log_detail "Using ad-hoc code signing identity"
 fi
 
-if [ "${ENABLE_ADHOC_SIGNING}" = "true" ] || [ "${ENABLE_SPARKLE_SIGNING}" = "true" ]; then
-    configure_keychain_session_for_signing
-fi
-
 if is_truthy "${SORTY_VERBOSE}"; then
     print_header "${PROJECT_NAME} Build" 50
     print_summary "Build Configuration" \
@@ -1331,7 +1362,7 @@ if [ "$SKIP_TESTS" != "true" ]; then
         # shellcheck disable=SC2206
         TEST_FLAGS_ARRAY=( ${TEST_FLAGS} )
     fi
-    if ! run_with_swiftpm_db_recovery "unit_tests" swift test --scratch-path "${BUILD_DIR}" --disable-dependency-cache "${TEST_FLAGS_ARRAY[@]}" --disable-sandbox; then
+    if ! run_with_swiftpm_db_recovery "unit_tests" swift test --scratch-path "${BUILD_DIR}" "${TEST_FLAGS_ARRAY[@]}" --disable-sandbox; then
         log_failure "Tests failed ($(get_step_duration "test")). Set SKIP_TESTS=true to bypass."
         exit 1
     fi
@@ -1564,11 +1595,10 @@ else
         swift package \
             --package-path "${PROJECT_DIR}" \
             --scratch-path "${BUILD_DIR}" \
-            --disable-dependency-cache \
             clean
         rm -rf "${BUILD_DIR}/hot-reload"
     fi
-    if ! run_with_swiftpm_db_recovery "swift_build" swift build --scratch-path "${BUILD_DIR}" --disable-dependency-cache -c "${BUILD_CONFIG}" --product "${SPM_BINARY_NAME}" "${BUILD_FLAGS_ARRAY[@]}"; then
+    if ! run_with_swiftpm_db_recovery "swift_build" swift build --scratch-path "${BUILD_DIR}" -c "${BUILD_CONFIG}" --product "${SPM_BINARY_NAME}" "${BUILD_FLAGS_ARRAY[@]}"; then
         log_failure "Compilation failed"
         exit 1
     fi

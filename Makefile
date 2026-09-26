@@ -11,7 +11,7 @@ CORES := $(shell sysctl -n hw.ncpu 2>/dev/null || echo 4)
 PARALLEL_FLAGS := -j $(CORES)
 SORTY_BUILD_DIR ?= $(HOME)/Library/Caches/Sorty/build
 SWIFTPM_SCRATCH_FLAG := --scratch-path "$(SORTY_BUILD_DIR)"
-SWIFTPM_CACHE_FLAG := --disable-dependency-cache
+SWIFTPM_CACHE_FLAG ?=
 # Scripted builds do not serve editor indexing.
 SWIFTPM_INDEX_STORE_FLAG := --disable-index-store
 
@@ -21,7 +21,8 @@ SWIFT_DEBUG_FLAGS := --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
 SWIFT_RELEASE_FLAGS := --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
 # Keep local app identity stable across rebuilds so macOS continues granting the
 # replacement binary access to Keychain credentials created by the prior build.
-FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_FINDER_EXTENSION=true ENABLE_ADHOC_SIGNING=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
+ENABLE_FINDER_EXTENSION ?= false
+FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_FINDER_EXTENSION=$(ENABLE_FINDER_EXTENSION) ENABLE_ADHOC_SIGNING=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
 VERBOSE ?= false
 BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE) SORTY_BUILD_DIR="$(SORTY_BUILD_DIR)"
 
