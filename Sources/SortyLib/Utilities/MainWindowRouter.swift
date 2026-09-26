@@ -396,3 +396,48 @@ public struct MainWindowSessionTracker: NSViewRepresentable {
         }
     }
 }
+
+// MARK: - External window requests
+
+public struct WindowLaunchRequest: Codable, Hashable, Identifiable {
+    public let id: UUID
+    public let deeplinkURLString: String?
+
+    public init(id: UUID = UUID(), deeplinkURLString: String? = nil) {
+        self.id = id
+        self.deeplinkURLString = deeplinkURLString
+    }
+
+    public init(url: URL) {
+        self.init(deeplinkURLString: url.absoluteString)
+    }
+
+    public var deeplinkURL: URL? {
+        guard let deeplinkURLString, !deeplinkURLString.isEmpty else {
+            return nil
+        }
+        return URL(string: deeplinkURLString)
+    }
+}
+
+// MARK: - External URL deduplication
+
+@MainActor
+public enum ExternalDeeplinkDeduper {
+    private static var lastSignature: String = ""
+    private static var lastHandledAt: Date = .distantPast
+    private static let dedupeWindow: TimeInterval = 0.8
+
+    public static func shouldHandle(_ url: URL) -> Bool {
+        let signature = url.absoluteString
+        let now = Date()
+
+        if signature == lastSignature, now.timeIntervalSince(lastHandledAt) < dedupeWindow {
+            return false
+        }
+
+        lastSignature = signature
+        lastHandledAt = now
+        return true
+    }
+}

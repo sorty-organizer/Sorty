@@ -189,11 +189,9 @@
 		CC220002000000000000A002 /* AIInsightExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A002 /* AIInsightExtractor.swift */; };
 		CC220002000000000000A003 /* AIRequestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A003 /* AIRequestSupport.swift */; };
 		CC220002000000000000A005 /* FileLearningsAttributionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A005 /* FileLearningsAttributionResolver.swift */; };
-		CC220002000000000000A006 /* WindowLaunchRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A006 /* WindowLaunchRequest.swift */; };
 		CC220002000000000000A007 /* WindowSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A007 /* WindowSession.swift */; };
 		CC220002000000000000A008 /* PromptContextHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A008 /* PromptContextHelper.swift */; };
 		CC220002000000000000A00A /* StorageDestinationNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00A /* StorageDestinationNormalizer.swift */; };
-		CC220002000000000000A00B /* ExternalDeeplinkDeduper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00B /* ExternalDeeplinkDeduper.swift */; };
 		CC220002000000000000A00C /* FilenameSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00C /* FilenameSanitizer.swift */; };
 		CC220002000000000000A00D /* NotificationCenter+MainActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00D /* NotificationCenter+MainActor.swift */; };
 		CC220002000000000000A00E /* RenameRuleEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00E /* RenameRuleEngine.swift */; };
@@ -503,11 +501,9 @@
 		CC110001000000000000A002 /* AIInsightExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInsightExtractor.swift; sourceTree = "<group>"; };
 		CC110001000000000000A003 /* AIRequestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIRequestSupport.swift; sourceTree = "<group>"; };
 		CC110001000000000000A005 /* FileLearningsAttributionResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileLearningsAttributionResolver.swift; sourceTree = "<group>"; };
-		CC110001000000000000A006 /* WindowLaunchRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowLaunchRequest.swift; sourceTree = "<group>"; };
 		CC110001000000000000A007 /* WindowSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSession.swift; sourceTree = "<group>"; };
 		CC110001000000000000A008 /* PromptContextHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptContextHelper.swift; sourceTree = "<group>"; };
 		CC110001000000000000A00A /* StorageDestinationNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageDestinationNormalizer.swift; sourceTree = "<group>"; };
-		CC110001000000000000A00B /* ExternalDeeplinkDeduper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDeeplinkDeduper.swift; sourceTree = "<group>"; };
 		CC110001000000000000A00C /* FilenameSanitizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilenameSanitizer.swift; sourceTree = "<group>"; };
 		CC110001000000000000A00D /* NotificationCenter+MainActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NotificationCenter+MainActor.swift"; sourceTree = "<group>"; };
 		CC110001000000000000A00E /* RenameRuleEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameRuleEngine.swift; sourceTree = "<group>"; };
@@ -711,7 +707,6 @@
 				AABBCC11000100000000000D /* FeatureFlags.swift */,
 				AABBCC11000100000000000E /* ExclusionEnforcer.swift */,
 				AABBCC110001000000000079 /* NamingPreset.swift */,
-				CC110001000000000000A006 /* WindowLaunchRequest.swift */,
 				CC110001000000000000A007 /* WindowSession.swift */,
 			);
 			path = Sources/SortyLib/Models;
@@ -754,7 +749,6 @@
 				AABBCC11000100000000007A /* NamingPresetManager.swift */,
 				AABBCC11000100000000007E /* OnboardingAudioManager.swift */,
 				AABBCC110001000000000095 /* SteeringPromptManager.swift */,
-				CC110001000000000000A00B /* ExternalDeeplinkDeduper.swift */,
 				CC110001000000000000A00C /* FilenameSanitizer.swift */,
 				CC110001000000000000A00D /* NotificationCenter+MainActor.swift */,
 				CC110001000000000000A00E /* RenameRuleEngine.swift */,
