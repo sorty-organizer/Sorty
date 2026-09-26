@@ -2,6 +2,7 @@
 """Combine separately built release apps before signing and packaging."""
 
 import hashlib
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -33,6 +34,31 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def same_generated_resource(relative: Path, arm_file: Path, intel_file: Path) -> bool:
+    if relative == Path("Contents/Resources/Assets.car"):
+        def catalog(path: Path) -> list:
+            entries = json.loads(run("xcrun", "assetutil", "--info", str(path)))
+            if not entries:
+                raise SystemExit(f"Empty asset catalog: {path}")
+            entries[0].pop("Timestamp", None)
+            return entries
+
+        return catalog(arm_file) == catalog(intel_file)
+
+    if relative == Path("Contents/Resources/Metadata.appintents/extract.actionsdata"):
+        def intents(path: Path) -> dict:
+            data = json.loads(path.read_text())
+            for action in data.get("actions", {}).values():
+                for parameter in action.get("parameters", []):
+                    types = parameter.get("resolvableInputTypes", [])
+                    types.sort(key=lambda value: json.dumps(value, sort_keys=True))
+            return data
+
+        return intents(arm_file) == intents(intel_file)
+
+    return False
+
+
 def sign(path: Path, entitlements: Optional[Path] = None) -> None:
     command = ["codesign", "--force", "--options", "runtime", "--sign", "-"]
     if entitlements:
@@ -59,7 +85,7 @@ def main() -> None:
         if is_macho(arm_file) != is_macho(intel_file):
             raise SystemExit(f"Mach-O mismatch: {relative}")
         if not is_macho(arm_file):
-            if digest(arm_file) != digest(intel_file):
+            if digest(arm_file) != digest(intel_file) and not same_generated_resource(relative, arm_file, intel_file):
                 raise SystemExit(f"Resource mismatch: {relative}")
             continue
         arm_archs = set(run("lipo", "-archs", str(arm_file)).split())
@@ -74,6 +100,7 @@ def main() -> None:
 
     expected = {
         Path("Contents/MacOS/Sorty"),
+        Path("Contents/Frameworks/Sentry.framework/Versions/A/Sentry"),
         Path("Contents/PlugIns/SortyFinderSync.appex/Contents/MacOS/SortyFinderSync"),
     }
     if set(merged) != expected:
@@ -89,12 +116,13 @@ def main() -> None:
         if set(run("lipo", "-archs", str(target)).split()) != {"arm64", "x86_64"}:
             raise SystemExit(f"Merged binary is not universal: {relative}")
 
+    sign(output / "Contents/Frameworks/Sentry.framework")
     extension = output / "Contents/PlugIns/SortyFinderSync.appex"
     sign(extension / "Contents/MacOS/SortyFinderSync")
     sign(extension, Path("SortyFinderSync/SortyFinderSync.entitlements"))
     sign(output, Path("Sorty.entitlements"))
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(output)], check=True)
-    print("Merged and signed Sorty and Finder extension slices.")
+    print("Merged and signed Sorty, Sentry, and Finder extension slices.")
 
 
 if __name__ == "__main__":

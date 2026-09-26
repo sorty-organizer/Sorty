@@ -283,12 +283,14 @@ Before merging any dropdown/popover changes that should be "system liquid glass"
 - Release disables Thin LTO while retaining whole-module Swift optimization
   and both arm64 and x86_64. This removes an optimization pass, but its effect
   on build duration, app size, and runtime has not yet been measured.
-- Release builds arm64 and x86_64 on separate runners, then merges the two
-  project executables and signs the app on a third runner. The merge checks
-  every bundled file and Mach-O architecture. Prebuilt frameworks must match
-  across both builds. Both slices' dSYMs go to Sentry. This adds a runner and
-  artifact transfers; the effect on release time needs a measured validation
-  run. The last universal validation spent 3m33s in its build step.
+- Release builds arm64 and x86_64 on separate runners, then merges the app,
+  Finder extension, and Sentry binaries and signs them on a third runner. The
+  merge checks every bundled file and Mach-O architecture. Prebuilt frameworks
+  must match across both builds. For generated asset catalogs it ignores only
+  the build timestamp; for App Intents metadata it ignores input-type order.
+  Both slices' dSYMs go to Sentry. This adds a runner and artifact transfers;
+  the effect on release time needs a measured validation run. The last
+  universal validation spent 3m33s in its build step.
 
 To see warnings for Debug expressions and function bodies taking over 100 ms:
 
