@@ -26,9 +26,6 @@ var sortyLibSwiftSettings: [SwiftSetting] = [
     .unsafeFlags(["-enable-batch-mode"], .when(configuration: .debug)),
     // Release: Full optimization with whole-module
     .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
-    // Batched builds otherwise repeat the same diagnostics for many
-    // primary files, producing megabytes of low-value output.
-    .unsafeFlags(["-suppress-warnings"]),
     // Swift 6 strict concurrency - minimal checking to reduce type-check cost
     .unsafeFlags(["-strict-concurrency=minimal"])
 ]
@@ -45,6 +42,19 @@ var sortyAppLinkerSettings: [LinkerSetting] = [
     .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug))
 ]
 
+// Opt in while investigating compile hotspots without changing normal builds.
+if ProcessInfo.processInfo.environment["SORTY_TYPECHECK_DIAGNOSTICS"] == "true" {
+    let diagnostics = SwiftSetting.unsafeFlags([
+        "-Xfrontend", "-warn-long-expression-type-checking=100",
+        "-Xfrontend", "-warn-long-function-bodies=100"
+    ], .when(configuration: .debug))
+    sortyLibSwiftSettings.append(diagnostics)
+    sortyAppSwiftSettings.append(diagnostics)
+} else {
+    // Batched builds otherwise repeat diagnostics for many primary files.
+    sortyLibSwiftSettings.append(.unsafeFlags(["-suppress-warnings"]))
+}
+
 if isHotReloadBuild {
     let opaqueTypeErasure = SwiftSetting.unsafeFlags(
         ["-Xfrontend", "-enable-experimental-opaque-type-erasure"],
@@ -60,25 +70,92 @@ if isHotReloadBuild {
     sortyAppLinkerSettings.append(interposable)
 }
 
+var packageProducts: [Product] = [
+    .library(name: "SortyQualitySupport", targets: ["SortyQualitySupport"]),
+    .library(
+        name: "SortyLib",
+        targets: ["SortyLib"]),
+    .executable(
+        name: "SortyApp",
+        targets: ["SortyApp"]),
+    .executable(
+        name: "SortyQuality",
+        targets: ["SortyQuality"])
+]
+var packageTargets: [Target] = [
+    .target(name: "SortyQualitySupport", path: "Sources/SortyQualitySupport"),
+    .target(
+        name: "SortyLib",
+        dependencies: sortyLibDependencies,
+        path: "Sources/SortyLib",
+        resources: [
+            // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation
+            // SPM only handles the Images directory as PNG fallbacks
+            .copy("Resources/Images"),
+            .copy("Resources/AppIcons"),
+            .copy("Resources/Shaders"),
+            .copy("Resources/whats-new-design-system-1.png"),
+            .copy("Resources/whats-new-design-system-2.png"),
+            .copy("Resources/whats-new-design-system-3.png"),
+            .copy("Resources/whats-new-design-system-4.png"),
+            .copy("Resources/whats-new-design-system-5.png"),
+            .copy("Resources/whats-new-preview.png"),
+            .copy("Resources/SortyAppRepair.entitlements"),
+            .process("Resources/Localizable.xcstrings"),
+            .process("Resources/automation-demo.mp4"),
+            .process("Resources/files-and-folders-demo.mp4"),
+            .process("Resources/full-disk-access-demo.mp4"),
+            .process("Resources/SortyMascotTemplate.svg"),
+            .process("Resources/OnboardingSound.m4a"),
+            .process("Resources/Final Onboarding.m4a")
+        ],
+        swiftSettings: sortyLibSwiftSettings,
+        linkerSettings: sortyLibLinkerSettings
+    ),
+    .executableTarget(
+        name: "SortyApp",
+        dependencies: ["SortyLib"],
+        path: "Sources/SortyApp",
+        swiftSettings: sortyAppSwiftSettings,
+        linkerSettings: sortyAppLinkerSettings
+    ),
+    .executableTarget(
+        name: "SortyQuality",
+        dependencies: ["SortyQualitySupport"],
+        path: "Sources/SortyQuality"
+    ),
+    .testTarget(
+        name: "SortyTests",
+        dependencies: ["SortyLib", "SortyQualitySupport"],
+        path: "Tests/SortyTests",
+        swiftSettings: [
+            .unsafeFlags(["-enable-batch-mode"]),
+        ]
+    )
+]
+if isHotReloadBuild {
+    packageProducts.append(
+        .executable(
+            name: "SortyHotReloadPreparer",
+            targets: ["SortyHotReloadPreparer"])
+    )
+    packageTargets.append(
+        .executableTarget(
+            name: "SortyHotReloadPreparer",
+            dependencies: [
+                .product(name: "InjectionImpl", package: "InjectionLite")
+            ],
+            path: "Sources/SortyHotReloadPreparer"
+        )
+    )
+}
+
 let package = Package(
     name: "Sorty",
     platforms: [
         .macOS(.v15)
     ],
-    products: [
-        .library(
-            name: "SortyLib",
-            targets: ["SortyLib"]),
-        .executable(
-            name: "SortyApp",
-            targets: ["SortyApp"]),
-        .executable(
-            name: "SortyQuality",
-            targets: ["SortyQuality"]),
-        .executable(
-            name: "SortyHotReloadPreparer",
-            targets: ["SortyHotReloadPreparer"])
-    ],
+    products: packageProducts,
     dependencies: [
         // Upstream Permiso currently targets macOS 26, so Sorty vendors a local
         // package variant that preserves the same overlay UI on macOS 15.
@@ -98,61 +175,5 @@ let package = Package(
         // 2.9.3 fixes Sparkle's macOS 26 cache protection for bundle IDs ending in `.app`.
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.3")
     ],
-    targets: [
-        .target(
-            name: "SortyLib",
-            dependencies: sortyLibDependencies,
-            path: "Sources/SortyLib",
-            resources: [
-                // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation
-                // SPM only handles the Images directory as PNG fallbacks
-                .copy("Resources/Images"),
-                .copy("Resources/AppIcons"),
-                .copy("Resources/Shaders"),
-                .copy("Resources/whats-new-design-system-1.png"),
-                .copy("Resources/whats-new-design-system-2.png"),
-                .copy("Resources/whats-new-design-system-3.png"),
-                .copy("Resources/whats-new-design-system-4.png"),
-                .copy("Resources/whats-new-design-system-5.png"),
-                .copy("Resources/whats-new-preview.png"),
-                .copy("Resources/SortyAppRepair.entitlements"),
-                .process("Resources/Localizable.xcstrings"),
-                .process("Resources/automation-demo.mp4"),
-                .process("Resources/files-and-folders-demo.mp4"),
-                .process("Resources/full-disk-access-demo.mp4"),
-                .process("Resources/SortyMascotTemplate.svg"),
-                .process("Resources/OnboardingSound.m4a"),
-                .process("Resources/Final Onboarding.m4a")
-            ],
-            swiftSettings: sortyLibSwiftSettings,
-            linkerSettings: sortyLibLinkerSettings
-        ),
-        .executableTarget(
-            name: "SortyApp",
-            dependencies: ["SortyLib"],
-            path: "Sources/SortyApp",
-            swiftSettings: sortyAppSwiftSettings,
-            linkerSettings: sortyAppLinkerSettings
-        ),
-        .executableTarget(
-            name: "SortyQuality",
-            dependencies: ["SortyLib"],
-            path: "Sources/SortyQuality"
-        ),
-        .executableTarget(
-            name: "SortyHotReloadPreparer",
-            dependencies: [
-                .product(name: "InjectionImpl", package: "InjectionLite")
-            ],
-            path: "Sources/SortyHotReloadPreparer"
-        ),
-        .testTarget(
-            name: "SortyTests",
-            dependencies: ["SortyLib"],
-            path: "Tests/SortyTests",
-            swiftSettings: [
-                .unsafeFlags(["-enable-batch-mode"]),
-            ]
-        )
-    ]
+    targets: packageTargets
 )

@@ -193,6 +193,7 @@ struct EmptyAction: Identifiable {
     }
 }
 
+#if DEBUG
 // MARK: - Previews
 
 #Preview("Preview List - Normal") {
@@ -224,3 +225,5 @@ struct EmptyAction: Identifiable {
     )
     .frame(width: 800, height: 400)
 }
+
+#endif

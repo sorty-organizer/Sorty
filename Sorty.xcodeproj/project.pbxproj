@@ -260,6 +260,7 @@
 		CCE084CF694F2524EA26AEDD /* UtilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1688894E654FAC1C33A7E623 /* UtilityTests.swift */; };
 		16B81F282B36EAF958598254 /* WindowSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE2963C4A84CA07B870EDC63 /* WindowSessionTests.swift */; };
 		4A0A4B215576BB73EEEEDEB3 /* SettingsLayoutStressUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 330431C3CDD48CC4A07DB898 /* SettingsLayoutStressUITests.swift */; };
+		C02609260000000000000001 /* SortyQualitySupport in Frameworks */ = {isa = PBXBuildFile; productRef = C02609260000000000000002 /* SortyQualitySupport */; };
 /* End PBXBuildFile section */
 
 
@@ -576,6 +577,22 @@
 		1688894E654FAC1C33A7E623 /* UtilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtilityTests.swift; sourceTree = "<group>"; };
 		CE2963C4A84CA07B870EDC63 /* WindowSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSessionTests.swift; sourceTree = "<group>"; };
 		330431C3CDD48CC4A07DB898 /* SettingsLayoutStressUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsLayoutStressUITests.swift; sourceTree = "<group>"; };
+		F13E52D84CC62F38F9D41AF6 /* ReadyToOrganizeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Views/ReadyToOrganizeView.swift"; sourceTree = SOURCE_ROOT; };
+		E7590A26860907EC4D33709A /* SavedPromptsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Views/SavedPromptsSheet.swift"; sourceTree = SOURCE_ROOT; };
+		2D19D6803ED844155FA0B2D8 /* OrganizationErrorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Views/OrganizationErrorView.swift"; sourceTree = SOURCE_ROOT; };
+		95494942E72DE1C7E350674E /* InstructionEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Views/InstructionEditor.swift"; sourceTree = SOURCE_ROOT; };
+		C5000C3DD3D2F29FE6F25A10 /* HistorySessionCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Views/HistorySessionCards.swift"; sourceTree = SOURCE_ROOT; };
+		8D37E2AE82738A4B7668C0AE /* HistoryDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Views/HistoryDetailSheet.swift"; sourceTree = SOURCE_ROOT; };
+		168BCF26B0BE017A8C71C631 /* AnalysisStreamPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Views/AnalysisStreamPreview.swift"; sourceTree = SOURCE_ROOT; };
+		0FD91179C099CC5D7895FD2C /* AnalysisProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Views/AnalysisProgressView.swift"; sourceTree = SOURCE_ROOT; };
+		95C41FDD3A84AE22B9DB9FE7 /* AnalysisInsightsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Views/AnalysisInsightsView.swift"; sourceTree = SOURCE_ROOT; };
+		A6FB4B175FFEED663D2912FF /* InlineNotice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Views/InlineNotice.swift"; sourceTree = SOURCE_ROOT; };
+		5A5EDDBAA2D94114C3B2A296 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Views/FlowLayout.swift"; sourceTree = SOURCE_ROOT; };
+		6187E5189847A706A5B2543B /* OrganizationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Organizer/OrganizationState.swift"; sourceTree = SOURCE_ROOT; };
+		CFA6EA186A5D415D9B226A77 /* OrganizationProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Organizer/OrganizationProgress.swift"; sourceTree = SOURCE_ROOT; };
+		4A1EE75F6D188CC654798CE5 /* LearningExclusionMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Learnings/LearningExclusionMonitor.swift"; sourceTree = SOURCE_ROOT; };
+		D153A402BA5FF77EE10EA803 /* DuplicateRestorationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/FileSystem/DuplicateRestorationManager.swift"; sourceTree = SOURCE_ROOT; };
+		2D6ACF796DAE946A054493E3 /* FileSystemError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/FileSystem/FileSystemError.swift"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -593,6 +610,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F61A46EE2DF2D37736E4CC95 /* SortyLib in Frameworks */,
+				C02609260000000000000001 /* SortyQualitySupport in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -885,6 +903,22 @@
 		33A128592F01230000A86470 = {
 			isa = PBXGroup;
 			children = (
+				F13E52D84CC62F38F9D41AF6 /* ReadyToOrganizeView.swift */,
+				E7590A26860907EC4D33709A /* SavedPromptsSheet.swift */,
+				2D19D6803ED844155FA0B2D8 /* OrganizationErrorView.swift */,
+				95494942E72DE1C7E350674E /* InstructionEditor.swift */,
+				C5000C3DD3D2F29FE6F25A10 /* HistorySessionCards.swift */,
+				8D37E2AE82738A4B7668C0AE /* HistoryDetailSheet.swift */,
+				168BCF26B0BE017A8C71C631 /* AnalysisStreamPreview.swift */,
+				0FD91179C099CC5D7895FD2C /* AnalysisProgressView.swift */,
+				95C41FDD3A84AE22B9DB9FE7 /* AnalysisInsightsView.swift */,
+				A6FB4B175FFEED663D2912FF /* InlineNotice.swift */,
+				5A5EDDBAA2D94114C3B2A296 /* FlowLayout.swift */,
+				6187E5189847A706A5B2543B /* OrganizationState.swift */,
+				CFA6EA186A5D415D9B226A77 /* OrganizationProgress.swift */,
+				4A1EE75F6D188CC654798CE5 /* LearningExclusionMonitor.swift */,
+				D153A402BA5FF77EE10EA803 /* DuplicateRestorationManager.swift */,
+				2D6ACF796DAE946A054493E3 /* FileSystemError.swift */,
 				99999999AAAA000000000003 /* Resources */,
 				3353FC462F0124320097CD23,
 				33A128902F01230200A86470 /* SortyUITests */,
@@ -1115,6 +1149,7 @@
 			name = SortyTests;
 			packageProductDependencies = (
 				2281A6367D915CEFD05D59CF /* SortyLib */,
+				C02609260000000000000002 /* SortyQualitySupport */,
 			);
 			productName = SortyTests;
 			productReference = 33A1286F2F01230200A86470 /* SortyTests.xctest */;
@@ -1484,7 +1519,7 @@
 				ENABLE_EAGER_LINKING = YES;
 				STRIP_INSTALLED_PRODUCT = YES;
 				STRIP_STYLE = all;
-				LLVM_LTO = YES_THIN;
+				LLVM_LTO = NO;
 			};
 			name = Release;
 		};
@@ -1767,6 +1802,10 @@
 		2281A6367D915CEFD05D59CF /* SortyLib */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SortyLib;
+		};
+		C02609260000000000000002 /* SortyQualitySupport */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SortyQualitySupport;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

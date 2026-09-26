@@ -511,6 +511,7 @@ struct MainWindowRootView: View {
     }
 
     private func configureUITestPreviewIfNeeded() {
+        #if DEBUG
         guard ProcessInfo.processInfo.environment["XCUITEST_SEED_PREVIEW"] == "1" else { return }
 
         let directory = URL(fileURLWithPath: "/tmp/sorty-accessibility-preview", isDirectory: true)
@@ -518,6 +519,7 @@ struct MainWindowRootView: View {
         windowSession.organizer.currentDirectory = directory
         windowSession.organizer.currentPlan = PreviewMocks.makeOrganizationPlan()
         windowSession.organizer.state = .ready
+        #endif
     }
 
     private func handleExternalDeeplink(_ url: URL) {

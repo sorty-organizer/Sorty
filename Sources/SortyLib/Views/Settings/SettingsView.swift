@@ -461,6 +461,7 @@ struct SettingsView: View {
 
 // MARK: - Previews
 
+#if DEBUG
 @MainActor
 private enum SettingsPreviewObjects {
     static var appStateWithSection: (_ section: SettingsCategory) -> AppState {
@@ -506,3 +507,5 @@ private enum SettingsPreviewObjects {
         .environmentObject(SettingsPreviewObjects.appStateWithSection(.advanced))
         .frame(width: 900, height: 700)
 }
+
+#endif

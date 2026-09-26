@@ -421,6 +421,7 @@ private struct AnalyticsConsentOverlay: View {
     }
 }
 
+#if DEBUG
 #Preview("Content View - Main") {
     ContentView()
         .environmentObject(PreviewObjects.mainAppState)
@@ -461,3 +462,5 @@ enum PreviewObjects {
         return state
     }
 }
+
+#endif

@@ -1,6 +1,7 @@
 import XCTest
 import Combine
 @testable import SortyLib
+import SortyQualitySupport
 
 // Mock AI Client for testing (analyze-focused).
 // NOTE: A second, divergent MockAIClient lives in LLMRuleInducerTests.swift

@@ -1,5 +1,5 @@
 import Foundation
-import SortyLib
+import SortyQualitySupport
 
 @main
 enum SortyQualityCommand {

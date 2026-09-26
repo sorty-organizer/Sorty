@@ -116,6 +116,10 @@ public enum FeatureFlags {
     /// SORTY_HARNESS_MODE=1 open Sorty.app
     /// ```
     public static var harnessMode: Bool {
+        #if DEBUG
         ProcessInfo.processInfo.environment["SORTY_HARNESS_MODE"] == "1"
+        #else
+        false
+        #endif
     }
 }

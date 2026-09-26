@@ -1,3 +1,4 @@
+#if DEBUG
 //
 //  PreviewMocks.swift
 //  Sorty
@@ -419,3 +420,5 @@ extension StorageLocationsManager {
         StorageLocationsManager()
     }
 }
+
+#endif
