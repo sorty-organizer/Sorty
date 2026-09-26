@@ -775,18 +775,34 @@ struct PromptBuilder {
         return base
     }
 
-    static func buildUltraCompactPrompt(
+    private static func buildReducedPrompt(
         files: [FileItem],
-        mode: OrganizationMode = .organize,
-        enableReasoning: Bool = false
+        mode: OrganizationMode,
+        enableReasoning: Bool,
+        level: CompactionLevel
     ) -> (system: String, user: String) {
-        let system = minimalCompactSystemPrompt(
-            mode: mode,
-            enableReasoning: enableReasoning
+        let limits: (name: Int, path: Int, title: Int, hint: Int, extensions: Int)
+        switch level {
+        case .ultra:
+            limits = (48, 64, 48, 96, 12)
+        case .summary:
+            limits = (40, 48, 40, 72, 8)
+        case .micro:
+            limits = (32, 40, 32, 56, 6)
+        case .standard:
+            preconditionFailure("Standard prompts use the full compact builder")
+        }
+
+        let system = minimalCompactSystemPrompt(mode: mode, enableReasoning: enableReasoning)
+        let table = compactFileIdTable(
+            files: files,
+            maxNameLength: limits.name,
+            maxPathLength: limits.path,
+            maxTitleLength: limits.title,
+            maxHintLength: limits.hint
         )
-        let table = compactFileIdTable(files: files, maxNameLength: 48, maxPathLength: 64, maxTitleLength: 48, maxHintLength: 96)
         let user = """
-        \(compactFileSummary(files: files))
+        \(compactFileSummary(files: files, maxExtensions: limits.extensions))
         Files (id|name|relative path|extension|size/date|title|content or OCR hint):
         \(table)
 
@@ -795,46 +811,6 @@ struct PromptBuilder {
         return (system, user)
     }
 
-    static func buildSummaryPrompt(
-        files: [FileItem],
-        mode: OrganizationMode = .organize,
-        enableReasoning: Bool = false
-    ) -> (system: String, user: String) {
-        let system = minimalCompactSystemPrompt(
-            mode: mode,
-            enableReasoning: enableReasoning
-        )
-        let table = compactFileIdTable(files: files, maxNameLength: 40, maxPathLength: 48, maxTitleLength: 40, maxHintLength: 72)
-        let user = """
-        \(compactFileSummary(files: files, maxExtensions: 8))
-        Files (id|name|relative path|extension|size/date|title|content or OCR hint):
-        \(table)
-
-        \(compactResponseContract(mode: mode, enableReasoning: enableReasoning))
-        """
-        return (system, user)
-    }
-
-    static func buildMicroPrompt(
-        files: [FileItem],
-        mode: OrganizationMode = .organize,
-        enableReasoning: Bool = false
-    ) -> (system: String, user: String) {
-        let system = minimalCompactSystemPrompt(
-            mode: mode,
-            enableReasoning: false
-        )
-        let table = compactFileIdTable(files: files, maxNameLength: 32, maxPathLength: 40, maxTitleLength: 32, maxHintLength: 56)
-        let user = """
-        \(compactFileSummary(files: files, maxExtensions: 6))
-        Files (id|name|relative path|extension|size/date|title|content or OCR hint):
-        \(table)
-
-        \(compactResponseContract(mode: mode, enableReasoning: enableReasoning))
-        """
-        return (system, user)
-    }
-    
     /// Compact prompt for Apple Intelligence (reduced context window)
     static func buildCompactPrompt(files: [FileItem], mode: OrganizationMode = .organize, enableReasoning: Bool = false) -> String {
         var prompt: String
@@ -919,23 +895,12 @@ struct PromptBuilder {
                 )
             let user = buildCompactPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
             pair = (system, user)
-        case .ultra:
-            pair = buildUltraCompactPrompt(
+        case .ultra, .summary, .micro:
+            pair = buildReducedPrompt(
                 files: files,
                 mode: config.mode,
-                enableReasoning: config.enableReasoning
-            )
-        case .summary:
-            pair = buildSummaryPrompt(
-                files: files,
-                mode: config.mode,
-                enableReasoning: config.enableReasoning
-            )
-        case .micro:
-            pair = buildMicroPrompt(
-                files: files,
-                mode: config.mode,
-                enableReasoning: config.enableReasoning
+                enableReasoning: config.enableReasoning,
+                level: level
             )
         }
         let namingPolicy = compactNamingPolicy(config: config)
