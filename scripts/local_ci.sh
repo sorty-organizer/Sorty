@@ -196,7 +196,7 @@ step_security() {
 
 step_build() {
     cd "$PROJECT_DIR"
-    swift build --disable-sandbox -j "$CORES"
+    swift build --scratch-path "$BUILD_DIR" --disable-dependency-cache --disable-index-store --disable-sandbox -j "$CORES"
 }
 
 step_test() {
@@ -206,7 +206,7 @@ step_test() {
     fi
 
     cd "$PROJECT_DIR"
-    swift test --disable-sandbox --parallel -j "$CORES"
+    swift test --scratch-path "$BUILD_DIR" --disable-dependency-cache --disable-index-store --disable-sandbox --parallel -j "$CORES"
 }
 
 step_app_build() {
@@ -215,7 +215,8 @@ step_app_build() {
     SKIP_GIT_INJECT=true \
     BUILD_CONFIG=debug \
     APP_ICON_VARIANT=ci \
-    SORTY_BUILD_DIR="${PROJECT_DIR}/.build" \
+    SORTY_BUILD_DIR="${BUILD_DIR}" \
+    BUILD_FLAGS="--disable-index-store -j ${CORES}" \
     ./scripts/build.sh
 }
 

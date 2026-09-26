@@ -106,6 +106,7 @@ make harness
 These are already configured — no action needed:
 
 - **Index store disabled** for local SwiftPM debug builds (`Makefile`)
+- **One normal SwiftPM cache** for `make now`, `make build`, `make test`, and local CI diagnostics, with matching indexing flags. Local CI honors `SORTY_BUILD_DIR` instead of creating a second cache in `.build`. Coverage, profiling, and hot reload still have distinct compiler settings and may require compilation.
 - **Parallel compilation** using all CPU cores (`-j $(CORES)`)
 - **Batch mode** for debug builds (SPM manages incremental compilation internally)
 - **Test target** depends only on `SortyLib` (not the executable target)

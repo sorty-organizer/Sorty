@@ -27,7 +27,7 @@ BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE) SORTY_BUILD_DIR="$(SORTY_BUILD_DIR)
 
 build:
 	@chmod +x scripts/build.sh
-	@$(BUILD_SCRIPT_ENV) BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFTPM_INDEX_STORE_FLAG)" ./scripts/build.sh
 
 build-ci-universal:
 	@echo "CI-style xcodebuild (universal)..."
@@ -54,7 +54,7 @@ dev:
 # runs the complete test suite with parallel execution
 test:
 	@echo "🧪 Running unit tests in parallel ($(CORES) jobs)..."
-	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox
+	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
 
 # Quick test run - excludes slow UI/integration tests
 test-fast:
@@ -99,14 +99,14 @@ ci:
 	@echo "🔄 Running local CI-style diagnostics ($(CORES) cores)..."
 	@echo "   Blacksmith GitHub Actions remain the source of truth for PR/release gates."
 	@chmod +x scripts/local_ci.sh
-	@./scripts/local_ci.sh
+	@$(BUILD_SCRIPT_ENV) ./scripts/local_ci.sh
 
 # Legacy local CI + report result to GitHub as a commit status.
 ci-report:
 	@echo "🔄 Running legacy local CI checks + reporting to GitHub..."
 	@echo "   This status does not skip Blacksmith checks."
 	@chmod +x scripts/local_ci.sh
-	@./scripts/local_ci.sh --report
+	@$(BUILD_SCRIPT_ENV) ./scripts/local_ci.sh --report
 
 clean:
 	@echo "🧹 Cleaning build artifacts..."
@@ -119,7 +119,7 @@ clean:
 # Clean rebuild - force a full rebuild after cleaning caches
 rebuild: clean
 	@echo "🔁 Full rebuild after clean..."
-	@$(BUILD_SCRIPT_ENV) BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFTPM_INDEX_STORE_FLAG)" ./scripts/build.sh
 
 # Install app to /Applications
 install: build
