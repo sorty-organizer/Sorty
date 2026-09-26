@@ -59,29 +59,6 @@ extension KeyEquivalent {
     static let defaultAction = KeyEquivalent("\r") // Return
 }
 
-extension String {
-    /// Returns true if the string is a subpath of the given base path
-    func isSubpath(of base: String) -> Bool {
-        let pathURL = URL(fileURLWithPath: self).standardized
-        let baseURL = URL(fileURLWithPath: base).standardized
-        
-        // Exact match
-        if pathURL.path == baseURL.path { return true }
-        
-        // Check if path starts with base and next char is separator
-        let basePath = baseURL.path
-        let targetPath = pathURL.path
-        
-        if targetPath.hasPrefix(basePath) {
-            let nextIndex = targetPath.index(targetPath.startIndex, offsetBy: basePath.count)
-            if nextIndex == targetPath.endIndex { return true } // Exact match again
-            return targetPath[nextIndex] == "/"
-        }
-        
-        return false
-    }
-}
-
 extension View {
     func minimumHitTarget(_ size: CGFloat = 40) -> some View {
         modifier(MinimumHitTargetModifier(size: size))

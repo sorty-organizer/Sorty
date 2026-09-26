@@ -596,7 +596,7 @@ public actor FileSystemManager {
 
     /// Check if a path is currently being reverted
     public func isPathBeingReverted(_ path: String) -> Bool {
-        return revertingPaths.contains(path) || revertingPaths.contains { path.isSubpath(of: $0) }
+        return revertingPaths.contains(path) || revertingPaths.contains { StorageLocationPathResolver.isPath(path, within: $0) }
     }
 
     /// Mark paths as being reverted to prevent re-organization

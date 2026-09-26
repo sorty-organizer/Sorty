@@ -278,7 +278,7 @@ public class ContinuousLearningObserver: ObservableObject {
 
     private func isPathInExcludedRun(_ path: String) -> Bool {
         learningExcludedRunPaths.contains { excludedFolderPath in
-            path.isSubpath(of: excludedFolderPath)
+            StorageLocationPathResolver.isPath(path, within: excludedFolderPath)
         }
     }
 
@@ -364,7 +364,7 @@ public class ContinuousLearningObserver: ObservableObject {
         // 2. Have a matching folder path (the file is within the session's folder)
         return recentSessions
             .filter { $0.timestamp > cutoff }
-            .filter { path.isSubpath(of: $0.folderPath) }
+            .filter { StorageLocationPathResolver.isPath(path, within: $0.folderPath) }
             .sorted { $0.timestamp > $1.timestamp }
             .first
     }

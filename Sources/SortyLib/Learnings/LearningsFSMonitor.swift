@@ -294,7 +294,7 @@ public class LearningsFSMonitor: ObservableObject {
         // Debounce: schedule snapshot update for affected directories
         for (index, path) in paths.enumerated() {
             for dirURL in monitoringGenerations.keys {
-                if path.isSubpath(of: dirURL.path) {
+                if StorageLocationPathResolver.isPath(path, within: dirURL.path) {
                     let flag = flags.indices.contains(index) ? flags[index] : 0
                     let requiresFullSnapshot = flag & FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs) != 0
                         || flag & FSEventStreamEventFlags(kFSEventStreamEventFlagUserDropped) != 0
@@ -354,7 +354,7 @@ public class LearningsFSMonitor: ObservableObject {
                 refreshedFiles.formUnion(FSSnapshot(at: scope).files)
             }
             let retainedFiles = oldSnapshot.files.filter { path in
-                !effectiveScopes.contains { path.isSubpath(of: $0.path) }
+                !effectiveScopes.contains { StorageLocationPathResolver.isPath(path, within: $0.path) }
             }
             return FSSnapshot(files: Set(retainedFiles).union(refreshedFiles))
         }
@@ -421,10 +421,10 @@ public class LearningsFSMonitor: ObservableObject {
     }
 
     private nonisolated static func minimizedScopes(_ scopes: [URL], within root: URL) -> [URL] {
-        let eligible = scopes.filter { $0.path.isSubpath(of: root.path) }
+        let eligible = scopes.filter { StorageLocationPathResolver.isPath($0.path, within: root.path) }
             .sorted { $0.path.count < $1.path.count }
         var result: [URL] = []
-        for scope in eligible where !result.contains(where: { scope.path.isSubpath(of: $0.path) }) {
+        for scope in eligible where !result.contains(where: { StorageLocationPathResolver.isPath(scope.path, within: $0.path) }) {
             result.append(scope)
         }
         return result.isEmpty ? [root] : result
