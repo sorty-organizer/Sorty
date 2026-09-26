@@ -304,3 +304,18 @@ restore prefixes, and run publish-free validation on `main` before a release to
 make warm universal outputs available to the tag. Directory timestamps alone
 cannot detect edits to existing resources; bundle reuse retains content hashes,
 including Beam shader headers and the bundled Sorty skill.
+
+## Validation on 26 September 2026
+
+Commit `c0e58011` passed [Swift CI](https://github.com/sorty-organizer/Sorty/actions/runs/36241274880)
+and [publish-free Release validation](https://github.com/sorty-organizer/Sorty/actions/runs/36241273072)
+on Blacksmith. The release run exercised both architectures, 1,126 tests with
+one skipped, signed ZIP packaging, app launch, Sparkle validation, and symbol
+archive transfer. It did not publish a GitHub release or Sentry release.
+
+The local Debug build assembled and signed successfully. One unchanged
+`make dev` invocation reported 2 seconds and reused the signed app. A preceding
+source rebuild reused both the asset and Metal caches. These are individual
+observations, not a controlled before-and-after benchmark or a promise that
+source edits build in 2 seconds. The release cache restored through its existing
+compatible prefix; no manifest-only cache key was needed.
