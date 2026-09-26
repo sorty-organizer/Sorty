@@ -288,7 +288,7 @@ Releases are validated and built on Blacksmith. Do not create release confidence
 
 1. Push `main` and wait for **Swift CI** to pass on Blacksmith.
 2. Trigger the **Release** workflow from GitHub Actions with the target version, or push the intended `v*` tag.
-3. Confirm the release workflow completed all required Blacksmith jobs: changelog preparation, current test inventory, serial unit tests, both architecture builds, universal app assembly, Sparkle appcast generation, and release publication.
+3. Confirm the release workflow completed all required Blacksmith jobs: changelog preparation, current test inventory, serial unit tests, universal app build, Sparkle appcast generation, and release publication.
 4. Use local release commands only to reproduce or debug a failure from the Blacksmith run.
 
 To check the release path without publishing, dispatch it on `main` with the
@@ -301,8 +301,8 @@ gh workflow run release.yml --ref main -f version=1.2.1 -f validate_only=true
 This runs tests, builds both architectures, verifies the signed ZIP, launches the
 packaged app, and validates the Sparkle appcast. It skips Sentry publication,
 tag creation, and GitHub release publication. A successful run also saves the
-architecture build caches on `main`, where subsequent releases can restore them.
-Normal releases leave `validate_only` off. Tests and the architecture builds run in
+universal build cache on `main`, where subsequent releases can restore it.
+Normal releases leave `validate_only` off. Tests and the universal build run in
 parallel jobs; tests within the release test job run serially because they share
 macOS Trash and Keychain services.
 
