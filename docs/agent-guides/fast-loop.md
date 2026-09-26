@@ -113,6 +113,8 @@ These are already configured — no action needed:
 - **FinderSync extension cached** — only rebuilds when source files change (~33s saved on incremental builds)
 - **Expensive SwiftUI expressions split into dedicated view types** so the compiler solves smaller generic graphs.
 - **Compatibility fingerprints** reset compiled outputs only when the Swift/Xcode toolchain changes. SwiftPM and Xcode handle package, project, plist, entitlement, and script changes incrementally.
+- **Batched fingerprint hashing** starts one hashing process per group of inputs instead of one per file. Content changes still invalidate the cache even when file size and modification time are unchanged.
+- **Sentry downloads only the linked variant** through `Packages/sentry-cocoa`. It uses the same upstream 9.23.0 binary, checksum, and linker helper. The six unused binary variants no longer consume cache space or download time. SwiftPM removes them when resolving the changed package graph.
 - **Content-addressed asset catalog cache** reuses `Assets.car` when the catalog, SDK, and `actool` are unchanged.
 - **Scheduled cache pruning**: oversized build caches are pruned at most once per day by default, including `make now`, instead of growing unchecked or doing expensive cleanup every run.
 
@@ -123,8 +125,27 @@ The scripted build path uses `scripts/build_cache.sh` before compiling:
 - Clears compiled outputs only when the Swift/Xcode toolchain is incompatible.
 - Preserves package checkouts and binary artifacts by default; incomplete Sparkle artifacts are still detected and repaired.
 - Prunes stale logs, asset-catalog entries, inactive configurations, and inactive Finder/Xcode outputs before considering opt-in dependency removal.
+- Under size pressure, evicts older asset catalogs while preserving the most recently used catalog. Cache hits refresh catalog age.
+- Measures the full cache once before eviction, then measures only each eviction candidate. A final full measurement reports actual disk usage.
 - Keeps pruning cheap for the fast loop by using `BUILD_CACHE_PRUNE_INTERVAL_SECONDS=86400` by default.
 - Uses `BUILD_CACHE_MAX_SIZE_MB=8192`, `BUILD_CACHE_TARGET_SIZE_MB=6144`, and `BUILD_CACHE_STALE_DAYS=30` unless overridden.
+
+CI disables SwiftPM indexing and the redundant global dependency download cache. Archives retain compiled products, package checkouts, and binary artifacts, but exclude indexes and logs. CI and release unit tests share a toolchain-specific cache; universal Xcode builds use a separate cache without falling back to SwiftPM test outputs. Editor builds in Xcode keep their own indexing settings.
+
+Each successful commit saves a fresh build cache. Restore first prefers the same
+toolchain and package manifests, then the most recent build for that toolchain
+and build family. The commit suffix matters because GitHub caches are immutable;
+a manifest-only key keeps restoring the first build indefinitely.
+
+`scripts/ci_source_cache.py` stores tracked-file hashes and timestamps alongside
+the compiled outputs. After checkout and cache restore, it restores timestamps
+only for files with identical contents. Changed and new files retain their fresh
+timestamps, so the compiler rebuilds them. Missing or invalid snapshots fall back
+to normal builds. This avoids invalidating every source solely because checkout
+gave it a new timestamp.
+
+See [GitHub's cache behavior](https://github.com/actions/cache#cache-hit)
+and the [Sentry package update procedure](../../Packages/sentry-cocoa/README.md).
 
 Useful commands:
 

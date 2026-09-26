@@ -606,13 +606,17 @@ bundle_fingerprint_generated_files() {
 
 bundle_fingerprint_files() {
     local path
+    local existing_files=()
     for path in "$@"; do
         if [ -f "${path}" ]; then
-            shasum -a 256 "${path}"
+            existing_files+=("${path}")
         else
             printf '%s missing\n' "${path}"
         fi
     done
+    if [ "${#existing_files[@]}" -gt 0 ]; then
+        shasum -a 256 -- "${existing_files[@]}"
+    fi
 }
 
 bundle_fingerprint_tree() {
@@ -917,15 +921,14 @@ compile_asset_catalog() {
         xcrun --find actool 2>/dev/null || true
         xcrun actool --version 2>/dev/null || true
         xcrun --sdk macosx --show-sdk-version 2>/dev/null || true
-        while IFS= read -r asset_file; do
-            printf '%s ' "${asset_file#${xcassets_path}/}"
-            shasum -a 256 "${asset_file}" | awk '{print $1}'
-        done < <(find "${xcassets_path}" -type f | LC_ALL=C sort)
+        # Relative paths keep the key stable across private staging bundles.
+        (cd "${xcassets_path}" && find -s . -type f -exec shasum -a 256 {} +)
     } | build_cache_hash_stream)"
     local cached_assets="${asset_cache_root}/${asset_cache_key}/Assets.car"
 
     if [ -f "${cached_assets}" ]; then
         cp "${cached_assets}" "${resources_dir}/Assets.car"
+        touch "$(dirname "${cached_assets}")"
         rm -rf "${xcassets_path}"
         log_detail "Asset catalog unchanged, using content-addressed cache"
         return

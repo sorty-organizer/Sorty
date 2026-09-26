@@ -59,16 +59,26 @@ jobs:
           TOOLCHAIN_KEY=$({ xcodebuild -version; swift --version; xcrun --sdk macosx --show-sdk-version; } | shasum -a 256 | awk '{print $1}')
           echo "key=${TOOLCHAIN_KEY}" >> "$GITHUB_OUTPUT"
 
-      # Cache SPM dependencies
+      # Keep the latest compatible build, isolated from universal release outputs.
       - name: Cache SPM
         uses: actions/cache@v6
         with:
           path: |
             .build
-            ~/Library/Caches/org.swift.swiftpm
-          key: ${{ runner.os }}-${{ runner.arch }}-spm-v3-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}
+            !.build/**/index
+            !.build/**/Index.noindex
+            !.build/logs
+            !.build/**/*.log
+          key: ${{ runner.os }}-${{ runner.arch }}-spm-tests-v5-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-spm-v3-${{ steps.toolchain.outputs.key }}-
+            ${{ runner.os }}-${{ runner.arch }}-spm-tests-v5-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
+            ${{ runner.os }}-${{ runner.arch }}-spm-tests-v5-${{ steps.toolchain.outputs.key }}-
+
+      - name: Restore unchanged source timestamps
+        run: python3 scripts/ci_source_cache.py restore
+
+      - name: Check source cache invalidation
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -p 'test_ci_source_cache.py'
 
       - name: Configure test Keychain
         run: |
@@ -82,9 +92,9 @@ jobs:
           set -o pipefail
           CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
           # Build all active products first so SortyApp is validated
-          swift build --disable-sandbox -j "$CORES"
-          swift test --disable-sandbox --list-tests | tee test_inventory.log
-          swift test --disable-sandbox --parallel --skip-build -j "$CORES" 2>&1 | tee unit_test_output.log
+          swift build --disable-dependency-cache --disable-index-store --disable-sandbox -j "$CORES"
+          swift test --disable-dependency-cache --disable-index-store --disable-sandbox --list-tests | tee test_inventory.log
+          swift test --disable-dependency-cache --disable-index-store --disable-sandbox --parallel --skip-build -j "$CORES" 2>&1 | tee unit_test_output.log
           echo "✅ Build & tests completed"
 
       - name: Build app via script
@@ -93,6 +103,7 @@ jobs:
           SKIP_TESTS: "true"
           SKIP_GIT_INJECT: "true"
           BUILD_CONFIG: "debug"
+          BUILD_FLAGS: "--disable-index-store"
           APP_ICON_VARIANT: "ci"
           ENABLE_ADHOC_SIGNING: "false"
           ENABLE_SPARKLE_SIGNING: "false"
@@ -106,6 +117,9 @@ jobs:
         run: |
           chmod +x scripts/prerelease_check.sh
           ./scripts/prerelease_check.sh --skip-build --skip-tests --skip-sparkle
+
+      - name: Save source timestamps with build cache
+        run: python3 scripts/ci_source_cache.py save
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v7

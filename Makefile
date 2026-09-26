@@ -12,8 +12,8 @@ PARALLEL_FLAGS := -j $(CORES)
 SORTY_BUILD_DIR ?= $(HOME)/Library/Caches/Sorty/build
 SWIFTPM_SCRATCH_FLAG := --scratch-path "$(SORTY_BUILD_DIR)"
 SWIFTPM_CACHE_FLAG := --disable-dependency-cache
-# SwiftPM's explicit switch is local-only; keep CI's existing indexing behavior.
-SWIFTPM_INDEX_STORE_FLAG := $(if $(filter 1 true True TRUE yes Yes YES on On ON,$(CI)),,--disable-index-store)
+# Scripted builds do not serve editor indexing.
+SWIFTPM_INDEX_STORE_FLAG := --disable-index-store
 
 # Package.swift owns compiler and linker settings so builds and tests share one
 # incremental compilation signature instead of invalidating each other.
@@ -269,7 +269,7 @@ help:
 	@echo "  AUTO_PRUNE_BUILD_CACHE=true (default) prunes stale build data on a schedule"
 	@echo "  BUILD_CACHE_MAX_SIZE_MB=8192 triggers pruning above this size"
 	@echo "  BUILD_CACHE_TARGET_SIZE_MB=6144 aims to shrink build cache near this size"
-	@echo "  BUILD_CACHE_STALE_DAYS=7 marks old cache data eligible for cleanup"
+	@echo "  BUILD_CACHE_STALE_DAYS=30 marks old cache data eligible for cleanup"
 	@echo "  BUILD_CACHE_PRUNE_INTERVAL_SECONDS=86400 limits full prune checks to once per day"
 	@echo "  KEYCHAIN_UNLOCK_TIMEOUT_SECONDS=43200 keeps keychain unlocked for signing (~12h)"
 	@echo ""

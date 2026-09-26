@@ -90,10 +90,9 @@ let package = Package(
             url: "https://github.com/PostHog/posthog-ios.git",
             exact: "3.68.2"
         ),
-        .package(
-            url: "https://github.com/getsentry/sentry-cocoa.git",
-            exact: "9.23.0"
-        ),
+        // Expose only the pinned Sentry binary we link, avoiding downloads of
+        // six unused variants from the upstream package manifest.
+        .package(path: "Packages/sentry-cocoa"),
         // Pinned InjectionLite sources with Sorty's reentrant-save protection.
         .package(path: "Packages/InjectionLite"),
         // 2.9.3 fixes Sparkle's macOS 26 cache protection for bundle IDs ending in `.app`.

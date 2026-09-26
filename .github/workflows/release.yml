@@ -141,11 +141,17 @@ jobs:
         with:
           path: |
             .build
-            ~/Library/Caches/org.swift.swiftpm
-          key: ${{ runner.os }}-${{ runner.arch }}-spm-v3-${{ steps.toolchain.outputs.key }}-release-tests-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}
+            !.build/**/index
+            !.build/**/Index.noindex
+            !.build/logs
+            !.build/**/*.log
+          key: ${{ runner.os }}-${{ runner.arch }}-spm-tests-v5-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-spm-v3-${{ steps.toolchain.outputs.key }}-release-tests-
-            ${{ runner.os }}-${{ runner.arch }}-spm-v3-${{ steps.toolchain.outputs.key }}-
+            ${{ runner.os }}-${{ runner.arch }}-spm-tests-v5-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
+            ${{ runner.os }}-${{ runner.arch }}-spm-tests-v5-${{ steps.toolchain.outputs.key }}-
+
+      - name: Restore unchanged source timestamps
+        run: python3 scripts/ci_source_cache.py restore
 
       - name: Configure test Keychain
         run: |
@@ -158,12 +164,15 @@ jobs:
         run: |
           set -o pipefail
           CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
-          swift build --disable-sandbox -j "$CORES"
-          swift test --disable-sandbox --list-tests | tee release_test_inventory.log
+          swift build --disable-dependency-cache --disable-index-store --disable-sandbox -j "$CORES"
+          swift test --disable-dependency-cache --disable-index-store --disable-sandbox --list-tests | tee release_test_inventory.log
           # Release tests run serially because Trash and Keychain are process-global macOS services.
-          swift test --disable-sandbox --no-parallel --skip-build 2>&1 \
+          swift test --disable-dependency-cache --disable-index-store --disable-sandbox --no-parallel --skip-build 2>&1 \
             | tee release_test.log \
             | tail -100
+
+      - name: Save source timestamps with build cache
+        run: python3 scripts/ci_source_cache.py save
 
       - name: Upload release test inventory
         uses: actions/upload-artifact@v7
@@ -203,11 +212,17 @@ jobs:
         with:
           path: |
             .build
-            ~/Library/Caches/org.swift.swiftpm
-          key: ${{ runner.os }}-${{ runner.arch }}-spm-v3-${{ steps.toolchain.outputs.key }}-release-universal-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}
+            !.build/**/index
+            !.build/**/Index.noindex
+            !.build/logs
+            !.build/**/*.log
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-release-v5-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-spm-v3-${{ steps.toolchain.outputs.key }}-release-universal-
-            ${{ runner.os }}-${{ runner.arch }}-spm-v3-${{ steps.toolchain.outputs.key }}-
+            ${{ runner.os }}-${{ runner.arch }}-xcode-release-v5-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
+            ${{ runner.os }}-${{ runner.arch }}-xcode-release-v5-${{ steps.toolchain.outputs.key }}-
+
+      - name: Restore unchanged source timestamps
+        run: python3 scripts/ci_source_cache.py restore
 
       - name: Build universal app
         env:
@@ -230,6 +245,9 @@ jobs:
             "releases/Sorty.app/Contents/Resources/${ICON_RESOURCE}.icns"
           test ! -e "releases/Sorty.app/Contents/Resources/AppIcon.icns"
           test -z "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' releases/Sorty.app/Contents/Info.plist 2>/dev/null || true)"
+
+      - name: Save source timestamps with build cache
+        run: python3 scripts/ci_source_cache.py save
 
       - name: Verify observability credentials are not packaged
         env:

@@ -59,15 +59,18 @@ build_cache_hash_stream() {
 
 build_cache_hash_files() {
     local rel_path
+    local existing_files=()
     for rel_path in "$@"; do
-        local abs_path="${PROJECT_DIR}/${rel_path}"
-        if [ -f "${abs_path}" ]; then
-            printf '%s ' "${rel_path}"
-            shasum -a 256 "${abs_path}" | awk '{print $1}'
+        if [ -f "${PROJECT_DIR}/${rel_path}" ]; then
+            existing_files+=("${rel_path}")
         else
             printf '%s missing\n' "${rel_path}"
         fi
-    done | build_cache_hash_stream
+    done
+    # One hashing process for the whole batch, retaining paths and missing inputs.
+    if [ "${#existing_files[@]}" -gt 0 ]; then
+        (cd "${PROJECT_DIR}" && shasum -a 256 -- "${existing_files[@]}")
+    fi
 }
 
 build_cache_dependency_hash() {
@@ -79,7 +82,7 @@ build_cache_dependency_hash() {
         done < <(find "${PROJECT_DIR}/Packages" -name "Package.swift" -type f | sort)
     fi
 
-    build_cache_hash_files "${dependency_files[@]}"
+    build_cache_hash_files "${dependency_files[@]}" | build_cache_hash_stream
 }
 
 build_cache_input_hash() {
@@ -94,7 +97,7 @@ build_cache_input_hash() {
         "scripts/build.sh" \
         "scripts/build_cache.sh" \
         "scripts/config.sh" \
-        "scripts/utils.sh"
+        "scripts/utils.sh" | build_cache_hash_stream
 }
 
 build_cache_toolchain_hash() {
@@ -330,6 +333,22 @@ prune_stale_build_cache_paths() {
 }
 
 build_cache_prune_candidate_paths() {
+    # Old catalogs are cheap to regenerate; keep the most recently used one.
+    local asset_path newest_asset=""
+    if [ -d "${BUILD_CACHE_STATE_DIR}/assets" ]; then
+        while IFS=$'\t' read -r _ asset_path; do
+            if [ -z "${newest_asset}" ]; then
+                newest_asset="${asset_path}"
+                continue
+            fi
+            printf '%s\n' "${asset_path}"
+        done < <(
+            while IFS= read -r asset_path; do
+                printf '%s\t%s\n' "$(build_cache_path_mtime "${asset_path}")" "${asset_path}"
+            done < <(find "${BUILD_CACHE_STATE_DIR}/assets" -mindepth 1 -maxdepth 1 -type d -print) | sort -rn
+        )
+    fi
+
     if [ "${BUILD_METHOD:-spm}" != "xcodebuild" ]; then
         printf '%s\n' "${BUILD_DIR}/DerivedData"
     fi
@@ -358,14 +377,17 @@ build_cache_prune_candidate_paths() {
 
 prune_inactive_build_outputs_to_target() {
     local target_size_mb="$1"
-    local candidate_path
+    local candidate_path candidate_size_mb
+    local remaining_size_mb="${2:-$(get_directory_size_mb "${BUILD_DIR}")}"
 
     while IFS=$'\t' read -r _ candidate_path; do
         [ -n "${candidate_path}" ] || continue
         [ -e "${candidate_path}" ] || continue
-        [ "$(get_directory_size_mb "${BUILD_DIR}")" -gt "${target_size_mb}" ] || break
+        [ "${remaining_size_mb}" -gt "${target_size_mb}" ] || break
+        candidate_size_mb=$(get_directory_size_mb "${candidate_path}")
         log_detail "Pruning inactive build output ${candidate_path#${BUILD_DIR}/}"
         prune_path_if_exists "${candidate_path}"
+        remaining_size_mb=$((remaining_size_mb - candidate_size_mb))
     done < <(
         while IFS= read -r candidate_path; do
             [ -e "${candidate_path}" ] || continue
@@ -395,7 +417,7 @@ prune_oversized_build_cache() {
         target_size_mb=6144
     fi
     if ! [[ "${stale_days}" =~ ^[0-9]+$ ]]; then
-        stale_days=7
+        stale_days=30
     fi
     if [ "${target_size_mb}" -gt "${max_size_mb}" ]; then
         target_size_mb="${max_size_mb}"
@@ -414,7 +436,7 @@ prune_oversized_build_cache() {
 
     log_item "Pruning build cache (${initial_size_mb}MB > ${max_size_mb}MB)"
 
-    prune_inactive_build_outputs_to_target "${target_size_mb}"
+    prune_inactive_build_outputs_to_target "${target_size_mb}" "${initial_size_mb}"
     local current_size_mb
     current_size_mb=$(get_directory_size_mb "${BUILD_DIR}")
 
