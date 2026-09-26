@@ -299,6 +299,19 @@ compiler benchmark. They do not support the projected two-minute release.
 Keep the universal workflow until a same-commit comparison shows a useful
 wall-clock gain.
 
+The build timing summary explains why. In the restored universal run,
+`SwiftCompile` was 385s of task time inside a 222s build (about 1.7 concurrent
+tasks) across four tasks: the 221-file `SortyLib` module and the app target, once
+per architecture. Whole-module `-O` compiles each architecture in one driver
+task, and `-parallelizeTargets` already runs the arm64 and x86_64 chains
+together, so the second architecture cost roughly 24s. Each single-architecture
+slice still paid for the whole `SortyLib -> Sorty` chain (198s and 231s), so the
+slowest slice matched the universal build before any merge, second runner setup,
+or artifact transfer. Whole-module optimization also has no file-level
+incrementality: one changed `SortyLib` file rebuilds all 215 others, so warm
+caches only skip unchanged targets such as `SortyFinderSync`. Shortening the
+`SortyLib` module, or its optimization mode, is the lever. More runners is not.
+
 To see warnings for Debug expressions and function bodies taking over 100 ms:
 
 ```bash
