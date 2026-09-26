@@ -476,6 +476,69 @@ enum AIRequestSupport {
     }
 }
 
+/// Builds the shared organization request content and response metrics used by
+/// the network clients. Provider-specific wire formats stay with each client.
+enum SharedOrganizePipeline {
+    static func buildPrompts(
+        config: AIConfig,
+        files: [FileItem],
+        customInstructions: String?,
+        personaPrompt: String?,
+        analyzedImageFilenames: [String] = [],
+        personaAsSeparateSection: Bool = false
+    ) -> (system: String, user: String) {
+        let system = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(
+            personaInfo: personaAsSeparateSection ? "" : (personaPrompt ?? ""),
+            mode: config.mode,
+            enableTagging: config.enableFileTagging
+        )
+        let fullSystem: String
+        if personaAsSeparateSection, let personaPrompt {
+            fullSystem = "\(system)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt)"
+        } else {
+            fullSystem = system
+        }
+        let user = PromptBuilder.buildOrganizationPrompt(
+            files: files,
+            mode: config.mode,
+            namingStyle: config.namingStyle,
+            renameNamingOptions: config.renameNamingOptions,
+            customNamingInstructions: config.customNamingInstructions,
+            renameRules: config.renameRules,
+            renameRuleMode: config.renameRuleMode,
+            enableReasoning: config.enableReasoning,
+            enableSmartRename: config.enableSmartRename,
+            includeContentMetadata: config.enableDeepScan,
+            customInstructions: customInstructions,
+            analyzedImageFilenames: analyzedImageFilenames
+        )
+        return (fullSystem, user)
+    }
+
+    static func makeStats(
+        config: AIConfig,
+        files: [FileItem],
+        duration: TimeInterval,
+        ttft: TimeInterval,
+        totalTokens: Int,
+        totalFileSize: Int64? = nil,
+        promptTokens: Int? = nil,
+        provider: String? = nil
+    ) -> GenerationStats {
+        GenerationStats(
+            duration: duration,
+            tps: duration > 0 ? Double(totalTokens) / duration : 0,
+            ttft: ttft,
+            totalTokens: totalTokens,
+            model: config.model,
+            filesScanned: files.count,
+            totalFileSize: totalFileSize ?? AIRequestSupport.totalFileSize(of: files),
+            promptTokens: promptTokens,
+            provider: provider
+        )
+    }
+}
+
 /// Debounces editor-linked AI helpers (persona/naming/instruction fields).
 /// Uses how code is used: every keystroke can trigger a generateText call,
 /// so callers await `debounce(key:)` first — a newer call with the same key

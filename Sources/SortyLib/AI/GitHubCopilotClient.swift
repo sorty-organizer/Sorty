@@ -56,20 +56,14 @@ public final class GitHubCopilotClient: AIClientProtocol, Sendable {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
         try ensureNetworkAllowed(url)
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", mode: config.mode, enableTagging: config.enableFileTagging)
-        let userPrompt = PromptBuilder.buildOrganizationPrompt(
+        let prompts = SharedOrganizePipeline.buildPrompts(
+            config: config,
             files: files,
-            mode: config.mode,
-            namingStyle: config.namingStyle,
-            renameNamingOptions: config.renameNamingOptions,
-            customNamingInstructions: config.customNamingInstructions,
-            renameRules: config.renameRules,
-            renameRuleMode: config.renameRuleMode,
-            enableReasoning: config.enableReasoning,
-            enableSmartRename: config.enableSmartRename,
-            includeContentMetadata: config.enableDeepScan,
-            customInstructions: customInstructions
+            customInstructions: customInstructions,
+            personaPrompt: personaPrompt
         )
+        let systemPrompt = prompts.system
+        let userPrompt = prompts.user
         
         var requestBody: [String: Any] = [
             "model": config.model,
@@ -109,21 +103,15 @@ public final class GitHubCopilotClient: AIClientProtocol, Sendable {
         try ensureNetworkAllowed(url)
         let orderedImageNames = Self.orderedImageFilenames(from: imageData)
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", mode: config.mode, enableTagging: config.enableFileTagging)
-        let userPrompt = PromptBuilder.buildOrganizationPrompt(
+        let prompts = SharedOrganizePipeline.buildPrompts(
+            config: config,
             files: files,
-            mode: config.mode,
-            namingStyle: config.namingStyle,
-            renameNamingOptions: config.renameNamingOptions,
-            customNamingInstructions: config.customNamingInstructions,
-            renameRules: config.renameRules,
-            renameRuleMode: config.renameRuleMode,
-            enableReasoning: config.enableReasoning,
-            enableSmartRename: config.enableSmartRename,
-            includeContentMetadata: config.enableDeepScan,
             customInstructions: customInstructions,
+            personaPrompt: personaPrompt,
             analyzedImageFilenames: Array(orderedImageNames.prefix(5))
         )
+        let systemPrompt = prompts.system
+        let userPrompt = prompts.user
         
         // Build multimodal content array (OpenAI-compatible format)
         var userContent: [[String: Any]] = [
@@ -423,15 +411,13 @@ public final class GitHubCopilotClient: AIClientProtocol, Sendable {
 
                 // Calculate stats
                 let estimatedTokens = content.count / 4
-                let tps = duration > 0 ? Double(estimatedTokens) / duration : 0
 
-                let stats = GenerationStats(
+                let stats = SharedOrganizePipeline.makeStats(
+                    config: config,
+                    files: files,
                     duration: duration,
-                    tps: tps,
-                    ttft: duration, // approximate
+                    ttft: duration,
                     totalTokens: estimatedTokens,
-                    model: config.model,
-                    filesScanned: files.count,
                     totalFileSize: totalFileSize
                 )
 
@@ -547,15 +533,13 @@ public final class GitHubCopilotClient: AIClientProtocol, Sendable {
                 let duration = endTime.timeIntervalSince(startTime)
                 let ttft = firstTokenTime?.timeIntervalSince(startTime) ?? duration
                 let estimatedTokens = accumulatedContentBuffer.count / 4
-                let tps = duration > 0 ? Double(estimatedTokens) / duration : 0
 
-                let stats = GenerationStats(
+                let stats = SharedOrganizePipeline.makeStats(
+                    config: config,
+                    files: files,
                     duration: duration,
-                    tps: tps,
                     ttft: ttft,
                     totalTokens: estimatedTokens,
-                    model: config.model,
-                    filesScanned: files.count,
                     totalFileSize: totalFileSize
                 )
 

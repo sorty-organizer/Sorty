@@ -34,22 +34,15 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
 
         let url = Self.messagesURL
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", mode: config.mode, enableTagging: config.enableFileTagging)
-        let fullSystemPrompt = personaPrompt != nil ? "\(systemPrompt)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt!)" : systemPrompt
-
-        let userPrompt = PromptBuilder.buildOrganizationPrompt(
+        let prompts = SharedOrganizePipeline.buildPrompts(
+            config: config,
             files: files,
-            mode: config.mode,
-            namingStyle: config.namingStyle,
-            renameNamingOptions: config.renameNamingOptions,
-            customNamingInstructions: config.customNamingInstructions,
-            renameRules: config.renameRules,
-            renameRuleMode: config.renameRuleMode,
-            enableReasoning: config.enableReasoning,
-            enableSmartRename: config.enableSmartRename,
-            includeContentMetadata: config.enableDeepScan,
-            customInstructions: customInstructions
+            customInstructions: customInstructions,
+            personaPrompt: personaPrompt,
+            personaAsSeparateSection: true
         )
+        let fullSystemPrompt = prompts.system
+        let userPrompt = prompts.user
 
         let requestBody: [String: Any] = [
             "model": config.model,
@@ -74,23 +67,16 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         let url = Self.messagesURL
         let orderedImageNames = Self.orderedImageFilenames(from: imageData)
 
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", mode: config.mode, enableTagging: config.enableFileTagging)
-        let fullSystemPrompt = personaPrompt != nil ? "\(systemPrompt)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt!)" : systemPrompt
-        
-        let userPrompt = PromptBuilder.buildOrganizationPrompt(
-            files: files, 
-            mode: config.mode,
-            namingStyle: config.namingStyle,
-            renameNamingOptions: config.renameNamingOptions,
-            customNamingInstructions: config.customNamingInstructions,
-            renameRules: config.renameRules,
-            renameRuleMode: config.renameRuleMode,
-            enableReasoning: config.enableReasoning, 
-            enableSmartRename: config.enableSmartRename,
-            includeContentMetadata: config.enableDeepScan,
+        let prompts = SharedOrganizePipeline.buildPrompts(
+            config: config,
+            files: files,
             customInstructions: customInstructions,
-            analyzedImageFilenames: orderedImageNames
+            personaPrompt: personaPrompt,
+            analyzedImageFilenames: orderedImageNames,
+            personaAsSeparateSection: true
         )
+        let fullSystemPrompt = prompts.system
+        let userPrompt = prompts.user
         
         // Build multimodal content for Claude Vision
         var contentArray: [[String: Any]] = [

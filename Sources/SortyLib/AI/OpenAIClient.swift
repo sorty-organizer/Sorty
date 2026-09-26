@@ -56,20 +56,14 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         let url = try AIRequestSupport.openAIChatCompletionsURL(from: apiURL)
         
         // Use custom system prompt if provided, otherwise use default
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", mode: config.mode, enableTagging: config.enableFileTagging)
-        let userPrompt = PromptBuilder.buildOrganizationPrompt(
-            files: files, 
-            mode: config.mode,
-            namingStyle: config.namingStyle,
-            renameNamingOptions: config.renameNamingOptions,
-            customNamingInstructions: config.customNamingInstructions,
-            renameRules: config.renameRules,
-            renameRuleMode: config.renameRuleMode,
-            enableReasoning: config.enableReasoning, 
-            enableSmartRename: config.enableSmartRename,
-            includeContentMetadata: config.enableDeepScan,
-            customInstructions: customInstructions
+        let prompts = SharedOrganizePipeline.buildPrompts(
+            config: config,
+            files: files,
+            customInstructions: customInstructions,
+            personaPrompt: personaPrompt
         )
+        let systemPrompt = prompts.system
+        let userPrompt = prompts.user
         let estimatedPromptTokens = PromptBuilder.estimateTokens(systemPrompt + userPrompt)
         
         // Build request body
@@ -107,21 +101,15 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
         let orderedImageNames = Self.orderedImageFilenames(from: imageData)
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", mode: config.mode, enableTagging: config.enableFileTagging)
-        let userPrompt = PromptBuilder.buildOrganizationPrompt(
-            files: files, 
-            mode: config.mode,
-            namingStyle: config.namingStyle,
-            renameNamingOptions: config.renameNamingOptions,
-            customNamingInstructions: config.customNamingInstructions,
-            renameRules: config.renameRules,
-            renameRuleMode: config.renameRuleMode,
-            enableReasoning: config.enableReasoning, 
-            enableSmartRename: config.enableSmartRename,
-            includeContentMetadata: config.enableDeepScan,
+        let prompts = SharedOrganizePipeline.buildPrompts(
+            config: config,
+            files: files,
             customInstructions: customInstructions,
+            personaPrompt: personaPrompt,
             analyzedImageFilenames: orderedImageNames
         )
+        let systemPrompt = prompts.system
+        let userPrompt = prompts.user
         let estimatedPromptTokens = PromptBuilder.estimateTokens(systemPrompt + userPrompt)
         
         // Build multimodal content
@@ -441,16 +429,13 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             // For non-streaming, TTFT is essentially the total duration as we wait for the full response
             // Estimated tokens: ~4 chars per token
             let estimatedTokens = content.count / 4
-            let tps = duration > 0 ? Double(estimatedTokens) / duration : 0
             
-            let stats = GenerationStats(
+            let stats = SharedOrganizePipeline.makeStats(
+                config: config,
+                files: files,
                 duration: duration,
-                tps: tps,
-                ttft: duration, // approximate
+                ttft: duration,
                 totalTokens: estimatedTokens,
-                model: config.model,
-                filesScanned: files.count,
-                totalFileSize: files.reduce(0) { $0 + $1.size },
                 promptTokens: promptTokens
             )
             
@@ -577,16 +562,13 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             
             // improved token estimation: ~4 chars per token
             let estimatedTokens = accumulatedContent.count / 4
-            let tps = duration > 0 ? Double(estimatedTokens) / duration : 0
             
-            let stats = GenerationStats(
+            let stats = SharedOrganizePipeline.makeStats(
+                config: config,
+                files: files,
                 duration: duration,
-                tps: tps,
                 ttft: ttft,
                 totalTokens: estimatedTokens,
-                model: config.model,
-                filesScanned: files.count,
-                totalFileSize: files.reduce(0) { $0 + $1.size },
                 promptTokens: promptTokens
             )
             

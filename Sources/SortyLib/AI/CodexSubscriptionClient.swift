@@ -54,24 +54,14 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         personaPrompt: String? = nil,
         temperature: Double? = nil
     ) async throws -> OrganizationPlan {
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(
-            personaInfo: personaPrompt ?? "",
-            mode: config.mode,
-            enableTagging: config.enableFileTagging
-        )
-        let userPrompt = PromptBuilder.buildOrganizationPrompt(
+        let prompts = SharedOrganizePipeline.buildPrompts(
+            config: config,
             files: files,
-            mode: config.mode,
-            namingStyle: config.namingStyle,
-            renameNamingOptions: config.renameNamingOptions,
-            customNamingInstructions: config.customNamingInstructions,
-            renameRules: config.renameRules,
-            renameRuleMode: config.renameRuleMode,
-            enableReasoning: config.enableReasoning,
-            enableSmartRename: config.enableSmartRename,
-            includeContentMetadata: config.enableDeepScan,
-            customInstructions: customInstructions
+            customInstructions: customInstructions,
+            personaPrompt: personaPrompt
         )
+        let systemPrompt = prompts.system
+        let userPrompt = prompts.user
         let prompt = Self.organizationPrompt(systemPrompt: systemPrompt, userPrompt: userPrompt)
         let estimatedPromptTokens = PromptBuilder.estimateTokens(systemPrompt + userPrompt)
         let start = Date()
@@ -83,15 +73,12 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         let duration = Date().timeIntervalSince(start)
 
         var plan = try parseOrganizationResponse(response, files: files)
-        let totalFileSize = AIRequestSupport.totalFileSize(of: files)
-        plan.generationStats = GenerationStats(
+        plan.generationStats = SharedOrganizePipeline.makeStats(
+            config: config,
+            files: files,
             duration: duration,
-            tps: duration > 0 ? Double(response.count / 4) / duration : 0,
             ttft: duration,
             totalTokens: response.count / 4,
-            model: config.model,
-            filesScanned: files.count,
-            totalFileSize: totalFileSize,
             promptTokens: estimatedPromptTokens,
             provider: AIProvider.openAI.displayName
         )
@@ -112,25 +99,15 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             }
         }
 
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(
-            personaInfo: personaPrompt ?? "",
-            mode: config.mode,
-            enableTagging: config.enableFileTagging
-        )
-        let userPrompt = PromptBuilder.buildOrganizationPrompt(
+        let prompts = SharedOrganizePipeline.buildPrompts(
+            config: config,
             files: files,
-            mode: config.mode,
-            namingStyle: config.namingStyle,
-            renameNamingOptions: config.renameNamingOptions,
-            customNamingInstructions: config.customNamingInstructions,
-            renameRules: config.renameRules,
-            renameRuleMode: config.renameRuleMode,
-            enableReasoning: config.enableReasoning,
-            enableSmartRename: config.enableSmartRename,
-            includeContentMetadata: config.enableDeepScan,
             customInstructions: customInstructions,
+            personaPrompt: personaPrompt,
             analyzedImageFilenames: imageData.keys.sorted()
         )
+        let systemPrompt = prompts.system
+        let userPrompt = prompts.user
         let prompt = Self.organizationPrompt(systemPrompt: systemPrompt, userPrompt: userPrompt)
         let estimatedPromptTokens = PromptBuilder.estimateTokens(systemPrompt + userPrompt)
         let start = Date()
@@ -142,15 +119,12 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         let duration = Date().timeIntervalSince(start)
 
         var plan = try parseOrganizationResponse(response, files: files)
-        let totalFileSize = AIRequestSupport.totalFileSize(of: files)
-        plan.generationStats = GenerationStats(
+        plan.generationStats = SharedOrganizePipeline.makeStats(
+            config: config,
+            files: files,
             duration: duration,
-            tps: duration > 0 ? Double(response.count / 4) / duration : 0,
             ttft: duration,
             totalTokens: response.count / 4,
-            model: config.model,
-            filesScanned: files.count,
-            totalFileSize: totalFileSize,
             promptTokens: estimatedPromptTokens,
             provider: AIProvider.openAI.displayName
         )
