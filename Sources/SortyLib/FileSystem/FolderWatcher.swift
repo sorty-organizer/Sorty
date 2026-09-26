@@ -1547,6 +1547,7 @@ public final class FolderWatcher: @unchecked Sendable {
             return
         }
         let root = URL(fileURLWithPath: rootPath(for: folderID, folder: folder))
+        var snapshotChanged = false
         for relativePath in relativePaths {
             let url = root.appendingPathComponent(relativePath)
             guard let values = try? url.resourceValues(forKeys: [
@@ -1554,15 +1555,25 @@ public final class FolderWatcher: @unchecked Sendable {
                 .fileSizeKey,
                 .contentModificationDateKey,
             ]), values.isRegularFile == true else {
-                folderSnapshots[folderID]?.removeValue(forKey: relativePath)
+                if folderSnapshots[folderID]?.removeValue(forKey: relativePath) != nil {
+                    snapshotChanged = true
+                }
                 continue
             }
-            folderSnapshots[folderID]?[relativePath] = FileFingerprint(
+            let fingerprint = FileFingerprint(
                 size: Int64(values.fileSize ?? 0),
                 modificationDate: values.contentModificationDate
             )
+            if folderSnapshots[folderID]?[relativePath] != fingerprint {
+                folderSnapshots[folderID]?[relativePath] = fingerprint
+                snapshotChanged = true
+            }
         }
-        dirtySnapshotFolderIDs.insert(folderID)
+        // FSEvents can replay a file already captured by reconciliation. An
+        // accepted delivery alone does not mean its persisted baseline changed.
+        if snapshotChanged {
+            dirtySnapshotFolderIDs.insert(folderID)
+        }
     }
 
     private func restorePersistedSnapshot(for folder: WatchedFolder) {
