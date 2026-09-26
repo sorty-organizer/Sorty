@@ -42,7 +42,8 @@ public struct DuplicateSettings: Codable, Sendable {
     public var semanticSimilarityThreshold: Double
 
     public static func clampedSemanticSimilarityThreshold(_ value: Double) -> Double {
-        min(max(value, minSemanticSimilarityThreshold), maxSemanticSimilarityThreshold)
+        guard value.isFinite else { return defaultSemanticSimilarityThreshold }
+        return min(max(value, minSemanticSimilarityThreshold), maxSemanticSimilarityThreshold)
     }
 
     public var normalizedSemanticSimilarityThreshold: Double {
@@ -273,16 +274,6 @@ public class DuplicateSettingsManager: ObservableObject {
 
     private static func applyingOverrides(to settings: DuplicateSettings, defaults: UserDefaults) -> DuplicateSettings {
         var overridden = settings
-        let recommended = DuplicateSettings()
-
-        overridden.comparisonMethod = recommended.comparisonMethod
-        overridden.minFileSize = recommended.minFileSize
-        overridden.maxScanDepth = recommended.maxScanDepth
-        overridden.includeExtensions = recommended.includeExtensions
-        overridden.excludeExtensions = recommended.excludeExtensions
-        overridden.autoStartScan = recommended.autoStartScan
-        overridden.includeSemanticDuplicates = recommended.includeSemanticDuplicates
-        overridden.semanticSimilarityThreshold = recommended.semanticSimilarityThreshold
 
         if let rawMethod = defaults.string(forKey: OverrideKey.comparisonMethod),
            let method = ComparisonMethod(rawValue: rawMethod) {

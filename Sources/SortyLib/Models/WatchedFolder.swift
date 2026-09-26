@@ -205,7 +205,12 @@ public class WatchedFoldersManager: ObservableObject {
                       let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) else {
                     return ([], false)
                 }
-                return (decoded, journal.replaceAll(with: decoded))
+                guard journal.replaceAll(with: decoded, replacingInvalidJournal: true) else {
+                    // A journal may have been created while the legacy snapshot
+                    // was decoding. Prefer that newer state over stale defaults.
+                    return (journal.load() ?? decoded, false)
+                }
+                return (decoded, true)
             }
             loadTask = task
         }
@@ -839,6 +844,7 @@ private final class WatchedFolderJournal: @unchecked Sendable {
 
             var slots: [WatchedFolder?] = []
             var indexByID: [UUID: Int] = [:]
+            var hasValidRecords = false
             var readBuffer = [UInt8](repeating: 0, count: 64 * 1_024)
             var lineBuffer: [UInt8] = []
             lineBuffer.reserveCapacity(4_096)
@@ -851,6 +857,7 @@ private final class WatchedFolderJournal: @unchecked Sendable {
                     return
                 }
 
+                hasValidRecords = true
                 switch record.operation {
                 case .upsert:
                     guard let folder = record.folder else { break }
@@ -885,7 +892,11 @@ private final class WatchedFolderJournal: @unchecked Sendable {
                 }
             }
             applyLine()
-            return slots.compactMap { $0 }
+            let folders = slots.compactMap { $0 }
+            guard !folders.isEmpty || hasValidRecords else {
+                return nil
+            }
+            return folders
         }
     }
 
@@ -911,9 +922,15 @@ private final class WatchedFolderJournal: @unchecked Sendable {
     }
 
     @discardableResult
-    func replaceAll(with folders: [WatchedFolder]) -> Bool {
+    func replaceAll(with folders: [WatchedFolder], replacingInvalidJournal: Bool = false) -> Bool {
         ioQueue.sync {
             guard let storeURL else { return false }
+            let journalExists = fileManager.fileExists(atPath: storeURL.path)
+            if journalExists && !replacingInvalidJournal {
+                // A journal written after the legacy read is authoritative. Do not
+                // let a stale legacy snapshot overwrite concurrent add/update work.
+                return false
+            }
             do {
                 try fileManager.createDirectory(
                     at: storeURL.deletingLastPathComponent(),
@@ -933,7 +950,14 @@ private final class WatchedFolderJournal: @unchecked Sendable {
                 }
                 try handle.close()
 
-                if fileManager.fileExists(atPath: storeURL.path) {
+                if journalExists {
+                    let hasValidRecord = (try? Data(contentsOf: storeURL))?
+                        .split(separator: 0x0A)
+                        .contains { (try? JSONDecoder().decode(Record.self, from: Data($0))) != nil } ?? false
+                    guard !hasValidRecord else {
+                        try? fileManager.removeItem(at: temporaryURL)
+                        return false
+                    }
                     _ = try fileManager.replaceItemAt(storeURL, withItemAt: temporaryURL)
                 } else {
                     try fileManager.moveItem(at: temporaryURL, to: storeURL)

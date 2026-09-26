@@ -115,6 +115,39 @@ class DuplicateDetectorTests: XCTestCase {
         XCTAssertTrue(inventory.semanticCandidates.isEmpty)
     }
 
+    func testDuplicateInventorySecondPassScansDirectoriesSeenInFirstPass() async throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("DuplicateSecondPassTests-\(UUID().uuidString)", isDirectory: true)
+        let nestedDirectory = directory.appendingPathComponent("Nested", isDirectory: true)
+
+        defer {
+            try? fileManager.removeItem(at: directory)
+        }
+
+        try fileManager.createDirectory(at: nestedDirectory, withIntermediateDirectories: true)
+        try Data("same-content".utf8).write(to: nestedDirectory.appendingPathComponent("first.txt"))
+        try Data("same-content".utf8).write(to: nestedDirectory.appendingPathComponent("second.txt"))
+
+        var settings = DuplicateSettings()
+        settings.includeSemanticDuplicates = true
+        let inventory = try await DirectoryScanner().scanDirectoryForDuplicates(
+            at: directory,
+            settings: settings,
+            semanticFileLimit: 0
+        )
+
+        XCTAssertEqual(inventory.exactCandidates.count, 2)
+        XCTAssertEqual(
+            Set(inventory.exactCandidates.map {
+                URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().standardizedFileURL.path
+            }),
+            Set(["first.txt", "second.txt"].map {
+                nestedDirectory.appendingPathComponent($0).resolvingSymlinksInPath().standardizedFileURL.path
+            })
+        )
+    }
+
     func testDuplicateInventorySkipsUnboundedSemanticAnalysis() async throws {
         let fileManager = FileManager.default
         let directory = fileManager.temporaryDirectory
@@ -154,6 +187,39 @@ class DuplicateDetectorTests: XCTestCase {
         XCTAssertFalse(manager.isScanning)
         XCTAssertTrue(manager.duplicateGroups.isEmpty)
         XCTAssertTrue(manager.semanticGroups.isEmpty)
+    }
+
+    @MainActor
+    func testCancelledManagerScanDoesNotReplaceExistingResults() async throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("DuplicateCancelledManagerScan-\(UUID().uuidString)", isDirectory: true)
+        let firstURL = directory.appendingPathComponent("first.txt")
+        let secondURL = directory.appendingPathComponent("second.txt")
+
+        defer {
+            try? fileManager.removeItem(at: directory)
+        }
+
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("same".utf8).write(to: firstURL)
+        try Data("same".utf8).write(to: secondURL)
+        let files = [firstURL, secondURL].map {
+            FileItem(path: $0.path, name: $0.lastPathComponent, extension: "txt", size: 4)
+        }
+        var settings = DuplicateSettings()
+        settings.includeSemanticDuplicates = false
+        let manager = DuplicateDetectionManager()
+        await manager.scanForDuplicates(files: files, settings: settings)
+        let originalGroupID = try XCTUnwrap(manager.duplicateGroups.first?.id)
+
+        let cancelledScan = Task { @MainActor in
+            await manager.scanForDuplicates(files: [], settings: settings)
+        }
+        cancelledScan.cancel()
+        await cancelledScan.value
+
+        XCTAssertEqual(manager.duplicateGroups.map(\.id), [originalGroupID])
     }
 
     @MainActor

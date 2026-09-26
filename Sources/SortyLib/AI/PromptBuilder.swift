@@ -488,7 +488,11 @@ struct PromptBuilder {
             tail = ""
         }
         let allowedChars = max(1_000, budget * 4 - tail.count - 200)
-        let truncated = String(prompt.prefix(allowedChars))
+        let prefixEnd = prompt.index(prompt.startIndex, offsetBy: min(allowedChars, prompt.count))
+        var truncated = String(prompt[..<prefixEnd])
+        if let boundary = truncated.range(of: "\n", options: .backwards) {
+            truncated = String(truncated[..<boundary.lowerBound])
+        }
         return truncated + "\n\n[... truncated to \(budget)-token budget ...]\n" + tail
     }
 

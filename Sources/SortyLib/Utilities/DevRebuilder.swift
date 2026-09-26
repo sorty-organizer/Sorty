@@ -75,6 +75,12 @@ public final class DevRebuilder {
                 return
             }
 
+            // Drain output while make is running. Waiting for termination before
+            // reading can fill the pipe buffer and deadlock a verbose build.
+            let outputTask = Task.detached(priority: .utility) {
+                pipe.fileHandleForReading.readDataToEndOfFile()
+            }
+
             // Wait for build completion without blocking the cooperative pool.
             // waitUntilExit() parks a pool thread; terminationHandler suspends instead.
             let status: Int32 = await withTaskCancellationHandler {
@@ -93,7 +99,7 @@ public final class DevRebuilder {
             process.terminationHandler = nil
             guard !Task.isCancelled else { return }
 
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let data = await outputTask.value
             let output = String(data: data, encoding: .utf8) ?? ""
             if status != 0 {
                 await MainActor.run {

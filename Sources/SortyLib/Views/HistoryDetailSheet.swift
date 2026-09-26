@@ -598,6 +598,17 @@ struct HistoryDetailSheet: View {
         }
     }
 
+    private static func files(from plan: OrganizationPlan?) -> [FileItem] {
+        guard let plan else { return [] }
+        var files = plan.unorganizedFiles
+        func collect(_ suggestion: FolderSuggestion) {
+            files.append(contentsOf: suggestion.files)
+            suggestion.subfolders.forEach(collect)
+        }
+        plan.suggestions.forEach(collect)
+        return files
+    }
+
     private func handleRedoWithModel(provider: AIProvider, model: String) {
         showRedoModelPicker = false
         HapticFeedbackManager.shared.tap()
@@ -609,7 +620,11 @@ struct HistoryDetailSheet: View {
                 organizer.currentDirectory = directoryURL
 
                 // Generate new plan with specified provider/model
-                try await organizer.regenerateWithModel(provider: provider, model: model)
+                try await organizer.regenerateWithModel(
+                    provider: provider,
+                    model: model,
+                    files: Self.files(from: entry.plan)
+                )
                 HapticFeedbackManager.shared.success()
                 onAction("New organization generated with \(provider.displayName) (\(model)).")
                 onDismiss()

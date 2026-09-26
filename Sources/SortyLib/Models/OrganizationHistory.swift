@@ -122,7 +122,9 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
     }
 
     public var hasApplicablePlan: Bool {
-        guard !success, storedPlanAvailable, status != .duplicatesCleanup else {
+        guard (!success || status == .cancelled || status == .partiallyUndone),
+              storedPlanAvailable,
+              status != .duplicatesCleanup else {
             return false
         }
 
@@ -716,7 +718,10 @@ public class OrganizationHistory: ObservableObject {
         let persistedEntries = await task.value
         guard !hasLoadedPersistedState, generation == loadGeneration else { return }
 
-        var mergedByID = Dictionary(uniqueKeysWithValues: persistedEntries.map { ($0.id, $0) })
+        var mergedByID: [UUID: OrganizationHistoryEntry] = [:]
+        for entry in persistedEntries {
+            mergedByID[entry.id] = entry
+        }
         for entry in entries {
             mergedByID[entry.id] = entry.summary
         }
@@ -795,7 +800,10 @@ public class OrganizationHistory: ObservableObject {
             return ImportResult(added: 0, updated: 0, unchanged: 0, omittedByRetentionLimit: 0)
         }
 
-        var mergedByID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
+        var mergedByID: [UUID: OrganizationHistoryEntry] = [:]
+        for entry in entries {
+            mergedByID[entry.id] = entry
+        }
         var added = 0
         var updated = 0
         var unchanged = 0

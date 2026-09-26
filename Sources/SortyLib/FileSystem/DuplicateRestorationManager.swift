@@ -4,6 +4,15 @@ import Darwin
 
 // MARK: - Duplicate Restoration Manager
 
+struct PartialTrashFailure: LocalizedError {
+    let underlyingError: Error
+    let movedItems: [RestorableDuplicate]
+
+    var errorDescription: String? {
+        "Some duplicate files were moved to Trash before cleanup failed: \(underlyingError.localizedDescription)"
+    }
+}
+
 /// Tracks duplicate files moved to Trash so History can restore them while they remain there.
 @MainActor
 public class DuplicateRestorationManager: ObservableObject {
@@ -36,12 +45,20 @@ public class DuplicateRestorationManager: ObservableObject {
 
             let sourceURL = URL(fileURLWithPath: file.path)
             let resultingTrashURL: URL?
-            if let trashItemForTesting = Self.trashItemForTesting {
-                resultingTrashURL = try trashItemForTesting(sourceURL)
-            } else {
-                var trashURL: NSURL?
-                try fileManager.trashItem(at: sourceURL, resultingItemURL: &trashURL)
-                resultingTrashURL = trashURL as URL?
+            do {
+                if let trashItemForTesting = Self.trashItemForTesting {
+                    resultingTrashURL = try trashItemForTesting(sourceURL)
+                } else {
+                    var trashURL: NSURL?
+                    try fileManager.trashItem(at: sourceURL, resultingItemURL: &trashURL)
+                    resultingTrashURL = trashURL as URL?
+                }
+            } catch {
+                guard !deletedItems.isEmpty else { throw error }
+                // This is an exceptional path: make the completed moves durable
+                // before reporting the later failure to the caller.
+                Self.writeHistoryFile(restoredItems)
+                throw PartialTrashFailure(underlyingError: error, movedItems: deletedItems)
             }
 
             let item = RestorableDuplicate(

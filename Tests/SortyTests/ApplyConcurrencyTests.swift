@@ -36,6 +36,48 @@ final class ApplyConcurrencyTests: XCTestCase {
     }
 
     @MainActor
+    func testApplyRejectsDirectoryDifferentFromPlanDirectory() async throws {
+        let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
+        let otherDir = tempRoot.appendingPathComponent("Other", isDirectory: true)
+        try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: otherDir, withIntermediateDirectories: true)
+        let fileURL = sourceDir.appendingPathComponent("a.txt")
+        try "contents".write(to: fileURL, atomically: true, encoding: .utf8)
+        let file = FileItem(path: fileURL.path, name: "a", extension: "txt")
+        let organizer = FolderOrganizer()
+        organizer.currentDirectory = sourceDir
+        organizer.currentPlan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Docs", files: [file])]
+        )
+
+        do {
+            try await organizer.apply(at: otherDir)
+            XCTFail("Apply must reject a directory different from the plan's source")
+        } catch let error as OrganizationError {
+            guard case .planDirectoryMismatch = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: otherDir.appendingPathComponent("Docs/a.txt").path))
+    }
+
+    func testValidatorRejectsParentTraversalDestination() throws {
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "../Sibling")]
+        )
+
+        XCTAssertThrowsError(
+            try FileOrganizationValidator.validate(plan, at: tempRoot)
+        ) { error in
+            guard case ValidationError.destinationEscapesBaseDirectory = error else {
+                return XCTFail("Unexpected validation error: \(error)")
+            }
+        }
+    }
+
+    @MainActor
     func testConcurrentDoubleApplySingleFlightsAndUndoRestores() async throws {
         let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
         try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)

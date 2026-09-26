@@ -25,6 +25,7 @@ struct DuplicatesView: View {
     @State private var isExactSectionExpanded = true
     @State private var isSimilarSectionExpanded = true
     @State private var capturedDirectory: URL?
+    @State private var currentScanID = UUID()
     @State private var semanticScanProgress: String?
 
     // Derived directory: Use local if set, otherwise fallback to global
@@ -149,6 +150,7 @@ struct DuplicatesView: View {
         }
         .onChange(of: effectiveDirectory) { _, _ in
             // Cancel in-flight scan if directory changes
+            currentScanID = UUID()
             currentScanTask?.cancel()
             // Clear results when switching directories to prevent showing stale data
             detectionManager.clearResults()
@@ -159,8 +161,12 @@ struct DuplicatesView: View {
             apply(handoff: handoff)
         }
         .onDisappear {
+            currentScanID = UUID()
             currentScanTask?.cancel()
             currentScanTask = nil
+            if detectionManager.isScanning || isPreparingScan {
+                detectionManager.cancelCurrentScan()
+            }
         }
         .sheet(isPresented: $showSettings) {
             DuplicateSettingsView(settingsManager: settingsManager)
@@ -173,8 +179,10 @@ struct DuplicatesView: View {
     }
 
     private func apply(handoff: AppState.DuplicatesHandoff) {
+        currentScanID = UUID()
         currentScanTask?.cancel()
         currentScanTask = nil
+        detectionManager.cancelCurrentScan()
 
         if let directory = handoff.directory {
             appState.duplicateSelectedDirectory = directory
@@ -373,8 +381,13 @@ struct DuplicatesView: View {
         let settings = settingsManager.settings
         HapticFeedbackManager.shared.tap()
 
-        // Cancel any in-flight scan
+        // Cancel any in-flight scan and invalidate any work already returned by it.
         currentScanTask?.cancel()
+        if detectionManager.isScanning || isPreparingScan {
+            detectionManager.cancelCurrentScan()
+        }
+        let scanID = UUID()
+        currentScanID = scanID
 
         // Capture current directory
         capturedDirectory = directory
@@ -387,11 +400,15 @@ struct DuplicatesView: View {
                     scanner: scanner,
                     directory: directory,
                     handoffPaths: handoffPaths,
-                    settings: settings
+                    settings: settings,
+                    scanID: scanID
                 )
 
-                // Verify directory hasn't changed since scan started
-                if capturedDirectory == effectiveDirectory && !Task.isCancelled {
+                // Only the active scan for the still-selected directory may publish results.
+                if currentScanID == scanID,
+                   capturedDirectory == directory,
+                   directory == effectiveDirectory,
+                   !Task.isCancelled {
                     switch scanSource {
                     case .inventory(let inventory):
                         await detectionManager.scanForDuplicates(
@@ -405,7 +422,7 @@ struct DuplicatesView: View {
                         )
                     }
 
-                    if !Task.isCancelled {
+                    if currentScanID == scanID, !Task.isCancelled {
                         // Auto-select first group
                         if let first = detectionManager.allGroups.first {
                             appState.duplicateSelectedGroup = first
@@ -414,7 +431,7 @@ struct DuplicatesView: View {
                     }
                 }
             } catch {
-                if !Task.isCancelled {
+                if currentScanID == scanID, !Task.isCancelled {
                     detectionManager.state = .failed(error.localizedDescription)
                     HapticFeedbackManager.shared.error()
                     DebugLogger.log("Duplicate scan failed: \(error)")
@@ -437,13 +454,18 @@ struct DuplicatesView: View {
         scanner: DirectoryScanner,
         directory: URL,
         handoffPaths: [String],
-        settings: DuplicateSettings
+        settings: DuplicateSettings,
+        scanID: UUID
     ) async throws -> ResolvedDuplicateScan {
         guard !handoffPaths.isEmpty else {
+            guard currentScanID == scanID, !Task.isCancelled else {
+                throw CancellationError()
+            }
             let inventory = try await scanner.scanDirectoryForDuplicates(
                 at: directory,
                 settings: settings
             ) { scanned, stage in
+                guard self.currentScanID == scanID, !Task.isCancelled else { return }
                 self.detectionManager.scanStage = "\(stage) \(scanned.formatted()) scanned"
             }
             return .inventory(inventory)
@@ -451,7 +473,7 @@ struct DuplicatesView: View {
 
         var targetedFiles: [FileItem] = []
         for path in handoffPaths {
-            if Task.isCancelled { break }
+            if Task.isCancelled || currentScanID != scanID { break }
 
             let fileURL = URL(fileURLWithPath: path).standardizedFileURL
             guard FileManager.default.fileExists(atPath: fileURL.path) else { continue }
@@ -471,10 +493,14 @@ struct DuplicatesView: View {
         }
 
         // Fallback when history paths no longer exist or are insufficient.
+        guard currentScanID == scanID, !Task.isCancelled else {
+            throw CancellationError()
+        }
         let inventory = try await scanner.scanDirectoryForDuplicates(
             at: directory,
             settings: settings
         ) { scanned, stage in
+            guard self.currentScanID == scanID, !Task.isCancelled else { return }
             self.detectionManager.scanStage = "\(stage) \(scanned.formatted()) scanned"
         }
         return .inventory(inventory)
@@ -491,10 +517,10 @@ struct DuplicatesView: View {
             screen: "duplicates",
             feature: "duplicate_scan"
         )
+        currentScanID = UUID()
         currentScanTask?.cancel()
         currentScanTask = nil
-        detectionManager.isScanning = false
-        detectionManager.state = .idle
+        detectionManager.cancelCurrentScan()
         HapticFeedbackManager.shared.tap()
     }
 
@@ -534,6 +560,30 @@ struct DuplicatesView: View {
                 ]
             )
         } catch {
+            if let partialFailure = error as? PartialTrashFailure {
+                let movedItems = partialFailure.movedItems
+                let deletedCount = movedItems.count
+                let movedPaths = Set(movedItems.map(\.originalPath))
+                let recoveredSpace = files
+                    .filter { movedPaths.contains($0.path) }
+                    .reduce(0) { $0 + $1.size }
+                let errorMessage = error.localizedDescription
+                Task { @MainActor in
+                    let entry = OrganizationHistoryEntry(
+                        directoryPath: effectiveDirectory?.path ?? "",
+                        filesOrganized: 0,
+                        foldersCreated: 0,
+                        success: false,
+                        status: .failed,
+                        errorMessage: errorMessage,
+                        duplicatesDeleted: deletedCount,
+                        recoveredSpace: recoveredSpace,
+                        restorableItems: movedItems,
+                        duplicateCleanupMode: .trash
+                    )
+                    appState.organizer?.history.addEntry(entry)
+                }
+            }
             HapticFeedbackManager.shared.error()
             DebugLogger.log("Delete failed: \(error)")
             AnalyticsManager.shared.captureFeature(
@@ -580,10 +630,12 @@ struct DuplicatesView: View {
 
         // Bulk cleanup is intentionally limited to byte-identical files.
         for group in detectionManager.allGroups where group.isExact {
-            let keepFileID = CleanupPreferenceResolver.preferredFileID(
+            guard let keepFileID = CleanupPreferenceResolver.preferredFileID(
                 in: group.files,
                 strategy: settingsManager.settings.defaultKeepStrategy
-            )
+            ), group.files.contains(where: { $0.id == keepFileID }) else {
+                continue
+            }
 
             filesToDelete.append(contentsOf: group.files.filter { $0.id != keepFileID })
         }
@@ -1440,17 +1492,27 @@ struct UnifiedDuplicateGroupDetailView: View {
     }
 
     private var effectiveKeepFileId: UUID? {
-        selectedKeepFileId ?? preferredKeepFileId()
+        if let selectedKeepFileId,
+           group.files.contains(where: { $0.id == selectedKeepFileId }) {
+            return selectedKeepFileId
+        }
+        return preferredKeepFileId()
     }
 
     private func removeFilesExceptSelectedKeepFile() {
-        guard let keepId = effectiveKeepFileId else { return }
+        guard let keepId = effectiveKeepFileId,
+              group.files.contains(where: { $0.id == keepId }) else { return }
         let filesToRemove = group.files.filter { $0.id != keepId }
+        guard !filesToRemove.isEmpty else { return }
         onDelete(filesToRemove)
     }
 
     private func preferredKeepFileId() -> UUID? {
-        if let recommended = group.recommendedFileId {
+        if group.isExact {
+            return keepFile(using: settings.defaultKeepStrategy)?.id
+        }
+        if let recommended = group.recommendedFileId,
+           group.files.contains(where: { $0.id == recommended }) {
             return recommended
         }
 

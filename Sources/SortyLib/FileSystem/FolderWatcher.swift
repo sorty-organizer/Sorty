@@ -613,11 +613,6 @@ public final class FolderWatcher: @unchecked Sendable {
         if exclusionMatcher.needsRefresh() {
             exclusionMatcher = exclusionMatcher.refreshed()
         }
-        if flags & UInt32(kFSEventStreamEventFlagOwnEvent) != 0 {
-            latestProcessedEventID = max(latestProcessedEventID ?? eventID, eventID)
-            scheduleCursorPersistence()
-            return true
-        }
 
         let path = standardizedPath(rawPath)
         let requiresRecursiveScan =
@@ -636,14 +631,28 @@ public final class FolderWatcher: @unchecked Sendable {
             flags & UInt32(kFSEventStreamEventFlagUserDropped) != 0 ||
             flags & UInt32(kFSEventStreamEventFlagKernelDropped) != 0 ||
             flags & UInt32(kFSEventStreamEventFlagEventIdsWrapped) != 0
+        if flags & UInt32(kFSEventStreamEventFlagOwnEvent) != 0,
+           !rootChanged,
+           !eventHistoryIsUnsafe {
+            latestProcessedEventID = max(latestProcessedEventID ?? eventID, eventID)
+            scheduleCursorPersistence()
+            return true
+        }
 
-        if eventHistoryIsUnsafe {
-            scheduleRecoveryScans(affectedBy: path)
-        } else if rootChanged {
+        if rootChanged {
             let recoveredRoots = reacquireRoots(affectedBy: path)
             for root in recoveredRoots {
-                beginScan(at: root)
+                beginScan(at: root, isRecovery: true)
             }
+        }
+        if eventHistoryIsUnsafe {
+            // A root change already queued recovery for the reacquired current
+            // roots above; the event path may be stale after relocation.
+            if !rootChanged {
+                scheduleRecoveryScans(affectedBy: path)
+            }
+        } else if rootChanged {
+            // The root was already reacquired and queued for baseline recovery.
         } else if itemWasRenamed, !fileManager.fileExists(atPath: path) {
             rememberRemoval(at: path)
         } else if requiresRecursiveScan || directoryArrived {

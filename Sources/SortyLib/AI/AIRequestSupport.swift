@@ -66,6 +66,8 @@ struct StreamingChunkCoalescer: Sendable {
 }
 
 enum AIRequestSupport {
+    private struct RetryDeadlineExceeded: Error {}
+
     /// Marks editor-linked, non-essential work (persona/naming/instruction
     /// helpers). Generators set it around `generateText` so the shared
     /// request builder can fail fast on constrained/expensive links.
@@ -335,12 +337,18 @@ enum AIRequestSupport {
     /// expensive links pause instead of spinning the radio.
     static func withTransientHTTPRetry<Payload>(
         delays: [Duration] = [.seconds(1), .seconds(2), .seconds(4)],
+        maxElapsed: Duration? = nil,
         _ operation: () async throws -> (Payload, URLResponse)
     ) async throws -> (Payload, URLResponse) {
+        let clock = ContinuousClock()
+        let deadline = maxElapsed.map { clock.now.advanced(by: $0) }
         var attempt = 0
 
         while true {
             try Task.checkCancellation()
+            if let deadline, clock.now >= deadline {
+                throw RetryDeadlineExceeded()
+            }
 
             do {
                 let result = try await operation()
@@ -352,29 +360,51 @@ enum AIRequestSupport {
 
                 let delay = retryDelay(from: response, fallback: jitteredDelay(delays[attempt]))
                 attempt += 1
-                try await sleepBeforeRetry(delay)
+                try await sleepBeforeRetry(delay, deadline: deadline, clock: clock)
+            } catch is RetryDeadlineExceeded {
+                throw URLError(.timedOut)
             } catch is CancellationError {
                 throw CancellationError()
             } catch let error as AIClientError {
+                if let deadline, clock.now >= deadline { throw URLError(.timedOut) }
                 guard shouldRetry(error), attempt < delays.count else { throw error }
                 let delay = jitteredDelay(delays[attempt])
                 attempt += 1
-                try await sleepBeforeRetry(delay)
+                do {
+                    try await sleepBeforeRetry(delay, deadline: deadline, clock: clock)
+                } catch is RetryDeadlineExceeded {
+                    throw URLError(.timedOut)
+                }
             } catch let error as URLError {
+                if let deadline, clock.now >= deadline { throw URLError(.timedOut) }
                 guard shouldRetry(error), attempt < delays.count else { throw error }
                 let delay = jitteredDelay(delays[attempt])
                 attempt += 1
-                try await sleepBeforeRetry(delay)
+                do {
+                    try await sleepBeforeRetry(delay, deadline: deadline, clock: clock)
+                } catch is RetryDeadlineExceeded {
+                    throw URLError(.timedOut)
+                }
             }
         }
     }
 
     /// Sleeps between retries; re-checks cancellation and the shared path probe
     /// first so offline/constrained links fail fast instead of waking the radio.
-    private static func sleepBeforeRetry(_ delay: Duration) async throws {
+    private static func sleepBeforeRetry(
+        _ delay: Duration,
+        deadline: ContinuousClock.Instant?,
+        clock: ContinuousClock
+    ) async throws {
         try Task.checkCancellation()
         if NetworkPathProbe.shared.isConstrainedOrExpensive {
             throw AIClientError.networkError(URLError(.dataNotAllowed))
+        }
+        if let deadline {
+            let remaining = clock.now.duration(to: deadline)
+            guard remaining > .zero, delay < remaining else {
+                throw RetryDeadlineExceeded()
+            }
         }
         try await Task.sleep(for: delay)
         try Task.checkCancellation()
@@ -458,8 +488,11 @@ enum AIRequestSupport {
     static func isPayloadTooLarge(_ error: Error) -> Bool {
         guard case let AIClientError.apiError(statusCode, message) = error else { return false }
         guard [400, 413, 422].contains(statusCode) else { return false }
-        if statusCode == 413 { return true }
         let normalized = message.lowercased()
+        if normalized.contains("output limit") || normalized.contains("max_tokens") || normalized.contains("finish_reason: length") {
+            return false
+        }
+        if statusCode == 413 { return true }
         return normalized.contains("image") ||
             normalized.contains("vision") ||
             normalized.contains("payload") ||

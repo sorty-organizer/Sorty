@@ -58,6 +58,7 @@ public struct BatchSummaryStats: Codable, Sendable {
     public let folderName: String
     public let folderPath: String?
     public let canUndo: Bool
+    public let historyEntryID: UUID?
     
     public init(
         filesMoved: Int = 0,
@@ -69,7 +70,8 @@ public struct BatchSummaryStats: Codable, Sendable {
         duration: TimeInterval = 0,
         folderName: String = "",
         folderPath: String? = nil,
-        canUndo: Bool = false
+        canUndo: Bool = false,
+        historyEntryID: UUID? = nil
     ) {
         self.filesMoved = filesMoved
         self.foldersCreated = foldersCreated
@@ -81,6 +83,7 @@ public struct BatchSummaryStats: Codable, Sendable {
         self.folderName = folderName
         self.folderPath = folderPath
         self.canUndo = canUndo
+        self.historyEntryID = historyEntryID
     }
     
     /// Total number of operations performed
@@ -135,6 +138,7 @@ private enum NativeNotificationUserInfoKey {
     static let isCritical = "isCritical"
     static let canRetry = "canRetry"
     static let batchStats = "batchStats"
+    static let historyEntryID = "historyEntryID"
     static let planID = "planID"
     static let isWatchedReview = "isWatchedReview"
     static let originSessionID = "originSessionID"
@@ -809,8 +813,25 @@ public class NotificationManager: ObservableObject {
     }
     
     /// Show batch summary notification with detailed stats
-    public func showBatchSummary(stats: BatchSummaryStats, isAutomated: Bool = false) {
-        show(.batchSummary(stats: stats, isAutomated: isAutomated))
+    public func showBatchSummary(
+        stats: BatchSummaryStats,
+        isAutomated: Bool = false,
+        historyEntryID: UUID? = nil
+    ) {
+        let identifiedStats = BatchSummaryStats(
+            filesMoved: stats.filesMoved,
+            foldersCreated: stats.foldersCreated,
+            filesRenamed: stats.filesRenamed,
+            filesTagged: stats.filesTagged,
+            duplicatesFound: stats.duplicatesFound,
+            errorsEncountered: stats.errorsEncountered,
+            duration: stats.duration,
+            folderName: stats.folderName,
+            folderPath: stats.folderPath,
+            canUndo: stats.canUndo,
+            historyEntryID: historyEntryID ?? stats.historyEntryID
+        )
+        show(.batchSummary(stats: identifiedStats, isAutomated: isAutomated))
     }
 
     public func showWatchedFolderStarted(fileCount: Int, folderName: String, folderPath: String) {
@@ -1298,6 +1319,7 @@ public class NotificationManager: ObservableObject {
             }
         case .batchSummary(let stats, let isAutomated):
             userInfo[NativeNotificationUserInfoKey.batchStats] = try? JSONEncoder().encode(stats).base64EncodedString()
+            userInfo[NativeNotificationUserInfoKey.historyEntryID] = stats.historyEntryID?.uuidString
             userInfo[NativeNotificationUserInfoKey.isAutomated] = isAutomated
             if let path = stats.folderPath {
                 userInfo[NativeNotificationUserInfoKey.folderPath] = path
@@ -1355,11 +1377,31 @@ public class NotificationManager: ObservableObject {
                   let data = Data(base64Encoded: encodedStats),
                   let stats = try? JSONDecoder().decode(BatchSummaryStats.self, from: data) else {
                 return .batchSummary(
-                    stats: BatchSummaryStats(folderName: folderName, folderPath: folderPath),
+                    stats: BatchSummaryStats(
+                        folderName: folderName,
+                        folderPath: folderPath,
+                        historyEntryID: (userInfo[NativeNotificationUserInfoKey.historyEntryID] as? String)
+                            .flatMap(UUID.init(uuidString:))
+                    ),
                     isAutomated: isAutomated
                 )
             }
-            return .batchSummary(stats: stats, isAutomated: isAutomated)
+            let historyEntryID = (userInfo[NativeNotificationUserInfoKey.historyEntryID] as? String)
+                .flatMap(UUID.init(uuidString:))
+            let identifiedStats = BatchSummaryStats(
+                filesMoved: stats.filesMoved,
+                foldersCreated: stats.foldersCreated,
+                filesRenamed: stats.filesRenamed,
+                filesTagged: stats.filesTagged,
+                duplicatesFound: stats.duplicatesFound,
+                errorsEncountered: stats.errorsEncountered,
+                duration: stats.duration,
+                folderName: stats.folderName,
+                folderPath: stats.folderPath,
+                canUndo: stats.canUndo,
+                historyEntryID: historyEntryID
+            )
+            return .batchSummary(stats: identifiedStats, isAutomated: isAutomated)
         case "watchedFolderStarted":
             guard let folderPath else { return nil }
             return .watchedFolderStarted(fileCount: fileCount, folderName: folderName, folderPath: folderPath)
@@ -1701,10 +1743,15 @@ public class NotificationManager: ObservableObject {
         if let path = type.folderPath {
             userInfo[NativeNotificationUserInfoKey.folderPath] = path
         }
-        if case .previewReady(_, _, let planID, let originSessionID, let isWatchedReview) = type {
+        switch type {
+        case .previewReady(_, _, let planID, let originSessionID, let isWatchedReview):
             userInfo[NativeNotificationUserInfoKey.planID] = planID?.uuidString
             userInfo[NativeNotificationUserInfoKey.originSessionID] = originSessionID?.uuidString
             userInfo[NativeNotificationUserInfoKey.isWatchedReview] = isWatchedReview
+        case .batchSummary(let stats, _):
+            userInfo[NativeNotificationUserInfoKey.historyEntryID] = stats.historyEntryID?.uuidString
+        default:
+            break
         }
         return userInfo
     }

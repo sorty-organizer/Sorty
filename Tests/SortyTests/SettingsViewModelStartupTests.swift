@@ -44,6 +44,31 @@ final class SettingsViewModelStartupTests: XCTestCase {
         XCTAssertEqual(viewModel.config.model, "startup-test-model")
     }
 
+    func testPersistedFileTaggingPreferenceIsPreservedDuringStartup() async throws {
+        let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        var storedConfig = AIConfig.default
+        storedConfig.enableFileTagging = false
+        defaults.set(try JSONEncoder().encode(storedConfig), forKey: "aiConfig")
+
+        let viewModel = SettingsViewModel(
+            userDefaults: defaults,
+            credentialStore: SettingsCredentialStore(
+                load: { _ in nil },
+                save: { _, _ in true },
+                saveImmediately: { _, _ in true },
+                delete: { _ in true }
+            ),
+            observesNotifications: false
+        )
+
+        await viewModel.loadPersistedState()
+
+        XCTAssertFalse(viewModel.config.enableFileTagging)
+    }
+
     func testResetBeforeHydrationDoesNotRestorePersistedConfiguration() async throws {
         let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

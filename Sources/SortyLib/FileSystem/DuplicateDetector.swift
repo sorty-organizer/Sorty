@@ -563,6 +563,7 @@ public class DuplicateDetectionManager: ObservableObject {
     @Published public private(set) var scanDuration: TimeInterval = 0
     
     private let detector = DuplicateDetector()
+    private var scanGeneration: UInt64 = 0
     private var lastProgressUpdate = Date.distantPast
     /// Progress store publishes at most ~4 Hz. Result stores below
     /// (duplicateGroups/semanticGroups) are assigned once per scan, never
@@ -627,6 +628,14 @@ public class DuplicateDetectionManager: ObservableObject {
         preflightUnavailableFiles: [UnavailableDuplicateFile],
         settings: DuplicateSettings
     ) async {
+        scanGeneration &+= 1
+        let generation = scanGeneration
+        if Task.isCancelled {
+            isScanning = false
+            state = .idle
+            scanStage = ""
+            return
+        }
         let scanStartedAt = Date()
         AnalyticsManager.shared.captureWorkflow(
             workflow: "duplicate_scan",
@@ -681,12 +690,20 @@ public class DuplicateDetectionManager: ObservableObject {
         scanStage = "Comparing file contents..."
 
         let exactResult = await detector.findExactDuplicates(in: exactCandidates) { current, candidateTotal in
+            guard !Task.isCancelled, self.scanGeneration == generation else { return }
             let candidateProgress = candidateTotal > 0
                 ? Double(current) / Double(candidateTotal)
                 : 1
             self.publishScanProgress(candidateProgress * 0.7, force: current == candidateTotal)
         }
 
+        guard scanGeneration == generation else { return }
+        if Task.isCancelled {
+            isScanning = false
+            state = .idle
+            scanStage = ""
+            return
+        }
         hashCandidateCount = exactResult.candidateCount
         sampledFileCount = exactResult.sampledCount
         hashedFileCount = exactResult.hashedCount
@@ -696,6 +713,10 @@ public class DuplicateDetectionManager: ObservableObject {
             .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
         unreadableFileCount = unavailableFiles.count
         
+        if scanGeneration != generation {
+            return
+        }
+
         if Task.isCancelled {
             isScanning = false
             state = .idle
@@ -714,7 +735,6 @@ public class DuplicateDetectionManager: ObservableObject {
         }
         
         var groups = exactResult.groups
-        duplicateGroups = groups
         
         // Step 3: Semantic duplicate detection (if enabled)
         if settings.includeSemanticDuplicates && !Task.isCancelled {
@@ -733,7 +753,9 @@ public class DuplicateDetectionManager: ObservableObject {
                     in: remainingSemanticCandidates
                 ) { [weak self] current, total, stage in
                     Task { @MainActor [weak self] in
-                        guard let self else { return }
+                        guard let self,
+                              self.scanGeneration == generation,
+                              !Task.isCancelled else { return }
                         let semanticProgress = total > 0 ? Double(current) / Double(total) : 1
                         // Stage labels ride the same 4 Hz throttle as progress
                         // instead of hopping to the main actor per file.
@@ -745,11 +767,25 @@ public class DuplicateDetectionManager: ObservableObject {
                         }
                     }
                 }
+                guard scanGeneration == generation else { return }
+                if Task.isCancelled {
+                    isScanning = false
+                    state = .idle
+                    scanStage = ""
+                    return
+                }
+
                 let promotedExactGroups = await promoteExactMatches(from: detectedSemanticGroups)
+                guard scanGeneration == generation else { return }
+                if Task.isCancelled {
+                    isScanning = false
+                    state = .idle
+                    scanStage = ""
+                    return
+                }
                 let promotedFileIDs = Set(promotedExactGroups.flatMap(\.files).map(\.id))
                 if !promotedExactGroups.isEmpty {
                     groups = mergeExactGroupsByHash(groups + promotedExactGroups)
-                    duplicateGroups = groups
                 }
                 semanticGroups = detectedSemanticGroups.compactMap { group in
                     let remainingFiles = group.files.filter { !promotedFileIDs.contains($0.id) }
@@ -767,6 +803,15 @@ public class DuplicateDetectionManager: ObservableObject {
         } else {
             semanticGroups = []
         }
+
+        guard scanGeneration == generation else { return }
+        if Task.isCancelled {
+            isScanning = false
+            state = .idle
+            scanStage = ""
+            return
+        }
+        duplicateGroups = groups
         
         lastScanDate = Date()
         isScanning = false
@@ -786,7 +831,16 @@ public class DuplicateDetectionManager: ObservableObject {
         )
     }
     
+    public func cancelCurrentScan() {
+        scanGeneration &+= 1
+        isScanning = false
+        scanProgress = 0
+        scanStage = ""
+        state = .idle
+    }
+
     public func clearResults() {
+        scanGeneration &+= 1
         duplicateGroups = []
         semanticGroups = []
         lastScanDate = nil

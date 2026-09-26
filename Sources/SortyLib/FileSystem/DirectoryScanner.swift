@@ -356,9 +356,11 @@ actor DirectoryScanner {
         // Directory identities already descended into. Symlinked directories
         // are skipped outright, so this only trips on hardlink/bind cycles.
         var visitedDirectoryIDs = Set<String>()
+        var rootDirectoryIDs = Set<String>()
         if let rootID = try? url.resourceValues(forKeys: [.fileResourceIdentifierKey]),
            let key = Self.visitedDirectoryKey(for: rootID) {
             visitedDirectoryIDs.insert(key)
+            rootDirectoryIDs.insert(key)
         }
 
         while let fileURL = enumerator.nextObject() as? URL {
@@ -498,7 +500,10 @@ actor DirectoryScanner {
         var exactCandidates: [FileItem] = []
         exactCandidates.reserveCapacity(exactCandidateCount)
         var enumeratedFileCount = 0
-        var secondPassVisitedDirectoryIDs = visitedDirectoryIDs
+        // Pass one has already seen every directory, so seeding pass two with
+        // its complete set would prune every directory before its files can be
+        // collected. Seed only the root and build a fresh set during pass two.
+        var secondPassVisitedDirectoryIDs = rootDirectoryIDs
 
         while let fileURL = candidateEnumerator.nextObject() as? URL {
             try Task.checkCancellation()

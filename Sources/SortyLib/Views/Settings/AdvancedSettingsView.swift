@@ -294,7 +294,14 @@ private struct TimeoutSliderRow: View {
     }
     
     private func commitMax() {
-        if let parsed = Double(maxText), parsed >= sliderMin {
+        // Double accepts strings such as "inf"; allowing those into the slider
+        // range later traps when the displayed maximum is converted to Int.
+        // Bound very large finite values too, since the UI displays them as Int.
+        let largestDisplayableMax = Double(Int.max / 2)
+        if let parsed = Double(maxText),
+           parsed.isFinite,
+           parsed >= sliderMin,
+           parsed <= largestDisplayableMax {
             let rounded = (parsed / step).rounded() * step
             withAnimation(.easeInOut(duration: 0.15)) {
                 customMax = rounded

@@ -192,16 +192,16 @@ public struct OnboardingView: View {
                     hasConfiguredWindowChrome = true
                 }
                 OnboardingScreenBackdropBlurPresenter(
-                    isVisible: introRevealPhase.rawValue
-                        >= OnboardingIntroRevealPhase.window.rawValue
+                    isVisible: isIntroVisible
+                        && introRevealPhase.rawValue >= OnboardingIntroRevealPhase.window.rawValue
                 )
             }
             .frame(width: 0, height: 0)
         )
         .overlay(alignment: .topLeading) {
             OnboardingScreenEdgeGlowPresenter(
-                isVisible: introRevealPhase.rawValue
-                    >= OnboardingIntroRevealPhase.screenGlow.rawValue
+                isVisible: isIntroVisible
+                    && introRevealPhase.rawValue >= OnboardingIntroRevealPhase.screenGlow.rawValue
             )
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
@@ -685,6 +685,7 @@ private struct OnboardingIntroView: View {
     @State private var textOpacity: Double = 0
     @State private var textOffset: CGFloat = 14
     @State private var filesAppeared = false
+    @State private var isGetStartedAvailable = false
     @State private var fileIcons: [String: NSImage] = [:]
     @State private var taskController = OnboardingIntroTaskController()
     @StateObject private var audio = OnboardingAudioManager()
@@ -706,7 +707,8 @@ private struct OnboardingIntroView: View {
                 iconOpacity: iconOpacity,
                 glowVisible: glowVisible,
                 textOpacity: textOpacity,
-                textOffset: textOffset
+                textOffset: textOffset,
+                isGetStartedAvailable: isGetStartedAvailable
             ) {
                 HapticFeedbackManager.shared.success()
                 taskController.revealGeneration += 1
@@ -758,6 +760,7 @@ private struct OnboardingIntroView: View {
                 textOpacity = 1
                 textOffset = 0
                 filesAppeared = true
+                isGetStartedAvailable = true
                 onRevealPhaseChanged(.files)
                 audio.startBackgroundMelody()
                 return
@@ -770,6 +773,7 @@ private struct OnboardingIntroView: View {
             os_signpost(.begin, log: onboardingPerformanceLog, name: "Onboarding audio preparation")
             await audio.prepareBackgroundMelody()
             os_signpost(.end, log: onboardingPerformanceLog, name: "Onboarding audio preparation")
+            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
             audio.startBackgroundMelody(after: 0.45)
             await Task.yield()
             guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
@@ -814,6 +818,9 @@ private struct OnboardingIntroView: View {
                 textOpacity = 1
                 textOffset = 0
             }
+            try? await Task.sleep(for: .milliseconds(850))
+            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
+            isGetStartedAvailable = true
 
             // Phase 3 — file chips drift in once everything has settled.
             try? await Task.sleep(for: .milliseconds(650))
@@ -836,6 +843,7 @@ private struct OnboardingIntroContentLayer: View {
     let glowVisible: Bool
     let textOpacity: Double
     let textOffset: CGFloat
+    let isGetStartedAvailable: Bool
     let action: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -912,6 +920,7 @@ private struct OnboardingIntroContentLayer: View {
                 )
                 .onboardingBeamBorder()
                 .keyboardShortcut(.defaultAction)
+                .disabled(!isGetStartedAvailable)
                 .accessibilityIdentifier("OnboardingAdvanceButton")
                 .background {
                     Color.clear
@@ -2089,6 +2098,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         private var pendingDismissal: DispatchWorkItem?
         private var isHostClosing = false
         private var isVisible = false
+        private var isApplicationActive = NSApp.isActive
 
         func setVisible(_ isVisible: Bool) {
             guard self.isVisible != isVisible else { return }
@@ -2174,6 +2184,26 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
                     queue: .main
                 ) { [weak self] _ in
                     Task { @MainActor in self?.hostWillClose() }
+                },
+                center.addObserver(
+                    forName: NSApplication.didResignActiveNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in
+                        self?.isApplicationActive = false
+                        self?.hidePanelImmediately()
+                    }
+                },
+                center.addObserver(
+                    forName: NSApplication.didBecomeActiveNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in
+                        self?.isApplicationActive = true
+                        self?.updatePanelFrame()
+                    }
                 }
             ]
 
@@ -2205,7 +2235,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             panel.isOpaque = false
             panel.hasShadow = false
             panel.ignoresMouseEvents = true
-            panel.hidesOnDeactivate = false
+            panel.hidesOnDeactivate = true
             panel.isReleasedWhenClosed = false
             panel.level = .normal
             panel.alphaValue = 0
@@ -2230,6 +2260,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         private func updatePanelFrame() {
             guard let window = hostWindow,
                   isVisible,
+                  isApplicationActive,
                   window.isVisible,
                   !window.isMiniaturized,
                   !window.styleMask.contains(.fullScreen),
@@ -2337,6 +2368,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         private var pendingDismissal: DispatchWorkItem?
         private var isHostClosing = false
         private var isVisible = false
+        private var isApplicationActive = NSApp.isActive
 
         func setVisible(_ isVisible: Bool) {
             guard self.isVisible != isVisible else { return }
@@ -2415,6 +2447,26 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                     queue: .main
                 ) { [weak self] _ in
                     Task { @MainActor in self?.hostWillClose() }
+                },
+                center.addObserver(
+                    forName: NSApplication.didResignActiveNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in
+                        self?.isApplicationActive = false
+                        self?.hidePanelImmediately()
+                    }
+                },
+                center.addObserver(
+                    forName: NSApplication.didBecomeActiveNotification,
+                    object: nil,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in
+                        self?.isApplicationActive = true
+                        self?.showPanelIfPossible()
+                    }
                 }
             ]
 
@@ -2447,9 +2499,9 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             panel.isOpaque = false
             panel.hasShadow = false
             panel.ignoresMouseEvents = true
-            panel.hidesOnDeactivate = false
+            panel.hidesOnDeactivate = true
             panel.isReleasedWhenClosed = false
-            panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+            panel.level = .normal
             panel.alphaValue = 0
             panel.collectionBehavior = [
                 .canJoinAllSpaces,
@@ -2478,6 +2530,7 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
 
         private func showPanelIfPossible() {
             guard isVisible,
+                  isApplicationActive,
                   let window = hostWindow,
                   window.isVisible,
                   !window.isMiniaturized,

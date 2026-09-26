@@ -533,7 +533,7 @@ public actor LocalRuleInferenceEngine {
         
         for rule in rules {
             // Normalize pattern for comparison
-            let key = "\(rule.pattern)|\(rule.template)"
+            let key = localRuleMergeKey(rule)
             
             if let existing = merged[key] {
                 // Merge: boost priority, combine example IDs, update support count
@@ -570,6 +570,19 @@ public actor LocalRuleInferenceEngine {
     }
 }
 
+private func localRuleMergeKey(_ rule: InferredRule) -> String {
+    let scope: String
+    switch rule.scope {
+    case .global:
+        scope = "global"
+    case .folder(let path):
+        scope = "folder:\(URL(fileURLWithPath: path).standardizedFileURL.path)"
+    case .activePersona(let id):
+        scope = "persona:\(id.uuidString)"
+    }
+    return "\(rule.pattern)|\(rule.template)|\(scope)"
+}
+
 // MARK: - LearningsManager Integration
 
 extension LearningsManager {
@@ -589,11 +602,11 @@ extension LearningsManager {
         // are always preserved from the existing rule.
         var indexByKey: [String: Int] = [:]
         for (index, rule) in workingProfile.inferredRules.enumerated() {
-            indexByKey["\(rule.pattern)|\(rule.template)"] = index
+            indexByKey[localRuleMergeKey(rule)] = index
         }
         
         for newRule in inferredRules {
-            let key = "\(newRule.pattern)|\(newRule.template)"
+            let key = localRuleMergeKey(newRule)
             if let index = indexByKey[key] {
                 let existing = workingProfile.inferredRules[index]
                 workingProfile.inferredRules[index] = InferredRule(

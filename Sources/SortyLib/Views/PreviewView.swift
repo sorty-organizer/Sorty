@@ -145,7 +145,7 @@ struct PreviewView: View {
                 }
             )
             if settingsViewModel.config.showStatsForNerds {
-                PreviewStatsView(stats: displayedPlan.generationStats, showStatsForNerds: true, estimatedTimeRemaining: nil, currentFile: Int(organizer.progress * Double(displayedPlan.totalFiles)), totalFiles: displayedPlan.totalFiles, stage: organizer.organizationStage)
+                PreviewStatsView(stats: displayedPlan.generationStats, showStatsForNerds: true, estimatedTimeRemaining: nil, currentFile: currentFileProgress(for: displayedPlan.totalFiles), totalFiles: displayedPlan.totalFiles, stage: organizer.organizationStage)
             }
             Divider()
             PreviewListView(
@@ -209,7 +209,14 @@ struct PreviewView: View {
             refreshDerivedPlanStats()
             consumePendingNotificationActionIfNeeded()
         }
-        .onChange(of: plan) { _, newPlan in editablePlan = newPlan; previewStore.updatePlan(newPlan); previewStore.resetEditsCaptured(); hasEdits = false; refreshDerivedPlanStats() }
+        .onChange(of: plan) { _, newPlan in
+            viewingHistoryIndex = nil
+            editablePlan = newPlan
+            previewStore.updatePlan(newPlan)
+            previewStore.resetEditsCaptured()
+            hasEdits = false
+            refreshDerivedPlanStats()
+        }
         .onChange(of: viewingHistoryIndex) { _, newIndex in
             if let idx = newIndex, idx < organizer.planHistory.count {
                 previewStore.updatePlan(organizer.planHistory[idx])
@@ -218,7 +225,11 @@ struct PreviewView: View {
             }
             refreshDerivedPlanStats()
         }
-        .onChange(of: organizer.planHistory) { _, _ in
+        .onChange(of: organizer.planHistory) { _, history in
+            if let viewingHistoryIndex, !history.indices.contains(viewingHistoryIndex) {
+                self.viewingHistoryIndex = nil
+                previewStore.updatePlan(editablePlan)
+            }
             refreshDerivedPlanStats()
         }
         .onChange(of: hasEdits) { _, _ in
@@ -484,9 +495,19 @@ struct PreviewView: View {
         }
     }
     
+    private func currentFileProgress(for totalFiles: Int) -> Int {
+        guard totalFiles > 0, organizer.progress.isFinite else { return 0 }
+        let progress = min(max(organizer.progress, 0), 1)
+        guard progress < 1 else { return totalFiles }
+        return Int(progress * Double(totalFiles))
+    }
+
     private func calculateTimeRemaining() -> TimeInterval? {
-        let remaining = editablePlan.totalFiles - Int(organizer.progress * Double(editablePlan.totalFiles))
-        guard remaining > 0, organizer.progress > 0 else { return nil }
+        let progress = organizer.progress
+        guard progress.isFinite, progress > 0, editablePlan.totalFiles > 0 else { return nil }
+        let completed = currentFileProgress(for: editablePlan.totalFiles)
+        let remaining = editablePlan.totalFiles - completed
+        guard remaining > 0 else { return nil }
         // Whole seconds: fractional churn would relabel the eta every tick.
         return (Double(remaining) * 0.3).rounded()
     }

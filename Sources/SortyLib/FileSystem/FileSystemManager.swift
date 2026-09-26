@@ -764,9 +764,10 @@ public actor FileSystemManager {
     ) -> [UUID: String] {
         let mappings = renameMappingsByFileID(in: suggestion)
         return Dictionary(
-            uniqueKeysWithValues: suggestion.files.map { file in
+            suggestion.files.map { file in
                 (file.id, mappings[file.id]?.finalFilename ?? file.displayName)
-            }
+            },
+            uniquingKeysWith: { first, _ in first }
         )
     }
     
@@ -1248,7 +1249,6 @@ public actor FileSystemManager {
                     let paths = collectFolderPaths(suggestion, parentURL: baseURL)
                     newlyCreatedFolders.formUnion(paths)
                 }
-                try? cleanupEmptySubdirectories(at: baseURL, excluding: newlyCreatedFolders)
 
                 if !allFailures.isEmpty {
                     DebugLogger.log("Organization completed with \(allFailures.count) failure(s)")
@@ -1654,43 +1654,6 @@ public actor FileSystemManager {
         return 1 + folder.subfolders.reduce(0) { $0 + countFolders(in: $1) }
     }
     
-    /// Recursively find and remove empty subdirectories, excluding newly created folders
-    private func cleanupEmptySubdirectories(at baseURL: URL, excluding protectedPaths: Set<String>) throws {
-        try Task.checkCancellation()
-        let contents = try fileManager.contentsOfDirectory(
-            at: baseURL,
-            includingPropertiesForKeys: [.isDirectoryKey, .isPackageKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        )
-        let protected = Set(protectedPaths.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path })
-
-        for item in contents {
-            // Skip hidden files/folders
-            if item.lastPathComponent.hasPrefix(".") {
-                continue
-            }
-
-            if protected.contains(item.resolvingSymlinksInPath().path) {
-                continue
-            }
-
-            let resourceValues = try? item.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
-            // Never descend into or remove app bundles, photo libraries, and
-            // other packages: they are opaque to the user even though they are
-            // directories on disk.
-            guard resourceValues?.isPackage != true else { continue }
-            let isDirectory = resourceValues?.isDirectory ?? false
-
-            if isDirectory {
-                // Recursively clean up subdirectories first
-                try? cleanupEmptySubdirectories(at: item, excluding: protectedPaths)
-
-                // Then try to remove this folder if it's empty
-                _ = try? removeEmptyFolder(at: item.path)
-            }
-        }
-    }
-
     // MARK: - Reverse Operations (Undo/Revert)
     
     /// Pre-flight check for restore operations - returns list of files that are missing at destination

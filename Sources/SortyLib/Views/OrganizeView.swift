@@ -510,6 +510,7 @@ struct OrganizeView: View {
                 HapticFeedbackManager.shared.success()
                 beginCompletionHandoff()
             case .error:
+                organizer.pinsCompletionView = false
                 showsCompletionContent = false
                 HapticFeedbackManager.shared.error()
             case .ready:

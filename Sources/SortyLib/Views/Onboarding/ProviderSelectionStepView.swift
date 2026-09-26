@@ -385,15 +385,22 @@ public struct ProviderSelectionStepView: View {
                         Text("1. Open verification page")
                             .font(.caption).bold()
 
-                        Link(destination: URL(string: code.verificationUri)!) {
-                            HStack {
-                                Text(code.verificationUri)
-                                Image(systemName: "arrow.up.right.square")
+                        if let verificationURL = URL(string: code.verificationUri) {
+                            Link(destination: verificationURL) {
+                                HStack {
+                                    Text(code.verificationUri)
+                                    Image(systemName: "arrow.up.right.square")
+                                }
+                                .font(.caption)
                             }
-                            .font(.caption)
+                            .trackHoveredURL(verificationURL)
+                            .buttonStyle(.link)
+                        } else {
+                            Text(code.verificationUri)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
                         }
-                        .trackHoveredURL(URL(string: code.verificationUri)!)
-                        .buttonStyle(.link)
                     }
 
                     VStack(alignment: .leading, spacing: 8) {

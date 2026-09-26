@@ -46,10 +46,13 @@ public struct ExtensionCommunication {
     private static let excludeQuickActionBundleIdentifier = "com.sorty.workflow.exclude"
     private static let scanQuickActionBundleIdentifier = "com.sorty.workflow.scan"
     private static let previewQuickActionBundleIdentifier = "com.sorty.workflow.preview"
+    private static let organizeQuickActionCommandMarker = "sorty://organize?path=$encoded&source=finder"
+    private static let watchQuickActionCommandMarker = "sorty://watched?action=add&path=$encoded"
+    private static let previewQuickActionCommandMarker = "sorty://scan?path=$encoded&preview=true"
     private static let quickActionIconBaseName = "SortyQuickActionIcon"
     private static let quickActionServiceIconName = "workflowCustomImageTemplate"
     private static let organizeWorkflowIconVersionInfoKey = "SortyOrganizeIconVersion"
-    private static let organizeWorkflowIconVersion = "2"
+    private static let organizeWorkflowIconVersion = "3"
     private static let watchWorkflowIconVariantInfoKey = "SortyWatchIconVariant"
     private static let servicesDirectoryPathDefaultsKey = "finderQuickActionServicesDirectoryPath"
     private static let stagedApplicationPathDefaultsKey = "finderStagedApplicationPath"
@@ -1724,7 +1727,11 @@ public struct ExtensionCommunication {
         }
     }
 
-    private static func isWorkflowInstalledAndCompatible(workflowName: String, bundleIdentifier: String) -> Bool {
+    private static func isWorkflowInstalledAndCompatible(
+        workflowName: String,
+        bundleIdentifier: String,
+        expectedCommand: String? = nil
+    ) -> Bool {
         for servicesDir in candidateServicesDirectories() {
             let workflowPath = servicesDir.appendingPathComponent(workflowName)
             guard FileManager.default.fileExists(atPath: workflowPath.path) else { continue }
@@ -1735,6 +1742,13 @@ public struct ExtensionCommunication {
                   currentBundleIdentifier == bundleIdentifier,
                   workflowHasFinderContext(infoPlist: info) else {
                 continue
+            }
+            if let expectedCommand {
+                let workflowURL = workflowPath.appendingPathComponent("Contents/document.wflow")
+                guard let contents = try? String(contentsOf: workflowURL, encoding: .utf8),
+                      contents.contains(xmlEscaped(expectedCommand)) else {
+                    continue
+                }
             }
 
             return true
@@ -1986,6 +2000,15 @@ public struct ExtensionCommunication {
         return result.exitCode == 0
     }
 
+    private static func xmlEscaped(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
+    }
+
     /// Install an "Organize with Sorty" Quick Action workflow to ~/Library/Services.
     public static func installQuickAction() -> (success: Bool, message: String) {
         let workflowName = organizeQuickActionWorkflowName
@@ -2047,7 +2070,7 @@ public struct ExtensionCommunication {
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://organize?path=$encoded&source=finder"; done
+            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://organize?path=$encoded&source=finder"; done
             """
 
             let workflowPlist = """
@@ -2095,7 +2118,7 @@ public struct ExtensionCommunication {
                             <key>AMParameters</key>
                             <dict>
                                 <key>COMMAND_STRING</key>
-                                <string>\(shellCommand)</string>
+                                <string>\(xmlEscaped(shellCommand))</string>
                                 <key>CheckedForUserDefaultShell</key>
                                 <true/>
                                 <key>inputMethod</key>
@@ -2123,7 +2146,7 @@ public struct ExtensionCommunication {
                             <key>ActionParameters</key>
                             <dict>
                                 <key>COMMAND_STRING</key>
-                                <string>\(shellCommand)</string>
+                                <string>\(xmlEscaped(shellCommand))</string>
                                 <key>CheckedForUserDefaultShell</key>
                                 <true/>
                                 <key>inputMethod</key>
@@ -2268,11 +2291,15 @@ public struct ExtensionCommunication {
         }
     }
 
-    /// Ensure Organize, Watch, and Exclude service entries are installed and refreshed.
+    /// Ensure Organize, Watch, Exclude, and Preview service entries are installed and refreshed.
     public static func ensureQuickActionInstalled(forceRefreshServices: Bool = false) -> (installed: Bool, message: String) {
         var refreshedOrganizeWorkflow = false
         var organizeRefreshError: String?
-        if !isQuickActionInstalled() {
+        if !isQuickActionInstalled() || !isWorkflowInstalledAndCompatible(
+            workflowName: organizeQuickActionWorkflowName,
+            bundleIdentifier: organizeQuickActionBundleIdentifier,
+            expectedCommand: Self.organizeQuickActionCommandMarker
+        ) {
             let refreshResult = installQuickAction()
             refreshedOrganizeWorkflow = refreshResult.success
             if !refreshResult.success {
@@ -2282,11 +2309,29 @@ public struct ExtensionCommunication {
 
         var refreshedWatchWorkflow = false
         var watchRefreshError: String?
-        if !isWatchWorkflowInstalledAndCompatible() {
+        if !isWatchWorkflowInstalledAndCompatible() || !isWorkflowInstalledAndCompatible(
+            workflowName: watchQuickActionWorkflowName,
+            bundleIdentifier: watchQuickActionBundleIdentifier,
+            expectedCommand: Self.watchQuickActionCommandMarker
+        ) {
             let refreshResult = installQuickWatchAction()
             refreshedWatchWorkflow = refreshResult.success
             if !refreshResult.success {
                 watchRefreshError = refreshResult.message
+            }
+        }
+
+        var refreshedPreviewWorkflow = false
+        var previewRefreshError: String?
+        if !isWorkflowInstalledAndCompatible(
+            workflowName: previewQuickActionWorkflowName,
+            bundleIdentifier: previewQuickActionBundleIdentifier,
+            expectedCommand: Self.previewQuickActionCommandMarker
+        ) {
+            let refreshResult = installQuickPreviewAction()
+            refreshedPreviewWorkflow = refreshResult.success
+            if !refreshResult.success {
+                previewRefreshError = refreshResult.message
             }
         }
 
@@ -2312,18 +2357,22 @@ public struct ExtensionCommunication {
         }
 
         if let watchRefreshError {
-            return (false, "Finder services refreshed, but Watch workflow icon update failed: \(watchRefreshError)")
+            return (false, "Finder services refreshed, but Watch workflow install failed: \(watchRefreshError)")
+        }
+
+        if let previewRefreshError {
+            return (false, "Finder services refreshed, but Preview workflow install failed: \(previewRefreshError)")
         }
 
         if let excludeRefreshError {
             return (false, "Finder services refreshed, but Exclude workflow install failed: \(excludeRefreshError)")
         }
 
-        if refreshedOrganizeWorkflow || refreshedWatchWorkflow || refreshedExcludeWorkflow {
+        if refreshedOrganizeWorkflow || refreshedWatchWorkflow || refreshedExcludeWorkflow || refreshedPreviewWorkflow {
             return (true, "Installed Sorty Services menu actions and refreshed Finder services.")
         }
 
-        return (true, "Finder services are up to date. Organize, Watch, and Exclude are available in Finder's Services menu.")
+        return (true, "Finder services are up to date. Organize, Watch, Exclude, and Preview are available in Finder's Services menu.")
     }
 
     public static func ensureQuickActionInstalledAsync(forceRefreshServices: Bool = false) async -> (installed: Bool, message: String) {
@@ -2454,7 +2503,7 @@ public struct ExtensionCommunication {
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://watched?action=add&amp;path=$encoded"; done
+            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://watched?action=add&path=$encoded"; done
             """
 
             let workflowPlist = """
@@ -2502,7 +2551,7 @@ public struct ExtensionCommunication {
                             <key>AMParameters</key>
                             <dict>
                                 <key>COMMAND_STRING</key>
-                                <string>\(shellCommand)</string>
+                                <string>\(xmlEscaped(shellCommand))</string>
                                 <key>CheckedForUserDefaultShell</key>
                                 <true/>
                                 <key>inputMethod</key>
@@ -2530,7 +2579,7 @@ public struct ExtensionCommunication {
                             <key>ActionParameters</key>
                             <dict>
                                 <key>COMMAND_STRING</key>
-                                <string>\(shellCommand)</string>
+                                <string>\(xmlEscaped(shellCommand))</string>
                                 <key>CheckedForUserDefaultShell</key>
                                 <true/>
                                 <key>inputMethod</key>
@@ -2743,7 +2792,7 @@ public struct ExtensionCommunication {
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://exclude?path=$encoded"; done
+            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://exclude?path=$encoded"; done
             """
 
             let workflowPlist = """
@@ -2791,7 +2840,7 @@ public struct ExtensionCommunication {
                             <key>AMParameters</key>
                             <dict>
                                 <key>COMMAND_STRING</key>
-                                <string>\(shellCommand)</string>
+                                <string>\(xmlEscaped(shellCommand))</string>
                                 <key>CheckedForUserDefaultShell</key>
                                 <true/>
                                 <key>inputMethod</key>
@@ -2819,7 +2868,7 @@ public struct ExtensionCommunication {
                             <key>ActionParameters</key>
                             <dict>
                                 <key>COMMAND_STRING</key>
-                                <string>\(shellCommand)</string>
+                                <string>\(xmlEscaped(shellCommand))</string>
                                 <key>CheckedForUserDefaultShell</key>
                                 <true/>
                                 <key>inputMethod</key>
@@ -3080,7 +3129,7 @@ public struct ExtensionCommunication {
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://scan?path=$encoded&amp;preview=true"; done
+            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://scan?path=$encoded&preview=true"; done
             """
 
             let workflowPlist = """
@@ -3128,7 +3177,7 @@ public struct ExtensionCommunication {
                             <key>AMParameters</key>
                             <dict>
                                 <key>COMMAND_STRING</key>
-                                <string>\(shellCommand)</string>
+                                <string>\(xmlEscaped(shellCommand))</string>
                                 <key>CheckedForUserDefaultShell</key>
                                 <true/>
                                 <key>inputMethod</key>
@@ -3156,7 +3205,7 @@ public struct ExtensionCommunication {
                             <key>ActionParameters</key>
                             <dict>
                                 <key>COMMAND_STRING</key>
-                                <string>\(shellCommand)</string>
+                                <string>\(xmlEscaped(shellCommand))</string>
                                 <key>CheckedForUserDefaultShell</key>
                                 <true/>
                                 <key>inputMethod</key>

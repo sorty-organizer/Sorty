@@ -43,7 +43,7 @@ public final class LogManager: @unchecked Sendable {
     private var logFileHandle: FileHandle?
     private var hasPreparedLogFile = false
     private let timestampFormatter = ISO8601DateFormatter()
-    private let userPathRegex = try? NSRegularExpression(pattern: "/Users/([^/]+)")
+    private let userPathRegex = try? NSRegularExpression(pattern: "/Users/[^\\s\\\"'<>]+")
     /// Debug sampling: hot loops must not thrash the log file, so only 1 in
     /// 100 debug messages is persisted. Info and above always persist.
     private let debugSampleLock = NSLock()
@@ -692,7 +692,15 @@ public final class LogManager: @unchecked Sendable {
         guard text.contains("/Users/")
             || text.contains("sk-")
             || text.contains("ghp_")
-            || text.contains("gho_") else {
+            || text.contains("gho_")
+            || text.contains("ghu_")
+            || text.contains("ghs_")
+            || text.contains("ghr_")
+            || text.localizedCaseInsensitiveContains("bearer ")
+            || text.localizedCaseInsensitiveContains("api_key=")
+            || text.localizedCaseInsensitiveContains("api-key=")
+            || text.localizedCaseInsensitiveContains("token=")
+            || text.localizedCaseInsensitiveContains("client_secret=") else {
             return text
         }
         var result = text
@@ -701,27 +709,31 @@ public final class LogManager: @unchecked Sendable {
         result = result.replacingOccurrences(of: "sk-[a-zA-Z0-9]{20,}", with: "[REDACTED_OPENAI_KEY]", options: .regularExpression)
         result = result.replacingOccurrences(of: "ghp_[a-zA-Z0-9]{20,}", with: "[REDACTED_GITHUB_TOKEN]", options: .regularExpression)
         result = result.replacingOccurrences(of: "gho_[a-zA-Z0-9]{20,}", with: "[REDACTED_GITHUB_TOKEN]", options: .regularExpression)
+        result = result.replacingOccurrences(of: "ghu_[a-zA-Z0-9]{20,}", with: "[REDACTED_GITHUB_TOKEN]", options: .regularExpression)
+        result = result.replacingOccurrences(of: "ghs_[a-zA-Z0-9]{20,}", with: "[REDACTED_GITHUB_TOKEN]", options: .regularExpression)
+        result = result.replacingOccurrences(of: "ghr_[a-zA-Z0-9]{20,}", with: "[REDACTED_GITHUB_TOKEN]", options: .regularExpression)
+        result = result.replacingOccurrences(of: "(?i)Bearer\\s+[A-Za-z0-9._~+/-]+=*", with: "Bearer [REDACTED_TOKEN]", options: .regularExpression)
+        result = result.replacingOccurrences(of: "(?i)(api[_-]?key|token|access[_-]?token|refresh[_-]?token|client[_-]?secret)(\\s*[:=]\\s*)[^\\s,;]+", with: "$1$2[REDACTED_SECRET]", options: .regularExpression)
         
-        // Redact User Paths
-        // Matches /Users/username/ or /Users/username
-        // We look for /Users/ followed by non-slash characters
+        // Redact complete absolute user paths, not just the username prefix.
         if let regex = userPathRegex {
-            let nsString = result as NSString
-            let matches = regex.matches(in: result, options: [], range: NSRange(location: 0, length: nsString.length))
-            
-            // Iterate in reverse to avoid range offsets shifting
-            for match in matches.reversed() {
-                if match.numberOfRanges > 1 {
-                    let usernameRange = match.range(at: 1)
-                    let username = nsString.substring(with: usernameRange)
-                    
-                    // Don't redact "Shared" or "Guest" if desired, but for strict privacy, redact all users
-                    if username != "Shared" {
-                        result = result.replacingOccurrences(of: "/Users/\(username)", with: "/Users/[REDACTED_USER]")
-                    }
-                }
-            }
+            result = regex.stringByReplacingMatches(
+                in: result,
+                options: [],
+                range: NSRange(result.startIndex..<result.endIndex, in: result),
+                withTemplate: "/Users/[REDACTED_PATH]"
+            )
         }
+        result = result.replacingOccurrences(
+            of: #"(?<![A-Za-z0-9:])/(?:[^\s/]+/)*[^\s/]+"#,
+            with: "[REDACTED_PATH]",
+            options: .regularExpression
+        )
+        result = result.replacingOccurrences(
+            of: #"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}"#,
+            with: "[REDACTED_EMAIL]",
+            options: [.regularExpression, .caseInsensitive]
+        )
         
         return result
     }

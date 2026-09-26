@@ -1012,17 +1012,14 @@ public actor ContentAnalyzer {
 
                 if compressionMethod == 0 {
                     // Stored (no compression)
-                    return String(
-                        decoding: fileData.prefix(maximumOutputBytes),
-                        as: UTF8.self
-                    )
+                    return Self.decodeUTF8Prefix(Data(fileData.prefix(maximumOutputBytes)))
                 } else if compressionMethod == 8 {
                     // Deflate — use Compression framework
                     let decompressed = decompressDeflate(
                         Data(fileData),
                         maximumOutputBytes: min(uncompressedSize, maximumOutputBytes)
                     )
-                    return decompressed.map { String(decoding: $0, as: UTF8.self) }
+                    return decompressed.flatMap(Self.decodeUTF8Prefix)
                 }
 
                 return nil
@@ -1032,6 +1029,19 @@ public actor ContentAnalyzer {
         }
 
         return nil
+    }
+
+    private nonisolated static func decodeUTF8Prefix(_ data: Data) -> String? {
+        // Truncating valid UTF-8 can split at most one four-byte scalar at the
+        // end. Try those boundary trims only; malformed interior bytes fail
+        // closed instead of triggering a quadratic byte-by-byte scan.
+        for trailingByteCount in 0...min(3, data.count) {
+            let prefix = data.prefix(data.count - trailingByteCount)
+            if let decoded = String(data: prefix, encoding: .utf8) {
+                return decoded
+            }
+        }
+        return data.isEmpty ? "" : nil
     }
 
     private func decompressDeflate(_ data: Data, maximumOutputBytes: Int) -> Data? {

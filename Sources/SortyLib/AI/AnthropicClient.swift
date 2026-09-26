@@ -144,13 +144,16 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
 
         let session = await AIRequestSupport.session(for: config)
         do {
-            let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
+            let (data, response) = try await AIRequestSupport.withTransientHTTPRetry(maxElapsed: .milliseconds(Int64(request.timeoutInterval * 1_000))) {
                 try await session.data(for: request)
             }
 
             _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
             
             let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            if let stopReason = json?["stop_reason"] as? String, stopReason == "max_tokens" {
+                throw Self.outputLimitError()
+            }
             guard let text = AIRequestSupport.extractText(from: json?["content"]),
                   !text.isEmpty else {
                 throw AIClientError.invalidResponseFormat
@@ -180,7 +183,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
 
         let session = await AIRequestSupport.session(for: config)
         do {
-            let (bytes, response) = try await AIRequestSupport.withTransientHTTPRetry {
+            let (bytes, response) = try await AIRequestSupport.withTransientHTTPRetry(maxElapsed: .milliseconds(Int64(request.timeoutInterval * 1_000))) {
                 try await session.bytes(for: request)
             }
             
@@ -201,6 +204,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             }
 
             var accumulatedContent = ""
+            var streamStopReason: String?
             // Coalesce off-actor: one MainActor hop per 100ms/4KB, not per delta.
             var coalescer = StreamingChunkCoalescer()
 
@@ -214,6 +218,14 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
 
                     let type = json["type"] as? String
                     var chunkText: String?
+
+                    if type == "message_delta",
+                       let delta = json["delta"] as? [String: Any] {
+                        streamStopReason = delta["stop_reason"] as? String ?? streamStopReason
+                    } else if type == "message_stop",
+                              let message = json["message"] as? [String: Any] {
+                        streamStopReason = message["stop_reason"] as? String ?? streamStopReason
+                    }
 
                     if type == "error" {
                         let errorObject = json["error"] as? [String: Any]
@@ -250,6 +262,10 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
                 }
             }
             
+            if streamStopReason == "max_tokens" {
+                throw Self.outputLimitError()
+            }
+
             let finalContent = accumulatedContent
             await MainActor.run { [weak self] in
                 self?.streamingDelegate?.didComplete(content: finalContent)
@@ -282,6 +298,13 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         }
     }
     
+    private static func outputLimitError() -> AIClientError {
+        .apiError(
+            statusCode: 413,
+            message: "Anthropic reached max_tokens before completing the response. Try fewer files or increase the output token limit."
+        )
+    }
+
     public func checkHealth() async throws {
         let headers = try requiredHeaders()
 
@@ -296,7 +319,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         request.allowsExpensiveNetworkAccess = false
 
         let session = await AIRequestSupport.session(for: config)
-        let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
+        let (data, response) = try await AIRequestSupport.withTransientHTTPRetry(maxElapsed: .milliseconds(Int64(request.timeoutInterval * 1_000))) {
             try await session.data(for: request)
         }
         _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
@@ -326,7 +349,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         request.timeoutInterval = AIRequestSupport.interactiveTimeout(for: config)
 
         let session = await AIRequestSupport.session(for: config)
-        let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
+        let (data, response) = try await AIRequestSupport.withTransientHTTPRetry(maxElapsed: .milliseconds(Int64(request.timeoutInterval * 1_000))) {
             try await session.data(for: request)
         }
         
@@ -337,6 +360,9 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         }
         
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        if json?["stop_reason"] as? String == "max_tokens" {
+            throw Self.outputLimitError()
+        }
         guard let text = AIRequestSupport.extractText(from: json?["content"]),
               !text.isEmpty else {
             throw AIClientError.invalidResponseFormat

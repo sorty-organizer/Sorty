@@ -187,8 +187,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
     public var currentPlan: OrganizationPlan? {
         get { presentationState.currentPlan }
-        set { updatePresentation { $0.currentPlan = newValue } }
+        set {
+            if newValue?.id != presentationState.currentPlan?.id {
+                currentPlanBaseURL = newValue == nil ? nil : currentDirectory?.standardizedFileURL
+            }
+            updatePresentation { $0.currentPlan = newValue }
+        }
     }
+    private var currentPlanBaseURL: URL?
     private var preparedPlanModeOverride: OrganizationMode?
     public var planHistory: [OrganizationPlan] {
         get { presentationState.planHistory }
@@ -1424,6 +1430,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Organization blocked: Already in progress")
             return
         }
+        preparedPlanModeOverride = nil
         // Never organize with empty/unhydrated exclusion rules.
         await exclusionRules?.loadPersistedState()
         await personaManager?.loadPersistedState()
@@ -1461,6 +1468,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         currentRunInstructions = customPrompt ?? customInstructions
         modelExcludedCurrentRun = false
         withBatchUpdates {
+            pinsCompletionView = false
             clearStreamingDisplayState()
             streamFileIDTable = [:]
             isStreaming = false
@@ -2672,9 +2680,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         into existing: FolderSuggestion
     ) -> FolderSuggestion {
         var merged = existing
-        merged.files.append(contentsOf: incoming.files)
-        merged.fileRenameMappings.append(contentsOf: incoming.fileRenameMappings)
-        merged.fileTagMappings.append(contentsOf: incoming.fileTagMappings)
+        var fileIDs = Set(existing.files.map(\.id))
+        merged.files.append(contentsOf: incoming.files.filter { fileIDs.insert($0.id).inserted })
+        merged.fileRenameMappings = Dictionary(
+            (existing.fileRenameMappings + incoming.fileRenameMappings).map { ($0.originalFile.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        ).values.sorted { $0.originalFile.id.uuidString < $1.originalFile.id.uuidString }
+        merged.fileTagMappings = Dictionary(
+            (existing.fileTagMappings + incoming.fileTagMappings).map { ($0.originalFile.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        ).values.sorted { $0.originalFile.id.uuidString < $1.originalFile.id.uuidString }
         merged.tags = Array(Set(existing.tags).union(incoming.tags)).sorted()
         merged.semanticTags = Array(Set(existing.semanticTags).union(incoming.semanticTags)).sorted()
         if merged.description.isEmpty {
@@ -4409,6 +4424,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard currentPlan != nil else {
             throw OrganizationError.noCurrentPlan
         }
+        if let planBaseURL = currentPlanBaseURL,
+           planBaseURL.resolvingSymlinksInPath().standardizedFileURL
+                != baseURL.resolvingSymlinksInPath().standardizedFileURL {
+            throw OrganizationError.planDirectoryMismatch(
+                expected: planBaseURL.path,
+                actual: baseURL.path
+            )
+        }
         // Claim .applying synchronously (before the first await) so a second
         // apply() observes .applying and no-ops instead of cancelling this run
         // via cancelInternal and starting a concurrent file-move pass.
@@ -4521,6 +4544,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             throw error
         }
         self.currentPlan = planToApply
+        currentPlanBaseURL = baseURL.standardizedFileURL
 
         let activity = ProcessInfo.processInfo.beginActivity(
             options: .userInitiated,
@@ -4674,12 +4698,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             throw CancellationError()
         } catch {
             let partialOperations: [FileSystemManager.FileOperation]?
-            if case FileSystemError.partialApplyFailure(let operations, _) = error {
+            let wasCancelled: Bool
+            if case FileSystemError.partialApplyFailure(let operations, let description) = error {
                 partialOperations = operations.isEmpty ? nil : operations
+                wasCancelled = Self.isCancellationError(error)
+                    || isCancellationRequested
+                    || description.localizedCaseInsensitiveContains("cancel")
             } else if !completedOperationsBeforeHistory.isEmpty {
                 partialOperations = completedOperationsBeforeHistory
+                wasCancelled = Self.isCancellationError(error) || isCancellationRequested
             } else {
                 partialOperations = nil
+                wasCancelled = Self.isCancellationError(error) || isCancellationRequested
             }
 
             let failedEntry = OrganizationHistoryEntry(
@@ -4688,8 +4718,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 foldersCreated: partialOperations?.filter { $0.type == .createFolder }.count ?? 0,
                 plan: planToApply,
                 success: false,
-                status: partialOperations == nil ? .failed : .partiallyUndone,
-                errorMessage: error.localizedDescription,
+                status: wasCancelled && partialOperations == nil
+                    ? .cancelled
+                    : (partialOperations == nil ? .failed : .partiallyUndone),
+                errorMessage: wasCancelled ? "User cancelled the operation" : error.localizedDescription,
                 rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
                 operations: partialOperations,
                 source: source
@@ -4697,15 +4729,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             await MainActor.run {
                 history.addEntry(failedEntry)
-                transition(to: .error(error), force: true)
-                errorMessage = userFacingErrorMessage(for: error)
-                organizationStage = errorMessage ?? "Apply failed"
+                if wasCancelled {
+                    resetToIdleUnlessCancellationResetIsSuppressed(source: source)
+                } else {
+                    transition(to: .error(error), force: true)
+                    errorMessage = userFacingErrorMessage(for: error)
+                    organizationStage = errorMessage ?? "Apply failed"
+                }
             }
 
             AnalyticsManager.shared.captureWorkflow(
                 workflow: "organize",
                 stage: "apply",
-                outcome: partialOperations == nil ? "failed" : "partially_completed",
+                outcome: wasCancelled
+                    ? (partialOperations == nil ? "cancelled" : "cancelled_partially_completed")
+                    : (partialOperations == nil ? "failed" : "partially_completed"),
                 properties: AnalyticsManager.durationProperties(
                     Date().timeIntervalSince(analyticsStartedAt)
                 ).merging([
@@ -4730,9 +4768,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard let plan = entry.plan else {
             throw OrganizationError.noCurrentPlan
         }
-        let baseURL = currentDirectory ?? URL(fileURLWithPath: entry.directoryPath)
+        let baseURL = URL(fileURLWithPath: entry.directoryPath).standardizedFileURL
         currentDirectory = baseURL
         currentPlan = plan
+        currentPlanBaseURL = baseURL
 
         // Do not pre-transition to .applying here: apply() owns the
         // idle/ready/completed -> applying transition and treats a second apply
@@ -5019,13 +5058,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     /// Regenerate preview with a specific provider and model
     public func regenerateWithModel(provider: AIProvider, model: String) async throws {
+        try await regenerateWithModel(provider: provider, model: model, files: nil)
+    }
+
+    func regenerateWithModel(provider: AIProvider, model: String, files suppliedFiles: [FileItem]?) async throws {
         AnalyticsManager.shared.captureWorkflow(
             workflow: "regenerate",
             stage: "started",
             outcome: "started",
             properties: ["variant": "model"]
         )
-        if state == .scanning || state == .organizing {
+        if suppliedFiles != nil && (state == .scanning || state == .organizing) {
+            await cancelCurrentOperationForRestart()
+        }
+        if suppliedFiles == nil && (state == .scanning || state == .organizing) {
             guard let directory = currentDirectory else {
                 throw OrganizationError.noCurrentPlan
             }
@@ -5050,9 +5096,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return
         }
 
-        var files = getFilesFromCurrentPlan()
+        var files = suppliedFiles ?? getFilesFromCurrentPlan()
 
-        if files.isEmpty, let directory = currentDirectory {
+        if suppliedFiles == nil, files.isEmpty, let directory = currentDirectory {
             files = try await scanPhase(directory: directory)
         }
 

@@ -225,14 +225,20 @@ struct ResponseParser {
                 forKey: .folderAssignments
             )
             folderAssignments = assignmentsLossy?.elements
-            unorganized = try container.decodeIfPresent([UnorganizedFileResponse].self, forKey: .unorganized)
+            let unorganizedLossy = try container.decodeIfPresent(
+                LossyArray<UnorganizedFileResponse>.self,
+                forKey: .unorganized
+            )
+            unorganized = unorganizedLossy?.elements
             unorganizedIDs = try container.decodeIfPresent([Int].self, forKey: .unorganizedIDs)
             notes = try container.decodeIfPresent(String.self, forKey: .notes)
             learningToolCall = try container.decodeIfPresent(
                 LearningToolCall.self,
                 forKey: .learningToolCall
             )
-            droppedElementCount = (foldersLossy?.droppedCount ?? 0) + (assignmentsLossy?.droppedCount ?? 0)
+            droppedElementCount = (foldersLossy?.droppedCount ?? 0)
+                + (assignmentsLossy?.droppedCount ?? 0)
+                + (unorganizedLossy?.droppedCount ?? 0)
         }
     }
 
@@ -274,17 +280,11 @@ struct ResponseParser {
                 forKey: .renameSuggestions
             )
             renameSuggestions = renamesLossy?.elements
-            droppedNestedCount = (subfoldersLossy?.droppedCount ?? 0) + (renamesLossy?.droppedCount ?? 0)
-
-            // Try to decode files as FileEntry array first
-            if let fileEntries = try? container.decode([FileEntry].self, forKey: .files) {
-                files = fileEntries
-            } else if let fileStrings = try? container.decode([String].self, forKey: .files) {
-                // Fallback: convert string array to FileEntry array
-                files = fileStrings.map { FileEntry(filename: $0) }
-            } else {
-                files = []
-            }
+            let fileEntriesLossy = try container.decodeIfPresent(LossyArray<FileEntry>.self, forKey: .files)
+            droppedNestedCount = (subfoldersLossy?.droppedCount ?? 0)
+                + (renamesLossy?.droppedCount ?? 0)
+                + (fileEntriesLossy?.droppedCount ?? 0)
+            files = fileEntriesLossy?.elements ?? []
         }
 
         enum CodingKeys: String, CodingKey {
@@ -595,23 +595,32 @@ struct ResponseParser {
 
         // Some models emit both schemas in one response. Prefer the schema that
         // actually maps more input files instead of blindly choosing `folders`.
-        let parsedSuggestions: [FolderSuggestion]
+        let selectedSuggestions: [FolderSuggestion]
         var diagnostics: ParseDiagnostics
         if folderSuggestions.isEmpty || compactAssignmentCount > folderAssignmentCount {
-            parsedSuggestions = assignmentSuggestions
+            selectedSuggestions = assignmentSuggestions
             diagnostics = assignmentDiagnostics
         } else {
-            parsedSuggestions = folderSuggestions
+            selectedSuggestions = folderSuggestions
             diagnostics = folderDiagnostics
         }
 
         let hasExplicitUnorganizedFiles = !(response.unorganized ?? []).isEmpty ||
             !(response.unorganizedIDs ?? []).isEmpty
-        guard !parsedSuggestions.isEmpty || hasExplicitUnorganizedFiles else {
+        guard !selectedSuggestions.isEmpty || hasExplicitUnorganizedFiles else {
             throw ParserError.missingRequiredFields
         }
 
+        var parsedSuggestions = selectedSuggestions
+        let rawAssignmentCount = collectAssignedFileIDs(from: selectedSuggestions).count
+        var globallyAssignedIDs: Set<UUID> = []
+        for index in parsedSuggestions.indices {
+            deduplicate(&parsedSuggestions[index], assignedFileIDs: &globallyAssignedIDs)
+        }
         let assignedFileIDs = collectAssignedFileIDs(from: parsedSuggestions)
+        if assignedFileIDs.count < rawAssignmentCount {
+            diagnostics.droppedElements += rawAssignmentCount - assignedFileIDs.count
+        }
 
         var unorganizedDetails = (response.unorganized ?? []).map { unorg in
             UnorganizedFile(filename: unorg.filename, reason: unorg.reason)
@@ -705,6 +714,23 @@ struct ResponseParser {
             needsReview: isPartial,
             parseWarnings: parseWarnings
         )
+    }
+
+    private static func deduplicate(
+        _ folder: inout FolderSuggestion,
+        assignedFileIDs: inout Set<UUID>
+    ) {
+        var folderFileIDs: Set<UUID> = []
+        folder.files.removeAll {
+            guard assignedFileIDs.insert($0.id).inserted else { return true }
+            folderFileIDs.insert($0.id)
+            return false
+        }
+        folder.fileRenameMappings.removeAll { !folderFileIDs.contains($0.originalFile.id) }
+        folder.fileTagMappings.removeAll { !folderFileIDs.contains($0.originalFile.id) }
+        for index in folder.subfolders.indices {
+            deduplicate(&folder.subfolders[index], assignedFileIDs: &assignedFileIDs)
+        }
     }
 
     private static func collectAssignedFileIDs(from suggestions: [FolderSuggestion]) -> Set<UUID> {
@@ -949,11 +975,50 @@ struct ResponseParser {
     }
 
     private static func removeTrailingCommas(in json: String) -> String {
-        json.replacingOccurrences(
-            of: #",\s*([\}\]])"#,
-            with: "$1",
-            options: .regularExpression
-        )
+        var result = String.UnicodeScalarView()
+        let scalars = Array(json.unicodeScalars)
+        var index = 0
+        var isInsideString = false
+        var isEscaping = false
+
+        while index < scalars.count {
+            let scalar = scalars[index]
+            if isInsideString {
+                result.append(scalar)
+                if isEscaping {
+                    isEscaping = false
+                } else if scalar == "\\" {
+                    isEscaping = true
+                } else if scalar == "\"" {
+                    isInsideString = false
+                }
+                index += 1
+                continue
+            }
+
+            if scalar == "\"" {
+                isInsideString = true
+                result.append(scalar)
+                index += 1
+                continue
+            }
+
+            if scalar == "," {
+                var next = index + 1
+                while next < scalars.count, CharacterSet.whitespacesAndNewlines.contains(scalars[next]) {
+                    next += 1
+                }
+                if next < scalars.count, scalars[next] == "}" || scalars[next] == "]" {
+                    index += 1
+                    continue
+                }
+            }
+
+            result.append(scalar)
+            index += 1
+        }
+
+        return String(result)
     }
 
     /// Extract partial results even if parsing fails
@@ -973,16 +1038,15 @@ struct ResponseParser {
             if let data = sanitizeJSONPayload(segment).data(using: .utf8),
                let folder = try? JSONDecoder().decode(FolderResponse.self, from: data) {
                 var segmentDiagnostics = ParseDiagnostics()
-                let suggestion = convertFolderResponse(
+                var suggestion = convertFolderResponse(
                     folder,
                     fileLookup: fileLookup,
                     fileIdIndex: fileIdIndex,
                     mode: mode,
                     diagnostics: &segmentDiagnostics
                 )
-                let suggestionFileIDs = collectAssignedFileIDs(from: [suggestion])
-                if suggestionFileIDs.contains(where: { !assignedFiles.contains($0) }) {
-                    assignedFiles.formUnion(suggestionFileIDs)
+                deduplicate(&suggestion, assignedFileIDs: &assignedFiles)
+                if !collectAssignedFileIDs(from: [suggestion]).isEmpty {
                     suggestions.append(suggestion)
                 }
                 continue
@@ -1147,19 +1211,21 @@ struct ResponseParser {
     }
 
     private static func partialFileNames(in arrayRemainder: String) -> [String] {
-        let filenamePattern = #"\"filename\"\s*:\s*\"([^\"]+)\""#
+        let filenamePattern = #""filename"\s*:\s*("(?:\\.|[^"\\])*")"#
         if let regex = try? NSRegularExpression(pattern: filenamePattern) {
             let matches = regex.matches(
                 in: arrayRemainder,
                 range: NSRange(arrayRemainder.startIndex..., in: arrayRemainder)
             )
             let filenames = matches.compactMap { match -> String? in
-                guard let range = Range(match.range(at: 1), in: arrayRemainder) else { return nil }
-                return String(arrayRemainder[range])
+                guard let range = Range(match.range(at: 1), in: arrayRemainder),
+                      let data = String(arrayRemainder[range]).data(using: .utf8),
+                      let filename = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) as? String else {
+                    return nil
+                }
+                return filename
             }
-            if !filenames.isEmpty {
-                return filenames
-            }
+            if !filenames.isEmpty { return filenames }
         }
 
         var values: [String] = []

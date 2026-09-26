@@ -267,7 +267,6 @@ public class SettingsViewModel: ObservableObject {
         if var decoded = decodedConfig {
             decoded.apiKey = nil
             decoded.enableSmartRename = true
-            decoded.enableFileTagging = true
             isApplyingConfigMutation = true
             config = decoded
             isApplyingConfigMutation = false

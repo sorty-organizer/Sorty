@@ -958,7 +958,13 @@ final class DuplicateRestorationManagerTests: XCTestCase {
             return trashURL as URL?
         }
 
-        XCTAssertThrowsError(try manager.moveToTrash(files: files))
+        XCTAssertThrowsError(try manager.moveToTrash(files: files)) { error in
+            guard let partialFailure = error as? PartialTrashFailure else {
+                XCTFail("Expected partial trash failure, got \(error)")
+                return
+            }
+            XCTAssertEqual(partialFailure.movedItems.map(\.originalPath), [firstURL.path])
+        }
         XCTAssertEqual(manager.restoredItems.count, 1)
         XCTAssertEqual(manager.restoredItems.first?.deletedPath, firstURL.path)
         XCTAssertFalse(FileManager.default.fileExists(atPath: firstURL.path))

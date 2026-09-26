@@ -245,7 +245,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         request.timeoutInterval = min(config.requestTimeout, 60)
 
         let session = await AIRequestSupport.session(for: config)
-        let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
+        let (data, response) = try await AIRequestSupport.withTransientHTTPRetry(maxElapsed: .milliseconds(Int64(request.timeoutInterval * 1_000))) {
             try await session.data(for: request)
         }
 
@@ -341,7 +341,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         request.timeoutInterval = min(config.requestTimeout, 60)
 
         let session = await AIRequestSupport.session(for: config)
-        let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
+        let (data, response) = try await AIRequestSupport.withTransientHTTPRetry(maxElapsed: .milliseconds(Int64(request.timeoutInterval * 1_000))) {
             try await session.data(for: request)
         }
         _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
@@ -402,7 +402,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
         let session = await AIRequestSupport.session(for: config)
         do {
-            let (data, response) = try await AIRequestSupport.withTransientHTTPRetry {
+            let (data, response) = try await AIRequestSupport.withTransientHTTPRetry(maxElapsed: .milliseconds(Int64(request.timeoutInterval * 1_000))) {
                 try await session.data(for: request)
             }
             let endTime = Date()
@@ -417,8 +417,15 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             }
 
             guard let choices = jsonResponse["choices"] as? [[String: Any]],
-                  let firstChoice = choices.first,
-                  let content = AIRequestSupport.extractChatMessageText(from: firstChoice),
+                  let firstChoice = choices.first else {
+                throw AIClientError.jsonDecodingError(
+                    context: Self.missingCompletionContext(from: jsonResponse)
+                )
+            }
+            if let finishError = Self.finishReasonError(from: ["choices": [firstChoice]]) {
+                throw AIClientError.apiError(statusCode: finishError.statusCode, message: finishError.message)
+            }
+            guard let content = AIRequestSupport.extractChatMessageText(from: firstChoice),
                   !content.isEmpty else {
                 throw AIClientError.jsonDecodingError(
                     context: Self.missingCompletionContext(from: jsonResponse)
@@ -478,7 +485,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         
         let session = await AIRequestSupport.session(for: config)
         do {
-            let (bytes, response) = try await AIRequestSupport.withTransientHTTPRetry {
+            let (bytes, response) = try await AIRequestSupport.withTransientHTTPRetry(maxElapsed: .milliseconds(Int64(request.timeoutInterval * 1_000))) {
                 try await session.bytes(for: request)
             }
             

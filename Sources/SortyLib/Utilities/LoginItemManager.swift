@@ -78,7 +78,12 @@ public class LoginItemManager: ObservableObject {
         UserDefaults.standard.publisher(for: \.launchAtLogin)
         .receive(on: RunLoop.main)
         .sink { [weak self] _ in
-            self?.syncLaunchAtLoginRegistration()
+            let launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
+            let keepInBackground = UserDefaults.standard.bool(forKey: "keepInBackground")
+            self?.syncServiceRegistration(
+                launchAtLogin: launchAtLogin,
+                keepInBackground: keepInBackground
+            )
         }
         .store(in: &cancellables)
 

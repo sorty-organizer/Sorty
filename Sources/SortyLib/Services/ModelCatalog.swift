@@ -810,13 +810,12 @@ public final class ModelCatalog: ObservableObject {
             urlString = "https://" + urlString
         }
 
-        // Ensure URL ends with /v1/models or similar if it's just a base URL
+        // Ensure URL ends with /v1/models without duplicating an existing /v1 base path.
         if !urlString.hasSuffix("/models") {
-            if urlString.hasSuffix("/") {
-                urlString += "v1/models"
-            } else {
-                urlString += "/v1/models"
-            }
+            let baseURL = urlString.hasSuffix("/") ? String(urlString.dropLast()) : urlString
+            urlString = baseURL.hasSuffix("/v1")
+                ? "\(baseURL)/models"
+                : "\(baseURL)/v1/models"
         }
         
         guard let url = URL(string: urlString), url.scheme != nil else {

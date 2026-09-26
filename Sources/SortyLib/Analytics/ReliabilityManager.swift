@@ -18,6 +18,7 @@ public final class ReliabilityManager {
     private let defaults: UserDefaults
     private var isActive = false
     private var isStarting = false
+    private var startupGeneration: UInt64 = 0
     private var captureRateLimiter = ReliabilityCaptureRateLimiter()
     private var launchSpan: ReliabilitySpan?
 
@@ -55,6 +56,8 @@ public final class ReliabilityManager {
 
         // Keep consent gating on the main actor; hop SDK start off launch.
         isStarting = true
+        startupGeneration &+= 1
+        let generation = startupGeneration
         let cacheDirectory = Self.cacheDirectory
         let releaseName = Self.releaseName
         let buildNumber = Self.buildNumber
@@ -91,7 +94,8 @@ public final class ReliabilityManager {
             await MainActor.run {
                 ReliabilityManager.shared.finishStarting(
                     telemetryAttributes: Self.telemetryAttributes,
-                    metricAttributes: Self.metricAttributes
+                    metricAttributes: Self.metricAttributes,
+                    generation: generation
                 )
             }
         }
@@ -99,10 +103,26 @@ public final class ReliabilityManager {
 
     private func finishStarting(
         telemetryAttributes: [String: Any],
-        metricAttributes: [String: SentryAttributeValue]
+        metricAttributes: [String: SentryAttributeValue],
+        generation: UInt64
     ) {
+        guard generation == startupGeneration else {
+            // Stop/consent changes can invalidate setup while it is running.
+            // Do not start a second setup until this one has been closed.
+            SentrySDK.close()
+            try? FileManager.default.removeItem(at: Self.cacheDirectory)
+            startIfAuthorized()
+            return
+        }
         isStarting = false
-        guard !isActive, consent == .granted else { return }
+        guard !isActive,
+              consent == .granted,
+              !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
+              !Self.isReliabilitySuppressedForThisProcess else {
+            SentrySDK.close()
+            try? FileManager.default.removeItem(at: Self.cacheDirectory)
+            return
+        }
         isActive = true
         SentrySDK.logger.info(
             "sorty.reliability.started",
@@ -260,6 +280,7 @@ public final class ReliabilityManager {
     public func stopAndClear() {
         launchSpan = nil
         isStarting = false
+        startupGeneration &+= 1
         if isActive {
             isActive = false
             SentrySDK.close()

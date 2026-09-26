@@ -343,18 +343,20 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         notificationObservers.append(NotificationCenter.default.addObserver(forName: .undoLastOrganization, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
             let folderPath = notification.userInfo?["folderPath"] as? String
+            let historyEntryID = (notification.userInfo?["historyEntryID"] as? String).flatMap(UUID.init(uuidString:))
             
             Task { @MainActor in
-                await self.handleUndoAction(folderPath: folderPath)
+                await self.handleUndoAction(folderPath: folderPath, historyEntryID: historyEntryID)
             }
         })
 
         notificationObservers.append(NotificationCenter.default.addObserver(forName: .requestUndoOrganizationConfirmation, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
             let folderPath = notification.userInfo?["folderPath"] as? String
+            let historyEntryID = (notification.userInfo?["historyEntryID"] as? String).flatMap(UUID.init(uuidString:))
 
             Task { @MainActor in
-                await self.handleUndoConfirmationRequest(folderPath: folderPath)
+                await self.handleUndoConfirmationRequest(folderPath: folderPath, historyEntryID: historyEntryID)
             }
         })
         
@@ -430,13 +432,13 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     // MARK: - Notification Action Handlers
     
     /// Handle undo action from notification
-    private func handleUndoAction(folderPath: String?) async {
-        notificationManager.recordActionLifecycle("undo", stage: "executing", detail: folderPath ?? "latest")
+    private func handleUndoAction(folderPath: String?, historyEntryID: UUID? = nil) async {
+        notificationManager.recordActionLifecycle("undo", stage: "executing", detail: historyEntryID?.uuidString ?? folderPath ?? "latest")
         
         // Find the entry to undo
-        guard let entryToUndo = findEntryToUndo(folderPath: folderPath) else {
+        guard let entryToUndo = findEntryToUndo(folderPath: folderPath, historyEntryID: historyEntryID) else {
             CoordinatorLog.log("Coordinator: No entry found to undo")
-            notificationManager.recordActionLifecycle("undo", stage: "no-op", failed: true, detail: folderPath ?? "latest")
+            notificationManager.recordActionLifecycle("undo", stage: "no-op", failed: true, detail: historyEntryID?.uuidString ?? folderPath ?? "latest")
             notificationManager.showError(message: "Nothing to undo", isCritical: false)
             return
         }
@@ -478,8 +480,14 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
     
     /// Find the most recent entry to undo, optionally filtered by folder path
-    private func findEntryToUndo(folderPath: String?) -> OrganizationHistoryEntry? {
+    private func findEntryToUndo(
+        folderPath: String?,
+        historyEntryID: UUID? = nil
+    ) -> OrganizationHistoryEntry? {
         let entries = organizer.history.entries
+        if let historyEntryID {
+            return entries.first { $0.id == historyEntryID && !$0.isUndone && $0.success }
+        }
         
         if let path = folderPath {
             // Find the most recent non-undone entry for this specific folder
@@ -568,7 +576,10 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
     }
 
-    private func handleUndoConfirmationRequest(folderPath: String?) async {
+    private func handleUndoConfirmationRequest(
+        folderPath: String?,
+        historyEntryID: UUID? = nil
+    ) async {
         let targetName = notificationFolderName(for: folderPath) ?? "your last organization"
         notificationManager.recordActionLifecycle("undo", stage: "confirmation_shown", detail: targetName)
 
@@ -580,7 +591,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
         if confirmed {
             notificationManager.recordActionLifecycle("undo", stage: "confirmed", detail: targetName)
-            await handleUndoAction(folderPath: folderPath)
+            await handleUndoAction(folderPath: folderPath, historyEntryID: historyEntryID)
         } else {
             notificationManager.recordActionLifecycle("undo", stage: "cancelled", detail: targetName)
         }
@@ -686,7 +697,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             duration: duration,
             folderName: folderName,
             folderPath: folderPath,
-            canUndo: canUndo
+            canUndo: canUndo,
+            historyEntryID: entry.id
         )
     }
     

@@ -34,6 +34,8 @@ struct PermissionsSettingsView: View {
     @State private var hoveredAccessInfoAction: AccessInfoAction?
     @State private var automationPermissionTask: Task<Void, Never>?
     @State private var isShowingMissingAutomationRecovery = false
+    @State private var permissionRefreshGeneration = 0
+    @State private var permissionRefreshTask: Task<Void, Never>?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -139,9 +141,7 @@ struct PermissionsSettingsView: View {
                         Button {
                             HapticFeedbackManager.shared.tap()
                             refreshStatusAnimationTrigger += 1
-                            Task {
-                                await refreshPermissions()
-                            }
+                            refreshPermissions()
                         } label: {
                             Label {
                                 Text("Refresh Status")
@@ -232,14 +232,15 @@ struct PermissionsSettingsView: View {
             .settingsFocusable(.permissionsUsage)
         }
         .task {
-            await refreshPermissions(animateNewGrants: false)
+            refreshPermissions(animateNewGrants: false)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            Task {
-                await refreshPermissions()
-            }
+            refreshPermissions()
         }
         .onDisappear {
+            permissionRefreshGeneration += 1
+            permissionRefreshTask?.cancel()
+            permissionRefreshTask = nil
             automationPermissionTask?.cancel()
             automationPermissionTask = nil
             privacyHoverSettleTask?.cancel()
@@ -407,35 +408,43 @@ struct PermissionsSettingsView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func refreshPermissions(animateNewGrants: Bool = true) async {
-        async let hasFullDiskAccess = Task.detached(priority: .utility) {
-            FullDiskAccessProbe.isGranted()
-        }.value
+    private func refreshPermissions(animateNewGrants: Bool = true) {
+        permissionRefreshGeneration += 1
+        let generation = permissionRefreshGeneration
+        permissionRefreshTask?.cancel()
+        permissionRefreshTask = Task { @MainActor in
+            async let hasFullDiskAccess = Task.detached(priority: .utility) {
+                FullDiskAccessProbe.isGranted()
+            }.value
 
-        updatePermissionState(
-            filesAndFoldersState,
-            for: .filesAndFolders,
-            animateGrant: animateNewGrants
-        )
-        updatePermissionState(
-            fullDiskAccessState(canReadProtectedLocation: await hasFullDiskAccess),
-            for: .fullDiskAccess,
-            animateGrant: animateNewGrants
-        )
+            automationManager.checkPermissions(enableChecksIfNeeded: true)
+            await notificationManager.checkNotificationPermission()
+            let isFullDiskAccessGranted = await hasFullDiskAccess
+            let isFilesAndFoldersAccessGranted = await appState.hasFilesAndFoldersPermissionAsync()
+            guard !Task.isCancelled, generation == permissionRefreshGeneration else { return }
 
-        automationManager.checkPermissions(enableChecksIfNeeded: true)
-        updatePermissionState(
-            permissionState(for: automationManager.automationStatus),
-            for: .automation,
-            animateGrant: animateNewGrants
-        )
-
-        await notificationManager.checkNotificationPermission()
-        updatePermissionState(
-            notificationState(for: notificationManager.notificationPermissionStatus),
-            for: .notifications,
-            animateGrant: animateNewGrants
-        )
+            updatePermissionState(
+                isFilesAndFoldersAccessGranted ? .granted : .unknown,
+                for: .filesAndFolders,
+                animateGrant: animateNewGrants
+            )
+            updatePermissionState(
+                fullDiskAccessState(canReadProtectedLocation: isFullDiskAccessGranted),
+                for: .fullDiskAccess,
+                animateGrant: animateNewGrants
+            )
+            updatePermissionState(
+                permissionState(for: automationManager.automationStatus),
+                for: .automation,
+                animateGrant: animateNewGrants
+            )
+            updatePermissionState(
+                notificationState(for: notificationManager.notificationPermissionStatus),
+                for: .notifications,
+                animateGrant: animateNewGrants
+            )
+            permissionRefreshTask = nil
+        }
     }
 
     private func updatePermissionState(

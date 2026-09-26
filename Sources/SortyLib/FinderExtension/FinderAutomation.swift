@@ -11,6 +11,16 @@ import AppKit
 import ApplicationServices
 import Permiso
 
+private func appleScriptStringLiteral(_ value: String) -> String {
+    let escaped = value
+        .replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "\"", with: "\\\"")
+        .replacingOccurrences(of: "\r", with: "\\r")
+        .replacingOccurrences(of: "\n", with: "\\n")
+        .replacingOccurrences(of: "\t", with: "\\t")
+    return "\"\(escaped)\""
+}
+
 private actor FinderSelectionQuery {
     static let shared = FinderSelectionQuery()
 
@@ -22,7 +32,7 @@ private actor FinderSelectionQuery {
                 repeat with anItem in selectedItems
                     set end of filePaths to POSIX path of (anItem as alias)
                 end repeat
-                return filePaths as string
+                return filePaths
             on error
                 return ""
             end try
@@ -41,13 +51,14 @@ private actor FinderSelectionQuery {
             return nil
         }
 
-        guard let resultString = result.stringValue, !resultString.isEmpty else {
+        guard result.descriptorType == typeAEList, result.numberOfItems > 0 else {
             return nil
         }
-        return resultString.components(separatedBy: CharacterSet(charactersIn: ",\n"))
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-            .map { URL(fileURLWithPath: $0) }
+        let paths = (1...result.numberOfItems).compactMap { index in
+            result.atIndex(index)?.stringValue
+        }
+        guard !paths.isEmpty else { return nil }
+        return paths.map { URL(fileURLWithPath: $0) }
     }
 }
 
@@ -210,12 +221,12 @@ public final class FinderAutomation {
         guard !urls.isEmpty else { return }
         guard checkAutomationPermission() == .granted else { return }
         
-        let pathsString = urls.map { $0.path }.joined(separator: "\n")
+        let pathsList = urls.map { appleScriptStringLiteral($0.path) }.joined(separator: ", ")
         
         let scriptSource = """
         tell application "Finder"
             try
-                set filePaths to paragraphs of "\(pathsString)"
+                set filePaths to {\(pathsList)}
                 set itemsToSelect to {}
                 
                 repeat with filePath in filePaths
@@ -262,7 +273,7 @@ public final class FinderAutomation {
         let scriptSource = """
         tell application "Finder"
             try
-                set targetFolder to POSIX file "\(url.path)" as alias
+                set targetFolder to POSIX file \(appleScriptStringLiteral(url.path)) as alias
                 make new Finder window to targetFolder
                 activate
             on error errMsg
@@ -295,7 +306,7 @@ public final class FinderAutomation {
         let scriptSource = """
         tell application "Finder"
             try
-                set theFolder to POSIX file "\(url.path)" as alias
+                set theFolder to POSIX file \(appleScriptStringLiteral(url.path)) as alias
                 repeat with theWindow in (every window)
                     try
                         if (target of theWindow as alias) is theFolder then

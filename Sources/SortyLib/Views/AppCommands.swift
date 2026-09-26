@@ -692,7 +692,55 @@ public class AppState: ObservableObject {
     /// Resolving a bookmark does not make it the active workflow folder.
     public func hasFilesAndFoldersPermission() -> Bool {
         guard let bookmark = filesAndFoldersPermissionBookmark else { return false }
+        let (isGranted, refreshedBookmark) = Self.verifyFilesAndFoldersBookmark(bookmark)
+        if let refreshedBookmark {
+            filesAndFoldersPermissionBookmark = refreshedBookmark
+            userDefaults.set(refreshedBookmark, forKey: Self.filesAndFoldersPermissionBookmarkKey)
+        } else if !isGranted {
+            // Invalid bookmarks are revoked; inaccessible folders remain saved
+            // so users can restore access without choosing a different folder.
+            var isStale = false
+            if (try? URL(
+                resolvingBookmarkData: bookmark,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )) == nil {
+                revokeFilesAndFoldersPermission()
+            }
+        }
+        return isGranted
+    }
 
+    /// Checks folder access away from the main actor for settings refreshes.
+    /// Only writes a renewed bookmark back if the selection has not changed.
+    public func hasFilesAndFoldersPermissionAsync() async -> Bool {
+        guard let bookmark = filesAndFoldersPermissionBookmark else { return false }
+        let (isGranted, refreshedBookmark) = await Task.detached(priority: .utility) {
+            Self.verifyFilesAndFoldersBookmark(bookmark)
+        }.value
+
+        guard filesAndFoldersPermissionBookmark == bookmark else { return false }
+        if let refreshedBookmark {
+            filesAndFoldersPermissionBookmark = refreshedBookmark
+            userDefaults.set(refreshedBookmark, forKey: Self.filesAndFoldersPermissionBookmarkKey)
+        } else if !isGranted {
+            var isStale = false
+            if (try? URL(
+                resolvingBookmarkData: bookmark,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )) == nil {
+                revokeFilesAndFoldersPermission()
+            }
+        }
+        return isGranted
+    }
+
+    nonisolated private static func verifyFilesAndFoldersBookmark(
+        _ bookmark: Data
+    ) -> (isGranted: Bool, refreshedBookmark: Data?) {
         var isStale = false
         guard let resolved = try? URL(
             resolvingBookmarkData: bookmark,
@@ -700,12 +748,9 @@ public class AppState: ObservableObject {
             relativeTo: nil,
             bookmarkDataIsStale: &isStale
         ) else {
-            revokeFilesAndFoldersPermission()
-            return false
+            return (false, nil)
         }
 
-        // A bookmark can still resolve after access has been revoked or the folder has become
-        // unavailable. Exercise a non-mutating directory read before reporting this as granted.
         let didStartAccessing = resolved.startAccessingSecurityScopedResource()
         defer {
             if didStartAccessing {
@@ -722,20 +767,17 @@ public class AppState: ObservableObject {
                   includingPropertiesForKeys: nil,
                   options: [.skipsHiddenFiles]
               )) != nil else {
-            return false
+            return (false, nil)
         }
 
-        if isStale,
-           let refreshedBookmark = try? resolved.bookmarkData(
-               options: .withSecurityScope,
-               includingResourceValuesForKeys: nil,
-               relativeTo: nil
-           ) {
-            filesAndFoldersPermissionBookmark = refreshedBookmark
-            userDefaults.set(refreshedBookmark, forKey: Self.filesAndFoldersPermissionBookmarkKey)
-        }
-
-        return true
+        let refreshedBookmark = isStale
+            ? try? resolved.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+            : nil
+        return (true, refreshedBookmark)
     }
 
     public func revokeFilesAndFoldersPermission() {
@@ -1319,7 +1361,7 @@ public class AppState: ObservableObject {
     }
 
     public func selectAllFiles() {
-        // Select all implementation handled by focused view via responder chain
+        NSApp.sendAction(#selector(NSResponder.selectAll(_:)), to: nil, from: nil)
     }
 
     private enum HistoryImportError: LocalizedError {
@@ -1505,14 +1547,15 @@ public class AppState: ObservableObject {
     }
 
     public func applyChanges() {
-        guard let organizer = organizer, let directory = selectedDirectory else { return }
+        guard let organizer, let directory = organizer.currentDirectory else { return }
         Task {
             try? await organizer.apply(at: directory)
         }
     }
 
     public func previewChanges() {
-        // Navigation to preview is handled by view logic
+        guard hasCurrentPlan else { return }
+        currentView = .organize
     }
 
     public func cancelOperation() {

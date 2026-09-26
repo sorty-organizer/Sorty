@@ -25,6 +25,9 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
         XCTAssertTrue(AIRequestSupport.isPayloadTooLarge(
             AIClientError.apiError(statusCode: 413, message: "Request rejected")
         ))
+        XCTAssertFalse(AIRequestSupport.isPayloadTooLarge(
+            AIClientError.apiError(statusCode: 413, message: "The model reached its output limit before finishing the organization plan.")
+        ))
         XCTAssertTrue(AIRequestSupport.isPayloadTooLarge(
             AIClientError.apiError(statusCode: 400, message: "Unsupported image format")
         ))

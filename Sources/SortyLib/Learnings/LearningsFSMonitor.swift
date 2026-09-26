@@ -104,7 +104,11 @@ private final class FSEventStreamManager: @unchecked Sendable {
                 pathsToWatch,
                 FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
                 1.0,  // Latency in seconds
-                FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagUseCFTypes)
+                FSEventStreamCreateFlags(
+                    kFSEventStreamCreateFlagFileEvents |
+                    kFSEventStreamCreateFlagUseCFTypes |
+                    kFSEventStreamCreateFlagMarkSelf
+                )
             )
             
             if let stream = stream {
@@ -293,9 +297,14 @@ public class LearningsFSMonitor: ObservableObject {
     fileprivate func handleFSEvents(paths: [String], flags: [FSEventStreamEventFlags]) {
         // Debounce: schedule snapshot update for affected directories
         for (index, path) in paths.enumerated() {
+            let flag = flags.indices.contains(index) ? flags[index] : 0
+            // MarkSelf events are caused by Sorty's own filesystem work, not
+            // manual corrections. Ignore them across nested monitored roots.
+            if flag & FSEventStreamEventFlags(kFSEventStreamEventFlagOwnEvent) != 0 {
+                continue
+            }
             for dirURL in monitoringGenerations.keys {
                 if StorageLocationPathResolver.isPath(path, within: dirURL.path) {
-                    let flag = flags.indices.contains(index) ? flags[index] : 0
                     let requiresFullSnapshot = flag & FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs) != 0
                         || flag & FSEventStreamEventFlags(kFSEventStreamEventFlagUserDropped) != 0
                         || flag & FSEventStreamEventFlags(kFSEventStreamEventFlagKernelDropped) != 0

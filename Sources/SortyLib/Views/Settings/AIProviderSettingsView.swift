@@ -239,10 +239,16 @@ struct AIProviderSettingsView: View {
                 // Device code flow
                 VStack(alignment: .leading, spacing: 16) {
                     StepCard(number: 1, title: "Open URL in browser") {
-                        Link(destination: URL(string: code.verificationUri)!) {
+                        if let verificationURL = URL(string: code.verificationUri) {
+                            Link(destination: verificationURL) {
+                                Text(code.verificationUri)
+                                    .underline()
+                                    .foregroundColor(.blue)
+                            }
+                        } else {
                             Text(code.verificationUri)
-                                .underline()
-                                .foregroundColor(.blue)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
                         }
                     }
 

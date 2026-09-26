@@ -393,8 +393,9 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             try Task.checkCancellation()
             try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { continuation in
+                    let completion = ProcessTerminationCompletion(continuation)
                     process.terminationHandler = { _ in
-                        continuation.resume()
+                        completion.resume()
                     }
                     do {
                         try process.run()
@@ -404,7 +405,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                         try inputPipe.fileHandleForWriting.close()
                     } catch {
                         process.terminationHandler = nil
-                        continuation.resume(throwing: error)
+                        completion.resume(throwing: error)
                     }
                 }
             } onCancel: {
@@ -765,6 +766,29 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             return resolvedPath
         } catch {
             return nil
+        }
+    }
+}
+
+private final class ProcessTerminationCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+
+    init(_ continuation: CheckedContinuation<Void, Error>) {
+        self.continuation = continuation
+    }
+
+    func resume(throwing error: Error? = nil) {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+
+        guard let pending else { return }
+        if let error {
+            pending.resume(throwing: error)
+        } else {
+            pending.resume()
         }
     }
 }

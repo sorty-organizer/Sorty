@@ -63,23 +63,52 @@ struct FileOrganizationValidator {
     private static func validateDestinations(_ plan: OrganizationPlan, at baseURL: URL, allowedLocations: [StorageLocation]) throws {
         let allowedPaths = Set(allowedLocations.map { StorageLocationPathResolver.resolvedPath($0.path) })
 
-        func checkSuggestion(_ suggestion: FolderSuggestion) throws {
-            // Check if this destination is an absolute storage location
+        let basePath = StorageLocationPathResolver.resolvedPath(baseURL.path)
+
+        func checkSuggestion(
+            _ suggestion: FolderSuggestion,
+            parentURL: URL,
+            confinementRootPath: String
+        ) throws {
+            let childParentURL: URL
+            let childConfinementRootPath: String
             if let absolutePath = StorageLocationPathResolver.normalizedAbsolutePath(from: suggestion.folderName) {
                 let resolvedPath = StorageLocationPathResolver.resolvedPath(absolutePath)
-                if !isAllowedStorageDestination(resolvedPath, allowedRoots: allowedPaths) {
+                guard !allowedPaths.isEmpty,
+                      isAllowedStorageDestination(resolvedPath, allowedRoots: allowedPaths) else {
                     throw ValidationError.invalidStorageLocation(absolutePath)
                 }
+                childParentURL = URL(fileURLWithPath: resolvedPath, isDirectory: true)
+                childConfinementRootPath = allowedPaths.first {
+                    StorageLocationPathResolver.isPath(resolvedPath, within: $0)
+                } ?? resolvedPath
+            } else {
+                let components = suggestion.folderName
+                    .replacingOccurrences(of: "\\", with: "/")
+                    .split(separator: "/", omittingEmptySubsequences: true)
+                guard !components.contains("..") else {
+                    throw ValidationError.destinationEscapesBaseDirectory(suggestion.folderName)
+                }
+
+                childParentURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+                let resolvedPath = StorageLocationPathResolver.resolvedPath(childParentURL.path)
+                guard StorageLocationPathResolver.isPath(resolvedPath, within: confinementRootPath) else {
+                    throw ValidationError.destinationEscapesBaseDirectory(suggestion.folderName)
+                }
+                childConfinementRootPath = confinementRootPath
             }
 
-            // Check subfolders
             for subfolder in suggestion.subfolders {
-                try checkSuggestion(subfolder)
+                try checkSuggestion(
+                    subfolder,
+                    parentURL: childParentURL,
+                    confinementRootPath: childConfinementRootPath
+                )
             }
         }
 
         for suggestion in plan.suggestions {
-            try checkSuggestion(suggestion)
+            try checkSuggestion(suggestion, parentURL: baseURL, confinementRootPath: basePath)
         }
     }
     
@@ -186,6 +215,7 @@ enum ValidationError: LocalizedError {
     case fileNotFound(String)
     case largeOperation(Int)
     case invalidStorageLocation(String)
+    case destinationEscapesBaseDirectory(String)
     
     var errorDescription: String? {
         switch self {
@@ -201,6 +231,8 @@ enum ValidationError: LocalizedError {
             return "Large operation detected (\(count) files). Please review carefully."
         case .invalidStorageLocation(let path):
             return "Invalid storage location: \(path). Sorty suggested a path that is not in your approved storage locations list."
+        case .destinationEscapesBaseDirectory(let path):
+            return "Destination folder resolves outside the selected directory: \(path)"
         }
     }
 }

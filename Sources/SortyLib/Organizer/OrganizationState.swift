@@ -64,7 +64,7 @@ public enum OrganizationState: Equatable, Sendable {
         // From scanning: can go to organizing, idle (cancel), or error
         if from == .scanning {
             switch to {
-            case .scanning, .organizing, .idle, .error:
+            case .scanning, .organizing, .ready, .idle, .error:
                 return true
             default:
                 return false
@@ -155,6 +155,7 @@ public enum OrganizationError: LocalizedError, Equatable {
     case clientNotConfigured
     case automationNotConfigured
     case noCurrentPlan
+    case planDirectoryMismatch(expected: String, actual: String)
     case fileMoveFailed(String)
     case cancelled
     case revertAlreadyInProgress(String)
@@ -167,6 +168,8 @@ public enum OrganizationError: LocalizedError, Equatable {
             return "Automation permission not granted. Please enable it in System Settings > Privacy & Security > Automation."
         case .noCurrentPlan:
             return "No organization plan available to apply."
+        case .planDirectoryMismatch(let expected, let actual):
+            return "This plan belongs to \(expected), not \(actual). Select the plan's original folder to apply it."
         case .fileMoveFailed(let details):
             return "Failed to move file: \(details)"
         case .cancelled:

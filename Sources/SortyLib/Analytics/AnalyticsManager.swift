@@ -36,6 +36,7 @@ public final class AnalyticsManager: ObservableObject {
     private let defaults: UserDefaults
     private var activeProjectToken: String?
     private var isStarting = false
+    private var startupGeneration: UInt64 = 0
     private var captureRateLimiter = AnalyticsCaptureRateLimiter()
     private var lastFeatureFlagReloadAt: TimeInterval?
 
@@ -70,6 +71,8 @@ public final class AnalyticsManager: ObservableObject {
         // Keep consent gating on the main actor; hop PostHog setup off
         // launch. Preserve the launchDuration timestamp across the hop.
         isStarting = true
+        startupGeneration &+= 1
+        let generation = startupGeneration
         let capturedLaunchDuration = launchDuration
 
         Task.detached(priority: .utility) {
@@ -91,15 +94,36 @@ public final class AnalyticsManager: ObservableObject {
             await MainActor.run {
                 AnalyticsManager.shared.finishStarting(
                     projectToken: projectToken,
-                    launchDuration: capturedLaunchDuration
+                    launchDuration: capturedLaunchDuration,
+                    generation: generation
                 )
             }
         }
     }
 
-    private func finishStarting(projectToken: String, launchDuration: TimeInterval?) {
+    private func finishStarting(
+        projectToken: String,
+        launchDuration: TimeInterval?,
+        generation: UInt64
+    ) {
+        guard generation == startupGeneration else {
+            // Stop/consent changes can invalidate setup while it is running.
+            // Do not start a second setup until this one has been closed.
+            isStarting = false
+            PostHogSDK.shared.close()
+            Self.removePersistedSDKData(projectToken: projectToken)
+            startIfAuthorized()
+            return
+        }
         isStarting = false
-        guard !isActive, consent == .granted else { return }
+        guard !isActive,
+              consent == .granted,
+              !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
+              !Self.isAnalyticsSuppressedForThisProcess else {
+            PostHogSDK.shared.close()
+            Self.removePersistedSDKData(projectToken: projectToken)
+            return
+        }
         activeProjectToken = projectToken
         isActive = true
         var sessionProperties: [String: Any] = [
@@ -340,7 +364,7 @@ public final class AnalyticsManager: ObservableObject {
     private func stopAndClear() {
         experimentalFeatures = []
         isLoadingExperimentalFeatures = false
-        isStarting = false
+        startupGeneration &+= 1
         let projectToken = activeProjectToken
             ?? Self.productionProjectToken
 

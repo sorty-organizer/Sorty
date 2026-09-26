@@ -110,7 +110,9 @@ public class ContinuousLearningObserver: ObservableObject {
 
         if var session = currentSession,
            URL(fileURLWithPath: session.folderPath).standardizedFileURL.path == URL(fileURLWithPath: folderPath).standardizedFileURL.path,
-           session.reaction == .inProgress {
+           session.reaction == .inProgress,
+           session.completedAt == nil,
+           historyEntryId == nil || session.historyEntryId == nil || session.historyEntryId == historyEntryId {
             if let historyEntryId {
                 session.historyEntryId = historyEntryId
             }
@@ -290,33 +292,45 @@ public class ContinuousLearningObserver: ObservableObject {
         currentSession = session
         if let index = recentSessions.firstIndex(where: { $0.id == session.id }) {
             recentSessions[index] = session
-        } else if appendIfNeeded || recentSessions.contains(where: { $0.folderPath == session.folderPath }) == false {
+        } else if appendIfNeeded {
+            // Multiple distinct organization runs can target the same folder.
+            // Preserve each ID for history correlation and revert matching.
             recentSessions.append(session)
         }
         learningsManager.upsertOrganizationSession(session)
     }
 
     private func applyOperations(_ operations: [FileSystemManager.FileOperation], to session: inout OrganizationSession) {
-        let movedFiles = operations.compactMap { operation -> OrganizationSessionMovedFile? in
-            guard let destinationPath = operation.destinationPath else { return nil }
+        var movedFiles = session.filesMoved
+        var updatedCount = 0
+        for operation in operations {
+            guard let destinationPath = operation.destinationPath else { continue }
             recentlyMovedFiles[destinationPath] = Date()
-            return OrganizationSessionMovedFile(
+            let existingIndex = movedFiles.firstIndex { $0.destinationPath == destinationPath }
+            let previousRuleID = existingIndex.map { movedFiles[$0].ruleId } ?? nil
+            let movedFile = OrganizationSessionMovedFile(
                 sourcePath: operation.sourcePath,
-                destinationPath: destinationPath
+                destinationPath: destinationPath,
+                ruleId: previousRuleID
             )
+            if let existingIndex {
+                movedFiles[existingIndex] = movedFile
+            } else {
+                movedFiles.append(movedFile)
+            }
+            updatedCount += 1
         }
 
-        if !movedFiles.isEmpty {
-            session.filesMoved = movedFiles
-            session.folderPatterns = extractFolderPatterns(from: movedFiles, rootFolderPath: session.folderPath)
-            session.planSummary = summarizePlan(from: session.folderPatterns, fileCount: movedFiles.count)
-            session.events.append(
-                OrganizationSessionEvent(
-                    kind: .applied,
-                    summary: "Applied organization to \(movedFiles.count) files"
-                )
+        guard updatedCount > 0 else { return }
+        session.filesMoved = movedFiles
+        session.folderPatterns = extractFolderPatterns(from: movedFiles, rootFolderPath: session.folderPath)
+        session.planSummary = summarizePlan(from: session.folderPatterns, fileCount: movedFiles.count)
+        session.events.append(
+            OrganizationSessionEvent(
+                kind: .applied,
+                summary: "Applied organization to \(updatedCount) files"
             )
-        }
+        )
     }
 
     private func extractFolderPatterns(
@@ -593,13 +607,23 @@ public class ContinuousLearningObserver: ObservableObject {
         
         LogManager.shared.log("Learning from a reverted session", category: "LearningObserver")
         
-        // Find and update the relevant session
-        if let idx = recentSessions.firstIndex(where: { $0.historyEntryId == entry.id.uuidString }) {
+        // Find and update the relevant session. Repeated notifications for the
+        // same history item must not count the revert as repeated negative evidence.
+        var newlyFailedRuleIDs: Set<String> = []
+        let alreadyReverted = recentSessions.first(where: {
+            $0.historyEntryId == entry.id.uuidString
+        })?.wasReverted == true || learningsManager.currentProfile?.historyReverts.contains(where: {
+            $0.entryId == entry.id.uuidString
+        }) == true
+        guard !alreadyReverted else { return }
+        if let idx = recentSessions.firstIndex(where: { $0.historyEntryId == entry.id.uuidString }),
+           !alreadyReverted {
             recentSessions[idx].wasReverted = true
             recentSessions[idx].reaction = .reverted
             recentSessions[idx].completedAt = Date()
             recentSessions[idx].timeToReaction = Date().timeIntervalSince(recentSessions[idx].timestamp)
-            recentSessions[idx].failedRuleIds.formUnion(recentSessions[idx].usedRuleIds)
+            newlyFailedRuleIDs = recentSessions[idx].usedRuleIds.subtracting(recentSessions[idx].failedRuleIds)
+            recentSessions[idx].failedRuleIds.formUnion(newlyFailedRuleIDs)
             recentSessions[idx].events.append(
                 OrganizationSessionEvent(
                     kind: .reverted,
@@ -624,10 +648,8 @@ public class ContinuousLearningObserver: ObservableObject {
             learningsManager.recordRejection(originalPath: op.sourcePath)
         }
 
-        if let session = recentSessions.first(where: { $0.historyEntryId == entry.id.uuidString }) {
-            for ruleId in session.usedRuleIds.subtracting(session.failedRuleIds) {
-                learningsManager.recordRuleFailure(ruleId: ruleId)
-            }
+        for ruleId in newlyFailedRuleIDs {
+            learningsManager.recordRuleFailure(ruleId: ruleId)
         }
     }
     
@@ -642,15 +664,29 @@ public class ContinuousLearningObserver: ObservableObject {
                 return
             }
             
-            // If already started in FolderOrganizer, just update the history ID
-            if let session = currentSession, session.folderPath == entry.directoryPath {
+            // Merge the finish notification only into the matching unfinished run.
+            // A later run in the same folder must never overwrite a session that is
+            // already awaiting feedback or belongs to another history entry.
+            if let session = currentSession,
+               standardizedPath(session.folderPath) == standardizedPath(entry.directoryPath),
+               session.reaction == .inProgress,
+               session.completedAt == nil,
+               session.historyEntryId == nil || session.historyEntryId == entry.id.uuidString {
                 var updatedSession = session
                 updatedSession.historyEntryId = entry.id.uuidString
                 updatedSession.completedAt = Date()
                 applyOperations(operations, to: &updatedSession)
                 persistSessionUpdate(updatedSession)
+            } else if var existingSession = recentSessions.first(where: {
+                $0.historyEntryId == entry.id.uuidString && !$0.wasReverted
+            }) {
+                // Duplicate finish notifications should enrich the same run,
+                // not create a second session or replace its learned metadata.
+                existingSession.completedAt = existingSession.completedAt ?? Date()
+                applyOperations(operations, to: &existingSession)
+                persistSessionUpdate(existingSession)
             } else {
-                // Fallback: Start a new session if not already started
+                // Fallback: create a distinct session for this history entry.
                 startSession(folderPath: entry.directoryPath, historyEntryId: entry.id.uuidString, operations: operations)
             }
             

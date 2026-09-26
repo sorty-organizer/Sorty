@@ -132,7 +132,7 @@ struct WatchedFoldersView: View {
                 transaction.disablesAnimations = true
             }
         }
-        .onAppear {
+        .task {
             watchedFoldersManager.refreshFolderExistence()
             if controlActiveState != .inactive {
                 ticker.start()

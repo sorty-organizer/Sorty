@@ -1519,6 +1519,8 @@ public class LearningsManager: ObservableObject {
             let retainedEvidenceIDs = Set(profile.positiveExamples.map(\.id))
                 .union(profile.rejections.map(\.id))
                 .union(profile.corrections.map(\.id))
+                .union(profile.postOrganizationChanges.map(\.id))
+                .union(profile.regenerationPreferenceEvidence.map(\.id))
             profile.inferredRules.removeAll { rule in
                 let evidenceIDs = Set(rule.exampleIds).union(rule.evidenceIds)
                 return !evidenceIDs.isEmpty && evidenceIDs.isDisjoint(with: retainedEvidenceIDs)
@@ -3444,6 +3446,10 @@ public class LearningsManager: ObservableObject {
             .union(
                 Set(profile.regenerationPreferenceEvidence.map(\.id))
                     .subtracting(Set(filtered.regenerationPreferenceEvidence.map(\.id)))
+            )
+            .union(
+                Set(profile.postOrganizationChanges.map(\.id))
+                    .subtracting(Set(filtered.postOrganizationChanges.map(\.id)))
             )
 
         if !excludedExampleIDs.isEmpty {

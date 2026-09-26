@@ -33,6 +33,9 @@ struct PersonaGeneratorView: View {
     @State private var isHoning: Bool = false
     @State private var isLoadingQuestions: Bool = false
     @State private var currentQuestionIndex: Int = 0
+    @State private var isGeneratingPersona = false
+    @State private var honingTask: Task<Void, Never>?
+    @State private var generationTask: Task<Void, Never>?
     @FocusState private var focusedCustomAnswerQuestionID: String?
 
     private let promptSuggestions = [
@@ -62,6 +65,14 @@ struct PersonaGeneratorView: View {
             value: isHoning || generator.isGenerating
         )
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
+        .onDisappear {
+            honingTask?.cancel()
+            honingTask = nil
+            generationTask?.cancel()
+            generationTask = nil
+            isLoadingQuestions = false
+            isGeneratingPersona = false
+        }
     }
 
     private var generationOverlay: some View {
@@ -145,7 +156,9 @@ struct PersonaGeneratorView: View {
                         onAcceptSuggestion: acceptCurrentPromptSuggestion
                     ) {
                         guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                              !isLoadingQuestions
+                              !isLoadingQuestions,
+                              !generator.isGenerating,
+                              !isGeneratingPersona
                         else {
                             return
                         }
@@ -406,16 +419,28 @@ struct PersonaGeneratorView: View {
     }
     
     private func startHoning() {
-        guard !isLoadingQuestions else { return }
+        guard !isLoadingQuestions, !isGeneratingPersona, !generator.isGenerating else { return }
 
         isLoadingQuestions = true
         currentQuestionIndex = 0
         answers.removeAll()
         customAnswers.removeAll()
+        let description = prompt
+        let config = settingsViewModel.config
 
-        Task {
+        honingTask = Task { @MainActor in
+            defer {
+                isLoadingQuestions = false
+                honingTask = nil
+            }
+
             do {
-                questions = try await honingEngine.generateQuestions(from: prompt, config: settingsViewModel.config)
+                let generatedQuestions = try await honingEngine.generateQuestions(
+                    from: description,
+                    config: config
+                )
+                guard !Task.isCancelled else { return }
+                questions = generatedQuestions
                 if questions.isEmpty {
                     generateFinalPersona()
                 } else {
@@ -424,17 +449,31 @@ struct PersonaGeneratorView: View {
                         isHoning = true
                     }
                 }
+            } catch is CancellationError {
+                return
             } catch {
+                guard !Task.isCancelled else { return }
                 generateFinalPersona()
             }
-            isLoadingQuestions = false
         }
     }
-    
+
     private func generateFinalPersona() {
-        Task {
-            let richAnswers = questions.compactMap { question -> HoningAnswer? in
-                guard let answer = answers[question.id] else { return nil }
+        guard !isGeneratingPersona, !generator.isGenerating else { return }
+        isGeneratingPersona = true
+        let description = prompt
+        let generationQuestions = questions
+        let generationAnswers = answers
+        let config = settingsViewModel.config
+
+        generationTask = Task { @MainActor in
+            defer {
+                isGeneratingPersona = false
+                generationTask = nil
+            }
+
+            let richAnswers = generationQuestions.compactMap { question -> HoningAnswer? in
+                guard let answer = generationAnswers[question.id] else { return nil }
                 return HoningAnswer(
                     questionId: question.id,
                     selectedOption: "Q: \(question.text) -> A: \(answer)"
@@ -442,31 +481,37 @@ struct PersonaGeneratorView: View {
             }
 
             do {
-                let result = try await generator.generatePersona(from: prompt, answers: richAnswers, config: settingsViewModel.config)
-                
+                let result = try await generator.generatePersona(
+                    from: description,
+                    answers: richAnswers,
+                    config: config
+                )
+                guard !Task.isCancelled else { return }
+
                 let newPersona = CustomPersona(
                     name: result.name,
                     icon: result.icon,
-                    description: prompt,
+                    description: description,
                     promptModifier: result.prompt,
                     instructionSuggestions: result.suggestions
                 )
-                
-                await MainActor.run {
-                    store.addPersona(newPersona)
-                    selectedPersonaId = newPersona.id
-                    onPersonaGenerated?()
-                    HapticFeedbackManager.shared.success()
-                    NotificationManager.shared.showHUDInfo(
-                        title: "Persona Ready",
-                        message: "\(newPersona.name) is saved and now active.",
-                        icon: "checkmark.circle.fill",
-                        iconColor: SortyDesignSystem.Colors.resolvedAccent,
-                        identifier: "persona-generated"
-                    )
-                    dismiss()
-                }
+
+                store.addPersona(newPersona)
+                selectedPersonaId = newPersona.id
+                onPersonaGenerated?()
+                HapticFeedbackManager.shared.success()
+                NotificationManager.shared.showHUDInfo(
+                    title: "Persona Ready",
+                    message: "\(newPersona.name) is saved and now active.",
+                    icon: "checkmark.circle.fill",
+                    iconColor: SortyDesignSystem.Colors.resolvedAccent,
+                    identifier: "persona-generated"
+                )
+                dismiss()
+            } catch is CancellationError {
+                // Dismissal is a normal cancellation, not a generation failure.
             } catch {
+                guard !Task.isCancelled else { return }
                 HapticFeedbackManager.shared.error()
             }
         }
