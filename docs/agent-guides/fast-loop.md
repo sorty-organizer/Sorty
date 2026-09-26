@@ -158,13 +158,14 @@ to normal builds. This avoids invalidating every source solely because checkout
 gave it a new timestamp.
 
 Use the Release workflow's `validate_only=true` input on `main` to exercise the
-universal build, signed ZIP, launch smoke test, and appcast validation without
+architecture builds, universal assembly, signed ZIP, launch smoke test, and appcast validation without
 publishing a release. This also populates the release cache on the default
 branch. GitHub lets tag runs restore default-branch caches, but a new tag cannot
 restore a cache saved only under a different tag. See the
 [release procedure](../../CONTRIBUTING.md#release-process).
 
-The release jobs transfer the packaged ZIP once and extract it for validation.
+The release jobs transfer both architecture bundles for assembly, then transfer
+the packaged ZIP for validation.
 They do not upload a second copy of the unpacked app, and artifact compression
 is disabled because the ZIP is already compressed.
 
@@ -243,8 +244,8 @@ justifies changing those boundaries.
   workflows together after validating a newer toolchain. The packaging job uses
   the runner toolchain for its small Swift validation scripts.
 - Test discovery compiles the test bundle; execution uses `--skip-build`.
-  Swift CI separately assembles the app to exercise packaging. Release has one
-  universal app build plus a Debug test build with different compiler settings.
+  Swift CI separately assembles the app to exercise packaging. Release has two
+  architecture builds plus a Debug test build with different compiler settings.
 - Release tests remain serial because they use shared Trash and
   Keychain services. Sharding requires an audited isolation list first.
 - Reuse a successful release test run with `reuse_test_run` when the existing
@@ -282,10 +283,12 @@ Before merging any dropdown/popover changes that should be "system liquid glass"
 - Release disables Thin LTO while retaining whole-module Swift optimization
   and both arm64 and x86_64. This removes an optimization pass, but its effect
   on build duration, app size, and runtime has not yet been measured.
-- Architecture builds stay together. Combining separate builds would require
-  merging and validating every nested Mach-O binary and its matching symbols,
-  then signing the assembled app. A `lipo` of only the main executable is not
-  sufficient.
+- Release builds arm64 and x86_64 on separate runners, then merges the two
+  project executables and signs the app on a third runner. The merge checks
+  every bundled file and Mach-O architecture. Prebuilt frameworks must match
+  across both builds. Both slices' dSYMs go to Sentry. This adds a runner and
+  artifact transfers; the effect on release time needs a measured validation
+  run. The last universal validation spent 3m33s in its build step.
 
 To see warnings for Debug expressions and function bodies taking over 100 ms:
 
@@ -301,7 +304,7 @@ profiling cache.
 Do not infer a release speedup from an exact-key cache miss. Inspect the restore
 step, build step, and cache save separately. Keep per-commit keys with compatible
 restore prefixes, and run publish-free validation on `main` before a release to
-make warm universal outputs available to the tag. Directory timestamps alone
+make warm architecture outputs available to the tag. Directory timestamps alone
 cannot detect edits to existing resources; bundle reuse retains content hashes,
 including Beam shader headers and the bundled Sorty skill.
 

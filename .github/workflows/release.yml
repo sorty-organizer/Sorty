@@ -189,10 +189,14 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  build-universal:
+  build-slice:
     runs-on: blacksmith-6vcpu-macos-15
     needs:
       - prepare-release
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
 
     steps:
       - name: Checkout
@@ -220,15 +224,15 @@ jobs:
             !.build/**/Index.noindex
             !.build/logs
             !.build/**/*.log
-          key: ${{ runner.os }}-${{ runner.arch }}-xcode-release-v5-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-release-${{ matrix.arch }}-v1-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-xcode-release-v5-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
-            ${{ runner.os }}-${{ runner.arch }}-xcode-release-v5-${{ steps.toolchain.outputs.key }}-
+            ${{ runner.os }}-${{ runner.arch }}-xcode-release-${{ matrix.arch }}-v1-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
+            ${{ runner.os }}-${{ runner.arch }}-xcode-release-${{ matrix.arch }}-v1-${{ steps.toolchain.outputs.key }}-
 
       - name: Restore unchanged source timestamps
         run: python3 scripts/ci_source_cache.py restore
 
-      - name: Build universal app
+      - name: Build ${{ matrix.arch }} app
         env:
           SORTY_BUILD_DIR: ${{ github.workspace }}/.build
           VERSION_OVERRIDE: ${{ needs.prepare-release.outputs.version }}
@@ -237,7 +241,7 @@ jobs:
           chmod +x ./scripts/build.sh
           BUILD_METHOD=xcodebuild \
           SKIP_TESTS=true \
-          BUILD_ARCHS="arm64 x86_64" \
+          BUILD_ARCHS="${{ matrix.arch }}" \
           APP_ICON_VARIANT=release \
           XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf-with-dsym ENABLE_CODE_COVERAGE=NO" \
           ./scripts/build.sh
@@ -265,24 +269,12 @@ jobs:
           test -s /tmp/sorty-symbol-paths
           COPYFILE_DISABLE=1 tar --null -czf release-symbols.tar.gz -T /tmp/sorty-symbol-paths
 
-      - name: Upload Sentry symbols
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-symbols
-          path: release-symbols.tar.gz
-          compression-level: 0
-          retention-days: 7
-
-      - name: Package universal ZIP
+      - name: Stage slice artifacts
         run: |
-          chmod +x ./scripts/package.sh
-          ZIP_NAME_OVERRIDE="Sorty.zip" ./scripts/package.sh
-
-      - name: Stage build artifacts
-        run: |
-          mkdir -p release-artifacts
-          cp "releases/Sorty.zip" "release-artifacts/"
-          cp ".build/logs/xcodebuild_compile.log" "release-artifacts/build_output_universal.log"
+          mkdir -p slice-artifacts
+          ditto -c -k --keepParent releases/Sorty.app slice-artifacts/Sorty.zip
+          mv release-symbols.tar.gz slice-artifacts/
+          cp ".build/logs/xcodebuild_compile.log" "slice-artifacts/build_output_${{ matrix.arch }}.log"
 
           # Preserve Sparkle's sign_update so the fresh release runner can sign appcasts.
           SIGN_UPDATE_TOOL=$(find \
@@ -292,12 +284,81 @@ jobs:
             -type f \
             -not -path "*/old_dsa_scripts/*" \
             2>/dev/null | head -1)
-          if [ -z "$SIGN_UPDATE_TOOL" ] || [ ! -x "$SIGN_UPDATE_TOOL" ]; then
-            echo "Sparkle sign_update was not produced by the universal build." >&2
-            exit 1
+          if [ "${{ matrix.arch }}" = arm64 ]; then
+            if [ -z "$SIGN_UPDATE_TOOL" ] || [ ! -x "$SIGN_UPDATE_TOOL" ]; then
+              echo "Sparkle sign_update was not produced by the arm64 build." >&2
+              exit 1
+            fi
+            mkdir -p "slice-artifacts/sparkle-tools"
+            cp "$SIGN_UPDATE_TOOL" "slice-artifacts/sparkle-tools/sign_update"
           fi
-          mkdir -p "release-artifacts/sparkle-tools"
-          cp "$SIGN_UPDATE_TOOL" "release-artifacts/sparkle-tools/sign_update"
+
+      - name: Upload slice artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-slice-${{ matrix.arch }}
+          path: slice-artifacts/
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload failed build logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-build-logs-${{ matrix.arch }}
+          path: .build/logs/*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+  build-universal:
+    runs-on: blacksmith-6vcpu-macos-15
+    needs:
+      - build-slice
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download slices
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-slice-*
+          path: slice-artifacts
+
+      - name: Merge and sign universal app
+        run: |
+          mkdir -p slice-apps/arm64 slice-apps/x86_64 releases
+          ditto -x -k slice-artifacts/release-slice-arm64/Sorty.zip slice-apps/arm64
+          ditto -x -k slice-artifacts/release-slice-x86_64/Sorty.zip slice-apps/x86_64
+          python3 scripts/merge_release_slices.py \
+            slice-apps/arm64/Sorty.app \
+            slice-apps/x86_64/Sorty.app \
+            releases/Sorty.app
+          python3 scripts/verify_posthog_release_secrets.py releases/Sorty.app
+
+      - name: Package universal ZIP
+        run: ZIP_NAME_OVERRIDE="Sorty.zip" ./scripts/package.sh
+
+      - name: Stage symbols and build artifacts
+        run: |
+          mkdir -p release-artifacts combined-symbols/arm64 combined-symbols/x86_64
+          cp releases/Sorty.zip release-artifacts/
+          cp slice-artifacts/release-slice-arm64/build_output_arm64.log release-artifacts/
+          cp slice-artifacts/release-slice-x86_64/build_output_x86_64.log release-artifacts/
+          mkdir -p release-artifacts/sparkle-tools
+          cp slice-artifacts/release-slice-arm64/sparkle-tools/sign_update \
+            release-artifacts/sparkle-tools/
+          tar -xzf slice-artifacts/release-slice-arm64/release-symbols.tar.gz -C combined-symbols/arm64
+          tar -xzf slice-artifacts/release-slice-x86_64/release-symbols.tar.gz -C combined-symbols/x86_64
+          tar -czf release-symbols.tar.gz -C combined-symbols .
+
+      - name: Upload Sentry symbols
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-symbols
+          path: release-symbols.tar.gz
+          compression-level: 0
+          retention-days: 7
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
@@ -306,15 +367,6 @@ jobs:
           path: release-artifacts/
           compression-level: 0
           retention-days: 7
-
-      - name: Upload failed build logs
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-build-logs
-          path: .build/logs/*.log
-          retention-days: 7
-          if-no-files-found: ignore
 
   release:
     runs-on: blacksmith-6vcpu-macos-15
@@ -556,7 +608,8 @@ jobs:
       - name: Extract symbols
         run: |
           tar -xzf release-symbols.tar.gz
-          test -n "$(find .build/DerivedData -type f -path '*/Contents/Resources/DWARF/*' -print -quit)"
+          test -n "$(find arm64 -type f -path '*/Contents/Resources/DWARF/*' -print -quit)"
+          test -n "$(find x86_64 -type f -path '*/Contents/Resources/DWARF/*' -print -quit)"
       - name: Publish Sentry release and symbols
         if: inputs.validate_only != true
         env:
@@ -569,6 +622,6 @@ jobs:
           npm exec --yes --package=@sentry/cli@3.6.2 -- bash -e -c '
             sentry-cli releases new "$SENTRY_RELEASE"
             sentry-cli releases set-commits "$SENTRY_RELEASE" --auto
-            sentry-cli debug-files upload --no-sources --wait-for 60 .build/DerivedData
+            sentry-cli debug-files upload --no-sources --wait-for 60 arm64 x86_64
             sentry-cli releases finalize "$SENTRY_RELEASE"
           '
