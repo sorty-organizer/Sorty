@@ -230,7 +230,7 @@ flowchart LR
         LearningsManager["LearningsManager"]
         ContinuousLearning["ContinuousLearningObserver"]
         FSMonitor["LearningsFSMonitor"]
-        RuleEngines["RuleInducer<br/>LocalRuleInferenceEngine<br/>LLMRuleInducer"]
+        RuleEngines["LocalRuleInferenceEngine<br/>LLMRuleInducer"]
         LearningsProfile["LearningsProfile<br/>rules, examples, corrections"]
     end
 

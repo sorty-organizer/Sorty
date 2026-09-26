@@ -23,9 +23,7 @@
 		365746FA957F49A88C99B2EE /* LLMRuleInducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47870FA6EF8C4D89A960A570 /* LLMRuleInducer.swift */; };
 		7ED95C0ED6B3404D91996F2F /* LearningsProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = D432637FC00D448EB39EF9B9 /* LearningsProfile.swift */; };
 		C636317AEB8C4833989D92A4 /* LearningsConsentManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D137B803768405893B39520 /* LearningsConsentManager.swift */; };
-		9A77E5C833114F39A922149C /* RuleInducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55984B92E4214A4C8D008A7C /* RuleInducer.swift */; };
 		6EDC835F365B441598DF6063 /* ContinuousLearningObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1813B822AD484B13A22DC5E2 /* ContinuousLearningObserver.swift */; };
-		27412A15DA6148F49ACD0BC6 /* PatternMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048494702C94478CA4F45671 /* PatternMatcher.swift */; };
 		B7175043EFC84B55BB376637 /* LearningsFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFD17C04F03490991995D66 /* LearningsFileManager.swift */; };
 		08558CA9E8704012BEC16BB6 /* LearningsAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42902EEA5C445E4AE788CC8 /* LearningsAnalyzer.swift */; };
 		601EC048635B48738F5F3CE2 /* SecurityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16512BA43584CED96CBA3B6 /* SecurityManager.swift */; };
@@ -247,7 +245,7 @@
 		5F13B0560579EA19ACC7B9E9 /* PromptBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B906671B20FA534F3F44125 /* PromptBuilderTests.swift */; };
 		E9C0E2403045AC9582139470 /* ResourceLoadingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D19C5B52C7984D1E5A95DE9F /* ResourceLoadingTests.swift */; };
 		64692421F52EB6EA95EA163A /* ResponseParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F8B4E8DCBAD585551A062B7 /* ResponseParserTests.swift */; };
-		7B6B8A763208318FAB31003E /* RuleInducerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C4B95D0425279208AA9936C /* RuleInducerTests.swift */; };
+		7B6B8A763208318FAB31003E /* LearningsModelSerializationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C4B95D0425279208AA9936C /* LearningsModelSerializationTests.swift */; };
 		C3D49AF3C277B327EF8BA04B /* SecurityManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72B55E6F0454EE814884012 /* SecurityManagerTests.swift */; };
 		F494D74639C6DE154F3AD216 /* SemanticAnalysisTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19B81E677CD5569CCEE2435B /* SemanticAnalysisTests.swift */; };
 		304D34F0C708AD5D5C59B423 /* SettingsSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0972B69A7BA96E5027FC0D4D /* SettingsSearchTests.swift */; };
@@ -342,9 +340,7 @@
 		47870FA6EF8C4D89A960A570 /* LLMRuleInducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMRuleInducer.swift; sourceTree = "<group>"; };
 		D432637FC00D448EB39EF9B9 /* LearningsProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsProfile.swift; sourceTree = "<group>"; };
 		7D137B803768405893B39520 /* LearningsConsentManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsConsentManager.swift; sourceTree = "<group>"; };
-		55984B92E4214A4C8D008A7C /* RuleInducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleInducer.swift; sourceTree = "<group>"; };
 		1813B822AD484B13A22DC5E2 /* ContinuousLearningObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousLearningObserver.swift; sourceTree = "<group>"; };
-		048494702C94478CA4F45671 /* PatternMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternMatcher.swift; sourceTree = "<group>"; };
 		DDFD17C04F03490991995D66 /* LearningsFileManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsFileManager.swift; sourceTree = "<group>"; };
 		C42902EEA5C445E4AE788CC8 /* LearningsAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsAnalyzer.swift; sourceTree = "<group>"; };
 		A16512BA43584CED96CBA3B6 /* SecurityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityManager.swift; sourceTree = "<group>"; };
@@ -564,7 +560,7 @@
 		6B906671B20FA534F3F44125 /* PromptBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilderTests.swift; sourceTree = "<group>"; };
 		D19C5B52C7984D1E5A95DE9F /* ResourceLoadingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceLoadingTests.swift; sourceTree = "<group>"; };
 		1F8B4E8DCBAD585551A062B7 /* ResponseParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseParserTests.swift; sourceTree = "<group>"; };
-		8C4B95D0425279208AA9936C /* RuleInducerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleInducerTests.swift; sourceTree = "<group>"; };
+		8C4B95D0425279208AA9936C /* LearningsModelSerializationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsModelSerializationTests.swift; sourceTree = "<group>"; };
 		A72B55E6F0454EE814884012 /* SecurityManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityManagerTests.swift; sourceTree = "<group>"; };
 		19B81E677CD5569CCEE2435B /* SemanticAnalysisTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SemanticAnalysisTests.swift; sourceTree = "<group>"; };
 		0972B69A7BA96E5027FC0D4D /* SettingsSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSearchTests.swift; sourceTree = "<group>"; };
@@ -640,9 +636,7 @@
 				47870FA6EF8C4D89A960A570 /* LLMRuleInducer.swift */,
 				D432637FC00D448EB39EF9B9 /* LearningsProfile.swift */,
 				7D137B803768405893B39520 /* LearningsConsentManager.swift */,
-				55984B92E4214A4C8D008A7C /* RuleInducer.swift */,
 				1813B822AD484B13A22DC5E2 /* ContinuousLearningObserver.swift */,
-				048494702C94478CA4F45671 /* PatternMatcher.swift */,
 				DDFD17C04F03490991995D66 /* LearningsFileManager.swift */,
 				C42902EEA5C445E4AE788CC8 /* LearningsAnalyzer.swift */,
 				AABBCC110001000000000017 /* LearningsFSMonitor.swift */,
@@ -1065,7 +1059,7 @@
 				6B906671B20FA534F3F44125 /* PromptBuilderTests.swift */,
 				D19C5B52C7984D1E5A95DE9F /* ResourceLoadingTests.swift */,
 				1F8B4E8DCBAD585551A062B7 /* ResponseParserTests.swift */,
-				8C4B95D0425279208AA9936C /* RuleInducerTests.swift */,
+				8C4B95D0425279208AA9936C /* LearningsModelSerializationTests.swift */,
 				A72B55E6F0454EE814884012 /* SecurityManagerTests.swift */,
 				19B81E677CD5569CCEE2435B /* SemanticAnalysisTests.swift */,
 				0972B69A7BA96E5027FC0D4D /* SettingsSearchTests.swift */,
@@ -1334,7 +1328,7 @@
 				5F13B0560579EA19ACC7B9E9 /* PromptBuilderTests.swift in Sources */,
 				E9C0E2403045AC9582139470 /* ResourceLoadingTests.swift in Sources */,
 				64692421F52EB6EA95EA163A /* ResponseParserTests.swift in Sources */,
-				7B6B8A763208318FAB31003E /* RuleInducerTests.swift in Sources */,
+				7B6B8A763208318FAB31003E /* LearningsModelSerializationTests.swift in Sources */,
 				C3D49AF3C277B327EF8BA04B /* SecurityManagerTests.swift in Sources */,
 				F494D74639C6DE154F3AD216 /* SemanticAnalysisTests.swift in Sources */,
 				304D34F0C708AD5D5C59B423 /* SettingsSearchTests.swift in Sources */,

@@ -25,7 +25,7 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | `ViewModels/` | View models |
 | `Managers/` | `@MainActor ObservableObject` state managers |
 | `Organizer/` | Core workflow orchestration (`FolderOrganizer` state machine) |
-| `Learnings/` | ML-based preference learning (`LearningsManager`, `LearningsAnalyzer`, `RuleInducer`) |
+| `Learnings/` | ML-based preference learning (`LearningsManager`, `LearningsAnalyzer`, `LocalRuleInferenceEngine`, `LLMRuleInducer`) |
 | `Utilities/` | Keychain, logging, deeplinks, security |
 | `DesignSystem/` | Shared design tokens and reusable UI components |
 | `FileSystem/` | File system access and scanning |

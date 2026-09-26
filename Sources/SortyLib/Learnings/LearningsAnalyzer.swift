@@ -21,10 +21,8 @@ public class LearningsAnalyzer: ObservableObject {
     
     // MARK: - Dependencies
     
-    private let ruleInducer = RuleInducer() // Legacy pattern matcher
     private let localRuleInferenceEngine = LocalRuleInferenceEngine()
     private var llmInducer: LLMRuleInducer?
-    private let contentAnalyzer = ContentAnalyzer()
     
     public init() {}
     
@@ -105,15 +103,6 @@ public class LearningsAnalyzer: ObservableObject {
             rules.append(contentsOf: aiRules)
         }
         
-        // Legacy pattern induction still adds value for template extraction from examples.
-        // It treats every example as positive destination evidence and ignores the action,
-        // so rejected examples must be excluded or rejected destinations become rules.
-        currentStatus = "Scanning for structural patterns..."
-        let legacyRules = await ruleInducer.induceRules(
-            from: trainingExamples.filter { $0.action != .reject },
-            exampleFolders: exampleFolderURLs
-        )
-        rules.append(contentsOf: legacyRules)
         rules = mergeRules(rules)
         
         progress = 0.3
@@ -340,7 +329,7 @@ public class LearningsAnalyzer: ObservableObject {
         let category = FileCategory.from(extension: ext)
         
         // Extract date from filename or use file date
-        let date = PatternMatcher.extractDate(from: filename) ?? Date()
+        let date = extractDate(from: filename) ?? Date()
         let calendar = Calendar.current
         let year = calendar.component(.year, from: date)
         let month = String(format: "%02d", calendar.component(.month, from: date))
@@ -360,6 +349,25 @@ public class LearningsAnalyzer: ObservableObject {
         }
         
         return result
+    }
+
+    /// Extracts a date embedded in common photo and document filenames.
+    nonisolated private static func extractDate(from filename: String) -> Date? {
+        let name = (filename as NSString).deletingPathExtension
+        for (pattern, format, replaceDots) in [
+            (#"\d{8}_\d{6}"#, "yyyyMMdd_HHmmss", false),
+            (#"\d{4}-\d{2}-\d{2}"#, "yyyy-MM-dd", false),
+            (#"\d{4}\.\d{2}\.\d{2}"#, "yyyy-MM-dd", true)
+        ] {
+            guard let range = name.range(of: pattern, options: .regularExpression) else { continue }
+            let value = String(name[range])
+            let formatter = DateFormatter()
+            formatter.dateFormat = format
+            if let date = formatter.date(from: replaceDots ? value.replacingOccurrences(of: ".", with: "-") : value) {
+                return date
+            }
+        }
+        return nil
     }
     
     /// Calculate confidence summary

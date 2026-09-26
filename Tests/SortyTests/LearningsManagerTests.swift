@@ -645,6 +645,7 @@ final class LearningsAnalyzerTests: XCTestCase {
         
         // Should use higher priority rule
         XCTAssertEqual(mapping.ruleId, rule2.id)
+        XCTAssertEqual(mapping.proposedDstPath, "/Photos/2024/2024-01-01/IMG_20240101_120000.jpg")
         XCTAssertFalse(mapping.alternatives.isEmpty)
     }
 }
@@ -678,65 +679,6 @@ final class LearningsProfileTests: XCTestCase {
         profile.positiveExamples.append(example)
         
         XCTAssertEqual(profile.positiveExamples.count, 1)
-    }
-}
-
-// MARK: - PatternMatcher Additional Tests
-
-final class PatternMatcherAdvancedTests: XCTestCase {
-    
-    func testBuildPatternFromMultipleFilenames() {
-        let filenames = [
-            "IMG_20240101_120000.jpg",
-            "IMG_20240102_130000.jpg",
-            "IMG_20240103_140000.jpg"
-        ]
-        
-        let pattern = PatternMatcher.buildPattern(from: filenames)
-        
-        XCTAssertNotNil(pattern)
-        // Should detect IMG pattern
-        XCTAssertTrue(pattern!.contains("IMG"))
-    }
-    
-    func testBuildPatternWithCommonPrefix() {
-        let filenames = [
-            "report_2024_01.pdf",
-            "report_2024_02.pdf",
-            "report_2024_03.pdf"
-        ]
-        
-        let pattern = PatternMatcher.buildPattern(from: filenames)
-        
-        XCTAssertNotNil(pattern)
-        XCTAssertTrue(pattern!.contains("report"))
-    }
-    
-    func testBuildPatternWithNoCommonality() {
-        let filenames = [
-            "random1.txt",
-            "another_file.doc",
-            "something_else.pdf"
-        ]
-        
-        let pattern = PatternMatcher.buildPattern(from: filenames)
-        
-        XCTAssertTrue(pattern == nil || !pattern!.isEmpty)
-    }
-}
-
-// MARK: - FolderStructureAnalysis Tests
-
-final class FolderStructureAnalysisTests: XCTestCase {
-    
-    func testAnalysisInitialState() {
-        let analysis = FolderStructureAnalysis()
-        
-        XCTAssertFalse(analysis.usesYearFolders)
-        XCTAssertFalse(analysis.usesMonthFolders)
-        XCTAssertFalse(analysis.usesDateFolders)
-        XCTAssertFalse(analysis.usesCategoryFolders)
-        XCTAssertNil(analysis.primaryGroupingKey)
     }
 }
 
