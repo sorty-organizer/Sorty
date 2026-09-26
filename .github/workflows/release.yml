@@ -14,6 +14,11 @@ on:
         description: 'Successful release run whose unit tests can be reused when only release tooling changed'
         required: false
         type: string
+      validate_only:
+        description: 'Build, test, and validate the release without publishing it'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: sparkle-publishing
@@ -256,6 +261,7 @@ jobs:
         run: python3 scripts/verify_posthog_release_secrets.py releases/Sorty.app
 
       - name: Publish Sentry macOS release and symbols
+        if: inputs.validate_only != true
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: sorty-z1
@@ -283,7 +289,6 @@ jobs:
       - name: Stage build artifacts
         run: |
           mkdir -p release-artifacts
-          cp -R "releases/Sorty.app" "release-artifacts/Sorty.app"
           cp "releases/Sorty.zip" "release-artifacts/"
           cp ".build/build_output.log" "release-artifacts/build_output_universal.log" 2>/dev/null || true
 
@@ -307,6 +312,7 @@ jobs:
         with:
           name: release-universal
           path: release-artifacts/
+          compression-level: 0
           retention-days: 7
 
   release:
@@ -355,8 +361,8 @@ jobs:
       - name: Prepare universal release assets
         run: |
           mkdir -p releases
-          cp -R artifacts/universal/Sorty.app releases/
           cp artifacts/universal/Sorty.zip releases/
+          ditto -x -k releases/Sorty.zip releases/
 
           if [ -f "artifacts/universal/sparkle-tools/sign_update" ]; then
             mkdir -p ".build/artifacts/sparkle/Sparkle/bin"
@@ -433,7 +439,7 @@ jobs:
           echo "${{ env.LEGACY_APPCAST_SHA256 }}  releases/appcast.xml" | shasum -a 256 -c -
 
       - name: Create tag
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.validate_only != true
         run: |
           TAG_NAME="v${{ needs.prepare-release.outputs.version }}"
           if ! git tag -l | grep -q "^${TAG_NAME}$"; then
@@ -462,6 +468,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create Release
+        if: inputs.validate_only != true
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.prepare-release.outputs.version }}
@@ -488,6 +495,7 @@ jobs:
           prerelease: ${{ needs.prepare-release.outputs.is_prerelease == 'true' }}
 
       - name: Verify published release
+        if: inputs.validate_only != true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
@@ -532,6 +540,7 @@ jobs:
           echo "- **Version**: ${{ needs.prepare-release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Tag**: v${{ needs.prepare-release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Pre-release**: ${{ needs.prepare-release.outputs.is_prerelease }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Validation only**: ${{ inputs.validate_only == true }}" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "### Assets" >> "$GITHUB_STEP_SUMMARY"
           ls -la releases/ >> "$GITHUB_STEP_SUMMARY"
