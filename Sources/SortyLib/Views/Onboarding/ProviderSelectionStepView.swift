@@ -1517,6 +1517,5 @@ struct OnboardingProviderRow: View {
 
     ProviderSelectionStepView()
         .environmentObject(SettingsViewModel())
-        .environmentObject(SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager))
         .environmentObject(codexAuthManager)
 }

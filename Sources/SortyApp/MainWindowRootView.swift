@@ -25,7 +25,6 @@ struct MainWindowRootView: View {
 
     let launchRequest: WindowLaunchRequest?
     let coordinator: AppCoordinator?
-    private let openAIAuth: SubscriptionAuthManager
     private let personaManager: PersonaManager
     private let customPersonaStore: CustomPersonaStore
     private let watchedFoldersManager: WatchedFoldersManager
@@ -55,7 +54,6 @@ struct MainWindowRootView: View {
         deeplinkHandler: DeeplinkHandler,
         automationManager: AutomationManager,
         menuBarController: MenuBarController,
-        openAIAuth: SubscriptionAuthManager,
         extensionListener: ExtensionListener,
         notificationSettings: NotificationSettingsManager,
         loginItemManager: LoginItemManager,
@@ -74,7 +72,6 @@ struct MainWindowRootView: View {
         self.deeplinkHandler = deeplinkHandler
         self.automationManager = automationManager
         self.menuBarController = menuBarController
-        self.openAIAuth = openAIAuth
         self.extensionListener = extensionListener
         self.notificationSettings = notificationSettings
         self.loginItemManager = loginItemManager
@@ -403,7 +400,6 @@ struct MainWindowRootView: View {
             .environmentObject(learningsManager)
             .environmentObject(storageLocationsManager)
             .environmentObject(automationManager)
-            .environmentObject(openAIAuth)
             .environmentObject(codexAuth)
             .environmentObject(notificationSettings)
             .environmentObject(loginItemManager)

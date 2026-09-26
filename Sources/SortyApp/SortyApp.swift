@@ -644,7 +644,6 @@ struct SortyApp: App {
     @StateObject private var deeplinkHandler: DeeplinkHandler
     @StateObject private var learningsManager: LearningsManager
     @StateObject private var automationManager: AutomationManager
-    @StateObject private var openAIAuthManager: SubscriptionAuthManager
     @StateObject private var codexAuthManager: CodexCLIAuthManager
     @StateObject private var notificationSettings: NotificationSettingsManager
     @StateObject private var loginItemManager: LoginItemManager
@@ -702,11 +701,6 @@ struct SortyApp: App {
 
         let codexAuthManager = Self.timedLaunchInit("CodexCLIAuthManager") { CodexCLIAuthManager() }
         _codexAuthManager = StateObject(wrappedValue: codexAuthManager)
-        _openAIAuthManager = StateObject(
-            wrappedValue: Self.timedLaunchInit("SubscriptionAuthManager") {
-                SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager)
-            }
-        )
 
         UserDefaults.standard.register(defaults: [
             "showMenuBarExtra": true,
@@ -897,7 +891,6 @@ struct SortyApp: App {
             deeplinkHandler: deeplinkHandler,
             automationManager: automationManager,
             menuBarController: menuBarController,
-            openAIAuth: openAIAuthManager,
             extensionListener: extensionListener,
             notificationSettings: notificationSettings,
             loginItemManager: loginItemManager,
@@ -924,7 +917,6 @@ struct SortyApp: App {
         .environmentObject(deeplinkHandler)
         .environmentObject(learningsManager)
         .environmentObject(automationManager)
-        .environmentObject(openAIAuthManager)
         .environmentObject(codexAuthManager)
         .environmentObject(notificationSettings)
         .environmentObject(loginItemManager)

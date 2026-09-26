@@ -1217,3 +1217,10 @@ public enum NamingStyle: String, Codable, CaseIterable, Sendable {
         }
     }
 }
+
+// Display name for providers that support account subscriptions.
+extension AIProvider {
+    var subscriptionProductName: String {
+        self == .openAI ? "ChatGPT" : displayName
+    }
+}

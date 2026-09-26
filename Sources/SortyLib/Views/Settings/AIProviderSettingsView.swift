@@ -12,7 +12,6 @@ struct AIProviderSettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject var viewModel: SettingsViewModel
-    @EnvironmentObject var openAIAuth: SubscriptionAuthManager
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
 
@@ -110,7 +109,6 @@ struct AIProviderSettingsView: View {
             }
             if viewModel.config.provider == .openAI {
                 codexAuth.checkStatus()
-                openAIAuth.checkAuthenticationStatus()
             }
         }
         .onChange(of: viewModel.config.provider) { _, newProvider in
@@ -120,7 +118,6 @@ struct AIProviderSettingsView: View {
             }
             if newProvider == .openAI {
                 codexAuth.checkStatus()
-                openAIAuth.checkAuthenticationStatus()
             }
         }
         .onChange(of: viewModel.config) {
@@ -391,7 +388,6 @@ struct AIProviderSettingsView: View {
             viewModel.config = nextConfig
         }
         viewModel.updateAvailableModels(force: true)
-        openAIAuth.checkAuthenticationStatus()
         HapticFeedbackManager.shared.selection()
     }
 
@@ -491,7 +487,6 @@ struct AIProviderSettingsView: View {
 
                     Button("Sign Out") {
                         codexAuth.signOut()
-                        openAIAuth.checkAuthenticationStatus()
                     }
                     .buttonStyle(.sortyBordered)
                     .controlSize(.small)
@@ -1021,7 +1016,6 @@ struct AIProviderSettingsView: View {
     private func verifyCodexSignInStatus() -> Bool {
         let wasAuthenticated = codexAuth.isAuthenticated
         codexAuth.checkStatus()
-        openAIAuth.checkAuthenticationStatus()
         if codexAuth.isAuthenticated && !wasAuthenticated {
             viewModel.updateAvailableModels(force: true)
             return true
@@ -1105,7 +1099,6 @@ struct AIProviderSettingsView: View {
 
         codexTerminalButtonState = .success
         viewModel.updateAvailableModels(force: true)
-        openAIAuth.checkAuthenticationStatus()
         HapticFeedbackManager.shared.success()
 
         codexDeviceAuthDismissTask?.cancel()
@@ -1355,7 +1348,6 @@ private struct CodexDeviceAuthStatusView: View {
     AIProviderSettingsView()
         .environmentObject(AppState())
         .environmentObject(SettingsViewModel())
-        .environmentObject(SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager))
         .environmentObject(codexAuthManager)
         .frame(width: 500, height: 600)
 }
