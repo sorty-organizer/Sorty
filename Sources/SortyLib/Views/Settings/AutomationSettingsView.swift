@@ -320,6 +320,7 @@ struct AutomationSettingsView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     AutomationSettingsView()
         .environmentObject(SettingsViewModel.preview)
@@ -327,3 +328,4 @@ struct AutomationSettingsView: View {
         .environmentObject(AppState())
         .frame(width: 500, height: 600)
 }
+#endif

@@ -307,6 +307,15 @@ jobs:
           compression-level: 0
           retention-days: 7
 
+      - name: Upload failed build logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-build-logs
+          path: .build/logs/*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
   release:
     runs-on: blacksmith-6vcpu-macos-15
     needs:
