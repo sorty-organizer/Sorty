@@ -292,10 +292,12 @@ We tried parallel arm64 and x86_64 runners in September 2026. The
 passed signing, launch, appcast, and symbol checks, but took 7m19s end to end.
 Both architecture caches restored; their xcodebuild steps took 198s and 231s.
 The earlier [universal run](https://github.com/sorty-organizer/Sorty/actions/runs/36241273072)
-took 6m03s end to end, with 213s in xcodebuild. The runs used different
-commits, so this is not a controlled compiler benchmark. It does not support
-the projected two-minute release. Keep the universal workflow until a
-same-commit comparison shows a useful wall-clock gain.
+took 6m03s end to end, with 213s in xcodebuild. After restoring that workflow,
+another [publish-free run](https://github.com/sorty-organizer/Sorty/actions/runs/36245314799)
+passed in 6m24s. These runs used different commits, so this is not a controlled
+compiler benchmark. They do not support the projected two-minute release.
+Keep the universal workflow until a same-commit comparison shows a useful
+wall-clock gain.
 
 To see warnings for Debug expressions and function bodies taking over 100 ms:
 
