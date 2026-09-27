@@ -2568,8 +2568,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         adaptiveDepth: Int = 0
     ) async throws -> [OrganizationPlan] {
         // Cap halve-and-retry recursion so a persistently failing batch cannot
-        // recurse without bound; depth 4 splits 350 -> ~22 files minimum.
-        let maxAdaptiveDepth = 4
+        // recurse without bound; depth 5 splits 350 -> ~5 files minimum.
+        let maxAdaptiveDepth = 5
         if job.cancellationRequested || Task.isCancelled {
             throw CancellationError()
         }
@@ -2662,8 +2662,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         adaptiveDepth: Int = 0
     ) async throws -> [OrganizationPlan] {
         // Cap halve-and-retry recursion so a persistently failing batch cannot
-        // recurse without bound; depth 4 splits 350 -> ~22 files minimum.
-        let maxAdaptiveDepth = 4
+        // recurse without bound; depth 5 splits 350 -> ~5 files minimum.
+        let maxAdaptiveDepth = 5
         try checkCancellation()
 
         // Compact prompts number this request's files 1-based; publish the same
