@@ -73,18 +73,19 @@ public struct DuplicateSettings: Codable, Sendable {
     }
 }
 
-struct DuplicateScanFilter: Sendable {
+/// Size/extension pre-filter shared by the duplicate scanners in SortyCore.
+public struct DuplicateScanFilter: Sendable {
     private let minimumFileSize: Int64
     private let includedExtensions: Set<String>
     private let excludedValues: Set<String>
 
-    init(settings: DuplicateSettings) {
+    public init(settings: DuplicateSettings) {
         minimumFileSize = settings.minFileSize
         includedExtensions = Set(settings.includeExtensions.map(Self.normalizedExtension))
         excludedValues = Set(settings.excludeExtensions.map { $0.lowercased() })
     }
 
-    func includes(
+    public func includes(
         fileSize: Int64,
         pathExtension: String,
         displayName: String

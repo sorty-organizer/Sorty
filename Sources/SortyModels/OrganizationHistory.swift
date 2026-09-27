@@ -1184,6 +1184,20 @@ public struct RestorableDuplicate: Codable, Identifiable, Sendable, Hashable, Eq
         public let permissions: Int?
         public let ownerAccountID: Int?
         public let groupOwnerAccountID: Int?
+
+        public init(
+            creationDate: Date? = nil,
+            modificationDate: Date? = nil,
+            permissions: Int? = nil,
+            ownerAccountID: Int? = nil,
+            groupOwnerAccountID: Int? = nil
+        ) {
+            self.creationDate = creationDate
+            self.modificationDate = modificationDate
+            self.permissions = permissions
+            self.ownerAccountID = ownerAccountID
+            self.groupOwnerAccountID = groupOwnerAccountID
+        }
     }
     
     public init(
