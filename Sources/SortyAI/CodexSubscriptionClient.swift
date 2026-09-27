@@ -851,17 +851,16 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         }
     }
 
-    /// Common install locations for the Codex CLI: Homebrew, the Codex app,
-    /// and the npm/bun/Volta/asdf/pnpm/yarn user-local bin dirs, including
-    /// nvm's versioned bin dirs (newest version first).
+    /// Prefer the current user-local Codex install over older system installs.
+    /// Also check Homebrew, the Codex app, and other package-manager bin dirs.
     private nonisolated static func codexExecutableCandidates() -> [String] {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         var candidates = [
+            "\(home)/.local/bin/codex",
             "/usr/local/bin/codex",
             "/opt/homebrew/bin/codex",
             "/Applications/Codex.app/Contents/Resources/codex",
             "\(home)/.npm-global/bin/codex",
-            "\(home)/.local/bin/codex",
             "\(home)/.volta/bin/codex",
             "\(home)/.asdf/shims/codex",
             "\(home)/.bun/bin/codex",
