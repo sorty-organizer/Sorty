@@ -45,7 +45,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     }
 
     private func resolvedMaxTokens() -> Int {
-        config.maxTokens ?? 4096
+        config.maxTokens ?? config.provider.defaultOrganizeMaxTokens
     }
 
     private func applyOrganizeTimeout(to request: inout URLRequest) {

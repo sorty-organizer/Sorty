@@ -504,6 +504,20 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// Default `max_tokens` for organization requests. Sorty's own cap was
+    /// the binding constraint on large batches: a plan entry costs tens of
+    /// tokens per file, so 4096 truncates batches these models could otherwise
+    /// finish (surfacing as OUTPUT_LIMIT). Cloud models with >=8k output get
+    /// 8192; local/custom endpoints keep 4096 to stay inside small contexts.
+    public var defaultOrganizeMaxTokens: Int {
+        switch self {
+        case .openAI, .openCodeZen, .openCodeGo, .anthropic, .gemini, .groq, .openRouter:
+            return 8192
+        case .unavailableProvider, .ollama, .openAICompatible, .appleFoundationModel:
+            return 4096
+        }
+    }
+
     /// The key used in Keychain to store the API key for this provider
     public var keychainKey: String {
         switch self {

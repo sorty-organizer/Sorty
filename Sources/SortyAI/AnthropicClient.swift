@@ -46,7 +46,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
 
         let requestBody: [String: Any] = [
             "model": config.model,
-            "max_tokens": config.maxTokens ?? 4096,
+            "max_tokens": config.maxTokens ?? config.provider.defaultOrganizeMaxTokens,
             "system": fullSystemPrompt,
             "messages": [
                 ["role": "user", "content": userPrompt]
@@ -99,7 +99,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         
         let requestBody: [String: Any] = [
             "model": config.model,
-            "max_tokens": config.maxTokens ?? 4096,
+            "max_tokens": config.maxTokens ?? config.provider.defaultOrganizeMaxTokens,
             "system": fullSystemPrompt,
             "messages": [
                 ["role": "user", "content": contentArray]
