@@ -676,6 +676,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     #if DEBUG
     private var revertOperationTestHook: (@Sendable () async -> Void)?
+    private var batchClientFactoryForTesting: (@Sendable (AIConfig, Int) async throws -> AIClientProtocol)?
     #endif
     
     public init(
@@ -724,6 +725,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if client != nil {
             self.isAIConfigured = true
         }
+    }
+
+    func setBatchClientFactoryForTesting(
+        _ factory: (@Sendable (AIConfig, Int) async throws -> AIClientProtocol)?
+    ) {
+        batchClientFactoryForTesting = factory
     }
 
     func flushStreamingUpdatesForTesting() async {
@@ -2501,7 +2508,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if batchCount == 1 {
             batchClient = baseClient
         } else {
+            #if DEBUG
+            if let batchClientFactoryForTesting {
+                batchClient = try await batchClientFactoryForTesting(baseClient.config, batchIndex)
+            } else {
+                batchClient = try await AIClientFactory.createClientDetached(config: baseClient.config)
+            }
+            #else
             batchClient = try await AIClientFactory.createClientDetached(config: baseClient.config)
+            #endif
         }
         let streamChannel = BatchStreamChannel(organizer: self, batchIndex: batchIndex)
         batchClient.streamingDelegate = streamChannel

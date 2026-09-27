@@ -26,6 +26,51 @@ final class StreamingLogicTests: XCTestCase {
         await organizer.flushStreamingUpdatesForTesting()
     }
 
+    func testConcurrentBatchesKeepTheirStreamAndFileIDsSeparate() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sorty-batch-stream-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for index in 0..<351 {
+            let url = directory.appendingPathComponent(String(format: "file-%03d.txt", index))
+            try Data("content".utf8).write(to: url)
+        }
+
+        let config = AIConfig(
+            provider: .openAI,
+            apiURL: "https://api.openai.com",
+            apiKey: "test-key",
+            model: "gpt-4o"
+        )
+        try await organizer.configure(with: config)
+        let firstStarted = expectation(description: "First batch streamed")
+        let secondStarted = expectation(description: "Second batch streamed")
+        let (releaseStream, release) = AsyncStream<Void>.makeStream()
+        let first = IsolatedBatchStreamingMockClient(
+            config: config, marker: "first batch", started: firstStarted, release: releaseStream
+        )
+        let second = IsolatedBatchStreamingMockClient(
+            config: config, marker: "second batch", started: secondStarted
+        )
+        organizer.setAIClientForTesting(first)
+        organizer.setBatchClientFactoryForTesting { _, index in index == 0 ? first : second }
+
+        let run = Task { try await organizer.organize(directory: directory) }
+        defer { release.yield(()); release.finish() }
+        await fulfillment(of: [firstStarted, secondStarted], timeout: 10)
+
+        XCTAssertTrue(organizer.streamingContent.contains("first batch"))
+        XCTAssertFalse(organizer.streamingContent.contains("second batch"))
+        XCTAssertEqual(organizer.streamFileIDTable.count, 350)
+        let firstBatchNames = await first.analyzedFileNames()
+        XCTAssertEqual(organizer.streamFileIDTable[1]?.displayName, firstBatchNames.first)
+        XCTAssertEqual(organizer.streamFileIDTable[350]?.displayName, firstBatchNames.last)
+
+        release.yield(())
+        release.finish()
+        try await run.value
+    }
+
     func testBatchUpdatesPublishOnce() {
         var updateCount = 0
         let subscription = organizer.objectWillChange.sink {
@@ -558,6 +603,67 @@ final class StreamingLogicTests: XCTestCase {
         organizer.resetToIdleState()
         XCTAssertEqual(organizer.state, .idle)
     }
+}
+
+actor IsolatedBatchStreamingMockClient: AIClientProtocol {
+    let config: AIConfig
+    @MainActor weak var streamingDelegate: StreamingDelegate?
+    private let marker: String
+    private let started: XCTestExpectation
+    private let release: AsyncStream<Void>?
+    private var fileNames: [String] = []
+
+    init(
+        config: AIConfig,
+        marker: String,
+        started: XCTestExpectation,
+        release: AsyncStream<Void>? = nil
+    ) {
+        self.config = config
+        self.marker = marker
+        self.started = started
+        self.release = release
+    }
+
+    func analyze(
+        files: [FileItem],
+        customInstructions: String?,
+        personaPrompt: String?,
+        temperature: Double?
+    ) async throws -> OrganizationPlan {
+        fileNames = files.map(\.displayName)
+        let marker = marker
+        await MainActor.run { [weak self] in
+            self?.streamingDelegate?.didReceiveChunk(marker)
+        }
+        started.fulfill()
+        if let release {
+            for await _ in release { break }
+        }
+        return OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Sorted", files: files)],
+            notes: marker
+        )
+    }
+
+    func analyzeWithImages(
+        files: [FileItem],
+        imageData: [String: Data],
+        customInstructions: String?,
+        personaPrompt: String?,
+        temperature: Double?
+    ) async throws -> OrganizationPlan {
+        try await analyze(
+            files: files,
+            customInstructions: customInstructions,
+            personaPrompt: personaPrompt,
+            temperature: temperature
+        )
+    }
+
+    func generateText(prompt: String, systemPrompt: String?) async throws -> String { "ok" }
+    func checkHealth() async throws {}
+    func analyzedFileNames() -> [String] { fileNames }
 }
 
 actor RestartableStreamingMockClient: AIClientProtocol {
