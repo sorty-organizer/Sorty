@@ -197,7 +197,9 @@ public struct BugReportView: View {
 
     private func openIssue() {
         let comment = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        if sendToSentry, showsSentryOption {
+        // An empty description opens the bare GitHub template below. There
+        // is no text to send, so Sentry is skipped instead of failing.
+        if sendToSentry, showsSentryOption, !comment.isEmpty {
             guard let eventID = ReliabilityManager.shared.submitBugFeedback(comment) else {
                 errorMessage = "Sentry is unavailable. Turn off Sentry sharing to continue with GitHub."
                 return
