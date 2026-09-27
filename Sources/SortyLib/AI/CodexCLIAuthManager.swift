@@ -229,7 +229,7 @@ public final class CodexCLIAuthManager: ObservableObject {
         // Utility priority keeps the CLI subprocess from competing with the
         // main thread for CPU while the first window is still settling.
         let probe = await Task.detached(priority: .utility) {
-            let executablePath = CodexSubscriptionClient.resolveCodexExecutablePath()
+            let executablePath = await CodexSubscriptionClient.resolveCodexExecutablePathAsync()
             let status = Self.readLoginStatus(codexExecutablePath: executablePath)
             let accountEmail: String?
             switch status {
@@ -312,7 +312,7 @@ public final class CodexCLIAuthManager: ObservableObject {
         statusRefreshTask = nil
 
         Task.detached(priority: .utility) {
-            if let codexExecutablePath = CodexSubscriptionClient.resolveCodexExecutablePath() {
+            if let codexExecutablePath = await CodexSubscriptionClient.resolveCodexExecutablePathAsync() {
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: codexExecutablePath)
                 process.arguments = ["logout"]
@@ -351,7 +351,7 @@ public final class CodexCLIAuthManager: ObservableObject {
 
         Task { @MainActor in
             let path = await Task.detached(priority: .utility) {
-                CodexSubscriptionClient.resolveCodexExecutablePath()
+                await CodexSubscriptionClient.resolveCodexExecutablePathAsync()
             }.value
             do {
                 let scriptURL = try prepareLoginScript(codexExecutablePath: path)
@@ -379,7 +379,7 @@ public final class CodexCLIAuthManager: ObservableObject {
 
         Task { @MainActor in
             let path = await Task.detached(priority: .utility) {
-                CodexSubscriptionClient.resolveCodexExecutablePath()
+                await CodexSubscriptionClient.resolveCodexExecutablePathAsync()
             }.value
             guard deviceAuthRun == deviceAuthGeneration else { return }
             startDeviceAuthProcess(path: path, deviceAuthRun: deviceAuthRun)

@@ -167,7 +167,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             }
             try AIRequestSupport.ensureNetworkAllowed(url: serviceURL)
 
-            guard resolveCodexExecutablePath() != nil else {
+            guard await resolveCodexExecutablePathAsync() != nil else {
                 throw AIClientError.apiError(
                     statusCode: 501,
                     message: "Codex CLI is required. Install with: npm i -g @openai/codex"
@@ -210,7 +210,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
 
     private nonisolated static func fetchModelsViaAppServer() async throws -> [CodexAvailableModel] {
         try Task.checkCancellation()
-        guard let codexPath = resolveCodexExecutablePath() else {
+        guard let codexPath = await resolveCodexExecutablePathAsync() else {
             throw AIClientError.apiError(
                 statusCode: 501,
                 message: "Codex CLI is required. Install with: npm i -g @openai/codex"
@@ -321,7 +321,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         usesOrganizationSchema: Bool
     ) async throws -> String {
         try await checkHealth()
-        guard let codexPath = Self.resolveCodexExecutablePath() else {
+        guard let codexPath = await Self.resolveCodexExecutablePathAsync() else {
             throw AIClientError.apiError(
                 statusCode: 501,
                 message: "Codex CLI is required. Install with: npm i -g @openai/codex"
@@ -766,13 +766,10 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         }
     }
 
-    /// Locates the Codex CLI, caching the outcome briefly so the status probes
-    /// clustered around launch and setup reconciliation do not each spawn a
-    /// lookup subprocess. A cached hit is re-validated against the file system.
+    /// Synchronous callers only inspect cached and common paths. A cold login
+    /// shell probe belongs to the async resolver so UI work never waits for it.
     nonisolated static func resolveCodexExecutablePath() -> String? {
-        executablePathCacheLock.lock()
-        let cached = executablePathCache
-        executablePathCacheLock.unlock()
+        let cached = executablePathCacheLock.withLock { executablePathCache }
 
         if let cached, Date().timeIntervalSince(cached.resolvedAt) < executablePathCacheLifetime {
             if let path = cached.path {
@@ -782,10 +779,30 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             }
         }
 
-        let resolved = locateCodexExecutable()
-        executablePathCacheLock.lock()
-        executablePathCache = (path: resolved, resolvedAt: Date())
-        executablePathCacheLock.unlock()
+        let resolved = codexExecutableCandidates().first {
+            FileManager.default.isExecutableFile(atPath: $0)
+        }
+        if let resolved {
+            executablePathCacheLock.lock()
+            executablePathCache = (path: resolved, resolvedAt: Date())
+            executablePathCacheLock.unlock()
+        }
+        return resolved
+    }
+
+    nonisolated static func resolveCodexExecutablePathAsync() async -> String? {
+        if let path = resolveCodexExecutablePath() { return path }
+        let cached = executablePathCacheLock.withLock { executablePathCache }
+        if let cached, cached.path == nil,
+           Date().timeIntervalSince(cached.resolvedAt) < executablePathCacheLifetime {
+            return nil
+        }
+        let resolved = await Task.detached(priority: .utility) {
+            locateCodexExecutable()
+        }.value
+        executablePathCacheLock.withLock {
+            executablePathCache = (path: resolved, resolvedAt: Date())
+        }
         return resolved
     }
 
