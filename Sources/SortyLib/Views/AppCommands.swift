@@ -19,6 +19,7 @@ public struct AppStateFocusedKey: FocusedValueKey {
 /// Collects one bug description for a GitHub draft and optional Sentry feedback.
 public struct BugReportView: View {
     private let onClose: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var analytics = AnalyticsManager.shared
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @State private var description = ""
@@ -70,6 +71,7 @@ public struct BugReportView: View {
                 Text("\(description.count)/2,000")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .numericTextTransition(animationValue: description.count)
             }
             TextEditor(text: $description)
                 .font(.body)
@@ -94,65 +96,67 @@ public struct BugReportView: View {
                     .accessibilityIdentifier("SendBugReportToSentryToggle")
 
                 if sendToSentry {
-                    Picker("Area", selection: $area) {
-                        ForEach(BugReportArea.allCases, id: \.self) { area in
-                            Text(area.displayName).tag(area)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Area")
+                            .font(.subheadline.weight(.semibold))
+
+                        BugReportAreaControl(selection: $area)
+                            .frame(maxWidth: .infinity, minHeight: 40)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Anonymous. No account, name, or email. Sentry discards IP addresses and builds no profile.")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+
+                            // One grid, not two stacks, so each row stays level even
+                            // when a label wraps to a second line.
+                            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 5) {
+                                GridRow {
+                                    Text("Sent to Sentry")
+                                        .font(.caption.weight(.semibold))
+                                    Text("Never sent")
+                                        .font(.caption.weight(.semibold))
+                                }
+                                GridRow {
+                                    sentryListRow("The description text you typed")
+                                    sentryExcludedRow("Name, email, or attachments")
+                                }
+                                GridRow {
+                                    sentryListRow("Linked event sorty.user_bug_report")
+                                    sentryExcludedRow("File names, paths, or contents")
+                                }
+                                GridRow {
+                                    sentryListRow("Sorty version, build, release channel")
+                                    sentryExcludedRow("Prompts, AI responses, or API keys")
+                                }
+                                GridRow {
+                                    sentryListRow("macOS version and chip type")
+                                    sentryExcludedRow("Screenshots, logs, or raw error text")
+                                }
+                                GridRow {
+                                    Text("Chosen area: \(area.displayName)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .numericTextTransition(animationValue: area)
+                                        .gridCellColumns(2)
+                                }
+                            }
+                            .accessibilityIdentifier("BugReportSentryDetails")
+
+                            Text("Check your text for private details before you send it. GitHub opens in your browser as a separate public issue.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityIdentifier("BugReportAreaPicker")
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Anonymous. No account, name, or email. Sentry discards IP addresses and builds no profile.")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-
-                        // One grid, not two stacks, so each row stays level even
-                        // when a label wraps to a second line.
-                        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 5) {
-                            GridRow {
-                                Text("Sent to Sentry")
-                                    .font(.caption.weight(.semibold))
-                                Text("Never sent")
-                                    .font(.caption.weight(.semibold))
-                            }
-                            GridRow {
-                                sentryListRow("The description text you typed")
-                                sentryExcludedRow("Name, email, or attachments")
-                            }
-                            GridRow {
-                                sentryListRow("Linked event sorty.user_bug_report")
-                                sentryExcludedRow("File names, paths, or contents")
-                            }
-                            GridRow {
-                                sentryListRow("Sorty version, build, release channel")
-                                sentryExcludedRow("Prompts, AI responses, or API keys")
-                            }
-                            GridRow {
-                                sentryListRow("macOS version and chip type")
-                                sentryExcludedRow("Screenshots, logs, or raw error text")
-                            }
-                            GridRow {
-                                Text("Chosen area: \(area.displayName)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .gridCellColumns(2)
-                            }
+                        .padding(12)
+                        .background(Color.secondary.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
                         }
-                        .accessibilityIdentifier("BugReportSentryDetails")
-
-                        Text("Check your text for private details before you send it. GitHub opens in your browser as a separate public issue.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("BugReportSentryTransparency")
                     }
-                    .padding(12)
-                    .background(Color.secondary.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
-                    }
-                    .accessibilityIdentifier("BugReportSentryTransparency")
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                 }
 
                 if !canSubmitBugFeedback {
@@ -182,6 +186,10 @@ public struct BugReportView: View {
         }
         .padding(24)
         .frame(width: 520, height: showsSentryOption ? (sendToSentry ? 660 : (!canSubmitBugFeedback ? 520 : 480)) : 440)
+        .animation(
+            reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.32, dampingFraction: 0.86),
+            value: sendToSentry
+        )
         .modifier(WindowGlassBackground())
         .accessibilityIdentifier("BugReportView")
     }
@@ -248,6 +256,77 @@ public struct BugReportView: View {
         }
         HapticFeedbackManager.shared.tap()
         onClose()
+    }
+}
+
+private struct BugReportAreaControl: NSViewRepresentable {
+    @Binding var selection: BugReportArea
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(selection: $selection)
+    }
+
+    func makeNSView(context: Context) -> NSSegmentedControl {
+        let areas = BugReportArea.allCases
+        let symbols = ["folder", "square.on.square", "sparkles", "gearshape"]
+        let configuration = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        let images = symbols.map { symbol in
+            let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) ?? NSImage()
+            let configured = image.withSymbolConfiguration(configuration) ?? image
+            configured.isTemplate = true
+            return configured
+        }
+        let control = NSSegmentedControl(
+            images: images,
+            trackingMode: .selectOne,
+            target: context.coordinator,
+            action: #selector(Coordinator.areaChanged(_:))
+        )
+        control.font = .systemFont(ofSize: 11, weight: .medium)
+        control.setAccessibilityLabel("Bug report area")
+        control.setAccessibilityIdentifier("BugReportAreaPicker")
+        control.segmentDistribution = .fillEqually
+
+        if #available(macOS 26.0, *) {
+            control.controlSize = .extraLarge
+            control.borderShape = .capsule
+        } else {
+            control.controlSize = .large
+        }
+        if control.responds(to: NSSelectorFromString("setRole:")) {
+            control.setValue(1, forKey: "role") // NSSegmentedControlRoleTabs
+        }
+
+        for (index, area) in areas.enumerated() {
+            control.setLabel(area.displayName, forSegment: index)
+            control.setImageScaling(.scaleNone, forSegment: index)
+            control.setToolTip(area.displayName, forSegment: index)
+        }
+        return control
+    }
+
+    func updateNSView(_ nsView: NSSegmentedControl, context: Context) {
+        context.coordinator.selection = $selection
+        nsView.selectedSegment = BugReportArea.allCases.firstIndex(of: selection) ?? 0
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var selection: Binding<BugReportArea>
+
+        init(selection: Binding<BugReportArea>) {
+            self.selection = selection
+        }
+
+        @objc
+        func areaChanged(_ sender: NSSegmentedControl) {
+            let areas = BugReportArea.allCases
+            guard areas.indices.contains(sender.selectedSegment) else { return }
+            let area = areas[sender.selectedSegment]
+            guard area != selection.wrappedValue else { return }
+            selection.wrappedValue = area
+            HapticFeedbackManager.shared.selection()
+        }
     }
 }
 
