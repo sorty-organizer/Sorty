@@ -18,26 +18,46 @@ public struct AppStateFocusedKey: FocusedValueKey {
 
 /// Collects one bug description for a GitHub draft and optional Sentry feedback.
 public struct BugReportView: View {
-    @Environment(\.dismiss) private var dismiss
+    private let onClose: () -> Void
     @State private var description = ""
     @State private var sendToSentry = false
     @State private var sentryEventID: String?
     @State private var errorMessage: String?
 
-    public init() {}
+    public init(onClose: @escaping () -> Void) {
+        self.onClose = onClose
+    }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Report a bug")
-                .font(.title2.weight(.semibold))
+            HStack(spacing: 12) {
+                Image(systemName: "ladybug.fill")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                    .frame(width: 32)
+                    .accessibilityHidden(true)
 
-            Text("Describe what happened. GitHub will open a draft for you to review and submit.")
-                .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Report a bug")
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    Text("Describe the problem, then review your GitHub issue draft.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             Text("What happened?")
-                .font(.headline)
+                .font(.subheadline.weight(.semibold))
             TextEditor(text: $description)
-                .frame(height: 120)
+                .font(.body)
+                .frame(height: 132)
+                .padding(4)
+                .background(Color(NSColor.controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
+                }
                 .accessibilityIdentifier("BugReportDescription")
                 .onChange(of: description) { _, newValue in
                     if newValue.count > 2_000 {
@@ -45,7 +65,7 @@ public struct BugReportView: View {
                     }
                 }
 
-            Toggle("Also send this description to Sentry", isOn: $sendToSentry)
+            Toggle("Send this description to Sentry too", isOn: $sendToSentry)
                 .disabled(!ReliabilityManager.shared.canSubmitBugFeedback)
                 .accessibilityIdentifier("SendBugReportToSentryToggle")
 
@@ -64,15 +84,19 @@ public struct BugReportView: View {
 
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { onClose() }
+                    .buttonStyle(.sortyBordered)
                     .keyboardShortcut(.cancelAction)
                 Button("Open GitHub Issue") { openIssue() }
+                    .buttonStyle(.sortyProminent)
                     .keyboardShortcut(.defaultAction)
                     .accessibilityIdentifier("OpenGitHubBugIssueButton")
             }
         }
         .padding(24)
-        .frame(width: 480)
+        .frame(width: 480, height: 440)
+        .modifier(WindowGlassBackground())
+        .accessibilityIdentifier("BugReportView")
     }
 
     private func openIssue() {
@@ -105,7 +129,7 @@ public struct BugReportView: View {
             return
         }
         HapticFeedbackManager.shared.tap()
-        dismiss()
+        onClose()
     }
 }
 
@@ -338,7 +362,7 @@ public struct SortyCommands: Commands {
             Link(destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!) { Label("Documentation", systemImage: "book") }
             
             Button("Report Bug", systemImage: "ladybug") {
-                appState?.showBugReportSheet = true
+                appState?.showBugReport()
             }
             .disabled(appState == nil)
 
@@ -578,7 +602,6 @@ public class AppState: ObservableObject {
     @Published public var lastOrganizedDirectory: URL?
     @Published public var navigatedFromSettings: Bool = false
     @Published public var showDeleteUsageDataConfirmation: Bool = false
-    @Published public var showBugReportSheet = false
     /// True while `deleteUsageData()` is running. The blocking portion runs off
     /// the main actor, so views use this for busy affordances instead of assuming
     /// the call completes synchronously.
@@ -638,6 +661,7 @@ public class AppState: ObservableObject {
     private var accreditationsWindowController: NSWindowController?
     private var internetAccessPolicyWindowController: NSWindowController?
     private var thanksWindowController: NSWindowController?
+    private var bugReportWindowController: NSWindowController?
     private let helpMenuHoverHapticsController = HelpMenuHoverHapticsController()
 
     public enum AppView: Hashable, Sendable {
@@ -2019,6 +2043,39 @@ public class AppState: ObservableObject {
         aboutWindowController = NSWindowController(window: window)
         aboutWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    public func showBugReport() {
+        if let window = bugReportWindowController?.window, window.isVisible {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let view = BugReportView { [weak self] in
+            self?.bugReportWindowController?.close()
+        }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 440),
+            styleMask: [.titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = NSHostingView(rootView: view)
+        window.title = "Report a Bug"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isReleasedWhenClosed = false
+        if #available(macOS 26.0, *) {
+            window.backgroundColor = .clear
+            window.isOpaque = false
+        }
+        window.center()
+
+        bugReportWindowController = NSWindowController(window: window)
+        bugReportWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        HapticFeedbackManager.shared.selection()
     }
 
     public func showInternetAccessPolicy(entryPoint: InternetAccessPolicyEntryPoint = .appMenu) {
