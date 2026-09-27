@@ -12,6 +12,7 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | Layer | Location | Purpose |
 |-------|----------|---------|
 | **SortyApp** | `Sources/SortyApp/` | SwiftUI lifecycle, `AppCoordinator` for background tasks |
+| **SortyFileSystem** | `Sources/SortyFileSystem/` | File naming, hashing, path validation, and storage path primitives |
 | **SortyCore** | `Sources/SortyCore/` | Models, AI clients, file operations, services, and shared app logic |
 | **SortyLib** | `Sources/SortyLib/` | SwiftUI views, view helpers, and app resources; depends on `SortyCore` |
 | **SortyFinderSync** | `Sources/SortyFinderSync/` | Finder Sync extension |
@@ -29,6 +30,7 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | `SortyCore/Organizer/` | Core workflow orchestration (`FolderOrganizer` state machine) |
 | `SortyCore/Learnings/` | Preference learning (`LearningsManager`, `LearningsAnalyzer`, `LocalRuleInferenceEngine`, `LLMRuleInducer`) |
 | `SortyCore/Utilities/` | Keychain, logging, deeplinks, security |
+| `SortyFileSystem/` | File naming, hashing, and path helpers used by `SortyCore` |
 | `SortyCore/DesignSystem/` | Shared design tokens; view helpers remain in `SortyLib` |
 | `SortyCore/FileSystem/` | File system access and scanning |
 | `SortyCore/FinderExtension/` | Finder extension IPC helpers |

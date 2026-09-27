@@ -5,11 +5,19 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
 
-# Auto-detect CPU cores
+# NOTE: This measures raw `swift build/test` (compile+link only), not the full
+# `make dev` pipeline (bundle assembly, resources, signing). Flags below mirror
+# the Makefile fast loop (same scratch path, -j, index-store setting) so the
+# numbers track `make dev` compile time; bundle/signing overhead is excluded
+# deliberately for a stable compile-only signal.
 CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
 PARALLEL_FLAGS="-j ${CORES}"
 SWIFT_DEBUG_FLAGS="--disable-sandbox --disable-index-store"
 SWIFT_RELEASE_FLAGS="--disable-sandbox --disable-index-store"
+# Same product `make dev` builds: measuring the whole package would include
+# SortyQuality and test targets that the dev loop never compiles.
+BENCH_PRODUCT="--product SortyApp"
+BENCH_TEST_FLAGS="--parallel"
 
 # File to touch for incremental build
 INCREMENTAL_FILE="Sources/SortyLib/Views/ContentView.swift"
@@ -123,7 +131,7 @@ clean_debug_build() {
     swift package --scratch-path "${BUILD_DIR}" clean 2>/dev/null || true
     rm -rf "${BUILD_DIR}/debug" 2>/dev/null || true
     # shellcheck disable=SC2086
-    swift build --scratch-path "${BUILD_DIR}" -c debug ${PARALLEL_FLAGS} ${SWIFT_DEBUG_FLAGS}
+    swift build --scratch-path "${BUILD_DIR}" -c debug ${PARALLEL_FLAGS} ${SWIFT_DEBUG_FLAGS} ${BENCH_PRODUCT}
 }
 
 run_scenario 1 "clean_debug" "Clean debug build" clean_debug_build
@@ -133,7 +141,7 @@ run_scenario 1 "clean_debug" "Clean debug build" clean_debug_build
 incremental_build() {
     touch "${PROJECT_DIR}/${INCREMENTAL_FILE}"
     # shellcheck disable=SC2086
-    swift build --scratch-path "${BUILD_DIR}" -c debug ${PARALLEL_FLAGS} ${SWIFT_DEBUG_FLAGS}
+    swift build --scratch-path "${BUILD_DIR}" -c debug ${PARALLEL_FLAGS} ${SWIFT_DEBUG_FLAGS} ${BENCH_PRODUCT}
 }
 
 run_scenario 2 "incremental" "Incremental build (touch ${INCREMENTAL_FILE})" incremental_build
@@ -142,7 +150,7 @@ run_scenario 2 "incremental" "Incremental build (touch ${INCREMENTAL_FILE})" inc
 
 test_build_run() {
     # shellcheck disable=SC2086
-    swift test --scratch-path "${BUILD_DIR}" ${PARALLEL_FLAGS} ${SWIFT_DEBUG_FLAGS}
+    swift test --scratch-path "${BUILD_DIR}" ${PARALLEL_FLAGS} ${BENCH_TEST_FLAGS} ${SWIFT_DEBUG_FLAGS}
 }
 
 run_scenario 3 "test" "Full test build + run" test_build_run
@@ -151,7 +159,7 @@ run_scenario 3 "test" "Full test build + run" test_build_run
 
 release_build() {
     # shellcheck disable=SC2086
-    swift build --scratch-path "${BUILD_DIR}" -c release ${PARALLEL_FLAGS} ${SWIFT_RELEASE_FLAGS}
+    swift build --scratch-path "${BUILD_DIR}" -c release ${PARALLEL_FLAGS} ${SWIFT_RELEASE_FLAGS} ${BENCH_PRODUCT}
 }
 
 run_scenario 4 "release" "Release build" release_build

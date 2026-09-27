@@ -12,8 +12,8 @@
 - Be careful with destructive actions that the user did not explicitly request, and confirm the intended scope before taking them.
 - No repo `swiftlint`/`swiftformat` command exists; do not invent one—use compiler warnings, focused diagnostic tests.
 - Xcode: open `Sorty.xcodeproj`, run `Sorty`; build `SortyFinderSync` separately when changing Finder integration or target membership.
-- Main targets: `Sources/SortyCore` shared app logic, `Sources/SortyLib` views and resources, `Sources/SortyApp` app lifecycle/windowing, `Sources/SortyFinderSync` extension, `Sources/SortyWidgets` widgets.
-- Keep reusable product logic in `SortyCore` and views in `SortyLib`; `SortyApp` should contain entry/window glue only. New app/extension/widget files need matching Xcode target membership.
+- Main targets: `Sources/SortyFileSystem` file and path primitives, `Sources/SortyCore` shared app logic, `Sources/SortyLib` views and resources, `Sources/SortyApp` app lifecycle/windowing, `Sources/SortyFinderSync` extension, `Sources/SortyWidgets` widgets.
+- Keep file and path primitives in `SortyFileSystem`, reusable product logic in `SortyCore`, and views in `SortyLib`; `SortyApp` should contain entry/window glue only. New app/extension/widget files need matching Xcode target membership.
 - Architecture is MVVM plus services: `View -> Manager/ViewModel -> FolderOrganizer -> AIClientProtocol -> OrganizationPlan -> preview/apply`.
 - Important APIs: `FolderOrganizer`, `AIClientProtocol`/`AIClientFactory`, `PromptBuilder`, `ModelCatalog`, `DeeplinkHandler`, `ExtensionCommunication`, `LearningsManager`, `SecurityManager`.
 - `FolderOrganizer` owns state transitions: `idle -> scanning -> organizing -> ready -> applying -> completed`; preserve cancellation/error transitions.

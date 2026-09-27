@@ -1,6 +1,7 @@
 import XCTest
 @testable import SortyLib
 @testable import SortyCore
+@testable import SortyFileSystem
 
 final class StorageLocationsReliabilityTests: XCTestCase {
     private var tempRoot: URL!

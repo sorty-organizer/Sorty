@@ -72,6 +72,7 @@ if isHotReloadBuild {
 
 var packageProducts: [Product] = [
     .library(name: "SortyQualitySupport", targets: ["SortyQualitySupport"]),
+    .library(name: "SortyFileSystem", targets: ["SortyFileSystem"]),
     .library(name: "SortyCore", targets: ["SortyCore"]),
     .library(
         name: "SortyLib",
@@ -86,8 +87,13 @@ var packageProducts: [Product] = [
 var packageTargets: [Target] = [
     .target(name: "SortyQualitySupport", path: "Sources/SortyQualitySupport"),
     .target(
+        name: "SortyFileSystem",
+        path: "Sources/SortyFileSystem",
+        swiftSettings: sortyLibSwiftSettings
+    ),
+    .target(
         name: "SortyCore",
-        dependencies: sortyLibDependencies,
+        dependencies: ["SortyFileSystem"] + sortyLibDependencies,
         path: "Sources/SortyCore",
         swiftSettings: sortyLibSwiftSettings,
         linkerSettings: sortyLibLinkerSettings
@@ -110,9 +116,11 @@ var packageTargets: [Target] = [
             .copy("Resources/whats-new-preview.png"),
             .copy("Resources/SortyAppRepair.entitlements"),
             .process("Resources/Localizable.xcstrings"),
-            .process("Resources/SortyMascotTemplate.svg"),
-            .process("Resources/OnboardingSound.m4a"),
-            .process("Resources/Final Onboarding.m4a")
+            .process("Resources/SortyMascotTemplate.svg")
+            // NOTE: Demo videos (*.mp4) and onboarding audio (*.m4a) stay out
+            // of SPM on purpose: scripts/build.sh stages them from
+            // Sources/SortyLib/Resources via copy_resources_safely, so
+            // SwiftPM does not restage/re-hash them after source rebuilds.
         ],
         swiftSettings: sortyLibSwiftSettings,
         linkerSettings: sortyLibLinkerSettings
@@ -131,11 +139,11 @@ var packageTargets: [Target] = [
     ),
     .testTarget(
         name: "SortyTests",
-        dependencies: ["SortyLib", "SortyCore", "SortyQualitySupport"],
+        dependencies: ["SortyLib", "SortyCore", "SortyFileSystem", "SortyQualitySupport"],
         path: "Tests/SortyTests",
-        swiftSettings: [
-            .unsafeFlags(["-enable-batch-mode"]),
-        ]
+        // Same flags as the lib targets so tests share one incremental
+        // compilation signature instead of invalidating it (see Makefile).
+        swiftSettings: sortyLibSwiftSettings
     )
 ]
 if isHotReloadBuild {

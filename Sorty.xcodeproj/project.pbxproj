@@ -104,7 +104,6 @@
 		AABBCC220002000000000013 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000013 /* ButtonStyles.swift */; };
 		AABBCC220002000000000014 /* AudioWaveformGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000014 /* AudioWaveformGenerator.swift */; };
 		AABBCC220002000000000015 /* FileThumbnailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000015 /* FileThumbnailProvider.swift */; };
-		AABBCC220002000000000016 /* HashUtility.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000016 /* HashUtility.swift */; };
 		AABBCC220002000000000017 /* LearningsFSMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000017 /* LearningsFSMonitor.swift */; };
 		AABBCC220002000000000018 /* LocalRuleInferenceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000018 /* LocalRuleInferenceEngine.swift */; };
 		AABBCC220002000000000019 /* AnthropicClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000019 /* AnthropicClient.swift */; };
@@ -193,10 +192,7 @@
 		CC220002000000000000A007 /* WindowSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A007 /* WindowSession.swift */; };
 		CC220002000000000000A008 /* PromptContextHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A008 /* PromptContextHelper.swift */; };
 		CC220002000000000000A00A /* StorageDestinationNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00A /* StorageDestinationNormalizer.swift */; };
-		CC220002000000000000A00C /* FilenameSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00C /* FilenameSanitizer.swift */; };
 		CC220002000000000000A00D /* NotificationCenter+MainActor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00D /* NotificationCenter+MainActor.swift */; };
-		CC220002000000000000A00E /* RenameRuleEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00E /* RenameRuleEngine.swift */; };
-		CC220002000000000000A00F /* StorageLocationPathResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00F /* StorageLocationPathResolver.swift */; };
 		CC220002000000000000A010 /* SortyGradientProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A010 /* SortyGradientProgressBar.swift */; };
 		DD220002000000000000A001 /* NoTickSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD110001000000000000A001 /* NoTickSlider.swift */; };
 		CC220002000000000000A013 /* LiquidGlassDuplicateButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A013 /* LiquidGlassDuplicateButton.swift */; };
@@ -258,6 +254,7 @@
 		4A0A4B215576BB73EEEEDEB3 /* SettingsLayoutStressUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 330431C3CDD48CC4A07DB898 /* SettingsLayoutStressUITests.swift */; };
 		C02609260000000000000001 /* SortyQualitySupport in Frameworks */ = {isa = PBXBuildFile; productRef = C02609260000000000000002 /* SortyQualitySupport */; };
 		C02609260000000000000004 /* SortyCore in Frameworks */ = {isa = PBXBuildFile; productRef = C02609260000000000000003 /* SortyCore */; };
+		C02609260000000000000006 /* SortyFileSystem in Frameworks */ = {isa = PBXBuildFile; productRef = C02609260000000000000005 /* SortyFileSystem */; };
 /* End PBXBuildFile section */
 
 
@@ -433,7 +430,6 @@
 		AABBCC110001000000000013 /* ButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonStyles.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000014 /* AudioWaveformGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioWaveformGenerator.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000015 /* FileThumbnailProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileThumbnailProvider.swift; sourceTree = "<group>"; };
-		AABBCC110001000000000016 /* HashUtility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HashUtility.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000017 /* LearningsFSMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsFSMonitor.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000018 /* LocalRuleInferenceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRuleInferenceEngine.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000019 /* AnthropicClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicClient.swift; sourceTree = "<group>"; };
@@ -506,10 +502,7 @@
 		CC110001000000000000A007 /* WindowSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSession.swift; sourceTree = "<group>"; };
 		CC110001000000000000A008 /* PromptContextHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptContextHelper.swift; sourceTree = "<group>"; };
 		CC110001000000000000A00A /* StorageDestinationNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageDestinationNormalizer.swift; sourceTree = "<group>"; };
-		CC110001000000000000A00C /* FilenameSanitizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilenameSanitizer.swift; sourceTree = "<group>"; };
 		CC110001000000000000A00D /* NotificationCenter+MainActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NotificationCenter+MainActor.swift"; sourceTree = "<group>"; };
-		CC110001000000000000A00E /* RenameRuleEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameRuleEngine.swift; sourceTree = "<group>"; };
-		CC110001000000000000A00F /* StorageLocationPathResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLocationPathResolver.swift; sourceTree = "<group>"; };
 		CC110001000000000000A010 /* SortyGradientProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortyGradientProgressBar.swift; sourceTree = "<group>"; };
 		DD110001000000000000A001 /* NoTickSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoTickSlider.swift; sourceTree = "<group>"; };
 		CC110001000000000000A013 /* LiquidGlassDuplicateButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassDuplicateButton.swift; sourceTree = "<group>"; };
@@ -604,6 +597,7 @@
 				F61A46EE2DF2D37736E4CC95 /* SortyLib in Frameworks */,
 				C02609260000000000000001 /* SortyQualitySupport in Frameworks */,
 				C02609260000000000000004 /* SortyCore in Frameworks */,
+				C02609260000000000000006 /* SortyFileSystem in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -753,17 +747,13 @@
 				AABBCC110001000000000013 /* ButtonStyles.swift */,
 				AABBCC110001000000000014 /* AudioWaveformGenerator.swift */,
 				AABBCC110001000000000015 /* FileThumbnailProvider.swift */,
-				AABBCC110001000000000016 /* HashUtility.swift */,
 				AABBCC11000100000000006B /* CostCalculator.swift */,
 				AABBCC110001000000000076 /* LoginItemManager.swift */,
 				AABBCC1100010000000000B0 /* SortyUninstaller.swift */,
 				AABBCC11000100000000007A /* NamingPresetManager.swift */,
 				AABBCC11000100000000007E /* OnboardingAudioManager.swift */,
 				AABBCC110001000000000095 /* SteeringPromptManager.swift */,
-				CC110001000000000000A00C /* FilenameSanitizer.swift */,
 				CC110001000000000000A00D /* NotificationCenter+MainActor.swift */,
-				CC110001000000000000A00E /* RenameRuleEngine.swift */,
-				CC110001000000000000A00F /* StorageLocationPathResolver.swift */,
 			);
 			path = Sources/SortyLib/Utilities;
 			sourceTree = "<group>";
@@ -1167,6 +1157,7 @@
 				2281A6367D915CEFD05D59CF /* SortyLib */,
 				C02609260000000000000002 /* SortyQualitySupport */,
 				C02609260000000000000003 /* SortyCore */,
+				C02609260000000000000005 /* SortyFileSystem */,
 			);
 			productName = SortyTests;
 			productReference = 33A1286F2F01230200A86470 /* SortyTests.xctest */;
@@ -1911,6 +1902,10 @@
 		C02609260000000000000003 /* SortyCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SortyCore;
+		};
+		C02609260000000000000005 /* SortyFileSystem */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SortyFileSystem;
 		};
 		D4A500600000000000000001 /* SortyLib */ = {
 			isa = XCSwiftPackageProductDependency;

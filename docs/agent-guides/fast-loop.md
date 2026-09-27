@@ -28,6 +28,24 @@ Unchanged signed bundles are reused; changed bundles are staged and signed
 before replacing the published app. Safe shutdown still waits for active file
 operations rather than interrupting them for a faster build.
 
+## SwiftPM target boundaries
+
+`SortyFileSystem` contains file and path primitives. `SortyCore` depends on it
+and contains models, AI clients, file operations, and services. `SortyLib`
+depends on `SortyCore` and contains views and app resources. `SortyApp` depends
+on `SortyLib`.
+
+A view-only edit stays in `SortyLib`. A change to a module's interface can
+rebuild its consumers, so Core and file-system edits may still compile more than
+one target. After the split, touching only `FlowLayout.swift` in a warmed cache
+compiled that file and emitted `SortyLib`; SwiftPM did not compile
+`SortyCore` or `SortyFileSystem`. That `make dev` run took 13 seconds,
+including bundle checks. Treat this as one observation, not a speedup estimate.
+
+Use a separate SwiftPM `--scratch-path` for diagnostic test builds. Sharing
+the normal dev scratch path with `swift test` can cause the next `make dev` to
+rebuild package dependencies.
+
 ## Hot reload
 
 Sorty vendors the InjectionLite runtime at InjectionNext 2.0.1's exact

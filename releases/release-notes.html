@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sorty 1.2.1</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; padding: 28px; font: -apple-system-body; color: CanvasText; background: Canvas; }
+    main { max-width: 720px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font: -apple-system-title1; }
+    h2 { margin: 28px 0 10px; font: -apple-system-headline; }
+    p { line-height: 1.5; }
+    ul { margin: 0; padding-left: 22px; }
+    li { margin: 9px 0; line-height: 1.45; }
+    .summary { color: color-mix(in srgb, CanvasText 78%, transparent); }
+    .callout { margin: 22px 0 8px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 14px; padding: 14px 16px; background: color-mix(in srgb, CanvasText 7%, Canvas); }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; }
+    a { color: LinkText; }
+    .performance { margin: 24px 0; padding: 18px; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 16px; background: radial-gradient(circle at 12% 5%, rgba(57, 151, 232, 0.12), transparent 50%), radial-gradient(circle at 88% 95%, rgba(41, 167, 122, 0.10), transparent 48%), color-mix(in srgb, CanvasText 5%, Canvas); box-shadow: 0 0 34px -20px rgba(57, 151, 232, 0.65); }
+    .performance h2 { margin: 0 0 20px; font-size: 1em; }
+    .performance p { margin: 18px 0 0; font-size: 0.85em; }
+    .performance .metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .performance .metric { min-width: 0; border: 1px solid color-mix(in srgb, CanvasText 12%, transparent); border-radius: 12px; padding: 12px; background: color-mix(in srgb, CanvasText 3%, Canvas); }
+    .metric-heading, .bar-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .metric-heading { margin-bottom: 10px; }
+    .metric-heading strong:last-child { color: #3997e8; }
+    .green .metric-heading strong:last-child { color: #238f6a; }
+    .purple .metric-heading strong:last-child { color: #8756d9; }
+    .bar-row { margin-top: 8px; font-size: 0.85em; font-variant-numeric: tabular-nums; }
+    .bar-row span:first-child { width: 55px; color: color-mix(in srgb, CanvasText 70%, transparent); }
+    .bar-row span:last-child { width: 72px; text-align: right; }
+    .track { flex: 1; height: 10px; border-radius: 10px; background: color-mix(in srgb, CanvasText 12%, Canvas); }
+    .bar { height: 100%; border-radius: 10px; }
+    .before { width: 100%; background: #8794a8; }
+    .blue .after { background: #3997e8; box-shadow: 0 0 12px 2px rgba(57, 151, 232, 0.45); }
+    .green .after { background: #29a77a; box-shadow: 0 0 12px 2px rgba(41, 167, 122, 0.4); }
+    .purple .after { background: #8756d9; box-shadow: 0 0 12px 2px rgba(135, 86, 217, 0.4); }
+    .green .track.zero { background: rgba(41, 167, 122, 0.15); box-shadow: 0 0 10px 1px rgba(41, 167, 122, 0.35); }
+    .after { transform-origin: left; animation: fill-bar 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+    @keyframes fill-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    @media (prefers-reduced-motion: reduce) { .after { animation: none; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Sorty 1.2.1</h1>
+    <p class="summary">A maintenance update with a refreshed app icon, faster launch, lower idle CPU use, faster large-folder planning, and reliability fixes.</p>
+    <div class="callout"><strong>Update:</strong> Install this release in Sorty with <strong>Check for Updates</strong>, or download <code>Sorty.zip</code> for a new installation.</div>
+    <section class="performance" aria-label="Sorty 1.2.1 performance comparison">
+      <h2>Measured against 1.2.0</h2>
+      <div class="metrics"><div class="metric blue">
+          <div class="metric-heading"><strong>Time to first window</strong><strong>50% faster</strong></div>
+          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>2,262 ms</span></div>
+          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 49.8%"></div></div><span>1,127 ms</span></div>
+        </div><div class="metric green">
+          <div class="metric-heading"><strong>Settled idle CPU</strong><strong>Near zero</strong></div>
+          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>51.4%</span></div>
+          <div class="bar-row"><span>1.2.1</span><div class="track zero"></div><span>0%</span></div>
+        </div><div class="metric green">
+          <div class="metric-heading"><strong>Idle CPU when minimized</strong><strong>Timers pause</strong></div>
+          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>55%</span></div>
+          <div class="bar-row"><span>1.2.1</span><div class="track zero"></div><span>0%</span></div>
+        </div><div class="metric green">
+          <div class="metric-heading"><strong>Idle CPU with animated HUD</strong><strong>About 3× lower</strong></div>
+          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>51.4%</span></div>
+          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 32.1%"></div></div><span>16.5%</span></div>
+        </div><div class="metric blue">
+          <div class="metric-heading"><strong>1,000-file prompt size</strong><strong>91% fewer</strong></div>
+          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>132,059 tokens</span></div>
+          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 9.1%"></div></div><span>11,961 tokens</span></div>
+        </div><div class="metric blue">
+          <div class="metric-heading"><strong>1,000-file prompt preparation</strong><strong>59% faster</strong></div>
+          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>12.1 ms</span></div>
+          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 41.3%"></div></div><span>5 ms</span></div>
+        </div><div class="metric blue">
+          <div class="metric-heading"><strong>Repeated batch manifest</strong><strong>81% fewer</strong></div>
+          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>13,686 tokens</span></div>
+          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 19.2%"></div></div><span>2,627 tokens</span></div>
+        </div><div class="metric purple">
+          <div class="metric-heading"><strong>Duplicate text-feature work</strong><strong>86% less work</strong></div>
+          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>100 % of old work</span></div>
+          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 14.0%"></div></div><span>14 % of old work</span></div>
+        </div><div class="metric blue">
+          <div class="metric-heading"><strong>Progress-line parsing work</strong><strong>45% less work</strong></div>
+          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>100 % of old work</span></div>
+          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 55.0%"></div></div><span>55 % of old work</span></div>
+        </div><div class="metric purple">
+          <div class="metric-heading"><strong>Flight queue work over 120 frames</strong><strong>O(1) per frame</strong></div>
+          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>100 % of old work</span></div>
+          <div class="bar-row"><span>1.2.1</span><div class="track zero"></div><span>0 % of old work</span></div>
+        </div><div class="metric blue">
+          <div class="metric-heading"><strong>Unicode stream counting, 100 runs</strong><strong>About 40.6 s saved</strong></div>
+          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>40.6 s</span></div>
+          <div class="bar-row"><span>1.2.1</span><div class="track zero"></div><span>0 s</span></div>
+        </div></div>
+      <p><a href="https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md">How we measured</a></p>
+    </section>
+    <section><h2>New</h2><ul><li>Updated the main Sorty app icon with the new release artwork.</li><li>Added in-app support checks and clearer diagnostics for watched folders and Finder integration.</li></ul></section><section><h2>Improved</h2><ul><li>Cut median time to the first visible window from 2,262 ms to 1,127 ms in a same-machine Release comparison with eight runs per build.</li><li>Reduced settled idle CPU from a 51.4% mean to 0% in a 60-second visible-window test with no animated HUD. Minimized-window idle CPU also fell from about 55% to 0%; with an animated HUD, measured CPU was 16.5%, about three times below the previous idle result.</li><li>Capped organization prompts for very large folders. In a 1,000-file deep-scan benchmark, the prompt fell from 132,059 tokens to 11,961, and preparation time fell from 12.1 ms to 5.0 ms. At 200 files, prompt size fell 56%; at 350 files, 74%; and at 500 files, 82%.</li><li>Reduced repeated context in multi-batch AI requests by 81% in a 1,050-file benchmark, and cut repeated text-feature work in the duplicate-detection benchmark by 86%.</li><li>Cut progress-line parsing work by 45%, removed repeated full-list scanning from the 120-frame flight queue benchmark, and reduced 100 Unicode stream-counting runs from 40.6 seconds to about zero.</li><li>Reduced repeated work during organization, AI streaming, duplicate review, and persisted-state loading.</li></ul></section><section><h2>Fixed</h2><ul><li>Fixed organization, cancellation, and undo edge cases, including overlapping runs.</li><li>Fixed Finder action routing, permission recovery, provider errors, and stale status after configuration changes.</li></ul></section>
+    <p><a href="https://github.com/sorty-organizer/Sorty/releases/tag/v1.2.1">View this release on GitHub</a></p>
+  </main>
+</body>
+</html>
