@@ -350,7 +350,7 @@ public class AISessionManager: ObservableObject {
                     let isSuccess = (200...299).contains(httpResponse.statusCode) || httpResponse.statusCode == 404
 
                     if isSuccess {
-                        LogManager.shared.log("Prewarmed \(provider.displayName): HTTP \(httpResponse.statusCode)", level: .debug, category: "AISessionManager")
+                        ModelLog.log("Prewarmed \(provider.displayName): HTTP \(httpResponse.statusCode)", level: .debug, category: "AISessionManager")
                         // The config may have been fixed while the request was in
                         // flight; only a verdict for the current generation applies.
                         guard generation == prewarmGenerations[provider, default: 0] else { return }
@@ -360,13 +360,13 @@ public class AISessionManager: ObservableObject {
                         return
                     } else {
                         // Non-success status, try next URL
-                        LogManager.shared.log("Prewarm attempt \(index + 1) for \(provider.displayName): HTTP \(httpResponse.statusCode)", level: .debug, category: "AISessionManager")
+                        ModelLog.log("Prewarm attempt \(index + 1) for \(provider.displayName): HTTP \(httpResponse.statusCode)", level: .debug, category: "AISessionManager")
                     }
                 }
             } catch {
                 if (error as? URLError)?.code == .cancelled { return }
                 // This URL failed, try the next one
-                LogManager.shared.log("Prewarm attempt \(index + 1) failed for \(provider.displayName): \(error.localizedDescription)", level: .debug, category: "AISessionManager")
+                ModelLog.log("Prewarm attempt \(index + 1) failed for \(provider.displayName): \(error.localizedDescription)", level: .debug, category: "AISessionManager")
                 continue
             }
         }
@@ -430,7 +430,7 @@ public class AISessionManager: ObservableObject {
     public func invalidate(provider: AIProvider) {
         if let retired = store.removeSession(for: provider) {
             Self.retireDetached(retired)
-            LogManager.shared.log("Removed session for \(provider.displayName)", category: "AISessionManager")
+            ModelLog.log("Removed session for \(provider.displayName)", category: "AISessionManager")
         }
 
         prewarmTasks[provider]?.cancel()
@@ -496,7 +496,7 @@ public class AISessionManager: ObservableObject {
     private func cleanupStaleSessions() {
         let staleProviders = store.staleProviders(timeout: sessionTimeout)
         for provider in staleProviders {
-            LogManager.shared.log("Cleaning up stale session for \(provider.displayName)", category: "AISessionManager")
+            ModelLog.log("Cleaning up stale session for \(provider.displayName)", category: "AISessionManager")
             invalidate(provider: provider)
         }
     }

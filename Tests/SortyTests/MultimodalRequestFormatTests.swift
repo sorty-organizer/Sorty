@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 @testable import SortyLib
 @testable import SortyCore
+@testable import SortyAI
 
 final class MultimodalRequestFormatTests: XCTestCase {
     private var testDefaultsSuiteName = ""
@@ -301,6 +302,10 @@ final class MultimodalRequestFormatTests: XCTestCase {
             model: "gpt-4o",
             enableStreaming: false
         )
+        // gpt-4o supports vision; inject the catalog answer the app would
+        // provide so the client takes the vision path under test.
+        GitHubCopilotClient.visionSupportChecker = { _, _ in true }
+        defer { GitHubCopilotClient.visionSupportChecker = nil }
         let client = GitHubCopilotClient(
             config: config,
             testHeadersProvider: {

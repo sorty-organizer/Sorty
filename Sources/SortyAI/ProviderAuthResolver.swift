@@ -1,7 +1,7 @@
 import Foundation
 
 public enum ProviderAuthResolver {
-    typealias Header = (field: String, value: String)
+    package typealias Header = (field: String, value: String)
     private static let subscriptionAuthFlagKey = "subscriptionAuthEnabled"
     private static let disableStoredCredentialsForUITestsKey = "uitestDisableStoredProviderCredentials"
 
@@ -33,7 +33,7 @@ public enum ProviderAuthResolver {
         return [header.field: header.value]
     }
 
-    static func authHeader(for provider: AIProvider, config: AIConfig) -> Header? {
+    package static func authHeader(for provider: AIProvider, config: AIConfig) -> Header? {
         let method = effectiveAuthMethod(for: provider, config: config)
 
         guard let rawCredential = credential(for: provider, method: method, config: config) else {
@@ -63,7 +63,7 @@ public enum ProviderAuthResolver {
     package static func hasRequiredCredential(for provider: AIProvider, config: AIConfig) -> Bool {
         switch provider {
         case .githubCopilot:
-            return KeychainManager.get(key: provider.keychainKey)?
+            return AIKeychain.shared.get(key: provider.keychainKey)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .isEmpty == false
         case .ollama, .appleFoundationModel:
@@ -118,7 +118,7 @@ public enum ProviderAuthResolver {
     }
 
     /// Off-main credential read for catalog/session setup. Uses the same memo
-    /// as the sync path; misses go through `KeychainManager.getAsync`
+    /// as the sync path; misses go through `AIKeychain.shared.getAsync`
     /// (already detached) instead of blocking the caller on SecItem calls.
     static func credentialAsync(for provider: AIProvider, method: ProviderAuthMethod, config: AIConfig) async -> String? {
         if provider == .openAI, method == .accountSignIn {
@@ -135,7 +135,7 @@ public enum ProviderAuthResolver {
         if let cached, Date().timeIntervalSince(cached.cachedAt) < credentialCacheLifetime {
             return cached.value
         }
-        let value = await KeychainManager.getAsync(key: provider.keychainKey)?
+        let value = await AIKeychain.shared.getAsync(key: provider.keychainKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let stored = (value?.isEmpty == false) ? value : nil
         credentialCacheLock.withLock { credentialCache[cacheKey] = (stored, Date()) }
@@ -151,7 +151,7 @@ public enum ProviderAuthResolver {
             if let cached, Date().timeIntervalSince(cached.cachedAt) < credentialCacheLifetime {
                 return cached.value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             }
-            let value = await KeychainManager.getAsync(key: provider.keychainKey)?
+            let value = await AIKeychain.shared.getAsync(key: provider.keychainKey)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             let valid = value?.isEmpty == false
             credentialCacheLock.withLock { credentialCache[cacheKey] = (valid ? value : nil, Date()) }
@@ -202,7 +202,7 @@ public enum ProviderAuthResolver {
         if let cached, Date().timeIntervalSince(cached.cachedAt) < credentialCacheLifetime {
             return cached.value
         }
-        let stored = KeychainManager.get(key: provider.keychainKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stored = AIKeychain.shared.get(key: provider.keychainKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = (stored?.isEmpty == false) ? stored : nil
         credentialCacheLock.lock()
         credentialCache[cacheKey] = (value, Date())

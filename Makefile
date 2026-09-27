@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-fast test-full clean help install quick now daily hot dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark benchmark-compare benchmark-save harness harness-accent quality-report ci ci-report prepare-swiftpm-scratch
+.PHONY: build run debug test test-fast test-full clean help install quick now daily hot dev build-profile cache-status cache-prune cache-clear-module release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark benchmark-compare benchmark-save harness harness-accent quality-report ci ci-report prepare-swiftpm-scratch
 
 # Default target
 all: build
@@ -73,16 +73,19 @@ dev: prepare-swiftpm-scratch
 # runs the complete test suite with parallel execution
 test: prepare-swiftpm-scratch
 	@echo "🧪 Running unit tests in parallel ($(CORES) jobs)..."
-	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
+	@chmod +x scripts/swift_retry.sh
+	@$(BUILD_SCRIPT_ENV) ./scripts/swift_retry.sh unit_tests swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
 
 # Quick test run - excludes slow UI/integration tests
 test-fast: prepare-swiftpm-scratch
 	@echo "🧪 Running fast unit tests only..."
-	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG) --filter SortyTests
+	@chmod +x scripts/swift_retry.sh
+	@$(BUILD_SCRIPT_ENV) ./scripts/swift_retry.sh unit_tests swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG) --filter SortyTests
 
 test-full: prepare-swiftpm-scratch
 	@echo "🧪 Running unit tests with coverage..."
-	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
+	@chmod +x scripts/swift_retry.sh
+	@$(BUILD_SCRIPT_ENV) ./scripts/swift_retry.sh unit_tests swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
 	@echo "✅ All tests completed. Coverage reports available in $(SORTY_BUILD_DIR)/debug/codecov"
 
 # Profile build times to identify slow-compiling files
@@ -95,6 +98,9 @@ cache-status:
 
 cache-prune:
 	@$(BUILD_SCRIPT_ENV) BUILD_CACHE_FORCE_PRUNE=true ./scripts/build_cache.sh prune
+
+cache-clear-module:
+	@$(BUILD_SCRIPT_ENV) ./scripts/build_cache.sh clear-module-cache
 
 # skips all checks and builds/runs immediately
 now: prepare-swiftpm-scratch
@@ -225,7 +231,8 @@ harness-accent: prepare-swiftpm-scratch
 QUALITY_CORPUS ?= QualityCorpus/private
 
 quality-report: prepare-swiftpm-scratch
-	@swift run $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG) SortyQuality --corpus "$(QUALITY_CORPUS)"
+	@chmod +x scripts/swift_retry.sh
+	@$(BUILD_SCRIPT_ENV) ./scripts/swift_retry.sh quality_report swift run $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG) SortyQuality --corpus "$(QUALITY_CORPUS)"
 
 help:
 	@echo "Sorty Build System (Optimized)"
@@ -249,6 +256,7 @@ help:
 	@echo "  make build-profile - Identify slow-compiling files and functions"
 	@echo "  make cache-status  - Show build cache size and fingerprint state"
 	@echo "  make cache-prune   - Force scheduled cache validation and pruning"
+	@echo "  make cache-clear-module - Clear Clang module caches (poison recovery)"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test        - Run unit tests in parallel"

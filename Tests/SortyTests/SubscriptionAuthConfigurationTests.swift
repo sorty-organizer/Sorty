@@ -1,6 +1,8 @@
 import XCTest
 @testable import SortyLib
 @testable import SortyCore
+@testable import SortyAI
+@testable import SortyModels
 
 final class SubscriptionAuthConfigurationTests: XCTestCase {
     func testCodexLoginScriptQuotesExecutablePathForShell() {

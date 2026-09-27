@@ -39,7 +39,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
             )
         } catch let error as AIClientError where Self.isContextLimitError(error) {
             if files.count > 1 {
-                DebugLogger.log("AFM context limit reached for \(files.count) files. Retrying with smaller requests.")
+                ModelLog.debug("AFM context limit reached for \(files.count) files. Retrying with smaller requests.")
                 return try await analyzeInAdaptiveBatches(
                     files: files,
                     customInstructions: customInstructions,
@@ -58,7 +58,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
         // AFM doesn't yet support multimodal analysis via this private API.
         // Fallback to text analysis.
         if config.enableVision, !imageData.isEmpty {
-            DebugLogger.log("AppleFoundationModelClient: Vision is enabled but multimodal analysis is unavailable; falling back to text-only.")
+            ModelLog.debug("AppleFoundationModelClient: Vision is enabled but multimodal analysis is unavailable; falling back to text-only.")
         }
         return try await analyze(files: files, customInstructions: customInstructions, personaPrompt: personaPrompt, temperature: temperature)
     }
@@ -155,7 +155,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
                 prompts.user = "\(heading) \(preservedContext)\n\n" + prompts.user
             }
 
-            DebugLogger.log("AFM Strategy: \(strategy) compaction for \(files.count) files")
+            ModelLog.debug("AFM Strategy: \(strategy) compaction for \(files.count) files")
 
             // A cancel must stop the retry loop, not fall through to another
             // local generation whose result nobody will use.
@@ -182,21 +182,21 @@ public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
                 throw CancellationError()
             } catch let error as LanguageModelSession.GenerationError {
                 lastGenerationError = error
-                DebugLogger.log("AFM generation failed with \(strategy) compaction: \(error.localizedDescription)")
+                ModelLog.debug("AFM generation failed with \(strategy) compaction: \(error.localizedDescription)")
                 if isLastAttempt {
                     throw Self.mapGenerationError(error)
                 }
             } catch let error as AIClientError {
                 // Retry with a stricter/smaller prompt if model output was malformed.
                 if case .invalidResponseFormat = error, !isLastAttempt {
-                    DebugLogger.log("AFM produced invalid response format with \(strategy) compaction; retrying.")
+                    ModelLog.debug("AFM produced invalid response format with \(strategy) compaction; retrying.")
                     continue
                 }
                 throw error
             } catch {
                 lastError = error
                 if !isLastAttempt {
-                    DebugLogger.log("AFM attempt failed with \(strategy) compaction: \(error.localizedDescription). Retrying.")
+                    ModelLog.debug("AFM attempt failed with \(strategy) compaction: \(error.localizedDescription). Retrying.")
                     continue
                 }
             }
@@ -376,7 +376,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
     }
     
     /// Check if Apple Intelligence is available on this device
-    static func isAvailable() -> Bool {
+    package static func isAvailable() -> Bool {
         let model = SystemLanguageModel.default
         if case .available = model.availability {
             return true
@@ -385,7 +385,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
     }
     
     /// Get a user-friendly explanation of why Apple Intelligence is unavailable
-    static var unavailabilityReason: String {
+    package static var unavailabilityReason: String {
         let model = SystemLanguageModel.default
         switch model.availability {
         case .available:

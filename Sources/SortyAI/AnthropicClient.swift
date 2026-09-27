@@ -115,7 +115,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             }
         } catch where AIRequestSupport.isPayloadTooLarge(error) {
             // Strip images first on 400/413/422 instead of re-sending megabytes.
-            LogManager.shared.log(
+            ModelLog.log(
                 "Anthropic multimodal request rejected; retrying text-only.",
                 level: .warning,
                 category: "AnthropicClient"

@@ -235,17 +235,17 @@ Allowed icons:
             guard generatedName.count >= 3,
                   (400...2000).contains(generatedPrompt.count),
                   !containsGenerationLeak else {
-                LogManager.shared.log(
+                ModelLog.log(
                     "Rejected generated persona after decoding.",
                     level: .error,
                     category: "PersonaGenerator",
                     data: [
-                        "nameLength": generatedName.count,
-                        "promptLength": generatedPrompt.count,
-                        "containsGenerationLeak": containsGenerationLeak,
-                        "organizeSuggestionCount": suggestions.organize.count,
-                        "organizeAndRenameSuggestionCount": suggestions.organizeAndRename.count,
-                        "renameOnlySuggestionCount": suggestions.renameOnly.count
+                        "nameLength": String(generatedName.count),
+                        "promptLength": String(generatedPrompt.count),
+                        "containsGenerationLeak": String(containsGenerationLeak),
+                        "organizeSuggestionCount": String(suggestions.organize.count),
+                        "organizeAndRenameSuggestionCount": String(suggestions.organizeAndRename.count),
+                        "renameOnlySuggestionCount": String(suggestions.renameOnly.count)
                     ]
                 )
                 throw PersonaGeneratorError.invalidPersonaResponse
@@ -339,13 +339,13 @@ Allowed icons:
               let data = json.data(using: .utf8),
               let generated = try? JSONDecoder().decode(GeneratedPersona.self, from: data)
         else {
-            LogManager.shared.log(
+            ModelLog.log(
                 "Failed to decode generated persona.",
                 level: .error,
                 category: "PersonaGenerator",
                 data: [
-                    "responseLength": response.count,
-                    "containsJSONObject": LLMJSONExtractor.lastObject(in: response) != nil
+                    "responseLength": String(response.count),
+                    "containsJSONObject": String(LLMJSONExtractor.lastObject(in: response) != nil)
                 ]
             )
             throw PersonaGeneratorError.invalidPersonaResponse

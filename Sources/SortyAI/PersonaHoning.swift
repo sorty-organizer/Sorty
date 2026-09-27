@@ -89,7 +89,7 @@ public class PersonaHoningEngine: ObservableObject {
         let jsonString = LLMJSONExtractor.firstArray(in: response) ?? response
         
         guard let questions = Self.validatedQuestions(from: jsonString) else {
-            LogManager.shared.log(
+            ModelLog.log(
                 "Failed to decode honing questions (response length: \(jsonString.count) characters)",
                 level: .error,
                 category: "PersonaHoning"

@@ -89,6 +89,15 @@ or widget targets.
 
 ### Troubleshooting
 
+- If `swift build` fails with `has no member 'main'` (or similar missing
+  members) on valid Foundation/AppKit API such as `RunLoop.main`,
+  `Bundle.main`, or `UserDefaults.standard`, the Clang module cache is
+  poisoned — not the code. `make` flows detect this signature, clear
+  `<config>/ModuleCache`, and retry once serially automatically; serial
+  builds passing on identical sources is the tell. Manual fix is the same:
+  `rm -rf .build/arm64-apple-macosx/debug/ModuleCache` (same via
+  `$SORTY_BUILD_DIR`; see `make cache-clear-module`). Seen under parallel
+  load with a warm cache, e.g. after toolchain/SDK updates.
 - The recursive `os_unfair_lock` crash on `InjectionQueue`, reported by make as
   `[hot] Error 9`, is addressed by the vendored save queue. Quit any older hot
   process and start `make hot` again to build and load the fix.

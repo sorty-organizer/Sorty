@@ -11,7 +11,7 @@ import Foundation
 /// rebuild the same manifest/file sections per batch/retry, so sections are
 /// cached by content hash and reused instead of re-scanned and re-formatted.
 private final class PromptSectionCache: @unchecked Sendable {
-    static let shared = PromptSectionCache()
+    package static let shared = PromptSectionCache()
     private static let maximumEntries = 16
     /// Oversized sections are never worth memoizing; skip the store.
     private static let maximumEntryBytes = 256 * 1024
@@ -25,7 +25,7 @@ private final class PromptSectionCache: @unchecked Sendable {
 
     /// Stable FNV-1a 64-bit hash rendered as 16 hex digits. `Hasher` is seeded
     /// per process, so it must not feed cache keys.
-    static func stableHash(_ text: String) -> String {
+    package static func stableHash(_ text: String) -> String {
         var hash: UInt64 = 0xcbf29ce484222325
         for byte in text.utf8 {
             hash ^= UInt64(byte)
@@ -59,11 +59,11 @@ private final class PromptSectionCache: @unchecked Sendable {
     }
 }
 
-struct PromptBuilder {
+package struct PromptBuilder {
     /// Content hash for the file-listing section: file identities + mtimes +
     /// prompt-shaping flags. Callers with the same hash reuse the cached
     /// section and only re-send what changed (diff-only upstream).
-    static func fileListingCacheKey(
+    package static func fileListingCacheKey(
         files: [FileItem],
         mode: OrganizationMode,
         includeContentMetadata: Bool
@@ -81,7 +81,7 @@ struct PromptBuilder {
     /// Manifest cache key: batch manifest reuse starts here. Identical
     /// (directory, file set, entry cap) inputs share one manifest instead of
     /// re-enumerating the directory per batch.
-    static func manifestCacheKey(
+    package static func manifestCacheKey(
         baseDirectoryURL: URL,
         files: [FileItem],
         maxEntries: Int
@@ -92,11 +92,11 @@ struct PromptBuilder {
 
     /// True when the device is on Low Power Mode or a constrained/expensive
     /// link: prompt context (existing folders, finder metadata) is capped.
-    static var isBatteryConstrainedContext: Bool {
+    package static var isBatteryConstrainedContext: Bool {
         ProcessInfo.processInfo.isLowPowerModeEnabled ||
             NetworkPathProbe.shared.isConstrainedOrExpensive
     }
-    static func buildSystemPrompt(enableReasoning: Bool = false, personaInfo: String, mode: OrganizationMode = .organize, enableTagging: Bool = true) -> String {
+    package static func buildSystemPrompt(enableReasoning: Bool = false, personaInfo: String, mode: OrganizationMode = .organize, enableTagging: Bool = true) -> String {
         var prompt = SystemPrompt.buildPrompt(mode: mode, enableTagging: enableTagging)
         
         if !personaInfo.isEmpty {
@@ -149,8 +149,8 @@ struct PromptBuilder {
     /// Budget for the main (non-Apple-FM) organization prompt. The compact
     /// Apple path already selects a compaction level against a token budget;
     /// the main path previously grew without bound (full metadata per file).
-    static let mainPromptTokenBudget = 12_000
-    static let mainPromptMaxFullMetadataFiles = 80
+    package static let mainPromptTokenBudget = 12_000
+    package static let mainPromptMaxFullMetadataFiles = 80
 
     /// Shared ISO8601 formatters. Creating a formatter costs milliseconds, and
     /// the prompt path formats dates per file. A configured
@@ -187,7 +187,7 @@ struct PromptBuilder {
         formatterLock.withLock { templateDateFormatter.string(from: date) }
     }
 
-    static func buildOrganizationPrompt(
+    package static func buildOrganizationPrompt(
         files: [FileItem],
         mode: OrganizationMode = .organize,
         namingStyle: NamingStyle = .descriptive,
@@ -502,7 +502,7 @@ struct PromptBuilder {
 
     /// Final guard: hard-truncate an over-budget main-path prompt while
     /// preserving the JSON-contract tail, so callers never send unbounded input.
-    static func enforceMainPromptBudget(_ prompt: String, budget: Int = mainPromptTokenBudget) -> String {
+    package static func enforceMainPromptBudget(_ prompt: String, budget: Int = mainPromptTokenBudget) -> String {
         guard estimateTokens(prompt) > budget else { return prompt }
         // The contract sentence varies by mode and reasoning flag. The old
         // matcher only looked for the organize/rename wording, so reasoning
@@ -533,7 +533,7 @@ struct PromptBuilder {
     }
 
     /// Escape prompt delimiters without collapsing distinct filenames.
-    static func promptSafeFilename(_ name: String) -> String {
+    package static func promptSafeFilename(_ name: String) -> String {
         name
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\n", with: " ")
@@ -545,7 +545,7 @@ struct PromptBuilder {
 
     /// Batch-scoped manifest so multi-batch folders don't repeat the full
     /// 400-entry directory manifest on every 350-file request.
-    static func buildBatchManifestContext(
+    package static func buildBatchManifestContext(
         baseDirectoryURL: URL,
         batchFiles: [FileItem],
         maxEntries: Int = 60
@@ -559,7 +559,7 @@ struct PromptBuilder {
 
     /// Strips a previously injected full SOURCE FOLDER CONTEXT block so a
     /// smaller batch-scoped block can replace it without duplication.
-    static func strippingSourceFolderContext(from instructions: String) -> String {
+    package static func strippingSourceFolderContext(from instructions: String) -> String {
         guard let start = instructions.range(of: "## SOURCE FOLDER CONTEXT") else {
             return instructions
         }
@@ -574,11 +574,11 @@ struct PromptBuilder {
     
     
     /// Estimate token count (rough: 1 token ≈ 4 chars for English)
-    static func estimateTokens(_ text: String) -> Int {
+    package static func estimateTokens(_ text: String) -> Int {
         return text.count / 4
     }
 
-    static func wrapDirectUserInstructions(_ instructions: String) -> String {
+    package static func wrapDirectUserInstructions(_ instructions: String) -> String {
         let trimmed = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
 
@@ -608,14 +608,14 @@ struct PromptBuilder {
     }
 
     /// Select compaction level based on full prompt budget.
-    enum CompactionLevel {
+    package enum CompactionLevel {
         case standard
         case ultra
         case summary
         case micro
     }
 
-    static func selectCompactionLevel(
+    package static func selectCompactionLevel(
         files: [FileItem],
         config: AIConfig,
         customInstructions: String? = nil,
@@ -644,7 +644,7 @@ struct PromptBuilder {
         return .micro
     }
 
-    static func preservedContext(customInstructions: String?, personaPrompt: String?) -> String {
+    package static func preservedContext(customInstructions: String?, personaPrompt: String?) -> String {
         var sections: [String] = []
         if let personaPrompt, !personaPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             sections.append("<active_persona>\n\(personaPrompt)\n</active_persona>")
@@ -716,7 +716,7 @@ struct PromptBuilder {
         return line
     }
 
-    static func compactFileIdTable(
+    package static func compactFileIdTable(
         files: [FileItem],
         maxNameLength: Int,
         maxPathLength: Int,
@@ -863,7 +863,7 @@ struct PromptBuilder {
     }
 
     /// Compact prompt for Apple Intelligence (reduced context window)
-    static func buildCompactPrompt(files: [FileItem], mode: OrganizationMode = .organize, enableReasoning: Bool = false) -> String {
+    package static func buildCompactPrompt(files: [FileItem], mode: OrganizationMode = .organize, enableReasoning: Bool = false) -> String {
         var prompt: String
         if mode == .renameOnly {
             prompt = "Suggest better names for these files (keep in place):\n\n"
@@ -881,7 +881,7 @@ struct PromptBuilder {
     }
     
     /// Compact system prompt for Apple Intelligence
-    static func buildCompactSystemPrompt(mode: OrganizationMode = .organize, enableReasoning: Bool = false, enableSmartRename: Bool = false, enableTagging: Bool = true) -> String {
+    package static func buildCompactSystemPrompt(mode: OrganizationMode = .organize, enableReasoning: Bool = false, enableSmartRename: Bool = false, enableTagging: Bool = true) -> String {
         var prompt = "You are a file management assistant. "
         let compactFolderPayload: String
         
@@ -933,7 +933,7 @@ struct PromptBuilder {
         return prompt
     }
 
-    static func promptPair(for level: CompactionLevel, config: AIConfig, files: [FileItem]) -> (system: String, user: String) {
+    package static func promptPair(for level: CompactionLevel, config: AIConfig, files: [FileItem]) -> (system: String, user: String) {
         let pair: (system: String, user: String)
         switch level {
         case .standard:
@@ -1044,7 +1044,7 @@ struct PromptBuilder {
     }
     
     /// Lists exact descendant folder paths so the planner can reuse deeply nested destinations.
-    static func buildExistingFoldersContext(at directoryURL: URL, maxFolders: Int = 1_000) -> String? {
+    package static func buildExistingFoldersContext(at directoryURL: URL, maxFolders: Int = 1_000) -> String? {
         guard maxFolders > 0 else { return nil }
 
         // On battery/constrained links the existing-folder list is capped at
@@ -1101,7 +1101,7 @@ struct PromptBuilder {
         return context
     }
 
-    static func buildDirectoryManifestContext(
+    package static func buildDirectoryManifestContext(
         baseDirectoryURL: URL,
         files: [FileItem],
         maxEntries: Int = 400
@@ -1203,7 +1203,7 @@ struct PromptBuilder {
     }
 
     /// Builds filesystem-backed source context without occupying the caller's actor.
-    static func buildDirectoryManifestContextOffMain(
+    package static func buildDirectoryManifestContextOffMain(
         baseDirectoryURL: URL,
         files: [FileItem],
         maxEntries: Int = 400
@@ -1233,7 +1233,7 @@ struct PromptBuilder {
     /// Builds the existing-folders context without occupying the caller's
     /// actor. It walks the directory tree, so large folders must not pay for
     /// it on the main actor. Mirrors buildDirectoryManifestContextOffMain.
-    static func buildExistingFoldersContextOffMain(
+    package static func buildExistingFoldersContextOffMain(
         at directoryURL: URL,
         maxFolders: Int = 1_000
     ) async throws -> String? {
@@ -1333,7 +1333,7 @@ struct PromptBuilder {
         return context
     }
 
-    static func buildFinderTaggedFolderContext(
+    package static func buildFinderTaggedFolderContext(
         baseDirectoryURL: URL,
         files: [FileItem]
     ) -> String? {
@@ -1437,7 +1437,7 @@ struct PromptBuilder {
     ///   - maxDepth: Maximum directory traversal depth (default 3)
     ///   - maxEntriesPerDirectory: Maximum folder entries per directory (default 20)
     /// - Returns: Formatted prompt context string, or empty string if no valid directories
-    static func buildReferenceDirectoryContext(
+    package static func buildReferenceDirectoryContext(
         paths: [String],
         maxDepth: Int = 3,
         maxEntriesPerDirectory: Int = 20

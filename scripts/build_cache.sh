@@ -712,6 +712,69 @@ manage_build_cache() {
     build_cache_release_lock
 }
 
+# --- Clang module-cache poisoning -------------------------------------------
+# How it is used: parallel SwiftPM jobs share one Clang module cache
+# (<config>/ModuleCache). Under parallel load its Foundation/AppKit entries
+# can go bad, and every later job then fails with missing members on valid
+# API (`RunLoop.main`, `Bundle.main`, `UserDefaults.standard`,
+# `Thread.current`, …). Serial builds pass on the same sources, which is the
+# tell. Clearing the cache and retrying once serially always recovers.
+
+# True when a build log shows the poisoning signature. Kept narrow on purpose:
+# a genuine typo (`Bundle.mian`) names a different member and never matches.
+# The log must also be fresh (written during the current invocation) so a
+# stale log from an earlier run — or verbose mode, which streams instead of
+# logging — can never trigger a spurious retry.
+swiftpm_module_cache_poison_detected() {
+    local log_name="$1"
+    local since_epoch="${2:-0}"
+    local log_file="${BUILD_LOG_DIR}/${log_name}.log"
+
+    [ -f "${log_file}" ] || return 1
+    if [ "$(build_cache_path_mtime "${log_file}")" -lt "${since_epoch}" ]; then
+        return 1
+    fi
+
+    grep -Eq "has no member '(main|current|standard)'" "${log_file}" ||
+        grep -Eq "cannot infer contextual base in reference to member 'common'" "${log_file}"
+}
+
+reset_clang_module_caches() {
+    local root
+    while IFS= read -r root; do
+        [ -n "${root}" ] || continue
+        prune_path_if_exists "${root}/debug/ModuleCache"
+        prune_path_if_exists "${root}/release/ModuleCache"
+        prune_path_if_exists "${root}/DerivedData/ModuleCache.noindex"
+    done < <(build_cache_scratch_roots)
+    log_detail "Cleared Clang module caches"
+}
+
+# Prints "$@" minus SwiftPM build-parallelism flags so a retry runs serially.
+# Test-execution parallelism (--parallel) is preserved; only build jobs drop.
+strip_parallel_job_flags() {
+    local arg skip_next=false
+    for arg in "$@"; do
+        if [ "${skip_next}" = "true" ]; then
+            skip_next=false
+            continue
+        fi
+        case "${arg}" in
+            -j)
+                skip_next=true
+                ;;
+            -j[0-9]*|--jobs=*)
+                ;;
+            --jobs)
+                skip_next=true
+                ;;
+            *)
+                printf '%s\n' "${arg}"
+                ;;
+        esac
+    done
+}
+
 print_build_cache_status() {
     local size_mb
     size_mb=$(get_directory_size_mb "${BUILD_DIR}" fresh)
@@ -747,8 +810,11 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
         status)
             print_build_cache_status
             ;;
+        clear-module-cache)
+            reset_clang_module_caches
+            ;;
         *)
-            echo "Usage: $0 [prune|status]"
+            echo "Usage: $0 [prune|status|clear-module-cache]"
             exit 1
             ;;
     esac

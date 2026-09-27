@@ -209,6 +209,9 @@ class SortyTests: XCTestCase {
         )
         let renameClient = MockAIClient(config: renameConfig)
         folderOrganizer.setAIClientForTesting(renameClient)
+        // Multi-batch runs build per-batch clients via the factory; keep
+        // every batch on the mock so no real client (or API URL) is needed.
+        folderOrganizer.setBatchClientFactoryForTesting { _, _ in renameClient }
         await renameClient.setHandler { files in
             OrganizationPlan(
                 suggestions: [

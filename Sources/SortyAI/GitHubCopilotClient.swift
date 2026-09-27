@@ -8,6 +8,11 @@
 import Foundation
 
 public final class GitHubCopilotClient: AIClientProtocol, Sendable {
+    /// Vision-capability check, injected because ModelCatalog lives up in
+    /// SortyCore. Nil means unknown: the client falls back to text-only,
+    /// which is always safe. The app wires the live catalog at startup.
+    nonisolated(unsafe) public static var visionSupportChecker: (@Sendable (String, AIProvider) async -> Bool)?
+
     public let config: AIConfig
     @MainActor public weak var streamingDelegate: StreamingDelegate?
     // @Sendable closure is itself Sendable, so checked Sendable holds
@@ -93,7 +98,7 @@ public final class GitHubCopilotClient: AIClientProtocol, Sendable {
     
     public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         // Check if model supports vision - if not, fall back to text-only
-        let supportsVision = await ModelCatalog.shared.supportsVision(modelId: config.model, provider: config.provider)
+        let supportsVision = await Self.visionSupportChecker?(config.model, config.provider) ?? false
         
         guard supportsVision, !imageData.isEmpty else {
             return try await analyze(files: files, customInstructions: customInstructions, personaPrompt: personaPrompt, temperature: temperature)
@@ -158,7 +163,7 @@ public final class GitHubCopilotClient: AIClientProtocol, Sendable {
             }
         } catch where AIRequestSupport.isPayloadTooLarge(error) {
             // Strip images first on 400/413/422 instead of re-sending them.
-            LogManager.shared.log(
+            ModelLog.log(
                 "Copilot multimodal request rejected; retrying text-only.",
                 level: .warning,
                 category: "GitHubCopilotClient"
@@ -174,7 +179,7 @@ public final class GitHubCopilotClient: AIClientProtocol, Sendable {
     public func fetchAvailableModels() async throws -> [String] {
         let url = URL(string: "https://api.githubcopilot.com/models")!
         try ensureNetworkAllowed(url)
-        DebugLogger.log("Fetching available models")
+        ModelLog.debug("Fetching available models")
         let session = await getSession()
         let fallbackModels = [
             "gpt-5-mini",
@@ -234,7 +239,7 @@ public final class GitHubCopilotClient: AIClientProtocol, Sendable {
 
             } catch {
                 // Fallback on error
-                DebugLogger.log("Failed to fetch models: \(error), using defaults")
+                ModelLog.debug("Failed to fetch models: \(error), using defaults")
                 return fallbackModels
             }
         }

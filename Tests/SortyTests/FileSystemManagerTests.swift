@@ -2,6 +2,8 @@
 import XCTest
 @testable import SortyLib
 @testable import SortyCore
+@testable import SortyAI
+@testable import SortyModels
 
 class FileSystemManagerTests: XCTestCase {
     

@@ -30,18 +30,26 @@ public enum ModelLog {
     public static func log(
         _ message: @autoclosure () -> String,
         level: ModelLogLevel = .info,
-        category _: String = "General"
+        category _: String = "General",
+        data: [String: String] = [:]
     ) {
         let resolved = message()
+        let rendered: String
+        if data.isEmpty {
+            rendered = resolved
+        } else {
+            let context = data.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: " ")
+            rendered = "\(resolved) [\(context)]"
+        }
         switch level {
         case .debug:
-            logger.debug("\(resolved, privacy: .public)")
+            logger.debug("\(rendered, privacy: .public)")
         case .info:
-            logger.info("\(resolved, privacy: .public)")
+            logger.info("\(rendered, privacy: .public)")
         case .warning, .error:
-            logger.error("\(resolved, privacy: .public)")
+            logger.error("\(rendered, privacy: .public)")
         case .fault:
-            logger.fault("\(resolved, privacy: .public)")
+            logger.fault("\(rendered, privacy: .public)")
         }
     }
 

@@ -315,7 +315,7 @@ public class WatchedFoldersManager: ObservableObject {
     }
 
     private func setupNotificationObservers() {
-        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil) { [weak self] in
+        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] in
             self?.clearAll()
         }
     }

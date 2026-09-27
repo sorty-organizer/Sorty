@@ -826,9 +826,23 @@ reset_swiftpm_package_cache() {
 run_with_swiftpm_db_recovery() {
     local log_name="$1"
     shift
+    local SWIFTPM_RECOVERY_STARTED_AT
+    SWIFTPM_RECOVERY_STARTED_AT="$(build_cache_now)"
 
     if run_build_with_compact_status "${log_name}" "$@"; then
         return 0
+    fi
+
+    if swiftpm_module_cache_poison_detected "${log_name}" "${SWIFTPM_RECOVERY_STARTED_AT:-0}"; then
+        log_warning "Clang module cache looks poisoned; clearing it and retrying once serially."
+        reset_clang_module_caches
+        local -a serial_args=()
+        while IFS= read -r arg; do
+            serial_args+=("${arg}")
+        done < <(strip_parallel_job_flags "$@")
+        serial_args+=(-j 1)
+        run_build_with_compact_status "${log_name}_retry" "${serial_args[@]}"
+        return
     fi
 
     if ! swiftpm_build_db_error_detected "${log_name}"; then

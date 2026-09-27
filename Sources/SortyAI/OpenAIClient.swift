@@ -157,7 +157,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         } catch where AIRequestSupport.isPayloadTooLarge(error) {
             // Strip images first on 400/413/422 (payload too large or
             // unsupported media) instead of re-sending the same megabytes.
-            LogManager.shared.log(
+            ModelLog.log(
                 "Multimodal request rejected (\(error.localizedDescription)); retrying once with file metadata only.",
                 level: .warning,
                 category: "OpenAIClient"
@@ -169,7 +169,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 temperature: temperature
             )
         } catch where config.provider == .openRouter && Self.shouldRetryOpenRouterWithoutImages(error) {
-            LogManager.shared.log(
+            ModelLog.log(
                 "OpenRouter could not complete the multimodal request; retrying once with file metadata only.",
                 level: .warning,
                 category: "OpenAIClient"
@@ -650,7 +650,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             fallbackBody["temperature"] = min(temperature, 0.2)
         }
 
-        LogManager.shared.log(
+        ModelLog.log(
             "Retrying OpenRouter once without optional routing parameters.",
             level: .warning,
             category: "OpenAIClient"

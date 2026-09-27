@@ -842,22 +842,19 @@ public enum VisionPayloadBudget {
     }
 }
 
-/// Single entry point for vision preparation: calls
-/// `prepareFilesForVision` once per request (maxConcurrent 4 stays inside
-/// ImageVisionAnalyzer) and clamps the result to the 32MB budget.
-/// The pipeline agent wires this into the organizer batch loop.
+/// Single entry point for vision preparation: calls the injected file
+/// preparer once per request and clamps the result to the 32MB budget.
+/// The preparer is injected (rather than constructing ImageVisionAnalyzer
+/// here) so this target does not depend on SortyCore; the organizer batch
+/// loop supplies the live implementation.
 public func prepareVisionBatch(
     files: [FileItem],
     base: URL?,
     pdfPageLimit: Int = 2,
-    progress: (@Sendable (Int, Int) async -> Void)? = nil
+    progress: (@Sendable (Int, Int) async -> Void)? = nil,
+    prepare: @Sendable ([FileItem], URL?, Int, (@Sendable (Int, Int) async -> Void)?) async -> [String: Data]
 ) async -> [String: Data] {
-    let prepared = await ImageVisionAnalyzer().prepareFilesForVision(
-        files: files,
-        baseDirectoryURL: base,
-        pdfPageLimit: pdfPageLimit,
-        progress: progress
-    )
+    let prepared = await prepare(files, base, pdfPageLimit, progress)
     return VisionPayloadBudget.clamped(prepared)
 }
 
@@ -869,26 +866,26 @@ public func clearVisionBatch(_ payload: inout [String: Data]) {
 }
 
 /// Extracts JSON from free-form LLM output.
-enum LLMJSONExtractor {
+package enum LLMJSONExtractor {
     /// Last balanced top-level JSON object in the text.
-    static func lastObject(in text: String) -> String? {
+    package static func lastObject(in text: String) -> String? {
         balancedSpans(in: text, open: "{", close: "}").last
     }
 
     /// All balanced top-level JSON objects in the text.
-    static func objectCandidates(in text: String) -> [String] {
+    package static func objectCandidates(in text: String) -> [String] {
         balancedSpans(in: text, open: "{", close: "}")
     }
 
     /// First balanced JSON array in the text.
-    static func firstArray(in text: String) -> String? {
+    package static func firstArray(in text: String) -> String? {
         balancedSpans(in: text, open: "[", close: "]").first
     }
 
     /// Rule-induction responses: a ```json fenced block if present (trimmed),
     /// else the first "[" through last "]", else the first "{" through last "}"
     /// wrapped as a one-element array, else the text unchanged.
-    static func fencedOrBracketedJSON(from text: String) -> String {
+    package static func fencedOrBracketedJSON(from text: String) -> String {
         // 1. Try to find JSON markdown blocks: ```json ... ``` or ``` ... ```
         if let startRange = text.range(of: "```json"),
            let endRange = text.range(of: "```", options: .backwards, range: startRange.upperBound..<text.endIndex) {

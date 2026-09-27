@@ -281,8 +281,8 @@ public enum StorageEnvironmentInspector {
 public class StorageLocationsManager: ObservableObject {
     @Published public private(set) var locations: [StorageLocation] = []
     @Published public private(set) var hasLoadedPersistedState = false
-    private let userDefaults = Foundation.UserDefaults.standard
-    private let persistedDataReader = UserDefaultsDataReader(Foundation.UserDefaults.standard)
+    private let userDefaults = UserDefaults.standard
+    private let persistedDataReader = UserDefaultsDataReader(.standard)
     private let storageKey = "storageLocations"
     private var activeSecurityScopedURLs: [UUID: URL] = [:]
     private let subfolderDiscovery = StorageSubfolderDiscoveryService()
@@ -358,17 +358,21 @@ public class StorageLocationsManager: ObservableObject {
     }
     
     private func setupNotificationObservers() {
-        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil) { [weak self] in
+        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] in
             self?.clearAll()
         }
         let workspaceCenter = NSWorkspace.shared.notificationCenter
         workspaceCenter.addMainActorObserver(
-            forName: NSWorkspace.didMountNotification
+            forName: NSWorkspace.didMountNotification,
+            object: nil,
+            queue: .main
         ) { [weak self] in
             self?.accessNeedsRefresh = true
         }
         workspaceCenter.addMainActorObserver(
-            forName: NSWorkspace.didUnmountNotification
+            forName: NSWorkspace.didUnmountNotification,
+            object: nil,
+            queue: .main
         ) { [weak self] in
             self?.accessNeedsRefresh = true
         }

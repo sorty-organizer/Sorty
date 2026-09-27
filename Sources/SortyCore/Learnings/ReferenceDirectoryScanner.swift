@@ -8,17 +8,6 @@
 
 import Foundation
 
-public enum ReferenceDirectoryScanError: LocalizedError, Sendable {
-    case unavailable(String)
-
-    public var errorDescription: String? {
-        switch self {
-        case .unavailable(let path):
-            return "The reference directory is unavailable: \(path)"
-        }
-    }
-}
-
 public struct ReferenceDirectoryScanner: Sendable {
     
     private static let maxDepth = 3
