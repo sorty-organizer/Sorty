@@ -9,6 +9,11 @@ import XCTest
 @testable import SortyLib
 
 final class PromptBuilderTests: XCTestCase {
+    func testPromptSafeFilenameKeepsAngleAndEntityNamesDistinct() {
+        XCTAssertEqual(PromptBuilder.promptSafeFilename("a<b>"), "a&lt;b&gt;")
+        XCTAssertEqual(PromptBuilder.promptSafeFilename("a&lt;b&gt;"), "a&amp;lt;b&amp;gt;")
+        XCTAssertNotEqual(PromptBuilder.promptSafeFilename("a<b>"), PromptBuilder.promptSafeFilename("ab"))
+    }
     
     private var tempDir: URL!
     

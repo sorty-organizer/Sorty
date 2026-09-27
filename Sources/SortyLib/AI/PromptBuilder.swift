@@ -510,6 +510,7 @@ struct PromptBuilder {
         name
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
             .trimmingCharacters(in: .whitespacesAndNewlines)
