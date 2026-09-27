@@ -234,7 +234,15 @@ public final class ReliabilityManager {
             ]
         )
 
-        SentrySDK.capture(error: sanitizedError) { scope in
+        let event = Event(error: sanitizedError as NSError)
+        event.fingerprint = [
+            "sorty.handled_error",
+            safeFeature,
+            safeOperation,
+            classification.category,
+            classification.cause,
+        ]
+        SentrySDK.capture(event: event) { scope in
             scope.setTag(value: "mac_app", key: "platform_surface")
             scope.setTag(
                 value: safeFeature,
@@ -490,6 +498,19 @@ public final class ReliabilityManager {
     private static func classify(_ error: Error) -> ReliabilityErrorClassification {
         let nsError = error as NSError
         let description = nsError.localizedDescription.lowercased()
+
+        if let catalogError = error as? ModelCatalogError {
+            switch catalogError {
+            case .invalidURL:
+                return .init(category: "configuration", cause: "invalid_model_url", type: "provider_error")
+            case .fetchFailed:
+                return .init(category: "provider", cause: "model_list_failed", type: "provider_error")
+            case .decodingFailed:
+                return .init(category: "validation", cause: "invalid_model_list", type: "provider_error")
+            case .privacyModeBlocked:
+                return .init(category: "network", cause: "privacy_mode_blocked", type: "provider_error")
+            }
+        }
 
         if nsError.code == NSURLErrorTimedOut
             || description.contains("timed out")

@@ -357,7 +357,7 @@ public final class ModelCatalog: ObservableObject {
             ReliabilityManager.shared.capture(
                 error: error,
                 feature: "model_catalog",
-                operation: "refresh_provider"
+                operation: "refresh_provider_\(provider.rawValue)"
             )
         }
     }

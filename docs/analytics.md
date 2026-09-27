@@ -22,6 +22,8 @@ Filter PostHog events and dashboards on the event property `is_internal = false`
 
 ## Event taxonomy
 
+Handled macOS errors are grouped in Sentry by sanitized feature, operation, category, and cause. Model catalog refresh operations include the provider name. These fields contain no credentials or provider responses, and they let a failed model list stay separate from an unrelated network timeout.
+
 | Event | Surface | Purpose |
 |---|---|---|
 | `$pageview` | Website | Visits to each public route, using a stable page name, sanitized path, and previous public route |
