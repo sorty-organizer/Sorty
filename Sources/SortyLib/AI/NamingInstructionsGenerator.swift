@@ -134,10 +134,14 @@ public class NamingInstructionsGenerator: ObservableObject {
         }
 
         if let referenceFolderName, !referenceFileNames.isEmpty {
+            let safeFolderName = PromptBuilder.promptSafeFilename(referenceFolderName)
+            let safeReferenceFileNames = referenceFileNames
+                .map { "- \(PromptBuilder.promptSafeFilename($0))" }
+                .joined(separator: "\n")
             sections.append("""
-            The user chose "\(referenceFolderName)" as a reference folder. Infer the naming conventions they prefer from these representative filenames. Treat the names as style examples only. Do not assume their dates, people, projects, or other facts apply to new files:
+            The user chose "\(safeFolderName)" as a reference folder. Infer the naming conventions they prefer from these representative filenames. Treat the names as style examples only. Do not assume their dates, people, projects, or other facts apply to new files:
             <reference_filenames>
-            \(referenceFileNames.map { "- \($0)" }.joined(separator: "\n"))
+            \(safeReferenceFileNames)
             </reference_filenames>
             """)
         }

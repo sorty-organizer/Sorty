@@ -91,16 +91,19 @@ public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
         }
     }
 
+    /// Retry levels always move toward a smaller prompt. Context-limit failures
+    /// only get worse with more context, and after the smallest level fails there
+    /// is nothing larger worth retrying.
     private static func compactionStrategies(startingWith level: PromptBuilder.CompactionLevel) -> [PromptBuilder.CompactionLevel] {
         switch level {
         case .standard:
-            return [.standard, .ultra, .micro, .summary]
+            return [.standard, .ultra, .summary, .micro]
         case .ultra:
-            return [.ultra, .micro, .summary]
+            return [.ultra, .summary, .micro]
         case .summary:
             return [.summary, .micro]
         case .micro:
-            return [.micro, .summary]
+            return [.micro]
         }
     }
 
@@ -163,14 +166,16 @@ public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
                 let response = try await session.respond(to: prompts.user)
                 let content = response.content
 
-                await streamContent(content)
-
                 var plan = try ResponseParser.parseResponse(content, originalFiles: files, mode: config.mode)
                 plan.generationStats = makeStats(
                     from: content,
                     files: files,
                     startTime: startTime
                 )
+                // Signal the stream only once the plan parsed: a malformed attempt
+                // must not surface as completed, and a successful one must not
+                // report completion twice.
+                await streamContent(content)
                 return plan
 
             } catch is CancellationError {
@@ -218,6 +223,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
         var pendingChunks: [[FileItem]] = [files]
         var completedPlans: [OrganizationPlan] = []
         var processedChunkCount = 0
+        var contextOverflowFiles: [FileItem] = []
 
         while !pendingChunks.isEmpty {
             let chunk = pendingChunks.removeFirst()
@@ -232,13 +238,21 @@ public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
                 )
                 completedPlans.append(chunkPlan)
                 processedChunkCount += 1
-            } catch let error as AIClientError where Self.isContextLimitError(error) && chunk.count > 1 {
-                let midpoint = max(1, chunk.count / 2)
-                let left = Array(chunk[..<midpoint])
-                let right = Array(chunk[midpoint...])
-                // Depth-first split to resolve tight context limits quickly.
-                pendingChunks.insert(right, at: 0)
-                pendingChunks.insert(left, at: 0)
+            } catch let error as AIClientError {
+                guard Self.isContextLimitError(error) else { throw error }
+                if chunk.count > 1 {
+                    let midpoint = max(1, chunk.count / 2)
+                    let left = Array(chunk[..<midpoint])
+                    let right = Array(chunk[midpoint...])
+                    // Depth-first split to resolve tight context limits quickly.
+                    pendingChunks.insert(right, at: 0)
+                    pendingChunks.insert(left, at: 0)
+                } else {
+                    // A single file can exceed the on-device context on its own.
+                    // Report it as unorganized instead of discarding the chunks
+                    // that already succeeded.
+                    contextOverflowFiles.append(contentsOf: chunk)
+                }
             }
         }
 
@@ -263,6 +277,20 @@ public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
             totalTokens += plan.generationStats?.totalTokens ?? 0
         }
 
+        for file in contextOverflowFiles where seenUnorganizedIDs.insert(file.id).inserted {
+            mergedUnorganizedFiles.append(file)
+
+            let filename = file.displayName.isEmpty ? file.name : file.displayName
+            if seenUnorganizedNames.insert(filename).inserted {
+                mergedUnorganizedDetails.append(
+                    UnorganizedFile(
+                        filename: filename,
+                        reason: "This file alone exceeds Apple Intelligence's on-device context limit."
+                    )
+                )
+            }
+        }
+
         let duration = Date().timeIntervalSince(overallStartTime)
         let tps = duration > 0 ? Double(totalTokens) / duration : 0
         let stats = GenerationStats(
@@ -276,7 +304,9 @@ public final class AppleFoundationModelClient: AIClientProtocol, Sendable {
             promptTokens: nil
         )
 
-        let notes = "Generated across \(processedChunkCount) requests to fit Apple model context limits."
+        let notes = contextOverflowFiles.isEmpty
+            ? "Generated across \(processedChunkCount) requests to fit Apple model context limits."
+            : "Generated across \(processedChunkCount) requests to fit Apple model context limits. \(contextOverflowFiles.count) file(s) exceeded the on-device context limit on their own and were left unorganized."
         return OrganizationPlan(
             suggestions: mergedSuggestions,
             unorganizedFiles: mergedUnorganizedFiles,

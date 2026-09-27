@@ -90,13 +90,21 @@ enum AIRequestSupport {
     /// Per-batch organize timeout capped to 120-180s so one call cannot pin
     /// the radio for the legacy 600s resource default.
     static func organizeTimeout(for config: AIConfig) -> TimeInterval {
-        config.effectiveOrganizeResourceTimeout
+        clampedTimeout(config.effectiveOrganizeResourceTimeout)
     }
 
     /// Short timeout for interactive catalog/health probes: fail fast and use
     /// cached fallbacks instead of holding the radio.
     static func interactiveTimeout(for config: AIConfig) -> TimeInterval {
-        min(config.requestTimeout, 15)
+        min(clampedTimeout(config.requestTimeout), 15)
+    }
+
+    /// Defensive clamp for values that feed `URLRequest.timeoutInterval` and the
+    /// retry deadline: a zero, negative, or NaN config value must not read as an
+    /// already-expired request or trap on `Int64(seconds * 1_000)`.
+    static func clampedTimeout(_ value: TimeInterval, minimum: TimeInterval = 1) -> TimeInterval {
+        guard value.isFinite, value > 0 else { return minimum }
+        return max(value, minimum)
     }
     nonisolated(unsafe) static var sessionOverride: (@Sendable (AIConfig) async -> URLSession)?
 
@@ -326,6 +334,118 @@ enum AIRequestSupport {
         return payload.isEmpty ? nil : payload
     }
 
+    /// Buffers the `data:` lines that make up one SSE event. The SSE spec allows
+    /// an event payload to span consecutive `data:` lines; decoding each line on
+    /// its own silently drops those events. Other fields (comments, `event:`,
+    /// `id:`, `retry:`) are ignored.
+    struct SSEDataBuffer {
+        private var lines: [String] = []
+        /// Set when `[DONE]` arrived while a complete payload was still
+        /// buffered: the payload is delivered first, then the sentinel on the
+        /// next consume/flush call.
+        private var pendingDone = false
+
+        /// Feeds one raw stream line and returns a payload when an event is
+        /// complete: a blank line, `[DONE]`, or — for servers that omit the
+        /// blank separator — a data line that already completes a JSON payload.
+        mutating func consume(line: String) -> String? {
+            if pendingDone {
+                pendingDone = false
+                return "[DONE]"
+            }
+
+            let line = line.hasSuffix("\r") ? String(line.dropLast()) : line
+
+            if line.isEmpty {
+                return flush()
+            }
+
+            guard line.hasPrefix("data:") else { return nil }
+
+            var payload = String(line.dropFirst(5))
+            while payload.hasPrefix(" ") {
+                payload.removeFirst()
+            }
+            guard !payload.isEmpty else { return nil }
+
+            let isDone = payload.trimmingCharacters(in: .whitespaces) == "[DONE]"
+
+            // Servers that do not separate events with a blank line still get
+            // per-event decoding when the buffered payload is already valid
+            // JSON. This runs before `[DONE]` terminates the stream so the
+            // final event is emitted instead of being cleared with the
+            // sentinel ("data: {…}\ndata: [DONE]" must not lose the chunk).
+            if !lines.isEmpty {
+                let buffered = lines.joined(separator: "\n")
+                if Self.isCompleteJSON(buffered) {
+                    lines.removeAll(keepingCapacity: true)
+                    if isDone {
+                        pendingDone = true
+                    } else {
+                        lines.append(payload)
+                    }
+                    return buffered
+                }
+            }
+
+            if isDone {
+                lines.removeAll(keepingCapacity: true)
+                return "[DONE]"
+            }
+
+            lines.append(payload)
+            return nil
+        }
+
+        /// Delivers a final payload when the stream ends without a blank line.
+        /// A deferred `[DONE]` sentinel is surfaced so callers can stop.
+        mutating func flush() -> String? {
+            if pendingDone {
+                pendingDone = false
+                lines.removeAll(keepingCapacity: true)
+                return "[DONE]"
+            }
+            guard !lines.isEmpty else { return nil }
+            let payload = lines.joined(separator: "\n")
+            lines.removeAll(keepingCapacity: true)
+            return payload.isEmpty ? nil : payload
+        }
+
+        private static func isCompleteJSON(_ text: String) -> Bool {
+            guard let data = text.data(using: .utf8) else { return false }
+            return (try? JSONSerialization.jsonObject(with: data)) != nil
+        }
+    }
+
+    /// Iterates SSE events, handing `handle` each full `data:` payload exactly
+    /// once. Prefer this over `consumeSSELines` when payloads may span multiple
+    /// `data:` lines; `[DONE]` terminates the stream and is not passed on.
+    static func consumeSSEEvents(
+        _ bytes: URLSession.AsyncBytes,
+        handle: (String) async throws -> Bool
+    ) async throws {
+        var buffer = SSEDataBuffer()
+        var sawDone = false
+        var stoppedByHandler = false
+        try await consumeSSELines(bytes) { line in
+            guard let payload = buffer.consume(line: line) else { return true }
+            if payload == "[DONE]" {
+                sawDone = true
+                return false
+            }
+            let shouldContinue = try await handle(payload)
+            if !shouldContinue { stoppedByHandler = true }
+            return shouldContinue
+        }
+        // Some servers close the stream without a trailing blank line; deliver
+        // the last buffered event instead of dropping it. A handler that
+        // already asked to stop gets no extra payload, and the `[DONE]`
+        // sentinel is never passed through as content.
+        if !sawDone, !stoppedByHandler, let trailing = buffer.flush(), trailing != "[DONE]" {
+            _ = try await handle(trailing)
+        }
+    }
+
     /// Retries transient transport and HTTP failures with bounded backoff.
     ///
     /// HTTP status inspection deliberately happens inside this wrapper. URLSession considers
@@ -341,13 +461,19 @@ enum AIRequestSupport {
         _ operation: () async throws -> (Payload, URLResponse)
     ) async throws -> (Payload, URLResponse) {
         let clock = ContinuousClock()
-        let deadline = maxElapsed.map { clock.now.advanced(by: $0) }
+        // A non-positive budget means "no deadline", not "already expired".
+        let deadline: ContinuousClock.Instant? = if let maxElapsed, maxElapsed > .zero {
+            clock.now.advanced(by: maxElapsed)
+        } else {
+            nil
+        }
         var attempt = 0
 
         while true {
             try Task.checkCancellation()
             if let deadline, clock.now >= deadline {
-                throw RetryDeadlineExceeded()
+                // Deadline expiration must never escape as an internal error type.
+                throw URLError(.timedOut)
             }
 
             do {

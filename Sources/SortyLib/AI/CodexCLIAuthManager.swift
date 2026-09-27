@@ -62,6 +62,15 @@ public final class CodexCLIAuthManager: ObservableObject {
     private var deviceAuthProcess: Process?
     private var deviceAuthOutput = ""
     private var statusRefreshTask: Task<Void, Never>?
+    /// Identity of `statusRefreshTask`, so a completing older refresh cannot
+    /// clear the reference to a newer one.
+    private var statusRefreshTaskID = 0
+    /// Bumped when auth state changes locally (sign-out, device login) so an
+    /// in-flight probe cannot republish a verdict read before the change.
+    private var statusGeneration = 0
+    /// Identifies the current device-auth run so a superseded process callback
+    /// can never publish a verdict for a newer session.
+    private var deviceAuthGeneration = 0
 
     private struct StatusProbe: Sendable {
         let isInstalled: Bool
@@ -190,16 +199,33 @@ public final class CodexCLIAuthManager: ObservableObject {
             return
         }
 
+        statusRefreshTaskID += 1
+        let taskID = statusRefreshTaskID
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
             await self.performStatusRefresh()
         }
         statusRefreshTask = task
         await task.value
+        // Only clear our own task; a refresh started after an auth change must
+        // not be clobbered by an older completion.
+        if statusRefreshTaskID == taskID {
+            statusRefreshTask = nil
+        }
+    }
+
+    /// Refreshes after auth state changed locally (device login, sign-out).
+    /// The generation bump discards any probe that is already running, and
+    /// clearing the coalesced task forces a fresh probe instead of reusing one
+    /// whose verdict predates the change.
+    private func refreshStatusAfterAuthChange() async {
+        statusGeneration += 1
         statusRefreshTask = nil
+        await refreshStatus()
     }
 
     private func performStatusRefresh() async {
+        let generation = statusGeneration
         // Utility priority keeps the CLI subprocess from competing with the
         // main thread for CPU while the first window is still settling.
         let probe = await Task.detached(priority: .utility) {
@@ -218,6 +244,10 @@ public final class CodexCLIAuthManager: ObservableObject {
                 accountEmail: accountEmail
             )
         }.value
+
+        // Sign-out or a device login superseded this probe while it ran; its
+        // verdict describes auth state that no longer exists.
+        guard generation == statusGeneration else { return }
 
         if isCodexInstalled != probe.isInstalled {
             isCodexInstalled = probe.isInstalled
@@ -276,6 +306,11 @@ public final class CodexCLIAuthManager: ObservableObject {
     }
 
     func signOut() {
+        // Any probe already running read the pre-sign-out auth state; discard
+        // its verdict instead of letting it re-mark the manager signed in.
+        statusGeneration += 1
+        statusRefreshTask = nil
+
         if let codexExecutablePath = CodexSubscriptionClient.resolveCodexExecutablePath() {
             Task.detached(priority: .utility) {
                 let process = Process()
@@ -328,6 +363,8 @@ public final class CodexCLIAuthManager: ObservableObject {
 
     func startDeviceAuth() {
         cancelDeviceAuth()
+        deviceAuthGeneration += 1
+        let deviceAuthRun = deviceAuthGeneration
 
         guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else {
             deviceAuthSession = CodexDeviceAuthSession(status: .failed(NetworkPrivacyPolicy.blockedMessage))
@@ -358,14 +395,16 @@ public final class CodexCLIAuthManager: ObservableObject {
             let data = handle.availableData
             guard !data.isEmpty, let chunk = String(data: data, encoding: .utf8) else { return }
             Task { @MainActor [weak self] in
-                self?.consumeDeviceAuthOutput(chunk)
+                // A superseded run's late output must not mutate the session.
+                guard let self, self.deviceAuthGeneration == deviceAuthRun else { return }
+                self.consumeDeviceAuthOutput(chunk)
             }
         }
 
         process.terminationHandler = { [weak self, weak outputPipe] finishedProcess in
             outputPipe?.fileHandleForReading.readabilityHandler = nil
             Task { @MainActor [weak self] in
-                self?.completeDeviceAuthProcess(finishedProcess.terminationStatus)
+                await self?.completeDeviceAuthProcess(finishedProcess, deviceAuthRun: deviceAuthRun)
             }
         }
 
@@ -381,6 +420,9 @@ public final class CodexCLIAuthManager: ObservableObject {
     }
 
     func cancelDeviceAuth() {
+        // Supersede the run before terminating so its callback cannot touch the
+        // reset session.
+        deviceAuthGeneration += 1
         deviceAuthProcess?.terminate()
         deviceAuthProcess = nil
         deviceAuthOutput = ""
@@ -405,16 +447,26 @@ public final class CodexCLIAuthManager: ObservableObject {
         deviceAuthSession = session
     }
 
-    private func completeDeviceAuthProcess(_ terminationStatus: Int32) {
+    private func completeDeviceAuthProcess(_ process: Process, deviceAuthRun: Int) async {
+        // Ignore a callback from a superseded run (cancelled or restarted); it
+        // must not publish a verdict for the current session.
+        guard deviceAuthRun == deviceAuthGeneration, process === deviceAuthProcess else { return }
         deviceAuthProcess = nil
-        checkStatus()
+
+        // The CLI writes auth.json just before exiting, so any probe that was
+        // already running is stale. Force a fresh one and only report failure
+        // from its verdict — reading `isAuthenticated` here raced the probe and
+        // mislabeled successful logins.
+        await refreshStatusAfterAuthChange()
+
+        guard deviceAuthRun == deviceAuthGeneration else { return }
 
         if isAuthenticated {
             markDeviceAuthAuthorizedIfNeeded()
             return
         }
 
-        guard terminationStatus != 15 else { return }
+        guard process.terminationStatus != 15 else { return }
 
         let message = "Codex authorization did not complete. Try again or run 'codex login --device-auth' manually."
         deviceAuthSession = CodexDeviceAuthSession(

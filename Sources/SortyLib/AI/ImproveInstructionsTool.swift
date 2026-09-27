@@ -45,6 +45,12 @@ public struct ImproveInstructionsTool: Sendable {
                    !replacement.isEmpty {
                     return .replacement(replacement)
                 }
+                // An unusable replacement must not be replaced by the raw JSON.
+                if let message = payload.message?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !message.isEmpty {
+                    return .needsUserInput(message)
+                }
+                return .needsUserInput(defaultRequestMessage)
             case requestUserInputAction:
                 if let message = payload.message?.trimmingCharacters(in: .whitespacesAndNewlines),
                    !message.isEmpty {
@@ -52,8 +58,22 @@ public struct ImproveInstructionsTool: Sendable {
                 }
                 return .needsUserInput(defaultRequestMessage)
             default:
-                break
+                if let message = payload.message?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !message.isEmpty {
+                    return .needsUserInput(message)
+                }
+                return .needsUserInput(defaultRequestMessage)
             }
+        }
+
+        // A payload-shaped response that failed to decode follows the same rule:
+        // never echo raw JSON back as the user's instructions.
+        let withoutFence = trimmed
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if withoutFence.hasPrefix("{") {
+            return .needsUserInput(defaultRequestMessage)
         }
 
         // Older or less capable providers may ignore the JSON contract. Preserve
@@ -366,7 +386,10 @@ public struct NaturalLanguageExclusionResolver: Sendable {
                 return rule(
                     type: .pathContains,
                     pattern: (trimmedPattern as NSString).expandingTildeInPath,
-                    conditionGroupID: conditionGroupID
+                    conditionGroupID: conditionGroupID,
+                    // An explicit folder path protects the folder and its tree,
+                    // matching ExclusionRulesView's folder intent.
+                    pathMatchMode: .folderTree
                 )
             case "file_category", "file_type", "category":
                 guard let category = parsedCategory else { return nil }
@@ -423,7 +446,15 @@ public struct NaturalLanguageExclusionResolver: Sendable {
                 return rule(type: .systemFiles, conditionGroupID: conditionGroupID)
             case "path_contains":
                 guard !trimmedPattern.isEmpty else { return nil }
-                return rule(type: .pathContains, pattern: trimmedPattern, conditionGroupID: conditionGroupID)
+                // "Text anywhere in a path" stays a substring match even when
+                // the text starts with "/"; without this an AI-generated
+                // leading-slash pattern silently meant "exact folder".
+                return rule(
+                    type: .pathContains,
+                    pattern: trimmedPattern,
+                    conditionGroupID: conditionGroupID,
+                    pathMatchMode: .substring
+                )
             case "regex":
                 guard !trimmedPattern.isEmpty,
                       (try? NSRegularExpression(pattern: trimmedPattern)) != nil else { return nil }
@@ -436,7 +467,8 @@ public struct NaturalLanguageExclusionResolver: Sendable {
         private func rule(
             type: ExclusionRuleType,
             pattern: String = "",
-            conditionGroupID: UUID?
+            conditionGroupID: UUID?,
+            pathMatchMode: PathMatchMode? = nil
         ) -> ExclusionRule {
             ExclusionRule(
                 type: type,
@@ -444,6 +476,7 @@ public struct NaturalLanguageExclusionResolver: Sendable {
                 description: description?.trimmingCharacters(in: .whitespacesAndNewlines),
                 isAIGenerated: true,
                 conditionGroupID: conditionGroupID,
+                pathMatchMode: pathMatchMode,
                 caseSensitive: caseSensitive ?? false,
                 negated: negated ?? false
             )

@@ -320,7 +320,7 @@ struct PromptBuilder {
         if !analyzedImageFilenames.isEmpty {
             let orderedNames = analyzedImageFilenames
                 .enumerated()
-                .map { "\($0.offset + 1). \($0.element)" }
+                .map { "\($0.offset + 1). \(promptSafeFilename($0.element))" }
                 .joined(separator: "\n")
 
             prompt += """
@@ -477,15 +477,24 @@ struct PromptBuilder {
     /// preserving the JSON-contract tail, so callers never send unbounded input.
     static func enforceMainPromptBudget(_ prompt: String, budget: Int = mainPromptTokenBudget) -> String {
         guard estimateTokens(prompt) > budget else { return prompt }
-        let contractMarker = "\nProvide the organization structure in JSON format."
-        let renameMarker = "\nReturn the suggestions in JSON format."
-        let tail: String
-        if let range = prompt.range(of: contractMarker, options: .backwards) {
-            tail = String(prompt[range.lowerBound...])
-        } else if let range = prompt.range(of: renameMarker, options: .backwards) {
-            tail = String(prompt[range.lowerBound...])
-        } else {
-            tail = ""
+        // The contract sentence varies by mode and reasoning flag. The old
+        // matcher only looked for the organize/rename wording, so reasoning
+        // runs lost their "Include the organization structure in JSON format"
+        // tail entirely.
+        let contractMarkers = [
+            "\nProvide detailed reasoning for each folder. Include the organization structure in JSON format.",
+            "\nProvide the organization structure in JSON format.",
+            "\nReturn the suggestions in JSON format."
+        ]
+        var tail = ""
+        for marker in contractMarkers {
+            if let range = prompt.range(of: marker, options: .backwards) {
+                tail = String(prompt[range.lowerBound...])
+                break
+            }
+        }
+        if tail.isEmpty {
+            tail = "\nProvide the organization structure in JSON format."
         }
         let allowedChars = max(1_000, budget * 4 - tail.count - 200)
         let prefixEnd = prompt.index(prompt.startIndex, offsetBy: min(allowedChars, prompt.count))
@@ -494,6 +503,18 @@ struct PromptBuilder {
             truncated = String(truncated[..<boundary.lowerBound])
         }
         return truncated + "\n\n[... truncated to \(budget)-token budget ...]\n" + tail
+    }
+
+    /// Filenames are untrusted input. Newlines and angle brackets are stripped
+    /// before a name is interpolated into a delimited prompt section so a
+    /// crafted name cannot close or forge prompt sections.
+    static func promptSafeFilename(_ name: String) -> String {
+        name
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "<", with: "")
+            .replacingOccurrences(of: ">", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Batch-scoped manifest so multi-batch folders don't repeat the full
@@ -921,7 +942,7 @@ struct PromptBuilder {
 
         let examples = files.prefix(maxExamples).enumerated().map { index, file in
             let expanded = expandTemplateVariables(instructions, for: file, counter: index + 1)
-            return "\(file.displayName) -> \(expanded)"
+            return "\(promptSafeFilename(file.displayName)) -> \(expanded)"
         }
 
         guard !examples.isEmpty else { return instructions }
@@ -1045,7 +1066,7 @@ struct PromptBuilder {
         let truncated = existingFolders.count > effectiveMax
 
         var context = "## EXISTING DESCENDANT FOLDERS (exact paths; prefer reusing these when semantically appropriate):\n"
-        context += foldersToShow.map { "- \($0)" }.joined(separator: "\n")
+        context += foldersToShow.map { "- \(promptSafeFilename($0))" }.joined(separator: "\n")
         if truncated {
             context += "\n- ... and \(existingFolders.count - effectiveMax) more"
         }
@@ -1102,26 +1123,28 @@ struct PromptBuilder {
         let extensionSummary = extensionCounts
         .sorted { $0.value > $1.value }
         .prefix(12)
-        .map { "\($0.key):\($0.value)" }
+        .map { "\(promptSafeFilename($0.key)):\($0.value)" }
         .joined(separator: ", ")
 
         let parentSummary = parentCounts
         .sorted { $0.value > $1.value }
         .prefix(10)
-        .map { "\($0.key): \($0.value)" }
+        .map { "\(promptSafeFilename($0.key)): \($0.value)" }
         .joined(separator: ", ")
 
+        // Paths and tags are untrusted input: sanitize every emitted path/line
+        // so a newline-bearing name cannot forge manifest or prompt lines.
         let manifestLines = manifestEntries.map { entry in
             let file = entry.file
-            var line = "- \(entry.relativePath) | \(file.extension.isEmpty ? "no-ext" : file.extension.lowercased()) | \(file.formattedSize)"
+            var line = "- \(promptSafeFilename(entry.relativePath)) | \(promptSafeFilename(file.extension.isEmpty ? "no-ext" : file.extension.lowercased())) | \(file.formattedSize)"
             if let modified = file.modificationDate {
                 line += " | modified \(Self.fullDateString(from: modified))"
             }
             if let tags = file.finderTags, !tags.isEmpty {
-                line += " | finder_tags \(tags.joined(separator: ", "))"
+                line += " | finder_tags \(tags.map(promptSafeFilename).joined(separator: ", "))"
             }
             if let color = file.finderTagColorName {
-                line += " | finder_color \(color)"
+                line += " | finder_color \(promptSafeFilename(color))"
             }
             return line
         }
@@ -1134,8 +1157,8 @@ struct PromptBuilder {
 
         var context = """
         ## SOURCE FOLDER CONTEXT
-        Source directory: \(baseDirectoryURL.lastPathComponent)
-        Ancestor context: \(ancestorNames.isEmpty ? "n/a" : ancestorNames.joined(separator: " / "))
+        Source directory: \(promptSafeFilename(baseDirectoryURL.lastPathComponent))
+        Ancestor context: \(ancestorNames.isEmpty ? "n/a" : ancestorNames.map(promptSafeFilename).joined(separator: " / "))
         Files in current organization scope: \(files.count)
         Extension mix: \(extensionSummary.isEmpty ? "n/a" : extensionSummary)
         Folder distribution: \(parentSummary.isEmpty ? "(root only)" : parentSummary)
@@ -1229,7 +1252,7 @@ struct PromptBuilder {
             guard lines.count < maxEntries else { return }
 
             let values = try? url.resourceValues(forKeys: keys)
-            var parts = ["- \(relativePath)"]
+            var parts = ["- \(promptSafeFilename(relativePath))"]
             if let created = values?.creationDate {
                 parts.append("created \(Self.internetDateString(from: created))")
             }
@@ -1241,10 +1264,10 @@ struct PromptBuilder {
             }
             if includeFinderMetadata {
                 if let tags = values?.tagNames, !tags.isEmpty {
-                    parts.append("finder_tags \(tags.joined(separator: ", "))")
+                    parts.append("finder_tags \(tags.map(promptSafeFilename).joined(separator: ", "))")
                 }
                 if let color = values?.labelNumber.flatMap(FinderTagColor.init(rawValue:))?.name {
-                    parts.append("finder_color \(color)")
+                    parts.append("finder_color \(promptSafeFilename(color))")
                 }
                 if let comment = url.finderComment, !comment.isEmpty {
                     parts.append("comment \(truncateForPrompt(comment, maxLength: 200))")

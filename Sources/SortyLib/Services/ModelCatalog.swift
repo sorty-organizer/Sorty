@@ -129,6 +129,70 @@ public final class ModelCatalog: ObservableObject {
         return filteredModels(cached, for: provider)
     }
 
+    /// Model IDs safe to auto-select for organization. Only models positively
+    /// identified as non-chat (embeddings, audio, moderation, rerank, media
+    /// generation) are dropped; unknown and custom IDs are kept.
+    public func chatCapableModelIDs(for provider: AIProvider) -> [String] {
+        cachedModels(for: provider).filter(Self.isChatCapable).map(\.id)
+    }
+
+    nonisolated static func isChatCapable(_ model: ModelInfo) -> Bool {
+        let id = model.id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !id.isEmpty else { return false }
+        let caps = Set((model.capabilities ?? []).compactMap { Self.normalizeCapabilityTag($0) })
+
+        // Explicit chat signals win even when the ID looks unusual.
+        if caps.contains("chat")
+            || caps.contains("completion")
+            || caps.contains("generatecontent")
+            || caps.contains("generatemessage") {
+            return true
+        }
+
+        // Non-chat families identified by ID (custom/unknown IDs fall through).
+        let nonChatIDMarkers = [
+            "embed", "whisper", "tts", "text-to-speech", "speech", "audio",
+            "dall-e", "dalle", "gpt-image", "moderation", "rerank", "transcribe",
+            "ocr", "sora", "imagen", "veo"
+        ]
+        if nonChatIDMarkers.contains(where: { marker in id.contains(marker) }) {
+            return false
+        }
+
+        let nonChatCapabilities: Set<String> = [
+            "embedding", "audio", "audio_input", "audio_output", "image_generation",
+            "moderation", "rerank", "transcription", "text_to_speech"
+        ]
+        if !caps.isDisjoint(with: nonChatCapabilities) {
+            return false
+        }
+
+        // Explicit modality metadata: keep text-in/text-out and multimodal
+        // chat models, drop output-only media models.
+        let modalityCaps = caps.filter {
+            $0.hasPrefix("input:") || $0.hasPrefix("output:") || $0.contains("->")
+        }
+        if !modalityCaps.isEmpty {
+            let acceptsText = modalityCaps.contains {
+                $0.hasPrefix("input:text") || $0.hasPrefix("text") || $0.contains("->text")
+            }
+            let declaresOutput = modalityCaps.contains {
+                $0.hasPrefix("output:") || $0.contains("->")
+            }
+            let emitsText = modalityCaps.contains {
+                $0.hasPrefix("output:text") || $0.hasSuffix("->text")
+            }
+            // Codex subscription entries declare input modalities only; a
+            // missing output declaration still means text output. Reject only
+            // when text input or a declared non-text output contradicts chat.
+            if !acceptsText || (declaresOutput && !emitsText) {
+                return false
+            }
+        }
+
+        return true
+    }
+
     public func reasoningConfiguration(
         for modelID: String,
         provider: AIProvider
@@ -143,6 +207,15 @@ public final class ModelCatalog: ObservableObject {
             return nil
         }
         return (efforts, model.defaultReasoningEffort)
+    }
+
+    /// Drops subscription-derived models. Codex-only IDs must not survive a
+    /// sign-out or an auth switch to an API key, and they are never written to
+    /// the shared per-provider cache (see `refresh`).
+    private func clearCodexSubscriptionModels() {
+        guard !codexSubscriptionModels.isEmpty || codexModelsTimestamp != nil else { return }
+        codexSubscriptionModels = []
+        codexModelsTimestamp = nil
     }
 
     public func refreshCodexSubscriptionModels(force: Bool = false) async {
@@ -196,9 +269,31 @@ public final class ModelCatalog: ObservableObject {
         authMethod: ProviderAuthMethod? = nil
     ) async {
         ensureCacheLoaded()
-        let resolvedAuth = provider == .openAI
-            ? (authMethod ?? ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: storedAIConfig() ?? .default))
-            : nil
+        // Callers may pass a raw auth method (e.g. the picker's Codex toggle)
+        // that the subscription feature flag overrides; normalize through the
+        // same resolver the clients use so catalog fetches match real requests.
+        let resolvedAuth: ProviderAuthMethod?
+        if provider == .openAI {
+            var authConfig = storedAIConfig() ?? .default
+            authConfig.setAuthMethod(authMethod ?? authConfig.authMethod(for: .openAI), for: .openAI)
+            resolvedAuth = ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: authConfig)
+        } else {
+            resolvedAuth = nil
+        }
+        if provider == .openAI, resolvedAuth != .accountSignIn {
+            // Drop subscription-derived models even if the fetch below fails:
+            // a list fetched under account sign-in is never API-key compatible.
+            let subscriptionIDs = Set(codexSubscriptionModels.map { $0.id.lowercased() })
+            clearCodexSubscriptionModels()
+            if cachedOpenAIAuthMethod == .accountSignIn {
+                cachedOpenAIAuthMethod = nil
+                modelsByProvider[.openAI] = []
+            } else if !subscriptionIDs.isEmpty, let existing = modelsByProvider[.openAI] {
+                modelsByProvider[.openAI] = existing.filter {
+                    !subscriptionIDs.contains($0.id.lowercased())
+                }
+            }
+        }
         let authMatchesCache = provider != .openAI || cachedOpenAIAuthMethod == resolvedAuth
         if !force, authMatchesCache, let timestamp = cacheTimestamps[provider] {
             let ttl = provider == .ollama ? Self.ollamaTTL : Self.cloudTTL
@@ -245,8 +340,10 @@ public final class ModelCatalog: ObservableObject {
                 }
             }
             
-            // Only update cache and timestamp if NOT using fallback
-            if !result.isFallback {
+            // Only update cache and timestamp if NOT using fallback. Codex
+            // subscription lists are memory-only: writing them to the shared
+            // OpenAI cache would leak them into API-key mode after sign-out.
+            if !result.isFallback, !isCodexFetch {
                 cacheTimestamps[provider] = Date()
                 saveCacheToDisk(provider: provider, models: sortedModels)
             }
@@ -441,6 +538,9 @@ public final class ModelCatalog: ObservableObject {
                     throw error
                 }
             }
+            // Signed out (or the credential disappeared): drop subscription
+            // models so they cannot be surfaced as available OpenAI models.
+            clearCodexSubscriptionModels()
             return ([], true)
         }
 
@@ -591,8 +691,34 @@ public final class ModelCatalog: ObservableObject {
         }
     }
     
+    /// Base URL for the configured Ollama server. The OpenAI-compatible `/v1`
+    /// suffix and trailing slashes are stripped so `/api/tags` and `/api/show`
+    /// reach the server the user configured instead of a hardcoded localhost.
+    private func ollamaBaseURL() -> String {
+        let configured = storedAIConfig().flatMap { config -> String? in
+            guard config.provider == .ollama else { return nil }
+            let trimmed = config.apiURL?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        var base = configured ?? AIProvider.ollama.defaultAPIURL ?? "http://localhost:11434"
+        if !base.contains("://") {
+            base = "http://" + base
+        }
+        while base.hasSuffix("/") {
+            base.removeLast()
+        }
+        if base.lowercased().hasSuffix("/v1") {
+            base.removeLast(3)
+        }
+        while base.hasSuffix("/") {
+            base.removeLast()
+        }
+        return base
+    }
+
     private func fetchOllamaModels() async throws -> [ModelInfo] {
-        guard let url = URL(string: "http://localhost:11434/api/tags") else {
+        let baseURL = ollamaBaseURL()
+        guard let url = URL(string: baseURL + "/api/tags") else {
             throw ModelCatalogError.invalidURL
         }
         try ensureNetworkAllowed(url)
@@ -645,7 +771,7 @@ public final class ModelCatalog: ObservableObject {
                 for _ in 0..<min(5, missingNames.count) {
                     guard let name = iterator.next() else { break }
                     group.addTask {
-                        await (name, Self.ollamaShowCapabilities(session: session, modelName: name))
+                        await (name, Self.ollamaShowCapabilities(session: session, baseURL: baseURL, modelName: name))
                     }
                 }
                 var collected: [(String, [String]?)] = []
@@ -653,7 +779,7 @@ public final class ModelCatalog: ObservableObject {
                     collected.append(result)
                     if let next = iterator.next() {
                         group.addTask {
-                            await (next, Self.ollamaShowCapabilities(session: session, modelName: next))
+                            await (next, Self.ollamaShowCapabilities(session: session, baseURL: baseURL, modelName: next))
                         }
                     }
                 }
@@ -683,9 +809,10 @@ public final class ModelCatalog: ObservableObject {
     /// capturing the MainActor-isolated catalog. 1.5s timeout each.
     nonisolated private static func ollamaShowCapabilities(
         session: URLSession,
+        baseURL: String,
         modelName: String
     ) async -> [String]? {
-        guard let url = URL(string: "http://localhost:11434/api/show"),
+        guard let url = URL(string: baseURL + "/api/show"),
               NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
             return nil
         }
@@ -1287,6 +1414,11 @@ public final class ModelCatalog: ObservableObject {
                     // that finished while the snapshot was being decoded).
                     if self.modelsByProvider[provider] == nil {
                         self.modelsByProvider[provider] = models
+                        // Restore the OpenAI auth tag together with the models
+                        // it belongs to, or every launch re-fetches.
+                        if provider == .openAI {
+                            self.cachedOpenAIAuthMethod = snapshot.openAIAuthMethod
+                        }
                     }
                 }
                 for (provider, timestamp) in snapshot.timestamps {
@@ -1308,13 +1440,19 @@ public final class ModelCatalog: ObservableObject {
     /// Nonisolated snapshot read: pure file I/O + decoding, no publishes.
     nonisolated private static func readCacheSnapshot(
         cacheDirectory: URL
-    ) -> (models: [AIProvider: [ModelInfo]], timestamps: [AIProvider: Date], failures: [Error]) {
+    ) -> (
+        models: [AIProvider: [ModelInfo]],
+        timestamps: [AIProvider: Date],
+        failures: [Error],
+        openAIAuthMethod: ProviderAuthMethod?
+    ) {
         var models: [AIProvider: [ModelInfo]] = [:]
         var timestamps: [AIProvider: Date] = [:]
         var failures: [Error] = []
+        var openAIAuthMethod: ProviderAuthMethod?
         let fm = FileManager.default
         guard fm.fileExists(atPath: cacheDirectory.path) else {
-            return (models, timestamps, failures)
+            return (models, timestamps, failures, openAIAuthMethod)
         }
 
         for provider in AIProvider.allCases {
@@ -1324,6 +1462,13 @@ public final class ModelCatalog: ObservableObject {
             do {
                 let data = try Data(contentsOf: cacheFile)
                 let wrapper = try JSONDecoder().decode(CacheWrapper.self, from: data)
+                // Codex subscription lists are memory-only now; an untagged
+                // (legacy) or subscription-tagged OpenAI cache may contain
+                // Codex-only models, so only API-key lists are restored.
+                if provider == .openAI {
+                    guard wrapper.openAIAuthMethod == .apiKey else { continue }
+                    openAIAuthMethod = wrapper.openAIAuthMethod
+                }
                 models[provider] = wrapper.models
                 timestamps[provider] = wrapper.timestamp
             } catch {
@@ -1331,13 +1476,19 @@ public final class ModelCatalog: ObservableObject {
                 continue
             }
         }
-        return (models, timestamps, failures)
+        return (models, timestamps, failures, openAIAuthMethod)
     }
     
     private func saveCacheToDisk(provider: AIProvider, models: [ModelInfo]) {
         let directory = Self.sharedCacheDirectory
         let cacheFile = directory.appendingPathComponent("\(provider.rawValue).json")
-        let wrapper = CacheWrapper(models: models, timestamp: Date())
+        // Tag OpenAI caches with the auth mode they were fetched under so
+        // API-key sessions never restore a subscription-derived list.
+        let wrapper = CacheWrapper(
+            models: models,
+            timestamp: Date(),
+            openAIAuthMethod: provider == .openAI ? cachedOpenAIAuthMethod : nil
+        )
 
         // Encode + write off the MainActor; only @Published-adjacent state
         // (cacheTimestamps, set by the caller) stays on main.
@@ -1524,7 +1675,7 @@ public final class ModelCatalog: ObservableObject {
         "gpt-5.2", "gpt-5-mini", "gpt-5-nano", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-vision-preview",
         "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
         // OpenAI - Reasoning models with vision
-        "o1", "o1-mini", "o1-preview", "o3", "o3-mini", "o4-mini",
+        "o1", "o3", "o4-mini",
         // Anthropic - Legacy naming
         "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-latest", "claude-3-5-haiku-20241022",
         "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307",
@@ -1570,6 +1721,12 @@ public final class ModelCatalog: ObservableObject {
         "gemma-2-flash",
         "llama-3.3-70b-versatile",
         "llama-4-70b-versatile"
+    ]
+
+    /// OpenAI reasoning models without image input: they match the broader
+    /// `o1`/`o3` vision prefixes but must stay text-only.
+    private static let knownNonVisionPrefixes: [String] = [
+        "o1-mini", "o1-preview", "o3-mini"
     ]
 
     /// Local/open-source model families commonly exposed through OpenAI-compatible endpoints.
@@ -1744,7 +1901,10 @@ public final class ModelCatalog: ObservableObject {
         let candidates = normalizedVisionCandidates(for: modelId)
         guard !candidates.isEmpty else { return false }
 
-        if candidates.contains(where: { Self.knownNonVisionModels.contains($0) }) {
+        if candidates.contains(where: { candidate in
+            Self.knownNonVisionModels.contains(candidate)
+                || Self.knownNonVisionPrefixes.contains(where: candidate.hasPrefix)
+        }) {
             return false
         }
 
@@ -1812,6 +1972,16 @@ public final class ModelCatalog: ObservableObject {
 private struct CacheWrapper: Codable {
     let models: [ModelInfo]
     let timestamp: Date
+    /// OpenAI auth mode the list was fetched with. Optional so caches written
+    /// by earlier builds still decode; those untagged OpenAI caches are
+    /// discarded on load because they may contain Codex-only models.
+    let openAIAuthMethod: ProviderAuthMethod?
+
+    init(models: [ModelInfo], timestamp: Date, openAIAuthMethod: ProviderAuthMethod? = nil) {
+        self.models = models
+        self.timestamp = timestamp
+        self.openAIAuthMethod = openAIAuthMethod
+    }
 }
 
 public enum ModelCatalogError: Error, LocalizedError {

@@ -72,47 +72,92 @@ public actor AIInsightExtractor {
     ) -> AIInsight? {
         let pattern = #""name"\s*:\s*"([^"\n]{2,80})"[\s\S]{0,500}?"files"\s*:\s*\[([\s\S]{0,500}?)\]"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
-        let matches = regex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
-        guard !matches.isEmpty else { return nil }
 
-        for match in matches.reversed() {
-            guard let folderRange = Range(match.range(at: 1), in: text),
-                  let filesRange = Range(match.range(at: 2), in: text) else {
-                continue
-            }
+        // Match inside a single balanced object. The old text-wide regex allowed
+        // a folder "name" from one object to pair with the "files" array of a
+        // later sibling object up to 500 characters away.
+        for object in Self.balancedObjectSections(in: text).reversed() {
+            let matches = regex.matches(in: object, options: [], range: NSRange(object.startIndex..., in: object))
 
-            let folderName = normalizeName(String(text[folderRange]))
-            guard isLikelyFolderName(folderName) else { continue }
+            for match in matches.reversed() {
+                guard let folderRange = Range(match.range(at: 1), in: object),
+                      let filesRange = Range(match.range(at: 2), in: object) else {
+                    continue
+                }
 
-            let fileSection = String(text[filesRange])
-            if let fileName = extractLatestFileName(fromJSONFileSection: fileSection) {
-                let resolvedFileName = URL(fileURLWithPath: fileName).lastPathComponent
-                let filePath = findScannedFilePath(
-                    for: resolvedFileName,
-                    scannedFilePathLookup: scannedFilePathLookup,
-                    currentDirectoryPath: currentDirectoryPath
-                )
+                let folderName = normalizeName(String(object[folderRange]))
+                guard isLikelyFolderName(folderName) else { continue }
+
+                let fileSection = String(object[filesRange])
+                if let fileName = extractLatestFileName(fromJSONFileSection: fileSection) {
+                    let resolvedFileName = URL(fileURLWithPath: fileName).lastPathComponent
+                    let filePath = findScannedFilePath(
+                        for: resolvedFileName,
+                        scannedFilePathLookup: scannedFilePathLookup,
+                        currentDirectoryPath: currentDirectoryPath
+                    )
+                    if let insight = makeInsight(
+                        text: "Assigning \(resolvedFileName) to \(folderName)",
+                        category: .file,
+                        filePath: filePath,
+                        stableSeed: "\(folderName)|\(filePath ?? resolvedFileName)"
+                    ) {
+                        return insight
+                    }
+                    continue
+                }
+
                 if let insight = makeInsight(
-                    text: "Assigning \(resolvedFileName) to \(folderName)",
-                    category: .file,
-                    filePath: filePath,
-                    stableSeed: "\(folderName)|\(filePath ?? resolvedFileName)"
+                    text: "Preparing folder \(folderName)",
+                    category: .folder,
+                    stableSeed: folderName
                 ) {
                     return insight
                 }
-                continue
-            }
-
-            if let insight = makeInsight(
-                text: "Preparing folder \(folderName)",
-                category: .folder,
-                stableSeed: folderName
-            ) {
-                return insight
             }
         }
 
         return nil
+    }
+
+    /// Every balanced `{...}` span in document order, so JSON fields can be
+    /// matched within one object instead of across sibling objects.
+    private static func balancedObjectSections(in text: String) -> [String] {
+        let characters = Array(text)
+        var sections: [String] = []
+
+        for start in characters.indices where characters[start] == "{" {
+            var depth = 0
+            var isInsideString = false
+            var isEscaping = false
+            var index = start
+
+            while index < characters.count {
+                let character = characters[index]
+                if isInsideString {
+                    if isEscaping {
+                        isEscaping = false
+                    } else if character == "\\" {
+                        isEscaping = true
+                    } else if character == "\"" {
+                        isInsideString = false
+                    }
+                } else if character == "\"" {
+                    isInsideString = true
+                } else if character == "{" {
+                    depth += 1
+                } else if character == "}" {
+                    depth -= 1
+                    if depth == 0 {
+                        sections.append(String(characters[start...index]))
+                        break
+                    }
+                }
+                index += 1
+            }
+        }
+
+        return sections
     }
 
     private func extractJSONFolderInsight(from text: String) -> AIInsight? {
@@ -426,7 +471,7 @@ public actor AIInsightExtractor {
 
         for (fileNameKey, candidatePaths) in scannedFilePathLookup {
             guard !fileNameKey.isEmpty, !candidatePaths.isEmpty else { continue }
-            guard let matchRange = lowercasedText.range(of: fileNameKey, options: [.backwards]) else { continue }
+            guard let matchRange = Self.lastTokenBoundedRange(of: fileNameKey, in: lowercasedText) else { continue }
 
             let location = lowercasedText.distance(from: lowercasedText.startIndex, to: matchRange.lowerBound)
             let resolvedPath: String
@@ -454,6 +499,58 @@ public actor AIInsightExtractor {
             }
             return lhs.location < rhs.location
         }
+    }
+
+    /// Last occurrence of `needle` that starts and ends on a token boundary.
+    /// A plain substring search made "report.pdf" match inside "myreport.pdf".
+    private static func lastTokenBoundedRange(of needle: String, in text: String) -> Range<String.Index>? {
+        var lastMatch: Range<String.Index>?
+        var searchStart = text.startIndex
+
+        while searchStart < text.endIndex,
+              let found = text.range(of: needle, range: searchStart..<text.endIndex) {
+            if isTokenBounded(found, in: text) {
+                lastMatch = found
+            }
+            searchStart = found.upperBound
+        }
+
+        return lastMatch
+    }
+
+    private static func isTokenBounded(_ range: Range<String.Index>, in text: String) -> Bool {
+        !hasTokenContinuingCharacter(before: range.lowerBound, in: text)
+            && !hasTokenContinuingCharacter(after: range.upperBound, in: text)
+    }
+
+    private static func hasTokenContinuingCharacter(before index: String.Index, in text: String) -> Bool {
+        guard index > text.startIndex else { return false }
+        let precedingIndex = text.index(before: index)
+        let character = text[precedingIndex]
+        if character == "." {
+            // "x.report" continues a dotted token; "moved. report" does not.
+            guard precedingIndex > text.startIndex else { return true }
+            return isFileNameTokenCharacter(text[text.index(before: precedingIndex)])
+        }
+        return isFileNameTokenCharacter(character)
+    }
+
+    private static func hasTokenContinuingCharacter(after index: String.Index, in text: String) -> Bool {
+        guard index < text.endIndex else { return false }
+        let character = text[index]
+        if character == "." {
+            // "report.pdf.bak" continues the token; a sentence-ending
+            // "report.pdf." does not.
+            let next = text.index(after: index)
+            guard next < text.endIndex else { return false }
+            return isFileNameTokenCharacter(text[next])
+        }
+        return isFileNameTokenCharacter(character)
+    }
+
+    private static func isFileNameTokenCharacter(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber
+            || character == "_" || character == "-"
     }
 
     private func extractPotentialFolderMentions(from text: String) -> [CandidateMatch] {
@@ -521,7 +618,18 @@ public actor AIInsightExtractor {
         let words = stem.split(separator: " ").map { String($0).lowercased() }
         guard !words.isEmpty else { return false }
         guard words.count <= 4 else { return false }
-        guard ext.count <= 12 else { return false }
+        guard !stem.isEmpty, ext.count <= 12 else { return false }
+        // Prose fragments such as "e.g", "i.e", and "v2.0" parse as
+        // name+extension but are not file names. Numeric extensions are
+        // legitimate ("scan.001", "page.123"), so reject only version-shaped
+        // stems and one-letter/one-letter pairs instead of every short stem or
+        // numeric extension; "a.txt" and "x.pdf" must survive.
+        if ext.rangeOfCharacter(from: .letters) == nil {
+            guard stem.rangeOfCharacter(from: .letters) != nil,
+                  stem.rangeOfCharacter(from: .decimalDigits) == nil else { return false }
+        } else if stem.count == 1, ext.count == 1 {
+            return false
+        }
 
         let blockedWords: Set<String> = [
             "we", "they", "all", "many", "have", "has", "are", "is", "it",

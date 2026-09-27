@@ -51,7 +51,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             "messages": [
                 ["role": "user", "content": userPrompt]
             ],
-            "temperature": AIConfig.organizationTemperature
+            "temperature": temperature ?? AIConfig.organizationTemperature
         ]
 
         if config.enableStreaming {
@@ -104,7 +104,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             "messages": [
                 ["role": "user", "content": contentArray]
             ],
-            "temperature": AIConfig.organizationTemperature
+            "temperature": temperature ?? AIConfig.organizationTemperature
         ]
 
         do {
@@ -149,23 +149,40 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             }
 
             _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
-            
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            if let stopReason = json?["stop_reason"] as? String, stopReason == "max_tokens" {
-                throw Self.outputLimitError()
-            }
-            guard let text = AIRequestSupport.extractText(from: json?["content"]),
-                  !text.isEmpty else {
-                throw AIClientError.invalidResponseFormat
-            }
-            
-            return try ResponseParser.parseResponse(text, originalFiles: files, mode: config.mode)
+
+            return try Self.parsePlan(from: data, files: files, mode: config.mode)
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as AIClientError {
             throw error
         } catch {
             throw AIClientError.networkError(error)
+        }
+    }
+
+    /// Decodes a non-streaming Anthropic response. Malformed JSON and parser
+    /// failures surface as `.jsonDecodingError` (as in OpenAIClient) so callers
+    /// can repair the batch instead of treating them as transport failures.
+    private static func parsePlan(from data: Data, files: [FileItem], mode: OrganizationMode) throws -> OrganizationPlan {
+        let json: [String: Any]?
+        do {
+            json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        } catch {
+            throw AIClientError.jsonDecodingError(context: error.localizedDescription)
+        }
+
+        if let stopReason = json?["stop_reason"] as? String, stopReason == "max_tokens" {
+            throw outputLimitError()
+        }
+        guard let text = AIRequestSupport.extractText(from: json?["content"]),
+              !text.isEmpty else {
+            throw AIClientError.invalidResponseFormat
+        }
+
+        do {
+            return try ResponseParser.parseResponse(text, originalFiles: files, mode: mode)
+        } catch {
+            throw AIClientError.jsonDecodingError(context: error.localizedDescription)
         }
     }
     
@@ -208,11 +225,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             // Coalesce off-actor: one MainActor hop per 100ms/4KB, not per delta.
             var coalescer = StreamingChunkCoalescer()
 
-            try await AIRequestSupport.consumeSSELines(bytes) { line in
-                guard line.hasPrefix("data:") else { return true }
-                let jsonString = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-                if jsonString == "[DONE]" { return false }
-
+            try await AIRequestSupport.consumeSSEEvents(bytes) { jsonString in
                 if let data = jsonString.data(using: .utf8),
                 let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
 
@@ -230,7 +243,10 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
                     if type == "error" {
                         let errorObject = json["error"] as? [String: Any]
                         let message = errorObject?["message"] as? String ?? "Anthropic streaming request failed"
-                        throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: message)
+                        throw AIClientError.apiError(
+                            statusCode: Self.streamErrorStatusCode(for: errorObject?["type"] as? String),
+                            message: message
+                        )
                     }
 
                     if type == "content_block_delta",
@@ -266,19 +282,24 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
                 throw Self.outputLimitError()
             }
 
+            // Parse (with a partial fallback) before signaling completion so a
+            // failed parse can never report didComplete followed by didFail.
+            let plan: OrganizationPlan
+            do {
+                plan = try ResponseParser.parseResponse(accumulatedContent, originalFiles: files, mode: config.mode)
+            } catch {
+                if let partialPlan = ResponseParser.extractPartialResults(accumulatedContent, originalFiles: files, mode: config.mode) {
+                    plan = partialPlan
+                } else {
+                    throw AIClientError.jsonDecodingError(context: error.localizedDescription)
+                }
+            }
+
             let finalContent = accumulatedContent
             await MainActor.run { [weak self] in
                 self?.streamingDelegate?.didComplete(content: finalContent)
             }
-            
-            do {
-                return try ResponseParser.parseResponse(accumulatedContent, originalFiles: files, mode: config.mode)
-            } catch {
-                if let partialPlan = ResponseParser.extractPartialResults(accumulatedContent, originalFiles: files, mode: config.mode) {
-                    return partialPlan
-                }
-                throw AIClientError.jsonDecodingError(context: error.localizedDescription)
-            }
+            return plan
         } catch is CancellationError {
             await MainActor.run { [weak self] in
                 self?.streamingDelegate?.didFail(error: CancellationError())
@@ -305,6 +326,22 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         )
     }
 
+    /// Maps a stream `error.type` to the status used for retry/quota decisions.
+    /// Mid-stream errors arrive after a 200 response, so the transport status
+    /// says nothing about the failure.
+    static func streamErrorStatusCode(for errorType: String?) -> Int {
+        switch errorType {
+        case "rate_limit_error":
+            return 429
+        case "overloaded_error":
+            return 529
+        case "api_error":
+            return 502
+        default:
+            return 503
+        }
+    }
+
     public func checkHealth() async throws {
         let headers = try requiredHeaders()
 
@@ -313,7 +350,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             method: "GET",
             headers: headers
         )
-        request.timeoutInterval = min(config.requestTimeout, 60)
+        request.timeoutInterval = min(AIRequestSupport.clampedTimeout(config.requestTimeout), 60)
         // Health checks never wake constrained/expensive radios.
         request.allowsConstrainedNetworkAccess = false
         request.allowsExpensiveNetworkAccess = false

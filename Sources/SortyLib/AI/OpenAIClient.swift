@@ -47,7 +47,10 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         // fast instead of hanging on the URLRequest default. Resource time is
         // capped per batch (120-180s) and waitsForConnectivity is set on the
         // session configuration (URLRequest has no such flag).
-        request.timeoutInterval = max(30, min(config.requestTimeout, 300))
+        request.timeoutInterval = min(
+            AIRequestSupport.clampedTimeout(config.requestTimeout, minimum: 30),
+            300
+        )
     }
     
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
@@ -242,7 +245,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         
         let headers = authHeaders()
         var request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
-        request.timeoutInterval = min(config.requestTimeout, 60)
+        request.timeoutInterval = min(AIRequestSupport.clampedTimeout(config.requestTimeout), 60)
 
         let session = await AIRequestSupport.session(for: config)
         let (data, response) = try await AIRequestSupport.withTransientHTTPRetry(maxElapsed: .milliseconds(Int64(request.timeoutInterval * 1_000))) {
@@ -338,7 +341,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         let headers = authHeaders()
 
         var request = try AIRequestSupport.makeJSONRequest(url: url, method: "GET", headers: headers)
-        request.timeoutInterval = min(config.requestTimeout, 60)
+        request.timeoutInterval = min(AIRequestSupport.clampedTimeout(config.requestTimeout), 60)
 
         let session = await AIRequestSupport.session(for: config)
         let (data, response) = try await AIRequestSupport.withTransientHTTPRetry(maxElapsed: .milliseconds(Int64(request.timeoutInterval * 1_000))) {
@@ -506,16 +509,11 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
             }
 
-            // Process SSE stream (per-line cancellation; task cancel stops bytes)
+            // Process SSE stream (per-line cancellation; task cancel stops bytes).
+            // Payloads are buffered per event so spec-compliant multi-line data
+            // events decode once instead of being dropped.
             var openRouterStreamFallback = false
-            try await AIRequestSupport.consumeSSELines(bytes) { line in
-                guard let jsonString = AIRequestSupport.sseDataPayload(from: line) else { return true }
-
-                // Check for stream end
-                if jsonString == "[DONE]" {
-                    return false
-                }
-
+            try await AIRequestSupport.consumeSSEEvents(bytes) { jsonString in
                 // Parse the JSON chunk
                 guard let jsonData = jsonString.data(using: .utf8),
                       let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {

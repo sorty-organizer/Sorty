@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Darwin
 
 public struct CodexAvailableModel: Sendable, Equatable {
     public let id: String
@@ -389,11 +390,39 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             diagnosticsLock.unlock()
         }
 
+        let completion = ProcessTerminationCompletion()
         do {
             try Task.checkCancellation()
+            // Watchdog: the continuation below otherwise resumes only from the
+            // process termination handler, so a wedged `codex exec` (which
+            // ignores task cancellation) would pin the task forever. Bound the
+            // run by the config's organize/resource timeout, escalate SIGTERM
+            // to SIGKILL, and unblock the continuation regardless.
+            let executionTimeout = AIRequestSupport.organizeTimeout(for: config)
+            let watchdog = Task.detached(priority: .utility) {
+                try? await Task.sleep(for: .seconds(executionTimeout))
+                guard !Task.isCancelled, process.isRunning else { return }
+                // Record the timeout verdict first so the termination handler
+                // cannot report a bare SIGTERM exit status instead.
+                completion.resume(throwing: AIClientError.apiError(
+                    statusCode: 504,
+                    message: "Codex CLI exceeded its \(Int(executionTimeout))s execution limit and was stopped."
+                ))
+                process.terminate()
+                try? await Task.sleep(for: .seconds(Self.processTerminationGracePeriod))
+                if process.isRunning {
+                    kill(process.processIdentifier, SIGKILL)
+                }
+            }
+            defer { watchdog.cancel() }
+
             try await withTaskCancellationHandler {
                 try await withCheckedThrowingContinuation { continuation in
-                    let completion = ProcessTerminationCompletion(continuation)
+                    completion.attach(continuation)
+                    if Task.isCancelled {
+                        completion.resume(throwing: CancellationError())
+                        return
+                    }
                     process.terminationHandler = { _ in
                         completion.resume()
                     }
@@ -409,8 +438,10 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                     }
                 }
             } onCancel: {
-                if process.isRunning {
-                    process.terminate()
+                // A CLI that ignores SIGTERM must not keep the continuation
+                // suspended: escalate to SIGKILL and resume as well.
+                Self.terminateWithEscalation(process) {
+                    completion.resume(throwing: CancellationError())
                 }
             }
             try Task.checkCancellation()
@@ -420,6 +451,11 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             errorPipe.fileHandleForReading.readabilityHandler = nil
             try? diagnosticsHandle.close()
             throw CancellationError()
+        } catch let error as AIClientError {
+            outputPipe.fileHandleForReading.readabilityHandler = nil
+            errorPipe.fileHandleForReading.readabilityHandler = nil
+            try? diagnosticsHandle.close()
+            throw error
         } catch {
             process.terminate()
             outputPipe.fileHandleForReading.readabilityHandler = nil
@@ -709,9 +745,30 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     /// share one `codex login status` probe instead of spawning two.
     private static let healthVerdictLifetime: TimeInterval = 30
 
+    /// How long a stopped CLI process gets to exit on SIGTERM before SIGKILL.
+    private static let processTerminationGracePeriod: TimeInterval = 5
+
+    /// Stops a CLI process that may ignore SIGTERM: signal now, SIGKILL after a
+    /// short grace period, then run `onEscalated` so the caller can unblock.
+    private nonisolated static func terminateWithEscalation(
+        _ process: Process,
+        onEscalated: @escaping @Sendable () -> Void
+    ) {
+        if process.isRunning {
+            process.terminate()
+        }
+        Task.detached(priority: .utility) {
+            try? await Task.sleep(for: .seconds(processTerminationGracePeriod))
+            if process.isRunning {
+                kill(process.processIdentifier, SIGKILL)
+            }
+            onEscalated()
+        }
+    }
+
     /// Locates the Codex CLI, caching the outcome briefly so the status probes
-    /// clustered around launch and setup reconciliation do not each spawn
-    /// `which`. A cached hit is re-validated against the file system.
+    /// clustered around launch and setup reconciliation do not each spawn a
+    /// lookup subprocess. A cached hit is re-validated against the file system.
     nonisolated static func resolveCodexExecutablePath() -> String? {
         executablePathCacheLock.lock()
         let cached = executablePathCache
@@ -733,15 +790,15 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     }
 
     private nonisolated static func locateCodexExecutable() -> String? {
-        let paths = [
-            "/usr/local/bin/codex",
-            "/opt/homebrew/bin/codex",
-            "/Applications/Codex.app/Contents/Resources/codex",
-            "\(FileManager.default.homeDirectoryForCurrentUser.path)/.npm-global/bin/codex"
-        ]
-
-        for path in paths where FileManager.default.fileExists(atPath: path) {
+        for path in codexExecutableCandidates() where FileManager.default.fileExists(atPath: path) {
             return path
+        }
+
+        // Version-manager installs (nvm, Volta, asdf, bun) only appear on an
+        // interactive login PATH, so ask the user's login shell before falling
+        // back to the bare environment probe.
+        if let loginShellPath = resolveCodexExecutableViaLoginShell() {
+            return loginShellPath
         }
 
         let process = Process()
@@ -768,20 +825,113 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             return nil
         }
     }
+
+    /// Common install locations for the Codex CLI: Homebrew, the Codex app,
+    /// and the npm/bun/Volta/asdf/pnpm/yarn user-local bin dirs, including
+    /// nvm's versioned bin dirs (newest version first).
+    private nonisolated static func codexExecutableCandidates() -> [String] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        var candidates = [
+            "/usr/local/bin/codex",
+            "/opt/homebrew/bin/codex",
+            "/Applications/Codex.app/Contents/Resources/codex",
+            "\(home)/.npm-global/bin/codex",
+            "\(home)/.local/bin/codex",
+            "\(home)/.volta/bin/codex",
+            "\(home)/.asdf/shims/codex",
+            "\(home)/.bun/bin/codex",
+            "\(home)/Library/pnpm/codex",
+            "\(home)/.local/share/pnpm/codex",
+            "\(home)/.config/yarn/global/node_modules/.bin/codex"
+        ]
+        candidates += nvmCodexCandidates(home: home)
+        return candidates
+    }
+
+    private nonisolated static func nvmCodexCandidates(home: String) -> [String] {
+        let versionsDirectory = URL(fileURLWithPath: home)
+            .appendingPathComponent(".nvm/versions/node", isDirectory: true)
+        guard let versions = try? FileManager.default.contentsOfDirectory(
+            at: versionsDirectory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+        return versions
+            .sorted { $0.lastPathComponent.compare($1.lastPathComponent, options: .numeric) == .orderedDescending }
+            .map { $0.appendingPathComponent("bin/codex").path }
+    }
+
+    /// Resolves the CLI through the user's interactive login shell, bounded so
+    /// a slow `.zshrc` cannot stall the caller. Interactive shells may print
+    /// banner text, so only the last executable file path counts.
+    private nonisolated static func resolveCodexExecutableViaLoginShell() -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-lic", "command -v codex"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            let deadline = Date().addingTimeInterval(loginShellProbeTimeout)
+            while process.isRunning, Date() < deadline {
+                Thread.sleep(forTimeInterval: 0.05)
+            }
+            if process.isRunning {
+                terminateWithEscalation(process) {}
+                return nil
+            }
+
+            let output = pipe.fileHandleForReading.readDataToEndOfFile()
+            let outputLines = String(data: output, encoding: .utf8)?
+                .split(whereSeparator: \.isNewline)
+                .map { $0.trimmingCharacters(in: .whitespaces) } ?? []
+            return outputLines.last { line in
+                line.hasPrefix("/") && FileManager.default.isExecutableFile(atPath: line)
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    private static let loginShellProbeTimeout: TimeInterval = 5
 }
 
+/// Exactly-once resume for the `codex exec` continuation: the termination
+/// handler, the execution watchdog and cancellation can all race to finish the
+/// process, but only the first outcome reaches the continuation.
 private final class ProcessTerminationCompletion: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<Void, Error>?
+    private var hasResumed = false
+    private var firstOutcome: Error?
 
-    init(_ continuation: CheckedContinuation<Void, Error>) {
+    /// Attaches the checked continuation. If an outcome was already recorded
+    /// (cancellation raced ahead of the process start), the continuation is
+    /// resumed immediately so it can never be stranded.
+    func attach(_ continuation: CheckedContinuation<Void, Error>) {
+        lock.lock()
+        if hasResumed {
+            let error = firstOutcome ?? CancellationError()
+            lock.unlock()
+            continuation.resume(throwing: error)
+            return
+        }
         self.continuation = continuation
+        lock.unlock()
     }
 
     func resume(throwing error: Error? = nil) {
         lock.lock()
         let pending = continuation
         continuation = nil
+        if !hasResumed {
+            hasResumed = true
+            firstOutcome = error ?? CancellationError()
+        }
         lock.unlock()
 
         guard let pending else { return }
@@ -798,6 +948,10 @@ private final class CodexOutputStreamer: @unchecked Sendable {
     // and mutates line/pending buffers synchronously; a lock is the smallest
     // correct primitive (no actor hop on this hot path).
     private let lock = NSLock()
+    /// Raw bytes are buffered so a multi-byte UTF-8 scalar split across
+    /// `availableData` chunks is decoded once complete instead of dropping
+    /// the whole chunk as invalid UTF-8.
+    private var rawByteBuffer = Data()
     private var lineBuffer = ""
     private var pendingChunk = ""
     private var pendingBytes = 0
@@ -814,17 +968,27 @@ private final class CodexOutputStreamer: @unchecked Sendable {
     }
 
     func process(_ data: Data) {
-        guard let text = String(data: data, encoding: .utf8), !text.isEmpty else { return }
+        guard !data.isEmpty else { return }
 
         lock.lock()
-        lineBuffer += text
-        let lines = lineBuffer.split(separator: "\n", omittingEmptySubsequences: false)
-        let completeLines = lineBuffer.hasSuffix("\n") ? lines : Array(lines.dropLast())
-        lineBuffer = lineBuffer.hasSuffix("\n") ? "" : String(lines.last ?? "")
+        rawByteBuffer.append(data)
+        let text = decodeCompleteScalarsLocked()
+        var completeLines: [String] = []
+        if !text.isEmpty {
+            lineBuffer += text
+            let lines = lineBuffer.split(separator: "\n", omittingEmptySubsequences: false)
+            if lineBuffer.hasSuffix("\n") {
+                completeLines = lines.map { String($0) }
+                lineBuffer = ""
+            } else {
+                completeLines = lines.dropLast().map { String($0) }
+                lineBuffer = String(lines.last ?? "")
+            }
+        }
         lock.unlock()
 
         for line in completeLines {
-            processLine(String(line))
+            processLine(line)
         }
     }
 
@@ -832,12 +996,45 @@ private final class CodexOutputStreamer: @unchecked Sendable {
         lock.lock()
         let pending = lineBuffer
         lineBuffer = ""
+        rawByteBuffer.removeAll(keepingCapacity: false)
         lock.unlock()
 
         if !pending.isEmpty {
             processLine(pending)
         }
         flushPending()
+    }
+
+    /// Decodes every complete UTF-8 scalar already buffered and carries the
+    /// trailing bytes of a split scalar to the next chunk. Only the final
+    /// scalar can be incomplete, so peeling back up to three bytes recovers
+    /// everything that is decodable. Must hold `lock`.
+    private func decodeCompleteScalarsLocked() -> String {
+        guard !rawByteBuffer.isEmpty else { return "" }
+
+        if let text = String(data: rawByteBuffer, encoding: .utf8) {
+            rawByteBuffer.removeAll(keepingCapacity: true)
+            return text
+        }
+
+        for trailingByteCount in 1...min(3, rawByteBuffer.count) {
+            let prefixLength = rawByteBuffer.count - trailingByteCount
+            if prefixLength == 0 {
+                // Everything buffered is a partial scalar: wait for more bytes.
+                return ""
+            }
+            guard let text = String(data: rawByteBuffer.prefix(prefixLength), encoding: .utf8) else {
+                continue
+            }
+            rawByteBuffer = Data(rawByteBuffer.suffix(trailingByteCount))
+            return text
+        }
+
+        // Genuinely invalid bytes: decode lossily so the stream never stalls
+        // and nothing keeps buffering.
+        let text = String(decoding: rawByteBuffer, as: UTF8.self)
+        rawByteBuffer.removeAll(keepingCapacity: true)
+        return text
     }
 
     private func flushPending() {

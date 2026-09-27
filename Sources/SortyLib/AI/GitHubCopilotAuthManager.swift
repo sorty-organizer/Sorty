@@ -106,6 +106,16 @@ public class GitHubCopilotAuthManager: ObservableObject {
     private let session = NetworkPrivacyPolicy.sharedSession
     private var pollTask: Task<Void, Never>?
     private var refreshTask: Task<String, Error>?
+    /// Bumped by cache invalidation and sign-out so a refresh that started
+    /// before the change can neither return nor persist its pre-change token.
+    private var refreshGeneration = 0
+    /// Identity of `refreshTask`, so a completing older refresh cannot clear
+    /// the reference to a newer one.
+    private var refreshTaskID = 0
+    /// Latest token-cache deletion. Refreshes await it before saving so a
+    /// delete queued before the save can never land after it and erase the
+    /// freshly minted token.
+    private var pendingTokenDeletion: Task<Void, Never>?
     private var authenticationCheckTask: Task<Void, Never>?
     private var signOutTask: Task<Void, Never>?
     private let defaults = UserDefaults.standard
@@ -431,11 +441,16 @@ public class GitHubCopilotAuthManager: ObservableObject {
     func signOut() {
         pollTask?.cancel()
         authenticationCheckTask?.cancel()
-        refreshTask?.cancel()
+        // Move the generation first: an in-flight refresh must not save a
+        // token after sign-out clears it.
+        beginRefreshGeneration()
         signOutTask?.cancel()
-        signOutTask = Task { [weak self] in
+        let deletion = enqueueTokenDeletion {
             _ = await KeychainManager.deleteAsync(key: "github_access_token")
             _ = await KeychainManager.deleteAsync(key: "github_copilot_token")
+        }
+        signOutTask = Task { [weak self] in
+            await deletion.value
             guard !Task.isCancelled, let self else { return }
             UserDefaults.standard.removeObject(forKey: "github_copilot_token_expiry")
             self.isAuthenticated = false
@@ -448,15 +463,69 @@ public class GitHubCopilotAuthManager: ObservableObject {
     }
 
     func invalidateCachedCopilotToken() {
+        beginRefreshGeneration()
         UserDefaults.standard.removeObject(forKey: "github_copilot_token_expiry")
-        Task {
+        // Serialized behind earlier deletions and awaited by refreshes before
+        // they save, so it cannot erase a replacement token minted later.
+        _ = enqueueTokenDeletion {
             _ = await KeychainManager.deleteAsync(key: "github_copilot_token")
         }
     }
 
     private func invalidateCachedCopilotTokenNow() async {
+        beginRefreshGeneration()
         UserDefaults.standard.removeObject(forKey: "github_copilot_token_expiry")
+        let deletion = enqueueTokenDeletion {
+            _ = await KeychainManager.deleteAsync(key: "github_copilot_token")
+        }
+        await deletion.value
+    }
+
+    /// Appends a token-cache deletion to the mutation chain and returns it.
+    /// Chaining keeps deletions ordered relative to each other, and refreshes
+    /// await the chain before saving so a queued delete can never land after a
+    /// fresh save.
+    private func enqueueTokenDeletion(
+        _ deletion: @escaping @Sendable () async -> Void
+    ) -> Task<Void, Never> {
+        let link = TokenDeletionLink()
+        link.previous = pendingTokenDeletion
+        let task = Task {
+            // Take and clear the predecessor so a completed deletion stops
+            // retaining the whole invalidation history.
+            let previous = link.previous
+            link.previous = nil
+            if let previous {
+                await previous.value
+            }
+            await deletion()
+        }
+        pendingTokenDeletion = task
+        return task
+    }
+
+    /// One-shot holder for the task a deletion is chained after.
+    private final class TokenDeletionLink: @unchecked Sendable {
+        var previous: Task<Void, Never>?
+    }
+
+    /// Deletes the cached token only while the stored value is still the one
+    /// this task wrote; a newer refresh may already have saved a replacement.
+    private func deleteCopilotToken(matching value: String) async {
+        guard let stored = await KeychainManager.getAsync(key: "github_copilot_token"),
+              stored == value else {
+            return
+        }
         _ = await KeychainManager.deleteAsync(key: "github_copilot_token")
+    }
+
+    /// Moves the refresh generation forward and abandons any in-flight refresh:
+    /// its token predates the invalidation and must not be returned or written
+    /// back over the cleared cache.
+    private func beginRefreshGeneration() {
+        refreshGeneration += 1
+        refreshTask?.cancel()
+        refreshTask = nil
     }
 
     @discardableResult
@@ -467,7 +536,8 @@ public class GitHubCopilotAuthManager: ObservableObject {
     
     // Retrieve Copilot-specific token using the auth token
     func getCopilotToken(forceRefresh: Bool = false) async throws -> String {
-        // If a refresh is already in progress, wait for it
+        // If a refresh is already in progress, wait for it. Invalidation always
+        // cancels and clears the task, so any task seen here is current.
         if let task = refreshTask {
             return try await task.value
         }
@@ -514,11 +584,18 @@ public class GitHubCopilotAuthManager: ObservableObject {
     
     @discardableResult
     private func refreshCopilotToken() async throws -> String {
-        // Check if there's an ongoing refresh task
+        // Reuse an in-flight refresh; invalidation clears the reference
+        // together with the generation bump, so a pre-invalidation task can
+        // never be joined here.
         if let existingTask = refreshTask {
             return try await existingTask.value
         }
 
+        let generation = refreshGeneration
+        // Deletes queued before this refresh began must land before its save;
+        // invalidations that land later bump the generation and are handled by
+        // the commit check below.
+        let pendingDeletion = pendingTokenDeletion
         // Create a new refresh task
         let task = Task<String, Error> {
             guard let accessToken = await KeychainManager.getAsync(key: "github_access_token") else {
@@ -569,27 +646,62 @@ public class GitHubCopilotAuthManager: ObservableObject {
             }
             
             let tokenResponse = try JSONDecoder().decode(CopilotTokenResponse.self, from: data)
-            
-            // Cache it
-            _ = await KeychainManager.saveAsync(key: "github_copilot_token", value: tokenResponse.token)
+
+            // The cache may have been invalidated or the user signed out while
+            // the request was in flight; never return or persist a token for a
+            // generation that no longer exists.
+            let canPersist = await MainActor.run {
+                !Task.isCancelled && generation == self.refreshGeneration
+            }
+            guard canPersist else { throw GitHubAuthError.notAuthenticated }
+
             let expiryDate = Date(timeIntervalSince1970: TimeInterval(tokenResponse.expiresAt))
-            UserDefaults.standard.set(expiryDate, forKey: "github_copilot_token_expiry")
-            
+            // Wait for any invalidation/sign-out delete queued before this
+            // refresh began; serialized this way, an earlier delete can never
+            // land after the save below and erase the fresh token.
+            if let pendingDeletion {
+                await pendingDeletion.value
+            }
+            let savedToken = await KeychainManager.saveAsync(key: "github_copilot_token", value: tokenResponse.token)
+            let committed = await MainActor.run { () -> Bool in
+                guard !Task.isCancelled, generation == self.refreshGeneration else { return false }
+                UserDefaults.standard.set(expiryDate, forKey: "github_copilot_token_expiry")
+                return true
+            }
+            guard committed else {
+                // The save can land after sign-out/invalidation cleared the
+                // cache; remove only our own write, never a newer refresh's.
+                if savedToken {
+                    await deleteCopilotToken(matching: tokenResponse.token)
+                }
+                throw GitHubAuthError.notAuthenticated
+            }
+
             LogManager.shared.log("Successfully refreshed GitHub Copilot token", level: .debug, category: "AuthManager")
-            
+
             return tokenResponse.token
         }
 
-        self.refreshTask = task
-        
-        defer {
-            // Clear the task after it finishes (regardless of success/failure)
-            Task { @MainActor in
-                self.refreshTask = nil
-            }
+        refreshTaskID += 1
+        let taskID = refreshTaskID
+        refreshTask = task
+
+        do {
+            let token = try await task.value
+            clearRefreshTaskIfCurrent(taskID)
+            return token
+        } catch {
+            clearRefreshTaskIfCurrent(taskID)
+            throw error
         }
-        
-        return try await task.value
+    }
+
+    /// Clears the bookkeeping for the refresh identified by `taskID` only if it
+    /// is still the registered one; an abandoned older refresh must not clobber
+    /// a newer task.
+    private func clearRefreshTaskIfCurrent(_ taskID: Int) {
+        guard refreshTaskID == taskID else { return }
+        refreshTask = nil
     }
 
     /// Verifies if the token is still valid by calling the user profile API.

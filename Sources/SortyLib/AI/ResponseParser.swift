@@ -191,9 +191,16 @@ struct ResponseParser {
         var unresolvedFilenames: [String] = []
         var hallucinatedIDs: [Int] = []
         var droppedElements: Int = 0
+        /// Placements removed by the global dedupe because the same file was
+        /// claimed by more than one folder. `collectAssignedFileIDs` returns a
+        /// set, so it can never reveal how many assignments dedupe dropped.
+        var duplicateAssignments: Int = 0
+        /// Rename mappings that belonged to a dropped duplicate claim.
+        var discardedRenameSuggestions: Int = 0
 
         var hasIssues: Bool {
             !unresolvedFilenames.isEmpty || !hallucinatedIDs.isEmpty || droppedElements > 0
+                || duplicateAssignments > 0
         }
     }
 
@@ -456,22 +463,68 @@ struct ResponseParser {
     }
 
     private static func embeddedJSONStart(inProgressLine line: String) -> String.Index? {
-        let lowered = line.lowercased()
-        guard lowered.contains("ready to output organization structure") else { return nil }
-
-        let objectStart = line.firstIndex(of: "{")
-        let arrayStart = line.firstIndex(of: "[")
-
-        switch (objectStart, arrayStart) {
-        case let (.some(lhs), .some(rhs)):
-            return lhs < rhs ? lhs : rhs
-        case let (.some(lhs), .none):
-            return lhs
-        case let (.none, .some(rhs)):
-            return rhs
-        case (.none, .none):
-            return nil
+        // No phrase gate: providers prefix the payload with arbitrary progress
+        // text. Scan for the first balanced JSON-looking object/array instead of
+        // requiring the literal "ready to output organization structure" phrase,
+        // which silently discarded every other balanced payload.
+        var searchStart = line.startIndex
+        while searchStart < line.endIndex {
+            guard let start = line[searchStart...].firstIndex(where: { $0 == "{" || $0 == "[" }) else {
+                return nil
+            }
+            if let end = balancedJSONEnd(in: line, from: start) {
+                let candidate = line[start...end]
+                if candidate.contains("\"") || candidate.contains(":") {
+                    return start
+                }
+            } else if looksLikeJSONPayloadStart(line[line.index(after: start)...]) {
+                // Payload continues on the following lines.
+                return start
+            }
+            searchStart = line.index(after: start)
         }
+        return nil
+    }
+
+    /// Index of the `}`/`]` matching the brace at `start`, or nil when the
+    /// payload stays open past the end of this line.
+    private static func balancedJSONEnd(in text: String, from start: String.Index) -> String.Index? {
+        let opener = text[start]
+        guard opener == "{" || opener == "[" else { return nil }
+        let closer: Character = opener == "{" ? "}" : "]"
+        var depth = 0
+        var isInsideString = false
+        var isEscaping = false
+        var index = start
+
+        while index < text.endIndex {
+            let character = text[index]
+            if isInsideString {
+                if isEscaping {
+                    isEscaping = false
+                } else if character == "\\" {
+                    isEscaping = true
+                } else if character == "\"" {
+                    isInsideString = false
+                }
+            } else if character == "\"" {
+                isInsideString = true
+            } else if character == opener {
+                depth += 1
+            } else if character == closer {
+                depth -= 1
+                if depth == 0 { return index }
+            }
+            index = text.index(after: index)
+        }
+        return nil
+    }
+
+    private static func looksLikeJSONPayloadStart(_ remainder: Substring) -> Bool {
+        guard let first = remainder.first(where: { !$0.isWhitespace }) else { return false }
+        if first == "\"" || first == "{" || first == "[" { return true }
+        if first.isNumber || first == "-" { return true }
+        return first == "t" || first == "f" || first == "n"
     }
 
     static func parseResponse(
@@ -506,7 +559,7 @@ struct ResponseParser {
             if let compactFolders = jsonObject["f"] as? [[String: Any]] {
                 // Parse ultra-compact format: {"f":[{"n":"Folder","files":[]}]}
                 var unresolvedCompact = 0
-                let suggestions = compactFolders.compactMap { dict -> FolderSuggestion? in
+                var suggestions = compactFolders.compactMap { dict -> FolderSuggestion? in
                     guard let name = dict["n"] as? String,
                           let fileNames = dict["files"] as? [String] else { return nil }
 
@@ -530,13 +583,27 @@ struct ResponseParser {
                     throw ParserError.missingRequiredFields
                 }
 
+                // The compact schema is easy to over-emit: the same file can be
+                // listed under several folders. Run the same global dedupe as the
+                // legacy schema so `totalFiles` is not double-counted and every
+                // move target is unique.
+                let compactDuplicateStats = duplicateAssignmentStats(in: suggestions)
+                var compactAssignedFileIDs: Set<UUID> = []
+                for index in suggestions.indices {
+                    deduplicate(&suggestions[index], assignedFileIDs: &compactAssignedFileIDs)
+                }
+
                 // Identify unorganized files
-                let organizedIds = Set(suggestions.flatMap { $0.files }.map { $0.id })
-                let unorganizedFiles = originalFiles.filter { !organizedIds.contains($0.id) }
-                let isPartialCompact = unresolvedCompact > 0 || !unorganizedFiles.isEmpty
+                let unorganizedFiles = originalFiles.filter { !compactAssignedFileIDs.contains($0.id) }
+                let isPartialCompact = unresolvedCompact > 0
+                    || !unorganizedFiles.isEmpty
+                    || compactDuplicateStats.occurrences > 0
                 var compactWarnings: [String] = []
                 if unresolvedCompact > 0 {
                     compactWarnings.append("\(unresolvedCompact) filename(s) could not be matched to scanned files and were skipped.")
+                }
+                if compactDuplicateStats.occurrences > 0 {
+                    compactWarnings.append("\(compactDuplicateStats.occurrences) duplicate file assignment(s) were dropped because the same file was claimed by more than one folder; the first folder keeps the file.")
                 }
                 if !unorganizedFiles.isEmpty {
                     compactWarnings.append("\(unorganizedFiles.count) file(s) were not mapped by the AI and kept unorganized.")
@@ -564,7 +631,15 @@ struct ResponseParser {
         // A single decode attempt: the old fallback decoder was an identical
         // plain JSONDecoder, so retrying it could never succeed after the
         // first failure — it only doubled failure cost on large payloads.
-        let response = try decoder.decode(AIResponse.self, from: jsonData)
+        let response: AIResponse
+        do {
+            response = try decoder.decode(AIResponse.self, from: jsonData)
+        } catch is DecodingError {
+            // Structural mismatches (e.g. `"folders": {}`) would otherwise
+            // escape as a raw DecodingError, bypassing the ParserError
+            // classification clients use to trigger adaptive batch retry.
+            throw ParserError.invalidJSON
+        }
 
         let fileIdIndex = Dictionary(uniqueKeysWithValues: originalFiles.enumerated().map { ($0.offset + 1, $0.element) })
 
@@ -612,15 +687,16 @@ struct ResponseParser {
         }
 
         var parsedSuggestions = selectedSuggestions
-        let rawAssignmentCount = collectAssignedFileIDs(from: selectedSuggestions).count
+        // `collectAssignedFileIDs` collapses duplicates into a set, so count
+        // duplicate placements before the dedupe to surface what it drops.
+        let duplicateStats = duplicateAssignmentStats(in: selectedSuggestions)
         var globallyAssignedIDs: Set<UUID> = []
         for index in parsedSuggestions.indices {
             deduplicate(&parsedSuggestions[index], assignedFileIDs: &globallyAssignedIDs)
         }
         let assignedFileIDs = collectAssignedFileIDs(from: parsedSuggestions)
-        if assignedFileIDs.count < rawAssignmentCount {
-            diagnostics.droppedElements += rawAssignmentCount - assignedFileIDs.count
-        }
+        diagnostics.duplicateAssignments = duplicateStats.occurrences
+        diagnostics.discardedRenameSuggestions = duplicateStats.lostRenameSuggestions
 
         var unorganizedDetails = (response.unorganized ?? []).map { unorg in
             UnorganizedFile(filename: unorg.filename, reason: unorg.reason)
@@ -683,6 +759,13 @@ struct ResponseParser {
         var parseWarnings: [String] = []
         if diagnostics.droppedElements > 0 {
             parseWarnings.append("\(diagnostics.droppedElements) malformed folder/rename entr\(diagnostics.droppedElements == 1 ? "y was" : "ies were") dropped during decoding.")
+        }
+        if diagnostics.duplicateAssignments > 0 {
+            var duplicateWarning = "\(diagnostics.duplicateAssignments) duplicate file assignment(s) were dropped because the same file was claimed by more than one folder; the first folder keeps the file."
+            if diagnostics.discardedRenameSuggestions > 0 {
+                duplicateWarning += " \(diagnostics.discardedRenameSuggestions) rename suggestion(s) on a later duplicate claim were discarded."
+            }
+            parseWarnings.append(duplicateWarning)
         }
         if !diagnostics.hallucinatedIDs.isEmpty {
             parseWarnings.append("\(diagnostics.hallucinatedIDs.count) file ID(s) referenced by the AI do not exist in this batch (\(diagnostics.hallucinatedIDs.prefix(8).map(String.init).joined(separator: ", "))\(diagnostics.hallucinatedIDs.count > 8 ? ", …" : "")).")
@@ -750,6 +833,37 @@ struct ResponseParser {
         }
 
         return ids
+    }
+
+    /// Counts duplicate file placements across the folder tree before the
+    /// global dedupe runs, plus the rename mappings those placements would
+    /// lose, so the plan can warn instead of silently dropping the second
+    /// claimant's rename.
+    private static func duplicateAssignmentStats(
+        in suggestions: [FolderSuggestion]
+    ) -> (occurrences: Int, lostRenameSuggestions: Int) {
+        var seenFileIDs: Set<UUID> = []
+        var occurrences = 0
+        var lostRenameSuggestions = 0
+
+        func walk(_ folder: FolderSuggestion) {
+            let renameFileIDs = Set(folder.fileRenameMappings.map(\.originalFile.id))
+            for file in folder.files where !seenFileIDs.insert(file.id).inserted {
+                occurrences += 1
+                if renameFileIDs.contains(file.id) {
+                    lostRenameSuggestions += 1
+                }
+            }
+            for subfolder in folder.subfolders {
+                walk(subfolder)
+            }
+        }
+
+        for suggestion in suggestions {
+            walk(suggestion)
+        }
+
+        return (occurrences, lostRenameSuggestions)
     }
 
     private static func convertFolderResponse(
