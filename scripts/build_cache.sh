@@ -22,11 +22,13 @@ BUILD_CACHE_FORCE_PRUNE="${BUILD_CACHE_FORCE_PRUNE:-false}"
 BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED="${BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED:-false}"
 BUILD_CACHE_FINGERPRINT_VERSION="${BUILD_CACHE_FINGERPRINT_VERSION:-3}"
 BUILD_CACHE_LOCK_STALE_SECONDS="${BUILD_CACHE_LOCK_STALE_SECONDS:-3600}"
+BUILD_CACHE_TOOLCHAIN_REFRESH_SECONDS="${BUILD_CACHE_TOOLCHAIN_REFRESH_SECONDS:-86400}"
 
 BUILD_CACHE_STATE_DIR="${BUILD_DIR}/.sorty-cache"
 BUILD_CACHE_STATE_FILE="${BUILD_CACHE_STATE_DIR}/state"
 BUILD_CACHE_LAST_PRUNE_FILE="${BUILD_CACHE_STATE_DIR}/last-prune"
 BUILD_CACHE_LOCK_DIR="${BUILD_CACHE_STATE_DIR}/maintenance.lock"
+BUILD_CACHE_TOOLCHAIN_FILE="${BUILD_CACHE_STATE_DIR}/toolchain-fingerprint"
 
 build_cache_now() {
     date +%s
@@ -101,16 +103,71 @@ build_cache_input_hash() {
 }
 
 build_cache_toolchain_hash() {
-    {
-        printf 'swiftc='
-        xcrun --find swiftc 2>/dev/null || command -v swiftc 2>/dev/null || printf 'unavailable\n'
+    local developer_dir swiftc_path swiftc_mtime cache_key now
+    developer_dir="$(xcode-select -p 2>/dev/null || true)"
+    swiftc_path="${developer_dir}/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    if [ ! -x "${swiftc_path}" ]; then
+        swiftc_path="$(command -v swiftc 2>/dev/null || true)"
+    fi
+    swiftc_mtime="$(build_cache_path_mtime "${swiftc_path}")"
+    cache_key="$({
+        printf 'developer-dir=%s\n' "${developer_dir:-unavailable}"
+        printf 'swiftc=%s\n' "${swiftc_path:-unavailable}"
+        printf 'swiftc-mtime=%s\n' "${swiftc_mtime}"
+    } | build_cache_hash_stream)"
+    now="$(build_cache_now)"
+
+    local cached_key cached_at cached_hash refresh_seconds
+    cached_key="$(sed -n 's/^key=//p' "${BUILD_CACHE_TOOLCHAIN_FILE}" 2>/dev/null | head -1)"
+    cached_at="$(sed -n 's/^checked_at=//p' "${BUILD_CACHE_TOOLCHAIN_FILE}" 2>/dev/null | head -1)"
+    cached_hash="$(sed -n 's/^hash=//p' "${BUILD_CACHE_TOOLCHAIN_FILE}" 2>/dev/null | head -1)"
+    refresh_seconds="${BUILD_CACHE_TOOLCHAIN_REFRESH_SECONDS}"
+    if ! [[ "${refresh_seconds}" =~ ^[0-9]+$ ]]; then
+        refresh_seconds=86400
+    fi
+
+    if [ "${cached_key}" = "${cache_key}" ] &&
+        [[ "${cached_at}" =~ ^[0-9]+$ ]] &&
+        [ $((now - cached_at)) -lt "${refresh_seconds}" ] &&
+        [ -n "${cached_hash}" ]; then
+        printf '%s\n' "${cached_hash}"
+        return
+    fi
+
+    local xcodebuild_path xcrun_path toolchain_hash
+    xcodebuild_path="${developer_dir}/usr/bin/xcodebuild"
+    xcrun_path="${developer_dir}/usr/bin/xcrun"
+    toolchain_hash="$({
+        printf 'swiftc=%s\n' "${swiftc_path:-unavailable}"
         printf 'swift-version='
-        xcrun swiftc -version 2>/dev/null || swiftc -version 2>/dev/null || printf 'unavailable\n'
+        if [ -x "${swiftc_path}" ]; then
+            "${swiftc_path}" -version 2>/dev/null || printf 'unavailable\n'
+        else
+            printf 'unavailable\n'
+        fi
         printf 'xcode-version='
-        xcodebuild -version 2>/dev/null || printf 'unavailable\n'
+        if [ -x "${xcodebuild_path}" ]; then
+            "${xcodebuild_path}" -version 2>/dev/null || printf 'unavailable\n'
+        else
+            printf 'unavailable\n'
+        fi
         printf 'macos-sdk='
-        xcrun --sdk macosx --show-sdk-path 2>/dev/null || printf 'unavailable\n'
-    } | build_cache_hash_stream
+        if [ -x "${xcrun_path}" ]; then
+            "${xcrun_path}" --sdk macosx --show-sdk-path 2>/dev/null || printf 'unavailable\n'
+        else
+            printf 'unavailable\n'
+        fi
+    } | build_cache_hash_stream)"
+
+    mkdir -p "${BUILD_CACHE_STATE_DIR}"
+    local temp_file="${BUILD_CACHE_TOOLCHAIN_FILE}.$$"
+    {
+        printf 'key=%s\n' "${cache_key}"
+        printf 'checked_at=%s\n' "${now}"
+        printf 'hash=%s\n' "${toolchain_hash}"
+    } > "${temp_file}"
+    mv "${temp_file}" "${BUILD_CACHE_TOOLCHAIN_FILE}"
+    printf '%s\n' "${toolchain_hash}"
 }
 
 build_cache_state_value() {

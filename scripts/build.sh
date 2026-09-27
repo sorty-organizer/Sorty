@@ -595,11 +595,104 @@ normalize_app_executable_linkage() {
 # Assembling and re-signing the app bundle costs several seconds even when
 # nothing changed. Fingerprint every input that feeds the published bundle
 # (built binary, plists, entitlements, resources, icon, extension sources,
-# versions, and assembly flags) using content hashes. The large SwiftPM
-# executable is generated output, so key it with inode, size, and nanosecond
-# timestamps instead of rereading 77MB on every no-op build. When the fingerprint
-# matches the stamp written after the last successful publish, the whole
-# assemble/sign/publish pipeline is skipped and the existing bundle is reused.
+# versions, and assembly flags). File and tree metadata is checked first, so
+# unchanged inputs reuse their cached content hash. Large generated executables
+# use metadata only, and media files are rehashed only after their mtime changes.
+# When the fingerprint matches the stamp written after the last successful
+# publish, the whole assemble/sign/publish pipeline is skipped and the existing
+# bundle is reused.
+
+BUNDLE_FINGERPRINT_CACHE_DIR="${BUILD_DIR}/.sorty-cache/bundle-fingerprints"
+
+bundle_fingerprint_cache_key() {
+    printf '%s' "$1" | shasum -a 256 | awk '{print $1}'
+}
+
+bundle_fingerprint_file_metadata() {
+    local path="$1"
+    stat -f '%N inode=%i size=%z mtime=%Fm' "${path}"
+}
+
+bundle_fingerprint_media_hash() {
+    local path="$1"
+    local cache_key cache_file mtime cached_mtime cached_hash content_hash
+    cache_key="$(bundle_fingerprint_cache_key "media:${path}")"
+    cache_file="${BUNDLE_FINGERPRINT_CACHE_DIR}/media-${cache_key}"
+    mtime="$(stat -f '%Fm' "${path}")"
+    cached_mtime="$(sed -n 's/^mtime=//p' "${cache_file}" 2>/dev/null | head -1)"
+    cached_hash="$(sed -n 's/^hash=//p' "${cache_file}" 2>/dev/null | head -1)"
+
+    if [ "${cached_mtime}" = "${mtime}" ] && [ -n "${cached_hash}" ]; then
+        printf '%s  %s\n' "${cached_hash}" "${path}"
+        return
+    fi
+
+    content_hash="$(shasum -a 256 -- "${path}" | awk '{print $1}')"
+    mkdir -p "${BUNDLE_FINGERPRINT_CACHE_DIR}"
+    local temp_file="${cache_file}.$$"
+    {
+        printf 'mtime=%s\n' "${mtime}"
+        printf 'hash=%s\n' "${content_hash}"
+    } > "${temp_file}"
+    mv "${temp_file}" "${cache_file}"
+    printf '%s  %s\n' "${content_hash}" "${path}"
+}
+
+bundle_fingerprint_cached_group() {
+    local group_name="$1"
+    shift
+
+    local cache_key cache_prefix stat_file hash_file temp_stat temp_hashes
+    cache_key="$(bundle_fingerprint_cache_key "${group_name}")"
+    cache_prefix="${BUNDLE_FINGERPRINT_CACHE_DIR}/${cache_key}"
+    stat_file="${cache_prefix}.stat"
+    hash_file="${cache_prefix}.hash"
+    temp_stat="${cache_prefix}.stat.$$"
+    temp_hashes="${cache_prefix}.hashes.$$"
+    mkdir -p "${BUNDLE_FINGERPRINT_CACHE_DIR}"
+    : > "${temp_stat}"
+    : > "${temp_hashes}"
+
+    local path
+    local existing_files=()
+    for path in "$@"; do
+        if [ -f "${path}" ]; then
+            bundle_fingerprint_file_metadata "${path}" >> "${temp_stat}"
+            existing_files+=("${path}")
+        else
+            printf '%s missing\n' "${path}" >> "${temp_stat}"
+        fi
+    done
+
+    if cmp -s "${temp_stat}" "${stat_file}" 2>/dev/null && [ -s "${hash_file}" ]; then
+        cat "${hash_file}"
+        rm -f "${temp_stat}" "${temp_hashes}"
+        return
+    fi
+
+    local regular_files=()
+    for path in "${existing_files[@]}"; do
+        case "${path}" in
+            *.mp4|*.m4a)
+                bundle_fingerprint_media_hash "${path}" >> "${temp_hashes}"
+                ;;
+            *)
+                regular_files+=("${path}")
+                ;;
+        esac
+    done
+    if [ "${#regular_files[@]}" -gt 0 ]; then
+        shasum -a 256 -- "${regular_files[@]}" >> "${temp_hashes}"
+    fi
+
+    local group_hash
+    group_hash="$({ cat "${temp_stat}"; LC_ALL=C sort "${temp_hashes}"; } | build_cache_hash_stream)"
+    printf '%s group=%s\n' "${group_hash}" "${group_name}" > "${hash_file}.tmp.$$"
+    mv "${hash_file}.tmp.$$" "${hash_file}"
+    mv "${temp_stat}" "${stat_file}"
+    rm -f "${temp_hashes}"
+    cat "${hash_file}"
+}
 
 bundle_fingerprint_generated_files() {
     local path
@@ -613,25 +706,18 @@ bundle_fingerprint_generated_files() {
 }
 
 bundle_fingerprint_files() {
-    local path
-    local existing_files=()
-    for path in "$@"; do
-        if [ -f "${path}" ]; then
-            existing_files+=("${path}")
-        else
-            printf '%s missing\n' "${path}"
-        fi
-    done
-    if [ "${#existing_files[@]}" -gt 0 ]; then
-        shasum -a 256 -- "${existing_files[@]}"
-    fi
+    bundle_fingerprint_cached_group "files:$*" "$@"
 }
 
 bundle_fingerprint_tree() {
     local root
     for root in "$@"; do
         if [ -d "${root}" ]; then
-            find -s -H "${root}" -type f ! -name '.DS_Store' -exec shasum -a 256 {} + 2>/dev/null
+            local tree_files=()
+            while IFS= read -r -d '' path; do
+                tree_files+=("${path}")
+            done < <(find -s -H "${root}" -type f ! -name '.DS_Store' -print0 2>/dev/null)
+            bundle_fingerprint_cached_group "tree:${root}" "${tree_files[@]}"
         else
             printf '%s missing-tree\n' "${root}"
         fi
@@ -640,7 +726,7 @@ bundle_fingerprint_tree() {
 
 compute_bundle_fingerprint() {
     {
-        printf 'fingerprint-schema=1\n'
+        printf 'fingerprint-schema=2\n'
         printf 'version=%s build=%s\n' "${VERSION}" "${BUILD_NUM}"
         printf 'commit=%s\n' "$(git -C "${PROJECT_DIR}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
         printf 'config=%s method=%s archs=%s icon=%s\n' \
@@ -802,7 +888,8 @@ copy_resources_safely() {
             "${resources_dir}/" "${dest_dir}/"
     fi
 
-    # Priority 2b: SortyLib source resources (audio/svg not in top-level Resources)
+    # Priority 2b: SortyLib source resources. This app-only staging step owns
+    # onboarding videos so SwiftPM does not restage them after source rebuilds.
     if [ -d "${source_resources_dir}" ]; then
         log_detail "Syncing additional resources from SortyLib source resources"
         rsync -a \
@@ -1190,6 +1277,7 @@ bundle_finder_extension() {
     local finder_arch_key="${BUILD_ARCHS// /-}"
     local derived_data="${BUILD_DIR}/FinderSyncDerivedData/${finder_arch_key}"
     local cached_appex="${derived_data}/Build/Products/${xcode_config}/${appex_name}"
+    local embedded_appex="${plugins_dir}/${appex_name}"
 
     # Skip rebuild if cached appex is newer than all source files
     if [ -d "${cached_appex}" ]; then
@@ -1204,11 +1292,15 @@ bundle_finder_extension() {
             fi
         done
         if [ "${needs_rebuild}" = "false" ]; then
+            if [ -d "${embedded_appex}" ] && [ ! "${cached_appex}" -nt "${embedded_appex}" ]; then
+                log_detail "SortyFinderSync.appex already embedded; preserving cached copy"
+                return
+            fi
             mkdir -p "${plugins_dir}"
-            rm -rf "${plugins_dir}/${appex_name}"
-            cp -R "${cached_appex}" "${plugins_dir}/${appex_name}"
+            rm -rf "${embedded_appex}"
+            cp -R "${cached_appex}" "${embedded_appex}"
             if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
-                run_quiet_allow_failure codesign_cmd_allow_failure "${plugins_dir}/${appex_name}"
+                run_quiet_allow_failure codesign_cmd_allow_failure "${embedded_appex}"
             fi
             log_detail "SortyFinderSync.appex unchanged, using cache"
             return
@@ -1266,7 +1358,13 @@ BUILD_CONFIG="${BUILD_CONFIG:-release}"
 BUILD_ARCHS="${BUILD_ARCHS:-$(uname -m)}"
 XCODE_EXTRA_FLAGS="${XCODE_EXTRA_FLAGS:-COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO}"
 XCODE_BUILD_JOBS="${XCODE_BUILD_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 8)}"
-ENABLE_FINDER_EXTENSION="${ENABLE_FINDER_EXTENSION:-true}"
+if [ -z "${ENABLE_FINDER_EXTENSION+x}" ]; then
+    if is_truthy "${FAST_DEV_MODE:-false}"; then
+        ENABLE_FINDER_EXTENSION=false
+    else
+        ENABLE_FINDER_EXTENSION=true
+    fi
+fi
 ENABLE_ADHOC_SIGNING="${ENABLE_ADHOC_SIGNING:-true}"
 ENABLE_SPARKLE_SIGNING="${ENABLE_SPARKLE_SIGNING:-true}"
 PRESERVE_APP_BUNDLE="${PRESERVE_APP_BUNDLE:-false}"

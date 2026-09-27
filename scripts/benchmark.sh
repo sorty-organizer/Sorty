@@ -8,8 +8,8 @@ source "${SCRIPT_DIR}/config.sh"
 # Auto-detect CPU cores
 CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
 PARALLEL_FLAGS="-j ${CORES}"
-SWIFT_DEBUG_FLAGS="-Xswiftc -Onone -Xswiftc -enable-batch-mode --disable-sandbox"
-SWIFT_RELEASE_FLAGS="-Xswiftc -O -Xswiftc -whole-module-optimization --disable-sandbox"
+SWIFT_DEBUG_FLAGS="--disable-sandbox --disable-index-store"
+SWIFT_RELEASE_FLAGS="--disable-sandbox --disable-index-store"
 
 # File to touch for incremental build
 INCREMENTAL_FILE="Sources/SortyLib/Views/ContentView.swift"
@@ -142,7 +142,7 @@ run_scenario 2 "incremental" "Incremental build (touch ${INCREMENTAL_FILE})" inc
 
 test_build_run() {
     # shellcheck disable=SC2086
-    swift test --scratch-path "${BUILD_DIR}" ${PARALLEL_FLAGS} --disable-sandbox
+    swift test --scratch-path "${BUILD_DIR}" ${PARALLEL_FLAGS} ${SWIFT_DEBUG_FLAGS}
 }
 
 run_scenario 3 "test" "Full test build + run" test_build_run

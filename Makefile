@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-fast test-full clean help install quick now daily hot dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark harness harness-accent quality-report ci ci-report
+.PHONY: build run debug test test-fast test-full clean help install quick now daily hot dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease rebuild build-ci-universal benchmark benchmark-compare benchmark-save harness harness-accent quality-report ci ci-report prepare-swiftpm-scratch
 
 # Default target
 all: build
@@ -10,7 +10,8 @@ all: build
 CORES := $(shell sysctl -n hw.ncpu 2>/dev/null || echo 4)
 PARALLEL_FLAGS := -j $(CORES)
 SORTY_BUILD_DIR ?= $(HOME)/Library/Caches/Sorty/build
-SWIFTPM_SCRATCH_FLAG := --scratch-path "$(SORTY_BUILD_DIR)"
+export SWIFTPM_BUILD_DIR := $(SORTY_BUILD_DIR)
+export SWIFTPM_SCRATCH_FLAG := --scratch-path "$(SORTY_BUILD_DIR)"
 SWIFTPM_CACHE_FLAG ?=
 # Scripted builds do not serve editor indexing.
 SWIFTPM_INDEX_STORE_FLAG := --disable-index-store
@@ -24,13 +25,30 @@ SWIFT_RELEASE_FLAGS := --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
 ENABLE_FINDER_EXTENSION ?= false
 FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_FINDER_EXTENSION=$(ENABLE_FINDER_EXTENSION) ENABLE_ADHOC_SIGNING=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
 VERBOSE ?= false
-BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE) SORTY_BUILD_DIR="$(SORTY_BUILD_DIR)"
+BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE) SORTY_BUILD_DIR="$(SORTY_BUILD_DIR)" SWIFTPM_BUILD_DIR="$(SORTY_BUILD_DIR)"
 
-build:
+# Keep SwiftPM's default `.build` path and Sorty's scripted scratch path on the
+# same cache. A later bare `swift build` then reuses `make dev` output.
+prepare-swiftpm-scratch:
+	@mkdir -p "$(SORTY_BUILD_DIR)"
+	@if [ -L .build ]; then \
+		current_target="$$(readlink .build)"; \
+		if [ "$$current_target" != "$(SORTY_BUILD_DIR)" ]; then \
+			echo "error: .build points to $$current_target, expected $(SORTY_BUILD_DIR)"; \
+			exit 1; \
+		fi; \
+	elif [ -e .build ]; then \
+		echo "error: .build is a real directory; move or remove it before using the shared cache"; \
+		exit 1; \
+	else \
+		ln -s "$(SORTY_BUILD_DIR)" .build; \
+	fi
+
+build: prepare-swiftpm-scratch
 	@chmod +x scripts/build.sh
 	@$(BUILD_SCRIPT_ENV) BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFTPM_INDEX_STORE_FLAG)" ./scripts/build.sh
 
-build-ci-universal:
+build-ci-universal: prepare-swiftpm-scratch
 	@echo "CI-style xcodebuild (universal)..."
 	@chmod +x scripts/build.sh scripts/package.sh
 	@$(BUILD_SCRIPT_ENV) BUILD_METHOD=xcodebuild SKIP_TESTS=true BUILD_ARCHS="arm64 x86_64" XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" ./scripts/build.sh
@@ -41,28 +59,28 @@ run: build
 	@open releases/Sorty.app
 
 # builds with debug symbols and verbose logging
-debug:
+debug: prepare-swiftpm-scratch
 	@echo "🛠️  Building in DEBUG mode with $(CORES) parallel jobs..."
 	@$(BUILD_SCRIPT_ENV) APP_ICON_VARIANT=debug BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@echo "🚀 Launching Debug Build..."
 	@open releases/Sorty.app
 
 # Fastest development build - parallel, no tests, debug mode
-dev:
+dev: prepare-swiftpm-scratch
 	@echo "⚡ Fast development build ($(CORES) parallel jobs)..."
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 
 # runs the complete test suite with parallel execution
-test:
+test: prepare-swiftpm-scratch
 	@echo "🧪 Running unit tests in parallel ($(CORES) jobs)..."
 	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
 
 # Quick test run - excludes slow UI/integration tests
-test-fast:
+test-fast: prepare-swiftpm-scratch
 	@echo "🧪 Running fast unit tests only..."
 	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG) --filter SortyTests
 
-test-full:
+test-full: prepare-swiftpm-scratch
 	@echo "🧪 Running unit tests with coverage..."
 	@swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
 	@echo "✅ All tests completed. Coverage reports available in $(SORTY_BUILD_DIR)/debug/codecov"
@@ -79,31 +97,31 @@ cache-prune:
 	@$(BUILD_SCRIPT_ENV) BUILD_CACHE_FORCE_PRUNE=true ./scripts/build_cache.sh prune
 
 # skips all checks and builds/runs immediately
-now:
+now: prepare-swiftpm-scratch
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@open releases/Sorty.app
 
 # Optimized local app for daily use and launch profiling. Keep the same signing
 # identity as the development loop, but exclude hot reload even if inherited.
-daily:
+daily: prepare-swiftpm-scratch
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SORTY_HOT_RELOAD=false APP_ICON_VARIANT=release SKIP_TESTS=true BUILD_CONFIG=release BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_RELEASE_FLAGS)" ./scripts/build.sh
 	@open releases/Sorty.app
 
 # Build and launch Sorty with its in-process InjectionLite hot-reload runtime.
-hot:
+hot: prepare-swiftpm-scratch
 	@chmod +x scripts/build.sh scripts/hot_reload.sh scripts/hot_reload_frontend.sh
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" \
 		./scripts/hot_reload.sh
 
 # Local CI-style diagnostics. Blacksmith GitHub Actions remain the release/PR gate.
-ci:
+ci: prepare-swiftpm-scratch
 	@echo "🔄 Running local CI-style diagnostics ($(CORES) cores)..."
 	@echo "   Blacksmith GitHub Actions remain the source of truth for PR/release gates."
 	@chmod +x scripts/local_ci.sh
 	@$(BUILD_SCRIPT_ENV) ./scripts/local_ci.sh
 
 # Legacy local CI + report result to GitHub as a commit status.
-ci-report:
+ci-report: prepare-swiftpm-scratch
 	@echo "🔄 Running legacy local CI checks + reporting to GitHub..."
 	@echo "   This status does not skip Blacksmith checks."
 	@chmod +x scripts/local_ci.sh
@@ -120,6 +138,7 @@ clean:
 # Clean rebuild - force a full rebuild after cleaning caches
 rebuild: clean
 	@echo "🔁 Full rebuild after clean..."
+	@$(MAKE) prepare-swiftpm-scratch
 	@$(BUILD_SCRIPT_ENV) BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFTPM_INDEX_STORE_FLAG)" ./scripts/build.sh
 
 # Install app to /Applications
@@ -140,7 +159,7 @@ release:
 	@echo "   2. Upload releases/Sorty-macOS.zip"
 	@echo "   3. Remind users to run: xattr -cr /Applications/Sorty.app"
 
-friend-zip:
+friend-zip: prepare-swiftpm-scratch
 	@echo "📦 Creating friend-test ZIP in Downloads..."
 	@chmod +x scripts/build.sh scripts/package.sh
 	@$(BUILD_SCRIPT_ENV) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
@@ -173,19 +192,19 @@ prerelease:
 	@./scripts/prerelease_check.sh
 
 # Benchmark build times and save results
-benchmark:
+benchmark: prepare-swiftpm-scratch
 	@echo "📊 Running build benchmarks..."
 	@chmod +x scripts/benchmark.sh
 	@./scripts/benchmark.sh
 
 # Compare benchmarks against a saved baseline
-benchmark-compare:
+benchmark-compare: prepare-swiftpm-scratch
 	@echo "📊 Comparing against baseline..."
 	@chmod +x scripts/benchmark.sh
 	@./scripts/benchmark.sh --compare .build/benchmark-baseline.json
 
 # Save current benchmark as baseline
-benchmark-save:
+benchmark-save: prepare-swiftpm-scratch
 	@echo "📊 Saving current results as baseline..."
 	@chmod +x scripts/benchmark.sh
 	@./scripts/benchmark.sh
@@ -193,19 +212,19 @@ benchmark-save:
 	@echo "✅ Baseline saved to .build/benchmark-baseline.json"
 
 # Preview harness for rapid iteration
-harness:
+harness: prepare-swiftpm-scratch
 	@echo "🔬 Building preview harness ($(CORES) parallel jobs)..."
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 open releases/Sorty.app
 
-harness-accent:
+harness-accent: prepare-swiftpm-scratch
 	@echo "🔬 Harness → Accent prototypes..."
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 SORTY_ACCENT_PROTOTYPE=1 open releases/Sorty.app
 
 QUALITY_CORPUS ?= QualityCorpus/private
 
-quality-report:
+quality-report: prepare-swiftpm-scratch
 	@swift run $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG) SortyQuality --corpus "$(QUALITY_CORPUS)"
 
 help:
