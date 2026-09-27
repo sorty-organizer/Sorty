@@ -628,6 +628,12 @@ public class LearningsManager: ObservableObject {
             Date().timeIntervalSince(loadStartedAt)
         )
     }
+
+    /// Load a cold profile without blocking the calling view's main actor.
+    public func loadProfileIfNeededForCollectionAsync() async {
+        guard currentProfile == nil, canAttemptProfileLoad() else { return }
+        await loadProfile()
+    }
     
     /// Load profile synchronously for background collection (without authentication)
     /// This allows data collection to work even when the UI is locked.

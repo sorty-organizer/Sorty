@@ -205,9 +205,11 @@ struct PreviewView: View {
         .onAppear {
             previewStore.dragDropManager = dragDropManager
             previewStore.learningsManager = learningsManager
-            learningsManager.loadProfileIfNeededForCollection()
             refreshDerivedPlanStats()
             consumePendingNotificationActionIfNeeded()
+        }
+        .task {
+            await learningsManager.loadProfileIfNeededForCollectionAsync()
         }
         .onChange(of: plan) { _, newPlan in
             viewingHistoryIndex = nil
