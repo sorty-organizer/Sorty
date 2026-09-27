@@ -8,6 +8,24 @@
 import Foundation
 @preconcurrency import Sentry
 
+public enum BugReportArea: String, CaseIterable, Sendable {
+    case organize
+    case duplicates
+    case aiSetup = "ai_setup"
+    case settings
+    case other
+
+    public var displayName: String {
+        switch self {
+        case .organize: "Organize"
+        case .duplicates: "Duplicates"
+        case .aiSetup: "AI setup"
+        case .settings: "Settings"
+        case .other: "Other"
+        }
+    }
+}
+
 @MainActor
 public final class ReliabilityManager {
     public static let shared = ReliabilityManager()
@@ -254,10 +272,13 @@ public final class ReliabilityManager {
 
     /// Links explicitly submitted bug text to a bounded Sentry event.
     /// Beyond the description, the event carries only anonymous environment
-    /// tags (Sorty release, macOS version, chip type) so support can tell
-    /// releases and OS versions apart. No identity, files, prompts, or logs.
+    /// tags (chosen area, Sorty release, macOS version, chip type) so support
+    /// can tell releases and OS versions apart. No identity, files, prompts, or logs.
     @discardableResult
-    public func submitBugFeedback(_ message: String) -> String? {
+    public func submitBugFeedback(
+        _ message: String,
+        area: BugReportArea = .other
+    ) -> String? {
         let comment = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSubmitBugFeedback,
               !comment.isEmpty,
@@ -271,6 +292,7 @@ public final class ReliabilityManager {
             scope.setTag(value: "mac_app", key: "platform_surface")
             scope.setTag(value: "user_feedback", key: "feature")
             scope.setTag(value: "report_bug", key: "operation")
+            scope.setTag(value: area.rawValue, key: "report_area")
             scope.setTag(value: Self.operatingSystemVersion, key: "os_version")
             scope.setTag(value: Self.deviceArchitecture, key: "device_arch")
         }
