@@ -75,7 +75,7 @@ public struct BugReportView: View {
             }
             TextEditor(text: $description)
                 .font(.body)
-                .frame(height: (showsSentryOption && sendToSentry) ? 100 : 180)
+                .frame(height: showsSentryOption ? (sendToSentry ? 100 : 340) : 180)
                 .padding(4)
                 .background(Color(NSColor.controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -137,7 +137,6 @@ public struct BugReportView: View {
                                     Text("Chosen area: \(area.displayName)")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
-                                        .numericTextTransition(animationValue: area)
                                         .gridCellColumns(2)
                                 }
                             }
@@ -180,6 +179,10 @@ public struct BugReportView: View {
                     .accessibilityAddTraits(.isStaticText)
             }
 
+            if !sendToSentry {
+                Spacer(minLength: 0)
+            }
+
             HStack {
                 Spacer()
                 Button("Cancel") { onClose() }
@@ -192,7 +195,7 @@ public struct BugReportView: View {
             }
         }
         .padding(24)
-        .frame(width: 520, height: showsSentryOption ? (sendToSentry ? 660 : (!canSubmitBugFeedback ? 520 : 480)) : 440)
+        .frame(width: 520, height: showsSentryOption ? 660 : 440, alignment: .top)
         .animation(
             reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.32, dampingFraction: 0.86),
             value: sendToSentry
@@ -229,6 +232,7 @@ public struct BugReportView: View {
 
     private func openIssue() {
         let comment = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        var didSubmitToSentry = false
         // An empty description opens the bare GitHub template below. There
         // is no text to send, so Sentry is skipped instead of failing.
         if sendToSentry, showsSentryOption, !comment.isEmpty {
@@ -241,6 +245,15 @@ public struct BugReportView: View {
             }
             sentryEventID = eventID
             sendToSentry = false // Retrying GitHub must not send a duplicate report.
+            NotificationManager.shared.showHUDInfo(
+                title: "Report queued for Sentry",
+                message: "Your bug description is linked to this report.",
+                icon: "checkmark.seal.fill",
+                iconColor: .mint,
+                identifier: "bug-report-sentry-success"
+            )
+            HapticFeedbackManager.shared.success()
+            didSubmitToSentry = true
         }
 
         var components = URLComponents(string: "https://github.com/sorty-organizer/Sorty/issues/new")!
@@ -257,7 +270,26 @@ public struct BugReportView: View {
             ]
         }
 
-        guard let url = components.url, NSWorkspace.shared.open(url) else {
+        guard let url = components.url else {
+            errorMessage = "GitHub could not open. Try again."
+            return
+        }
+        if didSubmitToSentry {
+            onClose()
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                if !NSWorkspace.shared.open(url) {
+                    NotificationManager.shared.showHUDInfo(
+                        title: "GitHub could not open",
+                        message: "Try opening the bug report again.",
+                        icon: "xmark.circle.fill",
+                        iconColor: .red
+                    )
+                }
+            }
+            return
+        }
+        guard NSWorkspace.shared.open(url) else {
             errorMessage = "GitHub could not open. Try again."
             return
         }
@@ -2259,11 +2291,11 @@ public class AppState: ObservableObject {
         let view = BugReportView { [weak self] in
             self?.bugReportWindowController?.close()
         }
-        // The Sentry transparency section needs extra height; keep the
-        // analytics-off window compact since the option is hidden there.
+        // Keep the window height steady while the Sentry panel opens.
+        // The analytics-off window stays compact because that panel is hidden.
         let showsSentryOption = AnalyticsManager.shared.consent == .granted
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: showsSentryOption ? 600 : 440),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: showsSentryOption ? 660 : 440),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
