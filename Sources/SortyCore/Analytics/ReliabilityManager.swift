@@ -253,6 +253,9 @@ public final class ReliabilityManager {
     }
 
     /// Links explicitly submitted bug text to a bounded Sentry event.
+    /// Beyond the description, the event carries only anonymous environment
+    /// tags (Sorty release, macOS version, chip type) so support can tell
+    /// releases and OS versions apart. No identity, files, prompts, or logs.
     @discardableResult
     public func submitBugFeedback(_ message: String) -> String? {
         let comment = message.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -268,6 +271,8 @@ public final class ReliabilityManager {
             scope.setTag(value: "mac_app", key: "platform_surface")
             scope.setTag(value: "user_feedback", key: "feature")
             scope.setTag(value: "report_bug", key: "operation")
+            scope.setTag(value: Self.operatingSystemVersion, key: "os_version")
+            scope.setTag(value: Self.deviceArchitecture, key: "device_arch")
         }
         guard eventID != .empty else { return nil }
 
@@ -332,6 +337,25 @@ public final class ReliabilityManager {
 
     private static var releaseName: String {
         "com.sorty.app@\(versionNumber)+\(buildNumber)"
+    }
+
+    /// Bounded macOS version for bug-report tags, such as "15.2.0".
+    /// Contains no identity, just the OS release support needs to reproduce.
+    private static var operatingSystemVersion: String {
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+    }
+
+    /// Chip type of the running app slice. Universal builds run the slice
+    /// that matches the Mac, so the compile-time arch is the runtime arch.
+    private static var deviceArchitecture: String {
+        #if arch(arm64)
+        return "arm64"
+        #elseif arch(x86_64)
+        return "x86_64"
+        #else
+        return "unknown"
+        #endif
     }
 
     private static var versionNumber: String {

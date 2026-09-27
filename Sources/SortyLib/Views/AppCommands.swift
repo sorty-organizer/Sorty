@@ -93,37 +93,44 @@ public struct BugReportView: View {
                     .accessibilityIdentifier("SendBugReportToSentryToggle")
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Anonymous — no account, name, or email. IP addresses are discarded and no person profile is created.")
+                    Text("Anonymous. No account, name, or email. Sentry discards IP addresses and builds no profile.")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
 
-                    HStack(alignment: .top, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 4) {
+                    // One grid, not two stacks, so each row stays level even
+                    // when a label wraps to a second line.
+                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 5) {
+                        GridRow {
                             Text("Sent to Sentry")
                                 .font(.caption.weight(.semibold))
-                            sentryListRow("Your description text (up to 2,000 characters)")
-                            sentryListRow("Event sorty.user_bug_report (mac_app · user_feedback · report_bug)")
-                            sentryListRow("App version, build, and environment")
-                        }
-                        .accessibilityIdentifier("BugReportSentryIncludes")
-
-                        VStack(alignment: .leading, spacing: 4) {
                             Text("Never sent")
                                 .font(.caption.weight(.semibold))
-                            sentryExcludedRow("Name, email, contacts, or attachments")
-                            sentryExcludedRow("File or folder names, paths, or contents")
-                            sentryExcludedRow("Prompts, AI responses, or API keys")
-                            sentryExcludedRow("Screenshots, logs, replays, or raw error text")
                         }
-                        .accessibilityIdentifier("BugReportSentryExcludes")
+                        GridRow {
+                            sentryListRow("The description text you typed")
+                            sentryExcludedRow("Name, email, or attachments")
+                        }
+                        GridRow {
+                            sentryListRow("Linked event sorty.user_bug_report")
+                            sentryExcludedRow("File names, paths, or contents")
+                        }
+                        GridRow {
+                            sentryListRow("Sorty version, build, release channel")
+                            sentryExcludedRow("Prompts, AI responses, or API keys")
+                        }
+                        GridRow {
+                            sentryListRow("macOS version and chip type")
+                            sentryExcludedRow("Screenshots, logs, or raw error text")
+                        }
                     }
+                    .accessibilityIdentifier("BugReportSentryDetails")
 
-                    Text("Review your description for private details before sending. The GitHub draft opens separately and is public.")
+                    Text("Check your text for private details before you send it. GitHub opens in your browser as a separate public issue.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     if !canSubmitBugFeedback {
-                        Text("Unavailable while Block Internet Connections is on. Turn it off in Settings → Advanced to enable Sentry sharing.")
+                        Text("Sentry sharing stays off while Block Internet Connections is on. Turn it off in Settings, Advanced to share with Sentry.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
