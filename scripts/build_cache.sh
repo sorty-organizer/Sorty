@@ -29,6 +29,9 @@ BUILD_CACHE_STATE_FILE="${BUILD_CACHE_STATE_DIR}/state"
 BUILD_CACHE_LAST_PRUNE_FILE="${BUILD_CACHE_STATE_DIR}/last-prune"
 BUILD_CACHE_LOCK_DIR="${BUILD_CACHE_STATE_DIR}/maintenance.lock"
 BUILD_CACHE_TOOLCHAIN_FILE="${BUILD_CACHE_STATE_DIR}/toolchain-fingerprint"
+# Last measured BUILD_DIR size (MB). Written on every full `du` walk so fresh
+# builds can reuse it until the next scheduled prune.
+BUILD_CACHE_SIZE_FILE="${BUILD_CACHE_STATE_DIR}/last-size"
 
 build_cache_now() {
     date +%s
@@ -39,14 +42,48 @@ build_cache_path_mtime() {
     stat -f %m "${path}" 2>/dev/null || stat -c %Y "${path}" 2>/dev/null || echo 0
 }
 
+# How get_directory_size_mb is used: prune decisions need an exact BUILD_DIR
+# size, but a full `du` walk on every build dominates maintenance time. Only
+# the top-level BUILD_DIR walk is expensive, so per-candidate subpaths stay
+# exact while BUILD_DIR reuses the last measured size until the prune interval
+# elapses (or pruning is forced). Pass "fresh" to force a full walk (status).
 get_directory_size_mb() {
     local dir_path="$1"
+    local mode="${2:-cached}"
+    local measured_size
+    local cached_size
     if [ ! -e "${dir_path}" ]; then
         echo "0"
         return
     fi
 
-    du -sm "${dir_path}" 2>/dev/null | awk '{print $1+0}'
+    if [ "${dir_path}" != "${BUILD_DIR}" ] || [ "${mode}" = "fresh" ]; then
+        measured_size="$(du -sm "${dir_path}" 2>/dev/null | awk '{print $1+0}')"
+        if [ "${dir_path}" = "${BUILD_DIR}" ]; then
+            mkdir -p "${BUILD_CACHE_STATE_DIR}"
+            printf '%s\n' "${measured_size}" > "${BUILD_CACHE_SIZE_FILE}"
+        fi
+        printf '%s\n' "${measured_size}"
+        return
+    fi
+
+    if is_truthy "${BUILD_CACHE_FORCE_PRUNE}" || build_cache_should_prune; then
+        measured_size="$(du -sm "${dir_path}" 2>/dev/null | awk '{print $1+0}')"
+        mkdir -p "${BUILD_CACHE_STATE_DIR}"
+        printf '%s\n' "${measured_size}" > "${BUILD_CACHE_SIZE_FILE}"
+        printf '%s\n' "${measured_size}"
+        return
+    fi
+
+    cached_size="$(cat "${BUILD_CACHE_SIZE_FILE}" 2>/dev/null || echo "")"
+    if [[ "${cached_size}" =~ ^[0-9]+$ ]]; then
+        printf '%s\n' "${cached_size}"
+        return
+    fi
+
+    # No measurement yet and no prune due: assume small. The exact size is
+    # measured at the next scheduled prune; explicit callers pass "fresh".
+    echo "0"
 }
 
 prune_path_if_exists() {
@@ -85,6 +122,15 @@ build_cache_dependency_hash() {
     fi
 
     build_cache_hash_files "${dependency_files[@]}" | build_cache_hash_stream
+}
+
+# Fast-path dependency key: hashing three files is milliseconds. The deep
+# Packages/* scan in build_cache_dependency_hash only runs when this key moves.
+build_cache_fast_dependency_hash() {
+    build_cache_hash_files \
+        "Package.swift" \
+        "Package.resolved" \
+        "Sorty.xcodeproj/project.pbxproj" | build_cache_hash_stream
 }
 
 build_cache_input_hash() {
@@ -181,6 +227,10 @@ build_cache_write_state() {
     local input_hash="$2"
     local dependency_hash="$3"
     local toolchain_hash="$4"
+    local fast_hash="$5"
+    if [ -z "${fast_hash}" ]; then
+        fast_hash="$(build_cache_state_value "fast_dependency_hash")"
+    fi
 
     mkdir -p "${BUILD_CACHE_STATE_DIR}"
     {
@@ -190,6 +240,7 @@ build_cache_write_state() {
         printf 'input_hash=%s\n' "${input_hash}"
         printf 'dependency_hash=%s\n' "${dependency_hash}"
         printf 'toolchain_hash=%s\n' "${toolchain_hash}"
+        printf 'fast_dependency_hash=%s\n' "${fast_hash}"
         printf 'build_method=%s\n' "${BUILD_METHOD:-spm}"
         printf 'build_config=%s\n' "${BUILD_CONFIG:-release}"
         printf 'build_archs=%s\n' "$(build_cache_fingerprint_archs)"
@@ -259,45 +310,57 @@ validate_build_cache_fingerprint() {
         return 0
     fi
 
-    local input_hash dependency_hash toolchain_hash compatibility_fingerprint
-    input_hash="$(build_cache_input_hash)"
-    dependency_hash="$(build_cache_dependency_hash)"
+    local toolchain_hash compatibility_fingerprint fast_hash input_hash dependency_hash
     toolchain_hash="$(build_cache_toolchain_hash)"
     compatibility_fingerprint="${toolchain_hash}"
+    fast_hash="$(build_cache_fast_dependency_hash)"
+    # The fixed input list is cheap (no directory scan); the deep Packages/*
+    # dependency scan below is the expensive one, so only it is gated.
+    input_hash="$(build_cache_input_hash)"
 
-    local previous_fingerprint previous_toolchain
+    local previous_fingerprint previous_toolchain stored_fast stored_dependency
     previous_fingerprint="$(build_cache_state_value "compatibility_fingerprint")"
     previous_toolchain="$(build_cache_state_value "toolchain_hash")"
+    stored_fast="$(build_cache_state_value "fast_dependency_hash")"
+    stored_dependency="$(build_cache_state_value "dependency_hash")"
+
+    if [ -n "${stored_fast}" ] && [ "${stored_fast}" = "${fast_hash}" ] && [ -n "${stored_dependency}" ]; then
+        # Fast path: dependency inputs unchanged since last state, so reuse the
+        # recorded deep hash instead of re-scanning Packages/*.
+        dependency_hash="${stored_dependency}"
+    else
+        dependency_hash="$(build_cache_dependency_hash)"
+    fi
 
     if [ -z "${previous_fingerprint}" ]; then
         # State written by fingerprint v2 did not store the compatibility key.
         # Migrate it in place when its toolchain still matches rather than
         # throwing away otherwise valid compiled products.
         if [ -n "${previous_toolchain}" ] && [ "${previous_toolchain}" = "${toolchain_hash}" ]; then
-            build_cache_write_state "${compatibility_fingerprint}" "${input_hash}" "${dependency_hash}" "${toolchain_hash}"
+            build_cache_write_state "${compatibility_fingerprint}" "${input_hash}" "${dependency_hash}" "${toolchain_hash}" "${fast_hash}"
             log_detail "Migrated build cache state without discarding compatible outputs"
             return 0
         fi
 
-        build_cache_write_state "${compatibility_fingerprint}" "${input_hash}" "${dependency_hash}" "${toolchain_hash}"
+        build_cache_write_state "${compatibility_fingerprint}" "${input_hash}" "${dependency_hash}" "${toolchain_hash}" "${fast_hash}"
         log_detail "Initialized build cache compatibility fingerprint"
         return 0
     fi
 
     if [ "${previous_fingerprint}" = "${compatibility_fingerprint}" ]; then
-        build_cache_write_state "${compatibility_fingerprint}" "${input_hash}" "${dependency_hash}" "${toolchain_hash}"
+        build_cache_write_state "${compatibility_fingerprint}" "${input_hash}" "${dependency_hash}" "${toolchain_hash}" "${fast_hash}"
         return 0
     fi
 
     if [ "${previous_fingerprint#*:}" = "${toolchain_hash}" ]; then
-        build_cache_write_state "${compatibility_fingerprint}" "${input_hash}" "${dependency_hash}" "${toolchain_hash}"
+        build_cache_write_state "${compatibility_fingerprint}" "${input_hash}" "${dependency_hash}" "${toolchain_hash}" "${fast_hash}"
         log_detail "Migrated build cache state without discarding compatible outputs"
         return 0
     fi
 
     log_item "Build toolchain changed; clearing incompatible compiled outputs"
     reset_cached_build_products
-    build_cache_write_state "${compatibility_fingerprint}" "${input_hash}" "${dependency_hash}" "${toolchain_hash}"
+    build_cache_write_state "${compatibility_fingerprint}" "${input_hash}" "${dependency_hash}" "${toolchain_hash}" "${fast_hash}"
 }
 
 build_cache_acquire_lock() {
@@ -359,18 +422,104 @@ build_cache_record_prune() {
     build_cache_now > "${BUILD_CACHE_LAST_PRUNE_FILE}"
 }
 
+# Scratch roots that can hold regenerable intermediates. The Makefile symlinks
+# PROJECT_DIR/.build at SORTY_BUILD_DIR, so both names may describe the same
+# directory; string-dedupe here (a repeated pass over one root is harmless).
+build_cache_scratch_roots() {
+    local root
+    local seen=""
+    for root in "${BUILD_DIR}" "${WORKSPACE_BUILD_DIR:-}"; do
+        [ -n "${root}" ] || continue
+        case ":${seen}:" in
+            *":${root}:"*) continue ;;
+        esac
+        seen="${seen}:${root}"
+        [ -d "${root}" ] || continue
+        printf '%s\n' "${root}"
+    done
+}
+
+# Never delete the config being built or the debug loop cache: the just-built
+# product lives in ${BUILD_DIR}/${BUILD_CONFIG}, and debug/ is always hot.
+build_cache_is_protected_config_name() {
+    local name="$1"
+    [ "${name}" = "debug" ] && return 0
+    [ "${name}" = "${BUILD_CONFIG:-release}" ] && return 0
+    return 1
+}
+
+# Content caches (assets/metal) are keyed by content hash; only the most
+# recently used entry per kind can ever be a hit, so drop all but the newest.
+# The build.sh hit paths touch the hit directory, keeping LRU order accurate.
+build_cache_prune_resource_caches_to_mru() {
+    local resource_cache cache_path newest_path
+    for resource_cache in assets metal; do
+        [ -d "${BUILD_CACHE_STATE_DIR}/${resource_cache}" ] || continue
+        newest_path=""
+        while IFS=$'\t' read -r _ cache_path; do
+            [ -n "${cache_path}" ] || continue
+            if [ -z "${newest_path}" ]; then
+                newest_path="${cache_path}"
+                continue
+            fi
+            rm -rf "${cache_path}"
+        done < <(
+            while IFS= read -r cache_path; do
+                printf '%s\t%s\n' "$(build_cache_path_mtime "${cache_path}")" "${cache_path}"
+            done < <(find "${BUILD_CACHE_STATE_DIR}/${resource_cache}" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null || true) | sort -rn
+        )
+    done
+}
+
 prune_stale_build_cache_paths() {
     local stale_days="$1"
     [ -d "${BUILD_DIR}" ] || return 0
 
-    if [ "${BUILD_METHOD:-spm}" != "xcodebuild" ] && [ -d "${BUILD_DIR}/DerivedData" ]; then
-        find "${BUILD_DIR}/DerivedData" -prune -type d -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
-    fi
+    local root disposable inactive dep_store dep_entry current_config
+    current_config="${BUILD_CONFIG:-release}"
+    while IFS= read -r root; do
+        [ -n "${root}" ] || continue
+        # Xcode-managed trees are only stale when another method owns the build.
+        if [ "${BUILD_METHOD:-spm}" != "xcodebuild" ]; then
+            for disposable in DerivedData xcode-derived; do
+                if [ -d "${root}/${disposable}" ]; then
+                    find "${root}/${disposable}" -prune -type d -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
+                fi
+            done
+        fi
+        # Regenerable intermediates: the whole dir goes only once fully stale.
+        for disposable in test-export xcode-packages; do
+            if [ -d "${root}/${disposable}" ]; then
+                find "${root}/${disposable}" -prune -type d -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
+            fi
+        done
 
-    local current_config="${BUILD_CONFIG:-release}"
-    find "${BUILD_DIR}" -mindepth 2 -maxdepth 2 -type d \
-        \( -name debug -o -name release \) ! -name debug ! -name "${current_config}" \
-        -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
+        find "${root}" -mindepth 2 -maxdepth 2 -type d \
+            \( -name debug -o -name release \) ! -name debug ! -name "${current_config}" \
+            -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
+
+        # Inactive top-level config outputs, sparing debug and the just-built config.
+        for inactive in release debug; do
+            if build_cache_is_protected_config_name "${inactive}"; then
+                continue
+            fi
+            if [ -d "${root}/${inactive}" ]; then
+                find "${root}/${inactive}" -prune -type d -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
+            fi
+        done
+
+        # Dependency stores are only reclaimed when explicitly opted in, so a
+        # default prune never forces a full package refetch.
+        if is_truthy "${BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED}"; then
+            for dep_store in checkouts repositories artifacts; do
+                [ -d "${root}/${dep_store}" ] || continue
+                while IFS= read -r dep_entry; do
+                    [ -n "${dep_entry}" ] || continue
+                    find "${dep_entry}" -prune -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
+                done < <(find "${root}/${dep_store}" -mindepth 1 -maxdepth 1 -print 2>/dev/null || true)
+            done
+        fi
+    done < <(build_cache_scratch_roots)
 
     local current_finder_arch_key="${BUILD_ARCHS:-$(uname -m)}"
     current_finder_arch_key="${current_finder_arch_key// /-}"
@@ -390,6 +539,8 @@ prune_stale_build_cache_paths() {
                 -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
         fi
     done
+    # Cap content caches to the most recently used entry per kind.
+    build_cache_prune_resource_caches_to_mru
 }
 
 build_cache_prune_candidate_paths() {
@@ -413,9 +564,46 @@ build_cache_prune_candidate_paths() {
         )
     done
 
-    if [ "${BUILD_METHOD:-spm}" != "xcodebuild" ]; then
-        printf '%s\n' "${BUILD_DIR}/DerivedData"
-    fi
+    # Regenerable intermediates across every scratch root, oldest first via the
+    # mtime sort in prune_inactive_build_outputs_to_target. The active debug/
+    # and current-config outputs are never candidates.
+    local root disposable inactive config_path config_base dep_store dep_entry
+    while IFS= read -r root; do
+        [ -n "${root}" ] || continue
+        if [ "${BUILD_METHOD:-spm}" != "xcodebuild" ]; then
+            for disposable in DerivedData xcode-derived; do
+                [ -e "${root}/${disposable}" ] && printf '%s\n' "${root}/${disposable}"
+            done
+        fi
+        for disposable in test-export xcode-packages; do
+            [ -e "${root}/${disposable}" ] && printf '%s\n' "${root}/${disposable}"
+        done
+        while IFS= read -r config_path; do
+            [ -n "${config_path}" ] || continue
+            config_base="$(basename "${config_path}")"
+            if build_cache_is_protected_config_name "${config_base}"; then
+                continue
+            fi
+            printf '%s\n' "${config_path}"
+        done < <(find "${root}" -mindepth 2 -maxdepth 2 -type d \
+            \( -name debug -o -name release \) -print 2>/dev/null || true)
+        for inactive in release debug; do
+            if build_cache_is_protected_config_name "${inactive}"; then
+                continue
+            fi
+            [ -e "${root}/${inactive}" ] && printf '%s\n' "${root}/${inactive}"
+        done
+        # Dependency entries are LRU candidates only when explicitly opted in.
+        if is_truthy "${BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED}"; then
+            for dep_store in checkouts repositories artifacts; do
+                [ -d "${root}/${dep_store}" ] || continue
+                while IFS= read -r dep_entry; do
+                    [ -n "${dep_entry}" ] || continue
+                    printf '%s\n' "${dep_entry}"
+                done < <(find "${root}/${dep_store}" -mindepth 1 -maxdepth 1 -print 2>/dev/null || true)
+            done
+        fi
+    done < <(build_cache_scratch_roots)
 
     local current_finder_arch_key="${BUILD_ARCHS:-$(uname -m)}"
     current_finder_arch_key="${current_finder_arch_key// /-}"
@@ -425,17 +613,6 @@ build_cache_prune_candidate_paths() {
             [ "$(basename "${finder_path}")" = "${current_finder_arch_key}" ] && continue
             printf '%s\n' "${finder_path}"
         done < <(find "${BUILD_DIR}/FinderSyncDerivedData" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null || true)
-    fi
-
-    local current_config="${BUILD_CONFIG:-release}"
-    local config_path
-    if [ -d "${BUILD_DIR}" ]; then
-        while IFS= read -r config_path; do
-            [ "$(basename "${config_path}")" = "debug" ] && continue
-            [ "$(basename "${config_path}")" = "${current_config}" ] && continue
-            printf '%s\n' "${config_path}"
-        done < <(find "${BUILD_DIR}" -mindepth 2 -maxdepth 2 -type d \
-            \( -name debug -o -name release \) -print 2>/dev/null || true)
     fi
 }
 
@@ -537,7 +714,7 @@ manage_build_cache() {
 
 print_build_cache_status() {
     local size_mb
-    size_mb=$(get_directory_size_mb "${BUILD_DIR}")
+    size_mb=$(get_directory_size_mb "${BUILD_DIR}" fresh)
     local input_hash dependency_hash toolchain_hash current_fingerprint stored_fingerprint
     input_hash="$(build_cache_input_hash)"
     dependency_hash="$(build_cache_dependency_hash)"
