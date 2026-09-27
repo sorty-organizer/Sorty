@@ -214,6 +214,16 @@ final class SortyFinderSync: FIFinderSync {
                 object: nil,
                 userInfo: ["path": directoryURL.path]
             )
+        } else if let applicationURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.sorty.app") {
+            NSWorkspace.shared.open(
+                [actionURL],
+                withApplicationAt: applicationURL,
+                configuration: NSWorkspace.OpenConfiguration()
+            ) { _, error in
+                if let error {
+                    logger.error("Could not deliver Sorty Finder action: \(error.localizedDescription)")
+                }
+            }
         }
         logger.error("Could not open Sorty action URL for path: \(directoryURL.path, privacy: .private)")
     }

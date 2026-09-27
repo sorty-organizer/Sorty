@@ -1411,7 +1411,7 @@ public actor FileSystemManager {
                 let sortedFolders = sourceFolders.sorted { $0.components(separatedBy: "/").count > $1.components(separatedBy: "/").count }
 
                 for folderPath in sortedFolders {
-                    if folderPath != baseURL.path && folderPath.hasPrefix(baseURL.path) {
+                    if folderPath.hasPrefix(baseURL.path == "/" ? "/" : baseURL.path + "/") {
                         _ = try? removeEmptyFolder(at: folderPath)
                     }
                 }

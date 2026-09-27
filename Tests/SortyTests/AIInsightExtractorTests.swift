@@ -3,6 +3,16 @@ import XCTest
 @testable import SortyCore
 
 final class AIInsightExtractorTests: XCTestCase {
+    func testDuplicateFilenameDoesNotPickArbitraryThumbnail() async {
+        let extractor = AIInsightExtractor()
+        let insight = await extractor.extractInsight(
+            from: #"{"folders":[{"name":"Receipts","files":["report.pdf"]}]}"#,
+            scannedFilePathLookup: ["report.pdf": ["/tmp/one/report.pdf", "/tmp/two/report.pdf"]],
+            currentDirectoryPath: "/tmp"
+        )
+
+        XCTAssertNil(insight?.filePath)
+    }
     func testExtractsJSONFileAssignmentInsight() async {
         let extractor = AIInsightExtractor()
         let content = """

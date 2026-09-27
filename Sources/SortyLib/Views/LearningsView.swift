@@ -173,8 +173,9 @@ struct LearningsView: View {
             // No-op after the app's normal post-launch load; covers harness
             // mode and any path that shows Learnings before globals configure.
             await manager.loadPersistedState()
-            manager.isLocked = false
-            await manager.loadProfileIfNeededForCollectionAsync()
+            if !manager.isLocked {
+                await manager.loadProfileIfNeededForCollectionAsync()
+            }
         }
         .onAppear {
             if settingsViewModel.availableModels.isEmpty {

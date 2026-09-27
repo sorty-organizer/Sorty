@@ -325,11 +325,10 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
     /// detail file backing `storedPlanAvailable` cannot be read, so views do
     /// not offer an action that would throw.
     func withStoredPlanUnavailable() -> OrganizationHistoryEntry {
-        guard storedPlanAvailable else { return self }
         return copyWithStoredMetadata(
             planAvailable: false,
-            operationCount: storedOperationCount,
-            restorableItemCount: storedRestorableItemCount
+            operationCount: 0,
+            restorableItemCount: 0
         )
     }
 
@@ -952,6 +951,13 @@ public class OrganizationHistory: ObservableObject {
             await pendingPersistence?.value
             return repository.loadDetails(for: entry)
         }.value
+        if details.operations == nil && details.restorableItems == nil,
+           let index = entries.firstIndex(where: { $0.id == entry.id }),
+           entries[index].storedOperationCount > 0 || entries[index].storedRestorableItemCount > 0 {
+            entries[index] = details.summary
+            saveHistory()
+            postDidChangeNotification()
+        }
         cacheDetails(details)
         return details
     }

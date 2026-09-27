@@ -2097,7 +2097,6 @@ public class LearningsManager: ObservableObject {
         let restoredSettingCount: Int
         if let settings = archive?.settings {
             try validateSettings(settings)
-            applyImportedSettings(settings)
             restoredSettingCount = 3
         } else {
             restoredSettingCount = 0
@@ -2105,8 +2104,14 @@ public class LearningsManager: ObservableObject {
 
         let mergedRecordCount = LearningsProfileArchiveSummary(profile: mergedProfile).totalRecordCount
         pruneOldData(in: &mergedProfile)
+        await persistenceTask?.value
+        try learningsTerminationIOQueue.sync {
+            try LearningsFileManager.save(profile: mergedProfile)
+        }
         currentProfile = mergedProfile
-        await saveProfile()
+        if let settings = archive?.settings {
+            applyImportedSettings(settings)
+        }
 
         let resultingRecordCount = LearningsProfileArchiveSummary(
             profile: currentProfile ?? mergedProfile

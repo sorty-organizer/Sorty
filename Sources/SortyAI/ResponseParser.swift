@@ -23,6 +23,7 @@ struct ResponseParser {
             var exactNames: [String: FileItem] = [:]
             var foldedNames: [String: FileItem] = [:]
             var extensions: [String: FileItem] = [:]
+            var ambiguousExtensions: Set<String> = []
             var relativePaths: [String: FileItem] = [:]
             exactNames.reserveCapacity(files.count * 2)
             foldedNames.reserveCapacity(files.count * 2)
@@ -58,14 +59,18 @@ struct ResponseParser {
                 }
 
                 let extensionKey = file.extension.lowercased()
-                if !extensionKey.isEmpty, extensions[extensionKey] == nil {
-                    extensions[extensionKey] = file
+                if !extensionKey.isEmpty {
+                    if extensions[extensionKey] == nil {
+                        extensions[extensionKey] = file
+                    } else {
+                        ambiguousExtensions.insert(extensionKey)
+                    }
                 }
             }
 
             self.exactNames = exactNames
             self.foldedNames = foldedNames
-            self.extensions = extensions
+            self.extensions = extensions.filter { !ambiguousExtensions.contains($0.key) }
             self.relativePaths = relativePaths
         }
 

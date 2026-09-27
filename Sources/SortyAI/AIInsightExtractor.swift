@@ -370,12 +370,11 @@ public actor AIInsightExtractor {
             return matches[0]
         }
 
-        if let currentDirectoryPath,
-           let preferred = matches.first(where: { $0.hasPrefix(currentDirectoryPath + "/") }) {
-            return preferred
+        if let currentDirectoryPath {
+            let preferred = matches.filter { $0.hasPrefix(currentDirectoryPath + "/") }
+            if preferred.count == 1 { return preferred[0] }
         }
-
-        return matches[0]
+        return nil
     }
 
     private func normalizeName(_ input: String) -> String {
@@ -477,11 +476,12 @@ public actor AIInsightExtractor {
             let resolvedPath: String
             if candidatePaths.count == 1 {
                 resolvedPath = candidatePaths[0]
-            } else if let currentDirectoryPath,
-                      let preferredPath = candidatePaths.first(where: { $0.hasPrefix(currentDirectoryPath + "/") }) {
-                resolvedPath = preferredPath
+            } else if let currentDirectoryPath {
+                let preferred = candidatePaths.filter { $0.hasPrefix(currentDirectoryPath + "/") }
+                guard preferred.count == 1 else { continue }
+                resolvedPath = preferred[0]
             } else {
-                resolvedPath = candidatePaths[0]
+                continue
             }
 
             let displayName = URL(fileURLWithPath: resolvedPath).lastPathComponent

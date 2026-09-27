@@ -1211,12 +1211,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return matches[0]
         }
 
-        if let currentDirectoryPath,
-           let preferredPath = matches.first(where: { $0.hasPrefix(currentDirectoryPath + "/") }) {
-            return preferredPath
+        if let currentDirectoryPath {
+            let preferred = matches.filter { $0.hasPrefix(currentDirectoryPath + "/") }
+            if preferred.count == 1 { return preferred[0] }
         }
-
-        return matches[0]
+        return nil
     }
 
     nonisolated private static func normalizeFolderName(_ input: String) -> String {
@@ -6076,8 +6075,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         _ entry: OrganizationHistoryEntry,
         shouldPostNotification: Bool
     ) async throws -> FileSystemManager.RestoreResult {
-        guard let operations = entry.operations, !operations.isEmpty, !entry.isUndone else {
+        guard !entry.isUndone else {
             return FileSystemManager.RestoreResult(successfulOperations: 0, missingFiles: [])
+        }
+        guard let operations = entry.operations, !operations.isEmpty else {
+            throw CocoaError(.fileReadNoSuchFile)
         }
 
         // A revert is a new operation: clear any stale cancellation flag left

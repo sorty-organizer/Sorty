@@ -121,12 +121,11 @@ public struct LearningsFileManager {
         directory: URL? = nil
     ) throws {
         let targetDirectory = directory ?? learningsDirectory
-        try deleteStoredFiles(fileManager: fileManager, directory: targetDirectory)
-        invalidateCachedKey()
-
         guard LearningsKeychain.shared.delete(key: encryptionKeychainKey) else {
             throw LearningsFileError.keychainDeleteFailed
         }
+        invalidateCachedKey()
+        try deleteStoredFiles(fileManager: fileManager, directory: targetDirectory)
 
         ModelLog.log("Deleted all Learnings data", category: "LearningsFile")
     }

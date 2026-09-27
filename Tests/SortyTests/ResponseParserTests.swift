@@ -6,6 +6,17 @@ import XCTest
 @testable import SortyModels
 
 class ResponseParserTests: XCTestCase {
+    func testAmbiguousExtensionDoesNotSelectArbitraryFile() {
+        let files = [
+            FileItem(path: "/path/first.pdf", name: "first", extension: "pdf", size: 1, isDirectory: false),
+            FileItem(path: "/path/second.pdf", name: "second", extension: "pdf", size: 1, isDirectory: false)
+        ]
+        let json = """
+        {"folders":[{"name":"Documents","files":["pdf"]}]}
+        """
+
+        XCTAssertThrowsError(try ResponseParser.parseResponse(json, originalFiles: files))
+    }
     
     func testValidJSONParsing() throws {
         let json = """

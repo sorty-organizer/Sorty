@@ -1136,10 +1136,11 @@ package actor DirectoryScanner {
     private static func relativePath(for itemURL: URL, under baseDirectoryURL: URL) -> String {
         let itemPath = itemURL.standardizedFileURL.path
         let basePath = baseDirectoryURL.standardizedFileURL.path
-        guard itemPath.hasPrefix(basePath + "/") else {
+        let prefix = basePath == "/" ? "/" : basePath + "/"
+        guard itemPath.hasPrefix(prefix) else {
             return itemURL.lastPathComponent
         }
-        return String(itemPath.dropFirst(basePath.count + 1))
+        return String(itemPath.dropFirst(prefix.count))
     }
 
     private static func extractImageDimensions(from metadata: ContentMetadata?) -> (
