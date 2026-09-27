@@ -11,11 +11,13 @@ provider and model if both are usable. If no usable automation choice exists,
 Sorty shows a provider error and asks the user to choose one. Incomplete
 automation overrides also show an error instead of selecting a default model.
 
-The model picker lists only models documented for chat completions and present
-in the plan's live `/models` response. Other OpenCode models use Responses,
-Messages, or Gemini endpoints that Sorty's OpenAI-compatible client does not
-send. The fallback list uses the same chat-compatible model IDs when catalog
-refresh is unavailable.
+The model picker shows the plan's live `/models` response minus models
+documented for non-chat endpoints (Responses, Messages, Gemini-native,
+SystemOne), which Sorty's OpenAI-compatible client does not send. Unknown
+model IDs stay included so newly added chat models appear without an app
+update; only add to the exclusion lists when the endpoint tables document
+a model or family as non-chat. The fallback list uses the same
+chat-compatible model IDs when catalog refresh is unavailable.
 
 Go's [V2 documentation](https://opencode.ai/v2/docs/console/go) says clients
 should send typical coding agent traffic. Sorty sends file organization

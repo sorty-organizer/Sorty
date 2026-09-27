@@ -979,8 +979,20 @@ public final class ModelCatalog: ObservableObject {
         }
     }
     
-    /// OpenCode publishes mixed API protocols. Only show models documented for
-    /// chat completions, which is the request format Sorty sends.
+    /// OpenCode publishes mixed API protocols. The live `/models` list is
+    /// filtered by denylist: documented non-chat IDs are dropped and
+    /// everything else is kept, so newly added chat models appear without
+    /// an allowlist update. Unknown IDs are included optimistically.
+    nonisolated static func openCodeChatModels(_ models: [ModelInfo], for provider: AIProvider) -> [ModelInfo] {
+        let excludedIDs = Set(provider.openCodeNonChatModelIDs.map { $0.lowercased() })
+        let excludedPrefixes = provider.openCodeNonChatModelIDPrefixes.map { $0.lowercased() }
+        return models.filter { model in
+            let id = model.id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !id.isEmpty, !excludedIDs.contains(id) else { return false }
+            return !excludedPrefixes.contains(where: id.hasPrefix)
+        }
+    }
+
     private func fetchOpenCodeModels(for provider: AIProvider) async throws -> (models: [ModelInfo], isFallback: Bool) {
         guard let baseURL = provider.defaultAPIURL,
               let url = URL(string: baseURL + "/models") else {
@@ -1009,8 +1021,7 @@ public final class ModelCatalog: ObservableObject {
                 provider: provider,
                 usesCreatedTimestamp: false
             )
-            let supported = Set(provider.recommendedModels)
-            let chatModels = models.filter { supported.contains($0.id) }
+            let chatModels = Self.openCodeChatModels(models, for: provider)
             return chatModels.isEmpty ? (fallbackModels(for: provider), true) : (chatModels, false)
         } catch {
             lastError[provider] = error

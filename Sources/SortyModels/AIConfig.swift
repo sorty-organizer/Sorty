@@ -474,6 +474,36 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// Exact OpenCode model IDs served over a non-chat protocol (Responses,
+    /// Messages, Gemini-native, SystemOne). The live `/models` filter drops
+    /// these and keeps everything else, so newly added chat models appear
+    /// without a hardcoded allowlist update. Only add IDs here when the
+    /// endpoint tables document them as non-chat.
+    public var openCodeNonChatModelIDs: [String] {
+        switch self {
+        case .openCodeZen:
+            // Messages-only on Zen; qwen3.8-max stays because it is chat.
+            return ["qwen3.8-flash", "qwen3.7-max", "qwen3.7-plus", "qwen3.6-plus", "qwen3.5-plus"]
+        case .openCodeGo, .unavailableProvider, .openAI, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini, .appleFoundationModel:
+            return []
+        }
+    }
+
+    /// Non-chat ID prefixes per OpenCode plan, matched case-insensitively.
+    /// Families are stable per the endpoint tables (GPT/Grok/Muse via
+    /// Responses, Claude via Messages, Gemini natively, Jev via SystemOne);
+    /// Minimax and Qwen differ per plan, so they are scoped accordingly.
+    public var openCodeNonChatModelIDPrefixes: [String] {
+        switch self {
+        case .openCodeZen:
+            return ["gpt-", "grok-", "claude-", "gemini-", "muse-spark-", "jev-"]
+        case .openCodeGo:
+            return ["gpt-", "grok-", "claude-", "gemini-", "muse-spark-", "jev-", "qwen", "minimax-"]
+        case .unavailableProvider, .openAI, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini, .appleFoundationModel:
+            return []
+        }
+    }
+
     /// The key used in Keychain to store the API key for this provider
     public var keychainKey: String {
         switch self {
