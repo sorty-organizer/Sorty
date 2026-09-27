@@ -732,6 +732,20 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(plan?.suggestions.first?.files.count, 2)
     }
 
+    func testPartialRenameSuggestionsRecoverFileAssignments() {
+        let response = """
+        {"folder_assignments":[{"name":"Docs","rename_suggestions":[{"file_id":1,"suggested_name":"summary.pdf"},
+        """
+        let files = [
+            FileItem(path: "/path/report.pdf", name: "report", extension: "pdf", size: 100, isDirectory: false)
+        ]
+
+        let plan = ResponseParser.extractPartialResults(response, originalFiles: files, mode: .organizeAndRename)
+
+        XCTAssertEqual(plan?.suggestions.first?.folderName, "Docs")
+        XCTAssertEqual(plan?.suggestions.first?.files, files)
+    }
+
     func testMalformedFolderDoesNotDiscardValidFolders() throws {
         let response = """
         {

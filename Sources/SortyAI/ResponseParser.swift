@@ -1174,6 +1174,7 @@ struct ResponseParser {
             guard let folderName = stringValue(forKey: "name", in: segment) else { continue }
             let fileNames = fileNames(in: segment)
             let fileIDs = integerValues(forKey: "file_ids", in: segment)
+            let renameFileIDs = mode == .organize ? [] : renameSuggestionFileIDs(in: segment)
             var folderFiles: [FileItem] = []
 
             for fileName in fileNames {
@@ -1181,7 +1182,7 @@ struct ResponseParser {
                       assignedFiles.insert(file.id).inserted else { continue }
                 folderFiles.append(file)
             }
-            for id in fileIDs {
+            for id in fileIDs + renameFileIDs {
                 guard let file = fileIdIndex[id],
                       assignedFiles.insert(file.id).inserted else { continue }
                 folderFiles.append(file)
@@ -1400,6 +1401,17 @@ struct ResponseParser {
               let regex = try? NSRegularExpression(pattern: #"\d+"#) else { return [] }
         return regex.matches(in: remainder, range: NSRange(remainder.startIndex..., in: remainder)).compactMap { match in
             guard let range = Range(match.range, in: remainder) else { return nil }
+            return Int(remainder[range])
+        }
+    }
+
+    private static func renameSuggestionFileIDs(in object: String) -> [Int] {
+        guard let marker = object.range(of: "\"rename_suggestions\""),
+              let arrayStart = arrayStart(after: marker.upperBound, in: object),
+              let regex = try? NSRegularExpression(pattern: #""file_id"\s*:\s*(\d+)"#) else { return [] }
+        let remainder = String(object[arrayStart...])
+        return regex.matches(in: remainder, range: NSRange(remainder.startIndex..., in: remainder)).compactMap { match in
+            guard let range = Range(match.range(at: 1), in: remainder) else { return nil }
             return Int(remainder[range])
         }
     }

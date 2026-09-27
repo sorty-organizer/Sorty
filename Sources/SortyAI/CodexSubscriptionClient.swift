@@ -203,9 +203,14 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         }
         try AIRequestSupport.ensureNetworkAllowed(url: serviceURL)
 
-        return try await Task.detached(priority: .userInitiated) {
+        let task = Task.detached(priority: .userInitiated) {
             try await fetchModelsViaAppServer()
-        }.value
+        }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
     }
 
     private nonisolated static func fetchModelsViaAppServer() async throws -> [CodexAvailableModel] {
@@ -228,10 +233,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         process.standardError = FileHandle.nullDevice
 
         try process.run()
-        // Watchdog: 15s global timeout. A silent app-server blocks inside
-        // availableData below, which ignores task cancellation, so the
-        // watchdog terminates the CLI to force EOF and unblock the loop.
-        // Without this a hung CLI pins the task (and CPU) indefinitely.
+        // A silent app-server still needs a fixed deadline.
         let deadline = Date().addingTimeInterval(15)
         let watchdog = Task.detached {
             try? await Task.sleep(for: .seconds(15))
@@ -253,16 +255,10 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         ].joined(separator: "\n") + "\n"
         try inputPipe.fileHandleForWriting.write(contentsOf: Data(requests.utf8))
 
-        var bufferedData = Data()
-        while process.isRunning {
-            try Task.checkCancellation()
-            let chunk = outputPipe.fileHandleForReading.availableData
-            guard !chunk.isEmpty else { break }
-            bufferedData.append(chunk)
-
-            while let newline = bufferedData.firstIndex(of: 0x0A) {
-                let lineData = bufferedData[..<newline]
-                bufferedData.removeSubrange(...newline)
+        return try await withTaskCancellationHandler {
+            for try await line in outputPipe.fileHandleForReading.bytes.lines {
+                try Task.checkCancellation()
+                let lineData = Data(line.utf8)
                 guard
                     let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
                     (json["id"] as? Int) == 2
@@ -301,18 +297,23 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                 }
                 return availableModels
             }
+            try Task.checkCancellation()
+            if Date() >= deadline {
+                throw AIClientError.apiError(
+                    statusCode: 504,
+                    message: "Codex model list timed out. The CLI may be busy; try again."
+                )
+            }
+            throw AIClientError.apiError(
+                statusCode: 500,
+                message: "Codex ended before returning its model list."
+            )
+        } onCancel: {
+            if process.isRunning {
+                process.terminate()
+            }
         }
 
-        if Date() >= deadline {
-            throw AIClientError.apiError(
-                statusCode: 504,
-                message: "Codex model list timed out. The CLI may be busy; try again."
-            )
-        }
-        throw AIClientError.apiError(
-            statusCode: 500,
-            message: "Codex ended before returning its model list."
-        )
     }
 
     private func runCodex(
