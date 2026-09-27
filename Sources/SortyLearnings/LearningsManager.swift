@@ -496,7 +496,7 @@ public class LearningsManager: ObservableObject {
         
         // Explicit user action: retry a previously failed load immediately.
         profileLoadFailureDate = nil
-        loadProfileIfNeededForCollection()
+        await loadProfileIfNeededForCollectionAsync()
         if var profile = currentProfile {
             profile.consentGranted = true
             profile.consentDate = Date()
