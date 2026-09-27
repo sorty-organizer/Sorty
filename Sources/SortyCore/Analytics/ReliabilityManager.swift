@@ -400,6 +400,9 @@ public final class ReliabilityManager {
     }
 
     private static var environmentName: String {
+        if InternalTelemetry.isEnabled {
+            return "internal"
+        }
         #if DEBUG
         return "development"
         #else

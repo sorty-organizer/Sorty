@@ -199,11 +199,15 @@ export function initializeWebsiteReliability(): void {
   if (!dsn) {
     return
   }
+  const environment = isWebsiteInternalTelemetry()
+    ? 'internal'
+    : process.env.NODE_ENV === 'production'
+      ? 'production'
+      : 'development'
 
   Sentry.init({
     dsn,
-    environment:
-      process.env.NODE_ENV === 'production' ? 'production' : 'development',
+    environment,
     release: process.env.NEXT_PUBLIC_SENTRY_RELEASE,
     dist: process.env.NEXT_PUBLIC_SENTRY_DIST,
     sendDefaultPii: false,
@@ -254,8 +258,7 @@ export function initializeWebsiteReliability(): void {
   const attributes = {
     platform_surface: 'website',
     is_internal: isWebsiteInternalTelemetry(),
-    environment:
-      process.env.NODE_ENV === 'production' ? 'production' : 'development',
+    environment,
   }
   Sentry.logger.info('sorty.reliability.started', attributes)
   Sentry.metrics.count('sorty.website.load', 1, { attributes })
