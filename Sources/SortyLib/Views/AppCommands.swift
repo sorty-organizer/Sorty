@@ -22,7 +22,7 @@ public struct BugReportView: View {
     @ObservedObject private var analytics = AnalyticsManager.shared
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @State private var description = ""
-    @State private var area: BugReportArea = .other
+    @State private var area: BugReportArea = .organize
     @State private var sendToSentry = false
     @State private var sentryEventID: String?
     @State private var errorMessage: String?
@@ -73,7 +73,7 @@ public struct BugReportView: View {
             }
             TextEditor(text: $description)
                 .font(.body)
-                .frame(height: showsSentryOption ? 90 : 160)
+                .frame(height: showsSentryOption ? 100 : 180)
                 .padding(4)
                 .background(Color(NSColor.controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -88,18 +88,20 @@ public struct BugReportView: View {
                     }
                 }
 
-            Picker("Area", selection: $area) {
-                ForEach(BugReportArea.allCases, id: \.self) { area in
-                    Text(area.displayName).tag(area)
-                }
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("BugReportAreaPicker")
-
             if showsSentryOption {
                 Toggle("Also send this description to Sentry (anonymous)", isOn: $sendToSentry)
                     .disabled(!canSubmitBugFeedback)
                     .accessibilityIdentifier("SendBugReportToSentryToggle")
+
+                if sendToSentry {
+                    Picker("Area", selection: $area) {
+                        ForEach(BugReportArea.allCases, id: \.self) { area in
+                            Text(area.displayName).tag(area)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("BugReportAreaPicker")
+                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Anonymous. No account, name, or email. Sentry discards IP addresses and builds no profile.")
@@ -131,11 +133,13 @@ public struct BugReportView: View {
                             sentryListRow("macOS version and chip type")
                             sentryExcludedRow("Screenshots, logs, or raw error text")
                         }
-                        GridRow {
-                            Text("Chosen area: \(area.displayName)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .gridCellColumns(2)
+                        if sendToSentry {
+                            GridRow {
+                                Text("Chosen area: \(area.displayName)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .gridCellColumns(2)
+                            }
                         }
                     }
                     .accessibilityIdentifier("BugReportSentryDetails")
@@ -179,7 +183,7 @@ public struct BugReportView: View {
             }
         }
         .padding(24)
-        .frame(width: 520, height: showsSentryOption ? 660 : 520)
+        .frame(width: 520, height: showsSentryOption ? (sendToSentry ? 660 : 600) : 440)
         .modifier(WindowGlassBackground())
         .accessibilityIdentifier("BugReportView")
     }
@@ -230,7 +234,7 @@ public struct BugReportView: View {
         if comment.isEmpty {
             components.queryItems = [URLQueryItem(name: "template", value: "bug_report.md")]
         } else {
-            var body = "## Area\n\n\(area.displayName)\n\n## Bug description\n\n\(comment)\n\n## Steps to reproduce\n\n## Expected behavior\n\n## Actual behavior\n"
+            var body = "## Bug description\n\n\(comment)\n\n## Steps to reproduce\n\n## Expected behavior\n\n## Actual behavior\n"
             if let sentryEventID {
                 body += "\nSentry event ID: `\(sentryEventID)`\n"
             }

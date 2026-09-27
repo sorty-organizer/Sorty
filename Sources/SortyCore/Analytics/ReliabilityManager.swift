@@ -13,7 +13,6 @@ public enum BugReportArea: String, CaseIterable, Sendable {
     case duplicates
     case aiSetup = "ai_setup"
     case settings
-    case other
 
     public var displayName: String {
         switch self {
@@ -21,7 +20,6 @@ public enum BugReportArea: String, CaseIterable, Sendable {
         case .duplicates: "Duplicates"
         case .aiSetup: "AI setup"
         case .settings: "Settings"
-        case .other: "Other"
         }
     }
 }
@@ -277,7 +275,7 @@ public final class ReliabilityManager {
     @discardableResult
     public func submitBugFeedback(
         _ message: String,
-        area: BugReportArea = .other
+        area: BugReportArea
     ) -> String? {
         let comment = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSubmitBugFeedback,
