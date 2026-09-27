@@ -376,7 +376,8 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         switch self {
         case .unavailableProvider: return "exclamationmark.triangle"
         case .openAI: return "ChatGPT"
-        case .openCodeZen, .openCodeGo: return "server.rack"
+        case .openCodeZen: return "OpenCodeZen"
+        case .openCodeGo: return "OpenCodeGo"
         case .groq: return "Groq"
         case .openRouter: return "OpenRouter"
         case .ollama: return "Ollama"
@@ -401,7 +402,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
 
     public var usesSystemImage: Bool {
         switch self {
-        case .unavailableProvider, .openCodeZen, .openCodeGo, .openAICompatible, .appleFoundationModel: return true
+        case .unavailableProvider, .openAICompatible, .appleFoundationModel: return true
         default: return false
         }
     }

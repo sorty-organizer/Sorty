@@ -20,13 +20,16 @@ struct AIProviderRow: View {
     private var isSelected: Bool {
         selectedProvider == provider || (isOpenCodeCard && selectedProvider == .openCodeGo)
     }
+    private var logoProvider: AIProvider {
+        isOpenCodeCard && selectedProvider == .openCodeGo ? .openCodeGo : provider
+    }
     
     var body: some View {
         Button {
             action(isOpenCodeCard && selectedProvider == .openCodeGo ? .openCodeGo : provider)
         } label: {
             HStack(alignment: .center, spacing: 8) {
-                ProviderLogoView(provider: provider, size: 17)
+                ProviderLogoView(provider: logoProvider, size: 17)
                     .frame(width: 28, height: 28)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)

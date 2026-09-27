@@ -302,8 +302,18 @@ public struct ProviderSelectionStepView: View {
                     get: { settingsViewModel.config.provider },
                     set: { selectProvider($0) }
                 )) {
-                    Text("Zen").tag(AIProvider.openCodeZen)
-                    Text("Go").tag(AIProvider.openCodeGo)
+                    Label {
+                        Text("Zen")
+                    } icon: {
+                        ProviderLogoView(provider: .openCodeZen, size: 14)
+                    }
+                    .tag(AIProvider.openCodeZen)
+                    Label {
+                        Text("Go")
+                    } icon: {
+                        ProviderLogoView(provider: .openCodeGo, size: 14)
+                    }
+                    .tag(AIProvider.openCodeGo)
                 }
                 .pickerStyle(.segmented)
             }
@@ -1161,6 +1171,9 @@ struct OnboardingProviderRow: View {
     private var isSelected: Bool {
         selectedProvider == provider || (isOpenCodeCard && selectedProvider == .openCodeGo)
     }
+    private var logoProvider: AIProvider {
+        isOpenCodeCard && selectedProvider == .openCodeGo ? .openCodeGo : provider
+    }
 
     private var subtitle: String? {
         switch provider {
@@ -1181,7 +1194,7 @@ struct OnboardingProviderRow: View {
             }
         } label: {
             HStack(spacing: 9) {
-                ProviderLogoView(provider: provider, size: 20)
+                ProviderLogoView(provider: logoProvider, size: 20)
                     .frame(width: 28, height: 28)
                     .overlay(alignment: .bottomTrailing) {
                         if isSelected {

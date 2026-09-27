@@ -193,8 +193,18 @@ struct AIProviderSettingsView: View {
                         get: { viewModel.config.provider },
                         set: { selectProvider($0) }
                     )) {
-                        Text("Zen").tag(AIProvider.openCodeZen)
-                        Text("Go").tag(AIProvider.openCodeGo)
+                        Label {
+                            Text("Zen")
+                        } icon: {
+                            ProviderLogoView(provider: .openCodeZen, size: 14)
+                        }
+                        .tag(AIProvider.openCodeZen)
+                        Label {
+                            Text("Go")
+                        } icon: {
+                            ProviderLogoView(provider: .openCodeGo, size: 14)
+                        }
+                        .tag(AIProvider.openCodeGo)
                     }
                     .pickerStyle(.segmented)
                 }
