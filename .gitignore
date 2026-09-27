@@ -38,6 +38,7 @@ DerivedData
 *.xcuserstate
 
 # Swift PM
+.build
 .build/
 .swiftpm/
 Sorty.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
