@@ -1,4 +1,5 @@
 import XCTest
+@testable import SortyOrganizer
 @testable import SortyLib
 @testable import SortyCore
 @testable import SortyFileSystem

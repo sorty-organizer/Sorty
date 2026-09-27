@@ -17,7 +17,8 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | **SortyAI** | `Sources/SortyAI/` | AI clients, prompts, keychain/vision seams; depends on `SortyFileSystem` + `SortyModels` |
 | **SortyLearnings** | `Sources/SortyLearnings/` | Preference learning and encrypted profiles; depends on `SortyFileSystem` + `SortyModels` + `SortyAI` |
 | **SortyFS** | `Sources/SortyFS/` | Scanning, content analysis, file operations, and folder watching; depends on `SortyFileSystem` + `SortyModels` |
-| **SortyCore** | `Sources/SortyCore/` | Shared app logic and service adapters; depends on `SortyLearnings`, `SortyFS`, and their lower layers |
+| **SortyOrganizer** | `Sources/SortyOrganizer/` | Organization workflow and state machine; depends on the lower file, model, AI, learning, and file service targets |
+| **SortyCore** | `Sources/SortyCore/` | Shared app logic and service adapters; depends on `SortyOrganizer`, `SortyLearnings`, `SortyFS`, and their lower layers |
 | **SortyLib** | `Sources/SortyLib/` | SwiftUI views, view helpers, and app resources; depends on `SortyCore` |
 | **SortyFinderSync** | `Sources/SortyFinderSync/` | Finder Sync extension |
 | **SortyWidgets** | `Sources/SortyWidgets/` | WidgetKit extension embedded by the Xcode app target |
@@ -30,16 +31,18 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | `SortyModels/` | Data models (`AIConfig`, `FileItem`, `OrganizationPlan`, `FeatureFlags`), history, `FileOperation`, content metadata |
 | `SortyLearnings/` | Preference learning, profile storage, rule inference, and observation; Core injects Keychain, telemetry, and session locking |
 | `SortyFS/` | File operations, scanning, duplicate detection, vision analysis, and folder watching; Core injects duplicate scan telemetry |
+| `SortyOrganizer/` | `FolderOrganizer` state machine and plan validation; Core injects persisted logging, analytics, reliability, notifications, Keychain, and Finder integration |
 | `SortyLib/Views/` | SwiftUI views |
 | `SortyCore/ViewModels/` | View models |
 | `SortyCore/Managers/` | `@MainActor ObservableObject` state managers |
-| `SortyCore/Organizer/` | Core workflow orchestration (`FolderOrganizer` state machine) |
 | `SortyCore/Utilities/` | Keychain, logging, deeplinks, security |
 | `SortyFileSystem/` | File naming, hashing, and path helpers used by `SortyCore` |
 | `SortyCore/DesignSystem/` | Shared design tokens; view helpers remain in `SortyLib` |
 | `SortyCore/FinderExtension/` | Finder extension IPC helpers |
 | `SortyCore/Analytics/` | `AnalyticsManager` (PostHog) and `ReliabilityManager` (Sentry); consent UI is in `SortyLib` |
 | `SortyCore/Services/` | App services |
+
+`LogManager` and `AnalyticsManager` remain Core services. Persisted diagnostic logs and analytics consent belong there; extracted targets receive the needed behavior through callbacks configured after the first window yields.
 
 ## State Management
 All managers are `@MainActor ObservableObject` classes created as `@StateObject` in `SortyApp.swift` and injected via `.environmentObject()` to the view hierarchy.

@@ -968,6 +968,7 @@ struct SortyApp: App {
         await Task.yield()
         LiveLearningsServices.configure()
         LiveSortyFSServices.configure()
+        LiveOrganizerServices.configure()
 
         // Harness/UI-test seeding runs here, not in `init`, so file and
         // defaults writes never block scene creation. Seeding stays before

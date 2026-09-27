@@ -10,6 +10,10 @@ import Foundation
 import SwiftUI
 import Combine
 import SortyLearnings
+import SortyFileSystem
+import SortyModels
+import SortyAI
+import SortyFS
 
 private actor RevertOperationTracker {
     private var activeEntryIDs: Set<UUID> = []
@@ -46,6 +50,7 @@ public final class RunningOrganizationActivity: ObservableObject {
 
 @MainActor
 public class FolderOrganizer: ObservableObject, StreamingDelegate {
+    private static let maxPreviewVersions = 5
     private actor LargeFolderPlanAccumulator {
         private var plan: OrganizationPlan
 
@@ -160,7 +165,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 // (e.g. a menu apply from history while the window view is
                 // unmounted). A fresh .ready is a new review, so it unpins too.
                 if case .error = newValue {
-                    NotificationManager.shared.requestAttention()
+                    OrganizerServices.attentionRequester()
                     pinsCompletionView = false
                 } else {
                     // Leaving .error ends the completion view's failure
@@ -261,37 +266,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             reviewTarget: reviewTarget
         ) else { return }
 
-        let destination: DeeplinkDestination
-        let actionTitle: String
-        let actionIcon: String
-        switch concern.reviewTarget {
-        case .instructions:
-            destination = .organize(path: folderPath, persona: nil, mode: nil, autostart: false)
-            actionTitle = "Review Instructions"
-            actionIcon = "text.alignleft"
-        case .persona:
-            destination = .persona(action: nil, prompt: nil, generate: false)
-            actionTitle = "Review Persona"
-            actionIcon = "person.text.rectangle"
-        case .watchedFolder:
-            destination = .watched(action: nil, path: folderPath)
-            actionTitle = "Review Watched Folder"
-            actionIcon = "folder.badge.gearshape"
-        }
-
-        NotificationManager.shared.showHUDInfo(
-            title: "Learning Is Being Skipped Often",
-            message: "Sorty skipped learning for \(concern.excludedRunCount) of the last \(concern.evaluatedRunCount) runs. Review the instructions that triggered it.",
-            icon: "exclamationmark.triangle.fill",
-            iconColor: .orange,
-            identifier: "frequent-learning-exclusions",
-            actions: [
-                HUDNotificationAction(title: actionTitle, systemImage: actionIcon) {
-                    guard let url = DeeplinkHandler.url(for: destination) else { return }
-                    _ = MainWindowRouter.shared.routeDeeplink(url)
-                }
-            ]
-        )
+        OrganizerServices.learningConcernReporter(concern, folderPath)
     }
 
     /// When true, callers (such as OrganizeView) should keep showing the OrganizationCompleteView
@@ -546,7 +521,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return true
         } else {
             // Log invalid transition attempt
-            LogManager.shared.log(
+            OrganizerServices.log(
                 "Invalid state transition attempted: \(currentState.description) -> \(newState.description)",
                 level: .warning,
                 category: "FolderOrganizer"
@@ -661,7 +636,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     public var customPersonaStore: CustomPersonaStore?
     public var learningsManager: LearningsManager?
     public var storageLocationsManager: StorageLocationsManager?
-    public var automationManager: AutomationManager?
+    public var automationManager: (any OrganizerAutomation)?
 
     /// Exclusion enforcer for post-AI validation (lazily initialized)
     private var exclusionEnforcer: ExclusionEnforcer?
@@ -762,7 +737,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // Oversized plans are skipped without wiping existing preview history;
         // wiping silently destroys undo context for regeneration preferences.
         guard plan.totalFiles <= Self.previewVersionFileLimit else {
-            LogManager.shared.log(
+            OrganizerServices.log(
                 "Skipping preview history for \(plan.totalFiles) files (limit \(Self.previewVersionFileLimit)); preserving \(planHistory.count) existing versions",
                 level: .warning,
                 category: "FolderOrganizer"
@@ -770,7 +745,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return
         }
         planHistory.append(plan)
-        if planHistory.count > Constants.maxPreviewVersions {
+        if planHistory.count > Self.maxPreviewVersions {
             planHistory.removeFirst()
         }
     }
@@ -1478,7 +1453,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         stopTimeoutTimer()
 
         // Request user attention for streaming failure
-        NotificationManager.shared.requestAttention()
+        OrganizerServices.attentionRequester()
     }
 
     // MARK: - Timeout Timer
@@ -1522,13 +1497,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // claim a second start would cancel this run and then clobber its
         // task/state on exit.
         guard let runToken = claimOrganizeRun() else {
-            DebugLogger.log("Organization blocked: Already starting or in progress")
+            ModelLog.debug("Organization blocked: Already starting or in progress")
             return
         }
         defer { releaseOrganizeRun(runToken) }
         // Guard against auto-start
         guard !isOperationInProgress() else {
-            DebugLogger.log("Organization blocked: Already in progress")
+            ModelLog.debug("Organization blocked: Already in progress")
             return
         }
         preparedPlanModeOverride = nil
@@ -1536,14 +1511,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         await exclusionRules?.loadPersistedState()
         await personaManager?.loadPersistedState()
         await customPersonaStore?.loadPersistedState()
-        let reliabilitySpan = ReliabilityManager.shared.startSpan(
+        let reliabilitySpan = OrganizerServices.startSpan(
             name: "organize",
             operation: "workflow.organize",
             feature: "organize"
         )
         defer { reliabilitySpan?.finish() }
 
-        AnalyticsManager.shared.captureWorkflow(
+        OrganizerServices.captureWorkflow(
             workflow: "organize",
             stage: "started",
             outcome: "started",
@@ -1628,7 +1603,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let analyticsStartedAt = Date()
         guard aiClient != nil else {
             let error = OrganizationError.clientNotConfigured
-            ReliabilityManager.shared.capture(
+            OrganizerServices.capture(
                 error: error,
                 feature: "organize",
                 operation: "generate_plan"
@@ -1657,22 +1632,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     updateState(.ready, stage: "No files found to organize", progress: 1.0)
                 }
 
-                NotificationManager.shared.show(
-                    .previewReady(
+                OrganizerServices.previewReady(
                         folderName: directory.lastPathComponent,
                         folderPath: directory.path,
                         planID: currentPlan?.id,
                         originSessionID: windowSessionID
                     )
-                )
-                AnalyticsManager.shared.captureWorkflow(
+                OrganizerServices.captureWorkflow(
                     workflow: "organize",
                     stage: "plan_ready",
                     outcome: "empty",
-                    properties: AnalyticsManager.durationProperties(
+                    properties: OrganizerServices.durationProperties(
                         Date().timeIntervalSince(analyticsStartedAt)
                     ).merging([
-                        "count_bucket": AnalyticsManager.countBucket(0),
+                        "count_bucket": OrganizerServices.countBucket(0),
                         "result_kind": "empty_directory",
                     ]) { current, _ in current }
                 )
@@ -1715,14 +1688,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             try checkCancellation()
 
-            NotificationManager.shared.show(
-                .previewReady(
+            OrganizerServices.previewReady(
                     folderName: directory.lastPathComponent,
                     folderPath: directory.path,
                     planID: validatedPlan.id,
                     originSessionID: windowSessionID
                 )
-            )
 
             if let learningsObserver = learningsObserver {
                 learningsObserver.startSession(
@@ -1735,17 +1706,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 }
             }
 
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "organize",
                 stage: "plan_ready",
                 outcome: "success",
-                properties: AnalyticsManager.durationProperties(
+                properties: OrganizerServices.durationProperties(
                     Date().timeIntervalSince(analyticsStartedAt)
                 ).merging([
-                    "count_bucket": AnalyticsManager.countBucket(files.count),
+                    "count_bucket": OrganizerServices.countBucket(files.count),
                     "result_kind": "organization_plan",
                 ]) { current, _ in current }.merging(
-                    AnalyticsManager.generationDurationProperties(validatedPlan.generationStats)
+                    OrganizerServices.generationDurationProperties(validatedPlan.generationStats)
                 ) { current, _ in current }
             )
 
@@ -1756,11 +1727,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 stopTimeoutTimer()
                 resetToIdleUnlessCancellationResetIsSuppressed()
             }
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "organize",
                 stage: "plan_generation",
                 outcome: "cancelled",
-                properties: AnalyticsManager.durationProperties(
+                properties: OrganizerServices.durationProperties(
                     Date().timeIntervalSince(analyticsStartedAt)
                 )
             )
@@ -1772,15 +1743,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 stopTimeoutTimer()
                 handleOrganizationError(error, directory: directory)
             }
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "organize",
                 stage: "plan_generation",
                 outcome: "failed",
-                properties: AnalyticsManager.durationProperties(
+                properties: OrganizerServices.durationProperties(
                     Date().timeIntervalSince(analyticsStartedAt)
                 )
             )
-            ReliabilityManager.shared.capture(
+            OrganizerServices.capture(
                 error: error,
                 feature: "organize",
                 operation: "generate_plan"
@@ -1933,14 +1904,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         if let learnedContext = learningsManager?.generatePromptContext(forFolder: directory.path), !learnedContext.isEmpty {
             instructions += "\n\n" + learnedContext
-            DebugLogger.log("Injected Learnings context into prompt")
+            ModelLog.debug("Injected Learnings context into prompt")
         }
 
         if !isRenameOnly,
            let modelDirContext = learningsManager?.generateModelDirectoryContext(for: files),
            !modelDirContext.isEmpty {
             instructions += "\n\n" + modelDirContext
-            DebugLogger.log("Injected Model Directory reference context into prompt")
+            ModelLog.debug("Injected Model Directory reference context into prompt")
         }
 
         if !isRenameOnly,
@@ -1949,7 +1920,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                files: files
            ) {
             instructions += "\n\n" + directoryManifest
-            DebugLogger.log("Injected source folder context into prompt")
+            ModelLog.debug("Injected source folder context into prompt")
         }
 
         if !isRenameOnly, let storageContext = await storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
@@ -1975,13 +1946,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             instructions += "\n\n" + storageContext + "\n" + sourceDirClause
-            DebugLogger.log("Injected Storage Locations context into prompt")
+            ModelLog.debug("Injected Storage Locations context into prompt")
         }
 
         if !isRenameOnly,
            let existingFoldersContext = try await PromptBuilder.buildExistingFoldersContextOffMain(at: directory) {
             instructions += "\n\n" + existingFoldersContext
-            DebugLogger.log("Injected Existing Folders context into prompt")
+            ModelLog.debug("Injected Existing Folders context into prompt")
         }
 
         let imagePayload: [String: Data] = [:]
@@ -1989,7 +1960,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let visionEnabled = aiConfig?.enableVision ?? false
         let currentModel = aiConfig?.model ?? ""
         let currentProvider = aiConfig?.provider ?? .openAICompatible
-        let modelSupportsVision = ModelCatalog.shared.supportsVision(modelId: currentModel, provider: currentProvider)
+        let modelSupportsVision = OrganizerServices.visionSupportChecker(currentModel, currentProvider)
         let shouldLimitVisionImages = aiConfig?.limitVisionImages ?? true
         let configuredBatchSize = max(1, aiConfig?.visionBatchSize ?? 12)
         let visionSelectionLimit: Int
@@ -2033,7 +2004,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 failedCount: 0,
                 warningMessage: warning
             )
-            DebugLogger.log(warning)
+            ModelLog.debug(warning)
         } else {
             visionAnalysisSummary = nil
         }
@@ -2299,7 +2270,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             throw OrganizationError.noCurrentPlan
         }
         guard let runToken = claimOrganizeRun() else {
-            DebugLogger.log("Resume blocked: another run is already in progress")
+            ModelLog.debug("Resume blocked: another run is already in progress")
             return
         }
         defer { releaseOrganizeRun(runToken) }
@@ -2633,11 +2604,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             let splitIndex = job.files.count / 2
-            LogManager.shared.log(
-                "Retrying a failed \(job.files.count)-file AI request as separate requests for \(splitIndex) and \(job.files.count - splitIndex) files.",
-                level: .warning,
-                category: "FolderOrganizer"
-            )
+            let retryMessage = "Retrying a failed \(job.files.count)-file AI request as separate requests for \(splitIndex) and \(job.files.count - splitIndex) files."
+            Task { @MainActor in
+                OrganizerServices.log(retryMessage, level: .warning, category: "FolderOrganizer")
+            }
             // The parent request's vision context claims the parent batch's
             // attachments; strip it and rebuild per half so each prompt lists
             // exactly the images that request sends.
@@ -2748,7 +2718,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let splitIndex = files.count / 2
             let firstFiles = Array(files[..<splitIndex])
             let secondFiles = Array(files[splitIndex...])
-            LogManager.shared.log(
+            OrganizerServices.log(
                 "Retrying a failed \(files.count)-file AI request as separate requests for \(firstFiles.count) and \(secondFiles.count) files.",
                 level: .warning,
                 category: "FolderOrganizer"
@@ -3164,7 +3134,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
         }
         aiAnalysisActivity = .requesting
-        DebugLogger.log(
+        ModelLog.debug(
             "Prepared \(payload.count) vision attachments using \(preparedByteCount) bytes for the next AI request"
         )
         return payload
@@ -3465,7 +3435,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let validationResult = enforcer.validate(planAfterValidation)
 
             if validationResult.hasViolations {
-                LogManager.shared.log("Exclusion violations detected: \(validationResult.violationCount) files", category: "FolderOrganizer")
+                OrganizerServices.log("Exclusion violations detected: \(validationResult.violationCount) files", category: "FolderOrganizer")
 
                 if let retryPlan = await retryWithExclusionEnhancement(
                     files: files,
@@ -3478,7 +3448,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 ) {
                     let retryValidation = enforcer.validate(retryPlan)
                     if retryValidation.hasViolations {
-                        LogManager.shared.log("Retry still has \(retryValidation.violationCount) violations, stripping", category: "FolderOrganizer")
+                        OrganizerServices.log("Retry still has \(retryValidation.violationCount) violations, stripping", category: "FolderOrganizer")
                         validatedPlan = retryValidation.cleanedPlan ?? retryPlan
                     } else {
                         validatedPlan = retryPlan
@@ -3639,10 +3609,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     ) -> OrganizationPlan {
         if !allowedLocations.isEmpty {
             let originalFolders = plan.suggestions.map(\.folderName)
-            DebugLogger.log("[StorageNorm] Before normalization — folders: \(originalFolders)")
-            DebugLogger.log("[StorageNorm] Allowed locations: \(allowedLocations.map { "\($0.name) → \($0.path)" })")
+            ModelLog.debug("[StorageNorm] Before normalization — folders: \(originalFolders)")
+            ModelLog.debug("[StorageNorm] Allowed locations: \(allowedLocations.map { "\($0.name) → \($0.path)" })")
             if let srcDir = sourceDirectoryURL {
-                DebugLogger.log("[StorageNorm] Source directory: \(srcDir.path)")
+                ModelLog.debug("[StorageNorm] Source directory: \(srcDir.path)")
             }
         }
 
@@ -3656,13 +3626,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let changedFolders = zip(plan.suggestions, normalizedPlan.suggestions)
                 .filter { $0.0.folderName != $0.1.folderName }
                 .map { "\"\($0.0.folderName)\" → \"\($0.1.folderName)\"" }
-            LogManager.shared.log(
+            OrganizerServices.log(
                 "Normalized storage destination aliases: \(changedFolders.joined(separator: ", "))",
                 category: "FolderOrganizer"
             )
-            DebugLogger.log("[StorageNorm] After normalization — changed: \(changedFolders)")
+            ModelLog.debug("[StorageNorm] After normalization — changed: \(changedFolders)")
         } else if !allowedLocations.isEmpty {
-            DebugLogger.log("[StorageNorm] No changes after normalization")
+            ModelLog.debug("[StorageNorm] No changes after normalization")
         }
 
         return normalizedPlan
@@ -3679,8 +3649,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     /// Cancel any ongoing operation - RELIABLE cancellation
     public func cancel(source: OrganizationEntrySource = .manual) {
-        DebugLogger.log("Cancel requested by user")
-        AnalyticsManager.shared.captureWorkflow(
+        ModelLog.debug("Cancel requested by user")
+        OrganizerServices.captureWorkflow(
             workflow: "organize",
             stage: "cancel_requested",
             outcome: "cancelled",
@@ -3695,7 +3665,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// The caller should finish the cancellation with `cancel()` after the outgoing view has faded.
     public func prepareForReturnToStartTransition() {
         guard state == .scanning || state == .organizing || state == .applying else { return }
-        DebugLogger.log("Preparing return-to-start cancellation")
+        ModelLog.debug("Preparing return-to-start cancellation")
         AISessionManager.shared.clearErrors()
         suppressCancellationReset = true
         cancelInternal()
@@ -3833,7 +3803,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         measuredWorkProgress = nil
         
         // Show error notification
-        NotificationManager.shared.showError(
+        OrganizerServices.showError(
             message: displayMessage,
             folderPath: currentDirectory?.path,
             isCritical: true
@@ -3889,7 +3859,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     ) async -> OrganizationPlan? {
         guard let enforcer = exclusionEnforcer else { return nil }
         
-        LogManager.shared.log("Retrying with enhanced exclusion prompt", category: "FolderOrganizer")
+        OrganizerServices.log("Retrying with enhanced exclusion prompt", category: "FolderOrganizer")
         restartPlanGenerationForRetry()
         await waitForPlanRetryBackoff()
         guard (try? checkCancellation()) != nil else { return nil }
@@ -3909,7 +3879,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
             return retryPlan
         } catch {
-            LogManager.shared.log("Exclusion retry failed: \(error.localizedDescription)", category: "FolderOrganizer")
+            OrganizerServices.log("Exclusion retry failed: \(error.localizedDescription)", category: "FolderOrganizer")
             return nil
         }
     }
@@ -3929,7 +3899,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         switch validationError {
         case .pathExists(let path):
             let fileName = URL(fileURLWithPath: path).lastPathComponent
-            LogManager.shared.log("Retrying: path exists conflict (\(fileName))", category: "FolderOrganizer")
+            OrganizerServices.log("Retrying: path exists conflict (\(fileName))", category: "FolderOrganizer")
             enhancement = """
             
             CRITICAL CORRECTION REQUIRED:
@@ -3938,7 +3908,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             Choose a different folder name that does not conflict with existing files. For example, add a suffix like "\(fileName) Files" or use a different category name.
             """
         case .invalidStorageLocation(let path):
-            LogManager.shared.log("Retrying: invalid storage location (\(path))", category: "FolderOrganizer")
+            OrganizerServices.log("Retrying: invalid storage location (\(path))", category: "FolderOrganizer")
             let allowedList: String
             if allowedStorageLocations.isEmpty {
                 allowedList = "- No storage locations are currently enabled. Use only relative folder names."
@@ -3988,10 +3958,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 allowedStorageLocations: allowedStorageLocations,
                 mode: aiConfig?.mode ?? .organize
             )
-            LogManager.shared.log("Validation retry succeeded", category: "FolderOrganizer")
+            OrganizerServices.log("Validation retry succeeded", category: "FolderOrganizer")
             return normalizedRetryPlan
         } catch {
-            LogManager.shared.log("Validation retry failed: \(error.localizedDescription)", category: "FolderOrganizer")
+            OrganizerServices.log("Validation retry failed: \(error.localizedDescription)", category: "FolderOrganizer")
             return nil
         }
     }
@@ -4043,13 +4013,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 allowedStorageLocations: allowedStorageLocations,
                 mode: aiConfig?.mode ?? .organize
             )
-            LogManager.shared.log(
+            OrganizerServices.log(
                 "Retried a plan that scored \(assessment.score)/100 with \(assessment.issues.count) structural issues",
                 category: "FolderOrganizer"
             )
             return storageNormalized
         } catch {
-            LogManager.shared.log(
+            OrganizerServices.log(
                 "Plan quality retry failed: \(error.localizedDescription)",
                 category: "FolderOrganizer"
             )
@@ -4125,13 +4095,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         autoApply: Bool = true
     ) async throws {
         guard !isOperationInProgress() else {
-            DebugLogger.log("Incremental organization blocked: Already in progress")
+            ModelLog.debug("Incremental organization blocked: Already in progress")
             return
         }
         // Claim before the first await so a run started while this one loads
         // persisted state cannot cancel it and then clobber its task/state.
         guard let runToken = claimOrganizeRun() else {
-            DebugLogger.log("Incremental organization blocked: another run is active")
+            ModelLog.debug("Incremental organization blocked: another run is active")
             return
         }
         defer { releaseOrganizeRun(runToken) }
@@ -4196,7 +4166,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // Clear any apply-failure flag left by an earlier run so a pre-apply
         // failure here still records its own history entry.
         performApplyRecordedFailure = false
-        AnalyticsManager.shared.captureWorkflow(
+        OrganizerServices.captureWorkflow(
             workflow: "organize",
             stage: "started",
             outcome: "started",
@@ -4224,7 +4194,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             operationConfig.requiresAPIKey = providerOverride.typicallyRequiresAPIKey
             operationConfig.apiKey = nil
             if providerOverride.typicallyRequiresAPIKey,
-               let apiKey = KeychainManager.get(key: providerOverride.keychainKey) {
+               let apiKey = OrganizerServices.keychainReader(providerOverride.keychainKey) {
                 operationConfig.apiKey = apiKey
             }
             operationConfig.apiURL = providerOverride.defaultAPIURL
@@ -4461,7 +4431,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
                 let validationResult = enforcer.validate(planAfterValidation)
                 if validationResult.hasViolations {
-                    LogManager.shared.log("Exclusion violations in incremental plan: \(validationResult.violationCount)", category: "FolderOrganizer")
+                    OrganizerServices.log("Exclusion violations in incremental plan: \(validationResult.violationCount)", category: "FolderOrganizer")
                     validatedPlan = validationResult.cleanedPlan ?? planAfterValidation
                 }
             }
@@ -4538,12 +4508,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         modelExcludedCurrentRun = false
 
         // Check if we have automation permission
-        guard automationManager.automationStatus == .granted else {
+        guard automationManager.isAutomationGranted else {
             throw OrganizationError.automationNotConfigured
         }
 
         // Get the selected files from Finder
-        guard let selectedFiles = await FinderAutomation.getSelectedFiles(), !selectedFiles.isEmpty else {
+        guard let selectedFiles = await OrganizerServices.finderSelectionReader(), !selectedFiles.isEmpty else {
             await MainActor.run {
                 transition(to: .idle, force: true)
                 organizationStage = "No files selected in Finder"
@@ -4584,7 +4554,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                         continue
                     }
                     skippedSelectionNames.append(url.lastPathComponent)
-                    LogManager.shared.log(
+                    OrganizerServices.log(
                         "Skipping Finder selection \(url.lastPathComponent): \(error.localizedDescription)",
                         level: .warning,
                         category: "FolderOrganizer"
@@ -4604,7 +4574,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                         continue
                     }
                     skippedSelectionNames.append(url.lastPathComponent)
-                    LogManager.shared.log(
+                    OrganizerServices.log(
                         "Skipping Finder selection \(url.lastPathComponent): \(error.localizedDescription)",
                         level: .warning,
                         category: "FolderOrganizer"
@@ -4619,7 +4589,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return "Skipped \(skippedSelectionNames.count) unreadable selection(s): \(preview)\(suffix)"
         }()
         if let notice = skippedSelectionNotice {
-            LogManager.shared.log(notice, level: .warning, category: "FolderOrganizer")
+            OrganizerServices.log(notice, level: .warning, category: "FolderOrganizer")
         }
 
         guard !files.isEmpty else {
@@ -4634,7 +4604,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 }
             }
             if skippedSelectionNotice != nil {
-                NotificationManager.shared.showHUDInfo(
+                OrganizerServices.showHUDInfo(
                     title: "Some Finder selections skipped",
                     message: skippedSelectionNotice ?? "",
                     icon: "exclamationmark.triangle.fill",
@@ -4648,7 +4618,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             // Surface partial skips before the analyzing stage overwrites it;
             // the analyzing phase keeps the accurate scanned count.
             organizationStage = notice
-            NotificationManager.shared.showHUDInfo(
+            OrganizerServices.showHUDInfo(
                 title: "Some Finder selections skipped",
                 message: notice,
                 icon: "exclamationmark.triangle.fill",
@@ -4662,13 +4632,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         // Start the organization process
         guard !isOperationInProgress() else {
-            DebugLogger.log("Selected files organization blocked: Already in progress")
+            ModelLog.debug("Selected files organization blocked: Already in progress")
             return 0
         }
         // Claim before taking over the task slot so a run that started during
         // the scans above cannot cancel this one and then clobber its state.
         guard let runToken = claimOrganizeRun() else {
-            DebugLogger.log("Selected files organization blocked: another run is active")
+            ModelLog.debug("Selected files organization blocked: another run is active")
             return 0
         }
         defer { releaseOrganizeRun(runToken) }
@@ -4868,7 +4838,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // before cancelInternal so the second call cannot cancel the first run.
         if state == .applying {
             organizationStage = "Already applying changes..."
-            LogManager.shared.log(
+            OrganizerServices.log(
                 "Ignoring re-entrant apply() while already applying",
                 level: .warning,
                 category: "FolderOrganizer"
@@ -4891,7 +4861,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // blocks a second apply before the .applying transition below.
         guard let runToken = claimOrganizeRun() else {
             organizationStage = "Another operation is still running..."
-            LogManager.shared.log(
+            OrganizerServices.log(
                 "Ignoring apply() while another run is active",
                 level: .warning,
                 category: "FolderOrganizer"
@@ -4966,19 +4936,19 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if isCurrentOrganizeRun(runToken) {
             performApplyRecordedFailure = false
         }
-        let reliabilitySpan = ReliabilityManager.shared.startSpan(
+        let reliabilitySpan = OrganizerServices.startSpan(
             name: "apply_plan",
             operation: "workflow.apply",
             feature: "organize"
         )
         defer { reliabilitySpan?.finish() }
         let analyticsStartedAt = Date()
-        AnalyticsManager.shared.captureWorkflow(
+        OrganizerServices.captureWorkflow(
             workflow: "organize",
             stage: "apply_started",
             outcome: "started",
             properties: [
-                "count_bucket": AnalyticsManager.countBucket(currentPlan.totalFiles),
+                "count_bucket": OrganizerServices.countBucket(currentPlan.totalFiles),
                 "entry_source": source.rawValue,
                 "mode": (modeOverride ?? preparedPlanModeOverride ?? aiConfig?.mode ?? .organize).rawValue,
             ]
@@ -5027,7 +4997,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let displayMessage = userFacingErrorMessage(for: error)
             transition(to: .error(error), force: true)
             errorMessage = displayMessage
-            NotificationManager.shared.showError(
+            OrganizerServices.showError(
                 message: displayMessage,
                 folderPath: baseURL.path,
                 isCritical: true
@@ -5153,7 +5123,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             // Auto-reveal in Finder is opt-in.
             let shouldAutoRevealInFinder = automationManager?.autoSelectOrganizedFolders ?? false
 
-            if let automationManager = automationManager, automationManager.automationStatus == .granted {
+            if let automationManager = automationManager, automationManager.isAutomationGranted {
                 automationManager.refreshFinder(at: baseURL)
 
                 if shouldAutoRevealInFinder {
@@ -5170,14 +5140,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 }
             }
 
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "organize",
                 stage: "applied",
                 outcome: "success",
-                properties: AnalyticsManager.durationProperties(
+                properties: OrganizerServices.durationProperties(
                     Date().timeIntervalSince(analyticsStartedAt)
                 ).merging([
-                    "count_bucket": AnalyticsManager.countBucket(operations.count),
+                    "count_bucket": OrganizerServices.countBucket(operations.count),
                     "entry_source": source.rawValue,
                     "mode": operationMode.rawValue,
                 ]) { current, _ in current }
@@ -5217,14 +5187,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     performApplyRecordedFailure = true
                 }
             }
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "organize",
                 stage: "apply",
                 outcome: "cancelled",
-                properties: AnalyticsManager.durationProperties(
+                properties: OrganizerServices.durationProperties(
                     Date().timeIntervalSince(analyticsStartedAt)
                 ).merging([
-                    "count_bucket": AnalyticsManager.countBucket(completedOperationsBeforeHistory.count),
+                    "count_bucket": OrganizerServices.countBucket(completedOperationsBeforeHistory.count),
                     "entry_source": source.rawValue,
                     "mode": operationMode.rawValue,
                 ]) { current, _ in current }
@@ -5282,21 +5252,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 performApplyRecordedFailure = true
             }
 
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "organize",
                 stage: "apply",
                 outcome: wasCancelled
                     ? (partialOperations == nil ? "cancelled" : "cancelled_partially_completed")
                     : (partialOperations == nil ? "failed" : "partially_completed"),
-                properties: AnalyticsManager.durationProperties(
+                properties: OrganizerServices.durationProperties(
                     Date().timeIntervalSince(analyticsStartedAt)
                 ).merging([
-                    "count_bucket": AnalyticsManager.countBucket(partialOperations?.count ?? 0),
+                    "count_bucket": OrganizerServices.countBucket(partialOperations?.count ?? 0),
                     "entry_source": source.rawValue,
                     "mode": operationMode.rawValue,
                 ]) { current, _ in current }
             )
-            ReliabilityManager.shared.capture(
+            OrganizerServices.capture(
                 error: error,
                 feature: "organize",
                 operation: "apply_plan",
@@ -5474,7 +5444,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     /// Regenerate preview with a specific provider
     public func regenerateWithProvider(_ provider: AIProvider) async throws {
-        AnalyticsManager.shared.captureWorkflow(
+        OrganizerServices.captureWorkflow(
             workflow: "regenerate",
             stage: "started",
             outcome: "started",
@@ -5489,7 +5459,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return
         }
         guard let runToken = claimOrganizeRun() else {
-            DebugLogger.log("Regenerate blocked: another run is already in progress")
+            ModelLog.debug("Regenerate blocked: another run is already in progress")
             return
         }
         defer { releaseOrganizeRun(runToken) }
@@ -5527,7 +5497,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     private func performRegenerateWithProvider(_ provider: AIProvider, files: [FileItem]) async throws {
         var files = files
-        let reliabilitySpan = ReliabilityManager.shared.startSpan(
+        let reliabilitySpan = OrganizerServices.startSpan(
             name: "regenerate_preview",
             operation: "workflow.regenerate",
             feature: "organize"
@@ -5561,7 +5531,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
                 let validationResult = enforcer.validate(newPlan)
                 if validationResult.hasViolations {
-                    LogManager.shared.log("Exclusion violations in regenerated preview: \(validationResult.violationCount)", category: "FolderOrganizer")
+                    OrganizerServices.log("Exclusion violations in regenerated preview: \(validationResult.violationCount)", category: "FolderOrganizer")
                     newPlan = validationResult.cleanedPlan ?? newPlan
                 }
             }
@@ -5585,7 +5555,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 self.currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: newPlan))
                 transition(to: .ready)
             }
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "regenerate",
                 stage: "plan_ready",
                 outcome: "success",
@@ -5604,13 +5574,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 transition(to: .error(error), force: true)
                 errorMessage = error.localizedDescription
             }
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "regenerate",
                 stage: "plan_generation",
                 outcome: "failed",
                 properties: ["variant": "provider"]
             )
-            ReliabilityManager.shared.capture(
+            OrganizerServices.capture(
                 error: error,
                 feature: "organize",
                 operation: "regenerate_with_provider"
@@ -5625,7 +5595,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     package func regenerateWithModel(provider: AIProvider, model: String, files suppliedFiles: [FileItem]?) async throws {
-        AnalyticsManager.shared.captureWorkflow(
+        OrganizerServices.captureWorkflow(
             workflow: "regenerate",
             stage: "started",
             outcome: "started",
@@ -5660,7 +5630,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             // non-stealing claim so that run keeps ownership instead of being
             // orphaned, and skip the restart if it won the slot.
             guard let restartToken = claimOrganizeRun() else {
-                DebugLogger.log("Restart blocked: another run claimed the organize slot while unwinding")
+                ModelLog.debug("Restart blocked: another run claimed the organize slot while unwinding")
                 return
             }
             defer { releaseOrganizeRun(restartToken) }
@@ -5682,7 +5652,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return
         }
         guard let runToken = claimOrganizeRun() else {
-            DebugLogger.log("Regenerate blocked: another run is already in progress")
+            ModelLog.debug("Regenerate blocked: another run is already in progress")
             return
         }
         defer { releaseOrganizeRun(runToken) }
@@ -5752,7 +5722,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
                 let validationResult = enforcer.validate(newPlan)
                 if validationResult.hasViolations {
-                    LogManager.shared.log("Exclusion violations in regenerated preview: \(validationResult.violationCount)", category: "FolderOrganizer")
+                    OrganizerServices.log("Exclusion violations in regenerated preview: \(validationResult.violationCount)", category: "FolderOrganizer")
                     newPlan = validationResult.cleanedPlan ?? newPlan
                 }
             }
@@ -5772,7 +5742,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 self.currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: newPlan))
                 transition(to: .ready)
             }
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "regenerate",
                 stage: "plan_ready",
                 outcome: "success",
@@ -5793,13 +5763,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 transition(to: .error(error), force: true)
                 errorMessage = error.localizedDescription
             }
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "regenerate",
                 stage: "plan_generation",
                 outcome: "failed",
                 properties: ["variant": "model"]
             )
-            ReliabilityManager.shared.capture(
+            OrganizerServices.capture(
                 error: error,
                 feature: "organize",
                 operation: "regenerate_with_model"
@@ -5811,7 +5781,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // MARK: - Regenerate Preview
 
     public func regeneratePreview() async throws {
-        AnalyticsManager.shared.captureWorkflow(
+        OrganizerServices.captureWorkflow(
             workflow: "regenerate",
             stage: "started",
             outcome: "started",
@@ -5825,7 +5795,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return
         }
         guard let runToken = claimOrganizeRun() else {
-            DebugLogger.log("Regenerate preview blocked: another run is already in progress")
+            ModelLog.debug("Regenerate preview blocked: another run is already in progress")
             return
         }
         defer { releaseOrganizeRun(runToken) }
@@ -5959,7 +5929,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
                 let validationResult = enforcer.validate(newPlan)
                 if validationResult.hasViolations {
-                    LogManager.shared.log("Exclusion violations in regenerated preview: \(validationResult.violationCount)", category: "FolderOrganizer")
+                    OrganizerServices.log("Exclusion violations in regenerated preview: \(validationResult.violationCount)", category: "FolderOrganizer")
                     newPlan = validationResult.cleanedPlan ?? newPlan
                 }
             }
@@ -6002,7 +5972,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 self.currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: newPlan))
                 transition(to: .ready)
             }
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "regenerate",
                 stage: "plan_ready",
                 outcome: "success",
@@ -6036,13 +6006,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 history.addEntry(failedEntry)
             }
 
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "regenerate",
                 stage: "plan_generation",
                 outcome: "failed",
                 properties: ["variant": "same_configuration"]
             )
-            ReliabilityManager.shared.capture(
+            OrganizerServices.capture(
                 error: error,
                 feature: "organize",
                 operation: "regenerate_preview"
@@ -6123,13 +6093,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             if let dest = op.destinationPath, !FileManager.default.fileExists(atPath: dest) {
                 let filename = URL(fileURLWithPath: dest).lastPathComponent
                 preCheckMissing.append(filename)
-                DebugLogger.log("Pre-check: file missing at \(dest)")
+                ModelLog.debug("Pre-check: file missing at \(dest)")
             }
         }
 
         if !preCheckMissing.isEmpty {
             let totalMoves = moveOps.count
-            DebugLogger.log("Pre-check: \(preCheckMissing.count)/\(totalMoves) files missing before undo")
+            ModelLog.debug("Pre-check: \(preCheckMissing.count)/\(totalMoves) files missing before undo")
         }
 
         updateProgress(0.3, stage: "Undoing changes...")
@@ -6191,13 +6161,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @discardableResult
     public func undoHistoryEntry(_ entry: OrganizationHistoryEntry) async throws -> FileSystemManager.RestoreResult {
         let entry = await history.details(for: entry)
-        let reliabilitySpan = ReliabilityManager.shared.startSpan(
+        let reliabilitySpan = OrganizerServices.startSpan(
             name: "undo_organization",
             operation: "workflow.undo",
             feature: "history"
         )
         defer { reliabilitySpan?.finish() }
-        AnalyticsManager.shared.captureWorkflow(
+        OrganizerServices.captureWorkflow(
             workflow: "undo",
             stage: "started",
             outcome: "started"
@@ -6206,22 +6176,22 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let result = try await withRevertGuard(entryIDs: [entry.id], path: entry.directoryPath) {
                 try await self.performUndoHistoryEntry(entry, shouldPostNotification: true)
             }
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "undo",
                 stage: "completed",
                 outcome: result.hasIssues ? "partially_completed" : "success",
                 properties: [
-                    "count_bucket": AnalyticsManager.countBucket(result.successfulOperations),
+                    "count_bucket": OrganizerServices.countBucket(result.successfulOperations),
                 ]
             )
             return result
         } catch {
-            AnalyticsManager.shared.captureWorkflow(
+            OrganizerServices.captureWorkflow(
                 workflow: "undo",
                 stage: "restore",
                 outcome: "failed"
             )
-            ReliabilityManager.shared.capture(
+            OrganizerServices.capture(
                 error: error,
                 feature: "history",
                 operation: "undo_organization"
@@ -6469,7 +6439,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             try data.write(to: targetURL, options: .atomic)
             lastManualSessionFingerprintByURL[targetURL] = fingerprint
         } catch {
-            DebugLogger.log("FolderOrganizer: Failed to persist manual session: \(error)")
+            ModelLog.debug("FolderOrganizer: Failed to persist manual session: \(error)")
         }
     }
 

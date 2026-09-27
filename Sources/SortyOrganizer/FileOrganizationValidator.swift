@@ -6,6 +6,11 @@
 //
 
 import Foundation
+import SortyFileSystem
+import SortyModels
+import SortyAI
+import SortyLearnings
+import SortyFS
 
 struct FileOrganizationValidator {
     static func validateOffMain(

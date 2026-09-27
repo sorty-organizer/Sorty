@@ -1,5 +1,6 @@
 import XCTest
 import Combine
+@testable import SortyOrganizer
 @testable import SortyLib
 @testable import SortyCore
 import SortyQualitySupport

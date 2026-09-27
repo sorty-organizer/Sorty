@@ -1,5 +1,6 @@
 import XCTest
 import AppKit
+@testable import SortyOrganizer
 @testable import SortyLib
 @testable import SortyCore
 
@@ -9,6 +10,9 @@ final class FolderOrganizerVisionFlowTests: XCTestCase {
     private var tempDirectory: URL!
 
     override func setUp() async throws {
+        OrganizerServices.visionSupportChecker = {
+            ModelCatalog.shared.supportsVision(modelId: $0, provider: $1)
+        }
         organizer = FolderOrganizer()
         tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
@@ -19,6 +23,7 @@ final class FolderOrganizerVisionFlowTests: XCTestCase {
             try? FileManager.default.removeItem(at: tempDirectory)
         }
         organizer = nil
+        OrganizerServices.visionSupportChecker = { _, _ in false }
     }
 
     func testVisionFlowCallsAnalyzeWithImagesAndRespectsBatchSize() async throws {
