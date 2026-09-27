@@ -3,6 +3,7 @@ import Foundation
 import XCTest
 
 @testable import SortyLib
+@testable import SortyCore
 
 final class PermissionReliabilityTests: XCTestCase {
     func testAutomationCheckRunsAfterUserIntentEnablesChecks() {

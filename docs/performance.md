@@ -31,7 +31,7 @@ System Events every 50 ms, 5 runs each, kill between runs.
 - Ranges do not overlap even excluding first (cold) runs.
 
 Startup mechanism (verified by grep at both revisions): v1.2.0 decodes stores
-synchronously in `init` (e.g. `Sources/SortyLib/Models/WatchedFolder.swift:82`)
+synchronously in `init` (e.g. `Sources/SortyCore/Models/WatchedFolder.swift:82`)
 with zero `loadPersistedState` call sites and a sync
 `configureGlobalsIfNeeded`. HEAD has 22 `loadPersistedState` sites across 12
 files; `Sources/SortyApp/SortyApp.swift:963` fans them out as parallel async

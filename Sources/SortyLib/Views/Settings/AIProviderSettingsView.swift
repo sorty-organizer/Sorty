@@ -52,38 +52,41 @@ struct AIProviderSettingsView: View {
     )
 
     var body: some View {
-        VStack(spacing: 16) {
-            // Provider Selection
-            SettingsCard(title: "Select Provider", icon: "cpu", color: .purple) {
-                LazyVGrid(
-                    columns: providerColumns,
-                    alignment: .leading,
-                    spacing: 10
-                ) {
-                    ForEach(Array(AIProvider.userSelectableProviders), id: \.self) { provider in
-                        AIProviderRow(
-                            provider: provider,
-                            isSelected: viewModel.config.provider == provider,
-                            action: {
-                                withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.85)) {
-                                    viewModel.config.provider = provider
-                                    if let defaultURL = provider.defaultAPIURL {
-                                        viewModel.config.apiURL = defaultURL
-                                    }
-                                    viewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
-                                    HapticFeedbackManager.shared.selection()
+        deviceAuthPresentation
+    }
+
+    private var providerSelectionSection: some View {
+        SettingsCard(title: "Select Provider", icon: "cpu", color: .purple) {
+            LazyVGrid(columns: providerColumns, alignment: .leading, spacing: 10) {
+                ForEach(Array(AIProvider.userSelectableProviders), id: \.self) { provider in
+                    AIProviderRow(
+                        provider: provider,
+                        isSelected: viewModel.config.provider == provider,
+                        action: {
+                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.85)) {
+                                viewModel.config.provider = provider
+                                if let defaultURL = provider.defaultAPIURL {
+                                    viewModel.config.apiURL = defaultURL
                                 }
+                                viewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
+                                HapticFeedbackManager.shared.selection()
                             }
-                        )
-                        .settingsFocusable(
-                            .providerChoice(provider),
-                            shape: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        )
-                    }
+                        }
+                    )
+                    .settingsFocusable(
+                        .providerChoice(provider),
+                        shape: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
                 }
             }
-            .settingsFocusable(.providerSelect)
-            .animatedAppearance(delay: 0.05)
+        }
+        .settingsFocusable(.providerSelect)
+        .animatedAppearance(delay: 0.05)
+    }
+
+    private var sections: some View {
+        VStack(spacing: 16) {
+            providerSelectionSection
 
             // Provider-specific configuration
             if viewModel.config.provider == .githubCopilot {
@@ -103,6 +106,10 @@ struct AIProviderSettingsView: View {
                     .animatedAppearance(delay: 0.15)
             }
         }
+    }
+
+    private var modelSelectionPresentation: some View {
+        sections
         .onAppear {
             if viewModel.config.provider == .githubCopilot {
                 copilotAuth.checkAuthenticationStatus()
@@ -145,6 +152,10 @@ struct AIProviderSettingsView: View {
             },
             isSubscriptionSelected: viewModel.config.authMethod(for: viewModel.config.provider) == .accountSignIn
         )
+    }
+
+    private var deviceAuthPresentation: some View {
+        modelSelectionPresentation
         .sheet(isPresented: $isShowingCodexDeviceAuth) {
             CodexDeviceAuthSheet(
                 session: codexAuth.deviceAuthSession,

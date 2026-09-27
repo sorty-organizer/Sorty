@@ -8,6 +8,7 @@
 
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 final class LearningsRuleScoringTests: XCTestCase {
 

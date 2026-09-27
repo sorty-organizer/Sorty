@@ -3,6 +3,7 @@ import AppKit
 import ImageIO
 import PDFKit
 @testable import SortyLib
+@testable import SortyCore
 
 final class ImageVisionAnalyzerTests: XCTestCase {
     private var tempDirectory: URL!

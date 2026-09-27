@@ -1,5 +1,6 @@
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 /// Focused startup hydration and bookmark-restore races.
 /// Covers: deferred exclusion loads, early-mutation preservation, reset invalidation,

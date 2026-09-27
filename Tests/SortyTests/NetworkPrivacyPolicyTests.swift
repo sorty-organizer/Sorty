@@ -1,5 +1,6 @@
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 private final class SuspendedNetworkPrivacyURLProtocol: URLProtocol {
     nonisolated(unsafe) static var onStart: (() -> Void)?

@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 final class SparkleTrafficLightSkipStoreTests: XCTestCase {
     func testSkippedVersionsRemainScopedToTheSelectedVersion() throws {

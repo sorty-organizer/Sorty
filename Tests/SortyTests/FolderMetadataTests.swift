@@ -1,6 +1,7 @@
 
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 final class FolderMetadataTests: XCTestCase {
     

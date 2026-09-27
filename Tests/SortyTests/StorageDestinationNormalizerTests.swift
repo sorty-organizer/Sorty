@@ -1,5 +1,6 @@
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 final class StorageDestinationNormalizerTests: XCTestCase {
     func testNormalizeMapsGenericStorageAliasWhenSingleLocationConfigured() {

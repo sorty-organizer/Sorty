@@ -1,6 +1,7 @@
 import XCTest
 import Combine
 @testable import SortyLib
+@testable import SortyCore
 import SortyQualitySupport
 
 // Mock AI Client for testing (analyze-focused).

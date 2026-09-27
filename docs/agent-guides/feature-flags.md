@@ -1,6 +1,6 @@
 # Feature Flags
 
-Feature flags are controlled via `defaults` and defined in `Sources/SortyLib/Models/FeatureFlags.swift`.
+Feature flags are controlled via `defaults` and defined in `Sources/SortyCore/Models/FeatureFlags.swift`.
 
 ## Usage
 ```bash
@@ -13,7 +13,7 @@ defaults write com.sorty.app <key> -bool false
 
 ## Available Flags
 
-Flags are defined in `Sources/SortyLib/Models/FeatureFlags.swift`. Terminal keys use the `com.sorty.app` defaults domain unless noted.
+Flags are defined in `Sources/SortyCore/Models/FeatureFlags.swift`. Terminal keys use the `com.sorty.app` defaults domain unless noted.
 
 | Flag | Key | Default | Description |
 |------|-----|---------|-------------|

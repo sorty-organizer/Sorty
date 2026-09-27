@@ -1,6 +1,7 @@
 import XCTest
 import AppKit
 @testable import SortyLib
+@testable import SortyCore
 
 @MainActor
 final class FolderOrganizerVisionFlowTests: XCTestCase {

@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 /// Covers the stale ready-screen error: fixing the config (e.g. adding the
 /// missing API key) must clear the previous prewarm verdict immediately

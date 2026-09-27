@@ -1,6 +1,7 @@
 
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 class ExclusionRulesTests: XCTestCase {
     

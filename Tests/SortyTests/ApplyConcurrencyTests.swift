@@ -1,5 +1,6 @@
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 /// Regression tests for FolderOrganizer apply/undo state tracking:
 /// - concurrent apply() calls must single-flight (the second no-ops on

@@ -1,5 +1,6 @@
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 /// Focused tests for the live-organization stream parser that drives the
 /// files-flying-into-folders animation while the AI response streams in.

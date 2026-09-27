@@ -1,5 +1,6 @@
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 /// Restart recovery for a Full Disk Access relaunch: the manual folder and its
 /// ready preview must survive, interruptions must restore the folder without

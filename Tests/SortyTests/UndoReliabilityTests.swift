@@ -1,5 +1,6 @@
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 private actor BlockingRevertHook {
     private var hasEntered = false

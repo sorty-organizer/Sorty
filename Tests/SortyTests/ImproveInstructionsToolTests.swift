@@ -5,6 +5,7 @@
 
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 final class ImproveInstructionsToolTests: XCTestCase {
     func testParsesReplacementAction() {

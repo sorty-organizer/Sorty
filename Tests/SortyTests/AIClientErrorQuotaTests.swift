@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 /// A 429 carrying a free-tier/quota body must surface as a usage-limit error,
 /// not a transient "rate limit exceeded, wait and retry" error.

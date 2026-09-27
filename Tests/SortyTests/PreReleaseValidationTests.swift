@@ -9,6 +9,7 @@
 
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 // MARK: - Filename Edge Cases
 

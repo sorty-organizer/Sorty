@@ -1,5 +1,6 @@
 import XCTest
 @testable import SortyLib
+@testable import SortyCore
 
 final class FinderIntegrationStatusTests: XCTestCase {
     private let preferredExtensionPath = "/Users/test/Applications/Sorty.app/Contents/PlugIns/SortyFinderSync.appex"

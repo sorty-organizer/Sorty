@@ -72,6 +72,7 @@ if isHotReloadBuild {
 
 var packageProducts: [Product] = [
     .library(name: "SortyQualitySupport", targets: ["SortyQualitySupport"]),
+    .library(name: "SortyCore", targets: ["SortyCore"]),
     .library(
         name: "SortyLib",
         targets: ["SortyLib"]),
@@ -85,8 +86,15 @@ var packageProducts: [Product] = [
 var packageTargets: [Target] = [
     .target(name: "SortyQualitySupport", path: "Sources/SortyQualitySupport"),
     .target(
-        name: "SortyLib",
+        name: "SortyCore",
         dependencies: sortyLibDependencies,
+        path: "Sources/SortyCore",
+        swiftSettings: sortyLibSwiftSettings,
+        linkerSettings: sortyLibLinkerSettings
+    ),
+    .target(
+        name: "SortyLib",
+        dependencies: ["SortyCore"] + sortyLibDependencies,
         path: "Sources/SortyLib",
         resources: [
             // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation
@@ -126,7 +134,7 @@ var packageTargets: [Target] = [
     ),
     .testTarget(
         name: "SortyTests",
-        dependencies: ["SortyLib", "SortyQualitySupport"],
+        dependencies: ["SortyLib", "SortyCore", "SortyQualitySupport"],
         path: "Tests/SortyTests",
         swiftSettings: [
             .unsafeFlags(["-enable-batch-mode"]),

@@ -39,8 +39,8 @@ Do not create a new event for every button or state. Prefer an existing canonica
 
 ## Implementation map
 
-- Mac PostHog setup, consent, allowlists, bucketing, and feature flags: `Sources/SortyLib/Analytics/AnalyticsManager.swift`
-- Mac Sentry setup, consent, privacy policy, crash/hang capture, rate limiting, and handled-error classification: `Sources/SortyLib/Analytics/ReliabilityManager.swift`
+- Mac PostHog setup, consent, allowlists, bucketing, and feature flags: `Sources/SortyCore/Analytics/AnalyticsManager.swift`
+- Mac Sentry setup, consent, privacy policy, crash/hang capture, rate limiting, and handled-error classification: `Sources/SortyCore/Analytics/ReliabilityManager.swift`
 - Mac settings toggles, notification previews, automation controls, and persona inventory: `Sources/SortyLib/Views/Settings/SettingsComponents.swift`, `Sources/SortyLib/Views/Settings/AutomationSettingsView.swift`, and `Sources/SortyLib/Views/PersonaPickerView.swift`
 - Mac one-time permission UI: `Sources/SortyLib/Analytics/AnalyticsConsentView.swift`
 - Website PostHog initialization, sanitization, and product events: `website/lib/analytics.ts`

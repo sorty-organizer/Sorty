@@ -8,6 +8,7 @@
 import XCTest
 import Combine
 @testable import SortyLib
+@testable import SortyCore
 
 // MARK: - AppState Tests
 

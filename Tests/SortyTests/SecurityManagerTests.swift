@@ -10,6 +10,7 @@ import XCTest
 import Combine
 import LocalAuthentication
 @testable import SortyLib
+@testable import SortyCore
 
 @MainActor
 final class SecurityManagerTests: XCTestCase {

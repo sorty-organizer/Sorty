@@ -1,6 +1,6 @@
 # Sorty Design System
 
-Centralized design constants in `Sources/SortyLib/DesignSystem/SortyDesignSystem.swift`.
+Centralized design constants in `Sources/SortyCore/DesignSystem/SortyDesignSystem.swift`.
 Only the members listed here exist — everything unused was removed.
 
 ## Namespaces
