@@ -883,11 +883,6 @@ public struct ProviderSelectionStepView: View {
         var next = settingsViewModel.config
         let provider = next.provider
         next.setAuthMethod(method, for: provider)
-        if method == .apiKey {
-            next.apiKey = KeychainManager.get(key: provider.keychainKey)
-        } else {
-            next.apiKey = nil
-        }
         settingsViewModel.config = next
         HapticFeedbackManager.shared.selection()
         settingsViewModel.updateAvailableModels(force: true)

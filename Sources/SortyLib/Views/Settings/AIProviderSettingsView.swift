@@ -400,7 +400,6 @@ struct AIProviderSettingsView: View {
         var nextConfig = viewModel.config
         let provider = nextConfig.provider
         nextConfig.setAuthMethod(method, for: provider)
-        nextConfig.apiKey = method == .apiKey ? KeychainManager.get(key: provider.keychainKey) : nil
         withAnimation(authenticationTransitionAnimation) {
             viewModel.config = nextConfig
         }
