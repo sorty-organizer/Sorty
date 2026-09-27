@@ -156,7 +156,14 @@ public struct BugReportView: View {
                         }
                         .accessibilityIdentifier("BugReportSentryTransparency")
                     }
-                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+                    .transition(
+                        reduceMotion
+                            ? .opacity
+                            : .asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),
+                                removal: .opacity
+                            )
+                    )
                 }
 
                 if !canSubmitBugFeedback {
