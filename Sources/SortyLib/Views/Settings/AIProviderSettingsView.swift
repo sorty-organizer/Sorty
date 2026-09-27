@@ -13,7 +13,6 @@ struct AIProviderSettingsView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
-    @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
 
     @State private var testConnectionStatus: String?
     @State private var testConnectionDetails: String?
@@ -89,19 +88,22 @@ struct AIProviderSettingsView: View {
             providerSelectionSection
 
             // Provider-specific configuration
-            if viewModel.config.provider == .githubCopilot {
-                copilotConfigSection
-                    .animatedAppearance(delay: 0.1)
+            if viewModel.config.provider == .unavailableProvider {
+                SettingsCard(title: "Provider unavailable", icon: "exclamationmark.triangle", color: .orange) {
+                    Text("GitHub Copilot was removed. Choose an AI provider to continue.")
+                        .foregroundStyle(.secondary)
+                }
+                .settingsFocusable(.providerConfiguration)
             } else if viewModel.config.provider == .appleFoundationModel {
                 appleConfigSection
                     .animatedAppearance(delay: 0.1)
-            } else if [.openAI, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini].contains(viewModel.config.provider) {
+            } else if [.openAI, .openCodeZen, .openCodeGo, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini].contains(viewModel.config.provider) {
                 apiConfigSection
                     .animatedAppearance(delay: 0.1)
             }
 
             // Connection Test
-            if [.openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini, .appleFoundationModel].contains(viewModel.config.provider) {
+            if [.openAI, .openCodeZen, .openCodeGo, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini, .appleFoundationModel].contains(viewModel.config.provider) {
                 connectionSection
                     .animatedAppearance(delay: 0.15)
             }
@@ -111,18 +113,12 @@ struct AIProviderSettingsView: View {
     private var modelSelectionPresentation: some View {
         sections
         .onAppear {
-            if viewModel.config.provider == .githubCopilot {
-                copilotAuth.checkAuthenticationStatus()
-            }
             if viewModel.config.provider == .openAI {
                 codexAuth.checkStatus()
             }
         }
         .onChange(of: viewModel.config.provider) { _, newProvider in
             NotificationManager.shared.dismissHUD(identifier: "setup-repair")
-            if newProvider == .githubCopilot {
-                copilotAuth.checkAuthenticationStatus()
-            }
             if newProvider == .openAI {
                 codexAuth.checkStatus()
             }
@@ -196,150 +192,6 @@ struct AIProviderSettingsView: View {
             connectionSuccessResetTask?.cancel()
             connectionSuccessResetTask = nil
         }
-    }
-
-    private var copilotConfigSection: some View {
-        SettingsCard(title: "GitHub Copilot", icon: "person.badge.key", color: .black) {
-            if copilotAuth.isAuthenticated {
-                // Signed in state
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(.green)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Signed in")
-                                .font(.headline)
-                            if let username = copilotAuth.username {
-                                Text(username)
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringUsername) ? 4 : 0)
-                                    .animation(.spring(), value: isHoveringUsername)
-                                    .onHover { hovering in
-                                        isHoveringUsername = hovering
-                                    }
-                            }
-                        }
-
-                        Spacer()
-
-                        if !viewModel.availableModels.isEmpty {
-                            ModelSelectorCompactButton(
-                                provider: .githubCopilot,
-                                label: selectedModelDisplay,
-                                onTap: { showModelPicker = true }
-                            )
-                            .modelSelectorTriggerBounds()
-                        } else if viewModel.isLoadingModels {
-                            BouncingSpinner(size: 12, color: .secondary)
-                        }
-
-                        Button("Sign Out") {
-                            copilotAuth.signOut()
-                        }
-                        .buttonStyle(.sortyBordered)
-                    }
-                }
-                .onAppear {
-                    viewModel.updateAvailableModels()
-                }
-                .transition(.opacity)
-            } else if let code = copilotAuth.deviceCodeResponse {
-                // Device code flow
-                VStack(alignment: .leading, spacing: 16) {
-                    StepCard(number: 1, title: "Open URL in browser") {
-                        if let verificationURL = URL(string: code.verificationUri) {
-                            Link(destination: verificationURL) {
-                                Text(code.verificationUri)
-                                    .underline()
-                                    .foregroundColor(.blue)
-                            }
-                        } else {
-                            Text(code.verificationUri)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                        }
-                    }
-
-                    StepCard(number: 2, title: "Enter this code") {
-                        HStack(spacing: 8) {
-                            Text(code.userCode)
-                                .font(.system(.title2, design: .monospaced))
-                                .bold()
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Color.secondary.opacity(0.1))
-                                .cornerRadius(8)
-
-                            Button {
-                                let pasteboard = NSPasteboard.general
-                                pasteboard.clearContents()
-                                pasteboard.setString(code.userCode, forType: .string)
-                                HapticFeedbackManager.shared.tap()
-                                withAnimation { hasCopiedCode = true }
-                                Task { @MainActor in
-                                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s
-                                    withAnimation { hasCopiedCode = false }
-                                }
-                            } label: {
-                                Image(systemName: hasCopiedCode ? "checkmark" : "doc.on.doc")
-                                    .foregroundColor(hasCopiedCode ? .green : .primary)
-                                    .symbolReplaceTransition(animationValue: hasCopiedCode)
-                            }
-                            .buttonStyle(.sortyBordered)
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        BouncingSpinner(size: 10, color: .secondary)
-                        Text("Waiting for authorization...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .transition(.opacity)
-            } else {
-                // Sign in prompt
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Sign in with GitHub to use Copilot models.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-
-                    Button {
-                        Task { try? await copilotAuth.startDeviceFlow() }
-                        HapticFeedbackManager.shared.tap()
-                    } label: {
-                        HStack {
-                            Image(systemName: "person.badge.key.fill")
-                            Text("Sign in with GitHub")
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.sortyPrimary)
-                    .tint(.black)
-
-                    if let error = copilotAuth.authError {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundColor(.red)
-                            .font(.caption)
-                    }
-
-                    Divider()
-
-                    Text("Requires an active GitHub Copilot subscription. This is an unofficial integration.")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                .transition(.opacity)
-            }
-        }
-        .animation(
-            reduceMotion ? nil : .easeInOut(duration: 0.22),
-            value: copilotAuth.isAuthenticated
-        )
-        .settingsFocusable(.providerConfiguration)
     }
 
     private var apiConfigSection: some View {
@@ -626,8 +478,7 @@ struct AIProviderSettingsView: View {
     }
 
     private var selectedModelDisplay: String {
-        let provider = viewModel.config.provider
-        return viewModel.config.model.isEmpty ? provider.defaultModel : viewModel.config.model
+        viewModel.config.model.isEmpty ? "Choose model" : viewModel.config.model
     }
 
     private var connectionSection: some View {
@@ -992,7 +843,6 @@ struct AIProviderSettingsView: View {
         let providerStatus = OnboardingSetupValidator.providerStatus(
             context: ProviderSetupContext(
                 config: testedConfig,
-                isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
                 isCodexAuthenticated: codexAuth.isAuthenticated,
                 isCodexInstalled: codexAuth.isCodexInstalled,
                 isAppleFoundationModelAvailable: viewModel.isAppleModelAvailable,

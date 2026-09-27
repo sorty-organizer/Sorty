@@ -842,11 +842,7 @@ final class AIConfigOCRKeywordsTests: XCTestCase {
         XCTAssertEqual(decoded.ocrLanguages, ["en-US", "fr-FR"])
     }
 
-    func testCopilotDefaultsVisionDetailToLow() {
-        let config = AIConfig(provider: .githubCopilot, model: "gpt-4o")
-        XCTAssertEqual(config.visionDetailLevel, .low)
-        XCTAssertEqual(config.effectiveVisionDetailLevel, .low)
-    }
+
 }
 
 // MARK: - Helper Extension for Tests

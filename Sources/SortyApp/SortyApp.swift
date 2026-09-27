@@ -930,9 +930,6 @@ struct SortyApp: App {
                 // AI clients in SortyAI cannot depend on shared infra here,
                 // so inject the live stores once at startup.
                 AIKeychain.shared = LiveAIKeychainStore()
-                GitHubCopilotClient.visionSupportChecker = { modelId, provider in
-                    await ModelCatalog.shared.supportsVision(modelId: modelId, provider: provider)
-                }
                 if hasConfiguredOperationalServices {
                     ReliabilityManager.shared.finishLaunchSpan()
                 }

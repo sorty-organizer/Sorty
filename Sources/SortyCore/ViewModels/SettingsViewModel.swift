@@ -95,16 +95,13 @@ public class SettingsViewModel: ObservableObject {
                 userDefaults.set(oldValue.model, forKey: modelSelectionKey(for: oldProvider))
 
                 // Save the old provider's API key to its keychain slot
-                // Skip for GitHub Copilot — its token is managed by GitHubCopilotAuthManager
-                if oldProvider != .githubCopilot,
-                   oldAuthMethod == .apiKey,
+                if oldAuthMethod == .apiKey,
                    let oldKey = oldValue.apiKey,
                    !oldKey.isEmpty {
                     persistCredential(oldKey, for: oldProvider)
                 }
 
                 // Load the new provider's API key from its keychain slot
-                // Skip for GitHub Copilot — auth is handled by GitHubCopilotAuthManager, not apiKey
                 isApplyingConfigMutation = true
                 config.apiKey = nil
                 config.apiURL = newProvider.defaultAPIURL
@@ -114,8 +111,7 @@ public class SettingsViewModel: ObservableObject {
                 isApplyingConfigMutation = false
                 userDefaults.set(config.model, forKey: modelSelectionKey(for: newProvider))
 
-                if newProvider != .githubCopilot,
-                   newProvider.typicallyRequiresAPIKey,
+                if newProvider.typicallyRequiresAPIKey,
                    newAuthMethod == .apiKey {
                     hydrateStoredCredential(for: newProvider, authMethod: newAuthMethod)
                 }
@@ -127,7 +123,6 @@ public class SettingsViewModel: ObservableObject {
                 updateAvailableModels(force: true)
 
                 // Auto-check connection after a short delay
-                // For GitHub Copilot, skip apiKey check since auth is token-based
                 providerConnectionTask?.cancel()
                 let connectionConfig = config
                 providerConnectionTask = Task { [weak self] in
@@ -135,8 +130,7 @@ public class SettingsViewModel: ObservableObject {
                     guard !Task.isCancelled,
                           let self,
                           self.config.provider == newProvider else { return }
-                    if newProvider == .githubCopilot
-                        || newProvider == .appleFoundationModel
+                    if newProvider == .appleFoundationModel
                         || connectionConfig.apiKey != nil {
                         try? await self.testConnection(using: connectionConfig)
                     }
@@ -267,7 +261,6 @@ public class SettingsViewModel: ObservableObject {
         let provider = config.provider
         let authMethod = ProviderAuthResolver.effectiveAuthMethod(for: provider, config: config)
         guard !userDefaults.bool(forKey: disableStoredCredentialsForUITestsKey),
-              provider != .githubCopilot,
               provider.typicallyRequiresAPIKey,
               authMethod == .apiKey else { return }
         hydrateStoredCredential(for: provider, authMethod: authMethod, migratesLegacyKey: true)
@@ -284,7 +277,6 @@ public class SettingsViewModel: ObservableObject {
         config.apiKey = apiKey
 
         guard let apiKey,
-              config.provider != .githubCopilot,
               config.provider.typicallyRequiresAPIKey,
               ProviderAuthResolver.effectiveAuthMethod(for: config.provider, config: config) == .apiKey else { return }
 
@@ -333,8 +325,7 @@ public class SettingsViewModel: ObservableObject {
             // keyless config while hydration was in flight; drop that verdict.
             // No auto-prewarm here: post-hydration network belongs to explicit
             // user intent (organize, provider switch), not launch hydration.
-            if provider != .githubCopilot,
-               provider.typicallyRequiresAPIKey,
+            if provider.typicallyRequiresAPIKey,
                authMethod == .apiKey,
                apiKey != nil {
                 AISessionManager.shared.resetPrewarmState(for: provider)
@@ -377,8 +368,7 @@ public class SettingsViewModel: ObservableObject {
         var configToSave = config
         configToSave.apiKey = nil
 
-        if provider != .githubCopilot,
-           provider.typicallyRequiresAPIKey,
+        if provider.typicallyRequiresAPIKey,
            ProviderAuthResolver.effectiveAuthMethod(for: provider, config: config) == .apiKey {
             if let apiKey {
                 _ = credentialStore.saveImmediately(provider.keychainKey, apiKey)
@@ -409,8 +399,7 @@ public class SettingsViewModel: ObservableObject {
         ])
         
         // Save API key to provider-specific Keychain key
-        if provider != .githubCopilot,
-           provider.typicallyRequiresAPIKey,
+        if provider.typicallyRequiresAPIKey,
            ProviderAuthResolver.effectiveAuthMethod(for: provider, config: config) == .apiKey {
             let providerKey = provider.keychainKey
             if let apiKey = apiKey {
@@ -514,23 +503,6 @@ public class SettingsViewModel: ObservableObject {
 
             if self.availableModels != resolvedModels {
                 self.availableModels = resolvedModels
-            }
-            let isKnownCodexModel = provider == .openAI
-                && ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: self.config) == .accountSignIn
-                && ModelCatalog.shared.isCodexSubscriptionModel(self.config.model)
-            let keepsCustomModelID = [.openAICompatible, .ollama].contains(provider)
-                && !self.config.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            if !resolvedModels.isEmpty, !isKnownCodexModel, !resolvedModels.contains(self.config.model) {
-                // A raw catalog can lead with embedding/audio models, and a
-                // custom endpoint ID must not be clobbered by one of them.
-                if !keepsCustomModelID {
-                    let replacement = ModelCatalog.shared.chatCapableModelIDs(for: provider).first
-                        ?? provider.recommendedModels.first
-                        ?? provider.defaultModel
-                    if replacement != self.config.model {
-                        self.config.model = replacement
-                    }
-                }
             }
             self.isLoadingModels = false
             AnalyticsManager.shared.captureWorkflow(

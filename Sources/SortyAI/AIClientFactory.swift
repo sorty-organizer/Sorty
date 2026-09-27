@@ -18,17 +18,19 @@ public struct AIClientFactory {
 
     public static func createClient(config: AIConfig) throws -> AIClientProtocol {
         switch config.provider {
+        case .unavailableProvider:
+            throw AIClientError.apiError(
+                statusCode: 503,
+                message: "The selected AI provider is no longer available. Choose a provider in Settings."
+            )
         case .openAI:
             if ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config) == .accountSignIn {
                 return CodexSubscriptionClient(config: config)
             }
             return OpenAIClient(config: config)
 
-        case .groq, .openAICompatible, .openRouter, .ollama, .gemini:
+        case .openCodeZen, .openCodeGo, .groq, .openAICompatible, .openRouter, .ollama, .gemini:
             return OpenAIClient(config: config)
-            
-        case .githubCopilot:
-            return GitHubCopilotClient(config: config)
             
         case .anthropic:
             return AnthropicClient(config: config)

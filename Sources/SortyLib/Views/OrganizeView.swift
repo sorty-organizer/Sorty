@@ -53,7 +53,6 @@ struct OrganizeView: View {
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
     @StateObject private var steeringManager = SteeringPromptManager.shared
 
     @State private var previousState: OrganizationState?
@@ -742,7 +741,6 @@ struct OrganizeView: View {
         OnboardingSetupValidator.providerStatus(
             context: ProviderSetupContext(
                 config: settingsViewModel.config,
-                isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
                 isCodexAuthenticated: codexAuth.isAuthenticated,
                 isCodexInstalled: codexAuth.isCodexInstalled,
                 isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,

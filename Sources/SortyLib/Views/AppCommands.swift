@@ -2174,7 +2174,6 @@ public class AppState: ObservableObject {
             var deletionFailures: [Error] = []
 
             AnalyticsManager.shared.resetConsentAndData()
-            GitHubCopilotAuthManager.shared.signOut()
 
             // Keychain and filesystem deletes block; run them off the main actor.
             // Ordering after this point matches the previous synchronous version.

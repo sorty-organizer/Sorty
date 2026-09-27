@@ -24,6 +24,7 @@ public enum FastModeSettings {
 
 public final class OpenAIClient: AIClientProtocol, Sendable {
     public let config: AIConfig
+    private let sessionID = UUID().uuidString
     @MainActor public weak var streamingDelegate: StreamingDelegate?
     
     public init(config: AIConfig) {
@@ -31,7 +32,12 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     }
 
     private func authHeaders() -> [String: String] {
-        ProviderAuthResolver.authHeaders(for: config.provider, config: config)
+        var headers = ProviderAuthResolver.authHeaders(for: config.provider, config: config)
+        if config.provider == .openCodeGo {
+            headers["User-Agent"] = "Sorty/1.0"
+            headers["x-opencode-session"] = sessionID
+        }
+        return headers
     }
     
     private func resolvedTemperature(_ override: Double?) -> Double {
@@ -297,7 +303,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             ]
         case .openAI, .gemini:
             requestBody["reasoning_effort"] = requestValue
-        case .githubCopilot, .groq, .openAICompatible, .ollama, .anthropic, .appleFoundationModel:
+        case .unavailableProvider, .openCodeZen, .openCodeGo, .groq, .openAICompatible, .ollama, .anthropic, .appleFoundationModel:
             break
         }
     }
@@ -320,7 +326,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             if openRouterFastMode {
                 requestBody["provider"] = ["sort": "throughput"]
             }
-        case .githubCopilot, .groq, .openAICompatible, .ollama, .anthropic, .gemini, .appleFoundationModel:
+        case .unavailableProvider, .openCodeZen, .openCodeGo, .groq, .openAICompatible, .ollama, .anthropic, .gemini, .appleFoundationModel:
             break
         }
     }

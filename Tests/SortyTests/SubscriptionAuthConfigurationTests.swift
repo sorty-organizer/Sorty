@@ -26,7 +26,7 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
     func testSupportedSubscriptionProviders() {
         XCTAssertTrue(AIProvider.openAI.supportsSubscriptionAuth)
         XCTAssertFalse(AIProvider.anthropic.supportsSubscriptionAuth)
-        XCTAssertFalse(AIProvider.githubCopilot.supportsSubscriptionAuth)
+        XCTAssertFalse(AIProvider.openCodeZen.supportsSubscriptionAuth)
         XCTAssertFalse(AIProvider.openRouter.supportsSubscriptionAuth)
     }
 
@@ -39,8 +39,61 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
 
     func testSupportedAuthMethodsForNonSubscriptionProviders() {
         XCTAssertEqual(AIProvider.groq.supportedAuthMethods, [.apiKey])
-        XCTAssertEqual(AIProvider.githubCopilot.supportedAuthMethods, [.apiKey])
+        XCTAssertEqual(AIProvider.openCodeZen.supportedAuthMethods, [.apiKey])
+        XCTAssertEqual(AIProvider.openCodeGo.supportedAuthMethods, [.apiKey])
         XCTAssertEqual(AIProvider.appleFoundationModel.supportedAuthMethods, [.apiKey])
+    }
+
+    func testOpenCodePlansUseSeparateKeysAndEndpoints() throws {
+        let zen = AIProvider.openCodeZen
+        let go = AIProvider.openCodeGo
+        XCTAssertNotEqual(zen.keychainKey, go.keychainKey)
+        XCTAssertEqual(zen.defaultAPIURL, "https://opencode.ai/zen/v1")
+        XCTAssertEqual(go.defaultAPIURL, "https://opencode.ai/zen/go/v1")
+
+        for provider in [zen, go] {
+            let config = AIConfig(
+                provider: provider,
+                apiURL: provider.defaultAPIURL,
+                apiKey: "test-key",
+                model: provider.defaultModel
+            )
+            let url = try AIRequestSupport.openAIChatCompletionsURL(from: config.apiURL!)
+            XCTAssertEqual(url.absoluteString, provider.defaultAPIURL! + "/chat/completions")
+            XCTAssertEqual(ProviderAuthResolver.authHeader(for: provider, config: config)?.value, "Bearer test-key")
+            XCTAssertTrue(try AIClientFactory.createClient(config: config) is OpenAIClient)
+        }
+    }
+
+    func testRemovedCopilotSelectionUsesChosenAutomationModel() throws {
+        let data = Data(#"{"provider":"github_copilot","apiURL":"https://api.githubcopilot.com","model":"gpt-5-mini","enableDeepScan":false,"automationProvider":"opencode_go","automationModel":"glm-5.3"}"#.utf8)
+        let config = try JSONDecoder().decode(AIConfig.self, from: data)
+
+        XCTAssertEqual(config.provider, .openCodeGo)
+        XCTAssertEqual(config.apiURL, AIProvider.openCodeGo.defaultAPIURL)
+        XCTAssertEqual(config.model, "glm-5.3")
+        XCTAssertFalse(config.enableDeepScan)
+        XCTAssertEqual(config.automationProvider, .openCodeGo)
+        XCTAssertEqual(config.automationModel, "glm-5.3")
+    }
+
+    func testRemovedCopilotWithoutAutomationSelectionRequiresRepair() throws {
+        let data = Data(#"{"provider":"github_copilot","automationProvider":"github_copilot","automationModel":"gpt-5-mini"}"#.utf8)
+        let config = try JSONDecoder().decode(AIConfig.self, from: data)
+
+        XCTAssertEqual(config.provider, .unavailableProvider)
+        XCTAssertEqual(config.model, "")
+        XCTAssertEqual(config.automationProvider, .unavailableProvider)
+        let status = OnboardingSetupValidator.providerStatus(
+            context: ProviderSetupContext(
+                config: config,
+                isCodexAuthenticated: false,
+                isCodexInstalled: false,
+                isAppleFoundationModelAvailable: false
+            )
+        )
+        XCTAssertFalse(status.isReady)
+        XCTAssertTrue(status.message.contains("GitHub Copilot was removed"))
     }
 
     func testAIConfigDefaultAuthMethods() {

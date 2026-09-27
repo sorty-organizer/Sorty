@@ -9,7 +9,6 @@ import SwiftUI
 
 private struct ProviderReadinessInputs: Equatable, Sendable {
     let config: AIConfig
-    let isGitHubCopilotAuthenticated: Bool
     let isCodexAuthenticated: Bool
     let isCodexInstalled: Bool
     let isAppleFoundationModelAvailable: Bool
@@ -39,7 +38,6 @@ private final class ProviderSelectionTaskController {
     var codexVerifyResetTask: Task<Void, Never>?
     var apiKeyCommitTask: Task<Void, Never>?
     var apiURLCommitTask: Task<Void, Never>?
-    var copilotModelTask: Task<Void, Never>?
 }
 
 public struct ProviderSelectionStepView: View {
@@ -48,14 +46,10 @@ public struct ProviderSelectionStepView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
     @State private var hasAppeared = false
     @State private var connectionStatus: ConnectionTestStatus = .idle
     @State private var connectionError: String?
     @State private var taskController = ProviderSelectionTaskController()
-    @State private var hasCopiedCode = false
-    @State private var availableModels: [String] = []
-    @State private var isLoadingModels = false
     @State private var isShowingAPIKey = false
     @State private var isShowingModelPopover = false
     @State private var codexTerminalButtonState: CodexActionVisualState = .idle
@@ -176,12 +170,12 @@ public struct ProviderSelectionStepView: View {
 
                             }
 
-                            Group {
-                                if settingsViewModel.config.provider == .githubCopilot {
-                                    onboardingCopilotConfig
-                                } else {
-                                    providerConfigSection
-                                }
+                            if settingsViewModel.config.provider == .unavailableProvider {
+                                Text(setupStatus.message)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.orange)
+                            } else {
+                                providerConfigSection
                             }
                         }
                         .padding(16)
@@ -226,19 +220,11 @@ public struct ProviderSelectionStepView: View {
             taskController.connectionTestTask = nil
             taskController.initialProviderRefreshTask?.cancel()
             taskController.initialProviderRefreshTask = nil
-            taskController.copilotModelTask?.cancel()
-            taskController.copilotModelTask = nil
-            if newProvider != .githubCopilot {
-                isLoadingModels = false
-            }
             taskController.apiKeyCommitTask?.cancel()
             taskController.apiURLCommitTask?.cancel()
             taskController.apiKeyCommitTask = nil
             taskController.apiURLCommitTask = nil
             synchronizeInputDrafts()
-            if newProvider == .githubCopilot {
-                copilotAuth.checkAuthenticationStatus()
-            }
             if newProvider == .openAI {
                 codexAuth.checkStatus()
             }
@@ -265,8 +251,6 @@ public struct ProviderSelectionStepView: View {
             taskController.testDebounceTask = nil
             taskController.connectionTestTask?.cancel()
             taskController.connectionTestTask = nil
-            taskController.copilotModelTask?.cancel()
-            taskController.copilotModelTask = nil
             taskController.codexTerminalResetTask?.cancel()
             taskController.codexTerminalResetTask = nil
             taskController.codexVerifyResetTask?.cancel()
@@ -308,177 +292,6 @@ public struct ProviderSelectionStepView: View {
             },
             isSubscriptionSelected: settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) == .accountSignIn
         )
-    }
-
-    @ViewBuilder
-    private var onboardingCopilotConfig: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if copilotAuth.isAuthenticated {
-                // Signed in state
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.green)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Signed in as")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        CopilotUsernameRevealText(value: copilotAuth.username ?? "User")
-                    }
-
-                    Spacer()
-
-                    Button("Sign Out") {
-                        taskController.copilotModelTask?.cancel()
-                        taskController.copilotModelTask = nil
-                        copilotAuth.signOut()
-                        connectionStatus = .idle
-                        availableModels = []
-                        isLoadingModels = false
-                    }
-                    .buttonStyle(.sortyBordered)
-                    .controlSize(.small)
-                }
-                .padding(12)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(8)
-
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Model")
-                            .font(.subheadline)
-                        Text("Used for organization")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    if isLoadingModels {
-                        HStack(spacing: 8) {
-                            BouncingSpinner(size: 12, color: .secondary)
-                            Text("Loading models...")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        ModelSelectorCompactButton(
-                            provider: settingsViewModel.config.provider,
-                            label: selectedModelDisplay
-                        ) {
-                            isShowingModelPopover = true
-                        }
-                        .modelSelectorTriggerBounds()
-                    }
-                }
-                .onAppear {
-                    if copilotAuth.isAuthenticated && availableModels.isEmpty {
-                        fetchCopilotModels()
-                    }
-                }
-
-            } else if let code = copilotAuth.deviceCodeResponse {
-                // Device code flow
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("1. Open verification page")
-                            .font(.caption).bold()
-
-                        if let verificationURL = URL(string: code.verificationUri) {
-                            Link(destination: verificationURL) {
-                                HStack {
-                                    Text(code.verificationUri)
-                                    Image(systemName: "arrow.up.right.square")
-                                }
-                                .font(.caption)
-                            }
-                            .trackHoveredURL(verificationURL)
-                            .buttonStyle(.link)
-                        } else {
-                            Text(code.verificationUri)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .textSelection(.enabled)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("2. Enter code")
-                            .font(.caption).bold()
-
-                        HStack {
-                            Text(code.userCode)
-                                .font(.system(.title3, design: .monospaced))
-                                .bold()
-                                .padding(8)
-                                .background(Color.secondary.opacity(0.1))
-                                .cornerRadius(6)
-
-                            Button {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(code.userCode, forType: .string)
-                                hasCopiedCode = true
-                                Task { @MainActor in
-                                    try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s
-                                    hasCopiedCode = false
-                                }
-                            } label: {
-                                Image(systemName: hasCopiedCode ? "checkmark" : "doc.on.doc")
-                                    .frame(width: 20, height: 20)
-                                    .symbolReplaceTransition(animationValue: hasCopiedCode)
-                            }
-                            .buttonStyle(.borderless)
-                            .help("Copy code")
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        BouncingSpinner(size: 8, color: .secondary)
-                        Text("Waiting for authorization...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding(12)
-                .background(Color.secondary.opacity(0.05))
-                .cornerRadius(8)
-
-            } else {
-                // Sign in prompt
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Access frontier AI models via your GitHub Copilot subscription.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-
-                    Button {
-                        Task {
-                            do {
-                                try await copilotAuth.startDeviceFlow()
-                            } catch {
-                                await MainActor.run {
-                                    copilotAuth.authError = error.localizedDescription
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "person.badge.key.fill")
-                            Text("Sign in with GitHub")
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.sortyPrimary)
-
-                    if let error = copilotAuth.authError {
-                        Text(error)
-                            .foregroundColor(.red)
-                            .font(.caption)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
     }
 
     @ViewBuilder
@@ -528,26 +341,24 @@ public struct ProviderSelectionStepView: View {
                     }
                 }
             }
-            if settingsViewModel.config.provider != .githubCopilot {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Model")
-                            .font(.subheadline)
-                        Text("Used for organization")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    ModelSelectorCompactButton(
-                        provider: settingsViewModel.config.provider,
-                        label: selectedModelDisplay
-                    ) {
-                        isShowingModelPopover = true
-                    }
-                    .modelSelectorTriggerBounds()
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Model")
+                        .font(.subheadline)
+                    Text("Used for organization")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
+
+                Spacer()
+
+                ModelSelectorCompactButton(
+                    provider: settingsViewModel.config.provider,
+                    label: selectedModelDisplay
+                ) {
+                    isShowingModelPopover = true
+                }
+                .modelSelectorTriggerBounds()
             }
         }
     }
@@ -819,7 +630,6 @@ public struct ProviderSelectionStepView: View {
     private var readinessInputs: ProviderReadinessInputs {
         ProviderReadinessInputs(
             config: settingsViewModel.config,
-            isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
             isCodexAuthenticated: codexAuth.isAuthenticated,
             isCodexInstalled: codexAuth.isCodexInstalled,
             isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
@@ -833,7 +643,6 @@ public struct ProviderSelectionStepView: View {
         let setupStatus = OnboardingSetupValidator.providerStatus(
             context: ProviderSetupContext(
                 config: inputs.config,
-                isGitHubCopilotAuthenticated: inputs.isGitHubCopilotAuthenticated,
                 isCodexAuthenticated: inputs.isCodexAuthenticated,
                 isCodexInstalled: inputs.isCodexInstalled,
                 isAppleFoundationModelAvailable: inputs.isAppleFoundationModelAvailable,
@@ -845,8 +654,6 @@ public struct ProviderSelectionStepView: View {
         switch provider {
         case .appleFoundationModel, .ollama:
             canTestConnection = true
-        case .githubCopilot:
-            canTestConnection = inputs.isGitHubCopilotAuthenticated
         default:
             canTestConnection = ProviderAuthResolver.hasRequiredCredential(
                 for: provider,
@@ -911,8 +718,6 @@ public struct ProviderSelectionStepView: View {
                   settingsViewModel.config.provider == provider else { return }
 
             switch provider {
-            case .githubCopilot:
-                copilotAuth.checkAuthenticationStatus()
             case .openAI:
                 codexAuth.checkStatus()
             case .appleFoundationModel:
@@ -1151,58 +956,7 @@ public struct ProviderSelectionStepView: View {
         }
     }
 
-    private func fetchCopilotModels() {
-        guard settingsViewModel.config.provider == .githubCopilot,
-              copilotAuth.isAuthenticated,
-              taskController.copilotModelTask == nil else { return }
-
-        let loadStartedAt = Date()
-        let config = settingsViewModel.config
-        isLoadingModels = true
-        taskController.copilotModelTask = Task { @MainActor in
-            defer { taskController.copilotModelTask = nil }
-            do {
-                guard let client = try AIClientFactory.createClient(config: config) as? GitHubCopilotClient else {
-                    isLoadingModels = false
-                    taskController.copilotModelTask = nil
-                    return
-                }
-                let models = try await client.fetchAvailableModels()
-                guard !Task.isCancelled,
-                      settingsViewModel.config.provider == .githubCopilot else { return }
-                if availableModels != models {
-                    availableModels = models
-                }
-                if !models.contains(settingsViewModel.config.model) {
-                    settingsViewModel.config.model = models.first ?? AIProvider.githubCopilot.defaultModel
-                }
-                isLoadingModels = false
-                taskController.copilotModelTask = nil
-                AnalyticsManager.shared.captureWorkflow(
-                    workflow: "model_catalog",
-                    stage: "loaded",
-                    outcome: "success",
-                    properties: AnalyticsManager.durationProperties(
-                        Date().timeIntervalSince(loadStartedAt)
-                    ).merging(["source": "onboarding"]) { current, _ in current }
-                )
-            } catch {
-                guard !Task.isCancelled else { return }
-                isLoadingModels = false
-                taskController.copilotModelTask = nil
-                AnalyticsManager.shared.captureWorkflow(
-                    workflow: "model_catalog",
-                    stage: "loaded",
-                    outcome: "failed",
-                    properties: AnalyticsManager.durationProperties(
-                        Date().timeIntervalSince(loadStartedAt)
-                    ).merging(["source": "onboarding"]) { current, _ in current }
-                )
-            }
-        }
-    }
 }
-
 private struct ProviderTestConnectionButton: View {
     @SortyHotReload private var hotReload
     let canTest: Bool
@@ -1272,38 +1026,6 @@ extension View {
     /// filter swipe-throughs, 90ms leave to settle edge brushes).
     func debouncedHover(_ isHovering: Binding<Bool>) -> some View {
         modifier(DebouncedHoverModifier(isHovering: isHovering))
-    }
-}
-
-private struct CopilotUsernameRevealText: View {
-    @SortyHotReload private var hotReload
-    let value: String
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovering = false
-
-    var body: some View {
-        ZStack {
-            Text(value)
-                .opacity(isHovering ? 0 : 1)
-                .blur(radius: 10)
-
-            Text(value)
-                .opacity(isHovering ? 1 : 0)
-        }
-        .font(.headline)
-        .padding(.vertical, 4)
-        .padding(.horizontal, 6)
-        .clipShape(Capsule())
-        .padding(.vertical, -4)
-        .padding(.horizontal, -6)
-        .animation(
-            reduceMotion
-                ? nil
-                : (isHovering ? .easeOut(duration: 0.34) : .easeInOut(duration: 0.24)),
-            value: isHovering
-        )
-        .debouncedHover($isHovering)
     }
 }
 

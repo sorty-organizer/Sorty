@@ -46,7 +46,7 @@ public enum ProviderAuthResolver {
         }
 
         switch provider {
-        case .openAI, .groq, .openRouter, .openAICompatible:
+        case .openAI, .openCodeZen, .openCodeGo, .groq, .openRouter, .openAICompatible:
             return ("Authorization", "Bearer \(credential)")
         case .anthropic:
             if method == .apiKey {
@@ -55,17 +55,15 @@ public enum ProviderAuthResolver {
             return ("Authorization", "Bearer \(credential)")
         case .gemini:
             return ("x-goog-api-key", credential)
-        case .githubCopilot, .ollama, .appleFoundationModel:
+        case .unavailableProvider, .ollama, .appleFoundationModel:
             return nil
         }
     }
 
     package static func hasRequiredCredential(for provider: AIProvider, config: AIConfig) -> Bool {
         switch provider {
-        case .githubCopilot:
-            return AIKeychain.shared.get(key: provider.keychainKey)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .isEmpty == false
+        case .unavailableProvider:
+            return false
         case .ollama, .appleFoundationModel:
             return true
         default:
@@ -145,17 +143,8 @@ public enum ProviderAuthResolver {
     /// Off-main variant of `hasRequiredCredential` for catalog fetches.
     static func hasRequiredCredentialAsync(for provider: AIProvider, config: AIConfig) async -> Bool {
         switch provider {
-        case .githubCopilot:
-            let cacheKey = credentialCacheKey(for: provider, method: .apiKey, configAPIKey: nil)
-            let cached = credentialCacheLock.withLock { credentialCache[cacheKey] }
-            if let cached, Date().timeIntervalSince(cached.cachedAt) < credentialCacheLifetime {
-                return cached.value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            }
-            let value = await AIKeychain.shared.getAsync(key: provider.keychainKey)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let valid = value?.isEmpty == false
-            credentialCacheLock.withLock { credentialCache[cacheKey] = (valid ? value : nil, Date()) }
-            return valid
+        case .unavailableProvider:
+            return false
         case .ollama, .appleFoundationModel:
             return true
         default:

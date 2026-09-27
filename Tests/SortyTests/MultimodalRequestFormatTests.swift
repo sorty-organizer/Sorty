@@ -72,6 +72,33 @@ final class MultimodalRequestFormatTests: XCTestCase {
         XCTAssertEqual(imageURL["detail"] as? String, "high")
     }
 
+    func testOpenCodeGoUsesItsChatEndpointAndSessionHeaders() async throws {
+        let config = AIConfig(
+            provider: .openCodeGo,
+            apiURL: AIProvider.openCodeGo.defaultAPIURL,
+            apiKey: "test-key",
+            model: "glm-5.3",
+            enableStreaming: false
+        )
+        let client = OpenAIClient(config: config)
+        let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]
+
+        MockHTTPURLProtocol.requestHandler = { request in
+            let body = """
+            {"choices":[{"message":{"content":"{\\"folders\\":[{\\"name\\":\\"Documents\\",\\"files\\":[\\"report.pdf\\"]}],\\"unorganized\\":[]}"}}]}
+            """
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(body.utf8))
+        }
+
+        _ = try await client.analyze(files: files)
+        let request = try XCTUnwrap(MockHTTPURLProtocol.lastRequest)
+        XCTAssertEqual(request.url?.absoluteString, "https://opencode.ai/zen/go/v1/chat/completions")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "Sorty/1.0")
+        XCTAssertNotNil(request.value(forHTTPHeaderField: "x-opencode-session"))
+    }
+
     func testOpenRouterRequestsJSONWithoutEliminatingFreeRouteProviders() async throws {
         let config = AIConfig(
             provider: .openRouter,
@@ -296,53 +323,7 @@ final class MultimodalRequestFormatTests: XCTestCase {
         XCTAssertNotNil(source["data"] as? String)
     }
 
-    func testGitHubCopilotClientCapsImagesAtFiveAndUsesLowDetailByDefault() async throws {
-        let config = AIConfig(
-            provider: .githubCopilot,
-            model: "gpt-4o",
-            enableStreaming: false
-        )
-        // gpt-4o supports vision; inject the catalog answer the app would
-        // provide so the client takes the vision path under test.
-        GitHubCopilotClient.visionSupportChecker = { _, _ in true }
-        defer { GitHubCopilotClient.visionSupportChecker = nil }
-        let client = GitHubCopilotClient(
-            config: config,
-            testHeadersProvider: {
-                ["Authorization": "Bearer test", "Content-Type": "application/json"]
-            }
-        )
 
-        let files = (1...7).map { index in
-            FileItem(path: "/tmp/photo\(index).jpg", name: "photo\(index)", extension: "jpg")
-        }
-        var imageData: [String: Data] = [:]
-        for index in 1...7 {
-            imageData["photo\(index).jpg"] = Data([UInt8(index)])
-        }
-
-        MockHTTPURLProtocol.requestHandler = { request in
-            let responseBody = """
-            {"choices":[{"message":{"content":"{\\"folders\\":[{\\"name\\":\\"Images\\",\\"files\\":[\\"photo1.jpg\\"]}],\\"unorganized\\":[]}"}}]}
-            """
-            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-            return (response, Data(responseBody.utf8))
-        }
-
-        _ = try await client.analyzeWithImages(files: files, imageData: imageData)
-        let request = try XCTUnwrap(MockHTTPURLProtocol.lastRequest)
-        let json = try request.jsonBody()
-        let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
-        let userMessage = try XCTUnwrap(messages.last)
-        let content = try XCTUnwrap(userMessage["content"] as? [[String: Any]])
-
-        let imageParts = content.filter { ($0["type"] as? String) == "image_url" }
-        XCTAssertEqual(imageParts.count, 5)
-        for imagePart in imageParts {
-            let imageURL = try XCTUnwrap(imagePart["image_url"] as? [String: Any])
-            XCTAssertEqual(imageURL["detail"] as? String, "low")
-        }
-    }
 }
 
 private final class MockHTTPURLProtocol: URLProtocol {
@@ -369,7 +350,7 @@ private final class MockHTTPURLProtocol: URLProtocol {
         guard let host = request.url?.host else { return false }
         return host == "api.openai.com" ||
             host == "api.anthropic.com" ||
-            host == "api.githubcopilot.com" ||
+            host == "opencode.ai" ||
             host == "openrouter.ai"
     }
 

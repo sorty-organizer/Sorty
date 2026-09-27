@@ -4187,7 +4187,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         operationConfig.enableSmartRename = mode != .organize
 
         let client: AIClientProtocol
-        if let providerOverride, let modelOverride {
+        if let providerOverride {
+            guard let modelOverride,
+                  !modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw AIClientError.apiError(
+                    statusCode: 400,
+                    message: "Choose an automation model for \(providerOverride.displayName) before running this folder."
+                )
+            }
             operationConfig.provider = providerOverride
             operationConfig.model = modelOverride
             operationConfig.requiresAPIKey = providerOverride.typicallyRequiresAPIKey

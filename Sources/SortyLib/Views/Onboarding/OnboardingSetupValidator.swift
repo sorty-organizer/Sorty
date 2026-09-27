@@ -2,7 +2,6 @@ import Foundation
 
 public struct ProviderSetupContext: Sendable {
     public let config: AIConfig
-    public let isGitHubCopilotAuthenticated: Bool
     public let isCodexAuthenticated: Bool
     public let isCodexInstalled: Bool
     public let isAppleFoundationModelAvailable: Bool
@@ -10,14 +9,12 @@ public struct ProviderSetupContext: Sendable {
 
     public init(
         config: AIConfig,
-        isGitHubCopilotAuthenticated: Bool,
         isCodexAuthenticated: Bool,
         isCodexInstalled: Bool,
         isAppleFoundationModelAvailable: Bool,
         appleFoundationModelStatus: String? = nil
     ) {
         self.config = config
-        self.isGitHubCopilotAuthenticated = isGitHubCopilotAuthenticated
         self.isCodexAuthenticated = isCodexAuthenticated
         self.isCodexInstalled = isCodexInstalled
         self.isAppleFoundationModelAvailable = isAppleFoundationModelAvailable
@@ -48,17 +45,13 @@ public enum OnboardingSetupValidator {
     public static func providerStatus(context: ProviderSetupContext) -> ProviderSetupStatus {
         let provider = context.config.provider
 
-        if provider == .githubCopilot {
-            guard context.isGitHubCopilotAuthenticated else {
-                return ProviderSetupStatus(
-                    isReady: false,
-                    title: "GitHub sign-in required",
-                    message: "Sign in with GitHub before continuing with GitHub Copilot.",
-                    recoverySuggestion: "Complete the device-flow sign-in in this step, then continue."
-                )
-            }
-
-            return readyStatus(for: provider)
+        if provider == .unavailableProvider {
+            return ProviderSetupStatus(
+                isReady: false,
+                title: "Provider unavailable",
+                message: "GitHub Copilot was removed. Choose an AI provider before organizing files.",
+                recoverySuggestion: "Select a provider and model, then add its credentials if needed."
+            )
         }
 
         if provider == .appleFoundationModel {
@@ -143,6 +136,8 @@ public enum OnboardingSetupValidator {
 
     private static func missingCredentialMessage(for provider: AIProvider) -> String {
         switch provider {
+        case .unavailableProvider:
+            return "Choose an AI provider before continuing."
         case .openAI:
             return "Enter an OpenAI API key before continuing."
         case .groq:
@@ -155,8 +150,8 @@ public enum OnboardingSetupValidator {
             return "Enter an Anthropic API key before continuing."
         case .gemini:
             return "Enter a Gemini API key before continuing."
-        case .githubCopilot:
-            return "Sign in with GitHub before continuing."
+        case .openCodeZen, .openCodeGo:
+            return "Enter an OpenCode API key before continuing."
         case .ollama:
             return "Finish configuring Ollama before continuing."
         case .appleFoundationModel:
@@ -166,12 +161,12 @@ public enum OnboardingSetupValidator {
 
     private static func missingCredentialSuggestion(for provider: AIProvider) -> String? {
         switch provider {
-        case .openAI, .groq, .openRouter, .anthropic, .gemini:
+        case .unavailableProvider:
+            return "Choose an AI provider before continuing."
+        case .openAI, .openCodeZen, .openCodeGo, .groq, .openRouter, .anthropic, .gemini:
             return "Paste the provider API key into the secure field in this step."
         case .openAICompatible:
             return "Add both the API URL and API key for your compatible service."
-        case .githubCopilot:
-            return "Complete the sign-in flow above, then continue."
         case .ollama:
             return "Confirm your Ollama server URL and that the service is running."
         case .appleFoundationModel:

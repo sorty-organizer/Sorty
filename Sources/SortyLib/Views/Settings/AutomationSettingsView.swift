@@ -124,11 +124,8 @@ struct AutomationSettingsView: View {
                         viewModel.config.automationProvider = nil
                         viewModel.config.automationModel = nil
                     } else {
-                        if selectedModel.isEmpty {
-                            selectedModel = selectedProvider.defaultModel
-                        }
                         viewModel.config.automationProvider = selectedProvider
-                        viewModel.config.automationModel = selectedModel
+                        viewModel.config.automationModel = selectedModel.isEmpty ? nil : selectedModel
                     }
                     if !isLoadingSettings {
                         AnalyticsManager.shared.captureSettingChanged(
@@ -160,6 +157,11 @@ struct AutomationSettingsView: View {
                         )
                         .modelSelectorTriggerBounds()
                     }
+                    if !selectedProvider.isAvailable || selectedModel.isEmpty {
+                        Label("Choose an available automation provider and model before running watched folders.", systemImage: "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
         }
@@ -189,7 +191,7 @@ struct AutomationSettingsView: View {
     }
 
     private var selectedModelDisplay: String {
-        selectedModel.isEmpty ? selectedProvider.defaultModel : selectedModel
+        selectedModel.isEmpty ? "Choose model" : selectedModel
     }
 
     private var backgroundBehaviorSection: some View {
@@ -323,7 +325,7 @@ struct AutomationSettingsView: View {
         if let provider = viewModel.config.automationProvider {
             useSeparateModel = true
             selectedProvider = provider
-            selectedModel = viewModel.config.automationModel ?? provider.defaultModel
+            selectedModel = viewModel.config.automationModel ?? ""
         } else {
             useSeparateModel = false
             selectedProvider = viewModel.config.provider

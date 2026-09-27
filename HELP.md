@@ -40,7 +40,7 @@ Welcome to Sorty! This app uses AI to intelligently sort your files into logical
 
 Before your first organization, we recommend:
 
-- **Configure your API Key** in Settings if using OpenAI (not needed for Apple Intelligence or local Ollama)
+- **Configure your API Key** in Settings if using OpenAI, OpenCode Zen, or OpenCode Go (not needed for Apple Intelligence or local Ollama)
 - **Set up Exclusion Rules** to protect important files you never want moved
 - **Enable Deep Scan** for smarter organization (uses more resources)
 - **Enable File Tagging** to get Finder-compatible tags on your files
@@ -598,6 +598,7 @@ Open **Settings → Troubleshooting** to run Sorty's local support checks. The a
 
 - **Apple Intelligence**: Processed on-device (requires M-series chip + macOS 15.1+)
 - **OpenAI/Compatible**: Cloud-based, file names and metadata sent to API
+- **OpenCode Zen and Go**: Cloud-based. Add the API key for each plan in Provider Settings. Sorty lists models supported by its chat completions client. [OpenCode Zen](https://opencode.ai/v2/docs/console/models/) and [Go](https://opencode.ai/v2/docs/console/go) document the available models and endpoints.
 - **Ollama**: Local processing, nothing leaves your machine
 
 ### Data Storage

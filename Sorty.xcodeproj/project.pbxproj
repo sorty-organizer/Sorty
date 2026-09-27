@@ -108,8 +108,6 @@
 		AABBCC220002000000000018 /* LocalRuleInferenceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000018 /* LocalRuleInferenceEngine.swift */; };
 		AABBCC220002000000000019 /* AnthropicClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000019 /* AnthropicClient.swift */; };
 		AABBCC22000200000000001A /* AISessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000001A /* AISessionManager.swift */; };
-		AABBCC22000200000000001B /* GitHubCopilotClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000001B /* GitHubCopilotClient.swift */; };
-		AABBCC22000200000000001C /* GitHubCopilotAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000001C /* GitHubCopilotAuthManager.swift */; };
 		AABBCC22000200000000001F /* AIProviderSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000001F /* AIProviderSettingsView.swift */; };
 		AABBCC220002000000000020 /* ModelSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000020 /* ModelSelector.swift */; };
 		AABBCC220002000000000021 /* HUDNotificationOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000021 /* HUDNotificationOverlay.swift */; };
@@ -223,7 +221,6 @@
 		457AEAD609917405DDD7972A /* FolderMetadataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99ADFE53808A05EFB6B407CE /* FolderMetadataTests.swift */; };
 		2BD6E888B5D2A21C866292D0 /* FolderOrganizerVisionFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10A630FE246F75EA8F56607 /* FolderOrganizerVisionFlowTests.swift */; };
 		0AA5AD6F6371E72F1976823D /* FolderSuggestionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC88340C387CF4B68949D18C /* FolderSuggestionTests.swift */; };
-		AAFDC24EC219BBDF528127AC /* GitHubCopilotAuthManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7D58D41094DF2DBE4F1D5E4 /* GitHubCopilotAuthManagerTests.swift */; };
 		482CAAAF7B7D4D32479C1C73 /* HistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 880FACCD4C5F0E2C9F3A2EAE /* HistoryTests.swift */; };
 		E3883C99928B5C7C2D5D1773 /* ImageVisionAnalyzerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AE0329FF05EF87212807327 /* ImageVisionAnalyzerTests.swift */; };
 		0C8D0BCE81CFA332E1A0E083 /* LLMRuleInducerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77DC4A2276CF08652DC2F6EE /* LLMRuleInducerTests.swift */; };
@@ -439,8 +436,6 @@
 		AABBCC110001000000000018 /* LocalRuleInferenceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRuleInferenceEngine.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000019 /* AnthropicClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicClient.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000001A /* AISessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISessionManager.swift; sourceTree = "<group>"; };
-		AABBCC11000100000000001B /* GitHubCopilotClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubCopilotClient.swift; sourceTree = "<group>"; };
-		AABBCC11000100000000001C /* GitHubCopilotAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubCopilotAuthManager.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000001F /* AIProviderSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings/AIProviderSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000020 /* ModelSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSelector.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000021 /* HUDNotificationOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDNotificationOverlay.swift; sourceTree = "<group>"; };
@@ -538,7 +533,6 @@
 		99ADFE53808A05EFB6B407CE /* FolderMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderMetadataTests.swift; sourceTree = "<group>"; };
 		F10A630FE246F75EA8F56607 /* FolderOrganizerVisionFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderOrganizerVisionFlowTests.swift; sourceTree = "<group>"; };
 		AC88340C387CF4B68949D18C /* FolderSuggestionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderSuggestionTests.swift; sourceTree = "<group>"; };
-		B7D58D41094DF2DBE4F1D5E4 /* GitHubCopilotAuthManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubCopilotAuthManagerTests.swift; sourceTree = "<group>"; };
 		880FACCD4C5F0E2C9F3A2EAE /* HistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryTests.swift; sourceTree = "<group>"; };
 		4AE0329FF05EF87212807327 /* ImageVisionAnalyzerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageVisionAnalyzerTests.swift; sourceTree = "<group>"; };
 		77DC4A2276CF08652DC2F6EE /* LLMRuleInducerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMRuleInducerTests.swift; sourceTree = "<group>"; };
@@ -670,8 +664,6 @@
 				3353FC212F0124320097CD23 /* SystemPrompt.swift */,
 				AABBCC110001000000000019 /* AnthropicClient.swift */,
 				AABBCC11000100000000001A /* AISessionManager.swift */,
-				AABBCC11000100000000001B /* GitHubCopilotClient.swift */,
-				AABBCC11000100000000001C /* GitHubCopilotAuthManager.swift */,
 				AABBCC110001000000000078 /* NamingInstructionsGenerator.swift */,
 				CC110001000000000000A002 /* AIInsightExtractor.swift */,
 				CC110001000000000000A003 /* AIRequestSupport.swift */,
@@ -1044,7 +1036,6 @@
 				99ADFE53808A05EFB6B407CE /* FolderMetadataTests.swift */,
 				F10A630FE246F75EA8F56607 /* FolderOrganizerVisionFlowTests.swift */,
 				AC88340C387CF4B68949D18C /* FolderSuggestionTests.swift */,
-				B7D58D41094DF2DBE4F1D5E4 /* GitHubCopilotAuthManagerTests.swift */,
 				880FACCD4C5F0E2C9F3A2EAE /* HistoryTests.swift */,
 				4AE0329FF05EF87212807327 /* ImageVisionAnalyzerTests.swift */,
 				77DC4A2276CF08652DC2F6EE /* LLMRuleInducerTests.swift */,
@@ -1342,7 +1333,6 @@
 				457AEAD609917405DDD7972A /* FolderMetadataTests.swift in Sources */,
 				2BD6E888B5D2A21C866292D0 /* FolderOrganizerVisionFlowTests.swift in Sources */,
 				0AA5AD6F6371E72F1976823D /* FolderSuggestionTests.swift in Sources */,
-				AAFDC24EC219BBDF528127AC /* GitHubCopilotAuthManagerTests.swift in Sources */,
 				482CAAAF7B7D4D32479C1C73 /* HistoryTests.swift in Sources */,
 				E3883C99928B5C7C2D5D1773 /* ImageVisionAnalyzerTests.swift in Sources */,
 				0C8D0BCE81CFA332E1A0E083 /* LLMRuleInducerTests.swift in Sources */,
