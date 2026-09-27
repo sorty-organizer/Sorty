@@ -838,12 +838,38 @@ final class EnhancedLearningsTests: XCTestCase {
         await manager.rejectRule(ruleId: ruleId, cooldownDays: 7)
         
         let rule = manager.currentProfile?.inferredRules.first(where: { $0.id == ruleId })
-        XCTAssertEqual(rule?.status, .rejected)
+        XCTAssertEqual(rule?.status, .cooldown)
         XCTAssertNotNil(rule?.rejectedAt)
         XCTAssertNotNil(rule?.cooldownUntil)
         XCTAssertFalse(rule?.isEnabled ?? true)
         
         XCTAssertTrue(manager.isRuleInCooldown(pattern: ".*\\.csv$"))
+    }
+
+    func testApprovingCoolingDownRuleClearsRejectionState() async {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        let ruleId = UUID().uuidString
+        profile.inferredRules = [
+            InferredRule(id: ruleId, pattern: ".*\\.csv$", template: "Data/{filename}", priority: 50, explanation: "CSV rule", scope: .global, status: .pendingApproval)
+        ]
+        manager.currentProfile = profile
+
+        await manager.rejectRule(ruleId: ruleId, cooldownDays: 7)
+
+        let coolingDown = manager.currentProfile?.inferredRules.first(where: { $0.id == ruleId })
+        XCTAssertEqual(coolingDown?.status, .cooldown)
+        XCTAssertFalse(coolingDown?.isEligible() ?? true)
+
+        await manager.approveRule(ruleId: ruleId)
+
+        let approved = manager.currentProfile?.inferredRules.first(where: { $0.id == ruleId })
+        XCTAssertEqual(approved?.status, .active)
+        XCTAssertTrue(approved?.isEnabled ?? false)
+        XCTAssertNil(approved?.rejectedAt)
+        XCTAssertNil(approved?.cooldownUntil)
+        XCTAssertTrue(approved?.isEligible() ?? false)
+        XCTAssertFalse(manager.isRuleInCooldown(pattern: ".*\\.csv$"))
     }
     
     // MARK: - Learning Exclusion Tests
@@ -943,6 +969,38 @@ final class EnhancedLearningsTests: XCTestCase {
         await manager.applyDataRetentionPolicy()
 
         XCTAssertEqual(manager.currentProfile?.positiveExamples.map(\.id), [oldExample.id])
+    }
+
+    func testRetentionKeepsRulesWithOpaqueEvidence() async {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let expiredExample = LabeledExample(
+            id: UUID().uuidString,
+            srcPath: "/old.txt",
+            dstPath: "/Archive/old.txt",
+            timestamp: now.addingTimeInterval(-40 * 86_400)
+        )
+        var profile = LearningsProfile()
+        profile.positiveExamples = [expiredExample]
+        profile.inferredRules = [
+            InferredRule(
+                pattern: ".*\\.txt$",
+                template: "Archive/{filename}",
+                exampleIds: [expiredExample.id],
+                explanation: "Expired local evidence"
+            ),
+            InferredRule(
+                pattern: "Invoice.*\\.pdf$",
+                template: "Finance/{year}/{filename}",
+                explanation: "LLM rule with prose evidence",
+                evidenceIds: ["Example: 'Invoice_2023_01.pdf' -> 'Finance/2023/Invoices/...'"]
+            )
+        ]
+        manager.currentProfile = profile
+        manager.dataRetentionDays = 30
+
+        await manager.applyDataRetentionPolicy(now: now)
+
+        XCTAssertEqual(manager.currentProfile?.inferredRules.map(\.pattern), ["Invoice.*\\.pdf$"])
     }
 
     func testExcludedPathsAreIgnoredWhenRecordingLearnings() async {

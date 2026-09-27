@@ -847,4 +847,25 @@ class ResponseParserTests: XCTestCase {
 
         XCTAssertNil(plan.learningToolCall)
     }
+
+    func testUltraCompactDuplicateAssignmentIsDeduplicatedAndWarned() throws {
+        let file = FileItem(
+            path: "/path/report.pdf",
+            name: "report",
+            extension: "pdf",
+            size: 100,
+            isDirectory: false
+        )
+        let response = #"{"f":[{"n":"Reports","files":["report.pdf"]},{"n":"Backup","files":["report.pdf"]}]}"#
+
+        let plan = try ResponseParser.parseResponse(response, originalFiles: [file])
+
+        // The second claimant must not double-count totalFiles or silently keep
+        // a duplicate move; the dropped assignment has to be reported.
+        XCTAssertEqual(plan.suggestions.count, 2)
+        XCTAssertEqual(plan.totalFiles, 1)
+        XCTAssertEqual(plan.suggestions[1].files.count, 0)
+        XCTAssertTrue(plan.isPartial)
+        XCTAssertTrue(plan.parseWarnings.contains { $0.contains("duplicate") })
+    }
 }

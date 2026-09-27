@@ -1,5 +1,6 @@
 
 import XCTest
+import Darwin
 @testable import SortyLib
 
 class DuplicateDetectorTests: XCTestCase {
@@ -398,5 +399,94 @@ class DuplicateDetectorTests: XCTestCase {
         XCTAssertEqual(manager.duplicateGroups.count, 1)
         XCTAssertEqual(manager.duplicateGroups.first?.files.count, 2)
         XCTAssertTrue(manager.semanticGroups.isEmpty)
+    }
+
+    func testFIFOIsNeverHashedOrCollectedAsCandidate() async throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("DuplicateFIFOTests-\(UUID().uuidString)", isDirectory: true)
+        let fifoURL = directory.appendingPathComponent("pipe")
+        let firstURL = directory.appendingPathComponent("empty-one.txt")
+        let secondURL = directory.appendingPathComponent("empty-two.txt")
+
+        defer {
+            try? fileManager.removeItem(at: directory)
+        }
+
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        XCTAssertTrue(fileManager.createFile(atPath: firstURL.path, contents: Data()))
+        XCTAssertTrue(fileManager.createFile(atPath: secondURL.path, contents: Data()))
+        XCTAssertEqual(mkfifo(fifoURL.path, 0o644), 0, "Failed to create FIFO fixture")
+
+        // Opening a FIFO blocks until a writer appears; hashing must refuse it.
+        XCTAssertNil(HashUtility.computeSHA256(for: fifoURL))
+
+        var settings = DuplicateSettings()
+        settings.includeSemanticDuplicates = false
+        let inventory = try await DirectoryScanner().scanDirectoryForDuplicates(
+            at: directory,
+            settings: settings
+        )
+
+        XCTAssertEqual(
+            Set(inventory.exactCandidates.map {
+                URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().standardizedFileURL.path
+            }),
+            Set([firstURL, secondURL].map {
+                $0.resolvingSymlinksInPath().standardizedFileURL.path
+            })
+        )
+    }
+
+    func testReplacedFileWithPreservedMetadataIsRehashed() async throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("DuplicateCacheIdentityTests-\(UUID().uuidString)", isDirectory: true)
+        let firstURL = directory.appendingPathComponent("first.txt")
+        let secondURL = directory.appendingPathComponent("second.txt")
+        let replacementURL = directory.appendingPathComponent("replacement.tmp")
+
+        defer {
+            try? fileManager.removeItem(at: directory)
+        }
+
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("AAAA".utf8).write(to: firstURL)
+        try Data("AAAA".utf8).write(to: secondURL)
+
+        let secondModified = try XCTUnwrap(
+            fileManager.attributesOfItem(atPath: secondURL.path)[.modificationDate] as? Date
+        )
+        let firstItem = FileItem(
+            path: firstURL.path,
+            name: "first",
+            extension: "txt",
+            size: 4
+        )
+        let secondItem = FileItem(
+            path: secondURL.path,
+            name: "second",
+            extension: "txt",
+            size: 4,
+            modificationDate: secondModified
+        )
+
+        let firstResult = await detector.findExactDuplicates(in: [firstItem, secondItem])
+        XCTAssertEqual(firstResult.groups.count, 1)
+
+        // Swap in different bytes while preserving path, size, and modification
+        // date; only the new file identity can reveal that the cached digest is
+        // stale.
+        try Data("BBBB".utf8).write(to: replacementURL)
+        try fileManager.removeItem(at: secondURL)
+        try fileManager.moveItem(at: replacementURL, to: secondURL)
+        try fileManager.setAttributes(
+            [.modificationDate: secondModified],
+            ofItemAtPath: secondURL.path
+        )
+
+        let secondResult = await detector.findExactDuplicates(in: [firstItem, secondItem])
+        XCTAssertTrue(secondResult.groups.isEmpty)
+        XCTAssertEqual(secondResult.hashedCount, 1, "Replaced file should be hashed again")
     }
 }

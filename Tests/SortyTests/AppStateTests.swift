@@ -440,40 +440,32 @@ class AppStateTests: XCTestCase {
         NotificationCenter.default.removeObserver(observer)
     }
     
-    func testPauseLearning() {
-        let expectation = XCTestExpectation(description: "Notification received")
-        
-        let observer = NotificationCenter.default.addObserver(
-            forName: .pauseLearning,
-            object: nil,
-            queue: nil
-        ) { _ in
-            expectation.fulfill()
+    func testExportLearningsProfileNavigatesDirectlyWithoutNotificationBridge() {
+        final class NotificationProbe: @unchecked Sendable {
+            var wasPosted = false
         }
-        
-        appState.pauseLearning()
-        
-        wait(for: [expectation], timeout: 2.0)
-        NotificationCenter.default.removeObserver(observer)
-    }
-    
-    func testExportLearningsProfile() {
-        let expectation = XCTestExpectation(description: "Notification received")
-        
+        let probe = NotificationProbe()
+
+        // Keep the export headless: with no manager there is no save panel, and
+        // the command must not fall back to the LearningsView notification.
+        organizer.learningsManager = nil
+
         let observer = NotificationCenter.default.addObserver(
             forName: .exportLearningsProfile,
             object: nil,
             queue: nil
         ) { _ in
-            expectation.fulfill()
+            probe.wasPosted = true
         }
-        
+        defer { NotificationCenter.default.removeObserver(observer) }
+
         appState.exportLearningsProfile()
-        
+
         XCTAssertEqual(appState.currentView, .learnings)
-        
-        wait(for: [expectation], timeout: 2.0)
-        NotificationCenter.default.removeObserver(observer)
+        XCTAssertFalse(
+            probe.wasPosted,
+            "Export must act on the learnings manager directly, not through the removed notification bridge"
+        )
     }
     
     func testImportLearningsProfile() {

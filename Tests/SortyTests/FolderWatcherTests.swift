@@ -30,6 +30,37 @@ final class FolderWatcherTests: XCTestCase {
         ) {}
     }
 
+    @MainActor
+    private final class AccessLossDelegate: FolderWatcherDelegate {
+        let expectation: XCTestExpectation
+        private(set) var lostAccessFolderIDs: Set<UUID> = []
+
+        init(expectation: XCTestExpectation) {
+            self.expectation = expectation
+        }
+
+        func folderWatcher(
+            _ watcher: FolderWatcher,
+            didDetectChangesIn folder: WatchedFolder,
+            newFiles: Set<String>,
+            resolvedURL: URL,
+            completion: @escaping @Sendable (Bool) -> Void
+        ) {
+            completion(true)
+        }
+
+        func folderWatcher(
+            _ watcher: FolderWatcher,
+            didDetectStaleBookmarkFor folder: WatchedFolder,
+            newBookmarkData: Data
+        ) {}
+
+        func folderWatcher(_ watcher: FolderWatcher, didLoseAccessTo folder: WatchedFolder) {
+            guard lostAccessFolderIDs.insert(folder.id).inserted else { return }
+            expectation.fulfill()
+        }
+    }
+
     func testWatchedFolderUsesSevenSecondSettleDelayByDefault() {
         let folder = WatchedFolder(path: "/tmp/Sorty-Watched-Default-Delay")
 
@@ -123,6 +154,37 @@ final class FolderWatcherTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: snapshotURL), initialSnapshot)
     }
 
+    @MainActor
+    func testMissingWatchedRootReportsLostAccessAndUnhealthyState() async throws {
+        let testRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Sorty-Watcher-Access-Loss-\(UUID().uuidString)", isDirectory: true)
+        let watchedURL = testRoot.appendingPathComponent("Watched", isDirectory: true)
+        let persistenceRoot = testRoot.appendingPathComponent("State", isDirectory: true)
+        try FileManager.default.createDirectory(at: watchedURL, withIntermediateDirectories: true)
+        defer {
+            do {
+                try FileManager.default.removeItem(at: testRoot)
+            } catch {
+                XCTFail("Failed to clean up \(testRoot.path): \(error)")
+            }
+        }
+
+        let folder = WatchedFolder(path: watchedURL.path, triggerDelay: 0.05)
+        let lostAccess = expectation(description: "watcher reports the missing root")
+        let delegate = AccessLossDelegate(expectation: lostAccess)
+        let watcher = FolderWatcher(persistenceRoot: persistenceRoot)
+        watcher.delegate = delegate
+        watcher.syncWithFolders([folder])
+
+        try FileManager.default.removeItem(at: watchedURL)
+        watcher.reconcileNow()
+
+        await fulfillment(of: [lostAccess], timeout: 5)
+        XCTAssertTrue(delegate.lostAccessFolderIDs.contains(folder.id))
+        XCTAssertFalse(watcher.isFolderHealthy(folder))
+        watcher.stopAllWatching()
+    }
+
     func testIgnoresICloudAndOneDrivePlaceholderFiles() {
         let iCloudPlaceholder = URL(fileURLWithPath: "/tmp/.Document.pdf.icloud")
         let oneDrivePlaceholder = URL(fileURLWithPath: "/tmp/Document.cloud")
@@ -191,6 +253,28 @@ final class FolderWatcherTests: XCTestCase {
         await reloadedManager.loadPersistedState()
         XCTAssertEqual(reloadedManager.folder(withID: folder.id)?.path, folder.path)
         XCTAssertEqual(reloadedManager.folder(matchingPath: folder.path)?.id, folder.id)
+        XCTAssertEqual(reloadedManager.activeFolderCount, 1)
+    }
+
+    @MainActor
+    func testDuplicatePersistedFolderIDsLoadAsOneFolder() async throws {
+        let cleanupManager = WatchedFoldersManager()
+        cleanupManager.clearAll()
+        defer { cleanupManager.clearAll() }
+
+        let folder = WatchedFolder(
+            path: "/tmp/Sorty-Watched-Duplicate-IDs",
+            isEnabled: true
+        )
+        let duplicateIDs = try JSONEncoder().encode([folder, folder])
+        UserDefaults.standard.set(duplicateIDs, forKey: "watchedFolders")
+        defer { UserDefaults.standard.removeObject(forKey: "watchedFolders") }
+
+        let reloadedManager = WatchedFoldersManager()
+        await reloadedManager.loadPersistedState()
+
+        XCTAssertEqual(reloadedManager.folders.count, 1)
+        XCTAssertEqual(reloadedManager.folders.first?.id, folder.id)
         XCTAssertEqual(reloadedManager.activeFolderCount, 1)
     }
 

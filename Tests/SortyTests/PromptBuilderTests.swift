@@ -688,4 +688,18 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("tags:Work"))
         XCTAssertFalse(prompt.contains("/Users/example"))
     }
+
+    func testBudgetTruncationKeepsReasoningJSONContract() {
+        let reasoningContract = "\nProvide detailed reasoning for each folder. Include the organization structure in JSON format."
+        let prompt = String(
+            repeating: "  - /tmp/long-file-name.pdf [file, 100 bytes / 100 bytes]\n",
+            count: 2_000
+        ) + reasoningContract
+
+        let truncated = PromptBuilder.enforceMainPromptBudget(prompt, budget: 500)
+
+        XCTAssertTrue(truncated.contains("truncated to 500-token budget"))
+        XCTAssertTrue(truncated.contains("Provide detailed reasoning for each folder"))
+        XCTAssertTrue(truncated.contains("Include the organization structure in JSON format"))
+    }
 }

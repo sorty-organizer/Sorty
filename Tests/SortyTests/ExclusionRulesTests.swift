@@ -464,4 +464,82 @@ class ExclusionRulesTests: XCTestCase {
         XCTAssertTrue(manager.rules.contains(where: { $0.id == otherLegacyRule.id }))
         XCTAssertTrue(manager.rules.contains(where: { $0.id == manualRule.id }))
     }
+
+    @MainActor
+    func testClearedRulesDoNotReseedDefaultsOnRelaunch() async throws {
+        let suiteName = "ExclusionRulesTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        // A never-configured install still receives the built-in defaults.
+        let freshInstall = ExclusionRulesManager(userDefaults: defaults)
+        await freshInstall.loadPersistedState()
+        XCTAssertTrue(freshInstall.rules.contains { $0.pattern == "node_modules" })
+
+        // "Remove All" persists an explicitly empty list.
+        freshInstall.clearAllRules()
+        XCTAssertTrue(freshInstall.rules.isEmpty)
+
+        // Relaunching must respect that choice instead of re-seeding the defaults.
+        let relaunched = ExclusionRulesManager(userDefaults: defaults)
+        await relaunched.loadPersistedState()
+        XCTAssertTrue(relaunched.rules.isEmpty)
+    }
+
+    @MainActor
+    func testExclusionEnforcerDropsMappingsAndFoldersEmptiedByExclusions() {
+        let excludedFile = FileItem(
+            path: "/p/Temp/secret.tmp",
+            name: "secret",
+            extension: "tmp",
+            size: 0,
+            isDirectory: false
+        )
+        let allowedFile = FileItem(
+            path: "/p/Documents/report.pdf",
+            name: "report",
+            extension: "pdf",
+            size: 0,
+            isDirectory: false
+        )
+        // Free-text path rules match as substrings, so this excludes the file
+        // without treating "/Temp/" as a folder tree root.
+        manager.addRule(
+            ExclusionRule(type: .pathContains, pattern: "/Temp/", pathMatchMode: .substring)
+        )
+
+        let plan = OrganizationPlan(suggestions: [
+            FolderSuggestion(
+                folderName: "Documents",
+                files: [allowedFile],
+                subfolders: [
+                    FolderSuggestion(
+                        folderName: "Temp",
+                        files: [excludedFile],
+                        fileRenameMappings: [
+                            FileRenameMapping(originalFile: excludedFile, suggestedName: "renamed.txt")
+                        ],
+                        fileTagMappings: [
+                            FileTagMapping(originalFile: excludedFile, tags: ["stale"])
+                        ]
+                    )
+                ],
+                fileRenameMappings: [
+                    FileRenameMapping(originalFile: excludedFile, suggestedName: "stale.txt")
+                ],
+                fileTagMappings: [
+                    FileTagMapping(originalFile: excludedFile, tags: ["stale"])
+                ]
+            )
+        ])
+
+        let result = ExclusionEnforcer(exclusionManager: manager).validate(plan)
+        let cleaned = result.cleanedPlan?.suggestions.first
+
+        XCTAssertEqual(result.cleanedPlan?.suggestions.count, 1)
+        XCTAssertEqual(cleaned?.files, [allowedFile])
+        XCTAssertTrue(cleaned?.subfolders.isEmpty == true)
+        XCTAssertTrue(cleaned?.fileRenameMappings.isEmpty == true)
+        XCTAssertTrue(cleaned?.fileTagMappings.isEmpty == true)
+    }
 }

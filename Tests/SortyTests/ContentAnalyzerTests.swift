@@ -417,6 +417,25 @@ final class ContentAnalyzerTests: XCTestCase {
         // Text files don't use OCR, but verify the parameter is accepted
         XCTAssertNotNil(result)
     }
+    
+    // MARK: - UTF-8 Boundary Tests
+    
+    func testAnalyzeCJKTextFileSplitAtReadCapKeepsUTF8Text() async throws {
+        let analyzer = ContentAnalyzer()
+        
+        // Every scalar here is three UTF-8 bytes, so the 256 KB read cap cuts
+        // one mid-sequence. The decoder must trim the partial scalar instead of
+        // falling through to a single-byte encoding, which would mojibake CJK.
+        let content = String(repeating: "中文测试内容", count: 40_000)
+        let textFile = tempDirectory.appendingPathComponent("cjk.txt")
+        try content.write(to: textFile, atomically: true, encoding: .utf8)
+        
+        let result = await analyzer.analyze(fileURL: textFile)
+        
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result?.textPreview?.contains("中文测试内容") ?? false)
+        XCTAssertFalse(result?.textPreview?.contains("\u{FFFD}") ?? true)
+    }
 }
 
 // MARK: - New Fields Tests (Duration, MediaInfo)
