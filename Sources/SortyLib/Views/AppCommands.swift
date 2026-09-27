@@ -19,6 +19,8 @@ public struct AppStateFocusedKey: FocusedValueKey {
 /// Collects one bug description for a GitHub draft and optional Sentry feedback.
 public struct BugReportView: View {
     private let onClose: () -> Void
+    @ObservedObject private var analytics = AnalyticsManager.shared
+    @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @State private var description = ""
     @State private var sendToSentry = false
     @State private var sentryEventID: String?
@@ -28,8 +30,22 @@ public struct BugReportView: View {
         self.onClose = onClose
     }
 
+    /// The Sentry option is hidden entirely unless anonymous analytics are
+    /// allowed. A disabled toggle would still advertise a path that cannot be
+    /// used; hiding it keeps the window honest about what is available.
+    private var showsSentryOption: Bool {
+        analytics.consent == .granted
+    }
+
+    private var canSubmitBugFeedback: Bool {
+        // Read the stored flag so the toggle refreshes live when Block
+        // Internet Connections changes while the window is open.
+        _ = internetPrivacyModeEnabled
+        return ReliabilityManager.shared.canSubmitBugFeedback
+    }
+
     public var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 Image(systemName: "ladybug.fill")
                     .font(.system(size: 22, weight: .medium))
@@ -46,11 +62,17 @@ public struct BugReportView: View {
                 }
             }
 
-            Text("What happened?")
-                .font(.subheadline.weight(.semibold))
+            HStack(alignment: .firstTextBaseline) {
+                Text("What happened?")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("\(description.count)/2,000")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
             TextEditor(text: $description)
                 .font(.body)
-                .frame(height: 132)
+                .frame(height: showsSentryOption ? 100 : 180)
                 .padding(4)
                 .background(Color(NSColor.controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -65,15 +87,56 @@ public struct BugReportView: View {
                     }
                 }
 
-            Toggle("Send this description to Sentry too", isOn: $sendToSentry)
-                .disabled(!ReliabilityManager.shared.canSubmitBugFeedback)
-                .accessibilityIdentifier("SendBugReportToSentryToggle")
+            if showsSentryOption {
+                Toggle("Also send this description to Sentry (anonymous)", isOn: $sendToSentry)
+                    .disabled(!canSubmitBugFeedback)
+                    .accessibilityIdentifier("SendBugReportToSentryToggle")
 
-            Text(ReliabilityManager.shared.canSubmitBugFeedback
-                 ? "Sentry receives this text with a linked app event. Review it for private details before sending."
-                 : "Sentry sharing requires anonymous analytics to be allowed in Settings and internet access to be enabled.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Anonymous — no account, name, or email. IP addresses are discarded and no person profile is created.")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Sent to Sentry")
+                                .font(.caption.weight(.semibold))
+                            sentryListRow("Your description text (up to 2,000 characters)")
+                            sentryListRow("Event sorty.user_bug_report (mac_app · user_feedback · report_bug)")
+                            sentryListRow("App version, build, and environment")
+                        }
+                        .accessibilityIdentifier("BugReportSentryIncludes")
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Never sent")
+                                .font(.caption.weight(.semibold))
+                            sentryExcludedRow("Name, email, contacts, or attachments")
+                            sentryExcludedRow("File or folder names, paths, or contents")
+                            sentryExcludedRow("Prompts, AI responses, or API keys")
+                            sentryExcludedRow("Screenshots, logs, replays, or raw error text")
+                        }
+                        .accessibilityIdentifier("BugReportSentryExcludes")
+                    }
+
+                    Text("Review your description for private details before sending. The GitHub draft opens separately and is public.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if !canSubmitBugFeedback {
+                        Text("Unavailable while Block Internet Connections is on. Turn it off in Settings → Advanced to enable Sentry sharing.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(12)
+                .background(Color.secondary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+                }
+                .accessibilityIdentifier("BugReportSentryTransparency")
+            }
 
             if let errorMessage {
                 Text(errorMessage)
@@ -94,14 +157,40 @@ public struct BugReportView: View {
             }
         }
         .padding(24)
-        .frame(width: 480, height: 440)
+        .frame(width: 520, height: showsSentryOption ? 600 : 440)
         .modifier(WindowGlassBackground())
         .accessibilityIdentifier("BugReportView")
     }
 
+    private func sentryListRow(_ text: String) -> some View {
+        Label {
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } icon: {
+            Image(systemName: "checkmark")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.green)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func sentryExcludedRow(_ text: String) -> some View {
+        Label {
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } icon: {
+            Image(systemName: "xmark")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.red)
+                .accessibilityHidden(true)
+        }
+    }
+
     private func openIssue() {
         let comment = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        if sendToSentry {
+        if sendToSentry, showsSentryOption {
             guard let eventID = ReliabilityManager.shared.submitBugFeedback(comment) else {
                 errorMessage = "Sentry is unavailable. Turn off Sentry sharing to continue with GitHub."
                 return
@@ -2055,8 +2144,11 @@ public class AppState: ObservableObject {
         let view = BugReportView { [weak self] in
             self?.bugReportWindowController?.close()
         }
+        // The Sentry transparency section needs extra height; keep the
+        // analytics-off window compact since the option is hidden there.
+        let showsSentryOption = AnalyticsManager.shared.consent == .granted
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 440),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: showsSentryOption ? 600 : 440),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
