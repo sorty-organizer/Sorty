@@ -8,33 +8,9 @@
 import Foundation
 @preconcurrency import Sentry
 
-/// Bounded triage area for a user-submitted bug report. Raw values double
-/// as the Sentry `report_area` tag, so nothing outside this list can leave.
-public enum BugReportArea: String, Sendable, CaseIterable {
-    case organize
-    case duplicates
-    case aiSetup = "ai_setup"
-    case settings
-    case other
-
-    public var displayName: String {
-        switch self {
-        case .organize:
-            return "Organize"
-        case .duplicates:
-            return "Duplicates"
-        case .aiSetup:
-            return "AI setup"
-        case .settings:
-            return "Settings"
-        case .other:
-            return "Other"
-        }
-    }
-}
-
 @MainActor
-public final class ReliabilityManager {    public static let shared = ReliabilityManager()
+public final class ReliabilityManager {
+    public static let shared = ReliabilityManager()
 
     private static let productionDSN =
         "https://5765fff5d0af8028865923c7c73b18ef@o4511816291844096.ingest.us.sentry.io/4511816293744640"
@@ -278,13 +254,10 @@ public final class ReliabilityManager {    public static let shared = Reliabilit
 
     /// Links explicitly submitted bug text to a bounded Sentry event.
     /// Beyond the description, the event carries only anonymous environment
-    /// tags (Sorty release, macOS version, chip type) and the report area so
-    /// support can route it. No identity, files, prompts, or logs.
+    /// tags (Sorty release, macOS version, chip type) so support can tell
+    /// releases and OS versions apart. No identity, files, prompts, or logs.
     @discardableResult
-    public func submitBugFeedback(
-        _ message: String,
-        area: BugReportArea = .other
-    ) -> String? {
+    public func submitBugFeedback(_ message: String) -> String? {
         let comment = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSubmitBugFeedback,
               !comment.isEmpty,
@@ -298,7 +271,6 @@ public final class ReliabilityManager {    public static let shared = Reliabilit
             scope.setTag(value: "mac_app", key: "platform_surface")
             scope.setTag(value: "user_feedback", key: "feature")
             scope.setTag(value: "report_bug", key: "operation")
-            scope.setTag(value: area.rawValue, key: "report_area")
             scope.setTag(value: Self.operatingSystemVersion, key: "os_version")
             scope.setTag(value: Self.deviceArchitecture, key: "device_arch")
         }

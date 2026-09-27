@@ -115,9 +115,9 @@ export default function PrivacyPolicyPage() {
           The Report Bug form can also send the description you type to Sentry
           when you select its separate sharing option. This requires anonymous
           analytics consent and internet access. Sorty sends that text with an
-          associated app event ID, plus the Sorty version, macOS version, chip
-          type, and the area you pick so support can reproduce and route the
-          issue, without your name, email, or attachments. Review the description for private details
+          associated app event ID, plus the Sorty version, macOS version, and
+          chip type so support can reproduce the issue, without your name,
+          email, or attachments. Review the description for private details
           first. The GitHub issue opens as a draft for you to submit separately.
         </p>
         <p>
