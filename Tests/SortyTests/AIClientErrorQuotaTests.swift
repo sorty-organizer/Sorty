@@ -30,4 +30,15 @@ final class AIClientErrorQuotaTests: XCTestCase {
 
         XCTAssertFalse(error.isQuotaExhausted)
     }
+
+    func testErrorReasonRedactsURLCredentials() {
+        let secret = "AIzaShort_key-with-hyphen"
+        let error = AIClientError.apiError(
+            statusCode: 403,
+            message: "Rejected https://example.com/v1?api_key=\(secret)&model=test"
+        )
+
+        XCTAssertFalse(error.failureReason?.contains(secret) == true)
+        XCTAssertTrue(error.failureReason?.contains("api_key=[REDACTED KEY]") == true)
+    }
 }

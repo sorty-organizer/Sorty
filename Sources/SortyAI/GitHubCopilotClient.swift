@@ -479,19 +479,7 @@ public final class GitHubCopilotClient: AIClientProtocol, Sendable {
                 }
 
                 if !(200...299).contains(httpResponse.statusCode) {
-                    var errorData = Data()
-                    try await withTaskCancellationHandler {
-                        for try await byte in bytes {
-                            try Task.checkCancellation()
-                            errorData.append(byte)
-                        }
-                    } onCancel: {}
-                    if shouldRetryAfterAuthFailure(statusCode: httpResponse.statusCode),
-                       authAttempt == 0 {
-                        try await refreshAuthForRetry()
-                        continue
-                    }
-                    let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+                    let errorMessage = try await AIRequestSupport.readStreamingErrorBody(bytes)
                     throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
                 }
 

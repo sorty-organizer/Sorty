@@ -498,14 +498,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             
             guard (200...299).contains(httpResponse.statusCode) else {
                 // For streaming errors, we need to collect the error message
-                var errorData = Data()
-                try await withTaskCancellationHandler {
-                    for try await byte in bytes {
-                        try Task.checkCancellation()
-                        errorData.append(byte)
-                    }
-                } onCancel: {}
-                let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+                let errorMessage = try await AIRequestSupport.readStreamingErrorBody(bytes)
                 throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
             }
 

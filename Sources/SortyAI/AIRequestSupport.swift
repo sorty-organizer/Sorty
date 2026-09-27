@@ -49,6 +49,7 @@ struct StreamingChunkCoalescer: Sendable {
     private static let maxBufferedInterval: TimeInterval = 0.1
 
     mutating func append(_ chunk: String) -> String? {
+        guard !chunk.isEmpty else { return nil }
         buffer += chunk
         if buffer.count >= Self.maxBufferedChars || Date().timeIntervalSince(lastFlush) >= Self.maxBufferedInterval {
             return flush()
@@ -160,11 +161,6 @@ enum AIRequestSupport {
             return try ensureURL(components)
         }
 
-        if path.hasSuffix("/v1beta/openai") || path.hasSuffix("/v1beta/openai/") {
-            components.path = path.hasSuffix("/") ? path + "chat/completions" : path + "/chat/completions"
-            return try ensureURL(components)
-        }
-
         let trimmedPath = path.hasSuffix("/") ? String(path.dropLast()) : path
         components.path = trimmedPath + "/v1/chat/completions"
         return try ensureURL(components)
@@ -198,9 +194,13 @@ enum AIRequestSupport {
             return try ensureURL(components)
         }
 
-        if path.contains("/v1/") || path.contains("/v1beta/") {
-            let normalizedPath = path.hasSuffix("/") ? path + "models" : path + "/models"
-            components.path = normalizedPath
+        if let range = path.range(of: "/v1beta/openai/", options: .backwards) {
+            components.path = String(path[..<range.upperBound].dropLast()) + "/models"
+            return try ensureURL(components)
+        }
+
+        if let range = path.range(of: "/v1/", options: .backwards) {
+            components.path = String(path[..<range.upperBound].dropLast()) + "/models"
             return try ensureURL(components)
         }
 
@@ -389,8 +389,9 @@ enum AIRequestSupport {
             }
 
             if isDone {
-                lines.removeAll(keepingCapacity: true)
-                return "[DONE]"
+                guard !lines.isEmpty else { return "[DONE]" }
+                pendingDone = true
+                return flushBufferedLines()
             }
 
             lines.append(payload)
@@ -406,6 +407,10 @@ enum AIRequestSupport {
                 return "[DONE]"
             }
             guard !lines.isEmpty else { return nil }
+            return flushBufferedLines()
+        }
+
+        private mutating func flushBufferedLines() -> String? {
             let payload = lines.joined(separator: "\n")
             lines.removeAll(keepingCapacity: true)
             return payload.isEmpty ? nil : payload
@@ -446,6 +451,19 @@ enum AIRequestSupport {
         }
     }
 
+    /// Keep proxy error pages from consuming unbounded memory while retaining
+    /// enough response text to diagnose provider failures.
+    static func readStreamingErrorBody(_ bytes: URLSession.AsyncBytes) async throws -> String {
+        var body = Data()
+        body.reserveCapacity(4_096)
+        for try await byte in bytes {
+            try Task.checkCancellation()
+            body.append(byte)
+            if body.count >= 65_536 { break }
+        }
+        return String(data: body, encoding: .utf8) ?? "Unknown streaming error"
+    }
+
     /// Retries transient transport and HTTP failures with bounded backoff.
     ///
     /// HTTP status inspection deliberately happens inside this wrapper. URLSession considers
@@ -480,6 +498,7 @@ enum AIRequestSupport {
                 let result = try await operation()
                 guard let response = result.1 as? HTTPURLResponse,
                       isTransientStatusCode(response.statusCode),
+                      !isQuotaExhaustedResponse(result.0, statusCode: response.statusCode),
                       attempt < delays.count else {
                     return result
                 }
@@ -547,12 +566,20 @@ enum AIRequestSupport {
     private static func shouldRetry(_ error: AIClientError) -> Bool {
         switch error {
         case .apiError(let statusCode, _):
-            return isTransientStatusCode(statusCode)
-        case .networkError:
-            return true
+            return isTransientStatusCode(statusCode) && !error.isQuotaExhausted
+        case .networkError(let underlying):
+            if let urlError = underlying as? URLError { return shouldRetry(urlError) }
+            if let clientError = underlying as? AIClientError { return shouldRetry(clientError) }
+            return false
         default:
             return false
         }
+    }
+
+    private static func isQuotaExhaustedResponse<Payload>(_ payload: Payload, statusCode: Int) -> Bool {
+        guard statusCode == 429, let data = payload as? Data,
+              let message = String(data: data, encoding: .utf8) else { return false }
+        return AIClientError.apiError(statusCode: statusCode, message: message).isQuotaExhausted
     }
 
     private static func shouldRetry(_ error: URLError) -> Bool {

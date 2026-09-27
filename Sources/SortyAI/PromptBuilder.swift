@@ -504,6 +504,22 @@ package struct PromptBuilder {
     /// preserving the JSON-contract tail, so callers never send unbounded input.
     package static func enforceMainPromptBudget(_ prompt: String, budget: Int = mainPromptTokenBudget) -> String {
         guard estimateTokens(prompt) > budget else { return prompt }
+        if let filesStart = prompt.range(of: "Files to process ("),
+           let headerEnd = prompt.range(of: "\n\n", range: filesStart.upperBound..<prompt.endIndex),
+           let metadataStart = prompt.range(of: "\n## FILE METADATA", range: headerEnd.upperBound..<prompt.endIndex) {
+            let suffixStart = prompt.range(of: "\n## IMAGE & CONTENT ANALYSIS", range: headerEnd.upperBound..<metadataStart.lowerBound)?.lowerBound
+                ?? metadataStart.lowerBound
+            let prefix = String(prompt[..<headerEnd.upperBound])
+            let suffix = String(prompt[suffixStart...])
+            let available = budget * 4 - prefix.count - suffix.count - 100
+            if available > 0 {
+                let fileSection = prompt[headerEnd.upperBound..<suffixStart]
+                let end = fileSection.index(fileSection.startIndex, offsetBy: min(available, fileSection.count))
+                let candidate = fileSection[..<end]
+                let completeLines = candidate.lastIndex(of: "\n").map { candidate[...$0] } ?? candidate[...]
+                return prefix + completeLines + "\n[... remaining files omitted to fit prompt budget ...]\n" + suffix
+            }
+        }
         // The contract sentence varies by mode and reasoning flag. The old
         // matcher only looked for the organize/rename wording, so reasoning
         // runs lost their "Include the organization structure in JSON format"

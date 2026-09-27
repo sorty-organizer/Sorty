@@ -43,6 +43,13 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
         XCTAssertEqual(url.absoluteString, "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
     }
 
+    func testModelsURLDropsChatEndpointSuffix() throws {
+        let url = try AIRequestSupport.openAIModelsURL(
+            from: "https://proxy.example.com/custom/v1/chat/completions/extra"
+        )
+        XCTAssertEqual(url.absoluteString, "https://proxy.example.com/custom/v1/models")
+    }
+
     private var testDefaultsSuiteName = ""
     private var testDefaults: UserDefaults!
 
@@ -268,5 +275,24 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
 
         XCTAssertEqual(attempts, 1)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 400)
+    }
+
+    func testTransientHTTPRetryDoesNotRepeatQuotaExhaustion() async throws {
+        let url = URL(string: "https://example.com/v1/chat/completions")!
+        var attempts = 0
+        let (data, _) = try await AIRequestSupport.withTransientHTTPRetry(delays: [.zero]) {
+            attempts += 1
+            let response = HTTPURLResponse(url: url, statusCode: 429, httpVersion: nil, headerFields: nil)!
+            return (Data("Free tier quota exhausted".utf8), response as URLResponse)
+        }
+        XCTAssertEqual(attempts, 1)
+        XCTAssertEqual(String(data: data, encoding: .utf8), "Free tier quota exhausted")
+    }
+
+    func testSSEBufferPreservesIncompletePayloadBeforeDone() {
+        var buffer = AIRequestSupport.SSEDataBuffer()
+        XCTAssertNil(buffer.consume(line: "data: {\"partial\": true"))
+        XCTAssertEqual(buffer.consume(line: "data: [DONE]"), "{\"partial\": true")
+        XCTAssertEqual(buffer.flush(), "[DONE]")
     }
 }

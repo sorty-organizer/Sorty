@@ -434,6 +434,10 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                         try inputPipe.fileHandleForWriting.close()
                     } catch {
                         process.terminationHandler = nil
+                        try? inputPipe.fileHandleForWriting.close()
+                        if process.isRunning {
+                            Self.terminateWithEscalation(process) {}
+                        }
                         completion.resume(throwing: error)
                     }
                 }
@@ -452,6 +456,9 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             try? diagnosticsHandle.close()
             throw CancellationError()
         } catch let error as AIClientError {
+            if process.isRunning {
+                Self.terminateWithEscalation(process) {}
+            }
             outputPipe.fileHandleForReading.readabilityHandler = nil
             errorPipe.fileHandleForReading.readabilityHandler = nil
             try? diagnosticsHandle.close()

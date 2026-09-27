@@ -209,14 +209,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             }
             
             if httpResponse.statusCode != 200 {
-                var errorData = Data()
-                try await withTaskCancellationHandler {
-                    for try await byte in bytes {
-                        try Task.checkCancellation()
-                        errorData.append(byte)
-                    }
-                } onCancel: {}
-                let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown streaming error"
+                let errorMessage = try await AIRequestSupport.readStreamingErrorBody(bytes)
                 throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
             }
 
@@ -350,7 +343,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             method: "GET",
             headers: headers
         )
-        request.timeoutInterval = min(AIRequestSupport.clampedTimeout(config.requestTimeout), 60)
+        request.timeoutInterval = AIRequestSupport.interactiveTimeout(for: config)
         // Health checks never wake constrained/expensive radios.
         request.allowsConstrainedNetworkAccess = false
         request.allowsExpensiveNetworkAccess = false

@@ -708,4 +708,16 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(truncated.contains("Provide detailed reasoning for each folder"))
         XCTAssertTrue(truncated.contains("Include the organization structure in JSON format"))
     }
+
+    func testBudgetTruncationKeepsInstructionsAfterFileList() {
+        let prompt = "Organize these files.\nFiles to process (500 total):\n\n"
+            + String(repeating: "long-file-name.pdf [file, 100 bytes]\n", count: 500)
+            + "\n## FILE METADATA\nReturn folder_assignments with file_ids."
+            + "\nProvide the organization structure in JSON format."
+
+        let truncated = PromptBuilder.enforceMainPromptBudget(prompt, budget: 500)
+
+        XCTAssertTrue(truncated.contains("Return folder_assignments with file_ids"))
+        XCTAssertTrue(truncated.contains("remaining files omitted"))
+    }
 }

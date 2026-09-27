@@ -428,6 +428,11 @@ public class AISessionManager: ObservableObject {
     
     /// Invalidate session for a provider (e.g., after auth failure)
     public func invalidate(provider: AIProvider) {
+        invalidateInternal(provider: provider)
+        scheduleCleanup()
+    }
+
+    private func invalidateInternal(provider: AIProvider) {
         if let retired = store.removeSession(for: provider) {
             Self.retireDetached(retired)
             ModelLog.log("Removed session for \(provider.displayName)", category: "AISessionManager")
@@ -437,7 +442,6 @@ public class AISessionManager: ObservableObject {
         prewarmTasks[provider] = nil
         prewarmVerdicts[provider] = nil
         prewarmingProviders.remove(provider)
-        scheduleCleanup()
     }
 
     /// Invalidate all sessions
@@ -497,8 +501,9 @@ public class AISessionManager: ObservableObject {
         let staleProviders = store.staleProviders(timeout: sessionTimeout)
         for provider in staleProviders {
             ModelLog.log("Cleaning up stale session for \(provider.displayName)", category: "AISessionManager")
-            invalidate(provider: provider)
+            invalidateInternal(provider: provider)
         }
+        scheduleCleanup()
     }
 }
 

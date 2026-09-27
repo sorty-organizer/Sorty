@@ -117,7 +117,7 @@ public enum AIClientError: LocalizedError, Sendable {
             }
             return "API Error (\(statusCode)): \(getStatusExplanation(statusCode))"
         case .networkError(let error):
-            return "Connection Failed: \(error.localizedDescription)"
+            return "Connection Failed: \(redactPotentialKeys(error.localizedDescription))"
         case .jsonDecodingError:
             return "Invalid Response: The server returned data in an unexpected format"
         }
@@ -142,7 +142,7 @@ public enum AIClientError: LocalizedError, Sendable {
             }
             return redactedRaw
         case .networkError(let error):
-            return error.localizedDescription
+            return redactPotentialKeys(error.localizedDescription)
         case .missingAPIKey:
             return "Please enter an API key in the settings or disable 'Requires API Key' for local models."
         case .invalidURL:
@@ -155,14 +155,19 @@ public enum AIClientError: LocalizedError, Sendable {
     }
     
     private func redactPotentialKeys(_ text: String) -> String {
-        // Redact standard API key patterns: e.g. sk-..., ant-api-..., or any 32+ char alpha-numeric string
+        // Keep parameter names for context while removing their values.
+        let queryPattern = #"(?i)([?&;](?:key|token|api[_-]?key|access[_-]?token|password|secret)=)[^&;\s"'<>]+"#
+        var redacted = text
+        if let regex = try? NSRegularExpression(pattern: queryPattern) {
+            let range = NSRange(redacted.startIndex..<redacted.endIndex, in: redacted)
+            redacted = regex.stringByReplacingMatches(in: redacted, range: range, withTemplate: "$1[REDACTED KEY]")
+        }
         let patterns = [
             "sk-[a-zA-Z0-9]{20,}",
             "ant-api-[a-zA-Z0-9-]{20,}",
+            "AIza[0-9A-Za-z_-]{20,}",
             "[a-zA-Z0-9]{32,}"
         ]
-        
-        var redacted = text
         for pattern in patterns {
             if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
                 let range = NSRange(location: 0, length: redacted.utf16.count)
