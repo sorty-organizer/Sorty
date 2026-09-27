@@ -505,15 +505,13 @@ struct PromptBuilder {
         return truncated + "\n\n[... truncated to \(budget)-token budget ...]\n" + tail
     }
 
-    /// Filenames are untrusted input. Newlines and angle brackets are stripped
-    /// before a name is interpolated into a delimited prompt section so a
-    /// crafted name cannot close or forge prompt sections.
+    /// Escape prompt delimiters without collapsing distinct filenames.
     static func promptSafeFilename(_ name: String) -> String {
         name
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "<", with: "")
-            .replacingOccurrences(of: ">", with: "")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

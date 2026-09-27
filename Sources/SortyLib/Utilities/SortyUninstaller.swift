@@ -9,7 +9,7 @@ import Foundation
 import ServiceManagement
 import UserNotifications
 
-public struct SortyUninstallReport: Equatable {
+public struct SortyUninstallReport: Equatable, Sendable {
     public let removedPaths: [String]
     public let missingPaths: [String]
     public let failedPaths: [String: String]

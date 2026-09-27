@@ -27,11 +27,12 @@ private enum SortyAppLog {
 private final class ApplicationRemovalMonitor {
     private let originalApplicationURL: URL
     private let fileDescriptor: Int32
-    private let onMovedToTrash: @MainActor @Sendable (URL?) -> Bool
+    private let onMovedToTrash: @MainActor @Sendable (URL?) async -> Bool
     private var source: DispatchSourceFileSystemObject?
     private var hasHandledRemoval = false
+    private var isHandlingRemoval = false
 
-    init?(onMovedToTrash: @escaping @MainActor @Sendable (URL?) -> Bool) {
+    init?(onMovedToTrash: @escaping @MainActor @Sendable (URL?) async -> Bool) {
         let applicationURL = Bundle.main.bundleURL.standardizedFileURL
         let descriptor = open(applicationURL.path, O_EVTONLY)
         guard descriptor >= 0 else { return nil }
@@ -61,12 +62,17 @@ private final class ApplicationRemovalMonitor {
     }
 
     private func handleFileSystemEvent() {
-        guard !hasHandledRemoval,
+        guard !hasHandledRemoval, !isHandlingRemoval,
               !FileManager.default.fileExists(atPath: originalApplicationURL.path) else {
             return
         }
 
-        hasHandledRemoval = onMovedToTrash(currentPathForOpenApplicationBundle())
+        isHandlingRemoval = true
+        let movedURL = currentPathForOpenApplicationBundle()
+        Task { @MainActor in
+            hasHandledRemoval = await onMovedToTrash(movedURL)
+            isHandlingRemoval = false
+        }
     }
 
     private func currentPathForOpenApplicationBundle() -> URL? {
@@ -158,7 +164,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         applicationRemovalMonitor = ApplicationRemovalMonitor { [weak self] movedApplicationURL in
-            self?.finishExternalUninstall(movedApplicationURL: movedApplicationURL) ?? false
+            await self?.finishExternalUninstall(movedApplicationURL: movedApplicationURL) ?? false
         }
         applicationRemovalMonitor?.start()
         configureBuildAutoCloseMonitor()
@@ -274,11 +280,13 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         #endif
     }
 
-    private func finishExternalUninstall(movedApplicationURL: URL?) -> Bool {
+    private func finishExternalUninstall(movedApplicationURL: URL?) async -> Bool {
         #if canImport(SortyLib)
-            guard let report = SortyUninstaller.runAfterExternalApplicationRemoval(
-                movedApplicationURL: movedApplicationURL
-            ) else { return false }
+            guard let report = await Task.detached(priority: .userInitiated, operation: {
+                SortyUninstaller.runAfterExternalApplicationRemoval(
+                    movedApplicationURL: movedApplicationURL
+                )
+            }).value else { return false }
             if report.didScheduleApplicationRemoval {
                 Self.forceQuit = true
                 NSApp.terminate(nil)

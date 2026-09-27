@@ -1764,7 +1764,15 @@ public class AppState: ObservableObject {
     }
 
     private func uninstallSorty() {
-        let report = SortyUninstaller.run()
+        Task { @MainActor in
+            let report = await Task.detached(priority: .userInitiated) {
+                SortyUninstaller.run()
+            }.value
+            finishUninstall(using: report)
+        }
+    }
+
+    private func finishUninstall(using report: SortyUninstallReport) {
         if report.didScheduleApplicationRemoval {
             NotificationCenter.default.post(name: .forceQuitSorty, object: nil)
             NSApp.terminate(nil)
