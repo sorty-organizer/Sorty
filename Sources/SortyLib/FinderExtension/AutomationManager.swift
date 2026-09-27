@@ -308,9 +308,9 @@ public final class AutomationManager: ObservableObject {
     }
     
     /// Get the path of the frontmost Finder window
-    public func getFrontmostFinderWindow() -> URL? {
+    public func getFrontmostFinderWindow() async -> URL? {
         guard automationStatus == .granted else { return nil }
-        return FinderAutomation.getFrontmostFinderWindowPath()
+        return await FinderAutomation.getFrontmostFinderWindowPath()
     }
     
     /// Check if current selection is a valid organization target

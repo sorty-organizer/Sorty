@@ -5,6 +5,7 @@
 - IPC uses app group `group.com.sorty.app`.
 - Finder Integration is a core app feature. The legacy defaults key `finderIntegrationEnabled` remains for migration and diagnostics, but new installs default to enabled.
 - In-app repair path: `ExtensionCommunication.repairFinderSyncExtensionRegistration`.
+- Finder selection and window AppleScripts run through `/usr/bin/osascript` off the main actor. Each short query has a process deadline; the Automation permission request waits for the user's decision.
 
 ## Preferred Repair Flow
 1. Open `Settings -> Finder Integration`.

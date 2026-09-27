@@ -34,9 +34,8 @@ public final class FinderAutomation {
     nonisolated static let permissionEventClass = AEEventClass(kAECoreSuite)
     nonisolated static let permissionEventID = AEEventID(kAEGetData)
 
-    /// Precompiled selection query. NSAppleScript is not thread-safe, so it is
-    /// compiled and executed on the main actor only.
-    private static let selectionQueryScript = NSAppleScript(source: """
+    /// NUL delimiters preserve commas and newlines in Finder filenames.
+    private static let selectionQueryScript = """
         with timeout of \(finderAutomationScriptTimeoutSeconds) seconds
             tell application "Finder"
                 set selectedItems to selection
@@ -44,37 +43,76 @@ public final class FinderAutomation {
                 repeat with anItem in selectedItems
                     set end of filePaths to POSIX path of (anItem as alias)
                 end repeat
-                return filePaths
+                set AppleScript's text item delimiters to ASCII character 0
+                return filePaths as text
             end tell
         end timeout
-        """)
+        """
     
     public static func enableAutomationChecks() {
         checksEnabled = true
     }
 
-    /// Runs a compiled script on the main thread and logs failures instead of
-    /// letting an `on error` handler silently turn them into a return value.
-    private static func execute(
-        _ script: NSAppleScript?,
-        description: String
-    ) -> NSAppleEventDescriptor? {
-        guard let script else {
-            DebugLogger.log("AppleScript \(description) could not be compiled")
-            return nil
-        }
-
-        var errorInfo: NSDictionary?
-        let result = script.executeAndReturnError(&errorInfo)
-        if let errorInfo {
-            DebugLogger.log("AppleScript \(description) failed: \(errorInfo)")
-            return nil
-        }
-        return result
+    private struct ScriptResult: Sendable {
+        let status: Int32
+        let output: String
+        let error: String
     }
 
-    private static func execute(source: String, description: String) -> NSAppleEventDescriptor? {
-        execute(NSAppleScript(source: source), description: description)
+    /// Run AppleScript outside Sorty's process. The process deadline also
+    /// covers a script engine that ignores AppleScript's own timeout.
+    private nonisolated static func execute(
+        source: String,
+        description: String,
+        timeout: TimeInterval? = 7
+    ) async -> ScriptResult? {
+        await Task.detached(priority: .utility) {
+            let outputURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("sorty-finder-\(UUID().uuidString).log")
+            let errorURL = outputURL.appendingPathExtension("err")
+            guard FileManager.default.createFile(atPath: outputURL.path, contents: nil),
+                  FileManager.default.createFile(atPath: errorURL.path, contents: nil),
+                  let outputHandle = try? FileHandle(forWritingTo: outputURL),
+                  let errorHandle = try? FileHandle(forWritingTo: errorURL) else { return nil }
+            defer {
+                try? outputHandle.close()
+                try? errorHandle.close()
+                try? FileManager.default.removeItem(at: outputURL)
+                try? FileManager.default.removeItem(at: errorURL)
+            }
+
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            process.arguments = ["-e", source]
+            process.standardOutput = outputHandle
+            process.standardError = errorHandle
+            do {
+                try process.run()
+                let deadline = timeout.map { Date().addingTimeInterval($0) }
+                while process.isRunning {
+                    if Task.isCancelled || (deadline.map { Date() >= $0 } ?? false) {
+                        process.terminate()
+                        let grace = Date().addingTimeInterval(1)
+                        while process.isRunning, Date() < grace {
+                            try? await Task.sleep(for: .milliseconds(50))
+                        }
+                        if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+                        DebugLogger.log("AppleScript \(description) timed out")
+                        return nil
+                    }
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                let output = (try? String(contentsOf: outputURL, encoding: .utf8)) ?? ""
+                let errorOutput = (try? String(contentsOf: errorURL, encoding: .utf8)) ?? ""
+                if process.terminationStatus != 0 {
+                    DebugLogger.log("AppleScript \(description) failed: \(errorOutput)")
+                }
+                return ScriptResult(status: process.terminationStatus, output: output, error: errorOutput)
+            } catch {
+                DebugLogger.log("AppleScript \(description) failed: \(error)")
+                return nil
+            }
+        }.value
     }
     
     // MARK: - Permission Status
@@ -98,24 +136,19 @@ public final class FinderAutomation {
         end tell
         """
 
-        guard let script = NSAppleScript(source: scriptSource) else {
-            return determineAutomationPermission(prompt: true)
-        }
-
-        var errorInfo: NSDictionary?
-        _ = script.executeAndReturnError(&errorInfo)
-
-        guard let errorInfo else { return .granted }
-        let errorCode = errorInfo[NSAppleScript.errorNumber] as? Int
-        switch errorCode {
-        case -1743:
+        guard let result = await execute(
+            source: scriptSource,
+            description: "permission request",
+            timeout: nil
+        ) else { return determineAutomationPermission(prompt: false) }
+        guard result.status != 0 else { return .granted }
+        if result.error.contains("(-1743)") {
             return .denied
-        case -600:
-            return .unknown
-        default:
-            DebugLogger.log("Unexpected Finder automation request error: \(errorInfo)")
-            return determineAutomationPermission(prompt: false)
         }
+        if result.error.contains("(-600)") {
+            return .unknown
+        }
+        return determineAutomationPermission(prompt: false)
     }
 
     nonisolated fileprivate static func determineAutomationPermission(
@@ -175,22 +208,21 @@ public final class FinderAutomation {
     public static func getSelectedFiles() async -> [URL]? {
         guard checksEnabled,
               determineAutomationPermission(prompt: false) == .granted,
-              let result = execute(selectionQueryScript, description: "selection query"),
-              result.descriptorType == typeAEList,
-              result.numberOfItems > 0 else {
+              let result = await execute(source: selectionQueryScript, description: "selection query"),
+              result.status == 0 else {
             return nil
         }
 
-        let paths = (1...result.numberOfItems).compactMap { index in
-            result.atIndex(index)?.stringValue
-        }
+        let paths = String(result.output.dropLast(result.output.hasSuffix("\n") ? 1 : 0))
+            .split(separator: "\0")
+            .map(String.init)
         guard !paths.isEmpty else { return nil }
         return paths.map { URL(fileURLWithPath: $0) }
     }
     
     /// Get the path of the frontmost Finder window
     /// Returns nil if no Finder window is open
-    public static func getFrontmostFinderWindowPath() -> URL? {
+    public static func getFrontmostFinderWindowPath() async -> URL? {
         guard checksEnabled else { return nil }
         guard checkAutomationPermission() == .granted else {
             return nil
@@ -205,12 +237,12 @@ public final class FinderAutomation {
         end timeout
         """
         
-        guard let result = execute(source: scriptSource, description: "front window query"),
-              let path = result.stringValue, !path.isEmpty else {
+        guard let result = await execute(source: scriptSource, description: "front window query"),
+              result.status == 0 else {
             return nil
         }
-        
-        return URL(fileURLWithPath: path)
+        let path = String(result.output.dropLast(result.output.hasSuffix("\n") ? 1 : 0))
+        return path.isEmpty ? nil : URL(fileURLWithPath: path)
     }
 
     // MARK: - Finder Selection Control
@@ -249,7 +281,7 @@ public final class FinderAutomation {
         end timeout
         """
         
-        _ = execute(source: scriptSource, description: "select in Finder")
+        Task { _ = await execute(source: scriptSource, description: "select in Finder") }
     }
     
     /// Reveal a single file or folder in Finder
@@ -272,7 +304,7 @@ public final class FinderAutomation {
         end timeout
         """
         
-        _ = execute(source: scriptSource, description: "open Finder window")
+        Task { _ = await execute(source: scriptSource, description: "open Finder window") }
     }
 
     // MARK: - Finder Refresh
@@ -299,7 +331,7 @@ public final class FinderAutomation {
         end timeout
         """
         
-        _ = execute(source: scriptSource, description: "refresh Finder window")
+        Task { _ = await execute(source: scriptSource, description: "refresh Finder window") }
     }
 
 }
