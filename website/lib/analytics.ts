@@ -4,6 +4,14 @@ import type { CaptureResult, Properties } from 'posthog-js'
 
 export const WEBSITE_ANALYTICS_PREFERENCE_KEY =
   'sorty.website.analytics.preference'
+export const WEBSITE_INTERNAL_TELEMETRY_KEY = 'sorty.website.internalTelemetry'
+
+export function isWebsiteInternalTelemetry(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    window.localStorage.getItem(WEBSITE_INTERNAL_TELEMETRY_KEY) === 'true'
+  )
+}
 
 export type WebsiteAnalyticsPreference = 'allowed' | 'denied'
 
@@ -273,6 +281,7 @@ function sanitizeEvent(event: CaptureResult | null): CaptureResult | null {
   }
   safeProperties.$geoip_disable = true
   safeProperties.analytics_scope = 'anonymous_aggregate'
+  safeProperties.is_internal = isWebsiteInternalTelemetry()
   safeProperties.platform_surface = 'website'
   event.properties = safeProperties
   return event

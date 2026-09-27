@@ -15,6 +15,14 @@ public enum AnalyticsConsent: String, Sendable {
     case denied
 }
 
+public enum InternalTelemetry {
+    public static let defaultsKey = "internalTelemetry"
+
+    public static var isEnabled: Bool {
+        UserDefaults.standard.bool(forKey: defaultsKey)
+    }
+}
+
 public struct ExperimentalFeature: Identifiable, Equatable, Sendable {
     public let id: String
     public let title: String
@@ -399,6 +407,7 @@ public final class AnalyticsManager: ObservableObject {
     private func send(event: String, properties: [String: Any]) {
         var safeProperties = properties
         safeProperties["platform_surface"] = "mac_app"
+        safeProperties["is_internal"] = InternalTelemetry.isEnabled
         safeProperties["$geoip_disable"] = true
         PostHogSDK.shared.capture(event, properties: safeProperties)
     }
@@ -585,6 +594,7 @@ public final class AnalyticsManager: ObservableObject {
             "entry_source",
             "feature",
             "has_custom_instructions",
+            "is_internal",
             "launch_source",
             "mode",
             "operation",

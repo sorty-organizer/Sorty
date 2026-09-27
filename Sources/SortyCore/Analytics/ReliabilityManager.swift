@@ -145,6 +145,12 @@ public final class ReliabilityManager {
             return
         }
         isActive = true
+        SentrySDK.configureScope { scope in
+            scope.setTag(
+                value: InternalTelemetry.isEnabled ? "true" : "false",
+                key: "is_internal"
+            )
+        }
         SentrySDK.logger.info(
             "sorty.reliability.started",
             attributes: telemetryAttributes
@@ -208,6 +214,7 @@ public final class ReliabilityManager {
             "sorty.reliability.handled_error",
             attributes: [
                 "platform_surface": "mac_app",
+                "is_internal": InternalTelemetry.isEnabled,
                 "feature": safeFeature,
                 "operation": safeOperation,
                 "error_category": classification.category,
@@ -219,6 +226,7 @@ public final class ReliabilityManager {
             key: "sorty.app.handled_error",
             attributes: [
                 "platform_surface": "mac_app",
+                "is_internal": InternalTelemetry.isEnabled,
                 "feature": safeFeature,
                 "operation": safeOperation,
                 "error_category": classification.category,
@@ -329,6 +337,10 @@ public final class ReliabilityManager {
             key: "feature"
         )
         span.setTag(value: "mac_app", key: "platform_surface")
+        span.setTag(
+            value: InternalTelemetry.isEnabled ? "true" : "false",
+            key: "is_internal"
+        )
         return ReliabilitySpan(span: span)
     }
 
@@ -431,6 +443,7 @@ public final class ReliabilityManager {
         [
             "platform_surface": "mac_app",
             "environment": environmentName,
+            "is_internal": InternalTelemetry.isEnabled,
         ]
     }
 
@@ -438,6 +451,7 @@ public final class ReliabilityManager {
         [
             "platform_surface": "mac_app",
             "environment": environmentName,
+            "is_internal": InternalTelemetry.isEnabled,
         ]
     }
 

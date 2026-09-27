@@ -1,7 +1,10 @@
 'use client'
 
 import * as Sentry from '@sentry/nextjs'
-import { isWebsiteAnalyticsEnabled } from '@/lib/analytics'
+import {
+  isWebsiteAnalyticsEnabled,
+  isWebsiteInternalTelemetry,
+} from '@/lib/analytics'
 
 type ExceptionContext = {
   surface: string
@@ -223,6 +226,10 @@ export function initializeWebsiteReliability(): void {
       }
       delete event.user
       delete event.request
+      event.tags = {
+        ...event.tags,
+        is_internal: String(isWebsiteInternalTelemetry()),
+      }
       if (event.message) {
         event.message = safeIdentifier(event.message, 'website_error')
       }
@@ -234,6 +241,10 @@ export function initializeWebsiteReliability(): void {
       }
       delete event.user
       delete event.request
+      event.tags = {
+        ...event.tags,
+        is_internal: String(isWebsiteInternalTelemetry()),
+      }
       event.transaction = safeTransactionName(event.transaction)
       return event
     },
@@ -242,6 +253,7 @@ export function initializeWebsiteReliability(): void {
 
   const attributes = {
     platform_surface: 'website',
+    is_internal: isWebsiteInternalTelemetry(),
     environment:
       process.env.NODE_ENV === 'production' ? 'production' : 'development',
   }
@@ -289,6 +301,7 @@ export function captureWebsiteException(
   const cause = safeIdentifier(context.cause, classified.cause)
   const attributes = {
     platform_surface: 'website',
+    is_internal: isWebsiteInternalTelemetry(),
     surface,
     handled: context.handled,
     error_type: classified.type,
