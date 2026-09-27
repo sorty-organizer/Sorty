@@ -13,7 +13,8 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 |-------|----------|---------|
 | **SortyApp** | `Sources/SortyApp/` | SwiftUI lifecycle, `AppCoordinator` for background tasks |
 | **SortyFileSystem** | `Sources/SortyFileSystem/` | File naming, hashing, path validation, and storage path primitives |
-| **SortyCore** | `Sources/SortyCore/` | Models, AI clients, file operations, services, and shared app logic |
+| **SortyModels** | `Sources/SortyModels/` | Data models, history, undo operations, and model-layer logging; depends on `SortyFileSystem` only |
+| **SortyCore** | `Sources/SortyCore/` | AI clients, file operations, services, and shared app logic; depends on `SortyModels` |
 | **SortyLib** | `Sources/SortyLib/` | SwiftUI views, view helpers, and app resources; depends on `SortyCore` |
 | **SortyFinderSync** | `Sources/SortyFinderSync/` | Finder Sync extension |
 | **SortyWidgets** | `Sources/SortyWidgets/` | WidgetKit extension embedded by the Xcode app target |
@@ -23,7 +24,7 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | Directory | Contains |
 |-----------|----------|
 | `SortyCore/AI/` | AI clients, prompt builders, response parsers |
-| `SortyCore/Models/` | Data models (`AIConfig`, `FileItem`, `OrganizationPlan`, `FeatureFlags`) |
+| `SortyModels/` | Data models (`AIConfig`, `FileItem`, `OrganizationPlan`, `FeatureFlags`), history, `FileOperation`, content metadata |
 | `SortyLib/Views/` | SwiftUI views |
 | `SortyCore/ViewModels/` | View models |
 | `SortyCore/Managers/` | `@MainActor ObservableObject` state managers |

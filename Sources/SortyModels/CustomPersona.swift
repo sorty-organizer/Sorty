@@ -181,7 +181,7 @@ public class CustomPersonaStore: ObservableObject {
         }
     }
     private func setupNotificationObservers() {
-        clearUsageObserver = NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] in
+        clearUsageObserver = NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil) { [weak self] in
             self?.clearAll()
         }
     }

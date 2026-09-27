@@ -8,28 +8,6 @@
 import Foundation
 import Combine
 
-/// UserDefaults supports concurrent reads. This wrapper makes that documented contract explicit
-/// to Swift's Sendable checker without allowing background writes through the same reference.
-final class UserDefaultsDataReader: @unchecked Sendable {
-    private let userDefaults: UserDefaults
-
-    init(_ userDefaults: UserDefaults) {
-        self.userDefaults = userDefaults
-    }
-
-    func data(forKey key: String) -> Data? {
-        userDefaults.data(forKey: key)
-    }
-
-    func string(forKey key: String) -> String? {
-        userDefaults.string(forKey: key)
-    }
-
-    func stringArray(forKey key: String) -> [String]? {
-        userDefaults.stringArray(forKey: key)
-    }
-}
-
 struct SettingsCredentialStore: Sendable {
     let load: @Sendable (String) async -> String?
     let save: @Sendable (String, String) async -> Bool

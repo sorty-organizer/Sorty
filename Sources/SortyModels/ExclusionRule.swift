@@ -591,7 +591,7 @@ public struct ExclusionMatcher: Sendable {
         return included
     }
 
-    func shouldExclude(
+    public func shouldExclude(
         path: String,
         name: String,
         pathExtension: String,
@@ -1156,7 +1156,7 @@ public class ExclusionRulesManager: ObservableObject {
         self.init(userDefaults: .standard)
     }
 
-    init(userDefaults: UserDefaults) {
+    public init(userDefaults: UserDefaults) {
         self.userDefaults = userDefaults
         self.persistedDataReader = UserDefaultsDataReader(userDefaults)
         setupNotificationObservers()
@@ -1258,7 +1258,7 @@ public class ExclusionRulesManager: ObservableObject {
     }
 
     private func setupNotificationObservers() {
-        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] in
+        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil) { [weak self] in
             self?.clearEverything()
         }
     }

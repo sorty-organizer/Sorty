@@ -916,6 +916,17 @@ struct SortyApp: App {
             startTelemetry: {
                 ReliabilityManager.shared.startIfAuthorized()
                 AnalyticsManager.shared.startIfAuthorized(launchDuration: appDelegate.launchDuration)
+                // Forward watched-folder lifecycle events (the manager itself
+                // cannot depend on the analytics stack).
+                WatchedFoldersManager.eventReporter = { event in
+                    AnalyticsManager.shared.captureFeature(
+                        feature: event.feature,
+                        subfeature: event.subfeature,
+                        action: event.action,
+                        outcome: event.outcome,
+                        properties: event.properties.mapValues { $0 as Any }
+                    )
+                }
                 if hasConfiguredOperationalServices {
                     ReliabilityManager.shared.finishLaunchSpan()
                 }

@@ -209,8 +209,8 @@ public struct PlanQualityIssue: Codable, Hashable, Sendable, Identifiable {
 }
 
 /// Enforces workflow-mode safety at the filesystem boundary instead of relying on AI output.
-enum OrganizationModePlanEnforcer {
-    static func enforce(
+public enum OrganizationModePlanEnforcer {
+    public static func enforce(
         _ plan: OrganizationPlan,
         mode: OrganizationMode,
         baseURL: URL

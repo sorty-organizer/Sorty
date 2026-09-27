@@ -61,7 +61,7 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
     public var status: OrganizationStatus // New detailed status
     public let errorMessage: String?
     public let rawAIResponse: String?
-    public var operations: [FileSystemManager.FileOperation]?
+    public var operations: [FileOperation]?
     public var isUndone: Bool
     public var source: OrganizationEntrySource
     
@@ -157,7 +157,7 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         status: OrganizationStatus? = nil,
         errorMessage: String? = nil,
         rawAIResponse: String? = nil,
-        operations: [FileSystemManager.FileOperation]? = nil,
+        operations: [FileOperation]? = nil,
         isUndone: Bool = false,
         source: OrganizationEntrySource = .manual,
         undoRestoredCount: Int? = nil,
@@ -235,7 +235,7 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         
         errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
         rawAIResponse = try container.decodeIfPresent(String.self, forKey: .rawAIResponse)
-        operations = try container.decodeIfPresent([FileSystemManager.FileOperation].self, forKey: .operations)
+        operations = try container.decodeIfPresent([FileOperation].self, forKey: .operations)
         isUndone = try container.decodeIfPresent(Bool.self, forKey: .isUndone) ?? false
         source = try container.decodeIfPresent(OrganizationEntrySource.self, forKey: .source) ?? .manual
         undoRestoredCount = try container.decodeIfPresent(Int.self, forKey: .undoRestoredCount)
@@ -419,7 +419,7 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
         mutationLock.lock()
         defer { mutationLock.unlock() }
         guard let primaryFileURL else {
-            LogManager.shared.log(
+            ModelLog.log(
                 "History file store unavailable; using legacy UserDefaults fallback",
                 level: .warning,
                 category: "OrganizationHistory"
@@ -443,7 +443,7 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
                 promoteFallbackEntriesIfNeeded(mergedEntries, fallbackEntries: fallbackEntries)
                 return retainedEntries(mergedEntries).map(\.summary)
             } catch {
-                LogManager.shared.log(
+                ModelLog.log(
                     "Primary history store unreadable at \(primaryFileURL.path): \(error.localizedDescription)",
                     level: .warning,
                     category: "OrganizationHistory"
@@ -482,12 +482,12 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
 
         if saveEntries(fallbackEntries) {
             userDefaults.removeObject(forKey: Self.legacyHistoryKey)
-            LogManager.shared.log(
+            ModelLog.log(
                 "Migrated \(fallbackEntries.count) history entr\(fallbackEntries.count == 1 ? "y" : "ies") from UserDefaults to file store",
                 category: "OrganizationHistory"
             )
         } else {
-            LogManager.shared.log(
+            ModelLog.log(
                 "History migration fell back to UserDefaults because file storage could not be written",
                 level: .warning,
                 category: "OrganizationHistory"
@@ -533,7 +533,7 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
                 // mirror must not roll a freshly verified primary back to an
                 // older snapshot.
                 if !primaryIsReadable(), let recoveredEntries = recoverFromBackup() {
-                    LogManager.shared.log(
+                    ModelLog.log(
                         "Recovered history store from backup after failed write; preserved \(recoveredEntries.count) entries",
                         level: .warning,
                         category: "OrganizationHistory"
@@ -542,7 +542,7 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
                 throw error
             }
         } catch {
-            LogManager.shared.log(
+            ModelLog.log(
                 "Failed to persist history file store, using UserDefaults fallback: \(error.localizedDescription)",
                 level: .warning,
                 category: "OrganizationHistory"
@@ -772,14 +772,14 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
             try fileManager.copyItem(at: backupFileURL, to: recoveryTempURL)
             try replacePrimary(with: recoveryTempURL, at: primaryFileURL)
 
-            LogManager.shared.log(
+            ModelLog.log(
                 "Recovered history store from backup at \(backupFileURL.path)",
                 level: .warning,
                 category: "OrganizationHistory"
             )
             return entries
         } catch {
-            LogManager.shared.log(
+            ModelLog.log(
                 "Failed to recover history store from backup: \(error.localizedDescription)",
                 level: .error,
                 category: "OrganizationHistory"
@@ -902,7 +902,7 @@ public class OrganizationHistory: ObservableObject {
     }
     
     private func setupNotificationObservers() {
-        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] in
+        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil) { [weak self] in
             self?.clearHistory()
         }
     }
@@ -1136,7 +1136,7 @@ public class OrganizationHistory: ObservableObject {
         }
     }
 
-    func waitForPendingPersistence() async {
+    public func waitForPendingPersistence() async {
         await persistenceTask?.value
     }
 

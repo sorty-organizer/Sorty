@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import SortyFileSystem
 
 public extension Notification.Name {
     static let autoOrganizeDisabledGlobally = Notification.Name("autoOrganizeDisabledGlobally")
@@ -140,6 +141,20 @@ private actor WatchedFolderExistenceProbe {
 /// Manager for persisting watched folders
 @MainActor
 public class WatchedFoldersManager: ObservableObject {
+    /// Analytics sink for folder lifecycle events. Uses how code is used: the
+    /// manager emits add/remove/enable/trigger events, but AnalyticsManager
+    /// lives up in SortyCore, so the app injects the reporter at launch and
+    /// the manager stays a leaf. Nil (e.g. tests) means events are dropped.
+    public struct FolderEvent: Sendable {
+        public let feature: String
+        public let subfeature: String
+        public let action: String
+        public let outcome: String
+        public let properties: [String: String]
+    }
+
+    nonisolated(unsafe) public static var eventReporter: (@Sendable (FolderEvent) -> Void)?
+
     @Published public private(set) var folders: [WatchedFolder] = []
     @Published public private(set) var activeFolderCount = 0
     @Published public private(set) var accessIssueFolderCount = 0
@@ -300,7 +315,7 @@ public class WatchedFoldersManager: ObservableObject {
     }
 
     private func setupNotificationObservers() {
-        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] in
+        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil) { [weak self] in
             self?.clearAll()
         }
     }
@@ -323,12 +338,14 @@ public class WatchedFoldersManager: ObservableObject {
             accessIssueFolderCount += 1
         }
         refreshFolderExistence()
-        AnalyticsManager.shared.captureFeature(
-            feature: "watched_folders",
-            subfeature: "folder_management",
-            action: "add",
-            outcome: "success",
-            properties: ["mode": normalizedFolder.effectiveOrganizationMode.rawValue]
+        Self.eventReporter?(
+            .init(
+                feature: "watched_folders",
+                subfeature: "folder_management",
+                action: "add",
+                outcome: "success",
+                properties: ["mode": normalizedFolder.effectiveOrganizationMode.rawValue]
+            )
         )
     }
 
@@ -375,11 +392,14 @@ public class WatchedFoldersManager: ObservableObject {
         if Self.hasAccessIssue(removedFolder) {
             accessIssueFolderCount = max(accessIssueFolderCount - 1, 0)
         }
-        AnalyticsManager.shared.captureFeature(
-            feature: "watched_folders",
-            subfeature: "folder_management",
-            action: "remove",
-            outcome: "success"
+        Self.eventReporter?(
+            .init(
+                feature: "watched_folders",
+                subfeature: "folder_management",
+                action: "remove",
+                outcome: "success",
+                properties: [:]
+            )
         )
     }
     
@@ -428,11 +448,14 @@ public class WatchedFoldersManager: ObservableObject {
             updated.isEnabled.toggle()
             updated.autoOrganize = updated.isEnabled
             updateFolder(updated)
-            AnalyticsManager.shared.captureFeature(
-                feature: "watched_folders",
-                subfeature: "monitoring",
-                action: updated.isEnabled ? "enable" : "disable",
-                outcome: "success"
+            Self.eventReporter?(
+                .init(
+                    feature: "watched_folders",
+                    subfeature: "monitoring",
+                    action: updated.isEnabled ? "enable" : "disable",
+                    outcome: "success",
+                    properties: [:]
+                )
             )
         }
     }
@@ -455,12 +478,14 @@ public class WatchedFoldersManager: ObservableObject {
         if var updated = self.folder(withID: folder.id) {
             updated.lastTriggered = Date()
             updateFolder(updated, affectsMonitoring: false)
-            AnalyticsManager.shared.captureFeature(
-                feature: "watched_folders",
-                subfeature: "automatic_organization",
-                action: "trigger",
-                outcome: "started",
-                properties: ["mode": updated.effectiveOrganizationMode.rawValue]
+            Self.eventReporter?(
+                .init(
+                    feature: "watched_folders",
+                    subfeature: "automatic_organization",
+                    action: "trigger",
+                    outcome: "started",
+                    properties: ["mode": updated.effectiveOrganizationMode.rawValue]
+                )
             )
         }
     }
@@ -699,7 +724,7 @@ public class WatchedFoldersManager: ObservableObject {
         with url: URL
     ) -> WatchedFolderReauthorizationResult {
         guard Self.normalizedPath(url.path) == Self.normalizedPath(folder.path) else {
-            DebugLogger.log(
+            ModelLog.debug(
                 "Rejected watched-folder access for unexpected path: expected \(folder.path), selected \(url.path)"
             )
             return .incorrectFolder
@@ -745,10 +770,10 @@ public class WatchedFoldersManager: ObservableObject {
             updated.accessStatus = .valid
             updateFolder(updated)
 
-            DebugLogger.log("Successfully reauthorized watched folder: \(folder.name)")
+            ModelLog.debug("Successfully reauthorized watched folder: \(folder.name)")
             return .success
         } catch {
-            DebugLogger.log("Failed to create bookmark during reauthorization: \(error)")
+            ModelLog.debug("Failed to create bookmark during reauthorization: \(error)")
             return .bookmarkCreationFailed
         }
     }
@@ -1060,7 +1085,7 @@ private final class WatchedFolderJournal: @unchecked Sendable {
                 do {
                     try appendUnlocked(records)
                 } catch {
-                    DebugLogger.log("Failed to merge legacy watched folders into the journal: \(error)")
+                    ModelLog.debug("Failed to merge legacy watched folders into the journal: \(error)")
                     return nil
                 }
             }
@@ -1116,7 +1141,7 @@ private final class WatchedFolderJournal: @unchecked Sendable {
                 }
                 return true
             } catch {
-                DebugLogger.log("Failed to compact watched-folder storage: \(error)")
+                ModelLog.debug("Failed to compact watched-folder storage: \(error)")
                 return false
             }
         }
@@ -1127,7 +1152,7 @@ private final class WatchedFolderJournal: @unchecked Sendable {
             do {
                 try appendUnlocked([record])
             } catch {
-                DebugLogger.log("Failed to persist watched-folder change: \(error)")
+                ModelLog.debug("Failed to persist watched-folder change: \(error)")
             }
         }
     }

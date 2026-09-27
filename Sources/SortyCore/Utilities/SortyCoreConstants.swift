@@ -12,15 +12,6 @@ enum Constants {
     static let maxPreviewVersions = 5
 }
 
-extension Notification.Name {
-    public static let organizationDidStart = Notification.Name("OrganizationDidStart")
-    public static let organizationDidFinish = Notification.Name("OrganizationDidFinish")
-    public static let organizationDidRevert = Notification.Name("OrganizationDidRevert")
-    public static let forceQuitSorty = Notification.Name("ForceQuitSorty")
-
-    /// Triggered when the user requests to delete all usage data
-    public static let clearAllUsageData = Notification.Name("clearAllUsageData")
-}
 
 
 

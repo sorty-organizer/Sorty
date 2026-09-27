@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import SortyFileSystem
 
 public enum ProviderAuthMethod: String, Codable, CaseIterable, Sendable {
     case apiKey = "api_key"
@@ -972,7 +973,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
 }
 
 public extension AIConfig {
-    func authMethod(for provider: AIProvider) -> ProviderAuthMethod {
+    public func authMethod(for provider: AIProvider) -> ProviderAuthMethod {
         switch provider {
         case .openAI:
             return openAIAuthMethod
@@ -994,7 +995,7 @@ public extension AIConfig {
         }
     }
 
-    var effectiveVisionDetailLevel: VisionDetailLevel {
+    public var effectiveVisionDetailLevel: VisionDetailLevel {
         if provider == .githubCopilot && visionDetailLevel == .auto {
             return .low
         }
@@ -1003,7 +1004,7 @@ public extension AIConfig {
 
     /// Per-batch resource timeout capped to 120-180s so one organize call
     /// cannot pin the radio for the legacy 600s default.
-    var effectiveOrganizeResourceTimeout: TimeInterval {
+    public var effectiveOrganizeResourceTimeout: TimeInterval {
         min(max(resourceTimeout, Self.minOrganizeResourceTimeout), Self.maxOrganizeResourceTimeout)
     }
 
@@ -1013,7 +1014,7 @@ public extension AIConfig {
         start.addingTimeInterval(Self.globalOrganizeDeadline)
     }
 
-    var duplicateHandlingMode: DuplicateHandlingMode {
+    public var duplicateHandlingMode: DuplicateHandlingMode {
         get {
             guard detectDuplicates else { return .off }
             return storeDuplicateMetadata ? .detectAndPreserveMetadata : .detectOnly

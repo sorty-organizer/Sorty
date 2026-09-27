@@ -56,7 +56,9 @@ public enum FeatureFlags {
     /// defaults write com.sorty.app internetPrivacyModeEnabled -bool false
     /// ```
     public static var internetPrivacyModeEnabled: Bool {
-        UserDefaults.standard.bool(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        // Canonical key lives on NetworkPrivacyPolicy up in SortyCore; the
+        // literal is repeated here so this leaf target stays dependency-free.
+        UserDefaults.standard.bool(forKey: "internetPrivacyModeEnabled")
     }
 
     /// Controls whether Sorty requires authentication for sensitive actions such as

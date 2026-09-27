@@ -255,6 +255,7 @@
 		C02609260000000000000001 /* SortyQualitySupport in Frameworks */ = {isa = PBXBuildFile; productRef = C02609260000000000000002 /* SortyQualitySupport */; };
 		C02609260000000000000004 /* SortyCore in Frameworks */ = {isa = PBXBuildFile; productRef = C02609260000000000000003 /* SortyCore */; };
 		C02609260000000000000006 /* SortyFileSystem in Frameworks */ = {isa = PBXBuildFile; productRef = C02609260000000000000005 /* SortyFileSystem */; };
+		C02609260000000000000008 /* SortyModels in Frameworks */ = {isa = PBXBuildFile; productRef = C02609260000000000000007 /* SortyModels */; };
 /* End PBXBuildFile section */
 
 
@@ -598,6 +599,7 @@
 				C02609260000000000000001 /* SortyQualitySupport in Frameworks */,
 				C02609260000000000000004 /* SortyCore in Frameworks */,
 				C02609260000000000000006 /* SortyFileSystem in Frameworks */,
+				C02609260000000000000008 /* SortyModels in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1158,6 +1160,7 @@
 				C02609260000000000000002 /* SortyQualitySupport */,
 				C02609260000000000000003 /* SortyCore */,
 				C02609260000000000000005 /* SortyFileSystem */,
+				C02609260000000000000007 /* SortyModels */,
 			);
 			productName = SortyTests;
 			productReference = 33A1286F2F01230200A86470 /* SortyTests.xctest */;
@@ -1906,6 +1909,10 @@
 		C02609260000000000000005 /* SortyFileSystem */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SortyFileSystem;
+		};
+		C02609260000000000000007 /* SortyModels */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SortyModels;
 		};
 		D4A500600000000000000001 /* SortyLib */ = {
 			isa = XCSwiftPackageProductDependency;

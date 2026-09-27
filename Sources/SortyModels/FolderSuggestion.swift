@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SortyFileSystem
 
 /// Represents a file with its suggested rename
 public struct FileRenameMapping: Codable, Identifiable, Hashable, Sendable {

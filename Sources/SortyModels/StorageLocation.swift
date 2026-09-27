@@ -8,6 +8,7 @@
 import Foundation
 import AppKit
 import Combine
+import SortyFileSystem
 
 public enum StorageProviderKind: String, Codable, Hashable, Sendable {
     case local
@@ -280,8 +281,8 @@ public enum StorageEnvironmentInspector {
 public class StorageLocationsManager: ObservableObject {
     @Published public private(set) var locations: [StorageLocation] = []
     @Published public private(set) var hasLoadedPersistedState = false
-    private let userDefaults = UserDefaults.standard
-    private let persistedDataReader = UserDefaultsDataReader(.standard)
+    private let userDefaults = Foundation.UserDefaults.standard
+    private let persistedDataReader = UserDefaultsDataReader(Foundation.UserDefaults.standard)
     private let storageKey = "storageLocations"
     private var activeSecurityScopedURLs: [UUID: URL] = [:]
     private let subfolderDiscovery = StorageSubfolderDiscoveryService()
@@ -357,21 +358,17 @@ public class StorageLocationsManager: ObservableObject {
     }
     
     private func setupNotificationObservers() {
-        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] in
+        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil) { [weak self] in
             self?.clearAll()
         }
         let workspaceCenter = NSWorkspace.shared.notificationCenter
         workspaceCenter.addMainActorObserver(
-            forName: NSWorkspace.didMountNotification,
-            object: nil,
-            queue: .main
+            forName: NSWorkspace.didMountNotification
         ) { [weak self] in
             self?.accessNeedsRefresh = true
         }
         workspaceCenter.addMainActorObserver(
-            forName: NSWorkspace.didUnmountNotification,
-            object: nil,
-            queue: .main
+            forName: NSWorkspace.didUnmountNotification
         ) { [weak self] in
             self?.accessNeedsRefresh = true
         }
@@ -625,7 +622,7 @@ public class StorageLocationsManager: ObservableObject {
                         saveLocations()
                     }
                 } catch {
-                    DebugLogger.log("Failed to renew stale storage bookmark: \(error.localizedDescription)")
+                    ModelLog.debug("Failed to renew stale storage bookmark: \(error.localizedDescription)")
                 }
             }
 
@@ -641,7 +638,7 @@ public class StorageLocationsManager: ObservableObject {
             }
         } catch {
             markAccessLost(for: location.id)
-            DebugLogger.log("Failed to resolve storage location bookmark: \(error)")
+            ModelLog.debug("Failed to resolve storage location bookmark: \(error)")
         }
 
         return nil
@@ -863,7 +860,7 @@ public class StorageLocationsManager: ObservableObject {
     /// Re-authorizes a storage location by creating a new security-scoped bookmark from a freshly-picked URL
     public func reauthorizeLocation(_ location: StorageLocation, with url: URL) {
         guard url.startAccessingSecurityScopedResource() else {
-            DebugLogger.log("Failed to access security-scoped resource for reauthorization: \(url.path)")
+            ModelLog.debug("Failed to access security-scoped resource for reauthorization: \(url.path)")
             return
         }
 
@@ -883,11 +880,11 @@ public class StorageLocationsManager: ObservableObject {
             activeSecurityScopedURLs[location.id] = url
             lastAccessValidationAt = Date()
 
-            DebugLogger.log("Successfully reauthorized storage location: \(location.name)")
+            ModelLog.debug("Successfully reauthorized storage location: \(location.name)")
         } catch {
             url.stopAccessingSecurityScopedResource()
             accessNeedsRefresh = true
-            DebugLogger.log("Failed to create bookmark during reauthorization: \(error)")
+            ModelLog.debug("Failed to create bookmark during reauthorization: \(error)")
         }
     }
 
@@ -931,7 +928,7 @@ public class StorageLocationsManager: ObservableObject {
             locations[index].accessStatus = .lost
             accessNeedsRefresh = true
             saveLocations()
-            DebugLogger.log("Failed to refresh storage location bookmark: \(error)")
+            ModelLog.debug("Failed to refresh storage location bookmark: \(error)")
         }
     }
 

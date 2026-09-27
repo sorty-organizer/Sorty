@@ -73,6 +73,7 @@ if isHotReloadBuild {
 var packageProducts: [Product] = [
     .library(name: "SortyQualitySupport", targets: ["SortyQualitySupport"]),
     .library(name: "SortyFileSystem", targets: ["SortyFileSystem"]),
+    .library(name: "SortyModels", targets: ["SortyModels"]),
     .library(name: "SortyCore", targets: ["SortyCore"]),
     .library(
         name: "SortyLib",
@@ -92,8 +93,14 @@ var packageTargets: [Target] = [
         swiftSettings: sortyLibSwiftSettings
     ),
     .target(
+        name: "SortyModels",
+        dependencies: ["SortyFileSystem"],
+        path: "Sources/SortyModels",
+        swiftSettings: sortyLibSwiftSettings
+    ),
+    .target(
         name: "SortyCore",
-        dependencies: ["SortyFileSystem"] + sortyLibDependencies,
+        dependencies: ["SortyFileSystem", "SortyModels"] + sortyLibDependencies,
         path: "Sources/SortyCore",
         swiftSettings: sortyLibSwiftSettings,
         linkerSettings: sortyLibLinkerSettings
@@ -139,7 +146,7 @@ var packageTargets: [Target] = [
     ),
     .testTarget(
         name: "SortyTests",
-        dependencies: ["SortyLib", "SortyCore", "SortyFileSystem", "SortyQualitySupport"],
+        dependencies: ["SortyLib", "SortyCore", "SortyModels", "SortyFileSystem", "SortyQualitySupport"],
         path: "Tests/SortyTests",
         // Same flags as the lib targets so tests share one incremental
         // compilation signature instead of invalidating it (see Makefile).

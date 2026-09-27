@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SortyFileSystem
 
 public enum FilenameNormalizer {
     public static func normalize(

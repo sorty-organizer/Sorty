@@ -110,7 +110,7 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         URL(fileURLWithPath: path)
     }
 
-    static func currentFileSystemIdentity(at path: String) -> String? {
+    public static func currentFileSystemIdentity(at path: String) -> String? {
         var fileStatus = stat()
         guard lstat(path, &fileStatus) == 0,
               (fileStatus.st_mode & mode_t(S_IFMT)) == mode_t(S_IFREG) else { return nil }
