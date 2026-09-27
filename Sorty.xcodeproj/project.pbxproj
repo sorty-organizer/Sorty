@@ -64,6 +64,8 @@
 		D4A500200000000000000002 /* SortyShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A500100000000000000002 /* SortyShortcuts.swift */; };
 		D4A500200000000000000003 /* SortyWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A500100000000000000006 /* SortyWidgets.swift */; };
 		D4A500200000000000000004 /* SortyWidgetSnapshotStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A500100000000000000007 /* SortyWidgetSnapshotStore.swift */; };
+		D4A500200000000000000005 /* SortyWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = D4A500100000000000000003 /* SortyWidgets.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		D4A500200000000000000006 /* SortyLib in Frameworks */ = {isa = PBXBuildFile; productRef = D4A500600000000000000001 /* SortyLib */; };
 		F1A1B001B001B001B001B006 /* SortyMascotHead.icns in Resources */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F006 /* SortyMascotHead.icns */; };
 		F1A1B001B001B001B001B008 /* SortyMascotHead.png in Resources */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F007 /* SortyMascotHead.png */; };
 		F1A1B001B001B001B001B009 /* SortyWatchMascot.png in Resources */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F008 /* SortyWatchMascot.png */; };
@@ -297,6 +299,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				F1A1B001B001B001B001B002 /* SortyFinderSync.appex in Embed App Extensions */,
+				D4A500200000000000000005 /* SortyWidgets.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -616,6 +619,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D4A500500000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D4A500200000000000000006 /* SortyLib in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -918,6 +929,7 @@
 				33A1286F2F01230200A86470 /* SortyTests.xctest */,
 				33A128792F01230200A86470 /* SortyUITests.xctest */,
 				F1A1F001F001F001F001F004 /* SortyFinderSync.appex */,
+				D4A500100000000000000003 /* SortyWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -1086,6 +1098,7 @@
 			);
 			dependencies = (
 				F1A1A001A001A001A001A002 /* PBXTargetDependency */,
+				D4A500700000000000000001 /* PBXTargetDependency */,
 			);
 			name = Sorty;
 			packageProductDependencies = (
@@ -1113,6 +1126,25 @@
 			);
 			productName = SortyFinderSync;
 			productReference = F1A1F001F001F001F001F004 /* SortyFinderSync.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		D4A500300000000000000001 /* SortyWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D4A500800000000000000001 /* Build configuration list for PBXNativeTarget "SortyWidgets" */;
+			buildPhases = (
+				D4A500500000000000000001 /* Sources */,
+				D4A500500000000000000002 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SortyWidgets;
+			packageProductDependencies = (
+				D4A500600000000000000001 /* SortyLib */,
+			);
+			productName = SortyWidgets;
+			productReference = D4A500100000000000000003 /* SortyWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 		33A1286E2F01230200A86470 /* SortyTests */ = {
@@ -1178,9 +1210,12 @@
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = 33A128612F01230000A86470;
 					};
-					F1A1E001E001E001E001E001 = {
+				F1A1E001E001E001E001E001 = {
 						CreatedOnToolsVersion = 26.2;
 					};
+				D4A500300000000000000001 = {
+						CreatedOnToolsVersion = 26.2;
+				};
 				};
 			};
 			buildConfigurationList = 33A1285D2F01230000A86470 /* Build configuration list for PBXProject "Sorty" */;
@@ -1207,6 +1242,7 @@
 			targets = (
 				33A128612F01230000A86470 /* Sorty */,
 				F1A1E001E001E001E001E001 /* SortyFinderSync */,
+				D4A500300000000000000001 /* SortyWidgets */,
 				33A1286E2F01230200A86470 /* SortyTests */,
 				33A128782F01230200A86470 /* SortyUITests */,
 			);
@@ -1360,6 +1396,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D4A500500000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D4A500200000000000000003 /* SortyWidgets.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1377,6 +1421,11 @@
 			isa = PBXTargetDependency;
 			target = F1A1E001E001E001E001E001 /* SortyFinderSync */;
 			targetProxy = F1A1A001A001A001A001A001 /* PBXContainerItemProxy */;
+		};
+		D4A500700000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D4A500300000000000000001 /* SortyWidgets */;
+			targetProxy = D4A500400000000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1601,6 +1650,66 @@
 			};
 			name = Debug;
 		};
+		D4A500900000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = SortyWidgets/SortyWidgets.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 11;
+				ENABLE_APP_SANDBOX = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SortyWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sorty.app.SortyWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		D4A500900000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = SortyWidgets/SortyWidgets.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 11;
+				ENABLE_APP_SANDBOX = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SortyWidgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sorty.app.SortyWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 		F1A1BC01BC01BC01BC01BC02 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1761,6 +1870,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		D4A500800000000000000001 /* Build configuration list for PBXNativeTarget "SortyWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D4A500900000000000000001 /* Debug */,
+				D4A500900000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -1786,6 +1904,10 @@
 		C02609260000000000000002 /* SortyQualitySupport */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SortyQualitySupport;
+		};
+		D4A500600000000000000001 /* SortyLib */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SortyLib;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

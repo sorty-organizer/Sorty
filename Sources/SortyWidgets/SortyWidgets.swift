@@ -1,5 +1,6 @@
 import SwiftUI
 import WidgetKit
+import SortyLib
 
 private struct SortyWidgetEntry: TimelineEntry {
     let date: Date

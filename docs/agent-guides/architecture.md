@@ -14,6 +14,7 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | **SortyApp** | `Sources/SortyApp/` | SwiftUI lifecycle, `AppCoordinator` for background tasks |
 | **SortyLib** | `Sources/SortyLib/` | All business logic shared by the app, Finder extension, and widgets |
 | **SortyFinderSync** | `Sources/SortyFinderSync/` | Finder Sync extension |
+| **SortyWidgets** | `Sources/SortyWidgets/` | WidgetKit extension embedded by the Xcode app target |
 
 ### SortyLib Directories
 
