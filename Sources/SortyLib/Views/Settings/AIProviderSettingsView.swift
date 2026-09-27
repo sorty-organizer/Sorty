@@ -568,7 +568,7 @@ struct AIProviderSettingsView: View {
 
                     if let status = testConnectionStatus, isConnectionFailed {
                         VStack(alignment: .center, spacing: 8) {
-                            HStack(alignment: .top, spacing: 8) {
+                            HStack(alignment: .center, spacing: 6) {
                                 Text(status.replacingOccurrences(of: "Error: ", with: ""))
                                     .font(.caption)
                                     .fontWeight(.semibold)
@@ -727,7 +727,6 @@ struct AIProviderSettingsView: View {
                     reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.75),
                     value: isHoveringCopyError
                 )
-                .padding(.top, 1)
         }
         .buttonStyle(.plain)
         .help(hasCopiedConnectionError ? "Copied error message" : "Copy error message")
