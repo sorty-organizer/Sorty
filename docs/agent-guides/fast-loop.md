@@ -118,15 +118,16 @@ make harness
 These are already configured — no action needed:
 
 - **Index store disabled** for local SwiftPM debug builds (`Makefile`)
-- **One normal SwiftPM cache** for `make now`, `make build`, `make test`, and local CI diagnostics, with matching indexing flags. Local CI honors `SORTY_BUILD_DIR` instead of creating a second cache in `.build`. Coverage, profiling, and hot reload still have distinct compiler settings and may require compilation.
+- **One normal SwiftPM cache** for bare `swift build`/`swift test`, `make now`, `make build`, `make test`, and local CI diagnostics. Make creates `.build` as a symlink to `SORTY_BUILD_DIR`, exports `SWIFTPM_BUILD_DIR`, and uses matching indexing flags. Coverage, profiling, and hot reload still have distinct compiler settings and may require compilation.
 - **Parallel compilation** using all CPU cores (`-j $(CORES)`)
 - **Batch mode** for debug builds (SPM manages incremental compilation internally)
 - **Test target** depends on `SortyLib` and the independent `SortyQualitySupport` library
 - **Concurrency checking** set to `minimal` to reduce type-check overhead
 - **FinderSync is opt-in for the fast loop** with `ENABLE_FINDER_EXTENSION=true`
 - **Expensive SwiftUI expressions split into dedicated view types** so the compiler solves smaller generic graphs.
-- **Compatibility fingerprints** reset compiled outputs only when the Swift/Xcode toolchain changes. SwiftPM and Xcode handle package, project, plist, entitlement, and script changes incrementally.
-- **Batched fingerprint hashing** starts one hashing process per group of inputs instead of one per file. Content changes still invalidate the cache even when file size and modification time are unchanged.
+- **Compatibility fingerprints** reset compiled outputs only when the Swift/Xcode toolchain changes. The toolchain probe is cached for one day and invalidates immediately when the selected Xcode path or `swiftc` mtime changes.
+- **Metadata-first bundle fingerprints** compare path, inode, size, and mtime before content hashing. Unchanged groups reuse their cached hash. MP4 and M4A files are read again only after their mtime changes.
+- **App-only onboarding videos** are staged by `scripts/build.sh`, outside the SwiftPM resource bundle, so Swift source rebuilds do not recopy the videos into `Sorty_SortyLib.bundle`.
 - **Sentry downloads only the linked variant** through `Packages/sentry-cocoa`. It uses the same upstream 9.23.0 binary, checksum, and linker helper. The six unused binary variants no longer consume cache space or download time. SwiftPM removes them when resolving the changed package graph.
 - **Content-addressed resource caches** reuse `Assets.car` and Beam `default.metallib` when their inputs and toolchains are unchanged. Metal keys include shader headers and the build recipe.
 - **Scheduled cache pruning**: oversized build caches are pruned at most once per day by default, including `make now`, instead of growing unchecked or doing expensive cleanup every run.

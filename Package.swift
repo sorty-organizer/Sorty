@@ -110,9 +110,6 @@ var packageTargets: [Target] = [
             .copy("Resources/whats-new-preview.png"),
             .copy("Resources/SortyAppRepair.entitlements"),
             .process("Resources/Localizable.xcstrings"),
-            .process("Resources/automation-demo.mp4"),
-            .process("Resources/files-and-folders-demo.mp4"),
-            .process("Resources/full-disk-access-demo.mp4"),
             .process("Resources/SortyMascotTemplate.svg"),
             .process("Resources/OnboardingSound.m4a"),
             .process("Resources/Final Onboarding.m4a")
