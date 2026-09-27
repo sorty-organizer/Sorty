@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Darwin
 
 public enum CloudFileStatus: String, Codable, Sendable {
     case local
@@ -33,6 +34,8 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
 
     // For duplicate detection (SHA-256)
     public var sha256Hash: String?
+    /// Device and inode captured when this file was scanned for duplicates.
+    public var fileSystemIdentity: String?
 
     // AI-Driven Smart Renaming - suggested filename from AI
     public var suggestedFilename: String?
@@ -68,6 +71,7 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         lastAccessDate: Date? = nil,
         contentMetadata: ContentMetadata? = nil,
         sha256Hash: String? = nil,
+        fileSystemIdentity: String? = nil,
         suggestedFilename: String? = nil,
         ocrText: String? = nil,
         contentFingerprint: String? = nil,
@@ -90,6 +94,7 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         self.lastAccessDate = lastAccessDate
         self.contentMetadata = contentMetadata
         self.sha256Hash = sha256Hash
+        self.fileSystemIdentity = fileSystemIdentity
         self.suggestedFilename = suggestedFilename
         self.ocrText = ocrText
         self.contentFingerprint = contentFingerprint
@@ -103,6 +108,13 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
 
     public var url: URL? {
         URL(fileURLWithPath: path)
+    }
+
+    static func currentFileSystemIdentity(at path: String) -> String? {
+        var fileStatus = stat()
+        guard lstat(path, &fileStatus) == 0,
+              (fileStatus.st_mode & mode_t(S_IFMT)) == mode_t(S_IFREG) else { return nil }
+        return "\(fileStatus.st_dev):\(fileStatus.st_ino)"
     }
 
     public var displayName: String {

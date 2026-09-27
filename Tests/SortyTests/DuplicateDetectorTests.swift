@@ -113,6 +113,7 @@ class DuplicateDetectorTests: XCTestCase {
 
         XCTAssertEqual(inventory.scannedFileCount, 2)
         XCTAssertEqual(inventory.exactCandidates.count, 2)
+        XCTAssertTrue(inventory.exactCandidates.allSatisfy { $0.fileSystemIdentity != nil })
         XCTAssertTrue(inventory.semanticCandidates.isEmpty)
     }
 

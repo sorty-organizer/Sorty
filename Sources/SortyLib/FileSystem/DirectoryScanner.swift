@@ -702,6 +702,7 @@ actor DirectoryScanner {
             lastAccessDate: lastAccessDate,
             contentMetadata: contentMetadata,
             sha256Hash: sha256Hash,
+            fileSystemIdentity: FileItem.currentFileSystemIdentity(at: url.path),
             ocrText: extractedOCRText,
             imageWidth: extractedDimensions?.width,
             imageHeight: extractedDimensions?.height,
@@ -732,7 +733,8 @@ actor DirectoryScanner {
             size: fileSize,
             isDirectory: false,
             creationDate: resourceValues.creationDate,
-            modificationDate: resourceValues.contentModificationDate
+            modificationDate: resourceValues.contentModificationDate,
+            fileSystemIdentity: FileItem.currentFileSystemIdentity(at: url.path)
         )
     }
 

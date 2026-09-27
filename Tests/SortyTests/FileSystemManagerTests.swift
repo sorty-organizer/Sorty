@@ -917,6 +917,32 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         }
     }
 
+    func testCleanupRejectsSameSizeReplacementWithPreservedTimestamp() async throws {
+        let selectedURL = tempDirectory.appendingPathComponent("selected.txt")
+        let replacementURL = tempDirectory.appendingPathComponent("replacement.txt")
+        try Data("AAAA".utf8).write(to: selectedURL)
+        let scannedItem = try await DirectoryScanner().scanFile(at: selectedURL)
+        let scannedDate = try XCTUnwrap(scannedItem.modificationDate)
+        XCTAssertNotNil(scannedItem.fileSystemIdentity)
+
+        try Data("BBBB".utf8).write(to: replacementURL)
+        try FileManager.default.removeItem(at: selectedURL)
+        try FileManager.default.moveItem(at: replacementURL, to: selectedURL)
+        try FileManager.default.setAttributes(
+            [.modificationDate: scannedDate],
+            ofItemAtPath: selectedURL.path
+        )
+
+        do {
+            _ = try await manager.moveToTrashAsync(files: [scannedItem])
+            XCTFail("Cleanup should reject a replaced file")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("was replaced after the scan"))
+        }
+        XCTAssertEqual(try Data(contentsOf: selectedURL), Data("BBBB".utf8))
+        XCTAssertTrue(manager.restoredItems.isEmpty)
+    }
+
     func testMoveToTrashPersistsItemsMovedBeforeALaterFailure() throws {
         let movedFile = tempDirectory.appendingPathComponent("moved.txt")
         try "Content".write(to: movedFile, atomically: true, encoding: .utf8)

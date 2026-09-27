@@ -21,6 +21,7 @@ struct StaleDuplicateError: LocalizedError {
         case notRegularFile
         case sizeChanged
         case modificationDateChanged
+        case identityChanged
     }
 
     let path: String
@@ -37,6 +38,8 @@ struct StaleDuplicateError: LocalizedError {
             return "\(name) changed size after the scan. Rescan for duplicates before cleaning up."
         case .modificationDateChanged:
             return "\(name) changed after the scan. Rescan for duplicates before cleaning up."
+        case .identityChanged:
+            return "\(name) was replaced after the scan. Rescan for duplicates before cleaning up."
         }
     }
 }
@@ -147,6 +150,10 @@ public class DuplicateRestorationManager: ObservableObject {
         }
         guard (attributes[.type] as? FileAttributeType) == .typeRegular else {
             throw StaleDuplicateError(path: file.path, reason: .notRegularFile)
+        }
+        if let scannedIdentity = file.fileSystemIdentity,
+           FileItem.currentFileSystemIdentity(at: file.path) != scannedIdentity {
+            throw StaleDuplicateError(path: file.path, reason: .identityChanged)
         }
         if let size = (attributes[.size] as? NSNumber)?.int64Value, size != file.size {
             throw StaleDuplicateError(path: file.path, reason: .sizeChanged)
