@@ -311,8 +311,8 @@ public final class CodexCLIAuthManager: ObservableObject {
         statusGeneration += 1
         statusRefreshTask = nil
 
-        if let codexExecutablePath = CodexSubscriptionClient.resolveCodexExecutablePath() {
-            Task.detached(priority: .utility) {
+        Task.detached(priority: .utility) {
+            if let codexExecutablePath = CodexSubscriptionClient.resolveCodexExecutablePath() {
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: codexExecutablePath)
                 process.arguments = ["logout"]
@@ -349,15 +349,20 @@ public final class CodexCLIAuthManager: ObservableObject {
             return
         }
 
-        do {
-            let scriptURL = try prepareLoginScript()
-            guard NSWorkspace.shared.open(scriptURL) else {
+        Task { @MainActor in
+            let path = await Task.detached(priority: .utility) {
+                CodexSubscriptionClient.resolveCodexExecutablePath()
+            }.value
+            do {
+                let scriptURL = try prepareLoginScript(codexExecutablePath: path)
+                guard NSWorkspace.shared.open(scriptURL) else {
+                    authError = "Could not open your default terminal app. Please run 'codex login' manually."
+                    return
+                }
+                authError = nil
+            } catch {
                 authError = "Could not open your default terminal app. Please run 'codex login' manually."
-                return
             }
-            authError = nil
-        } catch {
-            authError = "Could not open your default terminal app. Please run 'codex login' manually."
         }
     }
 
@@ -372,7 +377,17 @@ public final class CodexCLIAuthManager: ObservableObject {
             return
         }
 
-        guard let codexExecutablePath = CodexSubscriptionClient.resolveCodexExecutablePath() else {
+        Task { @MainActor in
+            let path = await Task.detached(priority: .utility) {
+                CodexSubscriptionClient.resolveCodexExecutablePath()
+            }.value
+            guard deviceAuthRun == deviceAuthGeneration else { return }
+            startDeviceAuthProcess(path: path, deviceAuthRun: deviceAuthRun)
+        }
+    }
+
+    private func startDeviceAuthProcess(path codexExecutablePath: String?, deviceAuthRun: Int) {
+        guard let codexExecutablePath else {
             deviceAuthSession = CodexDeviceAuthSession(status: .failed("Codex CLI not found. Install with: npm i -g @openai/codex"))
             authError = "Codex CLI not found. Install with: npm i -g @openai/codex"
             return
@@ -487,8 +502,8 @@ public final class CodexCLIAuthManager: ObservableObject {
         )
     }
 
-    private func prepareLoginScript() throws -> URL {
-        guard let codexExecutablePath = CodexSubscriptionClient.resolveCodexExecutablePath() else {
+    private func prepareLoginScript(codexExecutablePath: String?) throws -> URL {
+        guard let codexExecutablePath else {
             throw NSError(
                 domain: "CodexCLIAuthManager",
                 code: 1,
