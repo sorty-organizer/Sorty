@@ -161,7 +161,9 @@ public class LearningsManager: ObservableObject {
         if sessionLearningPaused {
             let profile = currentProfile
             let sessionCount = profile?.sessions.count ?? 0
-            let activeRuleCount = profile?.inferredRules.filter { $0.isEnabled && $0.status == .active }.count ?? 0
+            let activeRuleCount = profile.map { profile in
+                Self.effectiveRules(profile.inferredRules).filter { $0.isEnabled && $0.status == .active }.count
+            } ?? 0
             let weekAgo = Date().addingTimeInterval(-7 * 24 * 60 * 60)
             let recentSessionCount = profile?.sessions.filter { ($0.completedAt ?? $0.timestamp) > weekAgo }.count ?? 0
             return LearningsSummary(
@@ -191,7 +193,7 @@ public class LearningsManager: ObservableObject {
         }
         
         let sessionCount = profile.sessions.count
-        let activeRules = profile.inferredRules.filter { $0.isEnabled && $0.status == .active }
+        let activeRules = Self.effectiveRules(profile.inferredRules).filter { $0.isEnabled && $0.status == .active }
         let activeRuleCount = activeRules.count
         
         // Count recent sessions (last 7 days)
@@ -246,6 +248,27 @@ public class LearningsManager: ObservableObject {
             return .established
         }
     }
+
+    /// Rules with elapsed rejection cooldowns normalized to active+enabled.
+    /// Counting, attribution, and application all go through this so runtime
+    /// and the UI's `isEnabled` view of a rule never disagree.
+    nonisolated static func effectiveRules(_ rules: [InferredRule], at now: Date = Date()) -> [InferredRule] {
+        rules.map { rule in
+            var normalized = rule
+            normalized.normalizeExpiredCooldown(at: now)
+            return normalized
+        }
+    }
+
+    /// Fingerprint of the rule fields that change which rules are applied and
+    /// surfaced. `InferredRule` is not Equatable, so cache keys and the
+    /// normalized-profile check compare this instead of raw arrays.
+    private nonisolated static func rulesFingerprint(_ rules: [InferredRule]) -> String {
+        rules.map { rule in
+            let cooldown = rule.cooldownUntil?.timeIntervalSince1970 ?? 0
+            return "\(rule.id)|\(rule.isEnabled)|\(rule.status.rawValue)|\(rule.priority)|\(rule.successCount)|\(rule.failureCount)|\(cooldown)"
+        }.joined(separator: ";")
+    }
     
     // MARK: - Dependencies
     
@@ -290,6 +313,88 @@ public class LearningsManager: ObservableObject {
     private var modelDirectoryGeneration = 0
     private var hasPendingModelSelectionChange = false
     private var hasPendingModelDirectoryChanges = false
+
+    /// When loading for collection fails (profile file or Keychain temporarily
+    /// unavailable), remember the failure so every recorded event does not
+    /// re-run blocking file and Keychain reads on the main actor. Explicit
+    /// actions clear the memo; otherwise retry after the interval elapses.
+    private var profileLoadFailureDate: Date?
+    private static let profileLoadRetryInterval: TimeInterval = 30
+
+    private func canAttemptProfileLoad(now: Date = Date()) -> Bool {
+        guard let profileLoadFailureDate else { return true }
+        return now.timeIntervalSince(profileLoadFailureDate) >= Self.profileLoadRetryInterval
+    }
+
+    /// Learning writes recorded while the profile could not be loaded (file or
+    /// Keychain temporarily unavailable). Replayed in order after the next
+    /// successful load so a revert or rejection is not silently dropped.
+    private enum PendingLearningWrite {
+        case historyRevert(RevertEvent)
+        case rejection(LabeledExample)
+    }
+
+    private var pendingLearningWrites: [PendingLearningWrite] = []
+
+    /// True when the revert for `entryId` is already recorded or queued for the
+    /// next successful load. Callers check this before recording so repeated
+    /// notifications cannot double-count a revert.
+    func hasRecordedOrPendingHistoryRevert(entryId: String) -> Bool {
+        if currentProfile?.historyReverts.contains(where: { $0.entryId == entryId }) == true {
+            return true
+        }
+        return pendingLearningWrites.contains { write in
+            guard case .historyRevert(let event) = write else { return false }
+            return event.entryId == entryId
+        }
+    }
+
+    private func enqueuePendingLearningWrite(_ write: PendingLearningWrite) {
+        switch write {
+        case .historyRevert(let event):
+            guard !pendingLearningWrites.contains(where: { pending in
+                guard case .historyRevert(let queued) = pending else { return false }
+                return queued.entryId == event.entryId
+            }) else { return }
+        case .rejection(let example):
+            guard !pendingLearningWrites.contains(where: { pending in
+                guard case .rejection(let queued) = pending else { return false }
+                return queued.srcPath == example.srcPath && queued.dstPath == example.dstPath
+            }) else { return }
+        }
+        pendingLearningWrites.append(write)
+    }
+
+    /// Applies writes recorded while the profile was unavailable. Runs after
+    /// every successful load (and on forced saves), merging into the profile
+    /// just read from disk. Returns `true` when the profile changed.
+    @discardableResult
+    private func flushPendingLearningWrites() -> Bool {
+        guard !pendingLearningWrites.isEmpty, var profile = currentProfile else { return false }
+        let pending = pendingLearningWrites
+        pendingLearningWrites.removeAll()
+
+        var didChange = false
+        for write in pending {
+            switch write {
+            case .historyRevert(let event):
+                guard !profile.historyReverts.contains(where: { $0.entryId == event.entryId }) else { continue }
+                profile.historyReverts.append(event)
+                didChange = true
+            case .rejection(let example):
+                guard !profile.rejections.contains(where: { $0.srcPath == example.srcPath && $0.dstPath == example.dstPath }) else { continue }
+                profile.rejections.append(example)
+                if profile.rejections.count > Self.maxLabeledExamplesPerList {
+                    profile.rejections = Array(profile.rejections.suffix(Self.maxLabeledExamplesPerList))
+                }
+                didChange = true
+            }
+        }
+
+        guard didChange else { return false }
+        currentProfile = profile
+        return true
+    }
 
     /// Loads the model selection and reference-model directories after launch.
     /// Directory loading resolves security-scoped bookmarks and stats each
@@ -364,6 +469,8 @@ public class LearningsManager: ObservableObject {
     /// Unlock with Touch ID / password (required after initial setup)
     public func unlock() async {
         isLocked = false
+        // Explicit user action: retry a previously failed load immediately.
+        profileLoadFailureDate = nil
         await loadProfile()
     }
     
@@ -386,6 +493,8 @@ public class LearningsManager: ObservableObject {
     public func grantConsent() async {
         consentManager.grantConsent()
         
+        // Explicit user action: retry a previously failed load immediately.
+        profileLoadFailureDate = nil
         loadProfileIfNeededForCollection()
         if var profile = currentProfile {
             profile.consentGranted = true
@@ -443,6 +552,8 @@ public class LearningsManager: ObservableObject {
             hasPendingModelDirectoryChanges = false
             promptContextCacheKey = nil
             promptContextCacheValue = nil
+            profileLoadFailureDate = nil
+            pendingLearningWrites.removeAll()
             stopAllModelDirectoryAccess()
             modelDirectories = []
             modelDirectoryScanStates = [:]
@@ -480,6 +591,7 @@ public class LearningsManager: ObservableObject {
         let loadStartedAt = Date()
         var loadOutcome = "success"
         isLoading = true
+        profileLoadFailureDate = nil
         do {
             // Decrypt + decode off the main actor; assignment stays on main.
             let loaded = try await Task.detached(priority: .userInitiated) {
@@ -490,15 +602,24 @@ public class LearningsManager: ObservableObject {
             } else {
                 currentProfile = prepareLoadedProfile(LearningsProfile())
             }
+            if flushPendingLearningWrites() {
+                debouncedSave()
+            }
         } catch {
             loadOutcome = "failed"
+            profileLoadFailureDate = Date()
             ReliabilityManager.shared.capture(
                 error: error,
                 feature: "learnings",
                 operation: "load_profile"
             )
             self.error = "Failed to load profile: \(error.localizedDescription)"
-            currentProfile = prepareLoadedProfile(LearningsProfile())
+            // Never synthesize and cache an empty profile on a load failure:
+            // the next save would overwrite the real profile (for example
+            // while the Keychain is temporarily unavailable). Leaving
+            // `currentProfile` nil makes callers no-op, the summary shows an
+            // empty state, and a later explicit action retries the load.
+            currentProfile = nil
         }
         isLoading = false
         AnalyticsManager.shared.captureWorkflow(
@@ -517,6 +638,10 @@ public class LearningsManager: ObservableObject {
     /// stay in-memory with debouncedSave.
     public func loadProfileIfNeededForCollection() {
         guard currentProfile == nil else { return }
+        // A failed load leaves `currentProfile` nil; without this backoff every
+        // recorded event would repeat the blocking file + Keychain reads on the
+        // main actor. Explicit actions clear the memo and retry immediately.
+        guard canAttemptProfileLoad() else { return }
         
         do {
             if let profile = try LearningsFileManager.load() {
@@ -524,17 +649,26 @@ public class LearningsManager: ObservableObject {
             } else {
                 currentProfile = prepareLoadedProfile(LearningsProfile())
             }
+            profileLoadFailureDate = nil
+            if flushPendingLearningWrites() {
+                debouncedSave()
+            }
         } catch {
+            // Never synthesize and cache an empty profile on a load failure:
+            // the next debounced save would overwrite the real profile (for
+            // example while the Keychain is temporarily unavailable). Leaving
+            // `currentProfile` nil makes callers no-op and lets a later call
+            // (or the backoff window) retry the load.
+            profileLoadFailureDate = Date()
             ReliabilityManager.shared.capture(
                 error: error,
                 feature: "learnings",
                 operation: "load_profile_for_collection"
             )
             self.error = "Failed to load profile: \(error.localizedDescription)"
-            currentProfile = prepareLoadedProfile(LearningsProfile())
         }
     }
-    
+
     private func saveProfile() async {
         guard let profile = currentProfile else { return }
 
@@ -1219,15 +1353,25 @@ public class LearningsManager: ObservableObject {
     public func recordHistoryRevert(entryId: String, operationCount: Int, folderPath: String? = nil, revertReason: String? = nil) {
         guard consentManager.canCollectData else { return }
         if let folderPath, isPathExcludedFromLearning(folderPath) { return }
-        loadProfileIfNeededForCollection()
-        guard var profile = currentProfile else { return }
-        
+        guard !hasRecordedOrPendingHistoryRevert(entryId: entryId) else { return }
+
         let event = RevertEvent(
             entryId: entryId,
             operationCount: operationCount,
             folderPath: folderPath,
             reason: revertReason
         )
+
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else {
+            // A temporary load failure must not drop the revert: keep it for
+            // the next successful load instead of no-opping.
+            enqueuePendingLearningWrite(.historyRevert(event))
+            return
+        }
+        // The load above may have found a revert recorded in an earlier
+        // session, before this entry was ever visible in memory.
+        guard !profile.historyReverts.contains(where: { $0.entryId == entryId }) else { return }
         profile.historyReverts.append(event)
         currentProfile = profile
         debouncedSave()
@@ -1290,7 +1434,7 @@ public class LearningsManager: ObservableObject {
     /// Get the count of active rules applicable to a specific folder
     public func activeRuleCount(forFolder folderPath: String) -> Int {
         guard let profile = currentProfile else { return 0 }
-        return profile.inferredRules
+        return Self.effectiveRules(profile.inferredRules)
             .filter { $0.isEnabled && $0.status == .active }
             .filter { ruleMatchesScope(rule: $0, folderPath: folderPath, personaId: nil) }
             .count
@@ -1435,6 +1579,7 @@ public class LearningsManager: ObservableObject {
         saveTask?.cancel()
         promptContextCacheKey = nil
         promptContextCacheValue = nil
+        flushPendingLearningWrites()
         pruneOldData()
         await saveProfile()
     }
@@ -1450,6 +1595,9 @@ public class LearningsManager: ObservableObject {
         promptContextCacheKey = nil
         promptContextCacheValue = nil
 
+        // Apply queued writes so a revert recorded during a profile outage is
+        // not lost when the process ends before a load ever succeeds.
+        flushPendingLearningWrites()
         pruneOldData()
         guard let profile = currentProfile else { return }
         learningsTerminationIOQueue.sync {
@@ -1522,8 +1670,8 @@ public class LearningsManager: ObservableObject {
                 .union(profile.postOrganizationChanges.map(\.id))
                 .union(profile.regenerationPreferenceEvidence.map(\.id))
             profile.inferredRules.removeAll { rule in
-                let evidenceIDs = Set(rule.exampleIds).union(rule.evidenceIds)
-                return !evidenceIDs.isEmpty && evidenceIDs.isDisjoint(with: retainedEvidenceIDs)
+                guard let evidenceIDs = Self.matchableRuleEvidenceIDs(rule) else { return false }
+                return evidenceIDs.allSatisfy { !retainedEvidenceIDs.contains($0) }
             }
             profile.rejectedRuleCooldowns = profile.rejectedRuleCooldowns.filter { $0.value >= cutoff }
         }
@@ -1544,6 +1692,33 @@ public class LearningsManager: ObservableObject {
         profile.regenerationPreferenceEvidence = Array(profile.regenerationPreferenceEvidence.suffix(cap))
         profile.sessions = Array(profile.sessions.prefix(cap))
         profile.inlineLearningMomentAnswers = Array(profile.inlineLearningMomentAnswers.suffix(cap))
+
+        // Elapsed rejection cooldowns are normalized to active+enabled so the
+        // stored profile matches both runtime eligibility and the UI, and the
+        // matching cooldown bookkeeping is dropped.
+        for index in profile.inferredRules.indices {
+            profile.inferredRules[index].normalizeExpiredCooldown(at: now)
+        }
+        profile.rejectedRuleCooldowns = profile.rejectedRuleCooldowns.filter { $0.value > now }
+    }
+
+    /// Non-empty evidence references a rule can be matched against stored IDs.
+    /// Returns nil when the rule carries free-form (non-UUID) evidence in
+    /// `exampleIds` or `evidenceIds`: that prose is opaque, so the rule cannot
+    /// be proven stale or excluded and must survive retention pruning and
+    /// exclusion filtering.
+    private nonisolated static func matchableRuleEvidenceIDs(_ rule: InferredRule) -> [String]? {
+        // LLM-induced rules store human-readable evidence prose in
+        // `evidenceIds`; that prose is opaque and keeps the rule alive.
+        // `exampleIds` are always internal record IDs and stay matchable even
+        // when tests or imports use non-UUID spellings.
+        let proseEvidenceIDs = rule.evidenceIds.filter {
+            !$0.isEmpty && UUID(uuidString: $0) == nil
+        }
+        guard proseEvidenceIDs.isEmpty else { return nil }
+
+        let matchableIDs = (rule.exampleIds + rule.evidenceIds).filter { !$0.isEmpty }
+        return matchableIDs.isEmpty ? nil : matchableIDs
     }
     
     // MARK: - Feedback Loop (Continuous Learning)
@@ -1604,7 +1779,16 @@ public class LearningsManager: ObservableObject {
         guard isValidLearningPath(originalPath) else { return }
         guard !isPathExcludedFromLearning(originalPath) else { return }
         loadProfileIfNeededForCollection()
-        guard var profile = currentProfile else { return }
+        guard var profile = currentProfile else {
+            // Keep rejections recorded during a profile outage so they land
+            // with the next successful load instead of disappearing.
+            enqueuePendingLearningWrite(.rejection(LabeledExample(
+                srcPath: originalPath,
+                dstPath: originalPath,
+                action: .reject
+            )))
+            return
+        }
 
         if profile.rejections.contains(where: { $0.srcPath == originalPath && $0.dstPath == originalPath }) { return }
 
@@ -2054,10 +2238,13 @@ public class LearningsManager: ObservableObject {
         _ existing: [Element],
         _ imported: [Element]
     ) -> [Element] where Element.ID: Hashable {
-        var merged = existing
-        var indexes = Dictionary(uniqueKeysWithValues: existing.enumerated().map { ($1.id, $0) })
+        // Duplicate IDs can appear in a hand-edited or imported profile;
+        // `Dictionary(uniqueKeysWithValues:)` traps on those, so deduplicate
+        // explicitly with last-wins semantics (imported replaces existing).
+        var merged: [Element] = []
+        var indexes: [Element.ID: Int] = [:]
 
-        for element in imported {
+        for element in existing + imported {
             if let index = indexes[element.id] {
                 merged[index] = element
             } else {
@@ -2228,7 +2415,12 @@ public class LearningsManager: ObservableObject {
         }
 
         let preparedProfile = prepareLoadedProfile(profile)
-        if preparedProfile.sessions.count != profile.sessions.count {
+        // prepareLoadedProfile normalizes elapsed cooldowns and prunes, so the
+        // profile that is actually applied can differ from the stored one the
+        // UI reads. Republish whenever the rules changed, not only when
+        // sessions were dropped, so the displayed state matches runtime.
+        if preparedProfile.sessions.count != profile.sessions.count
+            || Self.rulesFingerprint(preparedProfile.inferredRules) != Self.rulesFingerprint(profile.inferredRules) {
             currentProfile = preparedProfile
         }
 
@@ -2246,8 +2438,10 @@ public class LearningsManager: ObservableObject {
             .prefix(20))
 
         // Memoize per profile generation: identical organize runs (initial
-        // analysis plus validation/quality retries) share one computation.
-        let contextFingerprint = "\(filteredProfile.sessions.count)|\(filteredProfile.inferredRules.count)|\(filteredProfile.additionalInstructionsHistory.count)|\(filteredProfile.guidingInstructionsHistory.count)|\(filteredProfile.positiveExamples.count)|\(filteredProfile.renameFeedbackHistory.count)|\(folderPath ?? "")"
+        // analysis plus validation/quality retries) share one computation. The
+        // rule fingerprint, not just the count, is part of the key: elapsed
+        // cooldowns normalize rules to active without changing the count.
+        let contextFingerprint = "\(filteredProfile.sessions.count)|\(Self.rulesFingerprint(filteredProfile.inferredRules))|\(filteredProfile.additionalInstructionsHistory.count)|\(filteredProfile.guidingInstructionsHistory.count)|\(filteredProfile.positiveExamples.count)|\(filteredProfile.renameFeedbackHistory.count)|\(folderPath ?? "")"
         if promptContextCacheKey == contextFingerprint, let cached = promptContextCacheValue {
             return cached
         }
@@ -2534,9 +2728,29 @@ public class LearningsManager: ObservableObject {
         
         if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
             profile.inferredRules[index].isEnabled = enabled
+            let status = profile.inferredRules[index].status
+            if enabled, status == .cooldown || status == .rejected {
+                clearRejectionState(on: &profile, at: index)
+            } else if !enabled, status == .cooldown || status == .rejected {
+                // An explicit user disable must outlast the rejection cooldown.
+                // Clearing the end date also stops legacy `.rejected` rules that
+                // still carry a future cooldown from reviving when it lapses.
+                profile.inferredRules[index].status = .rejected
+                profile.inferredRules[index].cooldownUntil = nil
+            }
             currentProfile = profile
             await saveProfile()
         }
+    }
+
+    /// Clears a rejection/cooldown so the rule can become eligible again.
+    private func clearRejectionState(on profile: inout LearningsProfile, at index: Int) {
+        let ruleId = profile.inferredRules[index].id
+        profile.inferredRules[index].status = .active
+        profile.inferredRules[index].isEnabled = true
+        profile.inferredRules[index].rejectedAt = nil
+        profile.inferredRules[index].cooldownUntil = nil
+        profile.rejectedRuleCooldowns.removeValue(forKey: ruleId)
     }
     
     /// Record a rule success (applied and no correction followed)
@@ -2585,7 +2799,7 @@ public class LearningsManager: ObservableObject {
         personaId: UUID?
     ) -> [InferredRule] {
         let now = Date()
-        let eligibleRules = profile.inferredRules
+        let eligibleRules = Self.effectiveRules(profile.inferredRules, at: now)
             .filter { $0.isEligible(at: now) }
             .filter { ruleMatchesScope(rule: $0, folderPath: folderPath, personaId: personaId) }
             .sorted {
@@ -2619,7 +2833,7 @@ public class LearningsManager: ObservableObject {
         guard var profile = currentProfile else { return }
         
         if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
-            profile.inferredRules[index].status = .active
+            clearRejectionState(on: &profile, at: index)
             currentProfile = profile
             await saveProfile()
         }
@@ -2630,13 +2844,14 @@ public class LearningsManager: ObservableObject {
         guard var profile = currentProfile else { return }
         
         if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
-            profile.inferredRules[index].status = .rejected
+            let cooldownEnd = Date().addingTimeInterval(Double(cooldownDays) * 86400)
+            profile.inferredRules[index].status = .cooldown
             profile.inferredRules[index].rejectedAt = Date()
-            profile.inferredRules[index].cooldownUntil = Date().addingTimeInterval(Double(cooldownDays) * 86400)
+            profile.inferredRules[index].cooldownUntil = cooldownEnd
             profile.inferredRules[index].isEnabled = false
             
             // Track cooldown
-            profile.rejectedRuleCooldowns[ruleId] = Date().addingTimeInterval(Double(cooldownDays) * 86400)
+            profile.rejectedRuleCooldowns[ruleId] = cooldownEnd
             
             currentProfile = profile
             await saveProfile()
@@ -2648,7 +2863,7 @@ public class LearningsManager: ObservableObject {
         guard var profile = currentProfile else { return }
         
         if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
-            profile.inferredRules[index].status = .active
+            clearRejectionState(on: &profile, at: index)
             if let explanation = newExplanation {
                 let rule = profile.inferredRules[index]
                 let updatedRule = InferredRule(
@@ -2669,8 +2884,8 @@ public class LearningsManager: ObservableObject {
                     status: .active,
                     evidenceIds: rule.evidenceIds,
                     evidenceDescription: rule.evidenceDescription,
-                    rejectedAt: rule.rejectedAt,
-                    cooldownUntil: rule.cooldownUntil
+                    rejectedAt: nil,
+                    cooldownUntil: nil
                 )
                 profile.inferredRules[index] = updatedRule
             } else {
@@ -2692,7 +2907,8 @@ public class LearningsManager: ObservableObject {
         let now = Date()
         
         return profile.inferredRules.contains { rule in
-            rule.pattern == pattern && rule.status == .rejected &&
+            rule.pattern == pattern &&
+            (rule.status == .rejected || rule.status == .cooldown) &&
             (rule.cooldownUntil ?? .distantPast) > now
         }
     }
@@ -3454,9 +3670,8 @@ public class LearningsManager: ObservableObject {
 
         if !excludedExampleIDs.isEmpty {
             filtered.inferredRules = filtered.inferredRules.filter { rule in
-                let usesExcludedExample = !Set(rule.exampleIds).isDisjoint(with: excludedExampleIDs)
-                let usesExcludedEvidence = !Set(rule.evidenceIds).isDisjoint(with: excludedExampleIDs)
-                return !usesExcludedExample && !usesExcludedEvidence
+                guard let evidenceIDs = Self.matchableRuleEvidenceIDs(rule) else { return true }
+                return !evidenceIDs.contains { excludedExampleIDs.contains($0) }
             }
         }
 

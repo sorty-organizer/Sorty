@@ -280,7 +280,9 @@ public class DuplicateSettingsManager: ObservableObject {
             overridden.comparisonMethod = method
         }
         if defaults.object(forKey: OverrideKey.minimumFileSizeMB) != nil {
-            overridden.minFileSize = Int64(max(0, defaults.double(forKey: OverrideKey.minimumFileSizeMB)) * 1_048_576)
+            overridden.minFileSize = Self.minimumFileSizeBytes(
+                megabytes: defaults.double(forKey: OverrideKey.minimumFileSizeMB)
+            )
         }
         if defaults.object(forKey: OverrideKey.maximumScanDepth) != nil {
             overridden.maxScanDepth = defaults.integer(forKey: OverrideKey.maximumScanDepth)
@@ -310,6 +312,20 @@ public class DuplicateSettingsManager: ObservableObject {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
     }
+
+    /// Converts the UserDefaults megabyte override to bytes. `double(forKey:)`
+    /// can return `inf`/`nan` or huge values for a hand-edited preference, and
+    /// `Int64(_:)` traps on anything outside its range, so the value is
+    /// finiteness-checked and clamped before conversion.
+    private static func minimumFileSizeBytes(megabytes: Double) -> Int64 {
+        guard megabytes.isFinite else { return 0 }
+        let clampedMegabytes = min(max(megabytes, 0), maximumMinimumFileSizeMB)
+        return Int64(clampedMegabytes * 1_048_576)
+    }
+
+    /// Upper bound for the minimum-file-size override (1 TB in MB). Larger
+    /// thresholds are meaningless for duplicate scanning.
+    private static let maximumMinimumFileSizeMB: Double = 1_048_576
 
     private static var allOverrideKeys: [String] {
         [

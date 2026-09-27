@@ -73,6 +73,56 @@ public struct NotificationSettings: Codable, Equatable, Sendable {
     
     public init() {}
 
+    /// Decodes every preference with its default value so a missing key (for
+    /// example after a new setting is added in an update) only falls back for
+    /// that key instead of failing the whole decode and resetting all
+    /// persisted notification settings.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = NotificationSettings()
+
+        inAppHUD = try container.decodeIfPresent(Bool.self, forKey: .inAppHUD)
+            ?? defaults.inAppHUD
+        systemNotifications = try container.decodeIfPresent(Bool.self, forKey: .systemNotifications)
+            ?? defaults.systemNotifications
+        showActionButtons = try container.decodeIfPresent(Bool.self, forKey: .showActionButtons)
+            ?? defaults.showActionButtons
+        processingComplete = try container.decodeIfPresent(Bool.self, forKey: .processingComplete)
+            ?? defaults.processingComplete
+        previewReady = try container.decodeIfPresent(Bool.self, forKey: .previewReady)
+            ?? defaults.previewReady
+        showPreviewReadyInForeground = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .showPreviewReadyInForeground
+        ) ?? defaults.showPreviewReadyInForeground
+        processingErrors = try container.decodeIfPresent(Bool.self, forKey: .processingErrors)
+            ?? defaults.processingErrors
+        batchSummary = try container.decodeIfPresent(Bool.self, forKey: .batchSummary)
+            ?? defaults.batchSummary
+        notifyOnAutoOrganize = try container.decodeIfPresent(Bool.self, forKey: .notifyOnAutoOrganize)
+            ?? defaults.notifyOnAutoOrganize
+        notifyOnWatchedFolderStart = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .notifyOnWatchedFolderStart
+        )
+        notifyOnWatchedFolderCompletion = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .notifyOnWatchedFolderCompletion
+        )
+        alwaysShowCriticalErrors = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .alwaysShowCriticalErrors
+        ) ?? defaults.alwaysShowCriticalErrors
+        systemNotificationSounds = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .systemNotificationSounds
+        ) ?? defaults.systemNotificationSounds
+        hudSounds = try container.decodeIfPresent(Bool.self, forKey: .hudSounds)
+            ?? defaults.hudSounds
+        playCompletionSound = try container.decodeIfPresent(Bool.self, forKey: .playCompletionSound)
+            ?? defaults.playCompletionSound
+    }
+
     @MainActor
     public static let `default` = NotificationSettings()
 }

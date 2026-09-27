@@ -25,6 +25,11 @@ public class ContinuousLearningObserver: ObservableObject {
     private var recentlyMovedFiles: [String: Date] = [:] // Path -> Time
     private var learningExcludedRunPaths: Set<String> = []
 
+    /// Revert notifications parked while the learnings profile was unavailable
+    /// (file or Keychain outage). Replayed once it loads so session-based
+    /// attribution is not lost.
+    private var pendingReverts: [(entry: OrganizationHistoryEntry, reason: String?)] = []
+
     /// Known groups of related project files that should stay together
     static let relatedFileGroups: [[String]] = [
         ["package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb"],
@@ -51,6 +56,12 @@ public class ContinuousLearningObserver: ObservableObject {
     
     /// Recent sessions for correlation (last 24 hours)
     private var recentSessions: [OrganizationSession] = []
+
+    /// Sessions ended by `endSession()` whose `.organizationDidFinish`
+    /// notification has not been consumed yet. Notifications are delivered on
+    /// the main queue in the same order runs end, so the oldest unclaimed
+    /// session for a folder is the run that just reported.
+    private var unclaimedFinishedSessionIDs: [String] = []
     
     /// Observation window for correlating user changes with AI sessions (default 30 minutes)
     public var correlationWindowMinutes: Double = 30
@@ -85,6 +96,16 @@ public class ContinuousLearningObserver: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
                 self?.handleSteeringPrompt(notification)
+            }
+            .store(in: &cancellables)
+
+        // Retry reverts parked while the learnings profile was unavailable as
+        // soon as it loads, so persisted sessions can be resolved.
+        learningsManager.$currentProfile
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] profile in
+                guard profile != nil else { return }
+                self?.replayPendingReverts()
             }
             .store(in: &cancellables)
         
@@ -158,6 +179,9 @@ public class ContinuousLearningObserver: ObservableObject {
     
     /// End the current session and leave it open for the correlation window.
     public func endSession() {
+        // A claim whose run never reported (or reported long ago) must not
+        // linger and swallow a later run's finish notification.
+        pruneUnclaimedFinishedSessions()
         if var session = currentSession {
             session.completedAt = Date()
             session.events.append(
@@ -168,6 +192,12 @@ public class ContinuousLearningObserver: ObservableObject {
                 )
             )
             persistSessionUpdate(session)
+            // The run's finish notification is delivered after this call; the
+            // session stays unclaimed until that notification links it to its
+            // history entry.
+            if !unclaimedFinishedSessionIDs.contains(session.id) {
+                unclaimedFinishedSessionIDs.append(session.id)
+            }
             LogManager.shared.log("Ended learning session \(session.id)", level: .debug, category: "LearningObserver")
         }
     }
@@ -260,6 +290,22 @@ public class ContinuousLearningObserver: ObservableObject {
     private func cleanupOldSessions() {
         let cutoff = Date().addingTimeInterval(-86400) // 24 hours
         recentSessions = recentSessions.filter { $0.timestamp > cutoff }
+        // Drop claims for sessions that fell out of the correlation window so
+        // the queue cannot grow or claim an unrelated later run.
+        let liveSessionIDs = Set(recentSessions.map(\.id))
+        unclaimedFinishedSessionIDs.removeAll { !liveSessionIDs.contains($0) }
+        pruneUnclaimedFinishedSessions()
+    }
+
+    /// Drops claims whose session disappeared, already linked to a history
+    /// entry, or outlived the correlation window.
+    private func pruneUnclaimedFinishedSessions(now: Date = Date()) {
+        let cutoff = now.addingTimeInterval(-correlationWindowMinutes * 60)
+        unclaimedFinishedSessionIDs.removeAll { id in
+            guard let session = recentSessions.first(where: { $0.id == id }) else { return true }
+            guard session.historyEntryId == nil else { return true }
+            return (session.completedAt ?? session.timestamp) < cutoff
+        }
     }
 
     public func excludeCurrentRun(folderPath: String) {
@@ -271,6 +317,7 @@ public class ContinuousLearningObserver: ObservableObject {
 
         currentSession = nil
         recentSessions.removeAll { $0.id == session.id }
+        unclaimedFinishedSessionIDs.removeAll { $0 == session.id }
         learningsManager.discardOrganizationSession(id: session.id)
     }
 
@@ -601,112 +648,268 @@ public class ContinuousLearningObserver: ObservableObject {
     
     private func handleRevertNotification(_ notification: Notification) {
         guard canCollect,
-              let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry,
-              let operations = entry.operations else { return }
+              let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry else { return }
+        processRevert(entry: entry, reason: notification.userInfo?["reason"] as? String)
+    }
+
+    /// Records and attributes one revert. `isRetry` replays a notification that
+    /// was parked while the profile was unavailable, where the revert event may
+    /// already have been flushed from the manager's pending-write queue.
+    private func processRevert(entry: OrganizationHistoryEntry, reason: String?, isRetry: Bool = false) {
+        guard canCollect else { return }
         guard !isRunExcluded(entry.directoryPath) else { return }
-        
+
+        let entryID = entry.id.uuidString
+        if !isRetry {
+            // Repeated notifications for the same history item must not count
+            // the revert as repeated negative evidence.
+            let alreadyProcessed = learningsManager.hasRecordedOrPendingHistoryRevert(entryId: entryID)
+                || recentSessions.contains { $0.historyEntryId == entryID && $0.wasReverted }
+                || learningsManager.currentProfile?.sessions.contains { $0.historyEntryId == entryID && $0.wasReverted } == true
+            guard !alreadyProcessed else { return }
+        }
+
         LogManager.shared.log("Learning from a reverted session", category: "LearningObserver")
-        
-        // Find and update the relevant session. Repeated notifications for the
-        // same history item must not count the revert as repeated negative evidence.
+
+        // Record the revert event before any session lookup. The event is
+        // evidence on its own: a backing-off profile must not drop it, and a
+        // missing session must not keep it from being recorded.
+        learningsManager.recordHistoryRevert(
+            entryId: entryID,
+            operationCount: entry.undoRestoredCount ?? entry.filesOrganized,
+            folderPath: entry.directoryPath,
+            revertReason: reason
+        )
+
+        // Attribution needs sessions and rules from the persisted profile. Park
+        // the notification (the manager queues the event) and retry once the
+        // profile loads, instead of recording a partial undo as a no-op.
+        guard learningsManager.currentProfile != nil else {
+            parkRevert(entry: entry, reason: reason)
+            return
+        }
+
+        // Find and update the relevant session.
+        let sessionIndex = recentSessions.firstIndex(where: { $0.historyEntryId == entryID })
+        // In-memory sessions are gone after a relaunch; fall back to the
+        // persisted session linked to this history entry so reverts of older
+        // runs still produce rejections and rule failures.
+        let persistedSession = sessionIndex == nil
+            ? learningsManager.currentProfile?.sessions.first(where: { $0.historyEntryId == entryID })
+            : nil
+
+        // A clean undo clears the entry's stored operations; a partial undo
+        // keeps only the operations that FAILED to restore. Those retained
+        // move/rename operations are the not-reverted set, so the files the
+        // user actually reverted are the session's recorded moves minus them.
+        let failedMoveSourcePaths = Set(
+            (entry.operations ?? [])
+                .filter { $0.type == .moveFile || $0.type == .renameFile }
+                .map(\.sourcePath)
+        )
+        let recordedSession = sessionIndex.map { recentSessions[$0] } ?? persistedSession
+        let revertedMovedFiles = (recordedSession?.filesMoved ?? []).filter {
+            !failedMoveSourcePaths.contains($0.sourcePath)
+        }
+        let rejectionSourcePaths = revertedMovedFiles.map(\.sourcePath)
+
+        // Only rules that were applied to reverted files failed. Per-file rule
+        // attribution exists on modern sessions; legacy sessions fall back to
+        // their used rules, and only when files really were reverted.
         var newlyFailedRuleIDs: Set<String> = []
-        let alreadyReverted = recentSessions.first(where: {
-            $0.historyEntryId == entry.id.uuidString
-        })?.wasReverted == true || learningsManager.currentProfile?.historyReverts.contains(where: {
-            $0.entryId == entry.id.uuidString
-        }) == true
-        guard !alreadyReverted else { return }
-        if let idx = recentSessions.firstIndex(where: { $0.historyEntryId == entry.id.uuidString }),
-           !alreadyReverted {
-            recentSessions[idx].wasReverted = true
-            recentSessions[idx].reaction = .reverted
-            recentSessions[idx].completedAt = Date()
-            recentSessions[idx].timeToReaction = Date().timeIntervalSince(recentSessions[idx].timestamp)
-            newlyFailedRuleIDs = recentSessions[idx].usedRuleIds.subtracting(recentSessions[idx].failedRuleIds)
-            recentSessions[idx].failedRuleIds.formUnion(newlyFailedRuleIDs)
-            recentSessions[idx].events.append(
-                OrganizationSessionEvent(
-                    kind: .reverted,
-                    summary: notification.userInfo?["reason"] as? String ?? "Organization was reverted"
-                )
-            )
-            persistSessionUpdate(recentSessions[idx])
+        if let session = recordedSession {
+            let attributedRuleIDs = Set(revertedMovedFiles.compactMap { movedFile in
+                movedFile.ruleId ?? session.appliedRules[movedFile.destinationPath]
+            })
+            if attributedRuleIDs.isEmpty {
+                newlyFailedRuleIDs = session.filesMoved.isEmpty || !revertedMovedFiles.isEmpty
+                    ? session.usedRuleIds
+                    : []
+            } else {
+                newlyFailedRuleIDs = attributedRuleIDs
+            }
+            newlyFailedRuleIDs.subtract(session.failedRuleIds)
         }
         
-        // Record revert event with enhanced context
-        learningsManager.recordHistoryRevert(
-            entryId: entry.id.uuidString,
-            operationCount: operations.count,
-            folderPath: entry.directoryPath,
-            revertReason: notification.userInfo?["reason"] as? String
-        )
+        if let sessionIndex {
+            var session = recentSessions[sessionIndex]
+            session.wasReverted = true
+            session.reaction = .reverted
+            session.completedAt = Date()
+            session.timeToReaction = Date().timeIntervalSince(session.timestamp)
+            session.failedRuleIds.formUnion(newlyFailedRuleIDs)
+            session.events.append(
+                OrganizationSessionEvent(
+                    kind: .reverted,
+                    summary: reason ?? "Organization was reverted"
+                )
+            )
+            recentSessions[sessionIndex] = session
+            if currentSession?.id == session.id {
+                currentSession = session
+            }
+            learningsManager.upsertOrganizationSession(session)
+        } else if var session = persistedSession {
+            session.wasReverted = true
+            session.reaction = .reverted
+            session.completedAt = max(session.completedAt ?? .distantPast, Date())
+            session.timeToReaction = Date().timeIntervalSince(session.timestamp)
+            session.failedRuleIds.formUnion(newlyFailedRuleIDs)
+            session.events.append(
+                OrganizationSessionEvent(
+                    kind: .reverted,
+                    summary: reason ?? "Organization was reverted"
+                )
+            )
+            learningsManager.upsertOrganizationSession(session)
+        }
         
-        for op in operations {
+        for sourcePath in rejectionSourcePaths {
             // AI moved A -> B.
             // User reverted (B -> A).
             // Learn: A -> B is BAD. (Rejection)
-            learningsManager.recordRejection(originalPath: op.sourcePath)
+            learningsManager.recordRejection(originalPath: sourcePath)
         }
 
         for ruleId in newlyFailedRuleIDs {
             learningsManager.recordRuleFailure(ruleId: ruleId)
         }
     }
+
+    /// Parks a revert whose attribution needs the profile, keyed by history
+    /// entry so duplicate notifications replay once.
+    private func parkRevert(entry: OrganizationHistoryEntry, reason: String?) {
+        guard !pendingReverts.contains(where: { $0.entry.id == entry.id }) else { return }
+        pendingReverts.append((entry: entry, reason: reason))
+    }
+
+    /// Replays reverts parked while the profile was unavailable. Runs when the
+    /// profile loads, so session resolution sees persisted sessions.
+    private func replayPendingReverts() {
+        guard learningsManager.currentProfile != nil, !pendingReverts.isEmpty else { return }
+        let pending = pendingReverts
+        pendingReverts.removeAll()
+        for item in pending {
+            processRevert(entry: item.entry, reason: item.reason, isRetry: true)
+        }
+    }
     
     private func handleFinishNotification(_ notification: Notification) {
         // Track "pending" moves to correlate later
         // This helps us know "AI just put file X at Y" without querying history immediately
-        if let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry,
-           let operations = entry.operations {
-            let learningExcluded = notification.userInfo?["learningExcluded"] as? Bool ?? false
-            if learningExcluded || isRunExcluded(entry.directoryPath) {
-                excludeCurrentRun(folderPath: entry.directoryPath)
-                return
-            }
-            
-            // Merge the finish notification only into the matching unfinished run.
-            // A later run in the same folder must never overwrite a session that is
-            // already awaiting feedback or belongs to another history entry.
-            if let session = currentSession,
-               standardizedPath(session.folderPath) == standardizedPath(entry.directoryPath),
-               session.reaction == .inProgress,
-               session.completedAt == nil,
-               session.historyEntryId == nil || session.historyEntryId == entry.id.uuidString {
-                var updatedSession = session
-                updatedSession.historyEntryId = entry.id.uuidString
-                updatedSession.completedAt = Date()
-                applyOperations(operations, to: &updatedSession)
-                persistSessionUpdate(updatedSession)
-            } else if var existingSession = recentSessions.first(where: {
-                $0.historyEntryId == entry.id.uuidString && !$0.wasReverted
-            }) {
-                // Duplicate finish notifications should enrich the same run,
-                // not create a second session or replace its learned metadata.
-                existingSession.completedAt = existingSession.completedAt ?? Date()
-                applyOperations(operations, to: &existingSession)
-                persistSessionUpdate(existingSession)
-            } else {
-                // Fallback: create a distinct session for this history entry.
-                startSession(folderPath: entry.directoryPath, historyEntryId: entry.id.uuidString, operations: operations)
-            }
-            
-            for op in operations {
-                if let destPath = op.destinationPath {
-                    recentlyMovedFiles[destPath] = Date()
-                }
-            }
-            
-            // Clean up old entries (older than 24 hours)
-            let cutoff = Date().addingTimeInterval(-86400)
-            recentlyMovedFiles = recentlyMovedFiles.filter { $0.value > cutoff }
-            
-            // Record run in metrics
-            let usedRules = currentSession?.usedRuleIds ?? []
-            learningsManager.recordSuccessfulRun(folderPath: entry.directoryPath, fileCount: operations.count, ruleIdsUsed: usedRules)
-
-            // Check for related files that were separated
-            checkRelatedFilesSeparation(operations: operations)
+        guard let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry,
+              let operations = entry.operations else { return }
+        let learningExcluded = notification.userInfo?["learningExcluded"] as? Bool ?? false
+        if learningExcluded || isRunExcluded(entry.directoryPath) {
+            excludeCurrentRun(folderPath: entry.directoryPath)
+            return
         }
+
+        let entryID = entry.id.uuidString
+        let normalizedFolder = standardizedPath(entry.directoryPath)
+        let movedSourcePaths = Set(operations.filter { $0.destinationPath != nil }.map(\.sourcePath))
+
+        // Resolve the session that belongs to this run. `FolderOrganizer` calls
+        // `endSession()` before this notification's main-queue delivery, so
+        // completion state must not decide the match: the history entry ID is
+        // the run token, and a session already linked to another entry is a
+        // different run and must never be merged into.
+        var resolvedSession: OrganizationSession?
+        if let index = recentSessions.firstIndex(where: { $0.historyEntryId == entryID }) {
+            // Duplicate delivery for an already-linked run.
+            resolvedSession = recentSessions[index]
+        } else if let index = unclaimedFinishedSessionIndex(
+            matchingFolder: normalizedFolder,
+            movedSourcePaths: movedSourcePaths
+        ) {
+            resolvedSession = recentSessions[index]
+        } else if let session = currentSession,
+                  standardizedPath(session.folderPath) == normalizedFolder,
+                  session.historyEntryId == nil || session.historyEntryId == entryID {
+            resolvedSession = session
+        }
+
+        var usedRuleIDs: Set<String> = []
+        if var session = resolvedSession {
+            unclaimedFinishedSessionIDs.removeAll { $0 == session.id }
+            session.historyEntryId = entryID
+            if session.completedAt == nil {
+                session.completedAt = Date()
+            }
+            applyOperations(operations, to: &session)
+            usedRuleIDs = session.usedRuleIds
+            persistSessionUpdate(session)
+        } else if canCollect {
+            // No tracked run survived (e.g. the observer restarted mid-run).
+            // Keep the entry linked to a single session and inherit the rule
+            // usage recorded for this run so rule successes are not lost.
+            var session = OrganizationSession(
+                completedAt: Date(),
+                folderPath: entry.directoryPath,
+                historyEntryId: entryID,
+                events: [
+                    OrganizationSessionEvent(
+                        kind: .started,
+                        summary: "Recovered organization run for \(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)"
+                    )
+                ]
+            )
+            if let run = currentSession,
+               standardizedPath(run.folderPath) == normalizedFolder,
+               run.historyEntryId == nil || run.historyEntryId == entryID {
+                session.usedRuleIds = run.usedRuleIds
+                session.failedRuleIds = run.failedRuleIds
+                session.appliedRules = run.appliedRules
+            }
+            applyOperations(operations, to: &session)
+            usedRuleIDs = session.usedRuleIds
+            persistSessionUpdate(session, appendIfNeeded: true)
+        }
+
+        for op in operations {
+            if let destPath = op.destinationPath {
+                recentlyMovedFiles[destPath] = Date()
+            }
+        }
+        
+        // Clean up old entries (older than 24 hours)
+        let cutoff = Date().addingTimeInterval(-86400)
+        recentlyMovedFiles = recentlyMovedFiles.filter { $0.value > cutoff }
+        
+        // Record run in metrics
+        learningsManager.recordSuccessfulRun(folderPath: entry.directoryPath, fileCount: operations.count, ruleIdsUsed: usedRuleIDs)
+
+        // Check for related files that were separated
+        checkRelatedFilesSeparation(operations: operations, folderPath: entry.directoryPath)
+    }
+
+    /// Index of the oldest ended-but-unclaimed session for this folder whose
+    /// recorded moves match the finishing run. Falls back to the oldest
+    /// unclaimed session because finish order mirrors `endSession()` order.
+    /// Candidates older than the correlation window are never claimed.
+    private func unclaimedFinishedSessionIndex(
+        matchingFolder normalizedFolder: String,
+        movedSourcePaths: Set<String>
+    ) -> Int? {
+        pruneUnclaimedFinishedSessions()
+        let cutoff = Date().addingTimeInterval(-correlationWindowMinutes * 60)
+        let candidates = unclaimedFinishedSessionIDs.compactMap { id in
+            recentSessions.firstIndex { $0.id == id }
+        }.filter { index in
+            let session = recentSessions[index]
+            return standardizedPath(session.folderPath) == normalizedFolder
+                && session.historyEntryId == nil
+                && (session.completedAt ?? session.timestamp) >= cutoff
+        }
+
+        guard !candidates.isEmpty else { return nil }
+        if !movedSourcePaths.isEmpty,
+           let matching = candidates.first(where: {
+               Set(recentSessions[$0].filesMoved.map(\.sourcePath)) == movedSourcePaths
+           }) {
+            return matching
+        }
+        return candidates.first
     }
 
     public func handleMonitoringWindowExpired(for directoryPath: String) {
@@ -765,13 +968,28 @@ public class ContinuousLearningObserver: ObservableObject {
 
     /// After organization, check if related project files (e.g., package.json + pnpm-lock.yaml)
     /// were moved to different locations or if some were moved while others weren't.
-    private func checkRelatedFilesSeparation(operations: [FileSystemManager.FileOperation]) {
+    private func checkRelatedFilesSeparation(
+        operations: [FileSystemManager.FileOperation],
+        folderPath: String
+    ) {
         guard canCollect else { return }
 
         let movedFileNames = Set(operations.compactMap { op -> String? in
             guard op.destinationPath != nil else { return nil }
             return URL(fileURLWithPath: op.sourcePath).lastPathComponent
         })
+
+        // Only names that actually exist in the organized folder (plus the files
+        // this run moved) can be "left behind" or "separated". Group members
+        // that were never on disk must not trigger a suggestion. The scan looks
+        // into subfolders too: a nested lockfile that stayed behind is still
+        // part of the project and must not read as absent.
+        let presentFileNames = movedFileNames.union(
+            presentRelatedFiles(
+                in: folderPath,
+                candidates: Set(Self.relatedFileGroups.flatMap { $0 })
+            )
+        )
 
         // Build a map of filename -> destination folder
         var fileDestinations: [String: String] = [:]
@@ -788,14 +1006,15 @@ public class ContinuousLearningObserver: ObservableObject {
 
             // Check if files in the group were moved to different destinations
             let destinations = Set(movedFromGroup.compactMap { fileDestinations[$0] })
-            let notMoved = group.filter { !movedFileNames.contains($0) }
+            let presentGroupMembers = group.filter { presentFileNames.contains($0) }
+            let notMoved = presentGroupMembers.filter { !movedFileNames.contains($0) }
 
             let shouldSuggest: Bool
             if destinations.count > 1 {
                 // Files moved to different folders
                 shouldSuggest = true
-            } else if !notMoved.isEmpty && !movedFromGroup.isEmpty {
-                // Some files moved, others left behind
+            } else if !notMoved.isEmpty {
+                // Some files moved, others are still in the folder
                 shouldSuggest = true
             } else {
                 shouldSuggest = false
@@ -803,11 +1022,11 @@ public class ContinuousLearningObserver: ObservableObject {
 
             if shouldSuggest {
                 let groupName = group.first ?? "project files"
-                let fileList = group.joined(separator: ", ")
+                let fileList = presentGroupMembers.joined(separator: ", ")
                 let message = "\(fileList) are related project files and should stay together. Consider adding them to exceptions."
                 let suggestion = LearningsManager.ExceptionSuggestion(
                     message: message,
-                    fileNames: group,
+                    fileNames: Array(presentGroupMembers),
                     groupName: groupName
                 )
                 // Only add if not already suggested for this group
@@ -816,6 +1035,49 @@ public class ContinuousLearningObserver: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Related-file candidates that exist at the folder root or in a shallow
+    /// subfolder. The old root-only listing treated a nested lockfile as
+    /// absent, so a separated project file could go unnoticed. The scan is
+    /// depth- and entry-bounded so large folders stay cheap.
+    private func presentRelatedFiles(in folderPath: String, candidates: Set<String>) -> Set<String> {
+        var remaining = candidates
+        guard !remaining.isEmpty else { return [] }
+
+        let rootContents = Set(
+            (try? FileManager.default.contentsOfDirectory(atPath: folderPath)) ?? []
+        )
+        var present = candidates.intersection(rootContents)
+        remaining.subtract(present)
+        guard !remaining.isEmpty else { return present }
+
+        let maximumDepth = 3
+        let maximumVisitedEntries = 2_000
+        guard let enumerator = FileManager.default.enumerator(
+            at: URL(fileURLWithPath: folderPath, isDirectory: true),
+            includingPropertiesForKeys: nil,
+            options: [.skipsPackageDescendants]
+        ) else {
+            return present
+        }
+
+        var visitedEntries = 0
+        for case let url as URL in enumerator {
+            if enumerator.level > maximumDepth {
+                enumerator.skipDescendants()
+                continue
+            }
+            visitedEntries += 1
+            guard visitedEntries <= maximumVisitedEntries else { break }
+
+            let name = url.lastPathComponent
+            if remaining.remove(name) != nil {
+                present.insert(name)
+                if remaining.isEmpty { break }
+            }
+        }
+        return present
     }
 }
 

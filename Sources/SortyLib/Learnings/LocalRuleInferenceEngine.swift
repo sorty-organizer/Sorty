@@ -294,9 +294,7 @@ public actor LocalRuleInferenceEngine {
             let lowered = prompt.prompt.lowercased()
             
             // Pattern: "put X in Y folder" / "move X to Y"
-            if let rule = parseMovementInstruction(prompt.prompt, sessionId: prompt.sessionId) {
-                rules.append(rule)
-            }
+            rules.append(contentsOf: parseMovementInstructions(prompt.prompt, sessionId: prompt.sessionId))
             
             // Pattern: "don't put X in Y" - could be used for negative rules
             // For now, skip negative patterns
@@ -342,76 +340,159 @@ public actor LocalRuleInferenceEngine {
         return rules
     }
     
-    private func parseMovementInstruction(_ instruction: String, sessionId: String?) -> InferredRule? {
-        let lowered = instruction.lowercased()
-        
+    private func parseMovementInstructions(_ instruction: String, sessionId: String?) -> [InferredRule] {
         // Try to extract "X to Y" or "X in Y" patterns
         let patterns = [
             "put (\\w+) (?:files? )?(?:in|to|into) ([\\w\\s/]+)",
             "move (\\w+) to ([\\w\\s/]+)",
             "(\\w+) should go (?:in|to) ([\\w\\s/]+)"
         ]
-        
-        for patternStr in patterns {
-            if let regex = try? NSRegularExpression(pattern: patternStr, options: .caseInsensitive),
-               let match = regex.firstMatch(in: lowered, range: NSRange(lowered.startIndex..., in: lowered)) {
-                
-                guard match.numberOfRanges >= 3,
-                      let fileTypeRange = Range(match.range(at: 1), in: lowered),
-                      let folderRange = Range(match.range(at: 2), in: lowered) else {
+
+        var rules: [InferredRule] = []
+        // The file type named most recently lets a later clause refer back to
+        // it by pronoun ("Don't put images in Photos, put them in Pictures").
+        var lastFileType: String?
+
+        // Negation only scopes to the clause it appears in, so one negative
+        // instruction cannot veto a positive instruction elsewhere in the
+        // prompt. Commas and em-dashes are clause boundaries: they separate
+        // the mirrored positive and negative forms ("... , put them in ...").
+        for clause in instructionClauses(from: instruction) {
+            for patternStr in patterns {
+                guard let regex = try? NSRegularExpression(pattern: patternStr, options: .caseInsensitive) else {
                     continue
                 }
-                
-                let fileType = String(lowered[fileTypeRange]).trimmingCharacters(in: .whitespaces)
-                let folderName = String(lowered[folderRange]).trimmingCharacters(in: .whitespaces)
-                
-                // Map file type to extension set with safe regex patterns
-                let extensionPattern: String
-                let categoryExtensions: [String] = {
-                    switch fileType {
-                    case "documents":
-                        return ["pdf", "docx", "doc", "xls", "xlsx", "ppt", "pptx", "txt", "rtf"]
-                    case "photos", "images":
-                        return ["jpg", "jpeg", "png", "gif", "bmp", "svg", "webp", "raw"]
-                    case "videos":
-                        return ["mp4", "mov", "mkv", "avi", "flv", "wmv", "m4v"]
-                    case "music", "audio":
-                        return ["mp3", "wav", "flac", "aac", "m4a", "wma", "ogg", "aiff"]
-                    case "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "jpg", "png", "mp3", "mp4":
-                        return [fileType]
-                    default:
-                        return []
+
+                // Every movement instruction in a clause matters; first-match
+                // only dropped the rest of a multi-move clause.
+                for match in regex.matches(in: clause, range: NSRange(clause.startIndex..., in: clause)) {
+                    guard match.numberOfRanges >= 3,
+                          let fullRange = Range(match.range, in: clause),
+                          let fileTypeRange = Range(match.range(at: 1), in: clause),
+                          let folderRange = Range(match.range(at: 2), in: clause) else {
+                        continue
                     }
-                }()
-                
-                if !categoryExtensions.isEmpty {
-                    let escapedExts = categoryExtensions.map { NSRegularExpression.escapedPattern(for: $0) }
-                    extensionPattern = ".*\\.(" + escapedExts.joined(separator: "|") + ")$"
-                } else {
-                    // For unknown types, escape the user input before embedding
-                    let escapedFileType = NSRegularExpression.escapedPattern(for: fileType)
-                    extensionPattern = ".*" + escapedFileType + ".*"
+
+                    let matchedFileType = String(clause[fileTypeRange]).trimmingCharacters(in: .whitespaces)
+                    let folderName = String(clause[folderRange]).trimmingCharacters(in: .whitespaces)
+                    guard !folderName.isEmpty else { continue }
+
+                    // Pronoun subjects resolve to the file type named earlier
+                    // in the prompt; without a referent the clause is not a
+                    // rule, and must never become a broad "...them..." pattern.
+                    let fileType: String
+                    if Self.pronounFileTypes.contains(matchedFileType.lowercased()) {
+                        guard let lastFileType else { continue }
+                        fileType = lastFileType
+                    } else {
+                        lastFileType = matchedFileType
+                        fileType = matchedFileType
+                    }
+
+                    // A negated instruction ("don't put X in Y", "never move X
+                    // to Y") must never become a positive rule. The negation
+                    // has to sit in the verb phrase immediately before the
+                    // matched verb; a whole-prefix scan over-rejects ("Don't
+                    // forget to put PNGs in Images").
+                    guard !isNegatedInstruction(String(clause[..<fullRange.lowerBound])) else {
+                        continue
+                    }
+
+                    // Match case-insensitively but keep the folder name exactly as the
+                    // user wrote it so templates preserve the original casing.
+                    let extensionPattern: String
+                    let categoryExtensions: [String] = {
+                        switch fileType.lowercased() {
+                        case "documents":
+                            return ["pdf", "docx", "doc", "xls", "xlsx", "ppt", "pptx", "txt", "rtf"]
+                        case "photos", "images":
+                            return ["jpg", "jpeg", "png", "gif", "bmp", "svg", "webp", "raw"]
+                        case "videos":
+                            return ["mp4", "mov", "mkv", "avi", "flv", "wmv", "m4v"]
+                        case "music", "audio":
+                            return ["mp3", "wav", "flac", "aac", "m4a", "wma", "ogg", "aiff"]
+                        case "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "jpg", "png", "mp3", "mp4":
+                            return [fileType.lowercased()]
+                        default:
+                            // "PNGs"/"PDFs" are common plurals; map them to the
+                            // singular extension when it is a known file type.
+                            let lowered = fileType.lowercased()
+                            if lowered.hasSuffix("s") {
+                                let singular = String(lowered.dropLast())
+                                if FileCategory.from(extension: singular) != .other {
+                                    return [singular]
+                                }
+                            }
+                            return []
+                        }
+                    }()
+                    
+                    if !categoryExtensions.isEmpty {
+                        let escapedExts = categoryExtensions.map { NSRegularExpression.escapedPattern(for: $0) }
+                        extensionPattern = ".*\\.(" + escapedExts.joined(separator: "|") + ")$"
+                    } else {
+                        // For unknown types, escape the user input before embedding
+                        let escapedFileType = NSRegularExpression.escapedPattern(for: fileType.lowercased())
+                        extensionPattern = ".*" + escapedFileType + ".*"
+                    }
+                    
+                    rules.append(InferredRule(
+                        id: "local-steering-\(UUID().uuidString.prefix(8))",
+                        pattern: extensionPattern,
+                        template: "\(folderName)/{filename}",
+                        metadataCues: [],
+                        priority: 75, // High priority for explicit instructions
+                        exampleIds: [],
+                        explanation: "\(fileType.capitalized) files should go to '\(folderName)/' (from your instruction)",
+                        successCount: 0,
+                        failureCount: 0,
+                        isEnabled: true,
+                        lastAppliedAt: nil,
+                        supportCount: 1
+                    ))
                 }
-                
-                return InferredRule(
-                    id: "local-steering-\(UUID().uuidString.prefix(8))",
-                    pattern: extensionPattern,
-                    template: "\(folderName)/{filename}",
-                    metadataCues: [],
-                    priority: 75, // High priority for explicit instructions
-                    exampleIds: [],
-                    explanation: "\(fileType.capitalized) files should go to '\(folderName)/' (from your instruction)",
-                    successCount: 0,
-                    failureCount: 0,
-                    isEnabled: true,
-                    lastAppliedAt: nil,
-                    supportCount: 1
-                )
             }
         }
         
-        return nil
+        return rules
     }
+
+    /// Sentence-like clauses a steering instruction can contain. Negation must
+    /// not leak across these boundaries. Commas and dashes separate mirrored
+    /// positive/negative halves ("Don't put images in Photos, put them in Pictures").
+    private func instructionClauses(from instruction: String) -> [String] {
+        instruction.split { character in
+            character == "." || character == "!" || character == "?" || character == ";" || character == "\n"
+                || character == "," || character == "—" || character == "–"
+        }.map(String.init)
+    }
+
+    /// Pronouns that stand in for a file type named in an earlier clause.
+    private static let pronounFileTypes: Set<String> = [
+        "them", "they", "it", "those", "these", "that", "this"
+    ]
+
+    /// True when the words immediately before a movement verb negate that verb.
+    /// Only the immediate verb phrase counts: "don't put"/"never move" negate,
+    /// while a trailing "to" means the matched verb belongs to a new phrase
+    /// ("don't forget to put PNGs in Images" is a positive instruction).
+    private func isNegatedInstruction(_ precedingText: String) -> Bool {
+        let normalized = precedingText
+            .replacingOccurrences(of: "’", with: "'")
+            .lowercased()
+        let tokens = normalized.split { !$0.isLetter && !$0.isNumber && $0 != "'" }
+        guard let last = tokens.last, last != "to" else { return false }
+        return tokens.suffix(2).contains { token in
+            Self.negationTokens.contains(token.replacingOccurrences(of: "'", with: ""))
+        }
+    }
+
+    /// Negation words with apostrophes stripped ("don't" -> "dont").
+    private static let negationTokens: Set<String> = [
+        "dont", "wont", "doesnt", "didnt", "isnt", "arent", "wasnt", "werent",
+        "cant", "couldnt", "shouldnt", "wouldnt", "mustnt", "neednt",
+        "no", "not", "never", "avoid"
+    ]
     
     // MARK: - Pattern Detection
     
@@ -483,22 +564,22 @@ public actor LocalRuleInferenceEngine {
     }
     
     private func extractCommonKeywords(from filenames: [String]) -> [String] {
-        // Tokenize all filenames and find common words
-        let allTokens = filenames.flatMap { filename -> [String] in
-            let name = (filename as NSString).deletingPathExtension
-            return name.components(separatedBy: CharacterSet.alphanumerics.inverted)
-                .filter { $0.count >= 3 }
-                .map { $0.lowercased() }
-        }
-        
-        // Count occurrences
+        // Count distinct filenames per token: a token repeated inside one
+        // filename is one observation, not two.
         var counts: [String: Int] = [:]
-        for token in allTokens {
-            counts[token, default: 0] += 1
+        for filename in filenames {
+            let name = (filename as NSString).deletingPathExtension
+            let tokens = Set(name.components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { $0.count >= 3 }
+                .map { $0.lowercased() })
+            for token in tokens {
+                counts[token, default: 0] += 1
+            }
         }
         
-        // Find tokens that appear in majority of files
-        let threshold = filenames.count / 2
+        // A token seen in a single sample can never justify a rule: require a
+        // majority of the filenames and at least two of them.
+        let threshold = max(2, filenames.count / 2 + 1)
         return counts.filter { $0.value >= threshold }
             .sorted { $0.value > $1.value }
             .map { $0.key }
@@ -590,11 +671,16 @@ extension LearningsManager {
     /// Run local rule inference without requiring AI
     public func runLocalRuleInference() async {
         guard let profile = currentProfile else { return }
-        var workingProfile = filteredLearningProfile(from: profile)
-        workingProfile.inferredRules.removeAll { $0.id.hasPrefix("local-avoid-") }
-        
+        let sourceProfile = filteredLearningProfile(from: profile)
+
         let engine = LocalRuleInferenceEngine()
-        let inferredRules = await engine.inferRules(from: workingProfile)
+        let inferredRules = await engine.inferRules(from: sourceProfile)
+
+        // Re-read the profile after the await: feedback recorded while
+        // inference ran must not be dropped by assigning the pre-await snapshot.
+        guard var workingProfile = currentProfile else { return }
+        workingProfile = filteredLearningProfile(from: workingProfile)
+        workingProfile.inferredRules.removeAll { $0.id.hasPrefix("local-avoid-") }
         
         // Merge with existing rules: strengthen duplicates with new evidence instead of
         // discarding it, so re-inference keeps established rules learning. User-controlled

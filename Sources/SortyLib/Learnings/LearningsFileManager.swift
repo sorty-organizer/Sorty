@@ -67,10 +67,26 @@ public struct LearningsFileManager {
         let encryptedData = try Data(contentsOf: profileURL)
         
         // Get encryption key. A missing key alongside an existing file means
-        // the data is currently undecryptable (e.g. Keychain unavailable);
-        // leave the file in place so a later launch with the key can read it.
+        // the data is currently undecryptable, but the cause matters: if the
+        // Keychain is temporarily unavailable, leave the file in place so a
+        // later launch with the key can read it; if the item is definitively
+        // gone, the file can never be decrypted again and must be recovered.
         guard let key = getEncryptionKey() else {
-            throw LearningsFileError.noEncryptionKey
+            guard KeychainManager.itemStatus(key: encryptionKeychainKey) == .notFound else {
+                throw LearningsFileError.noEncryptionKey
+            }
+
+            // Definitive loss (Keychain reset). Quarantine the orphaned bytes
+            // and rotate so learning can continue instead of staying dead
+            // forever. `getOrCreateEncryptionKey` performs the quarantine and
+            // stores/caches the new key; callers retry with a fresh profile.
+            _ = try getOrCreateEncryptionKey()
+            LogManager.shared.log(
+                "Learnings encryption key was missing; quarantined the profile and rotated the key",
+                level: .warning,
+                category: "LearningsFile"
+            )
+            throw LearningsFileError.corruptProfileQuarantined
         }
 
         do {
@@ -168,9 +184,23 @@ public struct LearningsFileManager {
             return existing
         }
 
-        // A profile file without a readable key is orphaned (Keychain reset or
-        // transiently unavailable). Quarantine it before rotating so the bytes
-        // survive for forensics instead of being overwritten silently.
+        // `KeychainManager.get` returns nil both when no key was ever stored and
+        // when the Keychain is temporarily unreadable (locked keychain, denied
+        // access). Only a definitive "every service says item-not-found" may
+        // rotate the key: treating a transient failure as "missing" quarantines
+        // a healthy profile and orphans its data under a fresh key.
+        guard KeychainManager.itemStatus(key: encryptionKeychainKey) == .notFound else {
+            LogManager.shared.log(
+                "Learnings encryption key is currently unavailable; keeping the existing key and profile",
+                level: .warning,
+                category: "LearningsFile"
+            )
+            throw LearningsFileError.noEncryptionKey
+        }
+
+        // A profile file without a key is orphaned (Keychain reset). Quarantine
+        // it before rotating so the bytes survive for forensics instead of
+        // being overwritten silently.
         if FileManager.default.fileExists(atPath: profileURL.path) {
             quarantineCorruptProfile()
         }
@@ -187,7 +217,8 @@ public struct LearningsFileManager {
         cacheKey(key)
         return key
     }
-    
+
+    /// Reads the cached or Keychain-stored Learnings key.
     private static func getEncryptionKey() -> SymmetricKey? {
         if let cached = cachedKey() {
             return cached

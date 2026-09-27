@@ -8,6 +8,14 @@
 import Foundation
 import Combine
 
+/// A scanned file together with the organization root it was found under.
+/// Batch analysis covers every root, so each file must keep its own root for
+/// template expansion and scope checks instead of borrowing the first one.
+private struct ScannedFile: Sendable {
+    let url: URL
+    let rootPath: String
+}
+
 /// Main analyzer for "The Learnings" feature
 @MainActor
 public class LearningsAnalyzer: ObservableObject {
@@ -110,15 +118,15 @@ public class LearningsAnalyzer: ObservableObject {
         var mappings: [ProposedMapping] = []
         var conflicts: [MappingConflict] = []
         
-        if let primaryRootPath = rootPaths.first {
+        if !rootPaths.isEmpty {
             // Step 2: Scan root paths for files to organize
             currentStatus = "Scanning files..."
-            var allFiles: [URL] = []
+            var allFiles: [ScannedFile] = []
             
             for rootPath in rootPaths {
                 let rootURL = URL(fileURLWithPath: rootPath)
                 let files = await scanDirectory(rootURL, sampleSize: 100)
-                allFiles.append(contentsOf: files)
+                allFiles.append(contentsOf: files.map { ScannedFile(url: $0, rootPath: rootPath) })
             }
             
             progress = 0.5
@@ -135,7 +143,7 @@ public class LearningsAnalyzer: ObservableObject {
                 let chunkEnd = min(chunkStart + proposalChunkSize, allFiles.count)
                 let chunk = Array(allFiles[chunkStart..<chunkEnd])
                 let chunkMappings = await Task.detached(priority: .utility) {
-                    Self.mappings(for: chunk, using: rules, rootPath: primaryRootPath)
+                    Self.mappings(for: chunk, using: rules)
                 }.value
                 for mapping in chunkMappings {
                     mappings.append(mapping)
@@ -194,12 +202,11 @@ public class LearningsAnalyzer: ObservableObject {
     }
 
     nonisolated private static func mappings(
-        for files: [URL],
-        using rules: [InferredRule],
-        rootPath: String
+        for files: [ScannedFile],
+        using rules: [InferredRule]
     ) -> [ProposedMapping] {
         let now = Date()
-        return files.map { makeMapping(for: $0, using: rules, rootPath: rootPath, now: now) }
+        return files.map { makeMapping(for: $0.url, using: rules, rootPath: $0.rootPath, now: now) }
     }
 
     nonisolated private static func makeMapping(
@@ -215,8 +222,12 @@ public class LearningsAnalyzer: ObservableObject {
         var bestMatch: (rule: InferredRule, confidence: Double)?
         var alternatives: [AlternativeMapping] = []
 
-        // Only enabled, active, non-cooldown rules may influence mappings.
-        let eligibleRules = rules.filter { $0.isEligible(at: now) }
+        // Only enabled, active, non-cooldown rules may influence mappings, and a
+        // folder-scoped rule must not leak into another root's files.
+        let fileDirectory = fileURL.deletingLastPathComponent().standardizedFileURL.path
+        let eligibleRules = rules.filter {
+            $0.isEligible(at: now) && ruleApplies($0, toFileDirectory: fileDirectory)
+        }
 
         // Folders that matching avoid rules veto for this file. Avoid rules are never
         // destinations themselves; they only suppress candidates.
@@ -287,6 +298,29 @@ public class LearningsAnalyzer: ObservableObject {
     }
     
     // MARK: - Private Methods
+
+    /// Template placeholders are path segments, not localized dates: `{date}`,
+    /// `{year}`, `{month}`, and `{day}` must not follow the user's calendar
+    /// (Buddhist/Japanese years) or time zone.
+    nonisolated private static let templateCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        return calendar
+    }()
+
+    /// Whether a rule may shape proposals for a file in `directoryPath`.
+    /// Global (and persona-scoped, which has no root context here) rules pass;
+    /// folder-scoped rules only apply to the scope itself or a folder nested
+    /// in it. Containment is checked against the file's own directory so a
+    /// rule scoped to a subfolder cannot leak to siblings when the analyzed
+    /// root is an ancestor of the scope.
+    nonisolated private static func ruleApplies(_ rule: InferredRule, toFileDirectory directoryPath: String) -> Bool {
+        guard case .folder(let scopePath) = rule.scope else { return true }
+        let scope = URL(fileURLWithPath: scopePath).standardizedFileURL.path
+        guard !scope.isEmpty, scope != "/" else { return true }
+        let directory = URL(fileURLWithPath: directoryPath).standardizedFileURL.path
+        return directory == scope || directory.hasPrefix(scope + "/")
+    }
     
     /// Scan directory for files
     private func scanDirectory(_ url: URL, sampleSize: Int) async -> [URL] {
@@ -330,7 +364,7 @@ public class LearningsAnalyzer: ObservableObject {
         
         // Extract date from filename or use file date
         let date = extractDate(from: filename) ?? Date()
-        let calendar = Calendar.current
+        let calendar = templateCalendar
         let year = calendar.component(.year, from: date)
         let month = String(format: "%02d", calendar.component(.month, from: date))
         let day = String(format: "%02d", calendar.component(.day, from: date))
@@ -362,6 +396,11 @@ public class LearningsAnalyzer: ObservableObject {
             guard let range = name.range(of: pattern, options: .regularExpression) else { continue }
             let value = String(name[range])
             let formatter = DateFormatter()
+            // A bare formatter follows the user's locale/calendar, so Buddhist or
+            // Japanese calendars mis-parse these fixed numeric patterns.
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
             formatter.dateFormat = format
             if let date = formatter.date(from: replaceDots ? value.replacingOccurrences(of: ".", with: "-") : value) {
                 return date

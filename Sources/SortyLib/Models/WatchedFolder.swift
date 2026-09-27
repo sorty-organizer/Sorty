@@ -197,20 +197,79 @@ public class WatchedFoldersManager: ObservableObject {
             let journal = journal
             let persistedDataReader = persistedDataReader
             let legacyStorageKey = legacyStorageKey
-            task = Task.detached(priority: .utility) {
-                if let journalFolders = journal.load() {
-                    return (journalFolders, false)
+            // The journal generation is captured with the load, so a clearAll()
+            // that lands while the migration runs invalidates its writes even
+            // when the main-actor staleness check already passed.
+            let journalGeneration = journal.currentGeneration()
+            // clearAll() bumps the generation and marks the load finished. The
+            // detached migration must observe that before any write, or it can
+            // resurrect folders the user just cleared.
+            let isLoadStale: @Sendable () async -> Bool = { [weak self] in
+                guard let self else { return true }
+                return await MainActor.run {
+                    self.loadGeneration != generation || self.hasLoadedPersistedState
                 }
+            }
+            task = Task.detached(priority: .utility) {
                 guard let data = persistedDataReader.data(forKey: legacyStorageKey),
                       let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) else {
+                    // No legacy snapshot to migrate; the journal, if any, is
+                    // authoritative.
+                    return (journal.load() ?? [], false)
+                }
+                let legacyFolders = Self.deduplicatedByID(decoded)
+                if let existingJournalFolders = journal.load() {
+                    // A journal already exists: its records replaced the legacy
+                    // snapshot, or an earlier migration write failed and left
+                    // the defaults behind. Merge so those folders are not
+                    // stranded, then drop the defaults.
+                    if await isLoadStale() {
+                        return ([], false)
+                    }
+                    if let mergedFolders = journal.mergeLegacyFolders(
+                        legacyFolders,
+                        generation: journalGeneration
+                    ) {
+                        return (mergedFolders, true)
+                    }
+                    // The merge could not be written; keep both sets visible and
+                    // leave the defaults for the next launch.
+                    let mergedFolders = Self.mergingByID(
+                        legacyFolders,
+                        journalFolders: existingJournalFolders
+                    )
+                    return (mergedFolders, false)
+                }
+                if await isLoadStale() {
                     return ([], false)
                 }
-                guard journal.replaceAll(with: decoded, replacingInvalidJournal: true) else {
-                    // A journal may have been created while the legacy snapshot
-                    // was decoding. Prefer that newer state over stale defaults.
-                    return (journal.load() ?? decoded, false)
+                guard journal.replaceAll(
+                    with: legacyFolders,
+                    replacingInvalidJournal: true,
+                    generation: journalGeneration
+                ) else {
+                    // A journal may have appeared while the legacy snapshot was
+                    // decoding. Its records are newer, so merge both sets by ID
+                    // (journal wins on conflict) instead of dropping folders.
+                    let journalFolders = journal.load() ?? []
+                    if await isLoadStale() {
+                        return ([], false)
+                    }
+                    if let mergedFolders = journal.mergeLegacyFolders(
+                        legacyFolders,
+                        generation: journalGeneration
+                    ) {
+                        return (mergedFolders, true)
+                    }
+                    // The merge could not be written; keep both sets visible and
+                    // leave the defaults for the next launch.
+                    let mergedFolders = Self.mergingByID(
+                        legacyFolders,
+                        journalFolders: journalFolders
+                    )
+                    return (mergedFolders, false)
                 }
-                return (decoded, true)
+                return (legacyFolders, true)
             }
             loadTask = task
         }
@@ -218,10 +277,12 @@ public class WatchedFoldersManager: ObservableObject {
         let (persistedFolders, didMigrateLegacyStorage) = await task.value
         guard !hasLoadedPersistedState, generation == loadGeneration else { return }
 
-        let inMemoryByID = Dictionary(uniqueKeysWithValues: folders.map { ($0.id, $0) })
-        let persistedIDs = Set(persistedFolders.map(\.id))
-        var loadedFolders = persistedFolders.map { inMemoryByID[$0.id] ?? $0 }
-        loadedFolders.append(contentsOf: folders.filter { !persistedIDs.contains($0.id) })
+        let inMemoryFolders = Self.deduplicatedByID(folders)
+        let inMemoryByID = Dictionary(uniqueKeysWithValues: inMemoryFolders.map { ($0.id, $0) })
+        let loadedPersistedFolders = Self.deduplicatedByID(persistedFolders)
+        let persistedIDs = Set(loadedPersistedFolders.map(\.id))
+        var loadedFolders = loadedPersistedFolders.map { inMemoryByID[$0.id] ?? $0 }
+        loadedFolders.append(contentsOf: inMemoryFolders.filter { !persistedIDs.contains($0.id) })
         for index in loadedFolders.indices {
             loadedFolders[index].autoOrganize = loadedFolders[index].isEnabled
         }
@@ -788,6 +849,35 @@ public class WatchedFoldersManager: ObservableObject {
         return false
     }
 
+    /// Last-wins deduplication by ID. A persisted store can repeat IDs (corrupt
+    /// or concurrently written records), which would otherwise trap
+    /// `Dictionary(uniqueKeysWithValues:)` or leave indexes pointing at one of
+    /// two rows for the same folder.
+    private nonisolated static func deduplicatedByID(_ folders: [WatchedFolder]) -> [WatchedFolder] {
+        var indexByID: [UUID: Int] = [:]
+        var deduplicated: [WatchedFolder] = []
+        deduplicated.reserveCapacity(folders.count)
+
+        for folder in folders {
+            if let index = indexByID[folder.id] {
+                deduplicated[index] = folder
+            } else {
+                indexByID[folder.id] = deduplicated.count
+                deduplicated.append(folder)
+            }
+        }
+        return deduplicated
+    }
+
+    /// Journal records win on ID conflicts and legacy-only folders are kept.
+    /// Used when a legacy migration races a journal write.
+    private nonisolated static func mergingByID(
+        _ legacyFolders: [WatchedFolder],
+        journalFolders: [WatchedFolder]
+    ) -> [WatchedFolder] {
+        deduplicatedByID(legacyFolders + journalFolders)
+    }
+
     private static var requiresSecurityScopedAccess: Bool {
         SandboxEnvironment.isSandboxed
     }
@@ -812,6 +902,9 @@ private final class WatchedFolderJournal: @unchecked Sendable {
     private let ioQueue = DispatchQueue(label: "com.sorty.watched-folders.persistence", qos: .utility)
     private let fileManager = FileManager.default
     private let storeURL: URL?
+    /// Bumped by `clear()` while holding `ioQueue`. Journal mutations captured
+    /// against an older generation no-op instead of resurrecting cleared data.
+    private var generation = 0
 
     init() {
         let isRunningTests =
@@ -833,71 +926,95 @@ private final class WatchedFolderJournal: @unchecked Sendable {
     }
 
     func load() -> [WatchedFolder]? {
-        ioQueue.sync {
-            guard let storeURL, fileManager.fileExists(atPath: storeURL.path) else {
-                return nil
-            }
+        ioQueue.sync { readState().folders }
+    }
 
-            guard let stream = InputStream(url: storeURL) else { return [] }
-            stream.open()
-            defer { stream.close() }
+    /// Current journal generation. `clear()` bumps it, so writers that captured
+    /// an older generation refuse to run: a clear that lands mid-migration must
+    /// not be undone by a late legacy write.
+    func currentGeneration() -> Int {
+        ioQueue.sync { generation }
+    }
 
-            var slots: [WatchedFolder?] = []
-            var indexByID: [UUID: Int] = [:]
-            var hasValidRecords = false
-            var readBuffer = [UInt8](repeating: 0, count: 64 * 1_024)
-            var lineBuffer: [UInt8] = []
-            lineBuffer.reserveCapacity(4_096)
-            let decoder = JSONDecoder()
+    /// Snapshot of the journal file: live folders plus every folder ID the
+    /// journal has ever recorded, including records since removed. The ID set
+    /// stops a legacy migration from re-importing a folder the user deleted
+    /// after an earlier migration write failed.
+    private struct ReadState {
+        let folders: [WatchedFolder]?
+        let seenIDs: Set<UUID>
+    }
 
-            func applyLine() {
-                guard !lineBuffer.isEmpty,
-                      let record = try? decoder.decode(Record.self, from: Data(lineBuffer)) else {
-                    lineBuffer.removeAll(keepingCapacity: true)
-                    return
-                }
-
-                hasValidRecords = true
-                switch record.operation {
-                case .upsert:
-                    guard let folder = record.folder else { break }
-                    if let index = indexByID[record.id] {
-                        slots[index] = folder
-                    } else {
-                        indexByID[record.id] = slots.count
-                        slots.append(folder)
-                    }
-                case .remove:
-                    if let index = indexByID.removeValue(forKey: record.id) {
-                        slots[index] = nil
-                    }
-                case .disableAll:
-                    for index in slots.indices {
-                        slots[index]?.isEnabled = false
-                        slots[index]?.autoOrganize = false
-                    }
-                }
-                lineBuffer.removeAll(keepingCapacity: true)
-            }
-
-            while true {
-                let count = stream.read(&readBuffer, maxLength: readBuffer.count)
-                guard count > 0 else { break }
-                for byte in readBuffer.prefix(count) {
-                    if byte == 0x0A {
-                        applyLine()
-                    } else {
-                        lineBuffer.append(byte)
-                    }
-                }
-            }
-            applyLine()
-            let folders = slots.compactMap { $0 }
-            guard !folders.isEmpty || hasValidRecords else {
-                return nil
-            }
-            return folders
+    /// Reads the journal file. Must be called on `ioQueue`.
+    private func readState() -> ReadState {
+        guard let storeURL, fileManager.fileExists(atPath: storeURL.path) else {
+            return ReadState(folders: nil, seenIDs: [])
         }
+
+        guard let stream = InputStream(url: storeURL) else {
+            return ReadState(folders: [], seenIDs: [])
+        }
+        stream.open()
+        defer { stream.close() }
+
+        var slots: [WatchedFolder?] = []
+        var indexByID: [UUID: Int] = [:]
+        var seenIDs: Set<UUID> = []
+        var hasValidRecords = false
+        var readBuffer = [UInt8](repeating: 0, count: 64 * 1_024)
+        var lineBuffer: [UInt8] = []
+        lineBuffer.reserveCapacity(4_096)
+        let decoder = JSONDecoder()
+
+        func applyLine() {
+            guard !lineBuffer.isEmpty,
+                  let record = try? decoder.decode(Record.self, from: Data(lineBuffer)) else {
+                lineBuffer.removeAll(keepingCapacity: true)
+                return
+            }
+
+            hasValidRecords = true
+            switch record.operation {
+            case .upsert:
+                seenIDs.insert(record.id)
+                guard let folder = record.folder else { break }
+                if let index = indexByID[record.id] {
+                    slots[index] = folder
+                } else {
+                    indexByID[record.id] = slots.count
+                    slots.append(folder)
+                }
+            case .remove:
+                seenIDs.insert(record.id)
+                if let index = indexByID.removeValue(forKey: record.id) {
+                    slots[index] = nil
+                }
+            case .disableAll:
+                for index in slots.indices {
+                    slots[index]?.isEnabled = false
+                    slots[index]?.autoOrganize = false
+                }
+            }
+            lineBuffer.removeAll(keepingCapacity: true)
+        }
+
+        while true {
+            let count = stream.read(&readBuffer, maxLength: readBuffer.count)
+            guard count > 0 else { break }
+            for byte in readBuffer.prefix(count) {
+                if byte == 0x0A {
+                    applyLine()
+                } else {
+                    lineBuffer.append(byte)
+                }
+            }
+        }
+        applyLine()
+        let folders = slots.compactMap { $0 }
+        guard !folders.isEmpty || hasValidRecords else {
+            return ReadState(folders: nil, seenIDs: seenIDs)
+        }
+        return ReadState(folders: folders, seenIDs: seenIDs)
     }
 
     func upsert(_ folder: WatchedFolder) {
@@ -914,6 +1031,7 @@ private final class WatchedFolderJournal: @unchecked Sendable {
 
     func clear() {
         ioQueue.sync {
+            generation &+= 1
             guard let storeURL, fileManager.fileExists(atPath: storeURL.path) else {
                 return
             }
@@ -921,9 +1039,43 @@ private final class WatchedFolderJournal: @unchecked Sendable {
         }
     }
 
+    /// Appends legacy folders the journal has never seen, keeping every record
+    /// written since the journal appeared (journal records win on ID conflicts)
+    /// and skipping IDs the journal has ever recorded, including folders since
+    /// removed, so a deleted folder is not re-imported. Returns the live journal
+    /// folders after the merge, or nil when the append could not be written or
+    /// a `clear()` landed first, so callers keep the legacy fallback for the
+    /// next launch.
     @discardableResult
-    func replaceAll(with folders: [WatchedFolder], replacingInvalidJournal: Bool = false) -> Bool {
+    func mergeLegacyFolders(_ legacyFolders: [WatchedFolder], generation: Int) -> [WatchedFolder]? {
         ioQueue.sync {
+            guard generation == self.generation else { return nil }
+            let state = readState()
+            let missingFolders = legacyFolders.filter { !state.seenIDs.contains($0.id) }
+
+            if !missingFolders.isEmpty {
+                let records = missingFolders.map {
+                    Record(operation: .upsert, id: $0.id, folder: $0)
+                }
+                do {
+                    try appendUnlocked(records)
+                } catch {
+                    DebugLogger.log("Failed to merge legacy watched folders into the journal: \(error)")
+                    return nil
+                }
+            }
+            return (state.folders ?? []) + missingFolders
+        }
+    }
+
+    @discardableResult
+    func replaceAll(
+        with folders: [WatchedFolder],
+        replacingInvalidJournal: Bool = false,
+        generation: Int
+    ) -> Bool {
+        ioQueue.sync {
+            guard generation == self.generation else { return false }
             guard let storeURL else { return false }
             let journalExists = fileManager.fileExists(atPath: storeURL.path)
             if journalExists && !replacingInvalidJournal {
@@ -972,23 +1124,38 @@ private final class WatchedFolderJournal: @unchecked Sendable {
 
     private func append(_ record: Record) {
         ioQueue.sync {
-            guard let storeURL else { return }
             do {
-                try fileManager.createDirectory(
-                    at: storeURL.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                if !fileManager.fileExists(atPath: storeURL.path) {
-                    fileManager.createFile(atPath: storeURL.path, contents: nil)
-                }
-                let handle = try FileHandle(forWritingTo: storeURL)
-                try handle.seekToEnd()
-                try handle.write(contentsOf: JSONEncoder().encode(record))
-                try handle.write(contentsOf: Data([0x0A]))
-                try handle.close()
+                try appendUnlocked([record])
             } catch {
                 DebugLogger.log("Failed to persist watched-folder change: \(error)")
             }
+        }
+    }
+
+    /// Appends records to the journal file. Must be called on `ioQueue`.
+    private func appendUnlocked(_ records: [Record]) throws {
+        guard let storeURL else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        try fileManager.createDirectory(
+            at: storeURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        if !fileManager.fileExists(atPath: storeURL.path) {
+            fileManager.createFile(atPath: storeURL.path, contents: nil)
+        }
+        let handle = try FileHandle(forWritingTo: storeURL)
+        do {
+            try handle.seekToEnd()
+            let encoder = JSONEncoder()
+            for record in records {
+                try handle.write(contentsOf: encoder.encode(record))
+                try handle.write(contentsOf: Data([0x0A]))
+            }
+            try handle.close()
+        } catch {
+            try? handle.close()
+            throw error
         }
     }
 }

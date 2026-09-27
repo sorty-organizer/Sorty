@@ -609,6 +609,11 @@ public struct AIConfig: Codable, Sendable, Equatable {
     /// at 120-180s; multi-batch runs share one global deadline below.
     public static let maxOrganizeResourceTimeout: TimeInterval = 180
     public static let minOrganizeResourceTimeout: TimeInterval = 120
+    /// Effective range for the request timeout. Consumers cap organize calls
+    /// at 300s and interactive probes lower still, so decoded values are
+    /// clamped here instead of reaching `URLSession` as 0/negative values.
+    public static let minRequestTimeout: TimeInterval = 30
+    public static let maxRequestTimeout: TimeInterval = 300
     /// Global deadline for a whole organize run across all batches/retries.
     public static let globalOrganizeDeadline: TimeInterval = 600
 
@@ -710,8 +715,9 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.apiURL = apiURL
         self.apiKey = apiKey
         self.model = model
-        self.requestTimeout = requestTimeout
-        // Clamp legacy persisted 600s values into the 120-180s per-batch cap.
+        // Clamp request/resource timeouts into the ranges consumers honor so a
+        // programmatic 0/negative value can never reach URLSession.
+        self.requestTimeout = min(max(requestTimeout, Self.minRequestTimeout), Self.maxRequestTimeout)
         self.resourceTimeout = min(max(resourceTimeout, Self.minOrganizeResourceTimeout), Self.maxOrganizeResourceTimeout)
         self.systemPromptOverride = systemPromptOverride
         self.maxTokens = maxTokens
@@ -797,8 +803,16 @@ public struct AIConfig: Codable, Sendable, Equatable {
         let decodedModel = try container.decodeIfPresent(String.self, forKey: .model)
         model = decodedModel ?? provider.defaultModel
         _ = try container.decodeIfPresent(Double.self, forKey: .temperature)
-        requestTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .requestTimeout) ?? 120
-        resourceTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .resourceTimeout) ?? 600
+        let decodedRequestTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .requestTimeout) ?? 120
+        requestTimeout = min(
+            max(decodedRequestTimeout.isFinite ? decodedRequestTimeout : 120, Self.minRequestTimeout),
+            Self.maxRequestTimeout
+        )
+        let decodedResourceTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .resourceTimeout) ?? 600
+        resourceTimeout = min(
+            max(decodedResourceTimeout.isFinite ? decodedResourceTimeout : 600, Self.minOrganizeResourceTimeout),
+            Self.maxOrganizeResourceTimeout
+        )
         systemPromptOverride = try container.decodeIfPresent(String.self, forKey: .systemPromptOverride)
         maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens)
         enableStreaming = try container.decodeIfPresent(Bool.self, forKey: .enableStreaming) ?? true

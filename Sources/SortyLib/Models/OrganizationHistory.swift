@@ -8,6 +8,15 @@
 import Foundation
 import Combine
 
+public extension Notification.Name {
+    /// Posted on the main actor whenever persisted history changes through
+    /// `OrganizationHistory.addEntry`, `updateEntry`, or `clearHistory`. The
+    /// name and payload are stable: no `userInfo` is attached, so observers
+    /// (including widget sync) re-read history for every change, including
+    /// failed and cancelled entries.
+    static let organizationHistoryDidChange = Notification.Name("OrganizationHistoryDidChange")
+}
+
 public enum OrganizationStatus: String, Codable, Sendable {
     case completed
     case failed
@@ -121,10 +130,16 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         return String("\(summary) Organization".prefix(60))
     }
 
+    /// True when a stored plan can be applied from history. The plan only
+    /// counts as applyable while no operations remain on record, so the check
+    /// reads the counts recomputed by `updateEntry` after undo prunes
+    /// operations. Completed and undone entries never offer it.
     public var hasApplicablePlan: Bool {
         guard (!success || status == .cancelled || status == .partiallyUndone),
               storedPlanAvailable,
-              status != .duplicatesCleanup else {
+              status != .duplicatesCleanup,
+              status != .completed,
+              status != .undo else {
             return false
         }
 
@@ -293,6 +308,65 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
             storedHasBillableCost: storedHasBillableCost
         )
     }
+
+    /// Returns a copy whose stored detail counts match the live detail arrays.
+    /// Undo prunes `operations`/`restorableItems` after the counts were
+    /// captured, and both `hasApplicablePlan` and history filters read the
+    /// stored counts.
+    func recomputingStoredDetailCounts() -> OrganizationHistoryEntry {
+        copyWithStoredMetadata(
+            planAvailable: storedPlanAvailable,
+            operationCount: operations?.count ?? 0,
+            restorableItemCount: restorableItems?.count ?? 0
+        )
+    }
+
+    /// Returns a copy that stops advertising an applyable plan. Used when the
+    /// detail file backing `storedPlanAvailable` cannot be read, so views do
+    /// not offer an action that would throw.
+    func withStoredPlanUnavailable() -> OrganizationHistoryEntry {
+        guard storedPlanAvailable else { return self }
+        return copyWithStoredMetadata(
+            planAvailable: false,
+            operationCount: storedOperationCount,
+            restorableItemCount: storedRestorableItemCount
+        )
+    }
+
+    private func copyWithStoredMetadata(
+        planAvailable: Bool,
+        operationCount: Int,
+        restorableItemCount: Int
+    ) -> OrganizationHistoryEntry {
+        OrganizationHistoryEntry(
+            id: id,
+            timestamp: timestamp,
+            directoryPath: directoryPath,
+            filesOrganized: filesOrganized,
+            foldersCreated: foldersCreated,
+            plan: plan,
+            success: success,
+            status: status,
+            errorMessage: errorMessage,
+            rawAIResponse: rawAIResponse,
+            operations: operations,
+            isUndone: isUndone,
+            source: source,
+            undoRestoredCount: undoRestoredCount,
+            undoFailedFiles: undoFailedFiles,
+            duplicatesDeleted: duplicatesDeleted,
+            recoveredSpace: recoveredSpace,
+            restorableItems: restorableItems,
+            duplicateCleanupMode: duplicateCleanupMode,
+            storedPlanAvailable: planAvailable,
+            storedOperationCount: operationCount,
+            storedRestorableItemCount: restorableItemCount,
+            storedEstimatedTimeSaved: storedEstimatedTimeSaved,
+            storedEstimatedCost: storedEstimatedCost,
+            storedGenerationModelName: storedGenerationModelName,
+            storedHasBillableCost: storedHasBillableCost
+        )
+    }
 }
 
 private struct OrganizationHistorySnapshot: Codable {
@@ -313,6 +387,11 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
     private let storageDirectory: URL?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    /// Serializes store mutations. Load-side-effect writes (fallback promotion,
+    /// detail migration, backup recovery) hold this lock too, so a `clear()`
+    /// that lands mid-load cannot be followed by a write that resurrects the
+    /// cleared entries.
+    private let mutationLock = NSRecursiveLock()
 
     init(
         userDefaults: UserDefaults = .standard,
@@ -337,6 +416,8 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
     }
 
     func loadEntries() -> [OrganizationHistoryEntry] {
+        mutationLock.lock()
+        defer { mutationLock.unlock() }
         guard let primaryFileURL else {
             LogManager.shared.log(
                 "History file store unavailable; using legacy UserDefaults fallback",
@@ -346,11 +427,21 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
             return loadLegacyEntries()
         }
 
+        // A failed file save writes the newest state to the legacy fallback.
+        // Merge it in (fallback records are newer) until a file save succeeds
+        // and removes it.
+        let fallbackEntries = loadLegacyEntries()
+
         if fileManager.fileExists(atPath: primaryFileURL.path) {
             do {
                 let entries = try readEntries(from: primaryFileURL)
-                migrateDetailsIfNeeded(entries)
-                return retainedEntries(entries).map(\.summary)
+                let mergedEntries = Self.mergingFallbackEntries(
+                    entries,
+                    fallbackEntries: fallbackEntries
+                )
+                migrateDetailsIfNeeded(mergedEntries)
+                promoteFallbackEntriesIfNeeded(mergedEntries, fallbackEntries: fallbackEntries)
+                return retainedEntries(mergedEntries).map(\.summary)
             } catch {
                 LogManager.shared.log(
                     "Primary history store unreadable at \(primaryFileURL.path): \(error.localizedDescription)",
@@ -359,28 +450,40 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
                 )
 
                 if let recoveredEntries = recoverFromBackup() {
-                    migrateDetailsIfNeeded(recoveredEntries)
-                    return retainedEntries(recoveredEntries).map(\.summary)
+                    let mergedEntries = Self.mergingFallbackEntries(
+                        recoveredEntries,
+                        fallbackEntries: fallbackEntries
+                    )
+                    migrateDetailsIfNeeded(mergedEntries)
+                    promoteFallbackEntriesIfNeeded(mergedEntries, fallbackEntries: fallbackEntries)
+                    return retainedEntries(mergedEntries).map(\.summary)
                 }
 
-                return []
+                // Without a readable primary or backup, the fallback is the
+                // newest copy available. Leave it in place for the next save.
+                guard !fallbackEntries.isEmpty else { return [] }
+                return retainedEntries(fallbackEntries).map(\.summary)
             }
         }
 
         if let recoveredEntries = recoverFromBackup() {
-            migrateDetailsIfNeeded(recoveredEntries)
-            return retainedEntries(recoveredEntries).map(\.summary)
+            let mergedEntries = Self.mergingFallbackEntries(
+                recoveredEntries,
+                fallbackEntries: fallbackEntries
+            )
+            migrateDetailsIfNeeded(mergedEntries)
+            promoteFallbackEntriesIfNeeded(mergedEntries, fallbackEntries: fallbackEntries)
+            return retainedEntries(mergedEntries).map(\.summary)
         }
 
-        let legacyEntries = loadLegacyEntries()
-        guard !legacyEntries.isEmpty else {
+        guard !fallbackEntries.isEmpty else {
             return []
         }
 
-        if saveEntries(legacyEntries) {
+        if saveEntries(fallbackEntries) {
             userDefaults.removeObject(forKey: Self.legacyHistoryKey)
             LogManager.shared.log(
-                "Migrated \(legacyEntries.count) history entr\(legacyEntries.count == 1 ? "y" : "ies") from UserDefaults to file store",
+                "Migrated \(fallbackEntries.count) history entr\(fallbackEntries.count == 1 ? "y" : "ies") from UserDefaults to file store",
                 category: "OrganizationHistory"
             )
         } else {
@@ -391,11 +494,13 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
             )
         }
 
-        return retainedEntries(legacyEntries).map(\.summary)
+        return retainedEntries(fallbackEntries).map(\.summary)
     }
 
     @discardableResult
     func saveEntries(_ entries: [OrganizationHistoryEntry]) -> Bool {
+        mutationLock.lock()
+        defer { mutationLock.unlock() }
         let entries = retainedEntries(entries)
         guard let primaryFileURL, let backupFileURL else {
             persistLegacyFallback(entries)
@@ -424,7 +529,10 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
                 return true
             } catch {
                 try? cleanupFileIfPresent(at: tempURL)
-                if let recoveredEntries = recoverFromBackup() {
+                // Only recover when the primary is unusable. A failed backup
+                // mirror must not roll a freshly verified primary back to an
+                // older snapshot.
+                if !primaryIsReadable(), let recoveredEntries = recoverFromBackup() {
                     LogManager.shared.log(
                         "Recovered history store from backup after failed write; preserved \(recoveredEntries.count) entries",
                         level: .warning,
@@ -445,6 +553,8 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
     }
 
     func clear() {
+        mutationLock.lock()
+        defer { mutationLock.unlock() }
         if let primaryFileURL {
             try? cleanupFileIfPresent(at: primaryFileURL)
         }
@@ -458,11 +568,15 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
     }
 
     func loadDetails(for summary: OrganizationHistoryEntry) -> OrganizationHistoryEntry {
-        guard let detailsDirectoryURL else { return summary }
+        guard let detailsDirectoryURL else {
+            return summary.withStoredPlanUnavailable()
+        }
         let fileURL = detailsDirectoryURL.appendingPathComponent("\(summary.id.uuidString).json")
         guard let data = try? Data(contentsOf: fileURL),
               var details = try? decoder.decode(OrganizationHistoryEntry.self, from: data) else {
-            return summary
+            // The detail file is gone; stop advertising an applyable plan so
+            // views do not offer an action that would throw.
+            return summary.withStoredPlanUnavailable()
         }
         details.status = summary.status
         details.isUndone = summary.isUndone
@@ -508,6 +622,46 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
             || entry.operations != nil
             || entry.undoFailedFiles != nil
             || entry.restorableItems != nil
+    }
+
+    /// Merges the legacy fallback over file-backed entries. The fallback is
+    /// only written when a file save fails, so its records are newer; entries
+    /// that only exist in the file are preserved.
+    private static func mergingFallbackEntries(
+        _ entries: [OrganizationHistoryEntry],
+        fallbackEntries: [OrganizationHistoryEntry]
+    ) -> [OrganizationHistoryEntry] {
+        guard !fallbackEntries.isEmpty else { return entries }
+
+        var mergedByID: [UUID: OrganizationHistoryEntry] = [:]
+        for entry in entries {
+            mergedByID[entry.id] = entry
+        }
+        for entry in fallbackEntries {
+            mergedByID[entry.id] = entry
+        }
+        return mergedByID.values.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    /// Writes merged fallback state back to the file store. `saveEntries` keeps
+    /// the fallback in place until a file save succeeds, so a failure here
+    /// cannot lose entries.
+    private func promoteFallbackEntriesIfNeeded(
+        _ entries: [OrganizationHistoryEntry],
+        fallbackEntries: [OrganizationHistoryEntry]
+    ) {
+        guard !fallbackEntries.isEmpty else { return }
+        _ = saveEntries(entries)
+    }
+
+    /// True when the primary store exists and decodes, so backup recovery never
+    /// overwrites a verified write with an older snapshot.
+    private func primaryIsReadable() -> Bool {
+        guard let primaryFileURL,
+              fileManager.fileExists(atPath: primaryFileURL.path) else {
+            return false
+        }
+        return (try? readEntries(from: primaryFileURL)) != nil
     }
 
     private func loadLegacyEntries() -> [OrganizationHistoryEntry] {
@@ -661,6 +815,10 @@ private final class OrganizationHistoryRepository: @unchecked Sendable {
 @MainActor
 public class OrganizationHistory: ObservableObject {
     private static let maximumEntryCount = 100
+    /// Most recently created instance. Widget sync lives in the app target and
+    /// holds no history reference, so it uses this to await queued writes
+    /// before reading the store.
+    private static weak var activeInstance: OrganizationHistory?
     public struct ImportResult: Equatable, Sendable {
         public let added: Int
         public let updated: Int
@@ -694,6 +852,7 @@ public class OrganizationHistory: ObservableObject {
             storageDirectory: storageDirectory
         )
         setupNotificationObservers()
+        Self.activeInstance = self
     }
 
     /// Loads and decodes history away from the main actor, then publishes retained entries.
@@ -736,6 +895,9 @@ public class OrganizationHistory: ObservableObject {
         if hasPendingChanges {
             hasPendingChanges = false
             saveHistory()
+            // Entries written before the first load were only just flushed to
+            // disk; observers (widget sync) must hear about them too.
+            postDidChangeNotification()
         }
     }
     
@@ -743,6 +905,12 @@ public class OrganizationHistory: ObservableObject {
         NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] in
             self?.clearHistory()
         }
+    }
+
+    /// Posts the stable history-change notification used by widget sync. This
+    /// type is main-actor isolated, so the post lands on the main actor.
+    private func postDidChangeNotification() {
+        NotificationCenter.default.post(name: .organizationHistoryDidChange, object: nil)
     }
     
     public func addEntry(_ entry: OrganizationHistoryEntry) {
@@ -752,15 +920,23 @@ public class OrganizationHistory: ObservableObject {
         cacheDetails(cleanEntry)
         trimToRetentionLimit()
         saveHistory(details: [cleanEntry])
+        postDidChangeNotification()
     }
     
     public func updateEntry(_ entry: OrganizationHistoryEntry) {
+        // Undo prunes `operations`/`restorableItems` after the stored counts
+        // were captured, so refresh the counts that gate `hasApplicablePlan`
+        // and history filters before storing the summary.
+        let entry = Self.containsDetails(entry)
+            ? entry.recomputingStoredDetailCounts()
+            : entry
         if let index = entries.firstIndex(where: { $0.id == entry.id }) {
             entries[index] = entry.summary
             if Self.containsDetails(entry) {
                 cacheDetails(entry)
             }
             saveHistory(details: Self.containsDetails(entry) ? [entry] : [])
+            postDidChangeNotification()
         }
     }
 
@@ -792,6 +968,7 @@ public class OrganizationHistory: ObservableObject {
         enqueuePersistence { repository in
             repository.clear()
         }
+        postDidChangeNotification()
     }
 
     @discardableResult
@@ -809,8 +986,18 @@ public class OrganizationHistory: ObservableObject {
         var unchanged = 0
 
         for entry in importedEntries {
+            // Entries in memory or in the import may carry detail payloads, so
+            // compare the canonical summaries both sides persist.
             if let existing = mergedByID[entry.id] {
-                if existing == entry {
+                if existing.summary == entry.summary {
+                    // The summaries match, but the import can still carry
+                    // details (plan, operations, restorable items) that the
+                    // local detail file no longer has. Repair those without
+                    // counting the entry as updated.
+                    if !Self.containsDetails(existing), Self.containsDetails(entry) {
+                        mergedByID[entry.id] = entry
+                        cacheDetails(entry)
+                    }
                     unchanged += 1
                     continue
                 }
@@ -829,6 +1016,7 @@ public class OrganizationHistory: ObservableObject {
         detailCacheOrder.removeAll { !retainedIDs.contains($0) }
         entries = retained.map(\.summary)
         saveHistory(details: retained.filter(Self.containsDetails))
+        postDidChangeNotification()
         return ImportResult(
             added: added,
             updated: updated,
@@ -950,6 +1138,14 @@ public class OrganizationHistory: ObservableObject {
 
     func waitForPendingPersistence() async {
         await persistenceTask?.value
+    }
+
+    /// Awaits queued writes on the active instance, if any. Widget sync calls
+    /// this before reading persisted entries so a change notification that
+    /// fires ahead of the disk write cannot snapshot stale history.
+    public static func waitForPendingPersistenceIfNeeded() async {
+        guard let activeInstance = Self.activeInstance else { return }
+        await activeInstance.waitForPendingPersistence()
     }
 
     public nonisolated static func loadPersistedEntries(

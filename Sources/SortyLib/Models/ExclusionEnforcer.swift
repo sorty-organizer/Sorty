@@ -118,9 +118,11 @@ public class ExclusionEnforcer: ObservableObject {
         
         var cleanedPlan = plan
         
-        // Clean each suggestion
-        cleanedPlan.suggestions = plan.suggestions.map { suggestion in
-            cleanFolder(suggestion, excludingFileIDs: violatedFileIDs)
+        // Clean each suggestion, dropping folders that only existed because of
+        // excluded files so no empty destination folders are created.
+        cleanedPlan.suggestions = plan.suggestions.compactMap { suggestion in
+            let cleaned = cleanFolder(suggestion, excludingFileIDs: violatedFileIDs)
+            return cleaned.isEmpty && !suggestion.isEmpty ? nil : cleaned
         }
         
         // Add violated files to unorganized list (they stay in place)
@@ -138,14 +140,33 @@ public class ExclusionEnforcer: ObservableObject {
         cleaned.files = folder.files.filter { !excludingFileIDs.contains($0.id) }
         
         // Clean subfolders recursively
-        cleaned.subfolders = folder.subfolders.map { subfolder in
-            cleanFolder(subfolder, excludingFileIDs: excludingFileIDs)
+        cleaned.subfolders = folder.subfolders
+            .map { subfolder in
+                cleanFolder(subfolder, excludingFileIDs: excludingFileIDs)
+            }
+            .filter { !$0.isEmpty }
+        
+        // Keep only mappings whose files survived somewhere in this subtree.
+        // Stale mappings otherwise rename, tag, or comment an unrelated file
+        // that happens to share the excluded file's name and folder.
+        let retainedFileIDs = Self.retainedFileIDs(in: cleaned)
+        cleaned.fileRenameMappings = folder.fileRenameMappings.filter {
+            retainedFileIDs.contains($0.originalFile.id)
+        }
+        cleaned.fileTagMappings = folder.fileTagMappings.filter {
+            retainedFileIDs.contains($0.originalFile.id)
         }
         
-        // Remove empty subfolders
-        cleaned.subfolders = cleaned.subfolders.filter { !$0.isEmpty }
-        
         return cleaned
+    }
+    
+    /// File IDs still present in a folder and all of its subfolders.
+    private static func retainedFileIDs(in folder: FolderSuggestion) -> Set<UUID> {
+        var ids = Set(folder.files.map(\.id))
+        for subfolder in folder.subfolders {
+            ids.formUnion(retainedFileIDs(in: subfolder))
+        }
+        return ids
     }
     
     // MARK: - Retry Prompt Enhancement

@@ -172,6 +172,15 @@ public class LearningsFSMonitor: ObservableObject {
     private var pendingSnapshotUpdates: [URL: Task<Void, Never>] = [:]
     private var pendingSnapshotScopes: [URL: Set<URL>] = [:]
     private var directoriesNeedingFullSnapshot: Set<URL> = []
+    /// Event scopes whose pending snapshot update must also report moves and
+    /// removals, keyed by monitored directory. Own events refresh the baseline
+    /// silently and insert nothing, so a directory-wide flag can no longer make
+    /// a replacement update report Sorty's own moves as user corrections.
+    private var pendingCorrectionScopes: [URL: Set<URL>] = [:]
+    /// Snapshot updates currently running. Later events queue behind an
+    /// in-flight update instead of cancelling it, so a corrections pass can
+    /// always finish emitting its notifications.
+    private var activeSnapshotUpdates: [URL: Task<Void, Never>] = [:]
     
     /// Queue for FSEvents callbacks
     private let eventQueue = DispatchQueue(label: "com.sorty.learnings.fsmonitor", qos: .utility)
@@ -188,6 +197,9 @@ public class LearningsFSMonitor: ObservableObject {
             task.cancel()
         }
         for task in pendingSnapshotUpdates.values {
+            task.cancel()
+        }
+        for task in activeSnapshotUpdates.values {
             task.cancel()
         }
         for task in initialSnapshotTasks.values {
@@ -228,10 +240,13 @@ public class LearningsFSMonitor: ObservableObject {
             self.monitoredDirectories[directory] = snapshot
             self.initialSnapshotTasks[directory] = nil
             if self.pendingSnapshotScopes[directory]?.isEmpty == false {
+                // Correction intent is already tracked per event scope; do not
+                // widen it to the whole root when rescheduling the full scan.
                 self.scheduleSnapshotUpdate(
                     for: directory,
                     scope: directory,
-                    requiresFullSnapshot: true
+                    requiresFullSnapshot: true,
+                    recordsCorrections: false
                 )
             }
             LogManager.shared.log("Started monitoring: \(directory.lastPathComponent) (\(snapshot.files.count) files)", level: .debug, category: "LearningsFSMonitor")
@@ -248,10 +263,13 @@ public class LearningsFSMonitor: ObservableObject {
         cleanupTasks.removeValue(forKey: directory)
         pendingSnapshotUpdates[directory]?.cancel()
         pendingSnapshotUpdates.removeValue(forKey: directory)
+        activeSnapshotUpdates[directory]?.cancel()
+        activeSnapshotUpdates.removeValue(forKey: directory)
         initialSnapshotTasks[directory]?.cancel()
         initialSnapshotTasks.removeValue(forKey: directory)
         pendingSnapshotScopes.removeValue(forKey: directory)
         directoriesNeedingFullSnapshot.remove(directory)
+        pendingCorrectionScopes.removeValue(forKey: directory)
         
         LogManager.shared.log("Stopped monitoring: \(directory.lastPathComponent)", level: .debug, category: "LearningsFSMonitor")
         
@@ -275,6 +293,9 @@ public class LearningsFSMonitor: ObservableObject {
         for task in pendingSnapshotUpdates.values {
             task.cancel()
         }
+        for task in activeSnapshotUpdates.values {
+            task.cancel()
+        }
         for task in initialSnapshotTasks.values {
             task.cancel()
         }
@@ -282,9 +303,11 @@ public class LearningsFSMonitor: ObservableObject {
         monitoringGenerations.removeAll()
         cleanupTasks.removeAll()
         pendingSnapshotUpdates.removeAll()
+        activeSnapshotUpdates.removeAll()
         initialSnapshotTasks.removeAll()
         pendingSnapshotScopes.removeAll()
         directoriesNeedingFullSnapshot.removeAll()
+        pendingCorrectionScopes.removeAll()
     }
     
     /// Get list of currently monitored directories
@@ -298,26 +321,32 @@ public class LearningsFSMonitor: ObservableObject {
         // Debounce: schedule snapshot update for affected directories
         for (index, path) in paths.enumerated() {
             let flag = flags.indices.contains(index) ? flags[index] : 0
-            // MarkSelf events are caused by Sorty's own filesystem work, not
-            // manual corrections. Ignore them across nested monitored roots.
-            if flag & FSEventStreamEventFlags(kFSEventStreamEventFlagOwnEvent) != 0 {
-                continue
+            // MarkSelf events are Sorty's own filesystem work, not manual
+            // corrections. They must still refresh the snapshot, otherwise the
+            // next genuine event diffs against a pre-own-move snapshot and
+            // reports our own moves as user corrections.
+            let isOwnEvent = flag & FSEventStreamEventFlags(kFSEventStreamEventFlagOwnEvent) != 0
+            let requiresFullSnapshot = flag & FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs) != 0
+                || flag & FSEventStreamEventFlags(kFSEventStreamEventFlagUserDropped) != 0
+                || flag & FSEventStreamEventFlags(kFSEventStreamEventFlagKernelDropped) != 0
+                || flag & FSEventStreamEventFlags(kFSEventStreamEventFlagRootChanged) != 0
+            let isDirectory = flag & FSEventStreamEventFlags(kFSEventStreamEventFlagItemIsDir) != 0
+            let eventURL = URL(fileURLWithPath: path)
+            // Nested monitored roots all own this event, so refresh every
+            // match instead of stopping at the first one. Only the most
+            // specific matching root reports corrections so one move is not
+            // delivered once per enclosing root.
+            let matchingDirectories = monitoringGenerations.keys.filter {
+                StorageLocationPathResolver.isPath(path, within: $0.path)
             }
-            for dirURL in monitoringGenerations.keys {
-                if StorageLocationPathResolver.isPath(path, within: dirURL.path) {
-                    let requiresFullSnapshot = flag & FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs) != 0
-                        || flag & FSEventStreamEventFlags(kFSEventStreamEventFlagUserDropped) != 0
-                        || flag & FSEventStreamEventFlags(kFSEventStreamEventFlagKernelDropped) != 0
-                        || flag & FSEventStreamEventFlags(kFSEventStreamEventFlagRootChanged) != 0
-                    let isDirectory = flag & FSEventStreamEventFlags(kFSEventStreamEventFlagItemIsDir) != 0
-                    let eventURL = URL(fileURLWithPath: path)
-                    scheduleSnapshotUpdate(
-                        for: dirURL,
-                        scope: isDirectory ? eventURL : eventURL.deletingLastPathComponent(),
-                        requiresFullSnapshot: requiresFullSnapshot
-                    )
-                    break
-                }
+            let reportingDirectory = matchingDirectories.max { $0.path.count < $1.path.count }
+            for dirURL in matchingDirectories {
+                scheduleSnapshotUpdate(
+                    for: dirURL,
+                    scope: isDirectory ? eventURL : eventURL.deletingLastPathComponent(),
+                    requiresFullSnapshot: requiresFullSnapshot,
+                    recordsCorrections: !isOwnEvent && dirURL == reportingDirectory
+                )
             }
         }
     }
@@ -325,18 +354,33 @@ public class LearningsFSMonitor: ObservableObject {
     private func scheduleSnapshotUpdate(
         for directory: URL,
         scope: URL,
-        requiresFullSnapshot: Bool
+        requiresFullSnapshot: Bool,
+        recordsCorrections: Bool = true
     ) {
         pendingSnapshotScopes[directory, default: []].insert(scope)
         if requiresFullSnapshot {
             directoriesNeedingFullSnapshot.insert(directory)
         }
-        // Cancel any pending update for this directory
+        // Correction intent is tracked per event scope, and only genuine
+        // events insert. An own event inside the debounce window therefore
+        // cannot make the replacement update report Sorty's own moves.
+        if recordsCorrections {
+            pendingCorrectionScopes[directory, default: []].insert(scope)
+        }
+        // Cancel any pending (debounce) update for this directory; an update
+        // that already started is left to finish and the replacement queues
+        // behind it.
         pendingSnapshotUpdates[directory]?.cancel()
         
         // Schedule new update after debounce interval
         pendingSnapshotUpdates[directory] = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(snapshotDebounceInterval * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            // Never interrupt an in-flight update: cancelling a corrections
+            // pass would drop the moves and removals it was about to report.
+            if let active = self.activeSnapshotUpdates[directory] {
+                await active.value
+            }
             guard !Task.isCancelled else { return }
             guard self.monitoredDirectories[directory] != nil else {
                 self.pendingSnapshotUpdates[directory] = nil
@@ -345,16 +389,58 @@ public class LearningsFSMonitor: ObservableObject {
             
             let scopes = self.pendingSnapshotScopes.removeValue(forKey: directory) ?? []
             let needsFullSnapshot = self.directoriesNeedingFullSnapshot.remove(directory) != nil
-            await self.updateSnapshotAndDetectMoves(
+            let consumedScopes = needsFullSnapshot ? [directory] : Array(scopes)
+            let correctionScopes = self.consumeCorrectionScopes(
                 for: directory,
-                scopes: needsFullSnapshot ? [directory] : Array(scopes)
+                consumedScopes: consumedScopes
             )
+            
+            let update = Task { @MainActor in
+                _ = await self.updateSnapshotAndDetectMoves(
+                    for: directory,
+                    scopes: consumedScopes,
+                    correctionScopes: correctionScopes
+                )
+                self.activeSnapshotUpdates[directory] = nil
+            }
+            self.activeSnapshotUpdates[directory] = update
+            await update.value
         }
     }
+
+    /// Removes and returns the correction intent this update is about to
+    /// consume. Intent is matched against the scopes the update refreshes;
+    /// intent for other scopes stays queued for the update that consumes them.
+    /// Taking it before the scan leaves a genuine event that lands while the
+    /// update runs queued for the next pass.
+    private func consumeCorrectionScopes(for directory: URL, consumedScopes: [URL]) -> Set<URL> {
+        guard let scopes = pendingCorrectionScopes[directory], !scopes.isEmpty else { return [] }
+
+        let consumed = scopes.filter { scope in
+            consumedScopes.contains { StorageLocationPathResolver.isPath(scope.path, within: $0.path) }
+        }
+        guard !consumed.isEmpty else { return [] }
+
+        let remaining = scopes.subtracting(consumed)
+        if remaining.isEmpty {
+            pendingCorrectionScopes.removeValue(forKey: directory)
+        } else {
+            pendingCorrectionScopes[directory] = remaining
+        }
+        return consumed
+    }
     
-    private func updateSnapshotAndDetectMoves(for directory: URL, scopes: [URL]) async {
+    /// Refreshes the stored snapshot for `directory` and reports the detected
+    /// changes whose scope has correction intent. Returns `true` once the
+    /// refreshed snapshot was stored, `false` when the update bailed out
+    /// before refreshing.
+    private func updateSnapshotAndDetectMoves(
+        for directory: URL,
+        scopes: [URL],
+        correctionScopes: Set<URL>
+    ) async -> Bool {
         guard let oldSnapshot = monitoredDirectories[directory],
-              let generation = monitoringGenerations[directory] else { return }
+              let generation = monitoringGenerations[directory] else { return false }
 
         let scanTask = Task.detached(priority: .utility) {
             let effectiveScopes = Self.minimizedScopes(scopes, within: directory)
@@ -375,27 +461,41 @@ public class LearningsFSMonitor: ObservableObject {
 
         guard !Task.isCancelled,
               monitoredDirectories[directory] != nil,
-              monitoringGenerations[directory] == generation else { return }
+              monitoringGenerations[directory] == generation else { return false }
+        
+        // Update stored snapshot
+        monitoredDirectories[directory] = newSnapshot
+        
+        // Own moves refresh the baseline silently; reporting them would feed
+        // Sorty's own work back in as user corrections.
+        guard !correctionScopes.isEmpty else { return true }
         
         // Detect moves by comparing snapshots
         let detection = await Task.detached(priority: .utility) {
             Self.detectFileMoves(from: oldSnapshot, to: newSnapshot)
         }.value
-        
-        // Update stored snapshot
-        monitoredDirectories[directory] = newSnapshot
-        
+
+        // Only changes inside a scope with genuine correction intent are
+        // reported; moves that happened solely because Sorty itself wrote to
+        // the folder stay out of learning.
+        func reportsCorrection(_ path: String) -> Bool {
+            correctionScopes.contains { StorageLocationPathResolver.isPath(path, within: $0.path) }
+        }
+
         // Notify about detected moves
-        for move in detection.moves {
+        for move in detection.moves
+        where reportsCorrection(move.fromPath) || reportsCorrection(move.toPath) {
             LogManager.shared.log("Detected a monitored file move", level: .debug, category: "LearningsFSMonitor")
             onFileMoveDetected?(move)
         }
         
         // Notify about removed files (moved outside monitored scope or deleted)
-        for removedPath in detection.removed {
+        for removedPath in detection.removed where reportsCorrection(removedPath) {
             LogManager.shared.log("Detected a monitored file removal", level: .debug, category: "LearningsFSMonitor")
             onFileRemoved?(removedPath)
         }
+
+        return true
     }
     
     // MARK: - Move Detection

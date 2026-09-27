@@ -327,12 +327,44 @@ public struct InferredRule: Codable, Identifiable, Sendable {
         return String(folder)
     }
 
-    /// Whether the rule may currently be applied or surfaced to the model:
-    /// enabled, active, and past any rejection cooldown.
+    /// Whether the rule may currently be applied or surfaced to the model.
+    ///
+    /// Rejection is a time-limited cooldown: while it runs the rule is
+    /// ineligible even though rejection also disabled it, and once the cooldown
+    /// elapses the rule returns to service. Rejections saved before the
+    /// `.cooldown` status existed (`.rejected` with an end date) follow the same
+    /// lifecycle; a rejection without an end date stays permanent. Explicit
+    /// disables clear the end date, so they never revive.
     public func isEligible(at date: Date = Date()) -> Bool {
-        guard isEnabled, status == .active else { return false }
-        if let cooldownUntil, cooldownUntil > date { return false }
-        return true
+        switch status {
+        case .cooldown, .rejected:
+            guard let cooldownUntil else { return false }
+            return cooldownUntil <= date
+        case .pendingApproval:
+            return false
+        case .active:
+            guard isEnabled else { return false }
+            if let cooldownUntil, cooldownUntil > date { return false }
+            return true
+        }
+    }
+
+    /// Applies the rule's effective status for `date`: an elapsed rejection
+    /// cooldown becomes active and enabled again. Runtime eligibility and UI
+    /// consumers both read `isEnabled`/`status`, so callers normalize before
+    /// counting, attributing, or persisting rules. An explicit disable clears
+    /// `cooldownUntil`, so deliberately disabled rules are never revived.
+    public mutating func normalizeExpiredCooldown(at date: Date = Date()) {
+        switch status {
+        case .cooldown, .rejected:
+            guard let cooldownUntil, cooldownUntil <= date else { return }
+            status = .active
+            isEnabled = true
+            self.cooldownUntil = nil
+            rejectedAt = nil
+        case .active, .pendingApproval:
+            break
+        }
     }
 
     /// Unified 0-1 confidence combining priority, observed outcomes, support, and recency.

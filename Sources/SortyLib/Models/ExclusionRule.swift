@@ -48,6 +48,21 @@ public enum ExclusionRuleType: String, Codable, CaseIterable, Identifiable, Send
 
 }
 
+// MARK: - Pattern Validation
+
+/// Shared pattern validation so the editor, the saved rows, and the compiled
+/// matcher agree on which rules can actually match.
+public enum ExclusionRulePatternValidator {
+    /// A user-facing reason a regular expression cannot compile, or nil when it is valid.
+    public static func regexIssue(_ pattern: String, caseSensitive: Bool) -> String? {
+        let options: NSRegularExpression.Options = caseSensitive ? [] : .caseInsensitive
+        guard (try? NSRegularExpression(pattern: pattern, options: options)) != nil else {
+            return "This regular expression isn't valid."
+        }
+        return nil
+    }
+}
+
 // MARK: - File Type Categories
 
 public enum FileTypeCategory: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -175,6 +190,20 @@ public enum FinderTagColor: Int, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+// MARK: - Path Matching
+
+/// How a path rule is interpreted: as a text fragment or as an exact folder tree.
+///
+/// Rules created with the folder picker set `.folderTree`; free-text path rules
+/// set `.substring`. Legacy rules saved before this marker keep their historical
+/// behavior (a leading "/" means a folder tree).
+public enum PathMatchMode: String, Codable, Sendable {
+    /// Match any path containing the text.
+    case substring
+    /// Match the folder path itself and everything beneath it.
+    case folderTree
+}
+
 // MARK: - Exclusion Rule Model
 
 public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
@@ -187,6 +216,9 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
     public var isAIGenerated: Bool?
     /// Rules sharing this identifier form one AND group. Ungrouped rules remain independent OR exclusions.
     public var conditionGroupID: UUID?
+    /// Explicit path interpretation for `.pathContains` rules. Nil keeps the legacy
+    /// behavior: a leading "/" is treated as a folder tree, anything else as text.
+    public var pathMatchMode: PathMatchMode?
 
     // For size comparison (in MB)
     public var numericValue: Double?
@@ -215,6 +247,7 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         isBuiltIn: Bool = false,
         isAIGenerated: Bool = false,
         conditionGroupID: UUID? = nil,
+        pathMatchMode: PathMatchMode? = nil,
         numericValue: Double? = nil,
         comparisonGreater: Bool? = nil,
         sizeUnit: ExclusionSizeUnit? = nil,
@@ -232,6 +265,7 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         self.isBuiltIn = isBuiltIn
         self.isAIGenerated = isAIGenerated
         self.conditionGroupID = conditionGroupID
+        self.pathMatchMode = pathMatchMode
         self.numericValue = numericValue
         self.comparisonGreater = comparisonGreater
         self.sizeUnit = sizeUnit
@@ -245,6 +279,38 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
     /// Check if a file matches this rule
     public func matches(_ file: FileItem) -> Bool {
         ExclusionMatcher(rules: [self]).shouldExclude(file)
+    }
+
+    /// True when a path rule excludes one exact folder and everything inside it.
+    public var isFolderTreePathRule: Bool {
+        guard type == .pathContains else { return false }
+        switch pathMatchMode {
+        case .folderTree: return true
+        case .substring: return false
+        case nil:
+            return pattern
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .hasPrefix("/")
+        }
+    }
+
+    /// A user-facing reason this rule can never match, or nil when the rule is usable.
+    ///
+    /// `CompiledExclusionRule` drops unusable rules, so surfaces that list saved
+    /// rules should show this instead of letting the rule fail silently.
+    public var patternValidationIssue: String? {
+        let trimmedPattern = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch type {
+        case .fileExtension:
+            return trimmedPattern.trimmingLeadingDots().isEmpty ? "Enter a file extension." : nil
+        case .fileName, .folderName, .pathContains:
+            return trimmedPattern.isEmpty ? "Enter the text to match." : nil
+        case .regex:
+            guard !trimmedPattern.isEmpty else { return "Enter a regular expression." }
+            return ExclusionRulePatternValidator.regexIssue(trimmedPattern, caseSensitive: caseSensitive)
+        default:
+            return nil
+        }
     }
 
     /// Human-readable description of the rule
@@ -261,7 +327,7 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         case .folderName:
             return "Folders named '\(pattern)'"
         case .pathContains:
-            if pattern.hasPrefix("/") {
+            if isFolderTreePathRule {
                 let folderName = URL(fileURLWithPath: pattern).lastPathComponent
                 return folderName.isEmpty ? "Excluded folder" : "\(folderName) folder"
             }
@@ -312,7 +378,7 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         case .fileExtension: "match_file_extension"
         case .fileName: "match_file_name"
         case .folderName: "match_folder_name"
-        case .pathContains: pattern.hasPrefix("/") ? "protect_folder" : "match_path"
+        case .pathContains: isFolderTreePathRule ? "protect_folder" : "match_path"
         case .regex: "match_regular_expression"
         case .fileSize: "compare_file_size"
         case .creationDate: "compare_creation_age"
@@ -330,7 +396,7 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         case .fileExtension: "doc.badge.gearshape.fill"
         case .fileName: "doc.text.magnifyingglass"
         case .folderName: "folder.badge.minus"
-        case .pathContains: pattern.hasPrefix("/") ? "folder.fill.badge.minus" : "point.bottomleft.forward.to.point.topright.scurvepath"
+        case .pathContains: isFolderTreePathRule ? "folder.fill.badge.minus" : "point.bottomleft.forward.to.point.topright.scurvepath"
         case .regex: "textformat.alt"
         case .fileSize: "internaldrive.fill"
         case .creationDate: "calendar.badge.minus"
@@ -348,7 +414,7 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         case .fileExtension: "File extension"
         case .fileName: "File name"
         case .folderName: "Folder name"
-        case .pathContains: pattern.hasPrefix("/") ? "Protected folder" : "Path match"
+        case .pathContains: isFolderTreePathRule ? "Protected folder" : "Path match"
         case .regex: "Name pattern"
         case .fileSize: "File size"
         case .creationDate: "Creation date"
@@ -765,7 +831,7 @@ private struct CompiledExclusionRule: Sendable {
 
         case .pathContains:
             guard !trimmedPattern.isEmpty else { return nil }
-            if trimmedPattern.hasPrefix("/") {
+            if rule.isFolderTreePathRule {
                 let normalizedPath = URL(fileURLWithPath: trimmedPattern).standardizedFileURL.path
                 predicate = .folderTree(
                     rule.caseSensitive ? normalizedPath : normalizedPath.lowercased(),
@@ -1078,6 +1144,9 @@ public class ExclusionRulesManager: ObservableObject {
 
     private struct PersistedSnapshot: Sendable {
         var rules: [ExclusionRule] = []
+        /// True when the rules key exists, even if it holds an empty array.
+        /// Distinguishes "the user removed every rule" from "never configured".
+        var hasPersistedRules = false
         var naturalLanguageExceptions: [NaturalLanguageException] = []
         var usage: [UUID: ExclusionRuleUsage] = [:]
         var didMigrateLegacyNaturalLanguage = false
@@ -1108,9 +1177,13 @@ public class ExclusionRulesManager: ObservableObject {
             let usageKey = usageKey
             task = Task.detached(priority: .utility) {
                 var snapshot = PersistedSnapshot()
-                if let data = persistedDataReader.data(forKey: rulesKey),
-                   let decoded = try? JSONDecoder().decode([ExclusionRule].self, from: data) {
-                    snapshot.rules = decoded
+                if let data = persistedDataReader.data(forKey: rulesKey) {
+                    // The key exists, so an empty decoded array means the user
+                    // deliberately removed every rule and nothing should re-seed.
+                    if let decoded = try? JSONDecoder().decode([ExclusionRule].self, from: data) {
+                        snapshot.rules = decoded
+                        snapshot.hasPersistedRules = true
+                    }
                 }
                 if let data = persistedDataReader.data(forKey: usageKey),
                    let decoded = try? JSONDecoder().decode([UUID: ExclusionRuleUsage].self, from: data) {
@@ -1156,7 +1229,7 @@ public class ExclusionRulesManager: ObservableObject {
         }
 
         removeLegacyLearningsLinkedRules()
-        if rules.isEmpty {
+        if rules.isEmpty, !snapshot.hasPersistedRules {
             setupDefaultRules()
         }
         migrateConfidentNaturalLanguageExceptions()
