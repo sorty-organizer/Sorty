@@ -436,14 +436,23 @@ struct AIProviderSettingsView: View {
 
     private var apiKeySection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SettingsSecureField(
-                title: "API Key",
-                text: Binding(
-                    get: { viewModel.config.apiKey ?? "" },
-                    set: { viewModel.updateAPIKey($0) }
-                ),
-                isOptional: !viewModel.config.requiresAPIKey
-            )
+            if viewModel.config.provider == .ollama {
+                // Sorty never stores or sends an Ollama credential, so a key
+                // field that silently drops the value would mislead users.
+                Text("Ollama runs without an API key. Sorty doesn't send credentials to Ollama, so protect remote servers at the network layer.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                SettingsSecureField(
+                    title: "API Key",
+                    text: Binding(
+                        get: { viewModel.config.apiKey ?? "" },
+                        set: { viewModel.updateAPIKey($0) }
+                    ),
+                    isOptional: !viewModel.config.requiresAPIKey
+                )
+            }
 
             if let url = viewModel.config.provider.apiKeyURL {
                 HStack(spacing: 4) {

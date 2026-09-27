@@ -28,7 +28,7 @@ public enum SandboxEnvironment {
     }
 }
 
-public enum IncomingPathValidationError: LocalizedError, Equatable {
+public enum IncomingPathValidationError: LocalizedError, Equatable, Sendable {
     case empty
     case doesNotExist(String)
     case notDirectory(String)
@@ -56,7 +56,15 @@ public struct IncomingPathValidator {
     /// explicit user pick in an NSOpenPanel.
     private static let blockedPrefixes: [String] = [
         "/System",
-        "/private",
+        "/private/etc",
+        "/private/bin",
+        "/private/sbin",
+        "/private/usr/bin",
+        "/private/usr/sbin",
+        "/private/usr/lib",
+        "/private/var/db",
+        "/private/var/log",
+        "/private/var/root",
         "/etc",
         "/bin",
         "/sbin",
@@ -67,12 +75,34 @@ public struct IncomingPathValidator {
         "/var/log",
         "/var/root",
         "/Library/System",
-        "/private/var/db",
     ]
 
     private static let blockedExact: Set<String> = [
         "/", "/System", "/Library", "/private", "/etc",
         "/bin", "/sbin", "/usr", "/var",
+    ]
+
+    /// Same protection applied to the symlink-resolved path. `/private` is
+    /// expanded into its sensitive subtrees here instead of blocking the whole
+    /// tree, because `/tmp` and `/var/folders` legitimately resolve into
+    /// `/private/tmp` and `/private/var/folders` and must stay selectable.
+    private static let resolvedBlockedPrefixes: [String] = [
+        "/System",
+        "/private/etc",
+        "/private/bin",
+        "/private/sbin",
+        "/private/usr/bin",
+        "/private/usr/sbin",
+        "/private/usr/lib",
+        "/private/var/db",
+        "/private/var/log",
+        "/private/var/root",
+        "/Library/System",
+    ]
+
+    private static let resolvedBlockedExact: Set<String> = [
+        "/", "/System", "/Library", "/private", "/private/etc", "/private/var",
+        "/bin", "/sbin", "/usr",
     ]
 
     /// Standardize without resolving symlinks twice; callers compare
@@ -87,6 +117,22 @@ public struct IncomingPathValidator {
         }
         for prefix in blockedPrefixes {
             if standardizedPath == prefix || standardizedPath.hasPrefix(prefix + "/") {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// True when the fully symlink-resolved path lands in a protected system
+    /// tree. `standardizedFileURL` alone does not follow symlinks, so a symlink
+    /// whose target is `/System` or `/private` must be resolved before the
+    /// blocklist is applied.
+    private static func isBlockedResolvedPath(_ resolvedPath: String) -> Bool {
+        if resolvedBlockedExact.contains(resolvedPath) {
+            return true
+        }
+        for prefix in resolvedBlockedPrefixes {
+            if resolvedPath == prefix || resolvedPath.hasPrefix(prefix + "/") {
                 return true
             }
         }
@@ -113,6 +159,12 @@ public struct IncomingPathValidator {
         if isBlockedSystemPath(standardizedPath) {
             return .failure(.blockedSystemPath(standardizedPath))
         }
+        // Standardizing does not follow symlinks; resolve them so a link into
+        // a protected tree cannot bypass the blocklist above.
+        let resolvedPath = url.resolvingSymlinksInPath().standardizedFileURL.path
+        if isBlockedResolvedPath(resolvedPath) {
+            return .failure(.blockedSystemPath(resolvedPath))
+        }
         var isDirectory = ObjCBool(false)
         guard FileManager.default.fileExists(atPath: standardizedPath, isDirectory: &isDirectory) else {
             return .failure(.doesNotExist(standardizedPath))
@@ -138,8 +190,18 @@ public struct IncomingPathValidator {
     /// probes run on a utility worker so notification delivery never blocks
     /// the main thread. Hop back to MainActor only for confirmed URLs.
     public static func validatedDirectoryURLIfValidAsync(path: String?) async -> URL? {
+        if case .success(let url) = await validatedDirectoryURLAsync(for: path) {
+            return url
+        }
+        return nil
+    }
+
+    /// Off-main typed variant for callers that need the rejection reason.
+    public static func validatedDirectoryURLAsync(
+        for path: String?
+    ) async -> Result<URL, IncomingPathValidationError> {
         await Task.detached(priority: .utility) {
-            validatedDirectoryURLIfValid(path: path)
+            validatedDirectoryURL(for: path)
         }.value
     }
 }

@@ -13,7 +13,6 @@ public struct ContentView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var appState: AppState
-    @EnvironmentObject var extensionListener: ExtensionListener
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
 
@@ -217,20 +216,21 @@ public struct ContentView: View {
                 showCommandNumbers = false
             }
         }
-        .onReceive(extensionListener.$incomingURL) { url in
-            if let url = url {
-                // Defense-in-depth: ExtensionCommunication already validated
-                // this IPC payload; re-validate before it becomes the workflow
-                // directory.
-                guard case .success(let validated) = IncomingPathValidator.validatedDirectoryURL(for: url.path) else {
+        .onReceive(NotificationCenter.default.publisher(for: .routeFinderDirectoryInMainWindow)) { notification in
+            guard notification.targetsWindowSession(appState.windowSessionID),
+                  let directoryURL = notification.routedDirectoryURL else {
+                return
+            }
+            // Validation touches the filesystem; run it off-main so a stalled
+            // network mount can't freeze the window.
+            Task { @MainActor in
+                guard let validated = await IncomingPathValidator.validatedDirectoryURLIfValidAsync(path: directoryURL.path) else {
                     DebugLogger.log("Rejected invalid extension directory in ContentView")
-                    extensionListener.incomingURL = nil
                     return
                 }
                 appState.showsFinderWorkflowPicker = true
                 appState.selectedDirectory = validated
                 appState.currentView = .organize
-                extensionListener.incomingURL = nil
             }
         }
     }

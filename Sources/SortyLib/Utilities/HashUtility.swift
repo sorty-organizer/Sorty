@@ -7,6 +7,7 @@
 
 import Foundation
 import CryptoKit
+import Darwin
 
 public enum HashUtility {
     struct ReadFailure: Error, Hashable, Sendable {
@@ -69,12 +70,50 @@ public enum HashUtility {
         computeSHA256Result(for: url).value
     }
 
+    /// Opens a path without blocking and rejects anything that is not a regular
+    /// file. A FIFO opened for reading would otherwise block in `open(2)`
+    /// forever, and devices or directories are never hashable content.
+    private static func openRegularFile(at url: URL) -> Result<FileHandle, ReadFailure> {
+        let descriptor = open(url.path, O_RDONLY | O_NONBLOCK | O_CLOEXEC)
+        guard descriptor >= 0 else {
+            return .failure(posixReadFailure())
+        }
+
+        var fileStatus = stat()
+        guard fstat(descriptor, &fileStatus) == 0 else {
+            let failure = posixReadFailure()
+            close(descriptor)
+            return .failure(failure)
+        }
+
+        guard (fileStatus.st_mode & mode_t(S_IFMT)) == mode_t(S_IFREG) else {
+            close(descriptor)
+            return .failure(
+                ReadFailure(message: "The file is not a regular file and cannot be hashed safely.")
+            )
+        }
+
+        return .success(FileHandle(fileDescriptor: descriptor, closeOnDealloc: true))
+    }
+
+    private static func posixReadFailure() -> ReadFailure {
+        let code = errno
+        return ReadFailure(
+            NSError(
+                domain: NSPOSIXErrorDomain,
+                code: Int(code),
+                userInfo: [NSLocalizedDescriptionKey: String(cString: strerror(code))]
+            )
+        )
+    }
+
     static func computeSHA256Result(for url: URL) -> ReadResult<String> {
         let handle: FileHandle
-        do {
-            handle = try FileHandle(forReadingFrom: url)
-        } catch {
-            return .failure(ReadFailure(error))
+        switch openRegularFile(at: url) {
+        case .success(let openedHandle):
+            handle = openedHandle
+        case .failure(let failure):
+            return .failure(failure)
         }
         
         defer {
@@ -113,10 +152,11 @@ public enum HashUtility {
 
     static func computeSampleFingerprintResult(for url: URL) -> ReadResult<SampleFingerprint> {
         let handle: FileHandle
-        do {
-            handle = try FileHandle(forReadingFrom: url)
-        } catch {
-            return .failure(ReadFailure(error))
+        switch openRegularFile(at: url) {
+        case .success(let openedHandle):
+            handle = openedHandle
+        case .failure(let failure):
+            return .failure(failure)
         }
 
         defer {

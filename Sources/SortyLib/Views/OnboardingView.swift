@@ -918,9 +918,11 @@ private struct OnboardingIntroContentLayer: View {
                         isGlassInteractive: false
                     )
                 )
-                .onboardingBeamBorder()
+                .onboardingBeamBorder(active: isGetStartedAvailable)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!isGetStartedAvailable)
+                .opacity(isGetStartedAvailable ? 1 : 0.62)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: isGetStartedAvailable)
                 .accessibilityIdentifier("OnboardingAdvanceButton")
                 .background {
                     Color.clear
@@ -2098,7 +2100,6 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         private var pendingDismissal: DispatchWorkItem?
         private var isHostClosing = false
         private var isVisible = false
-        private var isApplicationActive = NSApp.isActive
 
         func setVisible(_ isVisible: Bool) {
             guard self.isVisible != isVisible else { return }
@@ -2191,7 +2192,6 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
                     queue: .main
                 ) { [weak self] _ in
                     Task { @MainActor in
-                        self?.isApplicationActive = false
                         self?.hidePanelImmediately()
                     }
                 },
@@ -2201,7 +2201,6 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
                     queue: .main
                 ) { [weak self] _ in
                     Task { @MainActor in
-                        self?.isApplicationActive = true
                         self?.updatePanelFrame()
                     }
                 }
@@ -2260,7 +2259,9 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         private func updatePanelFrame() {
             guard let window = hostWindow,
                   isVisible,
-                  isApplicationActive,
+                  // Read live app state instead of a value snapshotted at
+                  // init, which can predate this runloop's activation.
+                  NSApp.isActive,
                   window.isVisible,
                   !window.isMiniaturized,
                   !window.styleMask.contains(.fullScreen),
@@ -2368,7 +2369,6 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         private var pendingDismissal: DispatchWorkItem?
         private var isHostClosing = false
         private var isVisible = false
-        private var isApplicationActive = NSApp.isActive
 
         func setVisible(_ isVisible: Bool) {
             guard self.isVisible != isVisible else { return }
@@ -2454,7 +2454,6 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                     queue: .main
                 ) { [weak self] _ in
                     Task { @MainActor in
-                        self?.isApplicationActive = false
                         self?.hidePanelImmediately()
                     }
                 },
@@ -2464,7 +2463,6 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                     queue: .main
                 ) { [weak self] _ in
                     Task { @MainActor in
-                        self?.isApplicationActive = true
                         self?.showPanelIfPossible()
                     }
                 }
@@ -2530,7 +2528,9 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
 
         private func showPanelIfPossible() {
             guard isVisible,
-                  isApplicationActive,
+                  // Read live app state instead of a value snapshotted at
+                  // init, which can predate this runloop's activation.
+                  NSApp.isActive,
                   let window = hostWindow,
                   window.isVisible,
                   !window.isMiniaturized,
@@ -2835,6 +2835,56 @@ private struct OnboardingNavigationBackdrop: View {
     }
 }
 
+/// Immutable copy of the window chrome that onboarding replaced, applied back
+/// when the configurator's coordinator goes away. `@unchecked Sendable` lets a
+/// deinit that runs off the main thread hand the snapshot to the main actor;
+/// every member is only touched there.
+private struct OnboardingWindowChromeSnapshot: @unchecked Sendable {
+    let window: NSWindow
+    let titleVisibility: NSWindow.TitleVisibility?
+    let titlebarAppearsTransparent: Bool?
+    let titlebarSeparatorStyle: NSTitlebarSeparatorStyle?
+    let styleMask: NSWindow.StyleMask?
+    let backgroundColor: NSColor?
+    let isOpaque: Bool?
+    let hasShadow: Bool?
+    let alphaValue: CGFloat?
+    let contentMinSize: NSSize?
+
+    @MainActor
+    func apply() {
+        if let styleMask {
+            window.styleMask = styleMask
+        }
+        if let titlebarAppearsTransparent {
+            window.titlebarAppearsTransparent = titlebarAppearsTransparent
+        }
+        if let titlebarSeparatorStyle {
+            window.titlebarSeparatorStyle = titlebarSeparatorStyle
+        }
+        if let titleVisibility {
+            window.titleVisibility = titleVisibility
+        }
+        if let backgroundColor {
+            window.backgroundColor = backgroundColor
+        }
+        if let isOpaque {
+            window.isOpaque = isOpaque
+        }
+        if let hasShadow {
+            window.hasShadow = hasShadow
+        }
+        if let alphaValue {
+            window.alphaValue = alphaValue
+        } else {
+            window.alphaValue = 1
+        }
+        if let contentMinSize {
+            window.contentMinSize = contentMinSize
+        }
+    }
+}
+
 private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
     @SortyHotReload private var hotReload
     let preserveWindowPosition: Bool
@@ -2934,40 +2984,46 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
 
         private func restore() {
             guard let window = configuredWindow else { return }
-            if let originalStyleMask {
-                window.styleMask = originalStyleMask
-            }
-            if let originalTitlebarAppearsTransparent {
-                window.titlebarAppearsTransparent = originalTitlebarAppearsTransparent
-            }
-            if let originalTitlebarSeparatorStyle {
-                window.titlebarSeparatorStyle = originalTitlebarSeparatorStyle
-            }
-            if let originalTitleVisibility {
-                window.titleVisibility = originalTitleVisibility
-            }
-            if let originalBackgroundColor {
-                window.backgroundColor = originalBackgroundColor
-            }
-            if let originalIsOpaque {
-                window.isOpaque = originalIsOpaque
-            }
-            if let originalHasShadow {
-                window.hasShadow = originalHasShadow
-            }
-            if let originalAlphaValue {
-                window.alphaValue = originalAlphaValue
-            } else {
-                window.alphaValue = 1
-            }
-            if let originalContentMinSize {
-                window.contentMinSize = originalContentMinSize
-            }
+            OnboardingWindowChromeSnapshot(
+                window: window,
+                titleVisibility: originalTitleVisibility,
+                titlebarAppearsTransparent: originalTitlebarAppearsTransparent,
+                titlebarSeparatorStyle: originalTitlebarSeparatorStyle,
+                styleMask: originalStyleMask,
+                backgroundColor: originalBackgroundColor,
+                isOpaque: originalIsOpaque,
+                hasShadow: originalHasShadow,
+                alphaValue: originalAlphaValue,
+                contentMinSize: originalContentMinSize
+            )
+            .apply()
         }
 
         deinit {
-            MainActor.assumeIsolated {
-                restore()
+            // Deinit is nonisolated and can run off the main thread. Capture a
+            // value snapshot of the original chrome and apply it on the main
+            // actor instead of assuming main-actor isolation here.
+            guard let window = configuredWindow else { return }
+            let snapshot = OnboardingWindowChromeSnapshot(
+                window: window,
+                titleVisibility: originalTitleVisibility,
+                titlebarAppearsTransparent: originalTitlebarAppearsTransparent,
+                titlebarSeparatorStyle: originalTitlebarSeparatorStyle,
+                styleMask: originalStyleMask,
+                backgroundColor: originalBackgroundColor,
+                isOpaque: originalIsOpaque,
+                hasShadow: originalHasShadow,
+                alphaValue: originalAlphaValue,
+                contentMinSize: originalContentMinSize
+            )
+            if Thread.isMainThread {
+                MainActor.assumeIsolated {
+                    snapshot.apply()
+                }
+            } else {
+                Task { @MainActor in
+                    snapshot.apply()
+                }
             }
         }
     }

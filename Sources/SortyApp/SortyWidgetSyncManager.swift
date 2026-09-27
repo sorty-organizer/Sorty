@@ -74,6 +74,7 @@ final class SortyWidgetSyncManager {
         let notificationNames: [Notification.Name] = [
             .organizationDidFinish,
             .organizationDidRevert,
+            .organizationHistoryDidChange,
             .clearAllUsageData
         ]
 
@@ -122,6 +123,10 @@ final class SortyWidgetSyncManager {
         storageLocationsManager: StorageLocationsManager,
         forceReload: Bool = false
     ) async {
+        // A history change notification can fire before the enqueued disk write
+        // lands; wait it out so the snapshot never reads stale history.
+        await OrganizationHistory.waitForPendingPersistenceIfNeeded()
+
         let watchedFolders = watchedFoldersManager.folders
         let storageLocations = storageLocationsManager.locations
         let activeWatchedFolderCount = watchedFoldersManager.activeFolderCount

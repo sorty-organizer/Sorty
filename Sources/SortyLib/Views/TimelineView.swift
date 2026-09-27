@@ -13,7 +13,7 @@ struct TimelineView: View {
     let directoryPath: String
     let onRestore: (OrganizationHistoryEntry) -> Void
     
-    @State private var selectedIndex: Int = 0
+    @State private var selectedEntryID: UUID?
     @State private var isHovering = false
     @State private var hoverIndex: Int?
     
@@ -24,6 +24,7 @@ struct TimelineView: View {
     
     var body: some View {
         let timelineEntries = filteredEntries
+        let selectedIndex = resolvedSelectedIndex(in: timelineEntries)
 
         VStack(alignment: .leading, spacing: 16) {
             // Header
@@ -56,7 +57,7 @@ struct TimelineView: View {
                     // Visual timeline
                     TimelineSliderTrack(
                         entries: timelineEntries,
-                        selectedIndex: $selectedIndex,
+                        selectedIndex: selectionBinding(for: timelineEntries),
                         hoverIndex: $hoverIndex
                     )
                     
@@ -74,6 +75,26 @@ struct TimelineView: View {
         .padding()
         .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
         .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+    }
+
+    /// Resolves the stored selection against the current snapshots so inserting
+    /// or removing a snapshot rebinds by entry ID instead of shifting the index.
+    private func resolvedSelectedIndex(in timelineEntries: [OrganizationHistoryEntry]) -> Int {
+        guard let selectedEntryID,
+              let index = timelineEntries.firstIndex(where: { $0.id == selectedEntryID }) else {
+            return 0
+        }
+        return index
+    }
+
+    private func selectionBinding(for timelineEntries: [OrganizationHistoryEntry]) -> Binding<Int> {
+        Binding(
+            get: { resolvedSelectedIndex(in: timelineEntries) },
+            set: { newIndex in
+                guard timelineEntries.indices.contains(newIndex) else { return }
+                selectedEntryID = timelineEntries[newIndex].id
+            }
+        )
     }
 }
 
@@ -368,36 +389,41 @@ struct CompactTimelineView: View {
     }
     
     private func handleRestore(_ entry: OrganizationHistoryEntry) {
-        // Find all entries that would be undone
-        let entriesToUndo = filteredEntries.filter {
+        // Mirror `FolderOrganizer.restoreToState`: every later, still-applied
+        // session with recorded operations is rolled back, including partial ones.
+        let entriesToUndo = entries.filter {
+            $0.directoryPath == directoryPath &&
             $0.timestamp > entry.timestamp &&
-            $0.status == .completed &&
-            !$0.isUndone
+            !$0.isUndone &&
+            ($0.status == .completed || $0.status == .partiallyUndone) &&
+            $0.storedOperationCount > 0
         }
         
-        // Collect all operations that would be reversed
-        var allOperations: [FileSystemManager.FileOperation] = []
-        for e in entriesToUndo {
-            if let ops = e.operations {
-                allOperations.append(contentsOf: ops)
-            }
-        }
-        
-        // Perform preflight check asynchronously
+        // The entries handed to this view are summaries; load each entry's
+        // details before preflighting its operations.
         Task {
+            var allOperations: [FileSystemManager.FileOperation] = []
+            for entryToUndo in entriesToUndo {
+                let details = await organizer.history.details(for: entryToUndo)
+                allOperations.append(contentsOf: details.operations ?? [])
+            }
+
             let fileSystemManager = FileSystemManager()
             let missingFiles = await fileSystemManager.preflightRestore(allOperations)
             
             await MainActor.run {
-                if !missingFiles.isEmpty {
-                    // Show confirmation dialog
-                    missingFilesForConfirmation = missingFiles
-                    pendingRestoreEntry = entry
-                    showMissingFilesConfirmation = true
-                } else {
+                guard !missingFiles.isEmpty else {
                     // No missing files, proceed directly
                     performRestore(entry)
+                    return
                 }
+
+                // Preflight reports basenames, which can repeat across
+                // operations; dedupe so the dialog doesn't list a file twice.
+                var seen = Set<String>()
+                missingFilesForConfirmation = missingFiles.filter { seen.insert($0).inserted }
+                pendingRestoreEntry = entry
+                showMissingFilesConfirmation = true
             }
         }
     }

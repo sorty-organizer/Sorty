@@ -239,10 +239,16 @@ struct StorageLocationConfigView: View {
     }
 
     private func save() {
-        var updated = location
+        // Re-read the live entry: the open-time snapshot can be stale (access
+        // refresh, reauthorization) and must not be written back wholesale.
+        guard var updated = storageLocationsManager.locations.first(where: { $0.id == location.id })
+        else {
+            dismiss()
+            return
+        }
         updated.name = name.isEmpty ? location.url.lastPathComponent : name
         updated.description = description.isEmpty ? nil : description
-        
+
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
             storageLocationsManager.updateLocation(updated)
         }

@@ -458,19 +458,33 @@ public class NotificationManager: ObservableObject {
     @MainActor private var queueTask: Task<Void, Never>?
     private var permissionCached: Bool = false
     private var hasPerformedLazySetup = false
-    private let nativeNotificationDelegate = NativeNotificationDelegate()
+    /// Strongly retained here because the notification center only keeps a weak
+    /// reference, and shared with the early-launch install below.
+    private static let nativeNotificationDelegate = NativeNotificationDelegate()
     private var pendingNativeActionHandlers: [String: NotificationActionHandler] = [:]
     private var pendingNativeNotificationTypes: [String: NotificationType] = [:]
     private var pendingNativeActions: [String: [CuratedNotificationAction]] = [:]
+    /// Insertion order of pending requests, used to prune the oldest entries.
+    private var pendingNativeRequestOrder: [String] = []
+    /// Upper bound for pending bookkeeping, which user responses never clear
+    /// for ignored notifications.
+    private static let maxPendingNativeRequests = 64
     private var registeredNativeCategories: [String: UNNotificationCategory] = [:]
     
     private init() {
         // Keep construction free of system probes and async work: the delegate
         // assignment is cheap, and permission setup runs lazily on first use
         // (after the first frame), never pre-frame.
-        if isSafeToUseSystemNotifications {
-            UNUserNotificationCenter.current().delegate = nativeNotificationDelegate
-        }
+        Self.installNotificationCenterDelegateIfNeeded()
+    }
+
+    /// Installs the shared `UNUserNotificationCenter` delegate as early as
+    /// possible. Apple requires it before launch finishes; actions that
+    /// cold-launch the app are dropped when it is missing. Idempotent, and it
+    /// never requests permission or records analytics.
+    public static func installNotificationCenterDelegateIfNeeded() {
+        guard canUseSystemNotifications else { return }
+        UNUserNotificationCenter.current().delegate = nativeNotificationDelegate
     }
 
     /// Starts the permission check once, on first actual use rather than at
@@ -484,7 +498,7 @@ public class NotificationManager: ObservableObject {
     }
     
     /// Check if it's safe to use UNUserNotificationCenter (requires bundle ID and not running in tests)
-    private var isSafeToUseSystemNotifications: Bool {
+    private static var canUseSystemNotifications: Bool {
         guard let bundleID = Bundle.main.bundleIdentifier else { return false }
         
         // Avoid running in xctest tool environment which crashes UNUserNotificationCenter with "bundleProxyForCurrentProcess is nil"
@@ -494,6 +508,8 @@ public class NotificationManager: ObservableObject {
         
         return true
     }
+
+    private var isSafeToUseSystemNotifications: Bool { Self.canUseSystemNotifications }
     
     /// Initialize the notification system (call on app startup for faster first notification)
     private func setupNotificationSystem() async {
@@ -574,64 +590,7 @@ public class NotificationManager: ObservableObject {
         
         DebugLogger.log("NotificationManager: show() called with type, inAppHUD=\(settingsValue.inAppHUD), systemNotifications=\(settingsValue.systemNotifications)")
         
-        // Handle automated organization filter
-        switch type {
-        case .watchedFolderStarted:
-            guard settingsValue.watchedFolderStartNotificationsEnabled else {
-                trackAnalytics(.suppressed, type: type, backend: "native", detail: "watched folder started disabled")
-                return
-            }
-        case .processingComplete(_, _, _, _, let isAutomated),
-             .batchSummary(_, let isAutomated):
-            if isAutomated && !settingsValue.watchedFolderCompletionNotificationsEnabled {
-                DebugLogger.log("NotificationManager: Automated organization notification suppressed by settings")
-                trackAnalytics(.suppressed, type: type, backend: "native", detail: "automated notifications disabled")
-                return
-            }
-        case .processingError(_, _, _, _, let isAutomated):
-            if isAutomated && !settingsValue.notifyOnAutoOrganize && !type.isCritical {
-                DebugLogger.log("NotificationManager: Automated organization error suppressed by settings")
-                trackAnalytics(.suppressed, type: type, backend: "native", detail: "automated notifications disabled")
-                return
-            }
-        default:
-            break
-        }
-        
-        // Check if we should show this notification type
-        switch type {
-        case .processingComplete:
-            guard settingsValue.processingComplete else {
-                DebugLogger.log("NotificationManager: processingComplete notifications disabled")
-                trackAnalytics(.suppressed, type: type, backend: "native", detail: "processing complete disabled")
-                return
-            }
-        case .previewReady:
-            guard settingsValue.previewReady else {
-                DebugLogger.log("NotificationManager: previewReady notifications disabled")
-                trackAnalytics(.suppressed, type: type, backend: "native", detail: "preview ready disabled")
-                return
-            }
-        case .processingError(_, _, let isCritical, _, _):
-            if isCritical && settingsValue.alwaysShowCriticalErrors {
-                // Always show critical errors
-            } else if !settingsValue.processingErrors {
-                DebugLogger.log("NotificationManager: processingErrors notifications disabled")
-                trackAnalytics(.suppressed, type: type, backend: "native", detail: "processing errors disabled")
-                return
-            }
-        case .batchSummary:
-            guard settingsValue.processingComplete && settingsValue.batchSummary else {
-                DebugLogger.log("NotificationManager: batchSummary notifications disabled")
-                trackAnalytics(.suppressed, type: type, backend: "native", detail: "batch summary disabled")
-                return
-            }
-        case .watchedFolderStarted:
-            break
-        case .info:
-            // Info notifications are always allowed
-            break
-        }
+        guard !isSuppressed(type) else { return }
         
         // Create notification content
         let (title, message, icon, iconColor) = notificationContent(for: type)
@@ -682,6 +641,7 @@ public class NotificationManager: ObservableObject {
     /// Show a notification with a custom action handler
     public func show(_ type: NotificationType, actionHandler: @escaping NotificationActionHandler) {
         ensureLazySetup()
+        guard !isSuppressed(type) else { return }
         let settingsValue = settings.settings
         
         // Create notification content
@@ -989,6 +949,74 @@ public class NotificationManager: ObservableObject {
         }
     }
     
+    /// Applies the automated-notification and per-type suppression settings
+    /// shared by both `show` overloads. Returns `true` when the notification
+    /// must not be delivered, recording the suppression in analytics once.
+    private func isSuppressed(_ type: NotificationType) -> Bool {
+        let settingsValue = settings.settings
+
+        // Handle automated organization filter
+        switch type {
+        case .watchedFolderStarted:
+            guard settingsValue.watchedFolderStartNotificationsEnabled else {
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "watched folder started disabled")
+                return true
+            }
+        case .processingComplete(_, _, _, _, let isAutomated),
+             .batchSummary(_, let isAutomated):
+            if isAutomated && !settingsValue.watchedFolderCompletionNotificationsEnabled {
+                DebugLogger.log("NotificationManager: Automated organization notification suppressed by settings")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "automated notifications disabled")
+                return true
+            }
+        case .processingError(_, _, _, _, let isAutomated):
+            if isAutomated && !settingsValue.notifyOnAutoOrganize && !type.isCritical {
+                DebugLogger.log("NotificationManager: Automated organization error suppressed by settings")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "automated notifications disabled")
+                return true
+            }
+        default:
+            break
+        }
+
+        // Check if we should show this notification type
+        switch type {
+        case .processingComplete:
+            guard settingsValue.processingComplete else {
+                DebugLogger.log("NotificationManager: processingComplete notifications disabled")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "processing complete disabled")
+                return true
+            }
+        case .previewReady:
+            guard settingsValue.previewReady else {
+                DebugLogger.log("NotificationManager: previewReady notifications disabled")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "preview ready disabled")
+                return true
+            }
+        case .processingError(_, _, let isCritical, _, _):
+            if isCritical && settingsValue.alwaysShowCriticalErrors {
+                // Always show critical errors
+            } else if !settingsValue.processingErrors {
+                DebugLogger.log("NotificationManager: processingErrors notifications disabled")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "processing errors disabled")
+                return true
+            }
+        case .batchSummary:
+            guard settingsValue.processingComplete && settingsValue.batchSummary else {
+                DebugLogger.log("NotificationManager: batchSummary notifications disabled")
+                trackAnalytics(.suppressed, type: type, backend: "native", detail: "batch summary disabled")
+                return true
+            }
+        case .watchedFolderStarted:
+            break
+        case .info:
+            // Info notifications are always allowed
+            break
+        }
+
+        return false
+    }
+    
     private func notificationContent(for type: NotificationType) -> (title: String, message: String, icon: String, iconColor: Color) {
         switch type {
         case .processingComplete(let fileCount, let folderName, _, _, _):
@@ -1233,7 +1261,13 @@ public class NotificationManager: ObservableObject {
             status = updatedSettings.authorizationStatus
         }
         
-        guard status == .authorized else {
+        // Accept every delivery-capable state: `.provisional` notifications
+        // arrive quietly and must not be dropped just because the UI could not
+        // observe a full authorization grant.
+        switch status {
+        case .authorized, .provisional, .ephemeral:
+            break
+        default:
             DebugLogger.log("NotificationManager: System notifications not authorized (status: \(status.rawValue))")
             trackAnalytics(.failed, type: type, backend: "native", detail: "authorization denied")
             return
@@ -1242,7 +1276,7 @@ public class NotificationManager: ObservableObject {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = message
-        content.sound = .default
+        content.sound = playSound ? .default : nil
         // Force high-visibility delivery so notifications surface on-screen immediately.
         content.interruptionLevel = .timeSensitive
         content.relevanceScore = 1.0
@@ -1268,13 +1302,12 @@ public class NotificationManager: ObservableObject {
             trigger: nil
         )
 
-        if let actionHandler = actionHandler {
-            pendingNativeActionHandlers[requestIdentifier] = actionHandler
-        }
-        if !actions.isEmpty {
-            pendingNativeActions[requestIdentifier] = actions
-        }
-        pendingNativeNotificationTypes[requestIdentifier] = type
+        storePendingNativeRequest(
+            identifier: requestIdentifier,
+            type: type,
+            actions: actions,
+            actionHandler: actionHandler
+        )
         
         do {
             try await UNUserNotificationCenter.current().add(request)
@@ -1282,9 +1315,48 @@ public class NotificationManager: ObservableObject {
             DebugLogger.log("NotificationManager: Native system notification sent successfully")
             trackAnalytics(.shown, type: type, backend: "native", detail: "native notification sent [\(actionSummary)]")
         } catch {
+            // A failed add never produces a response, so its bookkeeping must
+            // not linger (it would retain the handler and type forever).
+            removePendingNativeRequest(identifier: requestIdentifier)
             DebugLogger.log("NotificationManager: Failed to send system notification: \(error)")
             trackAnalytics(.failed, type: type, backend: "native", detail: error.localizedDescription)
         }
+    }
+
+    /// Books the context a native notification needs when the user responds.
+    /// Bounded, because entries for ignored notifications are never removed by
+    /// the system and would otherwise retain handlers indefinitely.
+    private func storePendingNativeRequest(
+        identifier: String,
+        type: NotificationType,
+        actions: [CuratedNotificationAction],
+        actionHandler: NotificationActionHandler?
+    ) {
+        if let actionHandler {
+            pendingNativeActionHandlers[identifier] = actionHandler
+        }
+        if !actions.isEmpty {
+            pendingNativeActions[identifier] = actions
+        }
+        pendingNativeNotificationTypes[identifier] = type
+
+        pendingNativeRequestOrder.append(identifier)
+        let overflow = pendingNativeRequestOrder.count - Self.maxPendingNativeRequests
+        guard overflow > 0 else { return }
+
+        for staleIdentifier in pendingNativeRequestOrder.prefix(overflow) {
+            pendingNativeActionHandlers.removeValue(forKey: staleIdentifier)
+            pendingNativeActions.removeValue(forKey: staleIdentifier)
+            pendingNativeNotificationTypes.removeValue(forKey: staleIdentifier)
+        }
+        pendingNativeRequestOrder.removeFirst(overflow)
+    }
+
+    private func removePendingNativeRequest(identifier: String) {
+        pendingNativeRequestOrder.removeAll { $0 == identifier }
+        pendingNativeActionHandlers.removeValue(forKey: identifier)
+        pendingNativeActions.removeValue(forKey: identifier)
+        pendingNativeNotificationTypes.removeValue(forKey: identifier)
     }
 
     private func nativeUserInfo(for type: NotificationType) -> [AnyHashable: Any] {
@@ -1443,11 +1515,14 @@ public class NotificationManager: ObservableObject {
 
     func handleNativeNotificationResponse(_ response: UNNotificationResponse) {
         let identifier = response.notification.request.identifier
-        let actionHandler = pendingNativeActionHandlers.removeValue(forKey: identifier)
-        let notificationType = pendingNativeNotificationTypes.removeValue(forKey: identifier) ??
+        let actionHandler = pendingNativeActionHandlers[identifier]
+        let notificationType = pendingNativeNotificationTypes[identifier] ??
             nativeNotificationType(from: response.notification.request.content)
-        let actions = pendingNativeActions.removeValue(forKey: identifier) ??
+        let actions = pendingNativeActions[identifier] ??
             notificationType.map(notificationActions(for:)) ?? []
+        // Capture the context first, then release every map entry so responded
+        // notifications stop occupying the bounded pending store.
+        removePendingNativeRequest(identifier: identifier)
 
         switch response.actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
@@ -1818,34 +1893,58 @@ public class NotificationManager: ObservableObject {
         }
     }
     
+    /// PNG bytes for the app icon, encoded once and reused so the expensive
+    /// TIFF/PNG conversion never reruns on the main actor per notification.
+    private static var cachedAppIconPNGData: Data?
+    /// Stable file backing the cached attachment, recreated only when missing.
+    private static var cachedAppIconFileURL: URL?
+
     /// Creates a notification attachment for the app icon to ensure it displays in notifications
     /// - Returns: A UNNotificationAttachment for the app icon, or nil if unavailable
     public static func createAppIconAttachment() -> UNNotificationAttachment? {
-        guard let iconImage = NSImage(named: "AppIcon") ?? NSApp.applicationIconImage else {
-            return nil
-        }
-        
-        let tempDir = FileManager.default.temporaryDirectory
-        let iconURL = tempDir.appendingPathComponent("SortyNotificationIcon-\(UUID().uuidString).png")
-        
-        guard let tiffData = iconImage.tiffRepresentation,
-              let bitmapRep = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
-            return nil
-        }
-        
+        guard let iconURL = appIconFileURL() else { return nil }
+
         do {
-            try pngData.write(to: iconURL)
-            let attachment = try UNNotificationAttachment(
+            return try UNNotificationAttachment(
                 identifier: "appIcon",
                 url: iconURL,
                 options: [UNNotificationAttachmentOptionsTypeHintKey: "public.png"]
             )
-            return attachment
         } catch {
-            try? FileManager.default.removeItem(at: iconURL)
             return nil
         }
+    }
+
+    /// Returns the on-disk icon URL, writing the encoded icon only when the
+    /// cached file is missing. The notification system takes ownership of the
+    /// file when it delivers a request, so it can disappear between calls.
+    private static func appIconFileURL() -> URL? {
+        if let cachedAppIconFileURL,
+           FileManager.default.fileExists(atPath: cachedAppIconFileURL.path) {
+            return cachedAppIconFileURL
+        }
+
+        guard let pngData = cachedAppIconPNGData ?? encodedAppIconPNG() else { return nil }
+        cachedAppIconPNGData = pngData
+
+        let iconURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SortyNotificationIcon.png")
+        do {
+            try pngData.write(to: iconURL, options: .atomic)
+            cachedAppIconFileURL = iconURL
+            return iconURL
+        } catch {
+            return nil
+        }
+    }
+
+    private static func encodedAppIconPNG() -> Data? {
+        guard let iconImage = NSImage(named: "AppIcon") ?? NSApp.applicationIconImage,
+              let tiffData = iconImage.tiffRepresentation,
+              let bitmapRep = NSBitmapImageRep(data: tiffData) else {
+            return nil
+        }
+        return bitmapRep.representation(using: .png, properties: [:])
     }
     
     private func formatDuration(_ duration: TimeInterval) -> String {

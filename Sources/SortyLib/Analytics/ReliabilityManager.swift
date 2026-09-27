@@ -109,6 +109,7 @@ public final class ReliabilityManager {
         guard generation == startupGeneration else {
             // Stop/consent changes can invalidate setup while it is running.
             // Do not start a second setup until this one has been closed.
+            isStarting = false
             SentrySDK.close()
             try? FileManager.default.removeItem(at: Self.cacheDirectory)
             startIfAuthorized()
@@ -279,7 +280,8 @@ public final class ReliabilityManager {
 
     public func stopAndClear() {
         launchSpan = nil
-        isStarting = false
+        // Keep isStarting set so at most one Sentry setup is ever in flight.
+        // The stale finish handler clears it once the in-flight setup is closed.
         startupGeneration &+= 1
         if isActive {
             isActive = false

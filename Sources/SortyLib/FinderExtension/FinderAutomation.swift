@@ -11,6 +11,10 @@ import AppKit
 import ApplicationServices
 import Permiso
 
+/// AppleScript-side deadline for Finder calls. A wedged Finder returns an
+/// Apple event timeout instead of holding the caller indefinitely.
+private let finderAutomationScriptTimeoutSeconds = 5
+
 private func appleScriptStringLiteral(_ value: String) -> String {
     let escaped = value
         .replacingOccurrences(of: "\\", with: "\\\\")
@@ -21,47 +25,6 @@ private func appleScriptStringLiteral(_ value: String) -> String {
     return "\"\(escaped)\""
 }
 
-private actor FinderSelectionQuery {
-    static let shared = FinderSelectionQuery()
-
-    private let script = NSAppleScript(source: """
-        tell application "Finder"
-            try
-                set selectedItems to selection
-                set filePaths to {}
-                repeat with anItem in selectedItems
-                    set end of filePaths to POSIX path of (anItem as alias)
-                end repeat
-                return filePaths
-            on error
-                return ""
-            end try
-        end tell
-        """)
-
-    func selectedFiles(checksEnabled: Bool) -> [URL]? {
-        guard checksEnabled,
-              FinderAutomation.determineAutomationPermission(prompt: false) == .granted,
-              let script else { return nil }
-
-        var errorInfo: NSDictionary?
-        let result = script.executeAndReturnError(&errorInfo)
-        if let errorInfo {
-            DebugLogger.log("AppleScript error getting selection: \(errorInfo)")
-            return nil
-        }
-
-        guard result.descriptorType == typeAEList, result.numberOfItems > 0 else {
-            return nil
-        }
-        let paths = (1...result.numberOfItems).compactMap { index in
-            result.atIndex(index)?.stringValue
-        }
-        guard !paths.isEmpty else { return nil }
-        return paths.map { URL(fileURLWithPath: $0) }
-    }
-}
-
 /// Service for automating Finder interactions
 /// Uses AppleScript which requires Automation permission
 @MainActor
@@ -70,9 +33,48 @@ public final class FinderAutomation {
     private static var checksEnabled = false
     nonisolated static let permissionEventClass = AEEventClass(kAECoreSuite)
     nonisolated static let permissionEventID = AEEventID(kAEGetData)
+
+    /// Precompiled selection query. NSAppleScript is not thread-safe, so it is
+    /// compiled and executed on the main actor only.
+    private static let selectionQueryScript = NSAppleScript(source: """
+        with timeout of \(finderAutomationScriptTimeoutSeconds) seconds
+            tell application "Finder"
+                set selectedItems to selection
+                set filePaths to {}
+                repeat with anItem in selectedItems
+                    set end of filePaths to POSIX path of (anItem as alias)
+                end repeat
+                return filePaths
+            end tell
+        end timeout
+        """)
     
     public static func enableAutomationChecks() {
         checksEnabled = true
+    }
+
+    /// Runs a compiled script on the main thread and logs failures instead of
+    /// letting an `on error` handler silently turn them into a return value.
+    private static func execute(
+        _ script: NSAppleScript?,
+        description: String
+    ) -> NSAppleEventDescriptor? {
+        guard let script else {
+            DebugLogger.log("AppleScript \(description) could not be compiled")
+            return nil
+        }
+
+        var errorInfo: NSDictionary?
+        let result = script.executeAndReturnError(&errorInfo)
+        if let errorInfo {
+            DebugLogger.log("AppleScript \(description) failed: \(errorInfo)")
+            return nil
+        }
+        return result
+    }
+
+    private static func execute(source: String, description: String) -> NSAppleEventDescriptor? {
+        execute(NSAppleScript(source: source), description: description)
     }
     
     // MARK: - Permission Status
@@ -88,6 +90,8 @@ public final class FinderAutomation {
     public static func requestAutomationPermission() async -> PermissionStatus {
         guard canCheckPermission(checksEnabled: checksEnabled) else { return .unknown }
 
+        // No `with timeout` here: this script intentionally waits on the TCC
+        // Allow / Don't Allow prompt, which the user may take a while to answer.
         let scriptSource = """
         tell application "Finder"
             return name of startup disk
@@ -169,7 +173,19 @@ public final class FinderAutomation {
     /// Get the currently selected files in the frontmost Finder window
     /// Returns nil if no Finder window is open or no selection
     public static func getSelectedFiles() async -> [URL]? {
-        await FinderSelectionQuery.shared.selectedFiles(checksEnabled: checksEnabled)
+        guard checksEnabled,
+              determineAutomationPermission(prompt: false) == .granted,
+              let result = execute(selectionQueryScript, description: "selection query"),
+              result.descriptorType == typeAEList,
+              result.numberOfItems > 0 else {
+            return nil
+        }
+
+        let paths = (1...result.numberOfItems).compactMap { index in
+            result.atIndex(index)?.stringValue
+        }
+        guard !paths.isEmpty else { return nil }
+        return paths.map { URL(fileURLWithPath: $0) }
     }
     
     /// Get the path of the frontmost Finder window
@@ -181,29 +197,16 @@ public final class FinderAutomation {
         }
         
         let scriptSource = """
-        tell application "Finder"
-            try
+        with timeout of \(finderAutomationScriptTimeoutSeconds) seconds
+            tell application "Finder"
                 set targetFolder to target of front window as alias
                 return POSIX path of targetFolder
-            on error
-                return ""
-            end try
-        end tell
+            end tell
+        end timeout
         """
         
-        guard let script = NSAppleScript(source: scriptSource) else {
-            return nil
-        }
-        
-        var errorInfo: NSDictionary?
-        let result = script.executeAndReturnError(&errorInfo)
-        
-        if let error = errorInfo {
-            DebugLogger.log("AppleScript error getting front window: \(error)")
-            return nil
-        }
-        
-        guard let path = result.stringValue, !path.isEmpty else {
+        guard let result = execute(source: scriptSource, description: "front window query"),
+              let path = result.stringValue, !path.isEmpty else {
             return nil
         }
         
@@ -224,8 +227,8 @@ public final class FinderAutomation {
         let pathsList = urls.map { appleScriptStringLiteral($0.path) }.joined(separator: ", ")
         
         let scriptSource = """
-        tell application "Finder"
-            try
+        with timeout of \(finderAutomationScriptTimeoutSeconds) seconds
+            tell application "Finder"
                 set filePaths to {\(pathsList)}
                 set itemsToSelect to {}
                 
@@ -242,22 +245,11 @@ public final class FinderAutomation {
                     select itemsToSelect
                     \(reveal ? "reveal itemsToSelect" : "")
                 end if
-            on error errMsg
-                return "Error: " & errMsg
-            end try
-        end tell
+            end tell
+        end timeout
         """
         
-        guard let script = NSAppleScript(source: scriptSource) else {
-            return
-        }
-        
-        var errorInfo: NSDictionary?
-        script.executeAndReturnError(&errorInfo)
-        
-        if let error = errorInfo {
-            DebugLogger.log("AppleScript error selecting in Finder: \(error)")
-        }
+        _ = execute(source: scriptSource, description: "select in Finder")
     }
     
     /// Reveal a single file or folder in Finder
@@ -271,27 +263,16 @@ public final class FinderAutomation {
         guard checkAutomationPermission() == .granted else { return }
         
         let scriptSource = """
-        tell application "Finder"
-            try
+        with timeout of \(finderAutomationScriptTimeoutSeconds) seconds
+            tell application "Finder"
                 set targetFolder to POSIX file \(appleScriptStringLiteral(url.path)) as alias
                 make new Finder window to targetFolder
                 activate
-            on error errMsg
-                return "Error: " & errMsg
-            end try
-        end tell
+            end tell
+        end timeout
         """
         
-        guard let script = NSAppleScript(source: scriptSource) else {
-            return
-        }
-        
-        var errorInfo: NSDictionary?
-        script.executeAndReturnError(&errorInfo)
-        
-        if let error = errorInfo {
-            DebugLogger.log("AppleScript error opening Finder window: \(error)")
-        }
+        _ = execute(source: scriptSource, description: "open Finder window")
     }
 
     // MARK: - Finder Refresh
@@ -304,8 +285,8 @@ public final class FinderAutomation {
         }
         
         let scriptSource = """
-        tell application "Finder"
-            try
+        with timeout of \(finderAutomationScriptTimeoutSeconds) seconds
+            tell application "Finder"
                 set theFolder to POSIX file \(appleScriptStringLiteral(url.path)) as alias
                 repeat with theWindow in (every window)
                     try
@@ -314,22 +295,11 @@ public final class FinderAutomation {
                         end if
                     end try
                 end repeat
-            on error
-                -- Ignore errors
-            end try
-        end tell
+            end tell
+        end timeout
         """
         
-        guard let script = NSAppleScript(source: scriptSource) else {
-            return
-        }
-        
-        var errorInfo: NSDictionary?
-        script.executeAndReturnError(&errorInfo)
-        
-        if let error = errorInfo {
-            DebugLogger.log("AppleScript error refreshing Finder: \(error)")
-        }
+        _ = execute(source: scriptSource, description: "refresh Finder window")
     }
 
 }

@@ -43,7 +43,19 @@ public final class LogManager: @unchecked Sendable {
     private var logFileHandle: FileHandle?
     private var hasPreparedLogFile = false
     private let timestampFormatter = ISO8601DateFormatter()
-    private let userPathRegex = try? NSRegularExpression(pattern: "/Users/[^\\s\\\"'<>]+")
+    /// Absolute POSIX paths, redacted in two passes. Paths under well-known
+    /// roots (`/Users`, `/Volumes`, `/private`, `/tmp`, ...) are consumed whole,
+    /// including spaces inside file names such as `My Report (Final).pdf`. The
+    /// leading slash must not be part of a `scheme://host` authority (see the
+    /// lookbehind), while `scheme:///path` (empty authority, e.g. file URLs) is
+    /// still redacted. The bounded trade-off is that prose directly after a
+    /// known-root path can be swallowed with it.
+    private static let knownRootPathPattern =
+        #"(?:(?<![\w/])|(?<=://))/(?:Users|Volumes|private|tmp|var|Applications|Library|System|opt|etc|home|Network|Developer)(?:/[^\s/]+(?:[ \t]+[^\s/]+)*)*"#
+    /// Every other absolute path is redacted token-wise: spaces end the match,
+    /// so trailing prose (`GET /v1/chat HTTP/1.1`) is never consumed.
+    private static let absolutePathPattern =
+        #"(?:(?<![\w/])|(?<=://))/(?:[^\s/]+/)*[^\s/]+"#
     /// Debug sampling: hot loops must not thrash the log file, so only 1 in
     /// 100 debug messages is persisted. Info and above always persist.
     private let debugSampleLock = NSLock()
@@ -687,9 +699,10 @@ public final class LogManager: @unchecked Sendable {
     }
 
     private func sanitize(_ text: String) -> String {
-        // Fast path: messages without user paths or key prefixes skip every
-        // regex below. This covers the vast majority of hot-loop messages.
-        guard text.contains("/Users/")
+        // Fast path: a message can only contain a redactable form if it has an
+        // absolute path (any leading slash, not just /Users) or a key/token
+        // shape. Anything else skips every regex below.
+        guard text.contains("/")
             || text.contains("sk-")
             || text.contains("ghp_")
             || text.contains("gho_")
@@ -705,8 +718,11 @@ public final class LogManager: @unchecked Sendable {
         }
         var result = text
         
-        // Redact standard API keys
-        result = result.replacingOccurrences(of: "sk-[a-zA-Z0-9]{20,}", with: "[REDACTED_OPENAI_KEY]", options: .regularExpression)
+        // Redact standard API keys; provider keys may embed hyphens/dashes
+        // (sk-ant-api03-..., sk-proj-...), so the body class includes them. The
+        // word boundary keeps hyphenated prose like `task-list-...` from
+        // matching mid-word.
+        result = result.replacingOccurrences(of: #"\bsk-[A-Za-z0-9_-]{20,}"#, with: "[REDACTED_OPENAI_KEY]", options: .regularExpression)
         result = result.replacingOccurrences(of: "ghp_[a-zA-Z0-9]{20,}", with: "[REDACTED_GITHUB_TOKEN]", options: .regularExpression)
         result = result.replacingOccurrences(of: "gho_[a-zA-Z0-9]{20,}", with: "[REDACTED_GITHUB_TOKEN]", options: .regularExpression)
         result = result.replacingOccurrences(of: "ghu_[a-zA-Z0-9]{20,}", with: "[REDACTED_GITHUB_TOKEN]", options: .regularExpression)
@@ -715,17 +731,17 @@ public final class LogManager: @unchecked Sendable {
         result = result.replacingOccurrences(of: "(?i)Bearer\\s+[A-Za-z0-9._~+/-]+=*", with: "Bearer [REDACTED_TOKEN]", options: .regularExpression)
         result = result.replacingOccurrences(of: "(?i)(api[_-]?key|token|access[_-]?token|refresh[_-]?token|client[_-]?secret)(\\s*[:=]\\s*)[^\\s,;]+", with: "$1$2[REDACTED_SECRET]", options: .regularExpression)
         
-        // Redact complete absolute user paths, not just the username prefix.
-        if let regex = userPathRegex {
-            result = regex.stringByReplacingMatches(
-                in: result,
-                options: [],
-                range: NSRange(result.startIndex..<result.endIndex, in: result),
-                withTemplate: "/Users/[REDACTED_PATH]"
-            )
-        }
+        // Redact complete absolute paths (/Users, /Volumes, /tmp, ...) without
+        // consuming the authority of scheme://host URLs. Known-root paths go
+        // first so names with spaces stay whole; the generic pass then covers
+        // any remaining absolute path token.
         result = result.replacingOccurrences(
-            of: #"(?<![A-Za-z0-9:])/(?:[^\s/]+/)*[^\s/]+"#,
+            of: Self.knownRootPathPattern,
+            with: "[REDACTED_PATH]",
+            options: .regularExpression
+        )
+        result = result.replacingOccurrences(
+            of: Self.absolutePathPattern,
             with: "[REDACTED_PATH]",
             options: .regularExpression
         )

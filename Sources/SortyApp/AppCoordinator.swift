@@ -560,7 +560,27 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         
         do {
             let url = URL(fileURLWithPath: path)
+            let targetDirectory = url.standardizedFileURL
+            let previousPlanID = organizer.currentPlan?.id
             try await organizer.organize(directory: url, customPrompt: nil, temperature: nil)
+
+            // `organize` can return without replacing `currentPlan` (cancellation
+            // resolves to idle) or after a cancelled run kept the plan it had
+            // produced, so require a fresh plan for this exact directory and a
+            // run that finished ready before applying.
+            guard let freshPlan = organizer.currentPlan,
+                  freshPlan.id != previousPlanID,
+                  organizer.currentDirectory?.standardizedFileURL == targetDirectory,
+                  organizer.state == .ready else {
+                CoordinatorLog.log("Coordinator: Retry for \(path) produced no fresh plan; skipping apply")
+                notificationManager.recordActionLifecycle("retry", stage: "no-fresh-plan", failed: true, detail: path)
+                notificationManager.showError(
+                    message: "Retry did not produce a new plan for \"\(url.lastPathComponent)\", so nothing was applied",
+                    isCritical: false
+                )
+                return
+            }
+
             try await organizer.apply(at: url, dryRun: false)
             
             notificationManager.showInfo(
@@ -835,6 +855,29 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         return task
     }
     
+    /// Provider/model for a watched-folder run. Per-folder overrides win;
+    /// otherwise the global automation selection applies. A nil
+    /// `automationProvider` means "use the main provider/model", which is the
+    /// client already configured on the organizer, so no override is passed.
+    private func automationOverrides(for folder: WatchedFolder) -> (provider: AIProvider?, model: String?) {
+        if let providerOverride = folder.providerOverride {
+            return (providerOverride, folder.modelOverride ?? providerOverride.defaultModel)
+        }
+        guard let config = organizer.aiClient?.config,
+              let automationProvider = config.automationProvider else {
+            return (nil, nil)
+        }
+        let configuredModel = config.automationModel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        // AIConfig documents `automationModel == nil` as "use main model", so
+        // fall back to the main model; the provider default is only a last
+        // resort when the main model is unset too.
+        let mainModel = config.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = !configuredModel.isEmpty
+            ? configuredModel
+            : (mainModel.isEmpty ? automationProvider.defaultModel : mainModel)
+        return (automationProvider, model)
+    }
+
     private func autoOrganize(
         folder: WatchedFolder,
         files: Set<String>,
@@ -919,13 +962,14 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             
             CoordinatorLog.log("Coordinator: Auto-organizing \(candidateAudit.stable.count) stable new files in \(folder.name): \(candidateAudit.stable)")
             
+            let overrides = automationOverrides(for: executionFolder)
             try await organizer.organizeIncremental(
                 directory: resolvedURL,
                 specificFiles: Array(candidateAudit.stable),
                 customPrompt: executionFolder.customPrompt,
                 temperature: executionFolder.temperature,
-                providerOverride: executionFolder.providerOverride,
-                modelOverride: executionFolder.modelOverride,
+                providerOverride: overrides.provider,
+                modelOverride: overrides.model,
                 mode: executionFolder.effectiveOrganizationMode,
                 historySource: .watchedFolder,
                 autoApply: executionFolder.effectiveApplyPolicy == .autoApply
@@ -1134,7 +1178,27 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         min(retryBaseDelay * pow(2, Double(max(retryAttempt - 1, 0))), maximumStabilityRetryDelay)
     }
 
+    /// Watched-folder state can contain duplicate IDs (merged or imported
+    /// stores); collapse them deterministically, keeping the last occurrence so
+    /// map construction can never trap on a duplicate key.
+    private static func deduplicatedFoldersByID(_ folders: [WatchedFolder]) -> [WatchedFolder] {
+        var indexByID: [UUID: Int] = [:]
+        indexByID.reserveCapacity(folders.count)
+        var uniqueFolders: [WatchedFolder] = []
+        uniqueFolders.reserveCapacity(folders.count)
+        for folder in folders {
+            if let index = indexByID[folder.id] {
+                uniqueFolders[index] = folder
+            } else {
+                indexByID[folder.id] = uniqueFolders.count
+                uniqueFolders.append(folder)
+            }
+        }
+        return uniqueFolders
+    }
+
     private func reconcilePendingWork(with folders: [WatchedFolder]) {
+        let folders = Self.deduplicatedFoldersByID(folders)
         let currentlySnoozedFolderIDs = Set(folders.filter(\.isSnoozed).map(\.id))
         // Gate on restore so pre-restore reconciliation never drops
         // persisted batches that have not been published yet.
@@ -1236,7 +1300,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     @MainActor
     private func applyRestoredWatchWork(_ persistedWork: PersistedOutstandingWatchWork) {
         let configuredFolders = Dictionary(
-            uniqueKeysWithValues: watchedFoldersManager.folders.map { ($0.id, $0) }
+            uniqueKeysWithValues: Self.deduplicatedFoldersByID(watchedFoldersManager.folders).map { ($0.id, $0) }
         )
         let enabledFolders = configuredFolders.filter { $0.value.isEnabled }
         for batch in persistedWork.batches {

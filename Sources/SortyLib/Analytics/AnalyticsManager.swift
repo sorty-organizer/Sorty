@@ -38,6 +38,7 @@ public final class AnalyticsManager: ObservableObject {
     private var isStarting = false
     private var startupGeneration: UInt64 = 0
     private var captureRateLimiter = AnalyticsCaptureRateLimiter()
+    private var pendingCaptures: [BufferedAnalyticsCapture] = []
     private var lastFeatureFlagReloadAt: TimeInterval?
 
     private static let productionProjectToken = "phc_rhKqvGRtWWMrSEC34WwUJipMZYM8kJA9ppav4ZxK7RiB"
@@ -46,6 +47,7 @@ public final class AnalyticsManager: ObservableObject {
     private static let maximumExperimentalFeatures = 20
     private static let maximumFeatureTitleLength = 80
     private static let maximumFeatureDescriptionLength = 280
+    private static let maximumPendingCaptures = 25
 
     private init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -120,6 +122,9 @@ public final class AnalyticsManager: ObservableObject {
               consent == .granted,
               !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
               !Self.isAnalyticsSuppressedForThisProcess else {
+            // An opt-out landed while setup was running; drop anything
+            // buffered so no events leave after the user said no.
+            pendingCaptures.removeAll()
             PostHogSDK.shared.close()
             Self.removePersistedSDKData(projectToken: projectToken)
             return
@@ -138,6 +143,7 @@ public final class AnalyticsManager: ObservableObject {
             event: "app:session_started",
             properties: sessionProperties
         )
+        flushPendingCaptures()
     }
 
     public func setConsent(_ newConsent: AnalyticsConsent) {
@@ -346,15 +352,51 @@ public final class AnalyticsManager: ObservableObject {
         Int((max(0, duration) * 1_000).rounded())
     }
 
-    private var canCapture: Bool {
-        isActive
-            && consent == .granted
+    private var canSend: Bool {
+        consent == .granted
             && !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled
             && !Self.isAnalyticsSuppressedForThisProcess
     }
 
+    private var canCapture: Bool {
+        isActive && canSend
+    }
+
     private func capture(event: String, properties: [String: Any]) {
-        guard canCapture, captureRateLimiter.shouldCapture() else { return }
+        // Consent gate first: buffering must never hold events the user did
+        // not opt into. While the SDK is inactive (cold launch before setup
+        // begins, or setup in flight) eligible events are buffered rather than
+        // dropped, so the first screen view survives.
+        guard canSend, captureRateLimiter.shouldCapture() else {
+            return
+        }
+
+        guard !isActive else {
+            send(event: event, properties: properties)
+            return
+        }
+
+        pendingCaptures.append(
+            BufferedAnalyticsCapture(event: event, properties: properties)
+        )
+        if pendingCaptures.count > Self.maximumPendingCaptures {
+            pendingCaptures.removeFirst(
+                pendingCaptures.count - Self.maximumPendingCaptures
+            )
+        }
+    }
+
+    private func flushPendingCaptures() {
+        guard !pendingCaptures.isEmpty else { return }
+        let captures = pendingCaptures
+        pendingCaptures.removeAll()
+        guard canCapture else { return }
+        for bufferedCapture in captures {
+            send(event: bufferedCapture.event, properties: bufferedCapture.properties)
+        }
+    }
+
+    private func send(event: String, properties: [String: Any]) {
         var safeProperties = properties
         safeProperties["platform_surface"] = "mac_app"
         safeProperties["$geoip_disable"] = true
@@ -364,6 +406,9 @@ public final class AnalyticsManager: ObservableObject {
     private func stopAndClear() {
         experimentalFeatures = []
         isLoadingExperimentalFeatures = false
+        // Consent denial and privacy mode both land here; never flush events
+        // that were buffered before the user opted out.
+        pendingCaptures.removeAll()
         startupGeneration &+= 1
         let projectToken = activeProjectToken
             ?? Self.productionProjectToken
@@ -612,6 +657,11 @@ public final class AnalyticsManager: ObservableObject {
         return result
     }
 
+}
+
+private struct BufferedAnalyticsCapture {
+    let event: String
+    let properties: [String: Any]
 }
 
 struct AnalyticsCaptureRateLimiter {

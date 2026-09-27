@@ -149,7 +149,14 @@ public class FileThumbnailProvider: ObservableObject {
                 // within 250 ms, so generation never begins for rows that
                 // scrolled past.
                 try? await Task.sleep(for: Self.lazyStartDelay)
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    // The last waiter cancelled during the lazy-start delay.
+                    // Release the active slot and settle the request here,
+                    // otherwise every cancelled generation permanently holds
+                    // one of the four concurrency slots.
+                    finishGeneration(fallbackIcon(for: url), forKey: key, requestID: requestID)
+                    return
+                }
                 let image = await generateThumbnail(for: url, size: size)
                 finishGeneration(image, forKey: key, requestID: requestID)
             }

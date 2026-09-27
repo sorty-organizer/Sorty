@@ -622,7 +622,7 @@ struct WindowVisibilityReader: NSViewRepresentable {
     final class Coordinator: NSObject {
         var isVisible: Binding<Bool>
         private weak var observedWindow: NSWindow?
-        private var observers: [NSObjectProtocol] = []
+        nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
 
         init(isVisible: Binding<Bool>) {
             self.isVisible = isVisible
@@ -663,11 +663,11 @@ struct WindowVisibilityReader: NSViewRepresentable {
         }
 
         deinit {
-            // Representable coordinators are main-confined; clean up synchronously.
-            MainActor.assumeIsolated {
-                let center = NotificationCenter.default
-                observers.forEach(center.removeObserver)
-            }
+            // Deinit is nonisolated and can run off the main thread.
+            // NotificationCenter removal is thread-safe, so observers are
+            // removed directly instead of assuming main-actor isolation.
+            let center = NotificationCenter.default
+            observers.forEach(center.removeObserver)
         }
     }
 

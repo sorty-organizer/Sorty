@@ -15,6 +15,10 @@ private struct LoginItemServiceStatus: Sendable {
     let isBackgroundAgentEnabled: Bool
     let registrationStatus: String
     let agentStatus: String
+    /// A preference value the app should adopt when SMAppService disagrees and
+    /// the change came from outside the app (System Settings). Nil means the
+    /// current preference already reflects the registration state.
+    let launchAtLoginPreference: Bool?
 }
 
 @MainActor
@@ -36,6 +40,11 @@ public class LoginItemManager: ObservableObject {
     private var hasStarted = false
     private var serviceSyncTask: Task<Void, Never>?
     private var serviceSyncGeneration = 0
+    /// When the app itself last changed the Launch at Login preference. A
+    /// `.notRegistered` status observed outside this short window is treated as
+    /// the user's System Settings opt-out instead of a missing registration.
+    private var lastUserInitiatedLaunchAtLoginChange: Date?
+    private static let userInitiatedChangeWindow: TimeInterval = 30
 
     private init() {}
 
@@ -75,19 +84,21 @@ public class LoginItemManager: ObservableObject {
         // Observe UserDefaults for background and login item settings
         // This ensures system registration stays in sync even when main window is closed
         
-        UserDefaults.standard.publisher(for: \.launchAtLogin)
+        UserDefaults.standard.publisher(for: \.launchAtLogin, options: [.new])
         .receive(on: RunLoop.main)
         .sink { [weak self] _ in
             let launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
             let keepInBackground = UserDefaults.standard.bool(forKey: "keepInBackground")
+            self?.lastUserInitiatedLaunchAtLoginChange = Date()
             self?.syncServiceRegistration(
                 launchAtLogin: launchAtLogin,
-                keepInBackground: keepInBackground
+                keepInBackground: keepInBackground,
+                initiatedByUser: true
             )
         }
         .store(in: &cancellables)
 
-        UserDefaults.standard.publisher(for: \.keepInBackground)
+        UserDefaults.standard.publisher(for: \.keepInBackground, options: [.new])
         .receive(on: RunLoop.main)
         .sink { [weak self] _ in
             let launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
@@ -106,7 +117,10 @@ public class LoginItemManager: ObservableObject {
     public func refreshStatus() {
         // Main App Status (Launch at Login)
         let status = SMAppService.mainApp.status
-        self.isLaunchAtLoginEnabled = (status == .enabled)
+        // `.requiresApproval` is a registration awaiting System Settings
+        // approval, not an absent one; reporting it as enabled keeps the toggle
+        // aligned with the stored preference so a click can unregister it.
+        self.isLaunchAtLoginEnabled = (status == .enabled || status == .requiresApproval)
         self.registrationStatus = Self.describe(status)
 
         // Background Agent Status
@@ -134,53 +148,38 @@ public class LoginItemManager: ObservableObject {
     /// Toggles the launch-at-login registration state.
     /// Registers the app as a login item if currently disabled, or unregisters it if enabled.
     public func toggleLaunchAtLogin() {
-        if isLaunchAtLoginEnabled {
-            unregisterService()
-        } else {
-            registerService()
-        }
+        setLaunchAtLogin(!isLaunchAtLoginEnabled)
     }
 
-    private func syncLaunchAtLoginRegistration() {
-        let shouldLaunchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
-
-        Task { [weak self] in
-            let status = await Task.detached(priority: .utility) {
-                Self.updateMainAppRegistration(enabled: shouldLaunchAtLogin)
-            }.value
-
-            guard let self else { return }
-            self.isLaunchAtLoginEnabled = (status == .enabled)
-            self.registrationStatus = Self.describe(status)
-        }
-    }
-
-    private nonisolated static func updateMainAppRegistration(enabled: Bool) -> SMAppService.Status {
-        let service = SMAppService.mainApp
-        let currentStatus = service.status
-
-        if enabled && (currentStatus == .notRegistered || currentStatus == .notFound) {
-            do {
-                try service.register()
-                DebugLogger.log("Registered main app service (Login Item)")
-            } catch {
-                DebugLogger.log("Failed to register login item: \(error.localizedDescription)")
-            }
-        } else if !enabled && (currentStatus == .enabled || currentStatus == .requiresApproval) {
-            do {
-                try service.unregister()
-                DebugLogger.log("Unregistered main app service (Login Item)")
-            } catch {
-                DebugLogger.log("Failed to unregister login item: \(error.localizedDescription)")
-            }
-        }
-
-        return service.status
+    /// Applies a user-driven Launch at Login change from Settings or the menu
+    /// bar: writes the preference, publishes the intent immediately, and
+    /// asserts the registration without waiting for the defaults observer.
+    public func setLaunchAtLogin(_ enabled: Bool) {
+        lastUserInitiatedLaunchAtLoginChange = Date()
+        isLaunchAtLoginEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "launchAtLogin")
+        syncServiceRegistration(
+            launchAtLogin: enabled,
+            keepInBackground: UserDefaults.standard.bool(forKey: "keepInBackground"),
+            initiatedByUser: true
+        )
     }
 
     /// Synchronizes the SMAppService registration based on current settings.
     /// Launch at login uses mainApp, while background activity uses a LaunchAgent.
-    public func syncServiceRegistration(launchAtLogin: Bool, keepInBackground: Bool, showMenuBarExtra: Bool = false) {
+    /// - Parameter initiatedByUser: Pass true only when the change came from an
+    ///   in-app toggle; launch-time syncs leave it false so a System Settings
+    ///   opt-out is not silently re-registered.
+    public func syncServiceRegistration(
+        launchAtLogin: Bool,
+        keepInBackground: Bool,
+        showMenuBarExtra: Bool = false,
+        initiatedByUser: Bool = false
+    ) {
+        let recentlyInitiated = lastUserInitiatedLaunchAtLoginChange.map {
+            Date().timeIntervalSince($0) < Self.userInitiatedChangeWindow
+        } ?? false
+        let assertLaunchRegistration = initiatedByUser || recentlyInitiated
         serviceSyncGeneration &+= 1
         let generation = serviceSyncGeneration
         serviceSyncTask?.cancel()
@@ -188,7 +187,8 @@ public class LoginItemManager: ObservableObject {
             let status = await Task.detached(priority: .utility) {
                 Self.synchronizeServiceRegistration(
                     launchAtLogin: launchAtLogin,
-                    keepInBackground: keepInBackground
+                    keepInBackground: keepInBackground,
+                    assertLaunchRegistration: assertLaunchRegistration
                 )
             }.value
 
@@ -196,6 +196,12 @@ public class LoginItemManager: ObservableObject {
                   !Task.isCancelled,
                   generation == self.serviceSyncGeneration else {
                 return
+            }
+            // Preference corrections land here, after the generation guard, so
+            // a slow launch-time sync cannot undo a fresh user toggle.
+            if let corrected = status.launchAtLoginPreference,
+               UserDefaults.standard.bool(forKey: "launchAtLogin") != corrected {
+                UserDefaults.standard.set(corrected, forKey: "launchAtLogin")
             }
             self.isLaunchAtLoginEnabled = status.isLaunchAtLoginEnabled
             self.isBackgroundAgentEnabled = status.isBackgroundAgentEnabled
@@ -209,19 +215,36 @@ public class LoginItemManager: ObservableObject {
 
     private nonisolated static func synchronizeServiceRegistration(
         launchAtLogin: Bool,
-        keepInBackground: Bool
+        keepInBackground: Bool,
+        assertLaunchRegistration: Bool
     ) -> LoginItemServiceStatus {
         // 1. Sync Login Item (mainApp)
         let mainAppStatus = SMAppService.mainApp.status
-        
+        var launchAtLoginPreference: Bool?
+
         if launchAtLogin && (mainAppStatus == .notRegistered || mainAppStatus == .notFound) {
-            try? SMAppService.mainApp.register()
-            DebugLogger.log("Registered main app service (Login Item)")
+            if assertLaunchRegistration {
+                try? SMAppService.mainApp.register()
+                DebugLogger.log("Registered main app service (Login Item)")
+            } else {
+                // The user removed Sorty from Login Items in System Settings
+                // (or a previous registration never completed). Re-registering
+                // here would silently undo that opt-out.
+                launchAtLoginPreference = false
+                DebugLogger.log("Login item is not registered; keeping the user's opt-out")
+            }
         } else if launchAtLogin && mainAppStatus == .requiresApproval {
             DebugLogger.log("Login item registration requires user approval in System Settings")
         } else if !launchAtLogin && (mainAppStatus == .enabled || mainAppStatus == .requiresApproval) {
-            try? SMAppService.mainApp.unregister()
-            DebugLogger.log("Unregistered main app service (Login Item)")
+            if assertLaunchRegistration {
+                try? SMAppService.mainApp.unregister()
+                DebugLogger.log("Unregistered main app service (Login Item)")
+            } else {
+                // Enabled from System Settings while Sorty was closed; publish
+                // the real state instead of immediately undoing the opt-in.
+                launchAtLoginPreference = true
+                DebugLogger.log("Login item is registered; keeping the user's opt-in")
+            }
         }
 
         // Migrate off the legacy agent plist that reused the app's service label.
@@ -277,31 +300,14 @@ public class LoginItemManager: ObservableObject {
         let finalMainAppStatus = SMAppService.mainApp.status
         let finalAgentStatus = agent.status
         return LoginItemServiceStatus(
-            isLaunchAtLoginEnabled: finalMainAppStatus == .enabled,
+            // `.requiresApproval` counts as registered so the published toggle
+            // reflects the stored preference and can be turned back off.
+            isLaunchAtLoginEnabled: finalMainAppStatus == .enabled || finalMainAppStatus == .requiresApproval,
             isBackgroundAgentEnabled: finalAgentStatus == .enabled,
             registrationStatus: describe(finalMainAppStatus),
-            agentStatus: describe(finalAgentStatus)
+            agentStatus: describe(finalAgentStatus),
+            launchAtLoginPreference: launchAtLoginPreference
         )
-    }
-
-    private func registerService() {
-        do {
-            try SMAppService.mainApp.register()
-            DebugLogger.log("Registered app service for background activity/login")
-        } catch {
-            DebugLogger.log("Failed to register login item: \(error.localizedDescription)")
-        }
-        refreshStatus()
-    }
-
-    private func unregisterService() {
-        do {
-            try SMAppService.mainApp.unregister()
-            DebugLogger.log("Unregistered app service")
-        } catch {
-            DebugLogger.log("Failed to unregister login item: \(error.localizedDescription)")
-        }
-        refreshStatus()
     }
 
     // MARK: - Settings

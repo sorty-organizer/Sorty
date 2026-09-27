@@ -101,9 +101,11 @@ struct HistoryPartialUndoSection: View {
             )
         }
 
-        let operationNames = Set(items.map(\.name))
+        var seenNames = Set(items.map(\.name))
         items.append(contentsOf: failedFiles.compactMap { fileName in
-            guard !operationNames.contains(fileName) else { return nil }
+            // Preflight/undo failure lists are basenames, so the same name can
+            // appear more than once; keep a single row per name.
+            guard seenNames.insert(fileName).inserted else { return nil }
             return PartialUndoItem(name: fileName, operation: nil)
         })
         return items.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
@@ -529,7 +531,9 @@ struct HistoryDetailActionsSection: View {
 
     @ViewBuilder
     var body: some View {
-        if entry.success || entry.status == .duplicatesCleanup || entry.hasApplicablePlan {
+        // `isUndone` keeps the redo button reachable for fully-undone entries,
+        // whose `hasApplicablePlan` is false because the plan is already applied.
+        if entry.success || entry.status == .duplicatesCleanup || entry.hasApplicablePlan || entry.isUndone {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Actions")
                     .font(.headline)

@@ -19,6 +19,8 @@ struct DuplicatesView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var showDeleteConfirmation = false
     @State private var filesToDelete: [FileItem] = []
+    @State private var cleanupErrorMessage: String?
+    @State private var isCleaningUp = false
     @State private var showSettings = false
     @State private var handoffFilePaths: [String] = []
     @State private var currentScanTask: Task<Void, Never>?
@@ -40,7 +42,7 @@ struct DuplicatesView: View {
         case .preparing, .scanning:
             return false
         case .idle:
-            return true
+            return detectionManager.allGroups.isEmpty
         case .completed, .failed:
             return detectionManager.allGroups.isEmpty
         }
@@ -75,6 +77,7 @@ struct DuplicatesView: View {
                 DuplicatesHeaderNew(
                     manager: detectionManager,
                     currentDirectory: effectiveDirectory,
+                    isCleaningUp: isCleaningUp,
                     onSelectDirectory: selectDirectory,
                     onScan: startScan,
                     onCancel: cancelScan,
@@ -94,7 +97,13 @@ struct DuplicatesView: View {
                             .transition(.opacity)
 
                     case .idle:
-                        if detectionManager.lastScanDate == nil {
+                        if !detectionManager.allGroups.isEmpty {
+                            // A cancelled rescan keeps the previous groups, so
+                            // show the retained results instead of claiming the
+                            // folder is duplicate-free.
+                            resultsView
+                            .transition(.opacity)
+                        } else if detectionManager.lastScanDate == nil {
                             DuplicatesEmptyStateView(
                                 title: "Ready to Scan",
                                 description:
@@ -140,10 +149,21 @@ struct DuplicatesView: View {
                     screen: "duplicates",
                     feature: "duplicate_cleanup"
                 )
-                deleteFiles(filesToDelete)
+                Task { await deleteFiles(filesToDelete) }
             }
         } message: {
             Text(bulkCleanupConfirmationMessage)
+        }
+        .alert(
+            "Cleanup Stopped",
+            isPresented: Binding(
+                get: { cleanupErrorMessage != nil },
+                set: { if !$0 { cleanupErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(cleanupErrorMessage ?? "")
         }
         .onAppear {
             consumePendingHandoffIfNeeded()
@@ -328,10 +348,12 @@ struct DuplicatesView: View {
                         group: group,
                         settings: settingsManager.settings,
                         onDelete: { files in
+                            guard !isCleaningUp else { return }
                             filesToDelete = files
                             showDeleteConfirmation = true
                         }
                     )
+                    .disabled(isCleaningUp)
                     .frame(
                         minWidth: 0,
                         maxWidth: .infinity,
@@ -524,30 +546,39 @@ struct DuplicatesView: View {
         HapticFeedbackManager.shared.tap()
     }
 
-    private func deleteFiles(_ files: [FileItem]) {
+    /// Trashes the pending files off the main actor, records the cleanup in
+    /// History, then refreshes the scan. Stale or partial failures surface an
+    /// alert instead of silently reporting success.
+    private func deleteFiles(_ files: [FileItem]) async {
+        // Bulk trashing is not re-entrant: a second cleanup would validate and
+        // move files the first batch is already working on.
+        guard !isCleaningUp else { return }
+        isCleaningUp = true
+        defer { isCleaningUp = false }
+
         var totalDeleted = 0
         var totalSizeRecovered: Int64 = 0
+        var trashedPaths = Set<String>()
 
         do {
-            let potentialRestorables = try DuplicateRestorationManager.shared.moveToTrash(
+            let potentialRestorables = try await DuplicateRestorationManager.shared.moveToTrashAsync(
                 files: files)
             totalDeleted = potentialRestorables.count
             totalSizeRecovered = files.reduce(0) { $0 + $1.size }
+            trashedPaths.formUnion(potentialRestorables.map(\.originalPath))
 
-            Task { @MainActor in
-                let entry = OrganizationHistoryEntry(
-                    directoryPath: effectiveDirectory?.path ?? "",
-                    filesOrganized: 0,
-                    foldersCreated: 0,
-                    success: true,
-                    status: .duplicatesCleanup,
-                    duplicatesDeleted: totalDeleted,
-                    recoveredSpace: totalSizeRecovered,
-                    restorableItems: potentialRestorables,
-                    duplicateCleanupMode: .trash
-                )
-                appState.organizer?.history.addEntry(entry)
-            }
+            let entry = OrganizationHistoryEntry(
+                directoryPath: effectiveDirectory?.path ?? "",
+                filesOrganized: 0,
+                foldersCreated: 0,
+                success: true,
+                status: .duplicatesCleanup,
+                duplicatesDeleted: totalDeleted,
+                recoveredSpace: totalSizeRecovered,
+                restorableItems: potentialRestorables,
+                duplicateCleanupMode: .trash
+            )
+            appState.organizer?.history.addEntry(entry)
 
             HapticFeedbackManager.shared.success()
             AnalyticsManager.shared.captureFeature(
@@ -560,30 +591,34 @@ struct DuplicatesView: View {
                 ]
             )
         } catch {
+            // Files that already reached the Trash are kept restorable; the
+            // `.duplicatesCleanup` status keeps History's restore action visible
+            // even though the overall cleanup failed.
             if let partialFailure = error as? PartialTrashFailure {
                 let movedItems = partialFailure.movedItems
                 let deletedCount = movedItems.count
                 let movedPaths = Set(movedItems.map(\.originalPath))
+                trashedPaths.formUnion(movedPaths)
                 let recoveredSpace = files
                     .filter { movedPaths.contains($0.path) }
                     .reduce(0) { $0 + $1.size }
                 let errorMessage = error.localizedDescription
-                Task { @MainActor in
-                    let entry = OrganizationHistoryEntry(
-                        directoryPath: effectiveDirectory?.path ?? "",
-                        filesOrganized: 0,
-                        foldersCreated: 0,
-                        success: false,
-                        status: .failed,
-                        errorMessage: errorMessage,
-                        duplicatesDeleted: deletedCount,
-                        recoveredSpace: recoveredSpace,
-                        restorableItems: movedItems,
-                        duplicateCleanupMode: .trash
-                    )
-                    appState.organizer?.history.addEntry(entry)
-                }
+                let entry = OrganizationHistoryEntry(
+                    directoryPath: effectiveDirectory?.path ?? "",
+                    filesOrganized: 0,
+                    foldersCreated: 0,
+                    success: false,
+                    status: .duplicatesCleanup,
+                    errorMessage: errorMessage,
+                    duplicatesDeleted: deletedCount,
+                    recoveredSpace: recoveredSpace,
+                    restorableItems: movedItems,
+                    duplicateCleanupMode: .trash
+                )
+                appState.organizer?.history.addEntry(entry)
             }
+
+            cleanupErrorMessage = error.localizedDescription
             HapticFeedbackManager.shared.error()
             DebugLogger.log("Delete failed: \(error)")
             AnalyticsManager.shared.captureFeature(
@@ -602,8 +637,26 @@ struct DuplicatesView: View {
             )
         }
 
+        // Drop the trashed files from the published groups before rescanning:
+        // a cancelled rescan keeps the previous groups, and those must not
+        // list files that already reached the Trash.
+        pruneCleanedUpResults(trashedPaths)
+
         // Refresh the scan
         startScan()
+    }
+
+    /// Removes trashed paths from the published results and drops a selection
+    /// that no longer exists, so a cancelled post-cleanup rescan cannot keep
+    /// displaying deleted files.
+    private func pruneCleanedUpResults(_ paths: Set<String>) {
+        guard !paths.isEmpty else { return }
+        detectionManager.pruneResults(removingPaths: paths)
+
+        if let selected = appState.duplicateSelectedGroup,
+           !detectionManager.allGroups.contains(where: { $0.id == selected.id }) {
+            appState.duplicateSelectedGroup = detectionManager.allGroups.first
+        }
     }
 
     private func selectDirectory() {
@@ -619,13 +672,73 @@ struct DuplicatesView: View {
         }
     }
 
+    /// Describes the pending set exactly: which group kinds are affected, how
+    /// many files are removed, and which copies actually survive. The previous
+    /// copy claimed similar files were never included, which is false for the
+    /// per-file delete path.
     private var bulkCleanupConfirmationMessage: String {
-        let strategy = settingsManager.settings.defaultKeepStrategy.description.lowercased()
+        let pendingIDs = Set(filesToDelete.map(\.id))
+        let affectedGroups = detectionManager.allGroups.filter { group in
+            group.files.contains { pendingIDs.contains($0.id) }
+        }
         let fileLabel = filesToDelete.count == 1 ? "file" : "files"
-        return "Sorty will \(strategy) in each exact-match group and move \(filesToDelete.count) other \(fileLabel) to Trash. Similar files are not included. History can restore these files until Trash is emptied."
+
+        guard !affectedGroups.isEmpty else {
+            return "Sorty will move \(filesToDelete.count) \(fileLabel) to Trash. History can restore these files until Trash is emptied."
+        }
+
+        let exactGroups = affectedGroups.filter(\.isExact)
+        let similarGroups = affectedGroups.filter(\.isSemantic)
+        var groupSummary: [String] = []
+        if !exactGroups.isEmpty {
+            groupSummary.append(
+                "\(exactGroups.count) exact-match group\(exactGroups.count == 1 ? "" : "s")"
+            )
+        }
+        if !similarGroups.isEmpty {
+            groupSummary.append(
+                "\(similarGroups.count) similar-file group\(similarGroups.count == 1 ? "" : "s")"
+            )
+        }
+
+        var message =
+            "Sorty will move \(filesToDelete.count) \(fileLabel) to Trash across \(groupSummary.joined(separator: " and "))."
+        message += " \(keeperSummary(for: affectedGroups, pendingIDs: pendingIDs))"
+        message += " History can restore these files until Trash is emptied."
+        return message
+    }
+
+    /// Names the survivors using the actual pending set, so the confirmation
+    /// never credits the keep strategy when the user chose a different keeper.
+    private func keeperSummary(
+        for groups: [UnifiedDuplicateGroup],
+        pendingIDs: Set<UUID>
+    ) -> String {
+        let survivingCount = groups.reduce(0) { total, group in
+            total + group.files.filter { !pendingIDs.contains($0.id) }.count
+        }
+
+        guard survivingCount == groups.count else {
+            return "\(survivingCount) file\(survivingCount == 1 ? "" : "s") in these groups stay."
+        }
+
+        let followsKeepStrategy = groups.allSatisfy { $0.isExact } && groups.allSatisfy { group in
+            let keeperID = group.files.first { !pendingIDs.contains($0.id) }?.id
+            return keeperID != nil && keeperID == CleanupPreferenceResolver.preferredFileID(
+                in: group.files,
+                strategy: settingsManager.settings.defaultKeepStrategy
+            )
+        }
+
+        if followsKeepStrategy {
+            return "One copy stays in each group (\(settingsManager.settings.defaultKeepStrategy.displayName))."
+        }
+        return "One file stays in each group."
     }
 
     private func prepareBulkDelete() {
+        guard !isCleaningUp else { return }
+
         var filesToDelete: [FileItem] = []
 
         // Bulk cleanup is intentionally limited to byte-identical files.
@@ -652,6 +765,7 @@ struct DuplicatesHeaderNew: View {
     @SortyHotReload private var hotReload
     @ObservedObject var manager: DuplicateDetectionManager
     let currentDirectory: URL?
+    let isCleaningUp: Bool
     let onSelectDirectory: () -> Void
     let onScan: () -> Void
     let onCancel: () -> Void
@@ -670,6 +784,10 @@ struct DuplicatesHeaderNew: View {
         .overlay(alignment: .bottom) {
             Divider()
         }
+    }
+
+    private var isScanInProgress: Bool {
+        manager.isScanning || manager.state == .preparing
     }
 
     private func headerLayout(spacing: CGFloat, showsFullControls: Bool) -> some View {
@@ -739,9 +857,9 @@ struct DuplicatesHeaderNew: View {
                     .systemLiquidGlassButton()
                     .help("Detection Settings")
                     .accessibilityLabel("Duplicate detection settings")
-                    .disabled(manager.isScanning)
+                    .disabled(isScanInProgress)
 
-                    if manager.exactGroupCount > 0 && !manager.isScanning {
+                    if manager.exactGroupCount > 0 && !isScanInProgress {
                         Button {
                             onBulkDelete()
                         } label: {
@@ -752,10 +870,11 @@ struct DuplicatesHeaderNew: View {
                         }
                         .buttonStyle(.sortyPrimary(size: .small))
                         .tint(.red)
+                        .disabled(isCleaningUp)
                         .help("Keep one preferred copy from every exact-match group and move the rest to Trash")
                     }
 
-                    if manager.isScanning {
+                    if isScanInProgress {
                         Button(action: onCancel) {
                             Label("Cancel", systemImage: "xmark")
                         }

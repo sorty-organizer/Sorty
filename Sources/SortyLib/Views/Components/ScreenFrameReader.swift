@@ -56,7 +56,7 @@ struct ScreenFrameReader: NSViewRepresentable {
 
 final class ProbeView: NSView {
     var onFrameChange: ((CGRect) -> Void)?
-    private var observers: [NSObjectProtocol] = []
+    nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -70,9 +70,11 @@ final class ProbeView: NSView {
     }
 
     deinit {
-        MainActor.assumeIsolated {
-            removeObservers()
-        }
+        // Deinit is nonisolated and can run off the main thread.
+        // NotificationCenter removal is thread-safe, so observers are removed
+        // directly instead of assuming main-actor isolation.
+        let notificationCenter = NotificationCenter.default
+        observers.forEach(notificationCenter.removeObserver)
     }
 
     func reportFrameIfNeeded() {

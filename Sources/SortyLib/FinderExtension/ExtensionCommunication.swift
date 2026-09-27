@@ -49,6 +49,7 @@ public struct ExtensionCommunication {
     private static let organizeQuickActionCommandMarker = "sorty://organize?path=$encoded&source=finder"
     private static let watchQuickActionCommandMarker = "sorty://watched?action=add&path=$encoded"
     private static let previewQuickActionCommandMarker = "sorty://scan?path=$encoded&preview=true"
+    private static let excludeQuickActionCommandMarker = "sorty://exclude?path=$encoded"
     private static let quickActionIconBaseName = "SortyQuickActionIcon"
     private static let quickActionServiceIconName = "workflowCustomImageTemplate"
     private static let organizeWorkflowIconVersionInfoKey = "SortyOrganizeIconVersion"
@@ -78,10 +79,16 @@ public struct ExtensionCommunication {
     public static let notificationName = Notification.Name("SortyDirectorySelected")
     public static let finderSyncHeartbeatNotification = Notification.Name("SortyFinderSyncHeartbeat")
     private static let finderSyncHeartbeatDefaultsKey = "finderSyncHeartbeatCache"
+    private static let finderSyncHeartbeatClearEpochKey = "finderSyncHeartbeatClearEpoch"
     private static let finderSyncHeartbeatMaxAge: TimeInterval = 180
     private static let servicesRegistryRefreshDefaultsKey = "finderServicesRegistryLastRefresh"
     private static let servicesRegistryRefreshMinimumInterval: TimeInterval = 6 * 60 * 60
     nonisolated(unsafe) private static var finderSyncHeartbeatObserver: NSObjectProtocol?
+
+    /// Serializes read-modify-write access to the `pbs` `NSServicesStatus`
+    /// domain; startup, repair, and uninstall can otherwise interleave and lose
+    /// each other's updates.
+    private static let pbsDomainLock = NSLock()
 
     // MARK: - URL Scheme Handling
 
@@ -172,6 +179,9 @@ public struct ExtensionCommunication {
     /// exactly like a deeplink (exists, directory, blocklist); invalid or
     /// missing payloads return nil. Callers must still treat the result as
     /// untrusted until the user confirms any destructive action.
+    ///
+    /// Blocking: the filesystem probes run on the calling thread, so UI paths
+    /// should prefer `receiveFromExtensionAsync()`.
     public static func receiveFromExtension() -> URL? {
         guard let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier),
               let path = sharedDefaults.string(forKey: directoryKey) else {
@@ -179,6 +189,22 @@ public struct ExtensionCommunication {
         }
         sharedDefaults.removeObject(forKey: directoryKey)
         guard let validated = IncomingPathValidator.validatedDirectoryURLIfValid(path: path) else {
+            DebugLogger.log("Rejected invalid Finder extension directory: \(path)")
+            return nil
+        }
+        return validated
+    }
+
+    /// Read-take used by the UI delivery path. The filesystem validation runs
+    /// off the calling actor so a stalled network mount cannot freeze the main
+    /// thread; callers hop back to the main actor with the validated URL.
+    public static func receiveFromExtensionAsync() async -> URL? {
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier),
+              let path = sharedDefaults.string(forKey: directoryKey) else {
+            return nil
+        }
+        sharedDefaults.removeObject(forKey: directoryKey)
+        guard let validated = await IncomingPathValidator.validatedDirectoryURLIfValidAsync(path: path) else {
             DebugLogger.log("Rejected invalid Finder extension directory: \(path)")
             return nil
         }
@@ -193,20 +219,20 @@ public struct ExtensionCommunication {
             object: nil,
             queue: .main
         ) { notification in
-            if let userInfo = notification.userInfo,
-               let path = userInfo["path"] as? String {
-                UserDefaults(suiteName: appGroupIdentifier)?.removeObject(forKey: directoryKey)
-                // DistributedNotificationCenter is unauthenticated: any local
-                // process can post SortyDirectorySelected. Validate like a
-                // deeplink before handing the URL to the UI.
-                guard let validated = IncomingPathValidator.validatedDirectoryURLIfValid(path: path) else {
+            guard let userInfo = notification.userInfo,
+                  let path = userInfo["path"] as? String else {
+                return
+            }
+            UserDefaults(suiteName: appGroupIdentifier)?.removeObject(forKey: directoryKey)
+            // DistributedNotificationCenter is unauthenticated: any local
+            // process can post SortyDirectorySelected. Validate like a deeplink
+            // off-main, then deliver the confirmed URL on the main actor.
+            Task { @MainActor in
+                guard let url = await IncomingPathValidator.validatedDirectoryURLIfValidAsync(path: path) else {
                     DebugLogger.log("Rejected invalid directory notification payload")
                     return
                 }
-                let url = validated
-                Task { @MainActor in
-                    handler(url)
-                }
+                handler(url)
             }
         }
     }
@@ -497,6 +523,12 @@ public struct ExtensionCommunication {
     }
 
     private static func cacheFinderSyncRuntimeHeartbeat(_ heartbeat: FinderSyncRuntimeHeartbeat) {
+        // A heartbeat emitted before the last repair clear (for example one
+        // still in flight when repair started) must not repopulate the cache
+        // and make the pre-repair extension look like the repaired build.
+        if let clearEpoch = finderSyncHeartbeatClearEpoch(), heartbeat.reportedAt < clearEpoch {
+            return
+        }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let data = try? encoder.encode(heartbeat) else { return }
@@ -508,8 +540,15 @@ public struct ExtensionCommunication {
     }
 
     private static func clearCachedFinderSyncRuntimeHeartbeat() {
+        // Stamp the clear time so late-arriving heartbeats from the pre-repair
+        // process are dropped instead of repopulating the cache.
+        heartbeatDefaults().set(Date(), forKey: finderSyncHeartbeatClearEpochKey)
         heartbeatDefaults().removeObject(forKey: finderSyncHeartbeatDefaultsKey)
         UserDefaults.standard.removeObject(forKey: finderSyncHeartbeatDefaultsKey)
+    }
+
+    private static func finderSyncHeartbeatClearEpoch() -> Date? {
+        heartbeatDefaults().object(forKey: finderSyncHeartbeatClearEpochKey) as? Date
     }
 
     private static func cachedFinderSyncRuntimeHeartbeat() -> FinderSyncRuntimeHeartbeat? {
@@ -527,6 +566,11 @@ public struct ExtensionCommunication {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         guard let heartbeat = try? decoder.decode(FinderSyncRuntimeHeartbeat.self, from: data) else {
+            heartbeatDefaults().removeObject(forKey: finderSyncHeartbeatDefaultsKey)
+            return nil
+        }
+
+        if let clearEpoch = finderSyncHeartbeatClearEpoch(), heartbeat.reportedAt < clearEpoch {
             heartbeatDefaults().removeObject(forKey: finderSyncHeartbeatDefaultsKey)
             return nil
         }
@@ -1232,6 +1276,10 @@ public struct ExtensionCommunication {
 
         // Kill any running instance of the extension so macOS loads the fresh one
         _ = await runCommandAsync(executablePath: "/usr/bin/pkill", arguments: ["-f", "SortyFinderSync"])
+        // Clear again after the kill: a heartbeat that was already in flight
+        // when repair began could otherwise land in between the first clear
+        // and verification and look like the repaired build.
+        clearCachedFinderSyncRuntimeHeartbeat()
 
         let beforePaths = await registeredFinderSyncExtensionPathsAsync()
         var removedStaleCount = 0
@@ -1863,29 +1911,31 @@ public struct ExtensionCommunication {
     }
 
     private static func forceEnableSortyServiceEntries() {
-        var pbsDomainValues = UserDefaults.standard.persistentDomain(forName: pbsDomain) ?? [:]
-        var serviceStatus = pbsDomainValues["NSServicesStatus"] as? [String: Any] ?? [:]
+        pbsDomainLock.withLock {
+            var pbsDomainValues = UserDefaults.standard.persistentDomain(forName: pbsDomain) ?? [:]
+            var serviceStatus = pbsDomainValues["NSServicesStatus"] as? [String: Any] ?? [:]
 
-        for service in activeSortyServices {
-            for statusKey in serviceStatusKeyCandidates(for: service, from: serviceStatus) {
-                var currentStatus = serviceStatus[statusKey] as? [String: Any] ?? [:]
-                currentStatus["enabled_context_menu"] = 1
-                currentStatus["enabled_services_menu"] = 1
+            for service in activeSortyServices {
+                for statusKey in serviceStatusKeyCandidates(for: service, from: serviceStatus) {
+                    var currentStatus = serviceStatus[statusKey] as? [String: Any] ?? [:]
+                    currentStatus["enabled_context_menu"] = 1
+                    currentStatus["enabled_services_menu"] = 1
 
-                var presentationModes = currentStatus["presentation_modes"] as? [String: Any] ?? [:]
-                presentationModes["ContextMenu"] = 1
-                presentationModes["ServicesMenu"] = 1
-                presentationModes["FinderPreview"] = 0
-                presentationModes["TouchBar"] = 0
-                currentStatus["presentation_modes"] = presentationModes
+                    var presentationModes = currentStatus["presentation_modes"] as? [String: Any] ?? [:]
+                    presentationModes["ContextMenu"] = 1
+                    presentationModes["ServicesMenu"] = 1
+                    presentationModes["FinderPreview"] = 0
+                    presentationModes["TouchBar"] = 0
+                    currentStatus["presentation_modes"] = presentationModes
 
-                serviceStatus[statusKey] = currentStatus
+                    serviceStatus[statusKey] = currentStatus
+                }
             }
-        }
 
-        pbsDomainValues["NSServicesStatus"] = serviceStatus
-        UserDefaults.standard.setPersistentDomain(pbsDomainValues, forName: pbsDomain)
-        UserDefaults.standard.synchronize()
+            pbsDomainValues["NSServicesStatus"] = serviceStatus
+            UserDefaults.standard.setPersistentDomain(pbsDomainValues, forName: pbsDomain)
+            UserDefaults.standard.synchronize()
+        }
     }
 
     private static func isEnabledValue(_ value: Any?) -> Bool {
@@ -1902,24 +1952,26 @@ public struct ExtensionCommunication {
     }
 
     private static func areSortyServiceEntriesEnabled() -> Bool {
-        let pbsDomainValues = UserDefaults.standard.persistentDomain(forName: pbsDomain) ?? [:]
-        let serviceStatus = pbsDomainValues["NSServicesStatus"] as? [String: Any] ?? [:]
+        pbsDomainLock.withLock {
+            let pbsDomainValues = UserDefaults.standard.persistentDomain(forName: pbsDomain) ?? [:]
+            let serviceStatus = pbsDomainValues["NSServicesStatus"] as? [String: Any] ?? [:]
 
-        for service in activeSortyServices {
-            let statusKeys = serviceStatusKeyCandidates(for: service, from: serviceStatus)
-            guard !statusKeys.isEmpty else {
-                return false
+            for service in activeSortyServices {
+                let statusKeys = serviceStatusKeyCandidates(for: service, from: serviceStatus)
+                guard !statusKeys.isEmpty else {
+                    return false
+                }
+                let hasPreferredEntry = statusKeys.contains { statusKey in
+                    let currentStatus = serviceStatus[statusKey] as? [String: Any] ?? [:]
+                    return statusEntryPrefersContextMenu(currentStatus)
+                }
+                guard hasPreferredEntry else {
+                    return false
+                }
             }
-            let hasPreferredEntry = statusKeys.contains { statusKey in
-                let currentStatus = serviceStatus[statusKey] as? [String: Any] ?? [:]
-                return statusEntryPrefersContextMenu(currentStatus)
-            }
-            guard hasPreferredEntry else {
-                return false
-            }
+
+            return true
         }
-
-        return true
     }
 
     private static func shouldRefreshDynamicServicesRegistry(force: Bool) -> Bool {
@@ -1963,22 +2015,24 @@ public struct ExtensionCommunication {
     private static func removeServiceStatusEntries(
         _ services: [(bundleIdentifier: String, menuTitle: String)]
     ) {
-        var pbsDomainValues = UserDefaults.standard.persistentDomain(forName: pbsDomain) ?? [:]
-        var serviceStatus = pbsDomainValues["NSServicesStatus"] as? [String: Any] ?? [:]
-        var didRemove = false
+        pbsDomainLock.withLock {
+            var pbsDomainValues = UserDefaults.standard.persistentDomain(forName: pbsDomain) ?? [:]
+            var serviceStatus = pbsDomainValues["NSServicesStatus"] as? [String: Any] ?? [:]
+            var didRemove = false
 
-        for service in services {
-            for statusKey in ownedServiceStatusKeyCandidates(for: service, from: serviceStatus) {
-                serviceStatus.removeValue(forKey: statusKey)
-                didRemove = true
+            for service in services {
+                for statusKey in ownedServiceStatusKeyCandidates(for: service, from: serviceStatus) {
+                    serviceStatus.removeValue(forKey: statusKey)
+                    didRemove = true
+                }
             }
+
+            guard didRemove else { return }
+
+            pbsDomainValues["NSServicesStatus"] = serviceStatus
+            UserDefaults.standard.setPersistentDomain(pbsDomainValues, forName: pbsDomain)
+            UserDefaults.standard.synchronize()
         }
-
-        guard didRemove else { return }
-
-        pbsDomainValues["NSServicesStatus"] = serviceStatus
-        UserDefaults.standard.setPersistentDomain(pbsDomainValues, forName: pbsDomain)
-        UserDefaults.standard.synchronize()
     }
 
     private static func removeLegacyServiceStatusEntries() {
@@ -2339,7 +2393,8 @@ public struct ExtensionCommunication {
         var excludeRefreshError: String?
         if !isWorkflowInstalledAndCompatible(
             workflowName: excludeQuickActionWorkflowName,
-            bundleIdentifier: excludeQuickActionBundleIdentifier
+            bundleIdentifier: excludeQuickActionBundleIdentifier,
+            expectedCommand: Self.excludeQuickActionCommandMarker
         ) {
             let refreshResult = installQuickExcludeAction()
             refreshedExcludeWorkflow = refreshResult.success
@@ -2401,9 +2456,19 @@ public struct ExtensionCommunication {
             let iconPath = workflowPath
                 .appendingPathComponent("Contents/Resources")
                 .appendingPathComponent("\(quickActionServiceIconName).png")
-            if FileManager.default.fileExists(atPath: iconPath.path) {
-                return true
+            guard FileManager.default.fileExists(atPath: iconPath.path) else {
+                continue
             }
+
+            // A workflow that opens the wrong (or a stale) command must not be
+            // reported as installed; ensureQuickActionInstalled re-installs it.
+            let workflowURL = workflowPath.appendingPathComponent("Contents/document.wflow")
+            guard let contents = try? String(contentsOf: workflowURL, encoding: .utf8),
+                  contents.contains(xmlEscaped(Self.organizeQuickActionCommandMarker)) else {
+                continue
+            }
+
+            return true
         }
         return false
     }
@@ -3018,12 +3083,18 @@ public struct ExtensionCommunication {
     /// Check if Quick Watch Action is installed
     public static func isQuickWatchActionInstalled() -> Bool {
         return isWatchWorkflowInstalledAndCompatible()
+            && isWorkflowInstalledAndCompatible(
+                workflowName: watchQuickActionWorkflowName,
+                bundleIdentifier: watchQuickActionBundleIdentifier,
+                expectedCommand: Self.watchQuickActionCommandMarker
+            )
     }
 
     public static func isQuickExcludeActionInstalled() -> Bool {
         return isWorkflowInstalledAndCompatible(
             workflowName: excludeQuickActionWorkflowName,
-            bundleIdentifier: excludeQuickActionBundleIdentifier
+            bundleIdentifier: excludeQuickActionBundleIdentifier,
+            expectedCommand: Self.excludeQuickActionCommandMarker
         )
     }
 
@@ -3356,7 +3427,8 @@ public struct ExtensionCommunication {
     public static func isQuickPreviewActionInstalled() -> Bool {
         return isWorkflowInstalledAndCompatible(
             workflowName: previewQuickActionWorkflowName,
-            bundleIdentifier: previewQuickActionBundleIdentifier
+            bundleIdentifier: previewQuickActionBundleIdentifier,
+            expectedCommand: Self.previewQuickActionCommandMarker
         )
     }
 

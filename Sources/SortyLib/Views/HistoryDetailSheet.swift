@@ -553,9 +553,11 @@ struct HistoryDetailSheet: View {
             }
             var restoredCount = 0
             var failedCount = 0
+            var restorableItems: [RestorableDuplicate] = []
             for item in restorables {
                 guard DuplicateRestorationManager.shared.canRestore(item: item) else {
                     failedCount += 1
+                    restorableItems.append(item)
                     continue
                 }
                 do {
@@ -563,10 +565,20 @@ struct HistoryDetailSheet: View {
                     restoredCount += 1
                 } catch {
                     failedCount += 1
+                    restorableItems.append(item)
                 }
             }
             if restoredCount > 0 {
                 HapticFeedbackManager.shared.success()
+
+                // Drop the restored entries so "Deleted Files" and the restore
+                // button disappear. Keep an empty array rather than nil so the
+                // entry still counts as detailed and the pruned list is written
+                // back instead of a stale details file being re-read.
+                var updatedEntry = currentEntry
+                updatedEntry.restorableItems = restorableItems
+                loadedEntry = updatedEntry
+                organizer.history.updateEntry(updatedEntry)
             } else {
                 HapticFeedbackManager.shared.error()
             }
@@ -1699,7 +1711,7 @@ struct PartialUndoResultSheet: View {
 
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 6) {
-                            ForEach(result.missingFiles, id: \.self) { fileName in
+                            ForEach(Array(result.missingFiles.enumerated()), id: \.offset) { _, fileName in
                                 let displayName = FeatureFlags.privacyModeEnabled
                                     ? PrivacyPathMasker.redactedText(fileName)
                                     : fileName

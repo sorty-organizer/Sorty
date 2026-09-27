@@ -152,7 +152,18 @@ public struct MenuBarView: View {
 
     @AppStorage("keepInBackground") private var keepInBackground = false
     @AppStorage("hideDockIcon") private var hideDockIcon = false
-    @AppStorage("launchAtLogin") private var launchAtLogin = false
+
+    /// Launch at Login reflects the real registration and toggles through the
+    /// manager so a System Settings opt-out is never silently re-registered.
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { loginItemManager.isLaunchAtLoginEnabled },
+            set: { newValue in
+                loginItemManager.setLaunchAtLogin(newValue)
+                HapticFeedbackManager.shared.tap()
+            }
+        )
+    }
 
     // Derived from watched folders so "Pause All" never goes stale.
     private var isAllPaused: Bool {
@@ -325,15 +336,9 @@ public struct MenuBarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
 
-            Toggle(isOn: Binding(
-                get: { launchAtLogin },
-                set: { newValue in
-                    launchAtLogin = newValue
-                    HapticFeedbackManager.shared.tap()
-                }
-            )) {
+            Toggle(isOn: launchAtLoginBinding) {
                 HStack(spacing: 8) {
-                    LaunchAtLoginIcon(isEnabled: launchAtLogin)
+                    LaunchAtLoginIcon(isEnabled: loginItemManager.isLaunchAtLoginEnabled)
                     Text("Launch at Login")
                     Spacer()
                 }
@@ -366,6 +371,9 @@ public struct MenuBarView: View {
                 get: { hideDockIcon },
                 set: { newValue in
                     hideDockIcon = newValue
+                    // The main-window onChange is window-scoped; apply the
+                    // policy here so the toggle works with zero windows.
+                    NSApp.setActivationPolicy(newValue ? .accessory : .regular)
                     HapticFeedbackManager.shared.tap()
                 }
             )) {
@@ -381,7 +389,7 @@ public struct MenuBarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
 
-            if keepInBackground || launchAtLogin || hideDockIcon {
+            if keepInBackground || loginItemManager.isLaunchAtLoginEnabled || hideDockIcon {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Running as Background Activity")
                         .font(.caption2)
@@ -711,4 +719,6 @@ private struct WatchedFolderMenuItem: View {
     MenuBarView()
         .environmentObject(WatchedFoldersManager())
         .environmentObject(MenuBarController())
+        .environmentObject(LoginItemManager.shared)
+        .environmentObject(NotificationSettingsManager.shared)
 }

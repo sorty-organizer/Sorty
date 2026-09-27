@@ -68,6 +68,50 @@ struct KeychainManager {
     private static var allServices: [String] {
         [primaryService] + fallbackServices
     }
+
+    /// Result of probing every service `get` searches for an item. Callers
+    /// that destroy or rotate data must never treat an unreadable Keychain as
+    /// definitive absence, so "not found" is only reported when every service
+    /// answered `errSecItemNotFound`.
+    enum ItemStatus: Sendable, Equatable {
+        case found
+        case notFound
+        case unavailable
+    }
+
+    /// Tri-state counterpart of `get(key:)` that checks every service `get`
+    /// reads. `nil` from `get` collapses "never saved" and "temporarily
+    /// unreadable"; rotation decisions need that distinction.
+    static func itemStatus(key: String) -> ItemStatus {
+        if cacheGet(key: key) != nil {
+            return .found
+        }
+
+        var sawUnavailableStatus = false
+        for service in allServices {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: key,
+                kSecReturnData as String: true,
+                kSecMatchLimit as String: kSecMatchLimitOne
+            ]
+
+            var result: AnyObject?
+            let status = SecItemCopyMatching(query as CFDictionary, &result)
+            switch status {
+            case errSecSuccess:
+                return .found
+            case errSecItemNotFound:
+                continue
+            default:
+                logFailure(operation: "status(\(service))", status: status)
+                sawUnavailableStatus = true
+            }
+        }
+
+        return sawUnavailableStatus ? .unavailable : .notFound
+    }
     
     static func save(key: String, value: String) -> Bool {
         guard let data = value.data(using: .utf8) else { return false }

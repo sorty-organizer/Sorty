@@ -5,6 +5,7 @@
 //  Settings for automation and watched folder AI configuration
 //
 
+import AppKit
 import SwiftUI
 
 struct AutomationSettingsView: View {
@@ -13,7 +14,6 @@ struct AutomationSettingsView: View {
     @EnvironmentObject var loginItemManager: LoginItemManager
 
     @AppStorage("keepInBackground") private var keepInBackground = false
-    @AppStorage("launchAtLogin") private var launchAtLogin = false
     
     @State private var useSeparateModel = false
     @State private var selectedProvider: AIProvider = .openAI
@@ -22,6 +22,22 @@ struct AutomationSettingsView: View {
     @State private var showAutomationModelInfo = false
     @State private var showBackgroundInfo = false
     @State private var isLoadingSettings = true
+
+    /// Reflects the real SMAppService registration (not just the stored
+    /// preference) and routes toggles back through the manager.
+    private var launchAtLoginBinding: Binding<Bool> {
+        Binding(
+            get: { loginItemManager.isLaunchAtLoginEnabled },
+            set: { newValue in
+                loginItemManager.setLaunchAtLogin(newValue)
+                AnalyticsManager.shared.captureSettingChanged(
+                    "Launch at Login",
+                    isEnabled: newValue,
+                    section: "automation"
+                )
+            }
+        )
+    }
     
     var body: some View {
         Group {
@@ -180,7 +196,7 @@ struct AutomationSettingsView: View {
         SettingsCard(title: "Background Behavior", icon: "menubar.rectangle", color: .purple) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle(isOn: $launchAtLogin) {
+                    Toggle(isOn: launchAtLoginBinding) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Launch at Login")
                                 .font(.subheadline)
@@ -191,13 +207,6 @@ struct AutomationSettingsView: View {
                     }
                     .toggleStyle(.switch)
                     .settingsFocusableSetting(.automationLaunchAtLogin)
-                    .onChange(of: launchAtLogin) { _, newValue in
-                        AnalyticsManager.shared.captureSettingChanged(
-                            "Launch at Login",
-                            isEnabled: newValue,
-                            section: "automation"
-                        )
-                    }
 
                     Toggle(isOn: $keepInBackground) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -268,6 +277,9 @@ struct AutomationSettingsView: View {
                     .toggleStyle(.switch)
                     .settingsFocusableSetting(.automationHideDockIcon)
                     .onChange(of: hideDockIcon) { _, newValue in
+                        // The main-window onChange is window-scoped; apply the
+                        // policy here so the toggle works with zero windows.
+                        NSApp.setActivationPolicy(newValue ? .accessory : .regular)
                         AnalyticsManager.shared.captureSettingChanged(
                             "Hide Dock Icon",
                             isEnabled: newValue,
@@ -326,6 +338,7 @@ struct AutomationSettingsView: View {
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(WatchedFoldersManager())
         .environmentObject(AppState())
+        .environmentObject(LoginItemManager.shared)
         .frame(width: 500, height: 600)
 }
 #endif

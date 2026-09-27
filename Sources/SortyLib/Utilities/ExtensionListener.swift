@@ -9,19 +9,18 @@ import Foundation
 import SwiftUI
 import Combine
 
+/// Bridges validated Finder handoffs to `MainWindowRouter`, which picks a
+/// single target window. Broadcasting the selection from this app-wide object
+/// would make every open window react to one Finder action.
 @MainActor
 public class ExtensionListener: ObservableObject {
-    @Published public var incomingURL: URL?
     nonisolated(unsafe) private var notificationObserver: NSObjectProtocol?
 
     public init() {
         notificationObserver = ExtensionCommunication.setupNotificationObserver { @MainActor [weak self] url in
-            // ExtensionCommunication validates the IPC payload; keep only
-            // validated directory URLs here.
-            guard case .success = IncomingPathValidator.validatedDirectoryURL(for: url.path) else {
-                return
-            }
-            self?.incomingURL = url
+            // ExtensionCommunication validates the IPC payload off-main before
+            // calling this handler.
+            self?.route(url)
         }
     }
 
@@ -30,9 +29,14 @@ public class ExtensionListener: ObservableObject {
     /// `configureGlobalsIfNeeded` rather than init to keep scene creation free
     /// of IPC validation and filesystem checks.
     public func drainHandoffSlot() {
-        if let existingURL = ExtensionCommunication.receiveFromExtension() {
-            incomingURL = existingURL
+        Task { @MainActor [weak self] in
+            guard let url = await ExtensionCommunication.receiveFromExtensionAsync() else { return }
+            self?.route(url)
         }
+    }
+
+    private func route(_ directoryURL: URL) {
+        MainWindowRouter.shared.routeFinderDirectory(directoryURL)
     }
 
     deinit {

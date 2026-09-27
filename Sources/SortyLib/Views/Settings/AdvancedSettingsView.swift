@@ -103,8 +103,8 @@ struct AdvancedSettingsView: View {
                         title: "Request Timeout",
                         description: "Time to wait for initial response",
                         value: $viewModel.config.requestTimeout,
-                        sliderMin: 30,
-                        defaultMax: 600,
+                        sliderMin: AIConfig.minRequestTimeout,
+                        maxAllowed: AIConfig.maxRequestTimeout,
                         step: 10,
                         focusTarget: .advancedRequestTimeout
                     )
@@ -115,9 +115,9 @@ struct AdvancedSettingsView: View {
                         title: "Resource Timeout",
                         description: "Maximum total request duration",
                         value: $viewModel.config.resourceTimeout,
-                        sliderMin: 60,
-                        defaultMax: 1800,
-                        step: 60,
+                        sliderMin: AIConfig.minOrganizeResourceTimeout,
+                        maxAllowed: AIConfig.maxOrganizeResourceTimeout,
+                        step: 10,
                         focusTarget: .advancedResourceTimeout
                     )
                 }
@@ -219,7 +219,9 @@ private struct TimeoutSliderRow: View {
     let description: String
     @Binding var value: TimeInterval
     let sliderMin: Double
-    let defaultMax: Double
+    /// Upper bound consumers actually honor. The editable maximum cannot
+    /// exceed it, so the UI never advertises an unused timeout.
+    let maxAllowed: Double
     let step: Double
     let focusTarget: SettingsFocusTarget
 
@@ -229,8 +231,7 @@ private struct TimeoutSliderRow: View {
     @FocusState private var maxFieldFocused: Bool
     
     private var effectiveMax: Double {
-        if let customMax, customMax > sliderMin { return customMax }
-        return max(defaultMax, value)
+        min(max(customMax ?? maxAllowed, sliderMin), maxAllowed)
     }
     
     var body: some View {
@@ -296,16 +297,17 @@ private struct TimeoutSliderRow: View {
     private func commitMax() {
         // Double accepts strings such as "inf"; allowing those into the slider
         // range later traps when the displayed maximum is converted to Int.
-        // Bound very large finite values too, since the UI displays them as Int.
-        let largestDisplayableMax = Double(Int.max / 2)
+        // Bound to the hard cap consumers honor so the UI never shows a value
+        // that gets silently clamped downstream.
         if let parsed = Double(maxText),
            parsed.isFinite,
            parsed >= sliderMin,
-           parsed <= largestDisplayableMax {
+           parsed <= maxAllowed {
             let rounded = (parsed / step).rounded() * step
+            let bounded = min(rounded, maxAllowed)
             withAnimation(.easeInOut(duration: 0.15)) {
-                customMax = rounded
-                if value > rounded { value = rounded }
+                customMax = bounded
+                if value > bounded { value = bounded }
             }
             HapticFeedbackManager.shared.success()
         }

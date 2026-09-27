@@ -1464,6 +1464,7 @@ struct ExclusionRuleRow: View {
     let isHighlighted: Bool
     let onEdit: () -> Void
     @State private var isHovered = false
+    @State private var isShowingGroupedDeleteConfirmation = false
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
 
     private var usage: ExclusionRuleUsage? {
@@ -1475,7 +1476,39 @@ struct ExclusionRuleRow: View {
     }()
 
     private var isFolderExclusion: Bool {
-        rule.type == .pathContains && rule.pattern.hasPrefix("/")
+        rule.isFolderTreePathRule
+    }
+
+    private var isGroupedCondition: Bool {
+        rule.conditionGroupID != nil
+    }
+
+    private var groupSize: Int {
+        guard let groupID = rule.conditionGroupID else { return 0 }
+        return rulesManager.rules.filter { $0.conditionGroupID == groupID }.count
+    }
+
+    private var groupedDeleteMessage: String {
+        if groupSize > 1 {
+            return "It is one of \(groupSize) conditions that must all match, so removing it loosens what this group excludes."
+        }
+        return "It is the last condition in its group, so removing it deletes the whole exclusion."
+    }
+
+    /// Deleting one member instantly loosens an AND group, so confirm first.
+    private func requestDelete() {
+        if isGroupedCondition {
+            isShowingGroupedDeleteConfirmation = true
+        } else {
+            deleteRule()
+        }
+    }
+
+    private func deleteRule() {
+        HapticFeedbackManager.shared.tap()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            rulesManager.removeRule(rule)
+        }
     }
 
     private var exclusionTitle: String {
@@ -1517,6 +1550,32 @@ struct ExclusionRuleRow: View {
                             .clipShape(RoundedRectangle(cornerRadius: 3))
                     }
 
+                    if isGroupedCondition {
+                        Text(groupSize > 1 ? "Group of \(groupSize)" : "Grouped")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.orange.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                            .help("Every condition in this group must match before an item is excluded.")
+                            .accessibilityLabel(
+                                "Part of a group of \(max(groupSize, 1)) conditions that must all match"
+                            )
+                    }
+
+                    if let validationIssue = rule.patternValidationIssue {
+                        Label("Invalid pattern", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.red.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                            .help(validationIssue)
+                            .accessibilityLabel("Invalid pattern. \(validationIssue)")
+                    }
+
                 }
 
                 HStack(spacing: 6) {
@@ -1546,10 +1605,7 @@ struct ExclusionRuleRow: View {
 
             if isHovered {
                 Button {
-                    HapticFeedbackManager.shared.tap()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        rulesManager.removeRule(rule)
-                    }
+                    requestDelete()
                 } label: {
                     Image(systemName: "trash")
                         .font(.caption)
@@ -1557,6 +1613,7 @@ struct ExclusionRuleRow: View {
                 }
                 .buttonStyle(.plain)
                 .transition(.scale.combined(with: .opacity))
+                .help(isGroupedCondition ? "Remove this condition from its group" : "Remove rule")
             }
 
             Toggle(
@@ -1604,20 +1661,26 @@ struct ExclusionRuleRow: View {
             }
 
             Button(role: .destructive) {
-                HapticFeedbackManager.shared.tap()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    rulesManager.removeRule(rule)
-                }
+                requestDelete()
             } label: {
                 Label("Delete", systemImage: "trash")
             }
         }
         .accessibilityAction(named: Text("Edit"), onEdit)
         .accessibilityAction(named: Text("Delete")) {
-            HapticFeedbackManager.shared.tap()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                rulesManager.removeRule(rule)
+            requestDelete()
+        }
+        .confirmationDialog(
+            "Remove this condition?",
+            isPresented: $isShowingGroupedDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Remove Condition", role: .destructive) {
+                deleteRule()
             }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(groupedDeleteMessage)
         }
     }
 
@@ -1766,6 +1829,27 @@ private enum AdvancedRuleChoice: String, CaseIterable, Identifiable {
     var id: Self { self }
 }
 
+/// Snapshot of every linked-condition editor field, used to detect unsaved edits
+/// before switching to another condition in the same group.
+private struct ExclusionConditionDraft: Equatable {
+    var intent: ExclusionIntent?
+    var fileKindChoice: FileKindChoice
+    var nameMatchChoice: NameMatchChoice
+    var propertyChoice: PropertyChoice
+    var advancedChoice: AdvancedRuleChoice
+    var selectedFinderTag: FinderTagColor
+    var pattern: String
+    var description: String
+    var numericValue: Double
+    var comparisonGreater: Bool
+    var sizeUnit: ExclusionSizeUnit
+    var dateAgeUnit: ExclusionAgeUnit
+    var selectedFileTypeCategory: FileTypeCategory
+    var selectedFolderURL: URL?
+    var caseSensitive: Bool
+    var negated: Bool
+}
+
 struct AddExclusionRuleView: View {
     @SortyHotReload private var hotReload
     @ObservedObject var rulesManager: ExclusionRulesManager
@@ -1791,6 +1875,10 @@ struct AddExclusionRuleView: View {
     @State private var caseSensitive = false
     @State private var negated = false
     @State private var activeConditionID: UUID?
+    /// Editor values as last loaded, used to detect unsaved linked-condition edits.
+    @State private var loadedConditionDraft: ExclusionConditionDraft?
+    @State private var pendingCondition: ExclusionRule?
+    @State private var showingConditionSwitchConfirmation = false
 
     init(
         rulesManager: ExclusionRulesManager,
@@ -1860,6 +1948,26 @@ struct AddExclusionRuleView: View {
             }
             HapticFeedbackManager.shared.selection()
             selectedFolderURL = url.standardizedFileURL
+        }
+        .onAppear(perform: captureInitialConditionDraftIfNeeded)
+        .confirmationDialog(
+            "Unsaved changes to this condition",
+            isPresented: $showingConditionSwitchConfirmation,
+            titleVisibility: .visible
+        ) {
+            if isValidInput {
+                Button("Save & Switch") {
+                    saveActiveConditionAndSwitch()
+                }
+            }
+            Button("Discard Changes", role: .destructive) {
+                discardActiveConditionChanges()
+            }
+            Button("Keep Editing", role: .cancel) {
+                pendingCondition = nil
+            }
+        } message: {
+            Text("Your edits to the current condition haven't been saved yet.")
         }
     }
 
@@ -1965,12 +2073,12 @@ struct AddExclusionRuleView: View {
                 Button {
                     HapticFeedbackManager.shared.selection()
                     withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedIntent = intent
                         if let relatedRule = relatedRules.first(where: {
                             Self.intent(for: $0) == intent
                         }) {
                             loadCondition(relatedRule)
                         }
-                        selectedIntent = intent
                     }
                 } label: {
                     HStack(spacing: 14) {
@@ -2015,25 +2123,23 @@ struct AddExclusionRuleView: View {
                 .foregroundStyle(.secondary)
 
             ForEach(relatedRules) { condition in
+                let displayedCondition = currentCondition(for: condition)
+
                 Button {
-                    HapticFeedbackManager.shared.selection()
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        loadCondition(condition)
-                        selectedIntent = Self.intent(for: condition)
-                    }
+                    selectLinkedCondition(displayedCondition)
                 } label: {
                     HStack {
-                        Image(systemName: condition.aiToolIcon)
+                        Image(systemName: displayedCondition.aiToolIcon)
                             .foregroundStyle(
-                                condition.id == activeConditionID
+                                displayedCondition.id == activeConditionID
                                     ? Color.accentColor
                                     : Color.secondary
                             )
                             .accessibilityHidden(true)
-                        Text(condition.interpretedMatchDescription)
+                        Text(displayedCondition.interpretedMatchDescription)
                             .foregroundStyle(.primary)
                         Spacer()
-                        if condition.id == activeConditionID {
+                        if displayedCondition.id == activeConditionID {
                             Image(systemName: "checkmark")
                                 .foregroundStyle(.tint)
                                 .accessibilityHidden(true)
@@ -2044,7 +2150,7 @@ struct AddExclusionRuleView: View {
                 }
                 .buttonStyle(.plain)
                 .background(
-                    condition.id == activeConditionID
+                    displayedCondition.id == activeConditionID
                         ? Color.accentColor.opacity(0.10)
                         : Color.clear,
                     in: RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -2128,7 +2234,7 @@ struct AddExclusionRuleView: View {
 
     private static func intent(for rule: ExclusionRule) -> ExclusionIntent {
         switch rule.type {
-        case .pathContains where rule.pattern.hasPrefix("/"):
+        case .pathContains where rule.isFolderTreePathRule:
             .folder
         case .finderTag:
             .finderTag
@@ -2140,6 +2246,87 @@ struct AddExclusionRuleView: View {
             .properties
         case .hiddenFiles, .systemFiles, .pathContains, .regex, .customScript:
             .advanced
+        }
+    }
+
+    /// Loads a linked condition, warning first when the active one has unsaved edits.
+    private func selectLinkedCondition(_ tappedCondition: ExclusionRule) {
+        let condition = currentCondition(for: tappedCondition)
+        guard condition.id != activeConditionID else { return }
+
+        HapticFeedbackManager.shared.selection()
+        if isActiveConditionDirty {
+            pendingCondition = condition
+            showingConditionSwitchConfirmation = true
+        } else {
+            switchCondition(to: condition)
+        }
+    }
+
+    /// Reads the freshest saved copy so previously saved edits are not replaced
+    /// by the snapshot captured when the editor opened.
+    private func currentCondition(for condition: ExclusionRule) -> ExclusionRule {
+        rulesManager.rules.first { $0.id == condition.id } ?? condition
+    }
+
+    private func switchCondition(to condition: ExclusionRule) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            selectedIntent = Self.intent(for: condition)
+            loadCondition(condition)
+        }
+    }
+
+    private func saveActiveConditionAndSwitch() {
+        guard let condition = pendingCondition,
+              let rule = configuredRule()
+        else {
+            pendingCondition = nil
+            return
+        }
+
+        HapticFeedbackManager.shared.success()
+        persist(rule)
+        pendingCondition = nil
+        switchCondition(to: condition)
+    }
+
+    private func discardActiveConditionChanges() {
+        guard let condition = pendingCondition else { return }
+        pendingCondition = nil
+        switchCondition(to: condition)
+    }
+
+    private var isActiveConditionDirty: Bool {
+        guard let loadedConditionDraft else { return false }
+        return currentConditionDraft != loadedConditionDraft
+    }
+
+    private var currentConditionDraft: ExclusionConditionDraft {
+        ExclusionConditionDraft(
+            intent: selectedIntent,
+            fileKindChoice: fileKindChoice,
+            nameMatchChoice: nameMatchChoice,
+            propertyChoice: propertyChoice,
+            advancedChoice: advancedChoice,
+            selectedFinderTag: selectedFinderTag,
+            pattern: pattern,
+            description: description,
+            numericValue: numericValue,
+            comparisonGreater: comparisonGreater,
+            sizeUnit: sizeUnit,
+            dateAgeUnit: dateAgeUnit,
+            selectedFileTypeCategory: selectedFileTypeCategory,
+            selectedFolderURL: selectedFolderURL,
+            caseSensitive: caseSensitive,
+            negated: negated
+        )
+    }
+
+    /// Captures the values set up in `init` so the first tap on another condition
+    /// can tell whether anything was edited.
+    private func captureInitialConditionDraftIfNeeded() {
+        if loadedConditionDraft == nil {
+            loadedConditionDraft = currentConditionDraft
         }
     }
 
@@ -2166,11 +2353,12 @@ struct AddExclusionRuleView: View {
             numericValue = rule.numericValue ?? 100
         }
         selectedFileTypeCategory = rule.fileTypeCategory ?? .images
-        selectedFolderURL = Self.intent(for: rule) == .folder
+        selectedFolderURL = rule.isFolderTreePathRule
             ? URL(fileURLWithPath: rule.pattern)
             : nil
         caseSensitive = rule.caseSensitive
         negated = rule.negated
+        loadedConditionDraft = currentConditionDraft
     }
 
     private var folderConfiguration: some View {
@@ -2382,17 +2570,44 @@ struct AddExclusionRuleView: View {
             case .pathContains:
                 labeledPatternField(
                     title: "Text in the path",
-                    placeholder: "/backups/",
-                    help: "Matches this text anywhere in the full path."
+                    placeholder: "backups",
+                    help: "Matches any path that contains this text. To exclude a folder and everything inside it, use “A specific folder” instead."
                 )
+                if trimmedPattern.hasPrefix("/") {
+                    pathSemanticsHint
+                }
             case .regex:
                 labeledPatternField(
                     title: "Regular expression",
                     placeholder: "^temp_.*\\.log$",
                     help: "Matches against the file or folder name."
                 )
+                if let patternValidationIssue {
+                    patternErrorRow(patternValidationIssue)
+                }
             }
         }
+    }
+
+    /// Explains that a free-text path rule matches text, not a folder tree, so
+    /// "/backups/" doesn't silently behave like a chosen folder.
+    private var pathSemanticsHint: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "info.circle.fill")
+                .foregroundStyle(.secondary)
+            Text("“\(trimmedPattern)” matches any path containing that text. To exclude a folder and its contents, go back and choose “A specific folder”.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityIdentifier("ExclusionRulePathSemanticsHint")
+    }
+
+    private func patternErrorRow(_ text: String) -> some View {
+        Label(text, systemImage: "exclamationmark.triangle.fill")
+            .font(.caption)
+            .foregroundStyle(.red)
+            .accessibilityIdentifier("ExclusionRulePatternError")
     }
 
     private func labeledPatternField(title: String, placeholder: String, help: String) -> some View {
@@ -2463,35 +2678,50 @@ struct AddExclusionRuleView: View {
             return numericValue > 0
         case .customScript:
             return false
+        case .regex:
+            guard !trimmedPattern.isEmpty else { return false }
+            return ExclusionRulePatternValidator.regexIssue(
+                trimmedPattern,
+                caseSensitive: caseSensitive
+            ) == nil
         default:
-            return !pattern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return !trimmedPattern.isEmpty
         }
     }
 
-    private func addRule() {
-        guard let selectedIntent, let selectedRuleType else { return }
+    private var trimmedPattern: String {
+        pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Inline explanation for a regular expression the matcher cannot compile.
+    private var patternValidationIssue: String? {
+        guard selectedRuleType == .regex, !trimmedPattern.isEmpty else { return nil }
+        return ExclusionRulePatternValidator.regexIssue(
+            trimmedPattern,
+            caseSensitive: caseSensitive
+        )
+    }
+
+    /// Builds the rule the editor currently describes, or nil when nothing is chosen.
+    private func configuredRule() -> ExclusionRule? {
+        guard let selectedIntent, let selectedRuleType else { return nil }
 
         if selectedIntent == .folder, let selectedFolderURL {
             let normalizedPath = selectedFolderURL.standardizedFileURL.path
             let folderName = selectedFolderURL.lastPathComponent
-            save(
-                ExclusionRule(
-                    type: .pathContains,
-                    pattern: normalizedPath,
-                    description: folderName.isEmpty ? "Protected folder" : folderName,
-                    caseSensitive: caseSensitive,
-                    negated: negated
-                )
+            return ExclusionRule(
+                type: .pathContains,
+                pattern: normalizedPath,
+                description: folderName.isEmpty ? "Protected folder" : folderName,
+                pathMatchMode: .folderTree,
+                caseSensitive: caseSensitive,
+                negated: negated
             )
-            return
         }
-
-        let trimmedPattern = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rule: ExclusionRule
 
         switch selectedRuleType {
         case .finderTag:
-            rule = ExclusionRule(
+            return ExclusionRule(
                 type: .finderTag,
                 pattern: String(selectedFinderTag.rawValue),
                 description: description.isEmpty
@@ -2499,7 +2729,7 @@ struct AddExclusionRuleView: View {
                     : description
             )
         case .fileSize, .creationDate, .modificationDate:
-            rule = ExclusionRule(
+            return ExclusionRule(
                 type: selectedRuleType,
                 description: description.isEmpty ? nil : description,
                 numericValue: selectedRuleType == .fileSize
@@ -2515,7 +2745,7 @@ struct AddExclusionRuleView: View {
                 negated: negated
             )
         case .fileType:
-            rule = ExclusionRule(
+            return ExclusionRule(
                 type: .fileType,
                 description: description.isEmpty ? nil : description,
                 fileTypeCategory: selectedFileTypeCategory,
@@ -2523,47 +2753,57 @@ struct AddExclusionRuleView: View {
                 negated: negated
             )
         default:
-            rule = ExclusionRule(
+            return ExclusionRule(
                 type: selectedRuleType,
                 pattern: trimmedPattern,
                 description: description.isEmpty ? nil : description,
+                pathMatchMode: selectedRuleType == .pathContains ? .substring : nil,
                 caseSensitive: caseSensitive,
                 negated: negated
             )
         }
+    }
 
+    private func addRule() {
+        guard let rule = configuredRule() else { return }
         save(rule)
     }
 
     private func save(_ rule: ExclusionRule) {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            if let editingRule,
-               let conditionToUpdate = relatedRules.first(where: { $0.id == activeConditionID })
-                    ?? (relatedRules.count == 1 ? editingRule : nil) {
-                let updatedRule = ExclusionRule(
-                    id: conditionToUpdate.id,
-                    type: rule.type,
-                    pattern: rule.pattern,
-                    isEnabled: conditionToUpdate.isEnabled,
-                    description: rule.description,
-                    isBuiltIn: conditionToUpdate.isBuiltIn,
-                    isAIGenerated: conditionToUpdate.isAIGenerated ?? false,
-                    conditionGroupID: conditionToUpdate.conditionGroupID,
-                    numericValue: rule.numericValue,
-                    comparisonGreater: rule.comparisonGreater,
-                    sizeUnit: rule.sizeUnit,
-                    ageUnit: rule.ageUnit,
-                    ageIntervalSeconds: rule.ageIntervalSeconds,
-                    fileTypeCategory: rule.fileTypeCategory,
-                    caseSensitive: rule.caseSensitive,
-                    negated: rule.negated
-                )
-                rulesManager.updateRule(updatedRule)
-            } else {
-                rulesManager.addRule(rule)
-            }
+            persist(rule)
         }
         dismiss()
+    }
+
+    /// Applies an editor-built rule to the active condition, or adds it as a new rule.
+    private func persist(_ rule: ExclusionRule) {
+        if let editingRule,
+           let conditionToUpdate = relatedRules.first(where: { $0.id == activeConditionID })
+                ?? (relatedRules.count == 1 ? editingRule : nil) {
+            let updatedRule = ExclusionRule(
+                id: conditionToUpdate.id,
+                type: rule.type,
+                pattern: rule.pattern,
+                isEnabled: conditionToUpdate.isEnabled,
+                description: rule.description,
+                isBuiltIn: conditionToUpdate.isBuiltIn,
+                isAIGenerated: conditionToUpdate.isAIGenerated ?? false,
+                conditionGroupID: conditionToUpdate.conditionGroupID,
+                pathMatchMode: rule.pathMatchMode,
+                numericValue: rule.numericValue,
+                comparisonGreater: rule.comparisonGreater,
+                sizeUnit: rule.sizeUnit,
+                ageUnit: rule.ageUnit,
+                ageIntervalSeconds: rule.ageIntervalSeconds,
+                fileTypeCategory: rule.fileTypeCategory,
+                caseSensitive: rule.caseSensitive,
+                negated: rule.negated
+            )
+            rulesManager.updateRule(updatedRule)
+        } else {
+            rulesManager.addRule(rule)
+        }
     }
 }
 

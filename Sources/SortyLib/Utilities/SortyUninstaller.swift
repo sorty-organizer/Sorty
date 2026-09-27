@@ -39,6 +39,9 @@ public enum SortyUninstaller {
     private static let toolbarHelperBundleIdentifier = "com.sorty.toolbar-helper"
     private static let servicesDirectoryPathDefaultsKey = "finderQuickActionServicesDirectoryPath"
     private static let launchServicesRegisterPath = "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+    /// `tccutil` exits 64 when the identifier has no TCC records at all, which
+    /// means there is nothing left to reset.
+    private static let tccutilNothingToResetStatus: Int32 = 64
 
     private static let legacyApplicationBundleIdentifiers = [
         "com.shirishpothi.Sorty",
@@ -139,6 +142,40 @@ public enum SortyUninstaller {
             customServicesDirectory: customServicesDirectory,
             fileManager: fileManager
         )
+
+        // Schedule post-quit removal before any destructive step. Aborting here
+        // (helper failed to start) must leave Keychain, TCC, and login items
+        // untouched so the app can be retried safely.
+        let finalRemovalTargets = safeUniqueURLs(removalPaths + applicationURLs)
+        let removalReadyURL = temporaryDirectory
+            .appendingPathComponent("sorty-uninstall-ready-\(UUID().uuidString)")
+        let didStartRemovalHelper = schedulePostTerminationRemoval(
+            targetURLs: finalRemovalTargets,
+            readyURL: removalReadyURL,
+            processIdentifier: ProcessInfo.processInfo.processIdentifier
+        )
+        guard didStartRemovalHelper else {
+            return SortyUninstallReport(
+                removedPaths: [],
+                missingPaths: [],
+                failedPaths: [:],
+                blockingFailureDescriptions: ["post-quit app removal"],
+                applicationPathsScheduledForRemoval: [],
+                removedQuickActionCount: 0,
+                didScheduleApplicationRemoval: false,
+                didClearDefaults: false,
+                didClearKeychain: false,
+                didClearNotifications: false,
+                didClearQuickActionRegistrations: false,
+                didResetPrivacyPermissions: false,
+                didUnregisterApplications: false,
+                didRequestFinderExtensionDisable: false,
+                didRequestFinderExtensionRemoval: false,
+                didRequestFinderExtensionStop: false,
+                didRequestLoginItemRemoval: false
+            )
+        }
+
         let removedServiceRegistrations = removeServiceRegistrations()
         let didClearKeychain = KeychainManager.deleteAll()
         let resetPrivacyPermissions = resetPrivacyPermissions()
@@ -160,36 +197,6 @@ public enum SortyUninstaller {
                 missingPaths: [],
                 failedPaths: [:],
                 blockingFailureDescriptions: blockingFailures,
-                applicationPathsScheduledForRemoval: [],
-                removedQuickActionCount: 0,
-                didScheduleApplicationRemoval: false,
-                didClearDefaults: false,
-                didClearKeychain: didClearKeychain,
-                didClearNotifications: false,
-                didClearQuickActionRegistrations: false,
-                didResetPrivacyPermissions: resetPrivacyPermissions,
-                didUnregisterApplications: false,
-                didRequestFinderExtensionDisable: false,
-                didRequestFinderExtensionRemoval: false,
-                didRequestFinderExtensionStop: false,
-                didRequestLoginItemRemoval: removedServiceRegistrations
-            )
-        }
-
-        let finalRemovalTargets = safeUniqueURLs(removalPaths + applicationURLs)
-        let removalReadyURL = temporaryDirectory
-            .appendingPathComponent("sorty-uninstall-ready-\(UUID().uuidString)")
-        let didStartRemovalHelper = schedulePostTerminationRemoval(
-            targetURLs: finalRemovalTargets,
-            readyURL: removalReadyURL,
-            processIdentifier: ProcessInfo.processInfo.processIdentifier
-        )
-        guard didStartRemovalHelper else {
-            return SortyUninstallReport(
-                removedPaths: [],
-                missingPaths: [],
-                failedPaths: [:],
-                blockingFailureDescriptions: ["post-quit app removal"],
                 applicationPathsScheduledForRemoval: [],
                 removedQuickActionCount: 0,
                 didScheduleApplicationRemoval: false,
@@ -251,6 +258,11 @@ public enum SortyUninstaller {
         }
         if !didClearDefaults {
             blockingFailures.append("saved settings")
+        }
+        if !pathResult.failed.isEmpty {
+            // Filesystem cleanup is best-effort per path, but data that survived
+            // removal must not be reported as a finished uninstall.
+            blockingFailures.append("saved app data")
         }
 
         let didScheduleApplicationRemoval = blockingFailures.isEmpty
@@ -338,7 +350,9 @@ public enum SortyUninstaller {
         temporaryDirectory: URL,
         fileManager: FileManager
     ) -> [URL] {
-        let prefixes = ["sorty-", "Sorty_", "SortyNotificationIcon-"]
+        // `SortyNotificationIcon` also covers the stable icon file
+        // (`SortyNotificationIcon.png`) and its older `-<uuid>` spellings.
+        let prefixes = ["sorty-", "Sorty_", "SortyNotificationIcon"]
         guard let contents = try? fileManager.contentsOfDirectory(
             at: temporaryDirectory,
             includingPropertiesForKeys: nil,
@@ -382,6 +396,25 @@ public enum SortyUninstaller {
             shift 2
             EXPECTED_START=$(/bin/ps -p "$TARGET_PID" -o lstart= 2>/dev/null)
             if [ -z "$EXPECTED_START" ]; then
+                exit 1
+            fi
+            # Cleanup runs while the app is still alive, so wait for its ready
+            # marker before starting the process-death window: a slow cleanup
+            # must not burn the 60s quit budget and strand the app installed.
+            READY_WAIT=0
+            while [ ! -f "$READY_FILE" ]; do
+                CURRENT_START=$(/bin/ps -p "$TARGET_PID" -o lstart= 2>/dev/null)
+                if [ -z "$CURRENT_START" ] || [ "$CURRENT_START" != "$EXPECTED_START" ]; then
+                    break
+                fi
+                if [ "$READY_WAIT" -ge 1200 ]; then
+                    /bin/rm -f "$READY_FILE"
+                    exit 1
+                fi
+                READY_WAIT=$((READY_WAIT + 1))
+                /bin/sleep 0.1
+            done
+            if [ ! -f "$READY_FILE" ]; then
                 exit 1
             fi
             WAIT_COUNT=0
@@ -648,19 +681,22 @@ public enum SortyUninstaller {
     }
 
     private static func resetPrivacyPermissions() -> Bool {
-        let didResetCurrentApplication = runCommand(
-            "/usr/bin/tccutil",
-            arguments: ["reset", "All", bundleIdentifier]
-        )
-        for identifier in legacyApplicationBundleIdentifiers
+        let identifiers = [bundleIdentifier]
+            + legacyApplicationBundleIdentifiers
             + knownFinderSyncBundleIdentifiers
-            + [widgetBundleIdentifier, toolbarHelperBundleIdentifier] {
-            _ = runCommand(
+            + [widgetBundleIdentifier, toolbarHelperBundleIdentifier]
+
+        // Aggregate every reset: a real failure on any identifier (legacy app,
+        // legacy/current Finder sync, widget, toolbar helper) still blocks the
+        // uninstall instead of being discarded.
+        return identifiers.reduce(true) { success, identifier in
+            let didReset = runCommand(
                 "/usr/bin/tccutil",
-                arguments: ["reset", "All", identifier]
+                arguments: ["reset", "All", identifier],
+                acceptedTerminationStatuses: [0, tccutilNothingToResetStatus]
             )
+            return didReset && success
         }
-        return didResetCurrentApplication
     }
 
     private static func clearNotifications() -> Bool {
@@ -793,7 +829,8 @@ public enum SortyUninstaller {
     private static func runCommand(
         _ launchPath: String,
         arguments: [String],
-        acceptedTerminationStatuses: Set<Int32> = [0]
+        acceptedTerminationStatuses: Set<Int32> = [0],
+        timeout: TimeInterval = 15
     ) -> Bool {
         guard FileManager.default.isExecutableFile(atPath: launchPath) else { return false }
 
@@ -803,12 +840,23 @@ public enum SortyUninstaller {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
+        // Timeout-guarded wait: a wedged pluginkit/lsregister/tccutil must not
+        // hold the uninstaller forever.
+        let semaphore = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in semaphore.signal() }
+
         do {
             try process.run()
-            process.waitUntilExit()
-            return acceptedTerminationStatuses.contains(process.terminationStatus)
         } catch {
             return false
         }
+
+        if semaphore.wait(timeout: .now() + timeout) == .timedOut {
+            process.terminate()
+            _ = semaphore.wait(timeout: .now() + 2)
+            return false
+        }
+
+        return acceptedTerminationStatuses.contains(process.terminationStatus)
     }
 }

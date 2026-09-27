@@ -5,6 +5,11 @@ import Foundation
 private actor AudioReaderLimiter {
     static let shared = AudioReaderLimiter(limit: 2)
 
+    /// Cancellations observed before a waiter registered. Entries normally
+    /// live for less than a scheduler hop, so the set is capped to keep late
+    /// cancellation notifications from growing it without bound.
+    private static let maximumTrackedCancellations = 64
+
     private var permits: Int
     private var waiters: [(UUID, CheckedContinuation<Void, Error>)] = []
     private var cancelledWaiters: Set<UUID> = []
@@ -53,7 +58,13 @@ private actor AudioReaderLimiter {
             let (_, continuation) = waiters.remove(at: index)
             continuation.resume(throwing: CancellationError())
         } else {
+            // The waiter may not have registered yet, or its cancellation may
+            // have raced a grant that already resumed it. Track it briefly so
+            // a late acquire() still observes the cancellation.
             cancelledWaiters.insert(id)
+            if cancelledWaiters.count > Self.maximumTrackedCancellations {
+                cancelledWaiters.removeAll()
+            }
         }
     }
 }
@@ -186,12 +197,16 @@ public final class AudioWaveformGenerator {
         reader.add(output)
         guard reader.startReading() else { return nil }
 
-        let duration = (try? await asset.load(.duration)).map(CMTimeGetSeconds) ?? 0
+        let rawDuration = (try? await asset.load(.duration)).map(CMTimeGetSeconds) ?? 0
+        // Indefinite or invalid assets report a non-finite CMTime; never feed
+        // that into the frame math below.
+        let duration = rawDuration.isFinite && rawDuration > 0 ? rawDuration : 0
         let formatDescription = try? await track.load(.formatDescriptions).first
         let audioDescription = formatDescription.flatMap {
             CMAudioFormatDescriptionGetStreamBasicDescription($0)?.pointee
         }
-        let sampleRate = audioDescription?.mSampleRate ?? 44_100
+        let rawSampleRate = audioDescription?.mSampleRate ?? 44_100
+        let sampleRate = rawSampleRate.isFinite && rawSampleRate > 0 ? rawSampleRate : 44_100
         let channelCount = max(1, Int(audioDescription?.mChannelsPerFrame ?? 1))
         let totalFrames = max(1, Int(duration * sampleRate))
         let barCount = 10

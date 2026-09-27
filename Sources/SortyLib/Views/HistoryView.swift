@@ -86,19 +86,21 @@ private struct HistorySessionRecord: Equatable {
 
 /// Caches the derived history snapshot across HistoryView rebuilds so tab
 /// switches reuse the last computed records instead of remapping every entry.
-/// Entries publish on willSet while `revision` bumps on didSet, so a stored
-/// snapshot is only served when no mutation happened since it was computed.
+/// Entries publish on willSet while mutations complete on didSet, so the cache
+/// is keyed on the delivered entries themselves instead of `revision`: a stored
+/// snapshot is only served when it was computed from exactly these entries.
 @MainActor
 private enum HistorySnapshotCache {
     private static var historyID: ObjectIdentifier?
-    private static var revision: UInt64?
+    private static var sourceEntries: [OrganizationHistoryEntry] = []
     private static var records: [HistorySessionRecord] = []
     private static var summary = HistoryImpactSummary()
 
     static func snapshot(
-        for history: OrganizationHistory
+        for history: OrganizationHistory,
+        entries: [OrganizationHistoryEntry]
     ) -> (records: [HistorySessionRecord], summary: HistoryImpactSummary)? {
-        guard historyID == ObjectIdentifier(history), revision == history.revision else {
+        guard historyID == ObjectIdentifier(history), sourceEntries == entries else {
             return nil
         }
         return (records, summary)
@@ -107,10 +109,11 @@ private enum HistorySnapshotCache {
     static func store(
         records: [HistorySessionRecord],
         summary: HistoryImpactSummary,
+        entries: [OrganizationHistoryEntry],
         for history: OrganizationHistory
     ) {
         historyID = ObjectIdentifier(history)
-        revision = history.revision
+        sourceEntries = entries
         self.records = records
         self.summary = summary
     }
@@ -546,14 +549,14 @@ struct HistoryView: View {
         let records: [HistorySessionRecord]
         let summary: HistoryImpactSummary
 
-        if let cached = HistorySnapshotCache.snapshot(for: history) {
+        if let cached = HistorySnapshotCache.snapshot(for: history, entries: entries) {
             (records, summary) = cached
         } else {
             records = entries.enumerated().map { index, entry in
                 HistorySessionRecord(entry: entry, thumbnailLoadIndex: index)
             }
             summary = HistoryImpactSummary(entries: entries)
-            HistorySnapshotCache.store(records: records, summary: summary, for: history)
+            HistorySnapshotCache.store(records: records, summary: summary, entries: entries, for: history)
         }
 
         cachedEntries = entries
@@ -659,7 +662,18 @@ struct HistoryView: View {
         guard let request = appState.pendingNotificationActionRequest else { return }
         guard request.kind == .redoWithModelConfirmation else { return }
         guard request.notificationType != "previewReady" else { return }
-        guard let targetEntry = notificationRedoTargetEntry(for: request.folderPath) else { return }
+        guard let targetEntry = notificationRedoTargetEntry(for: request.folderPath) else {
+            NotificationManager.shared.recordActionLifecycle(
+                "redo_with_model",
+                stage: "failed",
+                failed: true,
+                detail: "no history entry for \(request.folderPath ?? "notification folder")"
+            )
+            alertMessage = "Sorty couldn't find a history entry for this folder. Open History and choose a session to redo."
+            showAlert = true
+            appState.clearNotificationActionRequest(id: request.id)
+            return
+        }
 
         redoModelEntry = targetEntry
         activeNotificationRedoRequestID = request.id
@@ -669,16 +683,11 @@ struct HistoryView: View {
     }
 
     private func notificationRedoTargetEntry(for folderPath: String?) -> OrganizationHistoryEntry? {
-        if let folderPath {
-            let normalizedPath = URL(fileURLWithPath: folderPath).standardizedFileURL.path
-            if let matchingEntry = organizer.history.entries.first(where: {
-                URL(fileURLWithPath: $0.directoryPath).standardizedFileURL.path == normalizedPath
-            }) {
-                return matchingEntry
-            }
+        guard let folderPath else { return nil }
+        let normalizedPath = URL(fileURLWithPath: folderPath).standardizedFileURL.path
+        return organizer.history.entries.first {
+            URL(fileURLWithPath: $0.directoryPath).standardizedFileURL.path == normalizedPath
         }
-
-        return organizer.history.entries.first
     }
 }
 

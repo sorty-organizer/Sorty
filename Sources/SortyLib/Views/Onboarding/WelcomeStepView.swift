@@ -611,7 +611,8 @@ private class WelcomeRevealAudio: ObservableObject {
             guard st.isRunning else {
                 let ablPointer = UnsafeMutableAudioBufferListPointer(bufferList)
                 for buffer in ablPointer {
-                    memset(buffer.mData, 0, Int(buffer.mDataByteSize))
+                    guard let data = buffer.mData else { continue }
+                    memset(data, 0, Int(buffer.mDataByteSize))
                 }
                 return noErr
             }
@@ -624,7 +625,8 @@ private class WelcomeRevealAudio: ObservableObject {
                     st.isRunning = false
                     let floatSample = Float(0)
                     for buffer in ablPointer {
-                        let buf = buffer.mData!.assumingMemoryBound(to: Float.self)
+                        guard let data = buffer.mData else { continue }
+                        let buf = data.assumingMemoryBound(to: Float.self)
                         buf[frame] = floatSample
                     }
                     continue
@@ -666,7 +668,8 @@ private class WelcomeRevealAudio: ObservableObject {
 
                 let floatSample = Float(sample)
                 for buffer in ablPointer {
-                    let buf = buffer.mData!.assumingMemoryBound(to: Float.self)
+                    guard let data = buffer.mData else { continue }
+                    let buf = data.assumingMemoryBound(to: Float.self)
                     buf[frame] = floatSample
                 }
 

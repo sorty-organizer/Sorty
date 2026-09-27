@@ -4,10 +4,12 @@ import AppKit
 public enum WindowRoutingUserInfoKey {
     public static let targetSessionID = "targetSessionID"
     public static let deeplinkURLString = "deeplinkURLString"
+    public static let directoryURLString = "directoryURLString"
 }
 
 public extension Notification.Name {
     static let routeDeeplinkInMainWindow = Notification.Name("SortyRouteDeeplinkInMainWindow")
+    static let routeFinderDirectoryInMainWindow = Notification.Name("SortyRouteFinderDirectoryInMainWindow")
     static let presentSteeringPromptsInMainWindow = Notification.Name("SortyPresentSteeringPromptsInMainWindow")
     static let openOrganizeDirectoryPickerInMainWindow = Notification.Name("SortyOpenOrganizeDirectoryPickerInMainWindow")
     static let showWatchedFolders = Notification.Name("SortyShowWatchedFolders")
@@ -28,6 +30,16 @@ public extension Notification {
         }
 
         return URL(string: urlString)
+    }
+
+    /// Finder selection delivered by `ExtensionListener` after IPC validation.
+    var routedDirectoryURL: URL? {
+        guard let path = userInfo?[WindowRoutingUserInfoKey.directoryURLString] as? String,
+              !path.isEmpty else {
+            return nil
+        }
+
+        return URL(fileURLWithPath: path)
     }
 }
 
@@ -180,6 +192,14 @@ public final class MainWindowRouter {
         let readySessionID = targetSessionID.flatMap { sessions[$0]?.isReady == true ? $0 : nil } ??
             (targetSessionID == nil ? preferredReadySessionID : nil)
         guard let readySessionID else {
+            if name == .routeFinderDirectoryInMainWindow {
+                // Finder selections while no window is ready coalesce to the
+                // newest directory per session; replaying an unbounded queue
+                // would surface stale selections.
+                pendingNotificationRoutes.removeAll {
+                    $0.name == name && $0.targetSessionID == targetSessionID
+                }
+            }
             pendingNotificationRoutes.append(
                 PendingNotificationRoute(
                     name: name,
@@ -208,6 +228,17 @@ public final class MainWindowRouter {
         let availableSessions = sessions.filter { !$0.value.isBusy }
         guard let targetSessionID = preferredSessionID(in: availableSessions) else { return false }
         return routeDeeplink(url, to: targetSessionID)
+    }
+
+    /// Routes a validated Finder selection to one window only. Queues while no
+    /// window is ready (early startup handoff), then delivers to the first
+    /// window that becomes ready so a Finder action can't hijack every window.
+    @discardableResult
+    public func routeFinderDirectory(_ directoryURL: URL) -> Bool {
+        postOrQueue(
+            name: .routeFinderDirectoryInMainWindow,
+            userInfo: [WindowRoutingUserInfoKey.directoryURLString: directoryURL.path]
+        )
     }
 
     private func routeDeeplink(_ url: URL, to sessionID: UUID) -> Bool {

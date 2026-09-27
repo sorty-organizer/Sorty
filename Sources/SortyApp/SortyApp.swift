@@ -135,6 +135,14 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // Apple requires the notification center delegate before launch
+        // finishes; without it, actions that cold-launch Sorty are dropped.
+        // This only installs the delegate, with no permission prompts or
+        // analytics, and leaves the manager itself lazily constructed.
+        #if canImport(SortyLib)
+            NotificationManager.installNotificationCenterDelegateIfNeeded()
+        #endif
+
         // Keep pre-frame work minimal: NotificationManager and other services
         // start lazily after the first frame (see scheduleIdleStartupWorkIfNeeded).
         ApplicationMover.offerToMoveToApplicationsIfNeeded()

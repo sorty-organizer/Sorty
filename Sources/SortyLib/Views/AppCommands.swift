@@ -71,8 +71,7 @@ public struct SortyCommands: Commands {
             .disabled(appState == nil)
 
             Button("Open Directory...", systemImage: "folder") {
-                appState?.currentView = .organize
-                appState?.showDirectoryPicker = true
+                appState?.requestDirectoryPicker()
             }
             .keyboardShortcut("o", modifiers: .command)
             .disabled(appState == nil)
@@ -135,7 +134,7 @@ public struct SortyCommands: Commands {
                 appState?.regenerateOrganization()
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
-            .disabled(!(appState?.hasCurrentPlan ?? false))
+            .disabled(!(appState?.canRegenerateOrganization ?? false))
 
             Divider()
 
@@ -412,6 +411,8 @@ public class AppState: ObservableObject {
     @Published public var selectedDirectory: URL? {
         didSet {
             selectedDirectoryBookmarkTask?.cancel()
+            // A new selection invalidates the previously started scope.
+            releaseSelectedDirectoryAccess()
             if let url = selectedDirectory {
                 // Only mint bookmarks for validated user-visible folders.
                 // Untrusted deeplink/IPC payloads are validated before
@@ -453,29 +454,18 @@ public class AppState: ObservableObject {
     /// Security-scoped bookmark for the currently selected directory within this window session.
     public private(set) var selectedDirectoryBookmark: Data?
     private var selectedDirectoryBookmarkTask: Task<Void, Never>?
-    /// Tracks whether resolveSelectedDirectoryWithAccess holds an active
-    /// security-scoped session, so permission revocation only stops access it
-    /// actually started (avoids unbalanced stopAccessing calls).
-    private var selectedDirectoryAccessHeld = false
+    /// The exact URL that currently holds the session's started security
+    /// scope. Keeping the URL (instead of a bare flag) guarantees release stops
+    /// the URL that was actually started, even after the bookmark or selection
+    /// changed, and lets repeated resolves reuse one extension.
+    private var selectedDirectoryAccessURL: URL?
 
-    /// Balances one active selected-directory access session, if held.
+    /// Balances the active selected-directory access session, if any. Stops the
+    /// exact URL started by resolveSelectedDirectoryWithAccess().
     public func releaseSelectedDirectoryAccess() {
-        guard selectedDirectoryAccessHeld, let bookmark = selectedDirectoryBookmark else {
-            selectedDirectoryAccessHeld = false
-            return
-        }
-        var isStale = false
-        if let resolved = try? URL(
-            resolvingBookmarkData: bookmark,
-            options: .withSecurityScope,
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
-        ) {
-            resolved.stopAccessingSecurityScopedResource()
-        } else if let directory = selectedDirectory {
-            directory.stopAccessingSecurityScopedResource()
-        }
-        selectedDirectoryAccessHeld = false
+        guard let accessURL = selectedDirectoryAccessURL else { return }
+        accessURL.stopAccessingSecurityScopedResource()
+        selectedDirectoryAccessURL = nil
     }
     /// Persistent security-scoped bookmark for the folder selected in Files & Folders settings.
     @Published public private(set) var filesAndFoldersPermissionBookmark: Data?
@@ -653,6 +643,10 @@ public class AppState: ObservableObject {
     }
 
     public func recordOnboardingCompletion() {
+        // Requests issued while onboarding was showing never reached the main
+        // content view's onChange; clear the flag so later requests can open the
+        // picker instead of finding it stuck `true`.
+        showDirectoryPicker = false
         hasCompletedOnboarding = true
         let currentVersion = userDefaults.string(forKey: "lastLaunchedVersion") ?? BuildInfo.version
         userDefaults.set(currentVersion, forKey: Self.completedOnboardingVersionKey)
@@ -793,6 +787,13 @@ public class AppState: ObservableObject {
         organizer?.state == .ready
     }
 
+    /// Regeneration needs a current plan, cannot run while another operation is
+    /// in flight, and is disabled after apply because the plan's recorded paths
+    /// no longer exist on disk. Mirrors `regeneratePreview`'s preconditions.
+    public var canRegenerateOrganization: Bool {
+        hasCurrentPlan && !isOperationInProgress && organizer?.state != .completed
+    }
+
     public var isOperationInProgress: Bool {
         guard let state = organizer?.state else { return false }
         switch state {
@@ -805,9 +806,14 @@ public class AppState: ObservableObject {
 
     /// Resolve the security-scoped bookmark for the selected directory.
     /// Returns a URL with active security scope, or falls back to the stored URL.
-    /// Holds one balanced session tracked by selectedDirectoryAccessHeld; call
-    /// releaseSelectedDirectoryAccess() to balance it.
+    /// The first call starts one session and later calls return the same URL
+    /// without starting another; call releaseSelectedDirectoryAccess() to
+    /// balance it (changing selectedDirectory does so automatically).
     public func resolveSelectedDirectoryWithAccess() -> URL? {
+        if let accessURL = selectedDirectoryAccessURL {
+            return accessURL
+        }
+
         if let bookmark = selectedDirectoryBookmark {
             var isStale = false
             do {
@@ -818,7 +824,7 @@ public class AppState: ObservableObject {
                     bookmarkDataIsStale: &isStale
                 )
                 if resolved.startAccessingSecurityScopedResource() {
-                    selectedDirectoryAccessHeld = true
+                    selectedDirectoryAccessURL = resolved
                 }
                 if isStale {
                     do {
@@ -842,6 +848,20 @@ public class AppState: ObservableObject {
     public func resetSession() {
         selectedDirectory = nil
         organizer?.reset()
+    }
+
+    /// One-shot request to show the directory picker. ContentView only watches
+    /// `showDirectoryPicker` while main content is mounted (after onboarding),
+    /// so a request made during onboarding would strand the flag `true` and
+    /// block every later request. Completion clears the flag too (see
+    /// recordOnboardingCompletion()).
+    public func requestDirectoryPicker() {
+        currentView = .organize
+        guard hasCompletedOnboarding else {
+            showDirectoryPicker = false
+            return
+        }
+        showDirectoryPicker = true
     }
 
     public func handoffToDuplicates(
@@ -947,6 +967,7 @@ public class AppState: ObservableObject {
         withTransaction(transaction) {
             clearSetupRepairState()
             isRestartingOnboarding = true
+            showDirectoryPicker = false
             hasCompletedOnboarding = false
         }
     }
@@ -1540,7 +1561,7 @@ public class AppState: ObservableObject {
     }
 
     public func regenerateOrganization() {
-        guard let organizer = organizer else { return }
+        guard canRegenerateOrganization, let organizer = organizer else { return }
         Task {
             try? await organizer.regeneratePreview()
         }
@@ -1590,7 +1611,34 @@ public class AppState: ObservableObject {
         authenticateForSensitiveAction(
             reason: "Authenticate to pause learning and review your learnings controls."
         ) { [weak self] in
-            self?.postWindowScopedNotification(.pauseLearning)
+            self?.performPauseLearning()
+        }
+    }
+
+    /// Pauses learning at the app level so the command works with or without
+    /// LearningsView mounted. Confirms first, mirroring the dashboard flow.
+    private func performPauseLearning() {
+        guard let learningsManager = organizer?.learningsManager else { return }
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Pause Learning?"
+        alert.informativeText = "Sorty will stop learning from your organization activity. Your existing learning data and preferences stay saved, and you can turn learning back on at any time."
+        alert.addButton(withTitle: "Pause Learning")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.first?.hasDestructiveAction = true
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        Task { @MainActor in
+            await learningsManager.withdrawConsent()
+            HapticFeedbackManager.shared.success()
+            NotificationManager.shared.showHUDInfo(
+                title: "Learning Paused",
+                message: "Learning is off. Your existing learnings data is still saved.",
+                icon: "pause.circle.fill",
+                iconColor: .green
+            )
         }
     }
 
@@ -1615,8 +1663,52 @@ public class AppState: ObservableObject {
         authenticateForSensitiveAction(
             reason: "Authenticate to export your learnings profile."
         ) { [weak self] in
-            self?.currentView = .learnings
-            self?.postWindowScopedNotification(.exportLearningsProfile)
+            self?.performLearningsProfileExport()
+        }
+    }
+
+    /// Exports directly on the manager instead of notifying LearningsView,
+    /// which only receives the request while it is mounted.
+    private func performLearningsProfileExport() {
+        currentView = .learnings
+        guard let learningsManager = organizer?.learningsManager else { return }
+
+        // The dashboard loads the profile on appear; the menu action must work
+        // without it, so hydrate the cached profile first.
+        learningsManager.loadProfileIfNeededForCollection()
+        guard learningsManager.currentProfile != nil else {
+            HapticFeedbackManager.shared.error()
+            NotificationManager.shared.showHUDInfo(
+                title: "Nothing to Export",
+                message: "Sorty doesn't have a learning profile to export yet.",
+                icon: "info.circle.fill",
+                iconColor: .orange
+            )
+            return
+        }
+
+        let panel = NSSavePanel()
+        let learningsType = UTType(filenameExtension: "learnings", conformingTo: .json) ?? .json
+        panel.allowedContentTypes = [learningsType]
+        panel.nameFieldStringValue =
+            "learnings_profile_\(Date().formatted(date: .numeric, time: .omitted).replacingOccurrences(of: "/", with: "-")).learnings"
+        panel.message = "Export Learning Profile"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let summary = try learningsManager.exportProfile(to: url)
+            HapticFeedbackManager.shared.success()
+            NotificationManager.shared.showHUDInfo(
+                title: "Learning Profile Exported",
+                message: "Saved \(summary.totalRecordCount) learning records with profile settings and integrity metadata.",
+                icon: "checkmark.circle.fill",
+                iconColor: .green
+            )
+        } catch {
+            DebugLogger.log("Failed to export profile: \(error)")
+            HapticFeedbackManager.shared.error()
+            learningsManager.error = "Export failed: \(error.localizedDescription)"
         }
     }
     

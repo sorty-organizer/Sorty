@@ -18,10 +18,18 @@ final class WatchedFoldersTicker: ObservableObject {
 
     @Published private(set) var now = Date()
     private var tickTask: Task<Void, Never>?
+    /// Number of consumers currently demanding ticks. Windows come and go
+    /// independently, so `stop()` from one window must not freeze the
+    /// countdowns of another: the shared task stops only at zero demand.
+    private var demandCount = 0
 
     private init() {}
 
+    /// Registers one consumer. Every call must be paired with exactly one
+    /// `stop()`; `WatchedFoldersView` guards that pairing with its own demand
+    /// flag so an unbalanced call cannot freeze other windows.
     func start() {
+        demandCount += 1
         guard tickTask == nil else { return }
         tickTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -33,6 +41,8 @@ final class WatchedFoldersTicker: ObservableObject {
     }
 
     func stop() {
+        demandCount = max(demandCount - 1, 0)
+        guard demandCount == 0 else { return }
         tickTask?.cancel()
         tickTask = nil
     }
@@ -49,6 +59,10 @@ struct WatchedFoldersView: View {
     @State private var showingFolderPicker = false
     @State private var selectedFolderForEdit: WatchedFolder?
     @State private var isDropTargeted = false
+    /// Whether this view currently holds one demand on the shared ticker.
+    /// Prevents a stop from a view that never started (or double stops) from
+    /// cancelling another window's countdowns.
+    @State private var holdsTickerDemand = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -135,20 +149,34 @@ struct WatchedFoldersView: View {
         .task {
             watchedFoldersManager.refreshFolderExistence()
             if controlActiveState != .inactive {
-                ticker.start()
+                acquireTickerDemand()
             }
         }
         .onDisappear {
-            ticker.stop()
+            releaseTickerDemand()
         }
         .onChange(of: controlActiveState) { _, state in
             if state == .inactive {
-                ticker.stop()
+                releaseTickerDemand()
             } else {
-                ticker.start()
+                acquireTickerDemand()
             }
         }
         .navigationTitle("Watched Folders")
+    }
+
+    /// Balanced start/stop pairing for the shared ticker: callers may invoke
+    /// these repeatedly without unbalancing other windows' demand.
+    private func acquireTickerDemand() {
+        guard !holdsTickerDemand else { return }
+        holdsTickerDemand = true
+        ticker.start()
+    }
+
+    private func releaseTickerDemand() {
+        guard holdsTickerDemand else { return }
+        holdsTickerDemand = false
+        ticker.stop()
     }
 
     private func addWatchedFolder(from url: URL) {
@@ -443,13 +471,9 @@ struct WatchedFolderCard: View {
 
     private var isOrganizing: Bool {
         guard let currentDir = organizer.currentDirectory else { return false }
-        return currentDir.path == folder.path && organizer.state != .idle
-            && organizer.state != .completed && !isErrorState
-    }
-
-    private var isErrorState: Bool {
-        if case .error = organizer.state { return true }
-        return false
+        // Only scanning/organizing/applying are active work. `.ready` is a plan
+        // waiting for review, not a running operation.
+        return currentDir.path == folder.path && organizer.state.isOperationInProgress
     }
 
     private var isHighlighted: Bool {
@@ -896,8 +920,17 @@ struct WatchedFolderCard: View {
         return "Snoozed until \(time) · \(count) queued"
     }
 
+    /// Activity dates come from persisted state (and from retry scheduling), so
+    /// they can be corrupt by the time they reach the UI. Clamp the interval to
+    /// a day before converting to `Int`, which would otherwise trap on values
+    /// outside `Int`'s range or on a non-finite subtraction result.
+    private static let maxCountdownSeconds: TimeInterval = 86_400
+
     private func countdown(to date: Date, from now: Date) -> String {
-        let seconds = max(Int(date.timeIntervalSince(now).rounded(.up)), 0)
+        let interval = date.timeIntervalSince(now)
+        guard interval.isFinite else { return "starting now" }
+        let clamped = min(max(interval, 0), Self.maxCountdownSeconds)
+        let seconds = Int(clamped.rounded(.up))
         return seconds == 0 ? "starting now" : "in \(seconds)s"
     }
 
@@ -1950,8 +1983,11 @@ struct WatchedFolderConfigView: View {
         selectedModel = defaults.model
     }
 
-    private var currentFolderConfiguration: WatchedFolder {
-        var updated = folder
+    /// The live folder re-read at save time with only the fields this sheet
+    /// edits applied. Writing back the open-time snapshot would silently revert
+    /// concurrent changes such as pause, reauthorization, or bookmark refresh.
+    private var folderWithSheetEdits: WatchedFolder? {
+        guard var updated = watchedFoldersManager.folder(withID: folder.id) else { return nil }
         updated.organizationMode = selectedMode
         updated.applyPolicy = selectedApplyPolicy
         updated.customPrompt =
@@ -1972,21 +2008,37 @@ struct WatchedFolderConfigView: View {
     private func openFullOrganization() {
         HapticFeedbackManager.shared.tap()
 
-        let updatedFolder = currentFolderConfiguration
+        guard let updatedFolder = folderWithSheetEdits else {
+            dismiss()
+            return
+        }
         watchedFoldersManager.updateFolder(updatedFolder)
 
-        var config = settingsViewModel.config
-        config.enableSmartRename = true
-        config.mode = updatedFolder.effectiveOrganizationMode
-        settingsViewModel.config = config
+        // The Organize window reads the global config when the run starts, and
+        // there is no per-run mode override yet. Stage this folder's mode for
+        // the handoff, then restore the previous global values instead of
+        // persisting them for every future manual run. Tradeoff: the follow-up
+        // run falls back to the previous global mode until FolderOrganizer
+        // exposes a per-run mode.
+        let previousConfig = settingsViewModel.config
+        var stagedConfig = previousConfig
+        stagedConfig.enableSmartRename = true
+        stagedConfig.mode = updatedFolder.effectiveOrganizationMode
+        settingsViewModel.config = stagedConfig
+        defer { settingsViewModel.config = previousConfig }
 
         onOpenFullOrganization(updatedFolder)
         dismiss()
     }
 
     private func save() {
+        guard let updatedFolder = folderWithSheetEdits else {
+            // Folder was removed while the sheet was open.
+            dismiss()
+            return
+        }
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
-            watchedFoldersManager.updateFolder(currentFolderConfiguration)
+            watchedFoldersManager.updateFolder(updatedFolder)
         }
         dismiss()
     }

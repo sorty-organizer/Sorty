@@ -36,7 +36,14 @@ struct OrganizationCompleteView: View {
     @State private var undoRestoredCount = 0
     @State private var undoSkippedCount = 0
     @State private var lastUndoneEntry: OrganizationHistoryEntry?
+    @State private var failureMessage: String?
+    @State private var failedAction: FailedAction?
     @State private var isStorageSuggestionDismissed = false
+    /// True while an undo/redo failure from this view owns the completion
+    /// screen. The organizer's `.error` transition clears the completion pin,
+    /// which would swap this view's failure card for the generic ErrorView, so
+    /// the pin is restored until the user leaves the failure.
+    @State private var keepsFailureCardPinned = false
     
     @State private var shouldShowFinalCounts = false
 
@@ -65,12 +72,25 @@ struct OrganizationCompleteView: View {
             isUndoing || isRedoing
         }
     }
+
+    /// The action that produced the current `.failed` state, so the view can
+    /// title the error and offer the matching retry button.
+    private enum FailedAction: Equatable {
+        case undo
+        case redo
+    }
     
     private var shouldShowStorageSuggestion: Bool {
         !isStorageSuggestionDismissed
             && mode != .renameOnly
             && totalFiles >= 50
             && storageLocationsManager.enabledLocations.isEmpty
+    }
+
+    /// Folder count straight from the applied plan, which includes nested
+    /// subfolders; the `totalFolders` input only counts top-level suggestions.
+    private var resolvedTotalFolders: Int {
+        organizer.currentPlan?.totalFolders ?? totalFolders
     }
 
     private var primaryStatLabel: String {
@@ -94,10 +114,12 @@ struct OrganizationCompleteView: View {
 
     private var secondaryStatValue: String {
         if undoState == .completed {
+            // Nothing was reversed, so don't claim folder cleanup either.
+            if undoRestoredCount == 0 && undoSkippedCount == 0 { return "0" }
             // "0 Items Skipped" is noise; when nothing was skipped, show the
             // folders the undo cleaned up instead.
             if undoSkippedCount > 0 { return "\(undoSkippedCount)" }
-            return mode == .renameOnly ? "\(renameCount)" : "\(totalFolders)"
+            return mode == .renameOnly ? "\(renameCount)" : "\(resolvedTotalFolders)"
         }
 
         return "\(shouldShowFinalCounts ? secondaryStatTarget : 0)"
@@ -111,12 +133,12 @@ struct OrganizationCompleteView: View {
             if mode == .renameOnly {
                 return renameCount == 1 ? "Name Reverted" : "Names Reverted"
             }
-            return totalFolders == 1 ? "Folder Removed" : "Folders Removed"
+            return resolvedTotalFolders == 1 ? "Folder Removed" : "Folders Removed"
         }
 
         switch mode {
         case .renameOnly: return max(totalFiles - renameCount, 0) == 1 ? "File Unchanged" : "Files Unchanged"
-        case .organize, .organizeAndRename: return totalFolders == 1 ? "Folder Created" : "Folders Created"
+        case .organize, .organizeAndRename: return resolvedTotalFolders == 1 ? "Folder Created" : "Folders Created"
         }
     }
 
@@ -125,7 +147,20 @@ struct OrganizationCompleteView: View {
     }
 
     private var secondaryStatTarget: Int {
-        mode == .renameOnly ? max(totalFiles - renameCount, 0) : totalFolders
+        mode == .renameOnly ? max(totalFiles - renameCount, 0) : resolvedTotalFolders
+    }
+
+    /// Undo is actionable when there is no action in flight; a failed undo
+    /// offers its retry, while a failed redo does not (the redo button owns
+    /// that retry) so the undo button can never silently no-op.
+    private var canUndo: Bool {
+        undoState == .idle || (undoState == .failed && failedAction == .undo)
+    }
+
+    /// Redo is actionable after a completed undo or as the retry of a failed
+    /// redo.
+    private var canRedo: Bool {
+        undoState == .completed || (undoState == .failed && failedAction == .redo)
     }
 
     private var combinedModeHighlight: (value: String, label: String, icon: String, color: Color)? {
@@ -344,7 +379,7 @@ struct OrganizationCompleteView: View {
                         .disabled(undoState.isBusy)
 
                         HStack(spacing: 12) {
-                            if undoState == .completed || undoState.isRedoing {
+                            if canRedo || undoState.isRedoing {
                                 Button {
                                     HapticFeedbackManager.shared.tap()
                                     redoLastOrganization()
@@ -388,7 +423,7 @@ struct OrganizationCompleteView: View {
                                 }
                                 .help("Undo the latest organization for this folder")
                                 .accessibilityHint("Restores files from the most recent successful run")
-                                .disabled(undoState != .idle)
+                                .disabled(undoState.isBusy || !canUndo)
                                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
                             }
 
@@ -476,7 +511,33 @@ struct OrganizationCompleteView: View {
         }
         .background(WorkflowGradientBackground())
         .animation(.spring(response: 0.42, dampingFraction: 0.82), value: undoState)
+        .onChange(of: undoState) { _, newState in
+            if newState != .failed {
+                keepsFailureCardPinned = false
+            }
+        }
+        .onChange(of: organizer.state) { _, newState in
+            // Once the organizer leaves .error (retry, regenerate, or a new
+            // run) this view must stop restoring the failure pin so the new
+            // plan/state can be presented.
+            if case .error = newState { return }
+            keepsFailureCardPinned = false
+        }
+        .onChange(of: organizer.pinsCompletionView) { _, isPinned in
+            // The organizer unpins on `.error`, which would hide this view's
+            // retry card behind the generic ErrorView. Restore the pin only
+            // while the failure came from this view's own undo/redo task and
+            // the organizer is still in `.error`; when it has moved on (e.g.
+            // Regenerate reached `.ready`) the pin must stay cleared.
+            guard keepsFailureCardPinned, !isPinned else { return }
+            guard case .error = organizer.state else {
+                keepsFailureCardPinned = false
+                return
+            }
+            organizer.pinsCompletionView = true
+        }
         .onAppear {
+            restoreFailureCardIfNeeded()
             organizer.pinsCompletionView = true
             HapticFeedbackManager.shared.success()
             
@@ -560,7 +621,11 @@ struct OrganizationCompleteView: View {
         case .redoing:
             return "Redoing Changes"
         case .failed:
-            return "Undo Failed"
+            switch failedAction {
+            case .undo: return "Undo Failed"
+            case .redo: return "Redo Failed"
+            case nil: return "Action Failed"
+            }
         }
     }
 
@@ -571,21 +636,58 @@ struct OrganizationCompleteView: View {
         case .undoing:
             return "Restoring files to their previous locations..."
         case .completed:
+            if undoRestoredCount == 0 && undoSkippedCount == 0 {
+                return "Nothing to restore for this run."
+            }
             return undoSkippedCount > 0
                 ? "Restored what could be safely reverted. Review history for skipped items."
                 : "Restored your files to their previous locations."
         case .redoing:
             return "Reapplying the organization plan..."
         case .failed:
-            return "Sorty could not complete that action. Please review history for details."
+            return failureMessage ?? "Sorty could not complete that action. Please review history for details."
         }
     }
     
+    /// Restores the failed undo/redo card when this view is mounted again while
+    /// the organizer still carries the failure (for example after visiting
+    /// History), instead of briefly showing the success presentation.
+    private func restoreFailureCardIfNeeded() {
+        guard undoState == .idle,
+              case .error = organizer.state,
+              let action = organizer.completionFailureAction else { return }
+        failureMessage = organizer.errorMessage
+        failedAction = action == .undo ? FailedAction.undo : FailedAction.redo
+        if action == .redo {
+            // Redo retries the exact entry that failed; without it a remounted
+            // card would show a disabled Redo button.
+            lastUndoneEntry = organizer.completionFailureEntry
+        }
+        keepsFailureCardPinned = true
+        undoState = .failed
+    }
+
     private func undoLastOrganization() {
-        guard undoState == .idle else { return }
+        guard canUndo else {
+            // A failed redo is retried through the redo button; route there
+            // instead of leaving the caller with a silent no-op.
+            if undoState == .failed && failedAction == .redo {
+                redoLastOrganization()
+            }
+            return
+        }
+        let isRetry = undoState == .failed && failedAction == .undo
         guard let lastEntry = organizer.history.entries.first(where: { $0.directoryPath == directoryURL.path && $0.success && !$0.isUndone }) else { return }
         lastUndoneEntry = lastEntry
+        keepsFailureCardPinned = false
         organizer.pinsCompletionView = true
+        if isRetry {
+            failureMessage = nil
+            failedAction = nil
+            organizer.errorMessage = nil
+            organizer.completionFailureAction = nil
+            organizer.completionFailureEntry = nil
+        }
 
         withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
             undoState = .undoing
@@ -594,33 +696,39 @@ struct OrganizationCompleteView: View {
         
         Task {
             do {
+                // Load details first so the restored count can be limited to
+                // file operations instead of every reversed operation.
+                let detailedEntry = await organizer.history.details(for: lastEntry)
                 let result = try await organizer.undoHistoryEntry(lastEntry)
                 await MainActor.run {
-                    undoRestoredCount = restoredDisplayCount(for: lastEntry, result: result)
+                    undoRestoredCount = restoredDisplayCount(for: detailedEntry, result: result)
                     undoSkippedCount = result.missingFiles.count
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
                         undoState = .completed
                     }
-                    HapticFeedbackManager.shared.success()
-                    showUndoCompleteHUD()
+                    if undoRestoredCount > 0 || undoSkippedCount > 0 {
+                        HapticFeedbackManager.shared.success()
+                        showUndoCompleteHUD()
+                    } else {
+                        HapticFeedbackManager.shared.tap()
+                    }
                 }
             } catch {
                 await MainActor.run {
+                    let message = "Couldn't restore your files: \(error.localizedDescription)"
                     withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
                         undoState = .failed
                     }
+                    failureMessage = message
+                    failedAction = .undo
+                    organizer.errorMessage = message
+                    organizer.completionFailureAction = .undo
+                    organizer.completionFailureEntry = lastEntry
+                    keepsFailureCardPinned = true
+                    organizer.pinsCompletionView = true
                     HapticFeedbackManager.shared.error()
                 }
-                print("Failed to undo organization: \(error)")
-
-                try? await Task.sleep(for: .seconds(2))
-
-                await MainActor.run {
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
-                        undoState = .idle
-                    }
-                    lastUndoneEntry = nil
-                }
+                DebugLogger.log("Failed to undo organization: \(error.localizedDescription)")
             }
         }
     }
@@ -652,21 +760,35 @@ struct OrganizationCompleteView: View {
         for entry: OrganizationHistoryEntry,
         result: FileSystemManager.RestoreResult
     ) -> Int {
-        guard result.successfulOperations == 0, result.missingFiles.isEmpty else {
-            return result.successfulOperations
+        // Only move/rename/copy operations touch files; `successfulOperations`
+        // also counts tag restores and folder cleanups. A missing operation list,
+        // or a pass with nothing restored and nothing missing, means there is
+        // nothing to report as restored.
+        let fileOperations = (entry.operations ?? []).filter { operation in
+            operation.type == .moveFile || operation.type == .renameFile || operation.type == .copyFile
+        }
+        guard !fileOperations.isEmpty,
+              result.successfulOperations > 0 || !result.missingFiles.isEmpty else {
+            return 0
         }
 
-        let fileOperationCount = entry.operations?.filter { operation in
-            operation.type == .moveFile || operation.type == .renameFile || operation.type == .copyFile
-        }.count ?? 0
-
-        return max(fileOperationCount, entry.filesOrganized)
+        let failedOperationIDs = Set(result.retryableFailedOperationIDs)
+        return fileOperations.filter { !failedOperationIDs.contains($0.id) }.count
     }
 
     private func redoLastOrganization() {
-        guard undoState == .completed else { return }
+        guard canRedo else { return }
+        let isRetry = undoState == .failed && failedAction == .redo
         guard let entry = lastUndoneEntry else { return }
+        keepsFailureCardPinned = false
         organizer.pinsCompletionView = true
+        if isRetry {
+            failureMessage = nil
+            failedAction = nil
+            organizer.errorMessage = nil
+            organizer.completionFailureAction = nil
+            organizer.completionFailureEntry = nil
+        }
 
         withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
             undoState = .redoing
@@ -676,6 +798,7 @@ struct OrganizationCompleteView: View {
             do {
                 try await organizer.redoOrganization(from: entry)
                 await MainActor.run {
+                    failedAction = nil
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
                         undoState = .idle
                     }
@@ -689,25 +812,28 @@ struct OrganizationCompleteView: View {
                 }
             } catch {
                 await MainActor.run {
+                    let message = "Couldn't reapply the organization: \(error.localizedDescription)"
                     withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
                         undoState = .failed
                     }
+                    failureMessage = message
+                    failedAction = .redo
+                    organizer.errorMessage = message
+                    organizer.completionFailureAction = .redo
+                    organizer.completionFailureEntry = entry
+                    keepsFailureCardPinned = true
+                    organizer.pinsCompletionView = true
                     HapticFeedbackManager.shared.error()
                 }
-                print("Failed to redo organization: \(error)")
-
-                try? await Task.sleep(for: .seconds(2))
-
-                await MainActor.run {
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
-                        undoState = .completed
-                    }
-                }
+                DebugLogger.log("Failed to redo organization: \(error.localizedDescription)")
             }
         }
     }
 
     private func returnToStart() {
+        keepsFailureCardPinned = false
+        organizer.completionFailureAction = nil
+        organizer.completionFailureEntry = nil
         organizer.pinsCompletionView = false
         if let onReturnToStart {
             onReturnToStart()

@@ -18,7 +18,9 @@ public class SecurityManager: ObservableObject {
     // MARK: - Published State
     
     @Published public var isUnlocked: Bool = false
-    @Published public var biometryType: LABiometryType = .none
+    @Published public var biometryType: LABiometryType = .none {
+        didSet { hasResolvedBiometryType = true }
+    }
     @Published public var error: String?
     @Published public var authenticationMethod: AuthenticationMethod = .none
     

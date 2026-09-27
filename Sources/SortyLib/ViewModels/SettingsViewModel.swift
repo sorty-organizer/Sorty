@@ -54,8 +54,11 @@ public class SettingsViewModel: ObservableObject {
             let newKey = config.apiKey
             let oldProvider = oldValue.provider
             let newProvider = config.provider
-            let oldAuthMethod = oldValue.authMethod(for: oldProvider)
-            let newAuthMethod = config.authMethod(for: newProvider)
+            // Compare the methods clients actually use: the subscription
+            // feature flag can force API-key auth while the stored method is
+            // still account sign-in.
+            let oldAuthMethod = ProviderAuthResolver.effectiveAuthMethod(for: oldProvider, config: oldValue)
+            let newAuthMethod = ProviderAuthResolver.effectiveAuthMethod(for: newProvider, config: config)
 
             // Credentials changed — any prewarm verdict tied to the old config
             // is stale. Reset synchronously so the ready-to-organize screen never
@@ -266,6 +269,10 @@ public class SettingsViewModel: ObservableObject {
 
         if var decoded = decodedConfig {
             decoded.apiKey = nil
+            // The Smart Rename toggle was removed (commit e3c0da73); the flag
+            // now only gates the organization-mode picker and FolderOrganizer
+            // derives its per-operation value from `mode`. Normalize a legacy
+            // persisted `false` so that picker stays available.
             decoded.enableSmartRename = true
             isApplyingConfigMutation = true
             config = decoded
@@ -280,7 +287,7 @@ public class SettingsViewModel: ObservableObject {
 
     private func hydrateConfiguredCredentialIfNeeded() {
         let provider = config.provider
-        let authMethod = config.authMethod(for: provider)
+        let authMethod = ProviderAuthResolver.effectiveAuthMethod(for: provider, config: config)
         guard !userDefaults.bool(forKey: disableStoredCredentialsForUITestsKey),
               provider != .githubCopilot,
               provider.typicallyRequiresAPIKey,
@@ -301,7 +308,7 @@ public class SettingsViewModel: ObservableObject {
         guard let apiKey,
               config.provider != .githubCopilot,
               config.provider.typicallyRequiresAPIKey,
-              config.authMethod(for: config.provider) == .apiKey else { return }
+              ProviderAuthResolver.effectiveAuthMethod(for: config.provider, config: config) == .apiKey else { return }
 
         _ = credentialStore.saveImmediately(config.provider.keychainKey, apiKey)
     }
@@ -338,7 +345,7 @@ public class SettingsViewModel: ObservableObject {
             self.credentialHydrationID = nil
             self.credentialHydrationProvider = nil
             guard self.config.provider == provider,
-                  self.config.authMethod(for: provider) == authMethod else {
+                  ProviderAuthResolver.effectiveAuthMethod(for: provider, config: self.config) == authMethod else {
                 self.isConfiguredCredentialHydrating = false
                 return
             }
@@ -394,7 +401,7 @@ public class SettingsViewModel: ObservableObject {
 
         if provider != .githubCopilot,
            provider.typicallyRequiresAPIKey,
-           config.authMethod(for: provider) == .apiKey {
+           ProviderAuthResolver.effectiveAuthMethod(for: provider, config: config) == .apiKey {
             if let apiKey {
                 _ = credentialStore.saveImmediately(provider.keychainKey, apiKey)
             } else if credentialHydrationProvider != provider {
@@ -426,7 +433,7 @@ public class SettingsViewModel: ObservableObject {
         // Save API key to provider-specific Keychain key
         if provider != .githubCopilot,
            provider.typicallyRequiresAPIKey,
-           config.authMethod(for: provider) == .apiKey {
+           ProviderAuthResolver.effectiveAuthMethod(for: provider, config: config) == .apiKey {
             let providerKey = provider.keychainKey
             if let apiKey = apiKey {
                 _ = await credentialStore.save(providerKey, apiKey)
@@ -518,7 +525,7 @@ public class SettingsViewModel: ObservableObject {
             await ModelCatalog.shared.refresh(
                 provider: provider,
                 force: force,
-                authMethod: self.config.authMethod(for: provider)
+                authMethod: ProviderAuthResolver.effectiveAuthMethod(for: provider, config: self.config)
             )
             guard !Task.isCancelled, self.config.provider == provider else { return }
 
@@ -533,8 +540,19 @@ public class SettingsViewModel: ObservableObject {
             let isKnownCodexModel = provider == .openAI
                 && ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: self.config) == .accountSignIn
                 && ModelCatalog.shared.isCodexSubscriptionModel(self.config.model)
+            let keepsCustomModelID = [.openAICompatible, .ollama].contains(provider)
+                && !self.config.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             if !resolvedModels.isEmpty, !isKnownCodexModel, !resolvedModels.contains(self.config.model) {
-                self.config.model = resolvedModels.first ?? provider.defaultModel
+                // A raw catalog can lead with embedding/audio models, and a
+                // custom endpoint ID must not be clobbered by one of them.
+                if !keepsCustomModelID {
+                    let replacement = ModelCatalog.shared.chatCapableModelIDs(for: provider).first
+                        ?? provider.recommendedModels.first
+                        ?? provider.defaultModel
+                    if replacement != self.config.model {
+                        self.config.model = replacement
+                    }
+                }
             }
             self.isLoadingModels = false
             AnalyticsManager.shared.captureWorkflow(

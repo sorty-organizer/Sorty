@@ -152,6 +152,13 @@ struct RotatingInstructionSuggestionEditor: View {
     }
 }
 
+/// Carries an opaque AppKit event-monitor token across a main-actor hop when a
+/// coordinator deallocates off the main thread. Only `NSEvent.removeMonitor`
+/// consumes the value, and only on the main thread.
+private struct SendableEventMonitorToken: @unchecked Sendable {
+    let value: Any
+}
+
 struct SubmittableTextEditor: NSViewRepresentable {
     @SortyHotReload private var hotReload
     @Binding var text: String
@@ -281,8 +288,8 @@ struct SubmittableTextEditor: NSViewRepresentable {
         var selectedRange: Binding<NSRange>?
         var onAcceptSuggestion: (() -> Bool)?
         var onSubmit: () -> Void
-        var eventMonitor: Any?
-        var selectionObserver: NSObjectProtocol?
+        nonisolated(unsafe) var eventMonitor: Any?
+        nonisolated(unsafe) var selectionObserver: NSObjectProtocol?
 
         init(
             text: Binding<String>,
@@ -299,13 +306,19 @@ struct SubmittableTextEditor: NSViewRepresentable {
         }
 
         deinit {
-            // The coordinator is main-confined; clean up synchronously.
-            MainActor.assumeIsolated {
-                if let monitor = eventMonitor {
-                    NSEvent.removeMonitor(monitor)
-                }
-                if let selectionObserver {
-                    NotificationCenter.default.removeObserver(selectionObserver)
+            // Deinit is nonisolated and can run off the main thread.
+            // NotificationCenter removal is thread-safe and runs here
+            // directly; AppKit monitor removal hops to the main actor.
+            if let selectionObserver {
+                NotificationCenter.default.removeObserver(selectionObserver)
+            }
+            guard let eventMonitor else { return }
+            let token = SendableEventMonitorToken(value: eventMonitor)
+            if Thread.isMainThread {
+                NSEvent.removeMonitor(token.value)
+            } else {
+                Task { @MainActor in
+                    NSEvent.removeMonitor(token.value)
                 }
             }
         }
