@@ -2032,7 +2032,20 @@ public class AppState: ObservableObject {
 
         // The dashboard loads the profile on appear; the menu action must work
         // without it, so hydrate the cached profile first.
-        learningsManager.loadProfileIfNeededForCollection()
+        if learningsManager.currentProfile == nil {
+            Task { [weak self] in
+                await learningsManager.loadProfileIfNeededForCollectionAsync()
+                self?.finishLearningsProfileExport(using: learningsManager, destinationURL: destinationURL)
+            }
+            return
+        }
+        finishLearningsProfileExport(using: learningsManager, destinationURL: destinationURL)
+    }
+
+    private func finishLearningsProfileExport(
+        using learningsManager: LearningsManager,
+        destinationURL: URL?
+    ) {
         guard learningsManager.currentProfile != nil else {
             HapticFeedbackManager.shared.error()
             NotificationManager.shared.showHUDInfo(
