@@ -73,7 +73,7 @@ public struct BugReportView: View {
             }
             TextEditor(text: $description)
                 .font(.body)
-                .frame(height: showsSentryOption ? 100 : 180)
+                .frame(height: (showsSentryOption && sendToSentry) ? 100 : 180)
                 .padding(4)
                 .background(Color(NSColor.controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -101,39 +101,37 @@ public struct BugReportView: View {
                     }
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("BugReportAreaPicker")
-                }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Anonymous. No account, name, or email. Sentry discards IP addresses and builds no profile.")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Anonymous. No account, name, or email. Sentry discards IP addresses and builds no profile.")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
 
-                    // One grid, not two stacks, so each row stays level even
-                    // when a label wraps to a second line.
-                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 5) {
-                        GridRow {
-                            Text("Sent to Sentry")
-                                .font(.caption.weight(.semibold))
-                            Text("Never sent")
-                                .font(.caption.weight(.semibold))
-                        }
-                        GridRow {
-                            sentryListRow("The description text you typed")
-                            sentryExcludedRow("Name, email, or attachments")
-                        }
-                        GridRow {
-                            sentryListRow("Linked event sorty.user_bug_report")
-                            sentryExcludedRow("File names, paths, or contents")
-                        }
-                        GridRow {
-                            sentryListRow("Sorty version, build, release channel")
-                            sentryExcludedRow("Prompts, AI responses, or API keys")
-                        }
-                        GridRow {
-                            sentryListRow("macOS version and chip type")
-                            sentryExcludedRow("Screenshots, logs, or raw error text")
-                        }
-                        if sendToSentry {
+                        // One grid, not two stacks, so each row stays level even
+                        // when a label wraps to a second line.
+                        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 5) {
+                            GridRow {
+                                Text("Sent to Sentry")
+                                    .font(.caption.weight(.semibold))
+                                Text("Never sent")
+                                    .font(.caption.weight(.semibold))
+                            }
+                            GridRow {
+                                sentryListRow("The description text you typed")
+                                sentryExcludedRow("Name, email, or attachments")
+                            }
+                            GridRow {
+                                sentryListRow("Linked event sorty.user_bug_report")
+                                sentryExcludedRow("File names, paths, or contents")
+                            }
+                            GridRow {
+                                sentryListRow("Sorty version, build, release channel")
+                                sentryExcludedRow("Prompts, AI responses, or API keys")
+                            }
+                            GridRow {
+                                sentryListRow("macOS version and chip type")
+                                sentryExcludedRow("Screenshots, logs, or raw error text")
+                            }
                             GridRow {
                                 Text("Chosen area: \(area.displayName)")
                                     .font(.caption)
@@ -141,27 +139,27 @@ public struct BugReportView: View {
                                     .gridCellColumns(2)
                             }
                         }
-                    }
-                    .accessibilityIdentifier("BugReportSentryDetails")
+                        .accessibilityIdentifier("BugReportSentryDetails")
 
-                    Text("Check your text for private details before you send it. GitHub opens in your browser as a separate public issue.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    if !canSubmitBugFeedback {
-                        Text("Sentry sharing stays off while Block Internet Connections is on. Turn it off in Settings, Advanced to share with Sentry.")
+                        Text("Check your text for private details before you send it. GitHub opens in your browser as a separate public issue.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    .padding(12)
+                    .background(Color.secondary.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+                    }
+                    .accessibilityIdentifier("BugReportSentryTransparency")
                 }
-                .padding(12)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+
+                if !canSubmitBugFeedback {
+                    Text("Sentry sharing stays off while Block Internet Connections is on. Turn it off in Settings, Advanced to share with Sentry.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .accessibilityIdentifier("BugReportSentryTransparency")
             }
 
             if let errorMessage {
@@ -183,7 +181,7 @@ public struct BugReportView: View {
             }
         }
         .padding(24)
-        .frame(width: 520, height: showsSentryOption ? (sendToSentry ? 660 : 600) : 440)
+        .frame(width: 520, height: showsSentryOption ? (sendToSentry ? 660 : (!canSubmitBugFeedback ? 520 : 480)) : 440)
         .modifier(WindowGlassBackground())
         .accessibilityIdentifier("BugReportView")
     }
