@@ -161,6 +161,11 @@ actor SharedContentMetadataCache {
     private var totalByteCost = 0
     private let maximumByteCost: Int
     private let maximumEntryCount = 10_000
+    /// On-disk bound: the LZFSE payload is evicted oldest-first until the
+    /// JSON fits, so the cache file cannot grow without bound.
+    private static let maximumDiskBytes = 64 * 1024 * 1024
+    /// On-disk entries older than this are dropped on load.
+    private static let diskEntryTTL: TimeInterval = 7 * 24 * 60 * 60
     private var isDirty = false
     private var loadTask: Task<[Entry]?, Never>?
     private var hasLoaded = false
@@ -254,10 +259,10 @@ actor SharedContentMetadataCache {
     }
 
     private func insert(_ metadata: ContentMetadata, for key: Key) {
-        // Include paths and analysis options in the budget, not just extracted text.
-        let candidate = Entry(key: key, metadata: metadata, lastAccessedAt: Date(), byteCost: 0)
-        guard let byteCost = try? JSONEncoder().encode(candidate).count,
-              byteCost <= maximumByteCost else { return }
+        // Cheap size estimate (no per-insert JSON encode): paths, options,
+        // and extracted text summed from UTF-8 counts, capped per field.
+        let byteCost = Self.estimatedByteCost(key: key, metadata: metadata)
+        guard byteCost <= maximumByteCost else { return }
         isDirty = true
         if let previous = entries[key] { totalByteCost -= previous.byteCost }
         entries[key] = Entry(
@@ -270,16 +275,89 @@ actor SharedContentMetadataCache {
         trimIfNeeded()
     }
 
+    /// Cheap in-memory cost estimate for one entry. Encoding every candidate
+    /// with JSONEncoder on insert cost more than the extraction it cached, so
+    /// the budget is accounted from UTF-8 lengths plus fixed overhead for
+    /// dates, numbers, and flags. Each text field is capped so a single huge
+    /// preview cannot dominate the accounting.
+    private static func estimatedByteCost(key: Key, metadata: ContentMetadata) -> Int {
+        let perFieldCap = 64 * 1024
+        var bytes = 128 // dates, sizes, page counts, confidence, flags, coding overhead
+        bytes += min(key.filePath.utf8.count, perFieldCap)
+        for language in key.options.ocrLanguages { bytes += min(language.utf8.count, 64) }
+        for keyword in key.options.customOCRKeywords { bytes += min(keyword.utf8.count, 256) }
+        if let text = metadata.textPreview { bytes += min(text.utf8.count, perFieldCap) }
+        if let title = metadata.documentTitle { bytes += min(title.utf8.count, perFieldCap) }
+        if let author = metadata.author { bytes += min(author.utf8.count, perFieldCap) }
+        if let ocr = metadata.ocrText { bytes += min(ocr.utf8.count, perFieldCap) }
+        for keyword in metadata.keywords ?? [] { bytes += min(keyword.utf8.count, 256) }
+        for keyword in metadata.detectedKeywords ?? [] { bytes += min(keyword.utf8.count, 256) }
+        if let exif = metadata.exifData {
+            for (field, value) in exif {
+                bytes += min(field.utf8.count + value.utf8.count, 1024)
+            }
+        }
+        if let media = metadata.mediaInfo {
+            for (field, value) in media {
+                bytes += min(field.utf8.count + value.utf8.count, 1024)
+            }
+        }
+        return bytes
+    }
+
+    /// Single-pass partial selection of the oldest-touched keys. Sorting the
+    /// whole table on every trim is O(n log n); this keeps only the `limit`
+    /// oldest entries seen and returns them oldest-first.
+    private func oldestKeys(limit: Int) -> [Key] {
+        var buffer: [(key: Key, accessed: Date)] = []
+        buffer.reserveCapacity(min(limit, entries.count))
+        var newestInBuffer = Date.distantPast
+        var newestIndex = 0
+        for (key, entry) in entries {
+            let accessed = entry.lastAccessedAt
+            if buffer.count < limit {
+                buffer.append((key, accessed))
+                if accessed >= newestInBuffer {
+                    newestInBuffer = accessed
+                    newestIndex = buffer.count - 1
+                }
+            } else if accessed < newestInBuffer {
+                buffer[newestIndex] = (key, accessed)
+                newestInBuffer = buffer[0].accessed
+                newestIndex = 0
+                for index in 1..<buffer.count where buffer[index].accessed > newestInBuffer {
+                    newestInBuffer = buffer[index].accessed
+                    newestIndex = index
+                }
+            }
+        }
+        return buffer.sorted { $0.accessed < $1.accessed }.map { $0.key }
+    }
+
+    private func removeEntry(for key: Key) {
+        if let removed = entries.removeValue(forKey: key) {
+            totalByteCost -= removed.byteCost
+        }
+    }
+
     private func trimIfNeeded() {
         guard totalByteCost > maximumByteCost || entries.count > maximumEntryCount else { return }
         // Amortized trim: drop to 75% of the budget so the next insert does
-        // not immediately re-sort the whole table.
+        // not immediately re-trim the table.
         let targetByteCost = maximumByteCost * 3 / 4
         let targetEntryCount = entries.count > maximumEntryCount ? maximumEntryCount * 3 / 4 : maximumEntryCount
-        for entry in entries.values.sorted(by: { $0.lastAccessedAt < $1.lastAccessedAt }) {
-            guard totalByteCost > targetByteCost || entries.count > targetEntryCount else { break }
-            entries.removeValue(forKey: entry.key)
-            totalByteCost -= entry.byteCost
+        // Sampled eviction: resample the oldest-touched candidates instead of
+        // sorting the whole table; each pass evicts at least one entry.
+        while totalByteCost > targetByteCost || entries.count > targetEntryCount {
+            let candidates = oldestKeys(limit: 256)
+            guard !candidates.isEmpty else { break }
+            let bytesBefore = totalByteCost
+            let countBefore = entries.count
+            for key in candidates {
+                guard totalByteCost > targetByteCost || entries.count > targetEntryCount else { break }
+                removeEntry(for: key)
+            }
+            guard totalByteCost < bytesBefore || entries.count < countBefore else { break }
         }
     }
 
@@ -290,13 +368,27 @@ actor SharedContentMetadataCache {
             let diskURL = diskURL
             let legacyDiskURL = legacyDiskURL
             loadTask = Task.detached(priority: .utility) { () -> [Entry]? in
-                if let diskURL, let data = try? Data(contentsOf: diskURL),
-                   let json = try? (data as NSData).decompressed(using: .lzfse),
-                   let entries = try? JSONDecoder().decode([Entry].self, from: json as Data) {
-                    return entries
+                if let diskURL {
+                    if let size = (try? FileManager.default.attributesOfItem(atPath: diskURL.path))?[.size] as? NSNumber,
+                       size.intValue > Self.maximumDiskBytes {
+                        // Oversized cache file: skip instead of decoding unbounded
+                        // input. The next flush rewrites it within the disk bound.
+                        return nil
+                    }
+                    if let data = try? Data(contentsOf: diskURL),
+                       let json = try? (data as NSData).decompressed(using: .lzfse),
+                       json.length <= Self.maximumDiskBytes,
+                       let entries = try? JSONDecoder().decode([Entry].self, from: json as Data) {
+                        return entries
+                    }
                 }
-                guard let legacyDiskURL, let data = try? Data(contentsOf: legacyDiskURL) else { return nil }
-                return try? JSONDecoder().decode([Entry].self, from: data)
+                if let legacyDiskURL,
+                   let size = (try? FileManager.default.attributesOfItem(atPath: legacyDiskURL.path))?[.size] as? NSNumber,
+                   size.intValue <= Self.maximumDiskBytes,
+                   let data = try? Data(contentsOf: legacyDiskURL) {
+                    return try? JSONDecoder().decode([Entry].self, from: data)
+                }
+                return nil
             }
         }
         let decoded = await loadTask?.value
@@ -304,12 +396,12 @@ actor SharedContentMetadataCache {
         guard generation == currentGeneration, !hasLoaded else { return }
         hasLoaded = true
         loadTask = nil
-        let expiration = Date().addingTimeInterval(-14 * 24 * 60 * 60)
+        let expiration = Date().addingTimeInterval(-Self.diskEntryTTL)
         for entry in (decoded ?? []).sorted(by: { $0.lastAccessedAt > $1.lastAccessedAt }) {
             guard entry.lastAccessedAt >= expiration, entries[entry.key] == nil,
-                  entries.count < maximumEntryCount,
-                  let byteCost = try? JSONEncoder().encode(entry).count,
-                  byteCost <= maximumByteCost - totalByteCost else { continue }
+                  entries.count < maximumEntryCount else { continue }
+            let byteCost = Self.estimatedByteCost(key: entry.key, metadata: entry.metadata)
+            guard byteCost <= maximumByteCost - totalByteCost else { continue }
             entries[entry.key] = Entry(key: entry.key, metadata: entry.metadata,
                                        lastAccessedAt: entry.lastAccessedAt, byteCost: byteCost)
             totalByteCost += byteCost
@@ -334,7 +426,25 @@ actor SharedContentMetadataCache {
                 at: diskURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            let json = try JSONEncoder().encode(Array(entries.values))
+            // Bound the on-disk cache: evict oldest-first until the payload
+            // fits 64MB instead of writing an unbounded file.
+            var json = try JSONEncoder().encode(Array(entries.values))
+            while json.count > Self.maximumDiskBytes, !entries.isEmpty {
+                let candidates = oldestKeys(limit: 256)
+                guard !candidates.isEmpty else { break }
+                let countBefore = entries.count
+                for key in candidates {
+                    removeEntry(for: key)
+                }
+                guard entries.count < countBefore else { break }
+                json = try JSONEncoder().encode(Array(entries.values))
+            }
+            guard json.count <= Self.maximumDiskBytes else {
+                // Unreachable for an empty manifest, but never write an
+                // over-bound payload: drop this save and retry next flush.
+                DebugLogger.log("Skipping content cache save: payload exceeds disk bound")
+                return
+            }
             let compressed = try (json as NSData).compressed(using: .lzfse)
             try (compressed as Data).write(to: diskURL, options: .atomic)
             isDirty = false

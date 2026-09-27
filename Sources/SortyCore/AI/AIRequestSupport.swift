@@ -722,14 +722,42 @@ actor EditorLinkedDebouncer: Sendable {
 final class ImageBase64Cache: @unchecked Sendable {
     static let shared = ImageBase64Cache()
     private static let maxCachedBytes = 24 * 1_024 * 1_024
+    private static let sampleBytes = 64 * 1024
     private let lock = NSLock()
     private var cache: [String: String] = [:]
+    /// Insertion-ordered keys (parallel to `cache`) for oldest-first eviction.
+    private var insertionOrder: [String] = []
     private var cachedBytes = 0
 
     private init() {}
 
+    /// Stable content fingerprint without hashing every byte: FNV-1a over the
+    /// first/last 64KB plus stride samples. `Data.hashValue` walks all bytes
+    /// with a per-process seed, so it is both O(n) and unstable across launches.
+    private static func sampledFingerprint(of data: Data) -> String {
+        var hash: UInt64 = 0xcbf29ce484222325
+        func mix(_ byte: UInt8) {
+            hash ^= UInt64(byte)
+            hash &*= 0x100000001b3
+        }
+        if data.count <= sampleBytes * 2 {
+            for byte in data { mix(byte) }
+        } else {
+            for byte in data.prefix(sampleBytes) { mix(byte) }
+            for byte in data.suffix(sampleBytes) { mix(byte) }
+            let end = data.count - sampleBytes
+            let stride = max(1, (end - sampleBytes) / 1_024)
+            var index = sampleBytes
+            while index < end {
+                mix(data[index])
+                index += stride
+            }
+        }
+        return String(format: "%016llx", hash)
+    }
+
     func base64(for name: String, data: Data) -> String {
-        let key = "\(name)#\(data.count)#\(data.hashValue)"
+        let key = "\(name)#\(data.count)#\(Self.sampledFingerprint(of: data))"
         lock.lock()
         if let hit = cache[key] {
             lock.unlock()
@@ -737,26 +765,46 @@ final class ImageBase64Cache: @unchecked Sendable {
         }
         lock.unlock()
         let encoded = data.base64EncodedString()
-        guard encoded.utf8.count <= Self.maxCachedBytes else { return encoded }
+        let byteCount = encoded.utf8.count
+        guard byteCount <= Self.maxCachedBytes else { return encoded }
         lock.lock()
         if let hit = cache[key] {
             lock.unlock()
             return hit
         }
         // Encoded images vary widely in size; an entry count is not a memory bound.
-        if cachedBytes + encoded.utf8.count > Self.maxCachedBytes {
-            cache.removeAll()
-            cachedBytes = 0
+        if cachedBytes + byteCount > Self.maxCachedBytes {
+            evictOldestLocked()
+        }
+        guard cachedBytes + byteCount <= Self.maxCachedBytes else {
+            // Still over budget after eviction: serve without caching instead
+            // of dropping the whole table.
+            lock.unlock()
+            return encoded
         }
         cache[key] = encoded
-        cachedBytes += encoded.utf8.count
+        insertionOrder.append(key)
+        cachedBytes += byteCount
         lock.unlock()
         return encoded
+    }
+
+    /// Drops the oldest 25% by insertion order. The previous removeAll cliff
+    /// discarded hot entries alongside cold ones on every overflow.
+    private func evictOldestLocked() {
+        let victimCount = max(1, cache.count / 4)
+        for key in insertionOrder.prefix(victimCount) {
+            if let removed = cache.removeValue(forKey: key) {
+                cachedBytes -= removed.utf8.count
+            }
+        }
+        insertionOrder.removeFirst(min(victimCount, insertionOrder.count))
     }
 
     func clear() {
         lock.lock()
         cache.removeAll()
+        insertionOrder.removeAll()
         cachedBytes = 0
         lock.unlock()
     }

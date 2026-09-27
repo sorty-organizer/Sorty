@@ -12,22 +12,50 @@ import Foundation
 /// cached by content hash and reused instead of re-scanned and re-formatted.
 private final class PromptSectionCache: @unchecked Sendable {
     static let shared = PromptSectionCache()
+    private static let maximumEntries = 16
+    /// Oversized sections are never worth memoizing; skip the store.
+    private static let maximumEntryBytes = 256 * 1024
     private let lock = NSLock()
     private var sections: [String: String] = [:]
+    /// Access-order ticks (parallel to `sections`) for LRU eviction.
+    private var lastAccess: [String: UInt64] = [:]
+    private var tick: UInt64 = 0
 
     private init() {}
+
+    /// Stable FNV-1a 64-bit hash rendered as 16 hex digits. `Hasher` is seeded
+    /// per process, so it must not feed cache keys.
+    static func stableHash(_ text: String) -> String {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 0x100000001b3
+        }
+        return String(format: "%016llx", hash)
+    }
 
     func cachedSection(for key: String) -> String? {
         lock.lock()
         defer { lock.unlock() }
-        return sections[key]
+        guard let section = sections[key] else { return nil }
+        tick &+= 1
+        lastAccess[key] = tick
+        return section
     }
 
     func storeSection(_ section: String, for key: String) {
+        guard section.utf8.count <= Self.maximumEntryBytes else { return }
         lock.lock()
-        if sections.count > 16 { sections.removeAll() }
+        defer { lock.unlock() }
+        tick &+= 1
+        if sections[key] == nil, sections.count >= Self.maximumEntries,
+           let oldest = lastAccess.min(by: { $0.value < $1.value })?.key {
+            // LRU-16: evict the single oldest entry instead of clearing all.
+            sections.removeValue(forKey: oldest)
+            lastAccess.removeValue(forKey: oldest)
+        }
         sections[key] = section
-        lock.unlock()
+        lastAccess[key] = tick
     }
 }
 
@@ -40,16 +68,14 @@ struct PromptBuilder {
         mode: OrganizationMode,
         includeContentMetadata: Bool
     ) -> String {
-        var hasher = Hasher()
-        hasher.combine(mode.rawValue)
-        hasher.combine(includeContentMetadata)
-        for file in files {
-            hasher.combine(file.path)
-            hasher.combine(file.size)
-            hasher.combine(file.modificationDate?.timeIntervalSince1970 ?? 0)
-        }
-        hasher.combine(files.count)
-        return "files-\(hasher.finalize())"
+        // Sorted canonical lines so file order cannot change the key, then a
+        // stable FNV-1a hash (Swift.Hasher is seeded per process).
+        let lines = files.map { file in
+            "\(file.path)|\(file.size)|\(file.modificationDate?.timeIntervalSince1970 ?? 0)"
+        }.sorted()
+        let canonical = "mode=\(mode.rawValue)|meta=\(includeContentMetadata)|count=\(files.count)|"
+            + lines.joined(separator: ";")
+        return "files-\(PromptSectionCache.stableHash(canonical))"
     }
 
     /// Manifest cache key: batch manifest reuse starts here. Identical
@@ -60,7 +86,8 @@ struct PromptBuilder {
         files: [FileItem],
         maxEntries: Int
     ) -> String {
-        "manifest-\(baseDirectoryURL.standardizedFileURL.path.hashValue)-\(maxEntries)-\(fileListingCacheKey(files: files, mode: .organize, includeContentMetadata: true))"
+        let directoryHash = PromptSectionCache.stableHash(baseDirectoryURL.standardizedFileURL.path)
+        return "manifest-\(directoryHash)-\(maxEntries)-\(fileListingCacheKey(files: files, mode: .organize, includeContentMetadata: true))"
     }
 
     /// True when the device is on Low Power Mode or a constrained/expensive
