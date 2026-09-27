@@ -11,6 +11,8 @@ import CoreImage
 import Foundation
 import ImageIO
 import Vision
+import SortyFileSystem
+import SortyModels
 
 /// Result of OCR analysis on an image
 public struct OCRResult: Sendable {
@@ -195,7 +197,7 @@ public actor VisionAnalyzer {
 
             let request = VNRecognizeTextRequest { request, error in
                 if let error = error {
-                    DebugLogger.log("OCR error: \(error.localizedDescription)")
+                    ModelLog.debug("OCR error: \(error.localizedDescription)")
                     resumeOnce(nil)
                     return
                 }
@@ -256,7 +258,7 @@ public actor VisionAnalyzer {
             do {
                 try handler.perform([request])
             } catch {
-                DebugLogger.log("Failed to perform OCR: \(error.localizedDescription)")
+                ModelLog.debug("Failed to perform OCR: \(error.localizedDescription)")
                 resumeOnce(nil)
             }
         }
@@ -410,7 +412,7 @@ public actor VisionAnalyzer {
             )
             trimCacheIfNeeded()
         } catch {
-            DebugLogger.log("VisionAnalyzer: failed to cache OCR result for \(url.lastPathComponent): \(error.localizedDescription)")
+            ModelLog.debug("VisionAnalyzer: failed to cache OCR result for \(url.lastPathComponent): \(error.localizedDescription)")
         }
     }
 

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AppKit
 import PDFKit
 import ImageIO
 import UniformTypeIdentifiers
@@ -13,6 +14,8 @@ import Compression
 @preconcurrency import AVFoundation
 import CoreServices
 import CoreMedia
+import SortyFileSystem
+import SortyModels
 
 actor SharedContentMetadataCache {
     static let shared = SharedContentMetadataCache()
@@ -329,7 +332,7 @@ actor SharedContentMetadataCache {
             guard json.count <= Self.maximumDiskBytes else {
                 // Unreachable for an empty manifest, but never write an
                 // over-bound payload: drop this save and retry next flush.
-                DebugLogger.log("Skipping content cache save: payload exceeds disk bound")
+                ModelLog.debug("Skipping content cache save: payload exceeds disk bound")
                 return
             }
             let compressed = try (json as NSData).compressed(using: .lzfse)
@@ -337,7 +340,7 @@ actor SharedContentMetadataCache {
             isDirty = false
             if let legacyDiskURL { try? FileManager.default.removeItem(at: legacyDiskURL) }
         } catch {
-            DebugLogger.log("Failed to save content cache: \(error)")
+            ModelLog.debug("Failed to save content cache: \(error)")
         }
     }
 }
@@ -1359,6 +1362,3 @@ public actor ContentAnalyzer {
         return normalized.isEmpty ? nil : normalized
     }
 }
-
-// MARK: - Import for AppKit NSColor/NSImage
-import AppKit

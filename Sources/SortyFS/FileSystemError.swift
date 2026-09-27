@@ -1,10 +1,12 @@
 import Foundation
 import Combine
 import Darwin
+import SortyFileSystem
+import SortyModels
 
 // MARK: - Errors
 
-enum FileSystemError: LocalizedError {
+package enum FileSystemError: LocalizedError {
     case fileNotFound(path: String? = nil, underlyingErrno: Int32? = nil)
     case permissionDenied(path: String? = nil, underlyingErrno: Int32? = nil)
     case diskFull(path: String?, underlyingErrno: Int32?)
@@ -17,7 +19,7 @@ enum FileSystemError: LocalizedError {
     case crossVolumeCopyVerificationFailed(String)
     case destinationEscapesBaseDirectory(String)
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .fileNotFound(let path, let errnoValue):
             var message = path.map { "File not found: \($0)" } ?? "File not found"

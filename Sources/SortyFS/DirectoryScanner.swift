@@ -9,6 +9,8 @@ import CryptoKit
 import Darwin
 import Foundation
 import os.log
+import SortyFileSystem
+import SortyModels
 
 package struct DuplicateScanInventory: Sendable {
     let exactCandidates: [FileItem]
@@ -135,9 +137,9 @@ package actor DirectoryScanner {
     private let maximumCompleteSemanticFileCount = 5_000
 
     /// Whether the last scan was degraded due to memory pressure
-    private(set) var lastScanWasDegraded = false
+    package private(set) var lastScanWasDegraded = false
     /// Description of degradation that occurred
-    private(set) var degradationReason: String?
+    package private(set) var degradationReason: String?
 
     /// Callback for deep scan progress updates
     private var deepScanProgressCallback: (@Sendable (_ current: Int, _ total: Int) -> Void)?
@@ -162,16 +164,16 @@ package actor DirectoryScanner {
         // Setup happens lazily on first scan to avoid actor isolation issues
     }
 
-    func setCustomOCRKeywords(_ keywords: [String]) async {
+    package func setCustomOCRKeywords(_ keywords: [String]) async {
         await contentAnalyzer.setCustomOCRKeywords(keywords)
     }
 
-    func setOCRLanguages(_ languages: [String]) async {
+    package func setOCRLanguages(_ languages: [String]) async {
         await contentAnalyzer.setOCRLanguages(languages)
     }
 
     /// Scan directory with optional deep content analysis and hash computation
-    func scanDirectory(
+    package func scanDirectory(
         at url: URL,
         relativeTo baseDirectoryURL: URL? = nil,
         includeHidden: Bool = false,
@@ -946,13 +948,13 @@ package actor DirectoryScanner {
         }
     }
 
-    func setDeepScanProgressCallback(
+    package func setDeepScanProgressCallback(
         _ callback: (@Sendable (_ current: Int, _ total: Int) -> Void)?
     ) {
         deepScanProgressCallback = callback
     }
 
-    func setScanProgressCallback(
+    package func setScanProgressCallback(
         _ callback: (@Sendable (_ current: Int) -> Void)?
     ) {
         scanProgressCallback = callback
@@ -1514,7 +1516,7 @@ package actor DirectoryScanner {
     }
 }
 
-enum ScannerError: LocalizedError {
+package enum ScannerError: LocalizedError {
     case alreadyScanning
     case invalidURL
     case pathNotFound
@@ -1524,7 +1526,7 @@ enum ScannerError: LocalizedError {
     case excluded
     case enumerationFailed
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .alreadyScanning:
             return "A scan is already in progress"

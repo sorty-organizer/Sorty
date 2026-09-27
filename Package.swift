@@ -76,6 +76,7 @@ var packageProducts: [Product] = [
     .library(name: "SortyModels", targets: ["SortyModels"]),
     .library(name: "SortyAI", targets: ["SortyAI"]),
     .library(name: "SortyLearnings", targets: ["SortyLearnings"]),
+    .library(name: "SortyFS", targets: ["SortyFS"]),
     .library(name: "SortyCore", targets: ["SortyCore"]),
     .library(
         name: "SortyLib",
@@ -113,8 +114,14 @@ var packageTargets: [Target] = [
         swiftSettings: sortyLibSwiftSettings
     ),
     .target(
+        name: "SortyFS",
+        dependencies: ["SortyFileSystem", "SortyModels"],
+        path: "Sources/SortyFS",
+        swiftSettings: sortyLibSwiftSettings
+    ),
+    .target(
         name: "SortyCore",
-        dependencies: ["SortyFileSystem", "SortyModels", "SortyAI", "SortyLearnings"] + sortyLibDependencies,
+        dependencies: ["SortyFileSystem", "SortyModels", "SortyAI", "SortyLearnings", "SortyFS"] + sortyLibDependencies,
         path: "Sources/SortyCore",
         swiftSettings: sortyLibSwiftSettings,
         linkerSettings: sortyLibLinkerSettings
@@ -160,7 +167,7 @@ var packageTargets: [Target] = [
     ),
     .testTarget(
         name: "SortyTests",
-        dependencies: ["SortyLib", "SortyCore", "SortyLearnings", "SortyAI", "SortyModels", "SortyFileSystem", "SortyQualitySupport"],
+        dependencies: ["SortyLib", "SortyCore", "SortyFS", "SortyLearnings", "SortyAI", "SortyModels", "SortyFileSystem", "SortyQualitySupport"],
         path: "Tests/SortyTests",
         // Same flags as the lib targets so tests share one incremental
         // compilation signature instead of invalidating it (see Makefile).

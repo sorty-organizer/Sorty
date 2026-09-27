@@ -9,6 +9,8 @@ import Foundation
 import CryptoKit
 import Combine
 import Darwin
+import SortyFileSystem
+import SortyModels
 
 /// Group of files with identical content
 public struct DuplicateGroup: Identifiable, Hashable, Sendable {
@@ -660,12 +662,12 @@ public class DuplicateDetectionManager: ObservableObject {
             return
         }
         let scanStartedAt = Date()
-        AnalyticsManager.shared.captureWorkflow(
+        SortyFSTelemetry.captureWorkflow(
             workflow: "duplicate_scan",
             stage: "started",
             outcome: "started",
             properties: [
-                "count_bucket": AnalyticsManager.countBucket(totalScannedFileCount),
+                "count_bucket": SortyFSTelemetry.countBucket(totalScannedFileCount),
                 "semantic_enabled": settings.includeSemanticDuplicates,
             ]
         )
@@ -695,12 +697,12 @@ public class DuplicateDetectionManager: ObservableObject {
             scanStage = ""
             scanDuration = Date().timeIntervalSince(scanStartedAt)
             state = .completed(count: 0)
-            AnalyticsManager.shared.captureWorkflow(
+            SortyFSTelemetry.captureWorkflow(
                 workflow: "duplicate_scan",
                 stage: "completed",
                 outcome: "empty",
-                properties: AnalyticsManager.durationProperties(scanDuration).merging([
-                    "count_bucket": AnalyticsManager.countBucket(0),
+                properties: SortyFSTelemetry.durationProperties(scanDuration).merging([
+                    "count_bucket": SortyFSTelemetry.countBucket(0),
                     "result_kind": "no_files",
                     "semantic_enabled": settings.includeSemanticDuplicates,
                 ]) { current, _ in current }
@@ -744,11 +746,11 @@ public class DuplicateDetectionManager: ObservableObject {
             isScanning = false
             state = .idle
             scanStage = ""
-            AnalyticsManager.shared.captureWorkflow(
+            SortyFSTelemetry.captureWorkflow(
                 workflow: "duplicate_scan",
                 stage: "scanning",
                 outcome: "cancelled",
-                properties: AnalyticsManager.durationProperties(
+                properties: SortyFSTelemetry.durationProperties(
                     Date().timeIntervalSince(scanStartedAt)
                 ).merging([
                     "semantic_enabled": settings.includeSemanticDuplicates,
@@ -842,12 +844,12 @@ public class DuplicateDetectionManager: ObservableObject {
         scanStage = ""
         scanDuration = Date().timeIntervalSince(scanStartedAt)
         state = .completed(count: allGroups.count)
-        AnalyticsManager.shared.captureWorkflow(
+        SortyFSTelemetry.captureWorkflow(
             workflow: "duplicate_scan",
             stage: "completed",
             outcome: "success",
-            properties: AnalyticsManager.durationProperties(scanDuration).merging([
-                "count_bucket": AnalyticsManager.countBucket(allGroups.count),
+            properties: SortyFSTelemetry.durationProperties(scanDuration).merging([
+                "count_bucket": SortyFSTelemetry.countBucket(allGroups.count),
                 "result_kind": allGroups.isEmpty ? "no_duplicates" : "duplicates_found",
                 "semantic_enabled": settings.includeSemanticDuplicates,
             ]) { current, _ in current }

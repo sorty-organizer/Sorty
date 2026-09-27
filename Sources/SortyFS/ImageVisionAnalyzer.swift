@@ -13,6 +13,8 @@ import ImageIO
 import UniformTypeIdentifiers
 import CryptoKit
 import PDFKit
+import SortyFileSystem
+import SortyModels
 
 public final class ImageVisionAnalyzer: Sendable {
     private let maxDimension: CGFloat = 1024.0
@@ -43,7 +45,7 @@ public final class ImageVisionAnalyzer: Sendable {
 
     private func prepareImageForVision(at url: URL, pruneAfterWrite: Bool) async -> Data? {
         guard FileManager.default.fileExists(atPath: url.path) else {
-            DebugLogger.log("ImageVisionAnalyzer: file not found at \(url.path)")
+            ModelLog.debug("ImageVisionAnalyzer: file not found at \(url.path)")
             return nil
         }
 
@@ -55,7 +57,7 @@ public final class ImageVisionAnalyzer: Sendable {
             }
 
             guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-                DebugLogger.log("ImageVisionAnalyzer: failed to create image source for \(url.lastPathComponent)")
+                ModelLog.debug("ImageVisionAnalyzer: failed to create image source for \(url.lastPathComponent)")
                 return nil
             }
 
@@ -72,13 +74,13 @@ public final class ImageVisionAnalyzer: Sendable {
                 0,
                 thumbnailOptions as CFDictionary
             ) else {
-                DebugLogger.log("ImageVisionAnalyzer: failed to downsample \(url.lastPathComponent)")
+                ModelLog.debug("ImageVisionAnalyzer: failed to downsample \(url.lastPathComponent)")
                 return nil
             }
 
             guard !Task.isCancelled else { return nil }
             guard let jpegData = self.convertToJPEG(preparedImage) else {
-                DebugLogger.log("ImageVisionAnalyzer: failed to convert image to JPEG \(url.lastPathComponent)")
+                ModelLog.debug("ImageVisionAnalyzer: failed to convert image to JPEG \(url.lastPathComponent)")
                 return nil
             }
 
@@ -246,7 +248,7 @@ public final class ImageVisionAnalyzer: Sendable {
     ) async -> [String: Data] {
         await Task.detached(priority: .utility) {
             guard let document = PDFDocument(url: url) else {
-                DebugLogger.log("ImageVisionAnalyzer: failed to open PDF \(url.lastPathComponent)")
+                ModelLog.debug("ImageVisionAnalyzer: failed to open PDF \(url.lastPathComponent)")
                 return [:]
             }
 
@@ -327,7 +329,7 @@ public final class ImageVisionAnalyzer: Sendable {
             // File I/O runs outside the lock; only the prune pass below holds it.
             try data.write(to: cacheURL, options: .atomic)
         } catch {
-            DebugLogger.log("ImageVisionAnalyzer: failed to write cache for \(url.lastPathComponent) (\(error.localizedDescription))")
+            ModelLog.debug("ImageVisionAnalyzer: failed to write cache for \(url.lastPathComponent) (\(error.localizedDescription))")
             return
         }
         if pruneAfterWrite {
@@ -417,7 +419,7 @@ public final class ImageVisionAnalyzer: Sendable {
             let digest = SHA256.hash(data: Data(input.utf8))
             return digest.compactMap { String(format: "%02x", $0) }.joined()
         } catch {
-            DebugLogger.log("ImageVisionAnalyzer: failed to compute cache key for \(url.lastPathComponent) (\(error.localizedDescription))")
+            ModelLog.debug("ImageVisionAnalyzer: failed to compute cache key for \(url.lastPathComponent) (\(error.localizedDescription))")
             return nil
         }
     }

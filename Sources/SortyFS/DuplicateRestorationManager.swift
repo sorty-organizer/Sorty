@@ -1,6 +1,8 @@
 import Foundation
 import Combine
 import Darwin
+import SortyFileSystem
+import SortyModels
 
 // MARK: - Duplicate Restoration Manager
 
@@ -366,7 +368,7 @@ public class DuplicateRestorationManager: ObservableObject {
             )
             try encoded.write(to: fileURL, options: .atomic)
         } catch {
-            LogManager.shared.log(
+            ModelLog.log(
                 "Failed to save duplicate restoration history: \(error.localizedDescription)",
                 level: .error,
                 category: "DuplicateRestoration"

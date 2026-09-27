@@ -9,6 +9,8 @@
 import Foundation
 import Combine
 import Darwin
+import SortyFileSystem
+import SortyModels
 
 public actor FileSystemManager {
     private let fileManager = FileManager.default
@@ -342,7 +344,7 @@ public actor FileSystemManager {
             // copy again so the filesystem matches the failed move; if that
             // rollback also fails, surface a synthesized copy operation so
             // History/undo can remove the duplicate instead of leaking it.
-            DebugLogger.log("Copied to \(destination.path) but could not remove source \(source.path): \(error.localizedDescription)")
+            ModelLog.debug("Copied to \(destination.path) but could not remove source \(source.path): \(error.localizedDescription)")
             if (try? fileManager.removeItem(at: destination)) != nil {
                 throw FileSystemError.partialApplyFailure(
                     operations: [],
@@ -468,7 +470,7 @@ public actor FileSystemManager {
 
         // Fuzzy match: find existing directory with similar name (ignoring spaces/case)
         if let matchURL = findSimilarDirectory(named: sanitizedName, in: parentURL) {
-            DebugLogger.log("Fuzzy matched folder '\(sanitizedName)' → existing '\(matchURL.lastPathComponent)'")
+            ModelLog.debug("Fuzzy matched folder '\(sanitizedName)' → existing '\(matchURL.lastPathComponent)'")
             try validateRelativeDestination(matchURL, staysInside: parentURL)
             return matchURL
         }
@@ -677,7 +679,7 @@ public actor FileSystemManager {
         if let manager = exclusionManager {
             let item = FileItem(path: folderURL.path, name: folderURL.lastPathComponent, extension: folderURL.pathExtension)
             if await manager.shouldExclude(item) {
-                DebugLogger.log("Skipping excluded folder creation: \(folderURL.path)")
+                ModelLog.debug("Skipping excluded folder creation: \(folderURL.path)")
                 return operations
             }
         }
@@ -826,7 +828,7 @@ public actor FileSystemManager {
             // Check exclusions
             if let manager = exclusionManager {
                 if await manager.shouldExclude(file) {
-                    DebugLogger.log("Skipping excluded file move: \(sourceURL.path)")
+                    ModelLog.debug("Skipping excluded file move: \(sourceURL.path)")
                     continue
                 }
             }
@@ -938,7 +940,7 @@ public actor FileSystemManager {
         guard let comment = comment, !comment.isEmpty else {
             let rc = removexattr(path, key, 0)
             if rc != 0 && errno != ENOENT && errno != 93 {
-                DebugLogger.log("Failed to remove Finder comment for \(path): errno \(errno)")
+                ModelLog.debug("Failed to remove Finder comment for \(path): errno \(errno)")
                 throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
             }
             return
@@ -954,7 +956,7 @@ public actor FileSystemManager {
             setxattr(path, key, buf.baseAddress!, buf.count, 0, 0)
         }
         if rc != 0 {
-            DebugLogger.log("Failed to set Finder comment for \(path): errno \(errno)")
+            ModelLog.debug("Failed to set Finder comment for \(path): errno \(errno)")
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
     }
@@ -1023,12 +1025,12 @@ public actor FileSystemManager {
                 #if DEBUG
                 if let verifyValues = try? url.resourceValues(forKeys: [.tagNamesKey]),
                    let verifyTags = verifyValues.tagNames {
-                    DebugLogger.log("Tags verified for \(url.lastPathComponent): \(verifyTags)")
+                    ModelLog.debug("Tags verified for \(url.lastPathComponent): \(verifyTags)")
                 }
                 #endif
             } catch {
                 failure = "Could not apply tags to \(url.lastPathComponent): \(error.localizedDescription)"
-                DebugLogger.log("Tagging failed for \(url.path): \(error.localizedDescription)")
+                ModelLog.debug("Tagging failed for \(url.path): \(error.localizedDescription)")
             }
         }
 
@@ -1040,7 +1042,7 @@ public actor FileSystemManager {
             } catch {
                 let commentFailure = "Could not set Finder comment on \(url.lastPathComponent): \(error.localizedDescription)"
                 failure = [failure, commentFailure].compactMap { $0 }.joined(separator: "; ")
-                DebugLogger.log(commentFailure)
+                ModelLog.debug(commentFailure)
             }
         }
 
@@ -1152,14 +1154,14 @@ public actor FileSystemManager {
                 modificationDate: destinationValues?.contentModificationDate,
                 finderLabelNumber: destinationValues?.labelNumber
             ) {
-                DebugLogger.log("Operation BLOCKED: Destination \(destPath) is excluded.")
+                ModelLog.debug("Operation BLOCKED: Destination \(destPath) is excluded.")
                 return false
             }
             return true
         }
 
         if matcher.shouldExcludeUsingPathOnly(at: destURL) {
-            DebugLogger.log("Operation BLOCKED: Destination \(destPath) matches a path exclusion rule.")
+            ModelLog.debug("Operation BLOCKED: Destination \(destPath) matches a path exclusion rule.")
             return false
         }
         return true
@@ -1206,7 +1208,7 @@ public actor FileSystemManager {
         }
     }
     
-    func applyOrganization(
+    package func applyOrganization(
         _ plan: OrganizationPlan, 
         at baseURL: URL, 
         dryRun: Bool = false, 
@@ -1284,7 +1286,7 @@ public actor FileSystemManager {
                     validationIssues = await preValidatePlan(plan, at: baseURL)
                 }
                 if !validationIssues.isEmpty {
-                    DebugLogger.log("Pre-validation found \(validationIssues.count) issue(s): \(validationIssues.joined(separator: ", "))")
+                    ModelLog.debug("Pre-validation found \(validationIssues.count) issue(s): \(validationIssues.joined(separator: ", "))")
                     throw FileSystemError.preValidationFailed(validationIssues)
                 }
             }
@@ -1364,7 +1366,7 @@ public actor FileSystemManager {
                 $0.type == .moveFile || $0.type == .renameFile || $0.type == .copyFile
             }
             if organizedFileOperations.isEmpty, !exclusionSkips.isEmpty {
-                DebugLogger.log("Apply skipped all \(exclusionSkips.count) matching file(s) by exclusion rules; no files were organized")
+                ModelLog.debug("Apply skipped all \(exclusionSkips.count) matching file(s) by exclusion rules; no files were organized")
                 throw AllFilesExcludedError()
             }
 
@@ -1421,17 +1423,17 @@ public actor FileSystemManager {
                 }
 
                 if !allFailures.isEmpty {
-                    DebugLogger.log("Organization completed with \(allFailures.count) failure(s)")
+                    ModelLog.debug("Organization completed with \(allFailures.count) failure(s)")
                     for failure in allFailures {
-                        DebugLogger.log("  - \(failure.sourcePath): \(failure.error)")
+                        ModelLog.debug("  - \(failure.sourcePath): \(failure.error)")
                     }
                 }
             }
 
             if !exclusionSkips.isEmpty {
-                DebugLogger.log("Organization skipped \(exclusionSkips.count) file(s) by exclusion rules")
+                ModelLog.debug("Organization skipped \(exclusionSkips.count) file(s) by exclusion rules")
                 for skip in exclusionSkips {
-                    DebugLogger.log("  - \(skip.sourcePath): \(skip.error)")
+                    ModelLog.debug("  - \(skip.sourcePath): \(skip.error)")
                 }
             }
 
@@ -1449,9 +1451,9 @@ public actor FileSystemManager {
             }
 
             if !allFailures.isEmpty {
-                DebugLogger.log("Organization failed after \(allOperations.count) recorded operation(s) and \(allFailures.count) skipped file(s)")
+                ModelLog.debug("Organization failed after \(allOperations.count) recorded operation(s) and \(allFailures.count) skipped file(s)")
                 for failure in allFailures {
-                    DebugLogger.log("  - \(failure.sourcePath): \(failure.error)")
+                    ModelLog.debug("  - \(failure.sourcePath): \(failure.error)")
                 }
             }
 
@@ -1480,7 +1482,7 @@ public actor FileSystemManager {
         if let manager = exclusionManager {
             let item = FileItem(path: folderURL.path, name: folderURL.lastPathComponent, extension: folderURL.pathExtension)
             if await manager.shouldExclude(item) {
-                DebugLogger.log("Skipping excluded folder creation: \(folderURL.path)")
+                ModelLog.debug("Skipping excluded folder creation: \(folderURL.path)")
                 return OperationResult(operations: operations, processedCount: processedCount)
             }
         }
@@ -1504,7 +1506,7 @@ public actor FileSystemManager {
                         timestamp: Date(),
                         metadata: FileOperation.OperationMetadata(wasCreatedDuringOrganization: true)
                     ))
-                    DebugLogger.log("Moved conflicting file to \(backupName)")
+                    ModelLog.debug("Moved conflicting file to \(backupName)")
                 }
                 
                 if !exists || !isDirectory.boolValue {
@@ -1520,7 +1522,7 @@ public actor FileSystemManager {
                     ))
                 }
             } catch {
-                DebugLogger.log("Failed to create folder \(folderURL.path): \(error.localizedDescription)")
+                ModelLog.debug("Failed to create folder \(folderURL.path): \(error.localizedDescription)")
                 failures.append(OperationFailure(
                     sourcePath: folderURL.path,
                     destinationPath: nil,
@@ -1575,7 +1577,7 @@ public actor FileSystemManager {
             
             if let manager = exclusionManager {
                 if await manager.shouldExclude(file) {
-                    DebugLogger.log("Skipping excluded file move: \(sourceURL.path)")
+                    ModelLog.debug("Skipping excluded file move: \(sourceURL.path)")
                     // Record the skip separately from failures: exclusion is
                     // the rules working as configured, and only an apply with
                     // nothing organized is surfaced as an error.
@@ -1650,7 +1652,7 @@ public actor FileSystemManager {
                                 metadata: renameMetadata
                             )
                             if !validateOperation(plannedOperation, matcher: exclusionMatcher) {
-                                DebugLogger.log("Skipping move of \(sourceURL.path): destination is excluded")
+                                ModelLog.debug("Skipping move of \(sourceURL.path): destination is excluded")
                                 exclusionSkips.append(OperationFailure(
                                     sourcePath: sourceURL.path,
                                     destinationPath: destinationURL.path,
@@ -1701,7 +1703,7 @@ public actor FileSystemManager {
                             error: error.localizedDescription,
                             isRetryable: isRetryable
                         ))
-                        DebugLogger.log("Failed to move \(sourceURL.lastPathComponent): \(error.localizedDescription)")
+                        ModelLog.debug("Failed to move \(sourceURL.lastPathComponent): \(error.localizedDescription)")
                     }
                 } else {
                     let operationType = operationType(
@@ -1925,7 +1927,7 @@ public actor FileSystemManager {
     }
 
     /// Reverses a set of operations - returns result with details about skipped files
-    func reverseOperations(_ operations: [FileOperation]) async throws -> RestoreResult {
+    package func reverseOperations(_ operations: [FileOperation]) async throws -> RestoreResult {
         // Collect all paths involved and ensure we have access if they are security-scoped
         var involvedPaths: [String] = []
         for op in operations {
@@ -2022,7 +2024,7 @@ public actor FileSystemManager {
                         let filename = URL(fileURLWithPath: destinationPath).lastPathComponent
                         missingFiles.append(filename)
                         retryableFailedOperationIDs.append(operation.id)
-                        DebugLogger.log("Cannot restore - file no longer exists: \(destinationPath)")
+                        ModelLog.debug("Cannot restore - file no longer exists: \(destinationPath)")
                     }
                 }
 
@@ -2032,7 +2034,7 @@ public actor FileSystemManager {
 
             case .deleteFile:
                 // Cannot undo deletion without backup - log warning
-                DebugLogger.log("Cannot undo deletion: \(operation.sourcePath)")
+                ModelLog.debug("Cannot undo deletion: \(operation.sourcePath)")
                 missingFiles.append(URL(fileURLWithPath: operation.sourcePath).lastPathComponent)
 
             case .copyFile:
@@ -2058,7 +2060,7 @@ public actor FileSystemManager {
                         try (tagURL as NSURL).setResourceValue(originalTags, forKey: .tagNamesKey)
                     } catch {
                         tagFailures += 1
-                        DebugLogger.log("Failed to restore tags for \(tagURL.path): \(error.localizedDescription)")
+                        ModelLog.debug("Failed to restore tags for \(tagURL.path): \(error.localizedDescription)")
                     }
                 }
                 if operation.metadata?.newComment != nil {
@@ -2067,7 +2069,7 @@ public actor FileSystemManager {
                         try setFinderComment(operation.metadata?.originalComment, for: tagURL)
                     } catch {
                         tagFailures += 1
-                        DebugLogger.log("Failed to restore comment for \(tagURL.path): \(error.localizedDescription)")
+                        ModelLog.debug("Failed to restore comment for \(tagURL.path): \(error.localizedDescription)")
                     }
                 }
                 if attemptedRestores == 0 {
@@ -2087,7 +2089,7 @@ public actor FileSystemManager {
                 let failedPath = operation.destinationPath ?? operation.sourcePath
                 missingFiles.append(URL(fileURLWithPath: failedPath).lastPathComponent)
                 retryableFailedOperationIDs.append(operation.id)
-                DebugLogger.log("Cannot restore \(failedPath): \(error.localizedDescription)")
+                ModelLog.debug("Cannot restore \(failedPath): \(error.localizedDescription)")
             }
         }
 
@@ -2229,7 +2231,7 @@ public actor FileSystemManager {
                         try (url as NSURL).setResourceValue(originalTags, forKey: .tagNamesKey)
                     } catch {
                         singleFailures += 1
-                        DebugLogger.log("Failed to restore tags for \(url.path): \(error.localizedDescription)")
+                        ModelLog.debug("Failed to restore tags for \(url.path): \(error.localizedDescription)")
                     }
                 }
                 if operation.metadata?.newComment != nil {
@@ -2238,7 +2240,7 @@ public actor FileSystemManager {
                         try setFinderComment(operation.metadata?.originalComment, for: url)
                     } catch {
                         singleFailures += 1
-                        DebugLogger.log("Failed to restore comment for \(url.path): \(error.localizedDescription)")
+                        ModelLog.debug("Failed to restore comment for \(url.path): \(error.localizedDescription)")
                     }
                 }
                 if singleAttempted > 0, singleFailures == 0 {
@@ -2304,7 +2306,7 @@ public actor FileSystemManager {
 
         } catch {
             // Folder might not be empty or we don't have permission
-            DebugLogger.log("Could not remove folder: \(path) - \(error.localizedDescription)")
+            ModelLog.debug("Could not remove folder: \(path) - \(error.localizedDescription)")
         }
 
         return false
@@ -2369,7 +2371,7 @@ public actor FileSystemManager {
                     throw error
                 }
                 
-                DebugLogger.log("Retry attempt \(attempt)/\(config.maxAttempts) after error: \(error.localizedDescription)")
+                ModelLog.debug("Retry attempt \(attempt)/\(config.maxAttempts) after error: \(error.localizedDescription)")
                 try await Task.sleep(nanoseconds: delay)
                 delay = min(delay * 2, config.maxDelay)
             }
@@ -2709,7 +2711,7 @@ public actor FileSystemManager {
         while true {
             do {
                 if isCrossVolume(from: sourceURL, to: destination) {
-                    DebugLogger.log("Cross-volume move detected: \(sourceURL.path) → \(destination.path)")
+                    ModelLog.debug("Cross-volume move detected: \(sourceURL.path) → \(destination.path)")
                     let fileName = sourceURL.lastPathComponent
                     let handler = crossVolumeProgressHandler
                     try await copyWithProgress(from: sourceURL, to: destination) { progress in

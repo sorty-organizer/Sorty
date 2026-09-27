@@ -1,6 +1,7 @@
 import XCTest
 @testable import SortyLib
 @testable import SortyCore
+@testable import SortyFS
 
 final class FolderWatcherTests: XCTestCase {
     @MainActor

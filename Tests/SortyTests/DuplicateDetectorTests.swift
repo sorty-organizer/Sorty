@@ -3,6 +3,7 @@ import XCTest
 import Darwin
 @testable import SortyLib
 @testable import SortyCore
+@testable import SortyFS
 @testable import SortyFileSystem
 
 class DuplicateDetectorTests: XCTestCase {

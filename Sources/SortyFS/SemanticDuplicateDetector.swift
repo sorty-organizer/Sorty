@@ -11,6 +11,8 @@ import CryptoKit
 import Combine
 import Vision
 import AppKit
+import SortyFileSystem
+import SortyModels
 
 /// Represents a group of semantically similar files (near-duplicates)
 public struct SemanticDuplicateGroup: Identifiable, Sendable {
@@ -889,7 +891,7 @@ public actor SemanticDuplicateDetector {
         do {
             try handler.perform([request])
         } catch {
-            DebugLogger.log("Failed to generate feature print: \(error.localizedDescription)")
+            ModelLog.debug("Failed to generate feature print: \(error.localizedDescription)")
             return nil
         }
 

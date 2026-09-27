@@ -8,6 +8,7 @@
 import XCTest
 @testable import SortyLib
 @testable import SortyCore
+@testable import SortyFS
 
 // MARK: - ContentMetadata Tests (Additional Coverage)
 

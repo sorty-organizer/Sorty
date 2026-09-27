@@ -8,6 +8,8 @@
 import Foundation
 import AppKit
 import CoreServices
+import SortyFileSystem
+import SortyModels
 
 /// Protocol for receiving bounded folder-change batches.
 ///
@@ -215,7 +217,7 @@ public final class FolderWatcher: @unchecked Sendable {
             self.pausedFolders.insert(folder.id)
             self.clearPendingFiles(for: folder.id)
             self.minimumEventIDs[folder.id] = FSEventsGetCurrentEventId()
-            DebugLogger.log("Paused watching: \(folder.name)")
+            ModelLog.debug("Paused watching: \(folder.name)")
         }
     }
 
@@ -230,7 +232,7 @@ public final class FolderWatcher: @unchecked Sendable {
             self.folderSnapshots.removeValue(forKey: folder.id)
             self.recoveryDroppedPaths.removeValue(forKey: folder.id)
             self.beginScan(at: self.rootPath(for: folder.id, folder: folder), isRecovery: true)
-            DebugLogger.log("Resumed watching: \(folder.name)")
+            ModelLog.debug("Resumed watching: \(folder.name)")
         }
     }
 
@@ -246,7 +248,7 @@ public final class FolderWatcher: @unchecked Sendable {
             self.folderSnapshots.removeValue(forKey: folder.id)
             self.recoveryDroppedPaths.removeValue(forKey: folder.id)
             self.beginScan(at: self.rootPath(for: folder.id, folder: folder), isRecovery: true)
-            DebugLogger.log("Rebuilding watcher recovery baseline: \(folder.name)")
+            ModelLog.debug("Rebuilding watcher recovery baseline: \(folder.name)")
         }
     }
 
@@ -432,7 +434,7 @@ public final class FolderWatcher: @unchecked Sendable {
             relativeTo: nil,
             bookmarkDataIsStale: &isStale
         ) else {
-            DebugLogger.log("Failed to resolve bookmark for: \(folder.name)")
+            ModelLog.debug("Failed to resolve bookmark for: \(folder.name)")
             return nil
         }
 
@@ -447,7 +449,7 @@ public final class FolderWatcher: @unchecked Sendable {
             resolvedURLs[folder.id] = url
             securityScopedFolderIDs.insert(folder.id)
         } else {
-            DebugLogger.log("Lost security-scoped access for: \(folder.name)")
+            ModelLog.debug("Lost security-scoped access for: \(folder.name)")
         }
 
         if isStale,
@@ -610,7 +612,7 @@ public final class FolderWatcher: @unchecked Sendable {
             flags
         ) else {
             Unmanaged<FolderWatcherContext>.fromOpaque(info).release()
-            DebugLogger.log("FSEvents: Failed to create shared watched-folder stream")
+            ModelLog.debug("FSEvents: Failed to create shared watched-folder stream")
             scheduleStreamRecoveryIfNeeded()
             return
         }
@@ -620,7 +622,7 @@ public final class FolderWatcher: @unchecked Sendable {
             FSEventStreamInvalidate(newStream)
             FSEventStreamRelease(newStream)
             Unmanaged<FolderWatcherContext>.fromOpaque(info).release()
-            DebugLogger.log("FSEvents: Failed to start shared watched-folder stream")
+            ModelLog.debug("FSEvents: Failed to start shared watched-folder stream")
             scheduleStreamRecoveryIfNeeded()
             return
         }
@@ -633,7 +635,7 @@ public final class FolderWatcher: @unchecked Sendable {
             latestProcessedEventID = sinceWhen
         }
         scheduleStreamRecoveryIfNeeded()
-        DebugLogger.log(
+        ModelLog.debug(
             "FSEvents: Watching \(watchedFolders.count) folders through \(monitoringRoots.count) coalesced roots"
         )
     }
@@ -904,7 +906,7 @@ public final class FolderWatcher: @unchecked Sendable {
         queue.async { [weak self] in
             self?.stopStream()
         }
-        DebugLogger.log("FSEvents: Paused shared stream to apply bounded backpressure")
+        ModelLog.debug("FSEvents: Paused shared stream to apply bounded backpressure")
     }
 
     private func resumeAfterBackpressureIfPossible() {
@@ -1418,7 +1420,7 @@ public final class FolderWatcher: @unchecked Sendable {
         // that succeed advance the baseline when delivery is accepted.
         let nextAttempt = attempt + 1
         guard nextAttempt <= 8, !paths.isEmpty else {
-            DebugLogger.log("FSEvents: Dropping \(paths.count) scanned paths after sustained backpressure")
+            ModelLog.debug("FSEvents: Dropping \(paths.count) scanned paths after sustained backpressure")
             return false
         }
         let delay = min(4.0, Self.retryDelay * Double(1 << min(nextAttempt, 4)))
@@ -1582,7 +1584,7 @@ public final class FolderWatcher: @unchecked Sendable {
         scheduleRecoveryScans(affectedBy: affectedPath)
         lastReconciliationAt = Date()
         scheduleReconciliationDeadline()
-        DebugLogger.log("FSEvents: Replayed cursor and scheduled lifecycle recovery")
+        ModelLog.debug("FSEvents: Replayed cursor and scheduled lifecycle recovery")
     }
 
     /// Rechecks every watched root's readability (and therefore delivers
@@ -1604,7 +1606,7 @@ public final class FolderWatcher: @unchecked Sendable {
             return
         }
         guard unhealthyFolderIDs.insert(folderID).inserted else { return }
-        DebugLogger.log("FSEvents: Watched root is unreachable: \(folder.path)")
+        ModelLog.debug("FSEvents: Watched root is unreachable: \(folder.path)")
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.delegate?.folderWatcher(self, didLoseAccessTo: folder)
@@ -1627,7 +1629,7 @@ public final class FolderWatcher: @unchecked Sendable {
         // `requiresFullRecoveryScan` as well would rescan them a second time
         // and repeated wrap events would queue unbounded rescans.
         scheduleRecoveryScans(affectedBy: "/")
-        DebugLogger.log("FSEvents: Event IDs wrapped; reset cursors and scheduled full recovery")
+        ModelLog.debug("FSEvents: Event IDs wrapped; reset cursors and scheduled full recovery")
     }
 
     private func scheduleFullReconciliation() {
@@ -1695,7 +1697,7 @@ public final class FolderWatcher: @unchecked Sendable {
             persistedEventID = eventID
             replayFromEventID = eventID
         } catch {
-            DebugLogger.log("Failed to persist watched-folder event cursor: \(error)")
+            ModelLog.debug("Failed to persist watched-folder event cursor: \(error)")
         }
     }
 
@@ -1844,7 +1846,7 @@ public final class FolderWatcher: @unchecked Sendable {
             try JSONEncoder().encode(snapshot).write(to: url, options: .atomic)
             dirtySnapshotFolderIDs.remove(folderID)
         } catch {
-            DebugLogger.log("Failed to persist watcher snapshot for \(folder.name): \(error)")
+            ModelLog.debug("Failed to persist watcher snapshot for \(folder.name): \(error)")
         }
     }
 
