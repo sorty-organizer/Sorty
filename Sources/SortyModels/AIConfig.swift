@@ -459,9 +459,14 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .ollama:
             return ["llava", "llama3.2-vision", "qwen2.5vl", "gemma3", "llama4", "moondream", "llama3.1"]
         case .openCodeZen:
-            return ["glm-5.3", "glm-5.3-flash", "glm-5.2", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "minimax-m3", "minimax-m2.7", "qwen3.8-max"]
+            // Chat-completions models only: Sorty's OpenAI-compatible client
+            // cannot drive the Responses/Messages/Gemini/SystemOne endpoints.
+            // Keep in sync with the Zen endpoints table (opencode.ai/v2/docs/console/models).
+            return ["glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-5", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "kimi-k2.5", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "deepseek-v4-flash-free", "minimax-m3", "minimax-m2.7", "minimax-m2.5", "qwen3.8-max", "big-pickle", "space-bunny-free", "longcat-2.5-preview-free", "mimo-v2.6-flash-free", "mimo-v2.5-free", "ling-3.0-flash-fin-free", "nemotron-3-ultra-free", "nemotron-3.5-lightning-free"]
         case .openCodeGo:
-            return ["glm-5.3", "glm-5.3-flash", "glm-5.2", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "mimo-v2.6-flash", "mimo-v2.6-pro", "hy3"]
+            // Same chat-completions constraint for Go (opencode.ai/v2/docs/console/go).
+            // Note Minimax/Qwen are Messages-only on Go, unlike Zen.
+            return ["glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-5", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "kimi-k2.5", "longcat-2.0", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "mimo-v2.6-flash", "mimo-v2.6-pro", "mimo-v2.5", "mimo-v2.5-pro", "hy4-preview", "hy3", "space-bunny-free", "longcat-2.5-preview-free"]
         case .openAICompatible:
             return ["gpt-5.4-mini", "gpt-5.4", "gpt-4.1", "gpt-4o"]
         case .appleFoundationModel:
