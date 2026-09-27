@@ -22,6 +22,7 @@ public struct BugReportView: View {
     @ObservedObject private var analytics = AnalyticsManager.shared
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @State private var description = ""
+    @State private var area: BugReportArea = .other
     @State private var sendToSentry = false
     @State private var sentryEventID: String?
     @State private var errorMessage: String?
@@ -72,7 +73,7 @@ public struct BugReportView: View {
             }
             TextEditor(text: $description)
                 .font(.body)
-                .frame(height: showsSentryOption ? 100 : 180)
+                .frame(height: showsSentryOption ? 84 : 150)
                 .padding(4)
                 .background(Color(NSColor.controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -86,6 +87,16 @@ public struct BugReportView: View {
                         description = String(newValue.prefix(2_000))
                     }
                 }
+
+            Text("Which part of Sorty?")
+                .font(.subheadline.weight(.semibold))
+            Picker("Which part of Sorty?", selection: $area) {
+                ForEach(BugReportArea.allCases, id: \.self) { area in
+                    Text(area.displayName).tag(area)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("BugReportAreaPicker")
 
             if showsSentryOption {
                 Toggle("Also send this description to Sentry (anonymous)", isOn: $sendToSentry)
@@ -121,6 +132,10 @@ public struct BugReportView: View {
                         GridRow {
                             sentryListRow("macOS version and chip type")
                             sentryExcludedRow("Screenshots, logs, or raw error text")
+                        }
+                        GridRow {
+                            sentryListRow("Chosen area: \(area.displayName)")
+                                .gridCellColumns(2)
                         }
                     }
                     .accessibilityIdentifier("BugReportSentryDetails")
@@ -164,7 +179,7 @@ public struct BugReportView: View {
             }
         }
         .padding(24)
-        .frame(width: 520, height: showsSentryOption ? 600 : 440)
+        .frame(width: 520, height: showsSentryOption ? 660 : 520)
         .modifier(WindowGlassBackground())
         .accessibilityIdentifier("BugReportView")
     }
@@ -200,7 +215,7 @@ public struct BugReportView: View {
         // An empty description opens the bare GitHub template below. There
         // is no text to send, so Sentry is skipped instead of failing.
         if sendToSentry, showsSentryOption, !comment.isEmpty {
-            guard let eventID = ReliabilityManager.shared.submitBugFeedback(comment) else {
+            guard let eventID = ReliabilityManager.shared.submitBugFeedback(comment, area: area) else {
                 errorMessage = "Sentry is unavailable. Turn off Sentry sharing to continue with GitHub."
                 return
             }
@@ -212,7 +227,7 @@ public struct BugReportView: View {
         if comment.isEmpty {
             components.queryItems = [URLQueryItem(name: "template", value: "bug_report.md")]
         } else {
-            var body = "## Bug description\n\n\(comment)\n\n## Steps to reproduce\n\n## Expected behavior\n\n## Actual behavior\n"
+            var body = "## Area\n\n\(area.displayName)\n\n## Bug description\n\n\(comment)\n\n## Steps to reproduce\n\n## Expected behavior\n\n## Actual behavior\n"
             if let sentryEventID {
                 body += "\nSentry event ID: `\(sentryEventID)`\n"
             }
@@ -2157,7 +2172,7 @@ public class AppState: ObservableObject {
         // analytics-off window compact since the option is hidden there.
         let showsSentryOption = AnalyticsManager.shared.consent == .granted
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: showsSentryOption ? 600 : 440),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: showsSentryOption ? 660 : 520),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
