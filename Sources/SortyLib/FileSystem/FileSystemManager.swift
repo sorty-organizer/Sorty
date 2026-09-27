@@ -140,6 +140,41 @@ public actor FileSystemManager {
         return !sourceVolume.isEqual(destVolume)
     }
 
+    /// Capacity-screening variant of `isCrossVolume`. Some SMB/NFS mounts do
+    /// not vend volume identifiers; when those are unreadable, matching the
+    /// resolved volume roots still proves a same-volume move, so a local
+    /// rename is not charged against the destination's free space. The actual
+    /// move keeps the conservative copy path when identity is unknown.
+    private func isCrossVolumeForCapacity(from source: URL, to destination: URL) -> Bool {
+        #if DEBUG
+        if let crossVolumeDetectorOverride {
+            return crossVolumeDetectorOverride(source, destination)
+        }
+        #endif
+
+        let sourceValues = try? source.resourceValues(forKeys: [.volumeIdentifierKey])
+        var probe = destination.deletingLastPathComponent()
+        var destValues: URLResourceValues?
+        while destValues == nil {
+            if fileManager.fileExists(atPath: probe.path) {
+                destValues = try? probe.resourceValues(forKeys: [.volumeIdentifierKey])
+                break
+            }
+            let parent = probe.deletingLastPathComponent()
+            guard parent.path != probe.path else { break }
+            probe = parent
+        }
+
+        if let sourceVolume = sourceValues?.volumeIdentifier as? NSObject,
+           let destVolume = destValues?.volumeIdentifier as? NSObject {
+            return !sourceVolume.isEqual(destVolume)
+        }
+
+        // Same resolved volume root means same volume; anything else stays
+        // conservative.
+        return destinationVolume(for: source).key != destinationVolume(for: destination).key
+    }
+
     /// Maps a filesystem write failure to a storage-specific error when the
     /// underlying cause is disk-full, read-only media, or quota — instead of
     /// mislabeling all of them `permissionDenied`. Preserves errno and path.
@@ -303,31 +338,84 @@ public actor FileSystemManager {
         do {
             try fileManager.removeItem(at: source)
         } catch {
-            // Copy succeeded but the source survives: surface the failure so
-            // the caller records a partial apply instead of claiming success.
+            // Copy verified but the source survives. Remove the destination
+            // copy again so the filesystem matches the failed move; if that
+            // rollback also fails, surface a synthesized copy operation so
+            // History/undo can remove the duplicate instead of leaking it.
+            DebugLogger.log("Copied to \(destination.path) but could not remove source \(source.path): \(error.localizedDescription)")
+            if (try? fileManager.removeItem(at: destination)) != nil {
+                throw FileSystemError.partialApplyFailure(
+                    operations: [],
+                    underlyingDescription: "Copied to \(destination.path) but could not remove source \(source.path); the duplicate was rolled back: \(error.localizedDescription)"
+                )
+            }
             throw FileSystemError.partialApplyFailure(
-                operations: [],
-                underlyingDescription: "Copied to \(destination.path) but could not remove source \(source.path): \(error.localizedDescription)"
+                operations: [
+                    FileOperation(
+                        type: .copyFile,
+                        sourcePath: source.path,
+                        destinationPath: destination.path,
+                        metadata: FileOperation.OperationMetadata(wasCreatedDuringOrganization: true)
+                    )
+                ],
+                underlyingDescription: "Copied to \(destination.path) but could not remove source \(source.path), and the duplicate could not be rolled back: \(error.localizedDescription)"
             )
         }
     }
 
-    /// Start accessing a security-scoped resource and track it
+    /// Tracks the security-scoped URLs one top-level call started, so that
+    /// call releases exactly its own scopes. Without it an interleaved apply,
+    /// reverse, or restore would drain another call's access when it finishes.
+    private final class SecurityScopeSession: @unchecked Sendable {
+        // Mutated only from FileSystemManager's actor isolation; the
+        // task-local carries the session across the actor's call boundaries,
+        // never between concurrent tasks.
+        private var startCounts: [URL: Int] = [:]
+
+        func record(_ url: URL) {
+            startCounts[url, default: 0] += 1
+        }
+
+        func hasStarted(_ url: URL) -> Bool {
+            startCounts[url] != nil
+        }
+
+        func takeStartCounts() -> [URL: Int] {
+            defer { startCounts.removeAll() }
+            return startCounts
+        }
+    }
+
+    /// The scope session of the top-level call currently running on this task,
+    /// so nested helpers attribute the scopes they start to the right call.
+    @TaskLocal private static var activeSecurityScope: SecurityScopeSession?
+
+    /// Start accessing a security-scoped resource and track it. When a call
+    /// session is active, the start is attributed to that call.
     private func startAccessing(_ url: URL) -> Bool {
+        startAccessing(url, recordingInto: Self.activeSecurityScope)
+    }
+
+    private func startAccessing(_ url: URL, recordingInto session: SecurityScopeSession?) -> Bool {
         if url.startAccessingSecurityScopedResource() {
             activeBookmarks[url, default: 0] += 1
+            session?.record(url)
             return true
         }
         return false
     }
 
     /// Starts security-scoped access once per URL: repeated resolves of the
-    /// same storage root during one apply share a single session instead of
-    /// stacking start/stop pairs. Counts stay balanced because
-    /// stopAccessingAll drains exactly what was started.
+    /// same storage root during one call share a single start instead of
+    /// stacking start/stop pairs. Each call owns its own start, so releasing
+    /// a finished call's scopes never revokes access another call still uses.
     private func startAccessingOnce(_ url: URL) -> Bool {
+        if let session = Self.activeSecurityScope {
+            if session.hasStarted(url) { return true }
+            return startAccessing(url, recordingInto: session)
+        }
         if activeBookmarks[url] != nil { return true }
-        return startAccessing(url)
+        return startAccessing(url, recordingInto: nil)
     }
 
     /// Per-apply directory listing cache for fuzzy folder matching, so an
@@ -444,7 +532,26 @@ public actor FileSystemManager {
         return fuzzyMatch
     }
 
-    /// Stop accessing all tracked security-scoped resources
+    /// Releases exactly the scopes `session` started, leaving scopes owned by
+    /// other interleaved calls on the actor intact.
+    private func releaseSecurityScope(_ session: SecurityScopeSession) {
+        for (url, startCount) in session.takeStartCounts() {
+            guard let trackedCount = activeBookmarks[url] else { continue }
+            let stops = min(startCount, trackedCount)
+            for _ in 0..<stops {
+                url.stopAccessingSecurityScopedResource()
+            }
+            if trackedCount > stops {
+                activeBookmarks[url] = trackedCount - stops
+            } else {
+                activeBookmarks.removeValue(forKey: url)
+            }
+        }
+    }
+
+    /// Stop accessing all tracked security-scoped resources. Single-call use
+    /// only: concurrent callers must release their own `SecurityScopeSession`
+    /// so they don't drain scopes another call still needs.
     private func stopAccessingAll() {
         for (url, accessCount) in activeBookmarks {
             for _ in 0..<accessCount {
@@ -917,26 +1024,44 @@ public actor FileSystemManager {
         }
     }
 
-    private func applyTagsAndComment(to url: URL, tags: [String], comment: String?, dryRun: Bool, skipExistenceCheck: Bool = false) -> FileOperation? {
+    private struct TagOperationOutcome {
+        let operation: FileOperation?
+        /// Set when a requested tag/comment write did not land. The recorded
+        /// operation (if any) then contains only what reached disk.
+        let failure: String?
+    }
+
+    private func applyTagsAndComment(to url: URL, tags: [String], comment: String?, dryRun: Bool, skipExistenceCheck: Bool = false) -> TagOperationOutcome {
         let hasComment = comment != nil && !(comment ?? "").isEmpty
-        guard !tags.isEmpty || hasComment else { return nil }
+        guard !tags.isEmpty || hasComment else {
+            return TagOperationOutcome(operation: nil, failure: nil)
+        }
 
         if dryRun {
-            return FileOperation(
-                type: .tagFile,
-                sourcePath: url.path,
-                destinationPath: nil,
-                metadata: FileOperation.OperationMetadata(
-                    newTags: tags,
-                    newComment: comment
-                )
+            return TagOperationOutcome(
+                operation: FileOperation(
+                    type: .tagFile,
+                    sourcePath: url.path,
+                    destinationPath: nil,
+                    metadata: FileOperation.OperationMetadata(
+                        newTags: tags,
+                        newComment: comment
+                    )
+                ),
+                failure: nil
             )
         }
 
         // Just-moved destinations are known to exist (the move phase recorded
         // them); only files that stayed in place pay the existence syscall.
         if !skipExistenceCheck {
-            guard fileManager.fileExists(atPath: url.path) else { return nil }
+            guard fileManager.fileExists(atPath: url.path) else {
+                // A vanished file must not read as a successful tag apply.
+                return TagOperationOutcome(
+                    operation: nil,
+                    failure: "Could not apply tags to \(url.lastPathComponent): the file no longer exists."
+                )
+            }
         }
 
         let resourceValues = try? url.resourceValues(forKeys: [.tagNamesKey])
@@ -946,18 +1071,20 @@ public actor FileSystemManager {
         // originalComment solely when newComment != nil.
         let originalComment = hasComment ? url.finderComment : nil
 
-        var finalTags = originalTags
+        var appliedTags: [String]?
+        var failure: String?
         if !tags.isEmpty {
             let normalizedTags = tags.map { normalizeFinderTag($0) }
             var newTagsSet = Set(originalTags)
             for tag in normalizedTags {
                 newTagsSet.insert(tag)
             }
-            finalTags = Array(newTagsSet)
+            let finalTags = Array(newTagsSet)
 
             let nsURL = url as NSURL
             do {
                 try nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
+                appliedTags = finalTags
                 #if DEBUG
                 if let verifyValues = try? url.resourceValues(forKeys: [.tagNamesKey]),
                    let verifyTags = verifyValues.tagNames {
@@ -965,24 +1092,45 @@ public actor FileSystemManager {
                 }
                 #endif
             } catch {
+                failure = "Could not apply tags to \(url.lastPathComponent): \(error.localizedDescription)"
                 DebugLogger.log("Tagging failed for \(url.path): \(error.localizedDescription)")
             }
         }
 
+        var commentApplied = false
         if hasComment {
-            try? setFinderComment(comment, for: url)
+            do {
+                try setFinderComment(comment, for: url)
+                commentApplied = true
+            } catch {
+                let commentFailure = "Could not set Finder comment on \(url.lastPathComponent): \(error.localizedDescription)"
+                failure = [failure, commentFailure].compactMap { $0 }.joined(separator: "; ")
+                DebugLogger.log(commentFailure)
+            }
         }
 
-        return FileOperation(
-            type: .tagFile,
-            sourcePath: url.path,
-            destinationPath: nil,
-            metadata: FileOperation.OperationMetadata(
-                originalTags: originalTags,
-                newTags: finalTags,
-                originalComment: originalComment,
-                newComment: comment
-            )
+        guard appliedTags != nil || commentApplied else {
+            // Nothing reached disk: report the failure without recording a tag
+            // operation, so History and undo never claim metadata that was
+            // never applied.
+            return TagOperationOutcome(operation: nil, failure: failure)
+        }
+
+        return TagOperationOutcome(
+            operation: FileOperation(
+                type: .tagFile,
+                sourcePath: url.path,
+                destinationPath: nil,
+                metadata: FileOperation.OperationMetadata(
+                    // Record only what this call actually changed so undo
+                    // restores the right values.
+                    originalTags: appliedTags != nil ? originalTags : nil,
+                    newTags: appliedTags,
+                    originalComment: commentApplied ? originalComment : nil,
+                    newComment: commentApplied ? comment : nil
+                )
+            ),
+            failure: failure
         )
     }
 
@@ -992,8 +1140,12 @@ public actor FileSystemManager {
         
         let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
 
-        if let folderOp = applyTagsAndComment(to: folderURL, tags: suggestion.tags, comment: suggestion.comment, dryRun: dryRun) {
+        let folderOutcome = applyTagsAndComment(to: folderURL, tags: suggestion.tags, comment: suggestion.comment, dryRun: dryRun)
+        if let folderOp = folderOutcome.operation {
             operations.append(folderOp)
+        }
+        if let failure = folderOutcome.failure {
+            throw FileSystemError.partialApplyFailure(operations: operations, underlyingDescription: failure)
         }
 
         // Look for tag mappings in this suggestion
@@ -1010,8 +1162,12 @@ public actor FileSystemManager {
             
             let fileURL = folderURL.appendingPathComponent(finalFilename)
             
-            if let op = applyTagsAndComment(to: fileURL, tags: mapping.tags, comment: mapping.comment, dryRun: dryRun) {
+            let outcome = applyTagsAndComment(to: fileURL, tags: mapping.tags, comment: mapping.comment, dryRun: dryRun)
+            if let op = outcome.operation {
                 operations.append(op)
+            }
+            if let failure = outcome.failure {
+                throw FileSystemError.partialApplyFailure(operations: operations, underlyingDescription: failure)
             }
         }
 
@@ -1026,49 +1182,51 @@ public actor FileSystemManager {
 
     // MARK: - Apply Organization
     
-    func validateOperation(_ operation: FileOperation, exclusionManager: ExclusionRulesManager?) async -> Bool {
-        guard let manager = exclusionManager else { return true }
-        let matcher = await manager.matcherSnapshot()
-        let sourceURL = URL(fileURLWithPath: operation.sourcePath)
-        let sourceValues = try? sourceURL.resourceValues(forKeys: [
-            .fileSizeKey,
-            .creationDateKey,
-            .contentModificationDateKey,
-            .labelNumberKey,
-        ])
-        let shouldExcludeSource = matcher.shouldExcludeFile(
-            at: sourceURL,
-            size: Int64(sourceValues?.fileSize ?? 0),
-            creationDate: sourceValues?.creationDate,
-            modificationDate: sourceValues?.contentModificationDate,
-            finderLabelNumber: sourceValues?.labelNumber
-        )
-        if shouldExcludeSource {
-            DebugLogger.log("Operation BLOCKED: Source \(operation.sourcePath) is excluded.")
-            return false
+    /// Screens a planned move's destination through the exclusion matcher.
+    /// The caller already screened the source with the same matcher snapshot,
+    /// and a destination inside the source folder is a rename rather than a
+    /// new destination, so neither is re-checked here.
+    ///
+    /// A destination that does not exist yet has no usable metadata. Running
+    /// the full rules against its zero size and now fallback date would make
+    /// "newer than"/"smaller than" rules match every planned destination, so
+    /// a missing destination is screened with path-only predicates instead.
+    private func validateOperation(_ operation: FileOperation, matcher: ExclusionMatcher) -> Bool {
+        guard let destPath = operation.destinationPath else { return true }
+        let destURL = URL(fileURLWithPath: destPath)
+
+        let sourceFolderPath = URL(fileURLWithPath: operation.sourcePath)
+            .deletingLastPathComponent()
+            .standardizedFileURL
+            .path
+        if destURL.deletingLastPathComponent().standardizedFileURL.path == sourceFolderPath {
+            return true
         }
-        
-        if let destPath = operation.destinationPath {
-            let destURL = URL(fileURLWithPath: destPath)
+
+        if fileManager.fileExists(atPath: destPath) {
             let destinationValues = try? destURL.resourceValues(forKeys: [
                 .fileSizeKey,
                 .creationDateKey,
                 .contentModificationDateKey,
                 .labelNumberKey,
             ])
-            let shouldExcludeDest = matcher.shouldExcludeFile(
+            if matcher.shouldExcludeFile(
                 at: destURL,
                 size: Int64(destinationValues?.fileSize ?? 0),
                 creationDate: destinationValues?.creationDate,
                 modificationDate: destinationValues?.contentModificationDate,
                 finderLabelNumber: destinationValues?.labelNumber
-            )
-            if shouldExcludeDest {
+            ) {
                 DebugLogger.log("Operation BLOCKED: Destination \(destPath) is excluded.")
                 return false
             }
+            return true
         }
-        
+
+        if matcher.shouldExcludeUsingPathOnly(at: destURL) {
+            DebugLogger.log("Operation BLOCKED: Destination \(destPath) matches a path exclusion rule.")
+            return false
+        }
         return true
     }
 
@@ -1123,15 +1281,49 @@ public actor FileSystemManager {
         skipPreValidation: Bool = false,
         progress: (@Sendable (Double, String) -> Void)? = nil
     ) async throws -> [FileOperation] {
+        // One scope session per apply: an interleaved reverse or restore owns
+        // its own scopes, so neither call can release the other's.
+        let securityScope = SecurityScopeSession()
+        return try await Self.$activeSecurityScope.withValue(securityScope) {
+            try await applyOrganizationImpl(
+                plan,
+                at: baseURL,
+                dryRun: dryRun,
+                enableTagging: enableTagging,
+                strictExclusions: strictExclusions,
+                exclusionManager: exclusionManager,
+                skipPreValidation: skipPreValidation,
+                progress: progress,
+                securityScope: securityScope
+            )
+        }
+    }
+
+    private func applyOrganizationImpl(
+        _ plan: OrganizationPlan,
+        at baseURL: URL,
+        dryRun: Bool,
+        enableTagging: Bool,
+        strictExclusions: Bool,
+        exclusionManager: ExclusionRulesManager?,
+        skipPreValidation: Bool,
+        progress: (@Sendable (Double, String) -> Void)?,
+        securityScope: SecurityScopeSession
+    ) async throws -> [FileOperation] {
         _ = startAccessing(baseURL)
         beginListingCacheScope()
         defer {
             endListingCacheScope()
-            stopAccessingAll()
+            releaseSecurityScope(securityScope)
         }
 
         var allOperations: [FileOperation] = []
         var allFailures: [OperationFailure] = []
+        // Exclusion skips are not failures: a file the user excluded is the
+        // rules working as configured, so a skip must not turn an otherwise
+        // completed apply into a partial failure. Tracked separately for the
+        // all-excluded no-op guard below.
+        var exclusionSkips: [OperationFailure] = []
 
         do {
             let totalFiles = plan.suggestions.reduce(0) { $0 + countFiles(in: $1) }
@@ -1145,10 +1337,17 @@ public actor FileSystemManager {
             // immediately before this) avoid stat-ing every source a second
             // time. Move-time existence checks below remain as the safety net,
             // turning a vanished source into a per-file skip instead of a
-            // fatal abort.
-            if !dryRun && !skipPreValidation {
+            // fatal abort. Free space is still checked: running out mid-copy
+            // leaves partial state, and that check only stats cross-volume
+            // sources.
+            if !dryRun {
                 progress?(0.02, "Validating files...")
-                let validationIssues = await preValidatePlan(plan, at: baseURL)
+                let validationIssues: [String]
+                if skipPreValidation {
+                    validationIssues = destinationCapacityIssues(for: plan, at: baseURL)
+                } else {
+                    validationIssues = await preValidatePlan(plan, at: baseURL)
+                }
                 if !validationIssues.isEmpty {
                     DebugLogger.log("Pre-validation found \(validationIssues.count) issue(s): \(validationIssues.joined(separator: ", "))")
                     throw FileSystemError.preValidationFailed(validationIssues)
@@ -1178,6 +1377,18 @@ public actor FileSystemManager {
 
             progress?(0.1, "Moving files...")
 
+            // Strict exclusion screening only has work to do when rules are
+            // configured. Snapshot the matcher once here so per-file
+            // destination screening (and the source check beside it) does not
+            // hop to the manager for every file.
+            var exclusionMatcher: ExclusionMatcher?
+            if strictExclusions, let exclusionManager {
+                let matcher = await exclusionManager.matcherSnapshot()
+                if !matcher.isEmpty {
+                    exclusionMatcher = matcher
+                }
+            }
+
             // Shared across suggestions so two files targeting the same name
             // in one run never share a destination.
             var reservedDestinations = Set<String>()
@@ -1192,9 +1403,11 @@ public actor FileSystemManager {
                     suggestion,
                     parentURL: baseURL,
                     dryRun: dryRun,
+                    exclusionMatcher: exclusionMatcher,
                     exclusionManager: exclusionManager,
                     operationProgress: &operationProgress,
                     failures: &allFailures,
+                    exclusionSkips: &exclusionSkips,
                     reserved: &reservedDestinations,
                     existingPaths: existingPathsSnapshot
                 )
@@ -1206,6 +1419,18 @@ public actor FileSystemManager {
                     successCount: allOperations.count,
                     failures: allFailures
                 )
+            }
+
+            // Files skipped by exclusion rules are not failures, but when
+            // exclusions skipped every file and no move/rename/copy was
+            // recorded, the apply was a no-op and must not report plain
+            // success either.
+            let organizedFileOperations = allOperations.filter {
+                $0.type == .moveFile || $0.type == .renameFile || $0.type == .copyFile
+            }
+            if organizedFileOperations.isEmpty, !exclusionSkips.isEmpty {
+                DebugLogger.log("Apply skipped all \(exclusionSkips.count) matching file(s) by exclusion rules; no files were organized")
+                throw AllFilesExcludedError()
             }
 
             if enableTagging {
@@ -1225,9 +1450,19 @@ public actor FileSystemManager {
                         movedDestinations: movedDestinations,
                         dryRun: dryRun,
                         exclusionManager: exclusionManager,
-                        operationProgress: &operationProgress
+                        operationProgress: &operationProgress,
+                        failures: &allFailures
                     )
                     allOperations.append(contentsOf: result.operations)
+                }
+
+                if !allFailures.isEmpty {
+                    // Tags/comments that failed to write must not be reported
+                    // as applied; surface the partial apply to the caller.
+                    throw FileSystemError.partialFailure(
+                        successCount: allOperations.count,
+                        failures: allFailures
+                    )
                 }
             }
 
@@ -1258,10 +1493,18 @@ public actor FileSystemManager {
                 }
             }
 
-            if allFailures.isEmpty {
+            if !exclusionSkips.isEmpty {
+                DebugLogger.log("Organization skipped \(exclusionSkips.count) file(s) by exclusion rules")
+                for skip in exclusionSkips {
+                    DebugLogger.log("  - \(skip.sourcePath): \(skip.error)")
+                }
+            }
+
+            let skippedCount = allFailures.count + exclusionSkips.count
+            if skippedCount == 0 {
                 progress?(1.0, "Organization complete!")
             } else {
-                progress?(1.0, "Complete with \(allFailures.count) skipped file(s)")
+                progress?(1.0, "Complete with \(skippedCount) skipped file(s)")
             }
 
             return allOperations
@@ -1377,9 +1620,11 @@ public actor FileSystemManager {
         _ suggestion: FolderSuggestion,
         parentURL: URL,
         dryRun: Bool,
+        exclusionMatcher: ExclusionMatcher?,
         exclusionManager: ExclusionRulesManager? = nil,
         operationProgress: inout OrganizationProgress,
         failures: inout [OperationFailure],
+        exclusionSkips: inout [OperationFailure],
         reserved: inout Set<String>,
         existingPaths: Set<String> = []
     ) async throws -> OperationResult {
@@ -1396,6 +1641,15 @@ public actor FileSystemManager {
             if let manager = exclusionManager {
                 if await manager.shouldExclude(file) {
                     DebugLogger.log("Skipping excluded file move: \(sourceURL.path)")
+                    // Record the skip separately from failures: exclusion is
+                    // the rules working as configured, and only an apply with
+                    // nothing organized is surfaced as an error.
+                    exclusionSkips.append(OperationFailure(
+                        sourcePath: sourceURL.path,
+                        destinationPath: nil,
+                        error: "Skipped \(sourceURL.lastPathComponent): the file is excluded by an exclusion rule",
+                        isRetryable: false
+                    ))
                     operationProgress.report("Skipped \(sourceURL.lastPathComponent) (excluded)...")
                     processedCount += 1
                     continue
@@ -1447,6 +1701,33 @@ public actor FileSystemManager {
                             }
                         }
 
+                        // Strict exclusions also screen the resolved
+                        // destination (the source was checked above), so a
+                        // file bound for an excluded path is skipped instead
+                        // of moved. The skip goes to its own list so a run
+                        // where every destination is excluded can be reported
+                        // without failing an apply that moved other files.
+                        if let exclusionMatcher {
+                            let plannedOperation = FileOperation(
+                                type: operationType(from: sourceURL, to: destinationURL, renameMetadata: renameMetadata),
+                                sourcePath: sourceURL.path,
+                                destinationPath: destinationURL.path,
+                                metadata: renameMetadata
+                            )
+                            if !validateOperation(plannedOperation, matcher: exclusionMatcher) {
+                                DebugLogger.log("Skipping move of \(sourceURL.path): destination is excluded")
+                                exclusionSkips.append(OperationFailure(
+                                    sourcePath: sourceURL.path,
+                                    destinationPath: destinationURL.path,
+                                    error: "Skipped \(finalFilename): the destination is excluded by an exclusion rule",
+                                    isRetryable: false
+                                ))
+                                operationProgress.report("Skipped \(finalFilename) (excluded)...")
+                                processedCount += 1
+                                continue
+                            }
+                        }
+
                         // Uniquifies against disk + batch reservations, retries
                         // check-then-act races, and returns the actual
                         // destination, which is what gets recorded below.
@@ -1470,6 +1751,14 @@ public actor FileSystemManager {
                             metadata: renameMetadata
                         ))
                     } catch {
+                        // A cross-volume copy can fail after its destination
+                        // landed (the source could not be removed and the
+                        // rollback failed). Record those synthesized copy
+                        // operations so undo/history can remove the duplicate
+                        // instead of leaking it.
+                        if case FileSystemError.partialApplyFailure(let salvaged, _) = error, !salvaged.isEmpty {
+                            operations.append(contentsOf: salvaged)
+                        }
                         let isRetryable = isRetryableError(error)
                         failures.append(OperationFailure(
                             sourcePath: sourceURL.path,
@@ -1505,9 +1794,11 @@ public actor FileSystemManager {
                 subfolder,
                 parentURL: folderURL,
                 dryRun: dryRun,
+                exclusionMatcher: exclusionMatcher,
                 exclusionManager: exclusionManager,
                 operationProgress: &operationProgress,
                 failures: &failures,
+                exclusionSkips: &exclusionSkips,
                 reserved: &reserved,
                 existingPaths: existingPaths
             )
@@ -1567,7 +1858,8 @@ public actor FileSystemManager {
         movedDestinations: [String: URL],
         dryRun: Bool,
         exclusionManager: ExclusionRulesManager? = nil,
-        operationProgress: inout OrganizationProgress
+        operationProgress: inout OrganizationProgress,
+        failures: inout [OperationFailure]
     ) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
@@ -1577,10 +1869,19 @@ public actor FileSystemManager {
         
         let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: currentURL)
 
-        if let folderOp = applyTagsAndComment(to: folderURL, tags: suggestion.tags, comment: suggestion.comment, dryRun: dryRun) {
+        let folderOutcome = applyTagsAndComment(to: folderURL, tags: suggestion.tags, comment: suggestion.comment, dryRun: dryRun)
+        if let folderOp = folderOutcome.operation {
             operations.append(folderOp)
             operationProgress.report("Tagging \(suggestion.folderName)...")
             processedCount += 1
+        }
+        if let failure = folderOutcome.failure {
+            failures.append(OperationFailure(
+                sourcePath: folderURL.path,
+                destinationPath: nil,
+                error: failure,
+                isRetryable: false
+            ))
         }
         
         for mapping in suggestion.fileTagMappings {
@@ -1603,8 +1904,17 @@ public actor FileSystemManager {
             let fileURL = movedURL
                 ?? folderURL.appendingPathComponent(finalFilename)
             
-            if let op = applyTagsAndComment(to: fileURL, tags: mapping.tags, comment: mapping.comment, dryRun: dryRun, skipExistenceCheck: movedURL != nil) {
+            let outcome = applyTagsAndComment(to: fileURL, tags: mapping.tags, comment: mapping.comment, dryRun: dryRun, skipExistenceCheck: movedURL != nil)
+            if let op = outcome.operation {
                 operations.append(op)
+            }
+            if let failure = outcome.failure {
+                failures.append(OperationFailure(
+                    sourcePath: fileURL.path,
+                    destinationPath: nil,
+                    error: failure,
+                    isRetryable: false
+                ))
             }
             operationProgress.report("Tagging \(finalFilename)...")
             processedCount += 1
@@ -1617,7 +1927,8 @@ public actor FileSystemManager {
                 movedDestinations: movedDestinations,
                 dryRun: dryRun,
                 exclusionManager: exclusionManager,
-                operationProgress: &operationProgress
+                operationProgress: &operationProgress,
+                failures: &failures
             )
             operations.append(contentsOf: subResult.operations)
             processedCount += subResult.processedCount
@@ -1689,11 +2000,14 @@ public actor FileSystemManager {
             }
         }
         
-        // Start accessing all involved paths that might be security-scoped
+        // Start accessing all involved paths that might be security-scoped,
+        // recording them in this call's own session so a concurrently running
+        // apply/reverse can't drain them.
+        let securityScope = SecurityScopeSession()
         for path in involvedPaths {
-            _ = startAccessing(URL(fileURLWithPath: path))
+            _ = startAccessing(URL(fileURLWithPath: path), recordingInto: securityScope)
         }
-        defer { stopAccessingAll() }
+        defer { releaseSecurityScope(securityScope) }
 
         // Mark paths as reverting to prevent re-organization by watched folders
         markPathsAsReverting(involvedPaths)
@@ -1729,6 +2043,7 @@ public actor FileSystemManager {
                         }
 
                         // Determine final source path (handle conflicts)
+                        let destinationURL = URL(fileURLWithPath: destinationPath)
                         var finalSourcePath = operation.sourcePath
                         if fileManager.fileExists(atPath: finalSourcePath) {
                             var isDirectory: ObjCBool = false
@@ -1737,14 +2052,19 @@ public actor FileSystemManager {
                             }
                         }
                         if fileManager.fileExists(atPath: finalSourcePath) {
-                            // Original location is occupied by something else
-                            let uniqueURL = try generateUniqueURL(for: URL(fileURLWithPath: finalSourcePath))
+                            // Original location is occupied. The file being
+                            // restored is not a conflict when it is the same
+                            // object (case-only rename on a case-insensitive
+                            // volume), so exclude it from uniqueness.
+                            let uniqueURL = try generateUniqueURL(
+                                for: URL(fileURLWithPath: finalSourcePath),
+                                excludingSource: destinationURL
+                            )
                             finalSourcePath = uniqueURL.path
                         }
 
                         // Move file back, preserving the remote/external copy until a
                         // cross-volume restore has been fully staged and verified.
-                        let destinationURL = URL(fileURLWithPath: destinationPath)
                         let finalSourceURL = URL(fileURLWithPath: finalSourcePath)
                         if isCrossVolume(from: destinationURL, to: finalSourceURL) {
                             let handler = crossVolumeProgressHandler
@@ -1875,11 +2195,14 @@ public actor FileSystemManager {
         _ operation: FileOperation,
         protectedSiblingOperations: [FileOperation] = []
     ) async throws -> RestoreResult {
-        _ = startAccessing(URL(fileURLWithPath: operation.sourcePath))
+        // This call owns its security scopes: a concurrent apply or reverse
+        // must not be able to drain them.
+        let securityScope = SecurityScopeSession()
+        _ = startAccessing(URL(fileURLWithPath: operation.sourcePath), recordingInto: securityScope)
         if let dest = operation.destinationPath {
-            _ = startAccessing(URL(fileURLWithPath: dest))
+            _ = startAccessing(URL(fileURLWithPath: dest), recordingInto: securityScope)
         }
-        defer { stopAccessingAll() }
+        defer { releaseSecurityScope(securityScope) }
 
         var successCount = 0
         var missingFiles: [String] = []
@@ -1898,6 +2221,7 @@ public actor FileSystemManager {
                         try fileManager.createDirectory(at: originalDir, withIntermediateDirectories: true)
                     }
 
+                    let destinationURL = URL(fileURLWithPath: destinationPath)
                     var finalSourcePath = operation.sourcePath
                     if fileManager.fileExists(atPath: finalSourcePath) {
                         var isDirectory: ObjCBool = false
@@ -1906,11 +2230,16 @@ public actor FileSystemManager {
                         }
                     }
                     if fileManager.fileExists(atPath: finalSourcePath) {
-                        let uniqueURL = try generateUniqueURL(for: URL(fileURLWithPath: finalSourcePath))
+                        // As in reverseOperations: the file being restored is
+                        // not a conflict with itself (case-only rename on a
+                        // case-insensitive volume).
+                        let uniqueURL = try generateUniqueURL(
+                            for: URL(fileURLWithPath: finalSourcePath),
+                            excludingSource: destinationURL
+                        )
                         finalSourcePath = uniqueURL.path
                     }
 
-                    let destinationURL = URL(fileURLWithPath: destinationPath)
                     let finalSourceURL = URL(fileURLWithPath: finalSourcePath)
                     if isCrossVolume(from: destinationURL, to: finalSourceURL) {
                         let handler = crossVolumeProgressHandler
@@ -2171,6 +2500,16 @@ public actor FileSystemManager {
             await Task.yield()
         }
 
+        issues.append(contentsOf: destinationCapacityIssues(for: plan, at: baseURL))
+        
+        return issues
+    }
+
+    /// Free-space screening for the apply path: aggregates the bytes a
+    /// cross-volume apply must copy per destination volume and compares them
+    /// with the volume's available capacity, so a large copy fails before it
+    /// creates any folders instead of mid-write.
+    private func destinationCapacityIssues(for plan: OrganizationPlan, at baseURL: URL) -> [String] {
         var capacityRequirements: [String: DestinationCapacityRequirement] = [:]
         for suggestion in plan.suggestions {
             collectDestinationCapacityRequirements(
@@ -2179,6 +2518,8 @@ public actor FileSystemManager {
                 requirements: &capacityRequirements
             )
         }
+
+        var issues: [String] = []
         for requirement in capacityRequirements.values {
             guard let availableBytes = availableCapacity(at: requirement.destinationURL),
                   availableBytes < requirement.requiredBytes else {
@@ -2188,7 +2529,6 @@ public actor FileSystemManager {
                 "Not enough free space on \(requirement.volumeName): needs \(Self.formattedByteCount(requirement.requiredBytes)), but only \(Self.formattedByteCount(availableBytes)) is available"
             )
         }
-        
         return issues
     }
 
@@ -2214,7 +2554,7 @@ public actor FileSystemManager {
         for file in suggestion.files {
             guard let sourceURL = file.url,
                   fileManager.fileExists(atPath: sourceURL.path),
-                  isCrossVolume(from: sourceURL, to: folderURL) else {
+                  isCrossVolumeForCapacity(from: sourceURL, to: folderURL) else {
                 continue
             }
             let attributes = try? fileManager.attributesOfItem(atPath: sourceURL.path)
@@ -2328,10 +2668,55 @@ public actor FileSystemManager {
     // MARK: - Helpers
 
     /// Generate a unique filename by appending a counter. Capped so a densely
-    /// populated directory cannot spin forever; throws after the cap.
-    private func generateUniqueURL(for url: URL) throws -> URL {
+    /// populated directory cannot spin forever; throws after the cap. Pass
+    /// `excludingSource` when the candidate may legitimately be the file being
+    /// moved (case-only rename on a case-insensitive volume).
+    private func generateUniqueURL(for url: URL, excludingSource sourceURL: URL? = nil) throws -> URL {
         var reserved = Set<String>()
-        return try uniqueDestinationURL(for: url, reserved: &reserved)
+        return try uniqueDestinationURL(for: url, reserved: &reserved, excludingSource: sourceURL)
+    }
+
+    /// True when `candidate` is a case-only rename of `source` on the same
+    /// volume. A case-insensitive volume makes the target path "exist" (it is
+    /// the source itself), which is not a conflict.
+    ///
+    /// Case-insensitive path equality is the decisive test, but it is not
+    /// sufficient on its own: a case-sensitive volume can host two distinct
+    /// entries whose names differ only by case, and two hardlinks to one file
+    /// share a `fileResourceIdentifier` even though they are separate
+    /// directory entries. Treating such a sibling as the source itself would
+    /// skip uniquification and turn the move into a silent no-op, so the
+    /// candidate must also resolve to the source's own directory entry:
+    /// `nameKey` reports the on-disk name on both case-sensitive and
+    /// case-insensitive volumes. Reader-less mounts fall back to comparing
+    /// resolved volume URLs and the path check alone.
+    private func isSameFileObject(_ candidate: URL, as source: URL?) -> Bool {
+        guard let source,
+              candidate.path.compare(source.path, options: [.caseInsensitive]) == .orderedSame else {
+            return false
+        }
+
+        let candidateValues = try? candidate.resourceValues(
+            forKeys: [.volumeIdentifierKey, .nameKey]
+        )
+        let sourceValues = try? source.resourceValues(
+            forKeys: [.volumeIdentifierKey, .nameKey]
+        )
+
+        if let candidateVolume = candidateValues?.volumeIdentifier as? NSObject,
+           let sourceVolume = sourceValues?.volumeIdentifier as? NSObject {
+            guard candidateVolume.isEqual(sourceVolume) else { return false }
+        } else if destinationVolume(for: candidate).key != destinationVolume(for: source).key {
+            // Volume identity unknown (some SMB/NFS mounts): compare resolved
+            // volume roots instead.
+            return false
+        }
+
+        if let candidateName = candidateValues?.name,
+           let sourceName = sourceValues?.name {
+            return candidateName == sourceName
+        }
+        return true
     }
 
     /// Reservation key for a destination path. Lowercased because the common
@@ -2345,14 +2730,18 @@ public actor FileSystemManager {
     /// intra-batch reservation set, and reserves the result. Two files in one
     /// plan targeting the same name therefore land on different paths instead
     /// of the second silently overwriting (or failing on) the first.
-    private func uniqueDestinationURL(for url: URL, reserved: inout Set<String>) throws -> URL {
+    private func uniqueDestinationURL(
+        for url: URL,
+        reserved: inout Set<String>,
+        excludingSource sourceURL: URL? = nil
+    ) throws -> URL {
         let directory = url.deletingLastPathComponent()
         let filename = url.deletingPathExtension().lastPathComponent
         let ext = url.pathExtension
 
         var candidate = url
         var counter = 0
-        while fileManager.fileExists(atPath: candidate.path)
+        while (fileManager.fileExists(atPath: candidate.path) && !isSameFileObject(candidate, as: sourceURL))
             || reserved.contains(reservedDestinationKey(for: candidate)) {
             counter += 1
             guard counter <= Self.maximumUniqueNameAttempts else {
@@ -2376,7 +2765,11 @@ public actor FileSystemManager {
         proposedDestination: URL,
         reserved: inout Set<String>
     ) async throws -> URL {
-        var destination = try uniqueDestinationURL(for: proposedDestination, reserved: &reserved)
+        var destination = try uniqueDestinationURL(
+            for: proposedDestination,
+            reserved: &reserved,
+            excludingSource: sourceURL
+        )
         var attempts = 0
         while true {
             do {
@@ -2394,12 +2787,30 @@ public actor FileSystemManager {
                 }
                 return destination
             } catch {
+                // The attempt did not land where it was reserved, so release
+                // the reservation; a destination that did land is still caught
+                // by the disk check. Otherwise a failed move would force later
+                // files onto `_1` names for a path that is free again.
+                reserved.remove(reservedDestinationKey(for: destination))
                 guard isFileExistsError(error), attempts < Self.conflictingMoveRetryAttempts else {
                     throw error
                 }
                 attempts += 1
-                destination = try uniqueDestinationURL(for: proposedDestination, reserved: &reserved)
+                destination = try uniqueDestinationURL(
+                    for: proposedDestination,
+                    reserved: &reserved,
+                    excludingSource: sourceURL
+                )
             }
         }
+    }
+}
+
+/// Thrown when an apply had nothing to organize because exclusion rules
+/// skipped every matching file. Distinct from a partial failure: no operation
+/// failed, but reporting plain success would claim files were organized.
+struct AllFilesExcludedError: LocalizedError {
+    var errorDescription: String? {
+        "No files were organized — all matching files are excluded by your exclusion rules."
     }
 }

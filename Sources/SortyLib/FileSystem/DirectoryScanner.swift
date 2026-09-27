@@ -316,6 +316,7 @@ actor DirectoryScanner {
         let resourceKeys: Set<URLResourceKey> = [
             .isDirectoryKey,
             .isSymbolicLinkKey,
+            .isRegularFileKey,
             .fileResourceIdentifierKey,
             .fileSizeKey,
             .creationDateKey,
@@ -400,6 +401,13 @@ actor DirectoryScanner {
                    enumerationLevel > settings.maxScanDepth {
                     enumerator.skipDescendants()
                 }
+                continue
+            }
+
+            // Only regular files can be hashed safely. FIFOs, sockets, and
+            // devices must never enter the candidate set: opening a FIFO can
+            // block forever and a directory is never duplicate content.
+            guard resourceValues.isRegularFile == true else {
                 continue
             }
 
@@ -531,6 +539,12 @@ actor DirectoryScanner {
                    enumerationLevel > settings.maxScanDepth {
                     candidateEnumerator.skipDescendants()
                 }
+                continue
+            }
+
+            // Same regular-file gate as the first pass so special files never
+            // reach the hashing pipeline.
+            guard resourceValues.isRegularFile == true else {
                 continue
             }
 

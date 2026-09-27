@@ -223,7 +223,24 @@ actor SharedContentMetadataCache {
         saveToDisk()
     }
 
+    /// Removes every cached entry and the on-disk cache files. Used by the
+    /// explicit Settings "Clear Cache" action.
     func clear() {
+        resetInMemory()
+        hasLoaded = true
+        if let diskURL { try? FileManager.default.removeItem(at: diskURL) }
+        if let legacyDiskURL { try? FileManager.default.removeItem(at: legacyDiskURL) }
+    }
+
+    /// Drops in-memory entries only. The on-disk cache survives and is lazily
+    /// reloaded on the next lookup, so memory pressure does not force
+    /// expensive re-extraction.
+    func clearInMemory() {
+        resetInMemory()
+        hasLoaded = false
+    }
+
+    private func resetInMemory() {
         generation &+= 1
         loadTask?.cancel()
         loadTask = nil
@@ -234,9 +251,6 @@ actor SharedContentMetadataCache {
         inFlight.removeAll()
         entries.removeAll()
         totalByteCost = 0
-        hasLoaded = true
-        if let diskURL { try? FileManager.default.removeItem(at: diskURL) }
-        if let legacyDiskURL { try? FileManager.default.removeItem(at: legacyDiskURL) }
     }
 
     private func insert(_ metadata: ContentMetadata, for key: Key) {
@@ -342,6 +356,9 @@ public actor ContentAnalyzer {
     /// ZIPs larger than this are skipped (list-only): mapping a whole huge
     /// archive with `Data(contentsOf:)` plus in-memory deflate risks OOM.
     private let maximumZipBytesToMap = 100 * 1024 * 1024
+    /// RTF parsing expands the whole document in memory, so oversized files
+    /// are skipped like the other bounded extraction paths.
+    private let maximumRTFBytesToMap = 8 * 1024 * 1024
     private let initialPDFPageProbeCount = 3
     private let visionAnalyzer = VisionAnalyzer()
 
@@ -365,11 +382,13 @@ public actor ContentAnalyzer {
 
     public init() {}
 
-    /// Clear any cached data to free memory
+    /// Drops in-memory caches to relieve memory pressure. On-disk caches are
+    /// intentionally kept: deleting them frees no RAM and forces the next scan
+    /// to re-extract every file. The explicit Settings "Clear Cache" action
+    /// removes the on-disk caches via `CacheMaintenance.clear()`.
     public func clearCache() async {
-        await SharedContentMetadataCache.shared.clear()
+        await SharedContentMetadataCache.shared.clearInMemory()
         await visionAnalyzer.clearCache()
-        ImageVisionAnalyzer.clearSharedCache()
     }
 
     /// Coalesces scan-driven cache writes while preventing an older write from
@@ -378,9 +397,16 @@ public actor ContentAnalyzer {
         Task { await SharedContentMetadataCache.shared.scheduleFlush() }
     }
 
+    /// True when the path is a regular file. FIFOs, sockets, and devices are
+    /// rejected before any read: opening a FIFO for reading blocks until a
+    /// writer appears, which would otherwise stall a deep scan indefinitely.
+    private nonisolated static func isRegularFile(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
+    }
+
     /// Analyze a file and extract relevant metadata
     public func analyze(fileURL: URL, enableOCR: Bool = true) async -> ContentMetadata? {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+        guard Self.isRegularFile(fileURL) else {
             return nil
         }
 
@@ -693,14 +719,20 @@ public actor ContentAnalyzer {
 
     // MARK: - DOCX Extraction
 
-    /// Returns the archive bytes only when the file is small enough to map
-    /// safely; oversized ZIPs are skipped to avoid OOM.
-    private func mappableZipData(at url: URL) -> Data? {
+    /// Maps a file only when it is small enough; oversized files are skipped
+    /// to avoid OOM while parsing.
+    private func mappableData(at url: URL, maximumBytes: Int) -> Data? {
         if let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber,
-           size.int64Value > Int64(maximumZipBytesToMap) {
+           size.int64Value > Int64(maximumBytes) {
             return nil
         }
         return try? Data(contentsOf: url, options: .mappedIfSafe)
+    }
+
+    /// Returns the archive bytes only when the ZIP is small enough to map
+    /// safely; oversized archives are skipped to avoid OOM.
+    private func mappableZipData(at url: URL) -> Data? {
+        mappableData(at: url, maximumBytes: maximumZipBytesToMap)
     }
 
     private func extractDOCXContent(from url: URL) async -> ContentMetadata? {
@@ -764,9 +796,44 @@ public actor ContentAnalyzer {
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Extracts `<t>` element text with any namespace prefix (for example
+    /// `<a:t>` on slides). Spreadsheet shared strings, worksheet inline
+    /// strings, and presentation slides use these tags, which the
+    /// Word-specific `<w:t>` extractor above would miss. `<v>` values are
+    /// skipped because worksheet cells store shared-string indices there.
+    private func extractTextFromXMLTextElements(_ xml: String, maximumLength: Int) -> String {
+        guard maximumLength > 0 else { return "" }
+        let pattern = "<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?t(?:\\s[^>]*)?>([^<]+)</(?:[A-Za-z_][A-Za-z0-9_.-]*:)?t>"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return ""
+        }
+
+        var text = ""
+        regex.enumerateMatches(
+            in: xml,
+            range: NSRange(xml.startIndex..., in: xml)
+        ) { match, _, stop in
+            guard let match,
+                  let range = Range(match.range(at: 1), in: xml) else { return }
+            let value = xml[range].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else { return }
+            if !text.isEmpty {
+                text.append(" ")
+            }
+            text.append(contentsOf: value.prefix(maximumLength - text.count))
+            if text.count >= maximumLength {
+                stop.pointee = true
+            }
+        }
+
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     // MARK: - Plain Text Extraction
 
     private func extractTextContent(from url: URL) -> ContentMetadata? {
+        guard Self.isRegularFile(url) else { return nil }
+
         guard let handle = try? FileHandle(forReadingFrom: url) else {
             return nil
         }
@@ -787,7 +854,7 @@ public actor ContentAnalyzer {
     // MARK: - RTF Extraction
 
     private func extractRTFContent(from url: URL) -> ContentMetadata? {
-        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else {
+        guard let data = mappableData(at: url, maximumBytes: maximumRTFBytesToMap) else {
             return nil
         }
 
@@ -878,7 +945,12 @@ public actor ContentAnalyzer {
             return metadata
         }
 
-        return await extractZipXMLContent(from: url, xmlPath: "xl/workbook.xml")
+        // Shared strings hold most cell text; worksheets add inline strings in
+        // plain <t> elements, not Word's <w:t>.
+        return extractZipXMLContent(from: url, matchers: [
+            { $0 == "xl/sharedStrings.xml" },
+            { $0.hasPrefix("xl/worksheets/") && $0.hasSuffix(".xml") }
+        ])
     }
 
     private func extractPPTXContent(from url: URL) async -> ContentMetadata? {
@@ -886,7 +958,11 @@ public actor ContentAnalyzer {
             return metadata
         }
 
-        return await extractZipXMLContent(from: url, xmlPath: "ppt/presentation.xml")
+        // Slide text lives in <a:t> nodes. Layouts and masters are skipped
+        // because they repeat the same placeholder text on every slide.
+        return extractZipXMLContent(from: url, matchers: [
+            { $0.hasPrefix("ppt/slides/slide") && $0.hasSuffix(".xml") }
+        ])
     }
 
     // MARK: - Shared Helpers
@@ -927,33 +1003,39 @@ public actor ContentAnalyzer {
         return metadata.isEmpty ? nil : metadata
     }
 
-    private func extractZipXMLContent(from url: URL, xmlPath: String) async -> ContentMetadata? {
-        guard let zipData = mappableZipData(at: url),
-              let xmlString = extractFileFromZip(
-                data: zipData,
-                fileName: xmlPath,
-                maximumOutputBytes: maxOfficeXMLBytes
-              ) else {
-            return nil
-        }
+    /// Extracts text from Office Open XML archives by trying each matcher in
+    /// order, so primary content (shared strings, slides) claims the character
+    /// budget before secondary files.
+    private func extractZipXMLContent(from url: URL, matchers: [(String) -> Bool]) -> ContentMetadata? {
+        guard let zipData = mappableZipData(at: url) else { return nil }
 
-        let text = extractTextFromXML(xmlString)
+        let text = extractZipText(
+            data: zipData,
+            maximumEntryOutputBytes: maxOfficeXMLBytes,
+            maximumTotalLength: maxDocumentTextLength,
+            matchers: matchers
+        )
         guard !text.isEmpty else { return nil }
         return ContentMetadata(textPreview: String(text.prefix(maxDocumentTextLength)))
     }
 
     // MARK: - Native ZIP Reading
 
-    /// Extract a single file from a ZIP archive by name
-    private func extractFileFromZip(
-        data: Data,
-        fileName: String,
-        maximumOutputBytes: Int
-    ) -> String? {
+    private struct ZipEntry {
+        let name: String
+        let compressionMethod: UInt16
+        let compressedSize: Int
+        let uncompressedSize: Int
+        let localHeaderOffset: Int
+    }
+
+    /// Walks the ZIP central directory and returns its entries. The archive is
+    /// already size-bounded by `mappableZipData`, so this stays cheap.
+    private func zipEntries(in data: Data) -> [ZipEntry] {
         // ZIP end of central directory signature
         let eocdSignature: [UInt8] = [0x50, 0x4B, 0x05, 0x06]
 
-        guard data.count > 22 else { return nil }
+        guard data.count > 22 else { return [] }
         var eocdOffset = -1
         let searchStart = max(0, data.count - 65557)
 
@@ -965,7 +1047,7 @@ public actor ContentAnalyzer {
             }
         }
 
-        guard eocdOffset >= 0 else { return nil }
+        guard eocdOffset >= 0 else { return [] }
 
         // Read central directory offset from EOCD
         let cdOffset = Int(data[eocdOffset + 16]) | (Int(data[eocdOffset + 17]) << 8) |
@@ -974,6 +1056,7 @@ public actor ContentAnalyzer {
         // Iterate through central directory entries
         var pos = cdOffset
         let cdSignature: [UInt8] = [0x50, 0x4B, 0x01, 0x02]
+        var entries: [ZipEntry] = []
 
         while pos + 46 < data.count {
             guard data[pos] == cdSignature[0] && data[pos+1] == cdSignature[1] &&
@@ -994,41 +1077,100 @@ public actor ContentAnalyzer {
             let nameEnd = nameStart + fileNameLength
             guard nameEnd <= data.count else { break }
 
-            let entryName = String(data: data[nameStart..<nameEnd], encoding: .utf8) ?? ""
-
-            if entryName == fileName {
-                // Found it — read from local file header
-                let localPos = localHeaderOffset
-                guard localPos + 30 < data.count else { return nil }
-
-                let localNameLen = Int(data[localPos + 26]) | (Int(data[localPos + 27]) << 8)
-                let localExtraLen = Int(data[localPos + 28]) | (Int(data[localPos + 29]) << 8)
-                let dataStart = localPos + 30 + localNameLen + localExtraLen
-                let dataEnd = dataStart + compressedSize
-
-                guard dataEnd <= data.count else { return nil }
-
-                let fileData = data[dataStart..<dataEnd]
-
-                if compressionMethod == 0 {
-                    // Stored (no compression)
-                    return Self.decodeUTF8Prefix(Data(fileData.prefix(maximumOutputBytes)))
-                } else if compressionMethod == 8 {
-                    // Deflate — use Compression framework
-                    let decompressed = decompressDeflate(
-                        Data(fileData),
-                        maximumOutputBytes: min(uncompressedSize, maximumOutputBytes)
-                    )
-                    return decompressed.flatMap(Self.decodeUTF8Prefix)
-                }
-
-                return nil
-            }
+            entries.append(ZipEntry(
+                name: String(data: data[nameStart..<nameEnd], encoding: .utf8) ?? "",
+                compressionMethod: compressionMethod,
+                compressedSize: compressedSize,
+                uncompressedSize: uncompressedSize,
+                localHeaderOffset: localHeaderOffset
+            ))
 
             pos = nameEnd + extraFieldLength + commentLength
         }
 
+        return entries
+    }
+
+    /// Reads one central-directory entry, honoring its compression method and
+    /// bounding decompressed output.
+    private func extractEntryData(
+        _ entry: ZipEntry,
+        from data: Data,
+        maximumOutputBytes: Int
+    ) -> Data? {
+        let localPos = entry.localHeaderOffset
+        guard localPos + 30 < data.count else { return nil }
+
+        let localNameLen = Int(data[localPos + 26]) | (Int(data[localPos + 27]) << 8)
+        let localExtraLen = Int(data[localPos + 28]) | (Int(data[localPos + 29]) << 8)
+        let dataStart = localPos + 30 + localNameLen + localExtraLen
+        let dataEnd = dataStart + entry.compressedSize
+
+        guard dataStart <= dataEnd, dataEnd <= data.count else { return nil }
+
+        let fileData = data[dataStart..<dataEnd]
+
+        if entry.compressionMethod == 0 {
+            // Stored (no compression)
+            return Data(fileData.prefix(maximumOutputBytes))
+        }
+        if entry.compressionMethod == 8 {
+            // Deflate — use Compression framework
+            return decompressDeflate(
+                Data(fileData),
+                maximumOutputBytes: min(max(entry.uncompressedSize, 1), maximumOutputBytes)
+            )
+        }
+
         return nil
+    }
+
+    /// Extract a single file from a ZIP archive by name
+    private func extractFileFromZip(
+        data: Data,
+        fileName: String,
+        maximumOutputBytes: Int
+    ) -> String? {
+        guard let entry = zipEntries(in: data).first(where: { $0.name == fileName }),
+              let entryData = extractEntryData(entry, from: data, maximumOutputBytes: maximumOutputBytes) else {
+            return nil
+        }
+        return Self.decodeUTF8Prefix(entryData)
+    }
+
+    /// Extracts text from every entry matched by `matchers`, in matcher order
+    /// so primary content claims the character budget first.
+    private func extractZipText(
+        data: Data,
+        maximumEntryOutputBytes: Int,
+        maximumTotalLength: Int,
+        matchers: [(String) -> Bool]
+    ) -> String {
+        let entries = zipEntries(in: data)
+        var combined = ""
+
+        for matcher in matchers {
+            for entry in entries where matcher(entry.name) {
+                guard combined.count < maximumTotalLength else { break }
+                guard let entryData = extractEntryData(
+                    entry,
+                    from: data,
+                    maximumOutputBytes: maximumEntryOutputBytes
+                ), let xml = Self.decodeUTF8Prefix(entryData) else { continue }
+
+                let text = extractTextFromXMLTextElements(
+                    xml,
+                    maximumLength: maximumTotalLength - combined.count
+                )
+                guard !text.isEmpty else { continue }
+                if !combined.isEmpty {
+                    combined.append(" ")
+                }
+                combined.append(text)
+            }
+        }
+
+        return combined.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private nonisolated static func decodeUTF8Prefix(_ data: Data) -> String? {
@@ -1102,29 +1244,122 @@ public actor ContentAnalyzer {
             || type.conforms(to: .commaSeparatedText)
     }
 
+    /// Decodes text while keeping binary out. Single-byte encodings decode any
+    /// byte sequence, so they are gated on a printability check and NUL scan.
     private func decodeText(from data: Data) -> String? {
-        let candidateEncodings: [String.Encoding] = [
-            .utf8,
-            .utf16,
-            .utf16LittleEndian,
-            .utf16BigEndian,
-            .windowsCP1252,
-            .isoLatin1
-        ]
+        guard !data.isEmpty else { return nil }
 
-        for encoding in candidateEncodings {
-            guard let text = String(data: data, encoding: encoding) else {
-                continue
+        // UTF-16 is trusted only when a byte-order mark proves the encoding;
+        // its NUL-heavy bytes must be decoded before the binary gate below.
+        if let utf16 = decodeUTF16WithBOM(data) {
+            return normalizedText(utf16)
+        }
+
+        // NUL bytes mean binary, not text: no common text format contains them
+        // (UTF-8 permits NUL, so this must run before any byte decoding).
+        guard !data.contains(0) else { return nil }
+
+        // UTF-8, trimming up to three trailing bytes so a multi-byte scalar
+        // split by the 256 KB read cap does not force a fallback to a
+        // single-byte encoding (which would turn CJK text into mojibake).
+        // Only bytes that actually begin an incomplete scalar may be dropped:
+        // a CP1252 tail such as 0xE9 ("é") must reach the legacy encodings
+        // below with its last character intact.
+        for trailingByteCount in 0...min(3, data.count) {
+            let prefix = data.prefix(data.count - trailingByteCount)
+            guard let decoded = String(data: prefix, encoding: .utf8) else { continue }
+            if trailingByteCount > 0 {
+                guard Self.isTruncatedUTF8Scalar(data.suffix(trailingByteCount)) else { continue }
+                // One dropped byte is ambiguous: CP1252 "é" (0xE9) has the
+                // same shape as a cut multi-byte scalar. Trust the trim only
+                // when the decoded prefix proves the file is multi-byte UTF-8.
+                if trailingByteCount == 1,
+                   !decoded.unicodeScalars.contains(where: { $0.value > 0x7F }) {
+                    continue
+                }
             }
-            let normalized = text
-                .replacingOccurrences(of: "\u{0000}", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !normalized.isEmpty {
-                return normalized
-            }
+            if let text = normalizedText(decoded) { return text }
+        }
+
+        // Legacy single-byte encodings decode almost anything; only accept
+        // results that are overwhelmingly printable.
+        for encoding in [String.Encoding.windowsCP1252, .isoLatin1] {
+            guard let decoded = String(data: data, encoding: encoding),
+                  isPlausibleText(decoded) else { continue }
+            if let text = normalizedText(decoded) { return text }
         }
 
         return nil
+    }
+
+    /// True when the bytes are the read-cap cut start of a multi-byte UTF-8
+    /// scalar: a leading byte followed by only as many continuation bytes as
+    /// were read, with the scalar still incomplete. A complete scalar, a bare
+    /// ASCII byte, or bytes that cannot continue the lead byte return false.
+    private nonisolated static func isTruncatedUTF8Scalar(_ bytes: Data) -> Bool {
+        guard let lead = bytes.first else { return false }
+        let sequenceLength: Int
+        switch lead {
+        case 0xC2...0xDF: sequenceLength = 2
+        case 0xE0...0xEF: sequenceLength = 3
+        case 0xF0...0xF4: sequenceLength = 4
+        default: return false
+        }
+        guard bytes.count < sequenceLength else { return false }
+        return bytes.dropFirst().allSatisfy { (0x80...0xBF).contains($0) }
+    }
+
+    /// Decodes UTF-16 only when a byte-order mark proves the data is text.
+    private func decodeUTF16WithBOM(_ data: Data) -> String? {
+        // A UTF-32 BOM starts with a UTF-16 BOM followed by NULs; decoding
+        // such data as UTF-16 would produce garbage or NUL-stripped text.
+        if data.starts(with: [0xFF, 0xFE, 0x00, 0x00])
+            || data.starts(with: [0x00, 0x00, 0xFE, 0xFF]) {
+            return nil
+        }
+
+        let encoding: String.Encoding
+        if data.starts(with: [0xFF, 0xFE]) {
+            encoding = .utf16LittleEndian
+        } else if data.starts(with: [0xFE, 0xFF]) {
+            encoding = .utf16BigEndian
+        } else {
+            return nil
+        }
+
+        guard let decoded = String(data: data, encoding: encoding) else { return nil }
+        let text = decoded.hasPrefix("\u{FEFF}") ? String(decoded.dropFirst()) : decoded
+        // A BOM alone does not prove the payload is text, so the result must
+        // pass the same plausibility gate as the legacy encodings below.
+        guard isPlausibleText(text) else { return nil }
+        return text
+    }
+
+    /// True when the decoded string is mostly printable, so single-byte
+    /// decodes of binary data are rejected instead of sent to the AI.
+    private func isPlausibleText(_ text: String, maximumSuspiciousRatio: Double = 0.1) -> Bool {
+        var scalarCount = 0
+        var suspiciousCount = 0
+
+        for scalar in text.unicodeScalars {
+            scalarCount += 1
+            let value = scalar.value
+            let isControl = (value < 0x20 && value != 0x09 && value != 0x0A && value != 0x0D)
+                || (value >= 0x7F && value <= 0x9F)
+            if value == 0xFFFD || isControl {
+                suspiciousCount += 1
+            }
+        }
+
+        guard scalarCount > 0 else { return false }
+        return Double(suspiciousCount) <= Double(scalarCount) * maximumSuspiciousRatio
+    }
+
+    private func normalizedText(_ text: String) -> String? {
+        let normalized = text
+            .replacingOccurrences(of: "\u{0000}", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
     }
 }
 

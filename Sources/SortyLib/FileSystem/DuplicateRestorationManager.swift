@@ -13,6 +13,34 @@ struct PartialTrashFailure: LocalizedError {
     }
 }
 
+/// Raised when a file no longer matches the scan that selected it. Trashing it
+/// would delete content the user never reviewed, so cleanup stops instead.
+struct StaleDuplicateError: LocalizedError {
+    enum Reason {
+        case missing
+        case notRegularFile
+        case sizeChanged
+        case modificationDateChanged
+    }
+
+    let path: String
+    let reason: Reason
+
+    var errorDescription: String? {
+        let name = URL(fileURLWithPath: path).lastPathComponent
+        switch reason {
+        case .missing:
+            return "\(name) was moved or deleted after the scan. Rescan for duplicates before cleaning up."
+        case .notRegularFile:
+            return "\(name) is no longer a regular file. Rescan for duplicates before cleaning up."
+        case .sizeChanged:
+            return "\(name) changed size after the scan. Rescan for duplicates before cleaning up."
+        case .modificationDateChanged:
+            return "\(name) changed after the scan. Rescan for duplicates before cleaning up."
+        }
+    }
+}
+
 /// Tracks duplicate files moved to Trash so History can restore them while they remain there.
 @MainActor
 public class DuplicateRestorationManager: ObservableObject {
@@ -30,22 +58,21 @@ public class DuplicateRestorationManager: ObservableObject {
     }
 
     /// Moves duplicate files to macOS Trash and records their resulting locations for undo.
+    ///
+    /// Each path is re-checked against the metadata captured during the scan
+    /// before trashing, so a file that was replaced or edited after the scan is
+    /// never removed as a duplicate. Stops at the first mismatch; already
+    /// completed moves are reported as a `PartialTrashFailure`.
     public func moveToTrash(files: [FileItem]) throws -> [RestorableDuplicate] {
         var deletedItems: [RestorableDuplicate] = []
 
         for file in files {
-            let attributes = try? fileManager.attributesOfItem(atPath: file.path)
-            let metadata = RestorableDuplicate.FileMetadata(
-                creationDate: attributes?[.creationDate] as? Date,
-                modificationDate: attributes?[.modificationDate] as? Date,
-                permissions: attributes?[.posixPermissions] as? Int,
-                ownerAccountID: attributes?[.ownerAccountID] as? Int,
-                groupOwnerAccountID: attributes?[.groupOwnerAccountID] as? Int
-            )
-
-            let sourceURL = URL(fileURLWithPath: file.path)
-            let resultingTrashURL: URL?
             do {
+                try Self.validateUnchanged(file)
+                let metadata = Self.captureMetadata(for: file)
+
+                let sourceURL = URL(fileURLWithPath: file.path)
+                let resultingTrashURL: URL?
                 if let trashItemForTesting = Self.trashItemForTesting {
                     resultingTrashURL = try trashItemForTesting(sourceURL)
                 } else {
@@ -53,6 +80,16 @@ public class DuplicateRestorationManager: ObservableObject {
                     try fileManager.trashItem(at: sourceURL, resultingItemURL: &trashURL)
                     resultingTrashURL = trashURL as URL?
                 }
+
+                let item = RestorableDuplicate(
+                    originalPath: file.path,
+                    deletedPath: file.path,
+                    trashPath: resultingTrashURL?.path,
+                    metadata: metadata
+                )
+                deletedItems.append(item)
+                restoredItems.append(item)
+                saveHistory()
             } catch {
                 guard !deletedItems.isEmpty else { throw error }
                 // This is an exceptional path: make the completed moves durable
@@ -60,19 +97,138 @@ public class DuplicateRestorationManager: ObservableObject {
                 Self.writeHistoryFile(restoredItems)
                 throw PartialTrashFailure(underlyingError: error, movedItems: deletedItems)
             }
-
-            let item = RestorableDuplicate(
-                originalPath: file.path,
-                deletedPath: file.path,
-                trashPath: resultingTrashURL?.path,
-                metadata: metadata
-            )
-            deletedItems.append(item)
-            restoredItems.append(item)
-            saveHistory()
         }
 
         return deletedItems
+    }
+
+    /// Async cleanup path used by the duplicates UI: the filesystem moves run
+    /// on a detached task and the restore history is applied on the main actor,
+    /// so bulk trashing never blocks the UI. The synchronous `moveToTrash`
+    /// remains for callers (and tests) that need an immediate result.
+    public func moveToTrashAsync(files: [FileItem]) async throws -> [RestorableDuplicate] {
+        // The test override is a main-actor closure that cannot cross into a
+        // detached task, so use the synchronous path (which honors it) while
+        // an override is installed.
+        if Self.trashItemForTesting != nil {
+            return try moveToTrash(files: files)
+        }
+
+        let outcome = await Task.detached(priority: .userInitiated) {
+            DuplicateRestorationManager.performTrashBatch(files: files)
+        }.value
+
+        switch outcome {
+        case .success(let movedItems):
+            restoredItems.append(contentsOf: movedItems)
+            if !movedItems.isEmpty {
+                saveHistory()
+            }
+            return movedItems
+        case .partial(let movedItems, let failure):
+            restoredItems.append(contentsOf: movedItems)
+            // Keep the completed moves durable before reporting the failure,
+            // but encode and write on a worker instead of the main actor.
+            await writeHistoryIfCurrent(restoredItems, generation: historyGeneration)
+            throw PartialTrashFailure(underlyingError: failure.underlyingError, movedItems: movedItems)
+        case .failure(let failure):
+            throw failure.underlyingError
+        }
+    }
+
+    // MARK: - Trash Validation and Background Work
+
+    /// Re-checks a scanned file against the filesystem. A size or modification
+    /// date that no longer matches the scan means the file was replaced or
+    /// edited, so it must not be trashed as the duplicate the user reviewed.
+    nonisolated static func validateUnchanged(_ file: FileItem) throws {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: file.path) else {
+            throw StaleDuplicateError(path: file.path, reason: .missing)
+        }
+        guard (attributes[.type] as? FileAttributeType) == .typeRegular else {
+            throw StaleDuplicateError(path: file.path, reason: .notRegularFile)
+        }
+        if let size = (attributes[.size] as? NSNumber)?.int64Value, size != file.size {
+            throw StaleDuplicateError(path: file.path, reason: .sizeChanged)
+        }
+        if let modificationDate = file.modificationDate,
+           let currentModificationDate = attributes[.modificationDate] as? Date,
+           abs(currentModificationDate.timeIntervalSince(modificationDate)) > 0.5 {
+            throw StaleDuplicateError(path: file.path, reason: .modificationDateChanged)
+        }
+    }
+
+    nonisolated static func captureMetadata(
+        for file: FileItem
+    ) -> RestorableDuplicate.FileMetadata {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: file.path)
+        return RestorableDuplicate.FileMetadata(
+            creationDate: attributes?[.creationDate] as? Date,
+            modificationDate: attributes?[.modificationDate] as? Date,
+            permissions: attributes?[.posixPermissions] as? Int,
+            ownerAccountID: attributes?[.ownerAccountID] as? Int,
+            groupOwnerAccountID: attributes?[.groupOwnerAccountID] as? Int
+        )
+    }
+
+    private nonisolated static func performTrashBatch(files: [FileItem]) -> TrashBatchOutcome {
+        var movedItems: [RestorableDuplicate] = []
+        for file in files {
+            do {
+                movedItems.append(try trashForBackground(file))
+            } catch {
+                let failure = TrashFailureInfo(error)
+                return movedItems.isEmpty
+                    ? .failure(failure)
+                    : .partial(movedItems: movedItems, failure: failure)
+            }
+        }
+        return .success(movedItems)
+    }
+
+    /// Runs on a detached task, so it uses FileManager directly and never
+    /// touches the main-actor test override or observable state.
+    nonisolated static func trashForBackground(_ file: FileItem) throws -> RestorableDuplicate {
+        try validateUnchanged(file)
+        let metadata = captureMetadata(for: file)
+        let sourceURL = URL(fileURLWithPath: file.path)
+        var trashURL: NSURL?
+        try FileManager.default.trashItem(at: sourceURL, resultingItemURL: &trashURL)
+        return RestorableDuplicate(
+            originalPath: file.path,
+            deletedPath: file.path,
+            trashPath: (trashURL as URL?)?.path,
+            metadata: metadata
+        )
+    }
+
+    /// Sendable failure payload so errors can cross the detached-task boundary
+    /// and be rethrown on the main actor.
+    private struct TrashFailureInfo: Sendable {
+        let domain: String
+        let code: Int
+        let message: String
+
+        init(_ error: Error) {
+            let nsError = error as NSError
+            domain = nsError.domain
+            code = nsError.code
+            message = nsError.localizedDescription
+        }
+
+        var underlyingError: NSError {
+            NSError(
+                domain: domain,
+                code: code,
+                userInfo: [NSLocalizedDescriptionKey: message]
+            )
+        }
+    }
+
+    private enum TrashBatchOutcome: Sendable {
+        case success([RestorableDuplicate])
+        case partial(movedItems: [RestorableDuplicate], failure: TrashFailureInfo)
+        case failure(TrashFailureInfo)
     }
 
     public func canRestore(item: RestorableDuplicate) -> Bool {
@@ -123,6 +279,8 @@ public class DuplicateRestorationManager: ObservableObject {
     public func clearAllData() {
         historySaveTask?.cancel()
         historySaveTask = nil
+        historyWriteTask?.cancel()
+        historyWriteTask = nil
         historyGeneration &+= 1
         restoredItems.removeAll()
         try? fileManager.removeItem(at: Self.historyFileURL)
@@ -160,14 +318,29 @@ public class DuplicateRestorationManager: ObservableObject {
             guard !Task.isCancelled, generation == historyGeneration else { return }
             let snapshot = restoredItems
             let previousWrite = historyWriteTask
-            let write = Task.detached(priority: .utility) {
+            let write = Task.detached(priority: .utility) { [weak self] in
                 await previousWrite?.value
-                guard !Task.isCancelled else { return }
-                Self.writeHistoryFile(snapshot)
+                guard !Task.isCancelled, let self else { return }
+                await self.writeHistoryIfCurrent(snapshot, generation: generation)
             }
             historyWriteTask = write
             await write.value
         }
+    }
+
+    /// Encodes and writes the history on a worker, but only while `generation`
+    /// is still current. The generation is re-checked on the main actor
+    /// immediately before writing, so a clear that lands while a write was
+    /// already queued cannot have that write recreate the history.
+    private nonisolated func writeHistoryIfCurrent(
+        _ items: [RestorableDuplicate],
+        generation: Int
+    ) async {
+        let isCurrent = await MainActor.run { [weak self] in
+            self?.historyGeneration == generation
+        }
+        guard isCurrent else { return }
+        Self.writeHistoryFile(items)
     }
 
     private nonisolated static var historyFileURL: URL {

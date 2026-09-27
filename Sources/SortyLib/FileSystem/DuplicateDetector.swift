@@ -8,6 +8,7 @@
 import Foundation
 import CryptoKit
 import Combine
+import Darwin
 
 /// Group of files with identical content
 public struct DuplicateGroup: Identifiable, Hashable, Sendable {
@@ -160,6 +161,10 @@ public actor DuplicateDetector {
         let path: String
         let size: Int64
         let modificationDate: Date?
+        /// Device and inode of the file the digest was computed from. A new
+        /// file at the same path with the same size and modification date has
+        /// a different identity, so its digest can never be served from cache.
+        let identity: String?
     }
 
     private struct IndexBucket {
@@ -481,11 +486,29 @@ public actor DuplicateDetector {
         progressHandler?(completed, total)
     }
     
+    /// Builds the cache key from live filesystem metadata. Path, size, and
+    /// modification date alone can be preserved across a file replacement, so
+    /// the device/inode identity is included to keep stale digests out of
+    /// exact-match groups.
     private static func cacheKey(for file: FileItem) -> HashCacheKey {
-        HashCacheKey(
+        var fileStatus = stat()
+        if stat(file.path, &fileStatus) == 0 {
+            return HashCacheKey(
+                path: file.path,
+                size: Int64(fileStatus.st_size),
+                modificationDate: Date(
+                    timeIntervalSince1970: TimeInterval(fileStatus.st_mtimespec.tv_sec)
+                        + TimeInterval(fileStatus.st_mtimespec.tv_nsec) / 1_000_000_000
+                ),
+                identity: "\(fileStatus.st_dev):\(fileStatus.st_ino)"
+            )
+        }
+
+        return HashCacheKey(
             path: file.path,
             size: file.size,
-            modificationDate: file.modificationDate
+            modificationDate: file.modificationDate,
+            identity: nil
         )
     }
 
@@ -858,6 +881,34 @@ public class DuplicateDetectionManager: ObservableObject {
         semanticAnalyzedFileCount = 0
         semanticSkippedFileCount = 0
         scanDuration = 0
+    }
+
+    /// Removes the given paths from the published results. Cleanup calls this
+    /// before its post-cleanup rescan so a cancelled rescan cannot keep
+    /// listing files that already reached the Trash. Groups left without at
+    /// least two files disappear.
+    public func pruneResults(removingPaths paths: Set<String>) {
+        guard !paths.isEmpty else { return }
+
+        duplicateGroups = duplicateGroups.compactMap { group in
+            guard group.files.contains(where: { paths.contains($0.path) }) else { return group }
+            let remaining = group.files.filter { !paths.contains($0.path) }
+            guard remaining.count > 1 else { return nil }
+            return DuplicateGroup(hash: group.hash, files: remaining)
+        }
+
+        semanticGroups = semanticGroups.compactMap { group in
+            guard group.files.contains(where: { paths.contains($0.path) }) else { return group }
+            let remaining = group.files.filter { !paths.contains($0.path) }
+            guard remaining.count > 1 else { return nil }
+            return SemanticDuplicateGroup(
+                id: group.id,
+                groupType: group.groupType,
+                files: remaining,
+                similarity: group.similarity,
+                recommendation: group.recommendation
+            )
+        }
     }
 
     private func eligibleFiles(

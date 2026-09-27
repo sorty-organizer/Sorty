@@ -29,6 +29,23 @@ public protocol FolderWatcherDelegate: AnyObject {
         didDetectStaleBookmarkFor folder: WatchedFolder,
         newBookmarkData: Data
     )
+
+    /// Called when a watched root can no longer be resolved or read, so the UI
+    /// can surface lost access. `isFolderHealthy(_:)` reports the same state.
+    func folderWatcher(
+        _ watcher: FolderWatcher,
+        didLoseAccessTo folder: WatchedFolder
+    )
+}
+
+public extension FolderWatcherDelegate {
+    /// Default no-op: access-loss reporting is additive, so conformers that do
+    /// not surface it yet keep compiling and behaving as before.
+    @MainActor
+    func folderWatcher(
+        _ watcher: FolderWatcher,
+        didLoseAccessTo folder: WatchedFolder
+    ) {}
 }
 
 /// Monitors directory hierarchies using one coalesced FSEvents stream.
@@ -59,6 +76,7 @@ public final class FolderWatcher: @unchecked Sendable {
         let folderID: UUID
         let rootPath: String
         let baseline: [String: FileFingerprint]?
+        let droppedPaths: Set<String>
     }
 
     private static let maximumFilesPerBatch = 256
@@ -97,7 +115,14 @@ public final class FolderWatcher: @unchecked Sendable {
     private var isSuspendedForBackpressure = false
     private var shouldReplayAfterBackpressure = false
 
+    /// Removal tombstones keyed by relative path so a same-named arrival in a
+    /// different subfolder is not swallowed within the correlation window.
     private var recentlyRemovedFiles: [UUID: [String: Date]] = [:]
+    /// Relative paths a recovery pass could not hand to automation. Kept apart
+    /// from `pendingFiles` so reconciliation re-emits them when the baseline
+    /// has already moved past them.
+    private var recoveryDroppedPaths: [UUID: Set<String>] = [:]
+    private var unhealthyFolderIDs: Set<UUID> = []
     private var activeScanCount = 0
     private var activeScanPath: String?
     private var pendingScanPaths: [String] = []
@@ -203,6 +228,7 @@ public final class FolderWatcher: @unchecked Sendable {
             self.clearPendingFiles(for: folder.id)
             self.minimumEventIDs[folder.id] = FSEventsGetCurrentEventId()
             self.folderSnapshots.removeValue(forKey: folder.id)
+            self.recoveryDroppedPaths.removeValue(forKey: folder.id)
             self.beginScan(at: self.rootPath(for: folder.id, folder: folder), isRecovery: true)
             DebugLogger.log("Resumed watching: \(folder.name)")
         }
@@ -218,6 +244,7 @@ public final class FolderWatcher: @unchecked Sendable {
             self.clearPendingFiles(for: folder.id)
             self.minimumEventIDs[folder.id] = FSEventsGetCurrentEventId()
             self.folderSnapshots.removeValue(forKey: folder.id)
+            self.recoveryDroppedPaths.removeValue(forKey: folder.id)
             self.beginScan(at: self.rootPath(for: folder.id, folder: folder), isRecovery: true)
             DebugLogger.log("Rebuilding watcher recovery baseline: \(folder.name)")
         }
@@ -279,6 +306,8 @@ public final class FolderWatcher: @unchecked Sendable {
             clearAllPendingFiles()
             pendingScanPaths.removeAll()
             recoveryScanPaths.removeAll()
+            recoveryDroppedPaths.removeAll()
+            unhealthyFolderIDs.removeAll()
             folderSnapshots.removeAll()
             requiresFullRecoveryScan = false
             stopHealthTimerIfIdle()
@@ -292,9 +321,13 @@ public final class FolderWatcher: @unchecked Sendable {
             guard let self else { return }
             let isInitialSync = !self.hasCompletedInitialSync
 
-            let enabledFolders = Dictionary(
-                uniqueKeysWithValues: folders.lazy.filter(\.isEnabled).map { ($0.id, $0) }
-            )
+            // Deduplicate by ID inside the watcher entry point so a caller
+            // passing the same folder twice cannot trap here; the last
+            // occurrence wins.
+            var enabledFolders: [UUID: WatchedFolder] = [:]
+            for folder in folders where folder.isEnabled {
+                enabledFolders[folder.id] = folder
+            }
             let previousRoots = self.monitoringRoots
             let initialMinimumEventID = self.persistedEventID ?? FSEventsGetCurrentEventId()
             var rootsNeedingRecovery: Set<String> = []
@@ -346,6 +379,7 @@ public final class FolderWatcher: @unchecked Sendable {
 
     public func isFolderHealthy(_ folder: WatchedFolder) -> Bool {
         performOnQueueSyncIfNeeded {
+            guard !unhealthyFolderIDs.contains(folder.id) else { return false }
             let path = resolvedURLs[folder.id]?.path ?? folder.path
             return isReadableDirectory(atPath: path)
         }
@@ -359,6 +393,8 @@ public final class FolderWatcher: @unchecked Sendable {
     ) {
         watchedFolders[folder.id] = folder
         minimumEventIDs[folder.id] = minimumEventID
+        unhealthyFolderIDs.remove(folder.id)
+        recoveryDroppedPaths.removeValue(forKey: folder.id)
         _ = resolveBookmark(for: folder)
         restorePersistedSnapshot(for: folder)
     }
@@ -368,6 +404,8 @@ public final class FolderWatcher: @unchecked Sendable {
         pausedFolders.remove(folderID)
         minimumEventIDs.removeValue(forKey: folderID)
         recentlyRemovedFiles.removeValue(forKey: folderID)
+        recoveryDroppedPaths.removeValue(forKey: folderID)
+        unhealthyFolderIDs.remove(folderID)
         folderSnapshots.removeValue(forKey: folderID)
         dirtySnapshotFolderIDs.remove(folderID)
         if removePersistedSnapshot, let url = snapshotURL(for: folderID) {
@@ -540,11 +578,18 @@ public final class FolderWatcher: @unchecked Sendable {
             release: nil,
             copyDescription: nil
         )
+        let currentEventID = FSEventsGetCurrentEventId()
+        // A stored cursor ahead of the kernel counter means the event-ID
+        // timeline restarted (kernel wrap or a restored system). Replaying from
+        // it would stall the stream and every event would sit below the stale
+        // minima, so reset the timeline and recover from snapshots instead.
+        if currentEventID > 0, let replayFromEventID, currentEventID < replayFromEventID {
+            resetEventTimelineAfterWrap()
+        }
         let sinceWhen: FSEventStreamEventId
         if let replayFromEventID {
             sinceWhen = replayFromEventID
         } else {
-            let currentEventID = FSEventsGetCurrentEventId()
             replayFromEventID = currentEventID
             sinceWhen = currentEventID
         }
@@ -582,6 +627,11 @@ public final class FolderWatcher: @unchecked Sendable {
 
         stream = newStream
         callbackContext = info
+        if latestProcessedEventID == nil {
+            // Seed the processed cursor so the reconciliation short-circuit can
+            // tell "nothing happened since the last pass" apart from "never ran".
+            latestProcessedEventID = sinceWhen
+        }
         scheduleStreamRecoveryIfNeeded()
         DebugLogger.log(
             "FSEvents: Watching \(watchedFolders.count) folders through \(monitoringRoots.count) coalesced roots"
@@ -627,10 +677,15 @@ public final class FolderWatcher: @unchecked Sendable {
             )
         let itemWasRenamed =
             flags & UInt32(kFSEventStreamEventFlagItemRenamed) != 0
+        let eventIDsWrapped =
+            flags & UInt32(kFSEventStreamEventFlagEventIdsWrapped) != 0
         let eventHistoryIsUnsafe =
             flags & UInt32(kFSEventStreamEventFlagUserDropped) != 0 ||
             flags & UInt32(kFSEventStreamEventFlagKernelDropped) != 0 ||
-            flags & UInt32(kFSEventStreamEventFlagEventIdsWrapped) != 0
+            eventIDsWrapped
+        if eventIDsWrapped {
+            resetEventTimelineAfterWrap()
+        }
         if flags & UInt32(kFSEventStreamEventFlagOwnEvent) != 0,
            !rootChanged,
            !eventHistoryIsUnsafe {
@@ -645,28 +700,50 @@ public final class FolderWatcher: @unchecked Sendable {
                 beginScan(at: root, isRecovery: true)
             }
         }
+        // Events below a folder's minimum predate our interest in it. The
+        // single-file path already enforces this; scan paths must too or a
+        // replayed historical event re-delivers the whole tree. RootChanged is
+        // exempt because reacquireRoots owns its recovery.
+        let eventPredatesFolderInterest =
+            !rootChanged && isEventIDBelowFolderMinimum(eventID, path: path)
         if eventHistoryIsUnsafe {
             // A root change already queued recovery for the reacquired current
             // roots above; the event path may be stale after relocation.
-            if !rootChanged {
+            if !rootChanged, !eventPredatesFolderInterest {
                 scheduleRecoveryScans(affectedBy: path)
             }
         } else if rootChanged {
             // The root was already reacquired and queued for baseline recovery.
         } else if itemWasRenamed, !fileManager.fileExists(atPath: path) {
-            rememberRemoval(at: path)
+            if !eventPredatesFolderInterest {
+                rememberRemoval(at: path)
+            }
         } else if requiresRecursiveScan || directoryArrived {
-            let name = URL(fileURLWithPath: path).lastPathComponent
-            if let folderID = mostSpecificFolderID(containing: path),
-               itemWasRenamed,
-               consumeRecentRemoval(named: name, folderID: folderID) {
+            if eventPredatesFolderInterest {
+                // Historical replay for a folder we just started watching.
+            } else if let folderID = mostSpecificFolderID(containing: path),
+                      let folder = watchedFolders[folderID],
+                      itemWasRenamed,
+                      let relativePath = Self.relativePath(
+                          of: path,
+                          within: rootPath(for: folderID, folder: folder)
+                      ),
+                      !relativePath.isEmpty,
+                      consumeRecentRemoval(atRelativePath: relativePath, folderID: folderID) {
                 // A rename with both endpoints inside the same watched root is
                 // a user move, not a new arrival.
-            } else {
+            } else if mostSpecificFolderID(containing: path) != nil {
                 scheduleDirectoryScan(at: path)
+            } else {
+                // The event sits on a coalesced monitoring root above the
+                // watched folders; diff against baselines instead of presenting
+                // the whole tree as new.
+                scheduleRecoveryScans(affectedBy: path)
             }
         } else if flags & UInt32(kFSEventStreamEventFlagItemRemoved) != 0 {
-            rememberRemoval(at: path)
+            if !eventPredatesFolderInterest {
+                rememberRemoval(at: path)
+            }
         } else {
             enqueueFileIfActionable(at: path, flags: flags, eventID: eventID)
         }
@@ -717,7 +794,7 @@ public final class FolderWatcher: @unchecked Sendable {
         }
 
         if flags & UInt32(kFSEventStreamEventFlagItemRenamed) != 0,
-           consumeRecentRemoval(named: url.lastPathComponent, folderID: folderID) {
+           consumeRecentRemoval(atRelativePath: relativePath, folderID: folderID) {
             return
         }
 
@@ -845,25 +922,57 @@ public final class FolderWatcher: @unchecked Sendable {
     }
 
     private func rememberRemoval(at path: String) {
-        guard let folderID = mostSpecificFolderID(containing: path) else { return }
-        let name = URL(fileURLWithPath: path).lastPathComponent
+        guard let folderID = mostSpecificFolderID(containing: path),
+              let folder = watchedFolders[folderID],
+              let relativePath = Self.relativePath(
+                  of: path,
+                  within: rootPath(for: folderID, folder: folder)
+              ),
+              !relativePath.isEmpty else {
+            return
+        }
         var removals = recentlyRemovedFiles[folderID] ?? [:]
         let cutoff = Date().addingTimeInterval(-3)
         removals = removals.filter { $0.value >= cutoff }
         if removals.count < 128 {
-            removals[name] = Date()
+            removals[relativePath] = Date()
         }
         recentlyRemovedFiles[folderID] = removals
     }
 
-    private func consumeRecentRemoval(named name: String, folderID: UUID) -> Bool {
+    private func consumeRecentRemoval(atRelativePath relativePath: String, folderID: UUID) -> Bool {
         guard var removals = recentlyRemovedFiles[folderID],
-              let removedAt = removals.removeValue(forKey: name),
+              let removedAt = removals.removeValue(forKey: relativePath),
               Date().timeIntervalSince(removedAt) < 3 else {
             return false
         }
         recentlyRemovedFiles[folderID] = removals
         return true
+    }
+
+    /// True when an event predates our interest in the folders it can affect
+    /// (installation or resume), so reacting to it would re-deliver history.
+    private func isEventIDBelowFolderMinimum(
+        _ eventID: FSEventStreamEventId,
+        path: String
+    ) -> Bool {
+        if let folderID = mostSpecificFolderID(containing: path) {
+            guard let minimumEventID = minimumEventIDs[folderID] else { return false }
+            return eventID < minimumEventID
+        }
+        // The event can sit on a coalesced monitoring root above the watched
+        // folders. Treat it as historical only when every affected folder's
+        // floor is above it, so one live folder still triggers recovery.
+        var affectedMinimum: FSEventStreamEventId?
+        for (folderID, folder) in watchedFolders {
+            guard Self.isPath(rootPath(for: folderID, folder: folder), within: path) else {
+                continue
+            }
+            guard let minimumEventID = minimumEventIDs[folderID] else { return false }
+            affectedMinimum = min(affectedMinimum ?? minimumEventID, minimumEventID)
+        }
+        guard let affectedMinimum else { return false }
+        return eventID < affectedMinimum
     }
 
     // MARK: - Bounded scanning
@@ -917,7 +1026,15 @@ public final class FolderWatcher: @unchecked Sendable {
                 continue
             }
             affectedFolderIDs.append(folderID)
-            _ = resolveBookmark(for: folder)
+            let reacquiredURL = resolveBookmark(for: folder)
+            // A root that can no longer be resolved or read silently stops
+            // delivering, so surface it instead of leaving it indexed as healthy.
+            setFolderHealth(
+                for: folderID,
+                folder: folder,
+                isHealthy: (reacquiredURL != nil || folder.bookmarkData == nil)
+                    && isReadableDirectory(atPath: rootPath(for: folderID, folder: folder))
+            )
         }
         rebuildPathIndex()
         if previousMonitoringRoots != monitoringRoots {
@@ -963,6 +1080,9 @@ public final class FolderWatcher: @unchecked Sendable {
 
         if pendingScanPaths.isEmpty, requiresFullRecoveryScan {
             pendingScanPaths = monitoringRoots
+            // Overflow recovery must diff against baselines (and honor removal
+            // tombstones) instead of re-delivering every pre-existing file as new.
+            recoveryScanPaths.formUnion(pendingScanPaths)
             requiresFullRecoveryScan = false
         }
         guard !pendingScanPaths.isEmpty else {
@@ -1088,7 +1208,8 @@ public final class FolderWatcher: @unchecked Sendable {
                 return RecoveryTarget(
                     folderID: folderID,
                     rootPath: root,
-                    baseline: folderSnapshots[folderID]
+                    baseline: folderSnapshots[folderID],
+                    droppedPaths: recoveryDroppedPaths[folderID] ?? []
                 )
             }.sorted { $0.rootPath.count > $1.rootPath.count }
         }
@@ -1172,36 +1293,78 @@ public final class FolderWatcher: @unchecked Sendable {
         var reconciliationChangedSnapshot = false
         for target in targets {
             let current = currentStates[target.folderID] ?? [:]
-            let changedPaths: [String]
+            var changedRelativePaths: Set<String> = []
             if let baseline = target.baseline {
-                changedPaths = current.compactMap { relativePath, fingerprint in
-                    baseline[relativePath] == fingerprint
-                        ? nil
-                        : URL(fileURLWithPath: target.rootPath)
-                            .appendingPathComponent(relativePath).path
+                for (relativePath, fingerprint) in current where baseline[relativePath] != fingerprint {
+                    changedRelativePaths.insert(relativePath)
                 }
-            } else {
-                changedPaths = []
+                // Paths a previous pass could not hand to automation stay
+                // eligible even if the baseline has since moved past them.
+                for relativePath in target.droppedPaths where current[relativePath] != nil {
+                    changedRelativePaths.insert(relativePath)
+                }
             }
-            let snapshotChanged = target.baseline != current
-            reconciliationChangedSnapshot = reconciliationChangedSnapshot || snapshotChanged
 
-            performOnQueueSyncIfNeeded {
-                if snapshotChanged {
-                    folderSnapshots[target.folderID] = current
-                    dirtySnapshotFolderIDs.insert(target.folderID)
-                }
-                if changedPaths.isEmpty, snapshotChanged {
-                    persistSnapshot(for: target.folderID)
-                }
+            let orderedRelativePaths = changedRelativePaths.sorted()
+            let changedPaths = orderedRelativePaths.map {
+                URL(fileURLWithPath: target.rootPath).appendingPathComponent($0).path
             }
+
+            var ingestedPaths: Set<String> = []
+            var droppedPaths: Set<String> = []
             for batchStart in stride(
                 from: 0,
                 to: changedPaths.count,
                 by: Self.maximumFilesPerBatch
             ) {
-                let end = min(batchStart + Self.maximumFilesPerBatch, changedPaths.count)
-                ingestScannedPathsWithBackpressure(Array(changedPaths[batchStart..<end]))
+                let batchEnd = min(batchStart + Self.maximumFilesPerBatch, changedPaths.count)
+                let batchRelativePaths = orderedRelativePaths[batchStart..<batchEnd]
+                if ingestScannedPathsWithBackpressure(Array(changedPaths[batchStart..<batchEnd])) {
+                    ingestedPaths.formUnion(batchRelativePaths)
+                } else {
+                    droppedPaths.formUnion(batchRelativePaths)
+                }
+            }
+
+            performOnQueueSyncIfNeeded {
+                guard watchedFolders[target.folderID] != nil else { return }
+                let baseline = folderSnapshots[target.folderID]
+                // A scan that only covers part of the root must not wipe
+                // baseline entries outside the scanned subtree, and cannot
+                // establish a baseline for an unscanned whole root.
+                let coversWholeRoot = Self.isPath(target.rootPath, within: path)
+                if target.baseline == nil, !coversWholeRoot { return }
+                // A missing baseline initializes silently so enabling an existing
+                // tree never presents all of its contents as newly arrived.
+                var snapshot = target.baseline == nil ? current : (baseline ?? current)
+                if target.baseline != nil, coversWholeRoot {
+                    // Deletions are accepted silently; only paths that actually
+                    // reached automation advance their fingerprint.
+                    snapshot = snapshot.filter { current[$0.key] != nil }
+                }
+                for relativePath in ingestedPaths {
+                    snapshot[relativePath] = current[relativePath]
+                }
+                let snapshotChanged = baseline != snapshot
+                if snapshotChanged {
+                    folderSnapshots[target.folderID] = snapshot
+                    dirtySnapshotFolderIDs.insert(target.folderID)
+                }
+                if coversWholeRoot {
+                    let stillDropped = droppedPaths.filter { relativePath in
+                        guard let fingerprint = current[relativePath] else { return false }
+                        return snapshot[relativePath] != fingerprint
+                    }
+                    if stillDropped.isEmpty {
+                        recoveryDroppedPaths.removeValue(forKey: target.folderID)
+                    } else {
+                        recoveryDroppedPaths[target.folderID, default: []].formUnion(stillDropped)
+                    }
+                }
+                reconciliationChangedSnapshot = reconciliationChangedSnapshot || snapshotChanged
+                if droppedPaths.isEmpty, snapshotChanged {
+                    persistSnapshot(for: target.folderID)
+                }
             }
         }
 
@@ -1218,7 +1381,11 @@ public final class FolderWatcher: @unchecked Sendable {
         }
     }
 
-    private func ingestScannedPathsWithBackpressure(_ paths: [String], attempt: Int = 0) {
+    /// Hands scanned paths to the debounce pipeline. Returns `true` when the
+    /// whole batch is safely pending; `false` when the batch was deferred to a
+    /// bounded retry, so callers must not advance their baseline past it.
+    @discardableResult
+    private func ingestScannedPathsWithBackpressure(_ paths: [String], attempt: Int = 0) -> Bool {
         let didIngest = performOnQueueSyncIfNeeded {
             guard !watchedFolders.isEmpty else { return true }
             guard pendingFileCount + paths.count <= Self.maximumPendingFiles else {
@@ -1242,21 +1409,23 @@ public final class FolderWatcher: @unchecked Sendable {
             return true
         }
 
-        guard !didIngest else { return }
+        guard !didIngest else { return true }
         // Bounded async retry with exponential backoff instead of a
         // Thread.sleep spin on the scan queue: each retry waits longer
         // (0.25s, 0.5s, 1s...) and gives up after ~8 attempts so a stuck
-        // consumer cannot pin a thread forever. Dropped batches are picked up
-        // by the next reconciliation pass, which rebuilds from snapshots.
+        // consumer cannot pin a thread forever. The caller keeps the paths
+        // eligible for the next reconciliation (dropped-paths set); retries
+        // that succeed advance the baseline when delivery is accepted.
         let nextAttempt = attempt + 1
         guard nextAttempt <= 8, !paths.isEmpty else {
             DebugLogger.log("FSEvents: Dropping \(paths.count) scanned paths after sustained backpressure")
-            return
+            return false
         }
         let delay = min(4.0, Self.retryDelay * Double(1 << min(nextAttempt, 4)))
         queue.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.ingestScannedPathsWithBackpressure(paths, attempt: nextAttempt)
+            _ = self?.ingestScannedPathsWithBackpressure(paths, attempt: nextAttempt)
         }
+        return false
     }
 
     private func removeExcludedPendingFiles(for requestedFolderID: UUID? = nil) {
@@ -1404,6 +1573,8 @@ public final class FolderWatcher: @unchecked Sendable {
         replayFromEventID = persistedEventID ?? replayFromEventID
         if affectedPath != "/" {
             _ = reacquireRoots(affectedBy: affectedPath)
+        } else {
+            refreshFolderReachability()
         }
         if !isSuspendedForBackpressure {
             rebuildStream()
@@ -1414,15 +1585,62 @@ public final class FolderWatcher: @unchecked Sendable {
         DebugLogger.log("FSEvents: Replayed cursor and scheduled lifecycle recovery")
     }
 
+    /// Rechecks every watched root's readability (and therefore delivers
+    /// `didLoseAccessTo` on the transition) without re-resolving bookmarks,
+    /// which stays on the lifecycle paths where access can actually change.
+    private func refreshFolderReachability() {
+        for (folderID, folder) in watchedFolders {
+            setFolderHealth(
+                for: folderID,
+                folder: folder,
+                isHealthy: isReadableDirectory(atPath: rootPath(for: folderID, folder: folder))
+            )
+        }
+    }
+
+    private func setFolderHealth(for folderID: UUID, folder: WatchedFolder, isHealthy: Bool) {
+        if isHealthy {
+            unhealthyFolderIDs.remove(folderID)
+            return
+        }
+        guard unhealthyFolderIDs.insert(folderID).inserted else { return }
+        DebugLogger.log("FSEvents: Watched root is unreachable: \(folder.path)")
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.folderWatcher(self, didLoseAccessTo: folder)
+        }
+    }
+
+    /// Event IDs are monotonic until the kernel wraps them, which invalidates
+    /// every stored minimum and cursor: later IDs compare below all minima, so
+    /// events would be silently dropped and the cursor guard would never pass.
+    /// Reset to the new timeline and force a full recovery.
+    private func resetEventTimelineAfterWrap() {
+        let currentEventID = FSEventsGetCurrentEventId()
+        let cursor = max(currentEventID, 1)
+        minimumEventIDs = minimumEventIDs.mapValues { _ in 0 }
+        latestProcessedEventID = cursor
+        persistedEventID = nil
+        replayFromEventID = cursor
+        eventIDAtLastReconciliation = nil
+        // The all-roots recovery below already scans every tree; setting
+        // `requiresFullRecoveryScan` as well would rescan them a second time
+        // and repeated wrap events would queue unbounded rescans.
+        scheduleRecoveryScans(affectedBy: "/")
+        DebugLogger.log("FSEvents: Event IDs wrapped; reset cursors and scheduled full recovery")
+    }
+
     private func scheduleFullReconciliation() {
         guard !watchedFolders.isEmpty else { return }
-        // Event-ID short-circuit: with a live stream, no pending scans, and a
-        // cursor that has not advanced since the last pass, skip the
-        // full-tree rescan. The deadline still backs off exponentially via
-        // currentReconciliationInterval.
+        refreshFolderReachability()
+        // Event-ID short-circuit: with a live stream, no pending scans or
+        // dropped recovery batches, and a cursor that has not advanced since
+        // the last pass, skip the full-tree rescan. The deadline still backs
+        // off exponentially via currentReconciliationInterval.
         if hasCompletedInitialSync,
            stream != nil,
            !requiresFullRecoveryScan,
+           recoveryDroppedPaths.isEmpty,
            pendingScanPaths.isEmpty,
            activeScanPath == nil,
            let lastEventID = latestProcessedEventID,
@@ -1552,6 +1770,14 @@ public final class FolderWatcher: @unchecked Sendable {
     }
 
     private func recordAcceptedFiles(_ relativePaths: Set<String>, for folderID: UUID) {
+        if var dropped = recoveryDroppedPaths[folderID] {
+            dropped.subtract(relativePaths)
+            if dropped.isEmpty {
+                recoveryDroppedPaths.removeValue(forKey: folderID)
+            } else {
+                recoveryDroppedPaths[folderID] = dropped
+            }
+        }
         guard let folder = watchedFolders[folderID], folderSnapshots[folderID] != nil else {
             return
         }

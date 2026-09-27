@@ -71,10 +71,12 @@ public enum OrganizationState: Equatable, Sendable {
             }
         }
 
-        // From organizing: can go to ready, idle (cancel), restart scanning, or error
+        // From organizing: can go to ready, idle (cancel), restart scanning,
+        // apply (incremental auto-apply calls performApply while .organizing),
+        // complete (that apply's final transition), or error.
         if from == .organizing {
             switch to {
-            case .organizing, .scanning, .ready, .idle, .error:
+            case .organizing, .scanning, .ready, .applying, .completed, .idle, .error:
                 return true
             default:
                 return false

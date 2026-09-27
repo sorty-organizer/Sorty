@@ -119,6 +119,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         var planHistory: [OrganizationPlan] = []
         var errorMessage: String?
         var pinsCompletionView = false
+        var completionFailureAction: CompletionFailureAction?
+        var completionFailureEntry: OrganizationHistoryEntry?
         var displayStreamingContent = ""
         var truncatedDisplayStreamingContent = ""
         var streamFileIDTable: [Int: FileItem] = [:]
@@ -152,9 +154,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 let oldValue = presentationState.state
                 updatePresentation { $0.state = newValue }
 
-                // Request user attention for any error state
-                if case .error = state {
+                // Request user attention for any error state, and drop the
+                // completion pin so a stale pin cannot keep masking the error UI
+                // (e.g. a menu apply from history while the window view is
+                // unmounted). A fresh .ready is a new review, so it unpins too.
+                if case .error = newValue {
                     NotificationManager.shared.requestAttention()
+                    pinsCompletionView = false
+                } else {
+                    // Leaving .error ends the completion view's failure
+                    // presentation, so a remount cannot restore a stale card.
+                    completionFailureAction = nil
+                    completionFailureEntry = nil
+                    if case .ready = newValue {
+                        pinsCompletionView = false
+                    }
                 }
 
                 if state != .organizing {
@@ -190,6 +204,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         set {
             if newValue?.id != presentationState.currentPlan?.id {
                 currentPlanBaseURL = newValue == nil ? nil : currentDirectory?.standardizedFileURL
+                // A replaced plan must not inherit a watched-review mode
+                // override that belonged to the previous plan.
+                preparedPlanModeOverride = nil
             }
             updatePresentation { $0.currentPlan = newValue }
         }
@@ -282,6 +299,28 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     public var pinsCompletionView: Bool {
         get { presentationState.pinsCompletionView }
         set { updatePresentation { $0.pinsCompletionView = newValue } }
+    }
+
+    /// The undo/redo retry that produced the completion view's current failure
+    /// card. Stored on the organizer instead of only in the view so remounting
+    /// `OrganizationCompleteView` (for example after visiting History) still
+    /// shows the failure and its retry button. Cleared automatically when the
+    /// organizer leaves `.error` for a running/`.ready` state.
+    public enum CompletionFailureAction: String, Sendable {
+        case undo
+        case redo
+    }
+
+    public var completionFailureAction: CompletionFailureAction? {
+        get { presentationState.completionFailureAction }
+        set { updatePresentation { $0.completionFailureAction = newValue } }
+    }
+
+    /// The history entry a failed completion-card redo was retrying, kept so
+    /// the retry still targets the same entry after the view remounts.
+    public var completionFailureEntry: OrganizationHistoryEntry? {
+        get { presentationState.completionFailureEntry }
+        set { updatePresentation { $0.completionFailureEntry = newValue } }
     }
     
     // Proactive AI Validation
@@ -557,6 +596,42 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var currentTask: Task<Void, Error>?
     private var isCancellationRequested: Bool = false
 
+    /// Monotonic token for the currently claimed run. Every tracked run
+    /// (`organize`, `resumeOrganization`, `organizeIncremental`,
+    /// `organizeSelectedFiles`, `apply`, and the regenerate wrappers) claims
+    /// it synchronously before its first await because the state guard is
+    /// still false while that call loads persisted state; without it a second
+    /// start could cancel this run and then clobber its task/state on exit.
+    /// Only the current token may clear `currentTask` or reset state.
+    private var activeOrganizeRunToken: UInt64?
+    private var organizeRunTokenCounter: UInt64 = 0
+
+    /// Set by performApply once it has recorded a failure/partial history entry,
+    /// so the enclosing incremental/selected-file catch does not record the
+    /// same failure a second time via handleOrganizationError.
+    private var performApplyRecordedFailure = false
+
+    private func claimOrganizeRun(stealing: Bool = false) -> UInt64? {
+        guard stealing || activeOrganizeRunToken == nil else { return nil }
+        organizeRunTokenCounter &+= 1
+        activeOrganizeRunToken = organizeRunTokenCounter
+        return organizeRunTokenCounter
+    }
+
+    private func isCurrentOrganizeRun(_ token: UInt64) -> Bool {
+        activeOrganizeRunToken == token
+    }
+
+    private func releaseOrganizeRun(_ token: UInt64) {
+        guard activeOrganizeRunToken == token else { return }
+        activeOrganizeRunToken = nil
+    }
+
+    private func consumePerformApplyFailureRecording() -> Bool {
+        defer { performApplyRecordedFailure = false }
+        return performApplyRecordedFailure
+    }
+
     /// Single place that decides whether an error means "user cancelled".
     /// Covers structured cancellation (CancellationError, OrganizationError.cancelled,
     /// AIClientError.isCancellation, NSURLErrorCancelled) and stringly-typed
@@ -663,6 +738,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     func setRevertOperationHookForTesting(_ hook: (@Sendable () async -> Void)?) {
         revertOperationTestHook = hook
+    }
+
+    /// Test-only hook awaited after file moves complete and before the
+    /// post-move cancellation check, so tests can cancel deterministically
+    /// between the two and exercise the partial-cancel history path.
+    private var postMoveTestHook: (@Sendable () async -> Void)?
+
+    func setPostMoveCancellationCheckHookForTesting(_ hook: (@Sendable () async -> Void)?) {
+        postMoveTestHook = hook
     }
     #endif
 
@@ -1425,6 +1509,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     /// Start organization - MUST be explicitly called by user action
     public func organize(directory: URL, customPrompt: String? = nil, temperature: Double? = nil) async throws {
+        // Claim the run synchronously before the first await: the state guard
+        // is still false while this call loads persisted state, so without a
+        // claim a second start would cancel this run and then clobber its
+        // task/state on exit.
+        guard let runToken = claimOrganizeRun() else {
+            DebugLogger.log("Organization blocked: Already starting or in progress")
+            return
+        }
+        defer { releaseOrganizeRun(runToken) }
         // Guard against auto-start
         guard !isOperationInProgress() else {
             DebugLogger.log("Organization blocked: Already in progress")
@@ -1452,22 +1545,27 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             ]
         )
 
-        // Cancel any existing task first
-        cancelInternal()
+        // Cancel any existing task first, keeping this run's freshly claimed
+        // token alive.
+        cancelInternal(preservingToken: runToken)
         // Snapshot the intent before analysis starts so a restart forced by
         // macOS (e.g. enabling Full Disk Access) can offer the folder again.
         persistManualSession(directory: directory, plan: nil, stateHint: .interrupted, instructions: customPrompt ?? customInstructions)
-        try await runOrganizationTask(directory: directory, customPrompt: customPrompt, temperature: temperature)
+        try await runOrganizationTask(directory: directory, customPrompt: customPrompt, temperature: temperature, runToken: runToken)
     }
 
     private func runOrganizationTask(
         directory: URL,
         customPrompt: String?,
-        temperature: Double?
+        temperature: Double?,
+        runToken: UInt64
     ) async throws {
         currentRunInstructions = customPrompt ?? customInstructions
         modelExcludedCurrentRun = false
         withBatchUpdates {
+            // This run generates a fresh plan; a watched-review mode override
+            // from an earlier plan must not leak into it.
+            preparedPlanModeOverride = nil
             pinsCompletionView = false
             clearStreamingDisplayState()
             streamFileIDTable = [:]
@@ -1481,18 +1579,33 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             visionAnalysisSummary = nil
         }
 
-        currentTask = Task {
+        let task = Task {
             try await performOrganization(
                 directory: directory,
                 customPrompt: customPrompt,
-                temperature: temperature
+                temperature: temperature,
+                runToken: runToken
             )
         }
-        defer { currentTask = nil }
+        currentTask = task
+        defer {
+            // Only the run that still owns the token may clear the task; a
+            // superseded run must not clobber the winner.
+            if isCurrentOrganizeRun(runToken) {
+                currentTask = nil
+            }
+        }
 
         do {
-            try await currentTask?.value
+            try await task.value
         } catch where Self.isCancellationError(error) {
+            guard isCurrentOrganizeRun(runToken) else {
+                // A superseded run must not reset the newer run's state;
+                // consume any pending suppression so it cannot mute a later
+                // legitimate cancellation.
+                suppressCancellationReset = false
+                throw CancellationError()
+            }
             if suppressCancellationReset {
                 suppressCancellationReset = false
                 return
@@ -1503,7 +1616,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
-    private func performOrganization(directory: URL, customPrompt: String?, temperature: Double?) async throws {
+    private func performOrganization(directory: URL, customPrompt: String?, temperature: Double?, runToken: UInt64) async throws {
         let analyticsStartedAt = Date()
         guard aiClient != nil else {
             let error = OrganizationError.clientNotConfigured
@@ -1629,8 +1742,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
 
         } catch where Self.isCancellationError(error) {
-            stopTimeoutTimer()
-            resetToIdleUnlessCancellationResetIsSuppressed()
+            // A superseded run must not stop the winner's timeout timer or
+            // reset its state; the outer wrapper consumes the suppression flag.
+            if isCurrentOrganizeRun(runToken) {
+                stopTimeoutTimer()
+                resetToIdleUnlessCancellationResetIsSuppressed()
+            }
             AnalyticsManager.shared.captureWorkflow(
                 workflow: "organize",
                 stage: "plan_generation",
@@ -1641,8 +1758,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
             throw CancellationError()
         } catch {
-            stopTimeoutTimer()
-            handleOrganizationError(error, directory: directory)
+            // A superseded run must not record a failure for the old directory
+            // or overwrite the winner's error state.
+            if isCurrentOrganizeRun(runToken) {
+                stopTimeoutTimer()
+                handleOrganizationError(error, directory: directory)
+            }
             AnalyticsManager.shared.captureWorkflow(
                 workflow: "organize",
                 stage: "plan_generation",
@@ -1788,15 +1909,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         try checkCancellation()
 
-        let personaPrompt: String? = if let personaManager {
-            if let customPersonaStore {
-                personaManager.getEffectivePrompt(customStore: customPersonaStore)
-            } else {
-                personaManager.getPrompt(for: personaManager.selectedPersona)
-            }
-        } else {
-            nil
-        }
+        let personaPrompt = effectivePersonaPrompt()
 
         let directInstructions = customPrompt ?? customInstructions
         var instructions = PromptBuilder.wrapDirectUserInstructions(directInstructions)
@@ -1857,7 +1970,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Injected Storage Locations context into prompt")
         }
 
-        if !isRenameOnly, let existingFoldersContext = PromptBuilder.buildExistingFoldersContext(at: directory) {
+        if !isRenameOnly,
+           let existingFoldersContext = try await PromptBuilder.buildExistingFoldersContextOffMain(at: directory) {
             instructions += "\n\n" + existingFoldersContext
             DebugLogger.log("Injected Existing Folders context into prompt")
         }
@@ -2163,8 +2277,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
               let client = aiClient else {
             throw OrganizationError.noCurrentPlan
         }
+        guard let runToken = claimOrganizeRun() else {
+            DebugLogger.log("Resume blocked: another run is already in progress")
+            return
+        }
+        defer { releaseOrganizeRun(runToken) }
 
-        cancelInternal()
+        cancelInternal(preservingToken: runToken)
         isCancellationRequested = false
         clearStreamingDisplayState()
         updateState(
@@ -2204,15 +2323,29 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             resumeCheckpoint = nil
             updateState(.ready, stage: "Ready!", progress: 1.0)
         }
-        defer { currentTask = nil }
+        defer {
+            // Only the run that still owns the token may clear the task; a
+            // superseded run must not clobber the winner.
+            if isCurrentOrganizeRun(runToken) {
+                currentTask = nil
+            }
+        }
 
         do {
             try await currentTask?.value
         } catch where Self.isCancellationError(error) {
+            guard isCurrentOrganizeRun(runToken) else {
+                // A superseded run must not reset the newer run's state;
+                // consume any pending suppression so it cannot mute a later
+                // legitimate cancellation.
+                suppressCancellationReset = false
+                throw CancellationError()
+            }
             stopTimeoutTimer()
             resetToIdleUnlessCancellationResetIsSuppressed()
             throw CancellationError()
         } catch {
+            guard isCurrentOrganizeRun(runToken) else { throw error }
             stopTimeoutTimer()
             handleOrganizationError(error, directory: checkpoint.directory)
             throw error
@@ -2242,13 +2375,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private struct BatchAnalysisJob: Sendable {
         let batchIndex: Int
         var files: [FileItem]
-        let batchImages: [String: Data]
+        var batchImages: [String: Data]
         var requestInstructions: String
         let personaPrompt: String?
         let temperature: Double?
         /// Main-actor cancellation flag sampled at dispatch; Task.isCancelled
         /// covers task-tree cancellation.
         let cancellationRequested: Bool
+        /// Vision-capable files for the whole run plus the base directory, so
+        /// an adaptive split half that ends up without attachments can still
+        /// prepare its own images.
+        let visionFiles: [FileItem]
+        let reprepareImages: (@Sendable ([FileItem]) async throws -> [String: Data])?
     }
 
     /// Builds one batch job: stream ID table, batch-scoped instructions with
@@ -2284,9 +2422,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             if let visionBaseDirectory,
                batchInstructions.contains("## SOURCE FOLDER CONTEXT") {
                 batchInstructions = PromptBuilder.strippingSourceFolderContext(from: batchInstructions)
-                if let batchManifest = PromptBuilder.buildBatchManifestContext(
+                // Same 60-entry batch manifest as buildBatchManifestContext,
+                // but built off-main (it stats directory resource values).
+                if let batchManifest = try await PromptBuilder.buildDirectoryManifestContextOffMain(
                     baseDirectoryURL: visionBaseDirectory,
-                    batchFiles: batch
+                    files: batch,
+                    maxEntries: 60
                 ) {
                     batchInstructions += "\n\n" + batchManifest
                 }
@@ -2299,22 +2440,29 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
         }
 
-        let fileNames = Set(batch.map(visionAttachmentName))
-        var batchImages = imagePayload.filter { fileNames.contains($0.key) }
+        let fileNames = Set(batch.map { Self.visionAttachmentName(for: $0) })
+        var batchImages = Self.visionImages(in: imagePayload, keyedBy: batch)
         if batchImages.isEmpty, let visionBaseDirectory {
             let selectedFiles = visionFiles.filter {
-                fileNames.contains(visionAttachmentName(for: $0))
+                fileNames.contains(Self.visionAttachmentName(for: $0))
             }
             batchImages = try await prepareVisionPayload(
                 for: selectedFiles,
                 baseDirectory: visionBaseDirectory
             )
         }
-        let requestInstructions = batchImages.isEmpty
-            ? batchInstructions
-            : batchInstructions + "\n\n" + visionPromptInstructions(
-                for: batchImages.keys.sorted()
-            )
+        let requestInstructions = Self.requestInstructions(
+            base: batchInstructions,
+            visionImages: batchImages
+        )
+
+        let reprepareImages: (@Sendable ([FileItem]) async throws -> [String: Data])? =
+            visionBaseDirectory.map { baseDirectory in
+                { @Sendable [weak self] files in
+                    guard let self else { return [:] }
+                    return try await self.prepareVisionPayload(for: files, baseDirectory: baseDirectory)
+                }
+            }
 
         return BatchAnalysisJob(
             batchIndex: batchIndex,
@@ -2323,7 +2471,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             requestInstructions: requestInstructions,
             personaPrompt: personaPrompt,
             temperature: temperature,
-            cancellationRequested: isCancellationRequested
+            cancellationRequested: isCancellationRequested,
+            visionFiles: visionFiles,
+            reprepareImages: reprepareImages
         )
     }
 
@@ -2375,7 +2525,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 level: .warning,
                 category: "FolderOrganizer"
             )
-            let recoveryInstructions = job.requestInstructions + """
+            // The parent request's vision context claims the parent batch's
+            // attachments; strip it and rebuild per half so each prompt lists
+            // exactly the images that request sends.
+            let recoveryInstructions = Self.strippingVisionContext(from: job.requestInstructions) + """
 
             ADAPTIVE RETRY
             - The previous larger request could not produce a complete valid plan.
@@ -2383,10 +2536,31 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             """
             var firstJob = job
             firstJob.files = Array(job.files[..<splitIndex])
-            firstJob.requestInstructions = recoveryInstructions
+            // Each half must only re-upload the parent batch's images that
+            // belong to its own files, not the entire parent payload. PDF
+            // page attachments decorate the base name with " [Page N]".
+            firstJob.batchImages = Self.visionImages(in: job.batchImages, keyedBy: firstJob.files)
+            if firstJob.batchImages.isEmpty, let reprepareImages = job.reprepareImages {
+                firstJob.batchImages = try await reprepareImages(
+                    Self.visionFiles(in: job.visionFiles, matching: firstJob.files)
+                )
+            }
+            firstJob.requestInstructions = Self.requestInstructions(
+                base: recoveryInstructions,
+                visionImages: firstJob.batchImages
+            )
             var secondJob = job
             secondJob.files = Array(job.files[splitIndex...])
-            secondJob.requestInstructions = recoveryInstructions
+            secondJob.batchImages = Self.visionImages(in: job.batchImages, keyedBy: secondJob.files)
+            if secondJob.batchImages.isEmpty, let reprepareImages = job.reprepareImages {
+                secondJob.batchImages = try await reprepareImages(
+                    Self.visionFiles(in: job.visionFiles, matching: secondJob.files)
+                )
+            }
+            secondJob.requestInstructions = Self.requestInstructions(
+                base: recoveryInstructions,
+                visionImages: secondJob.batchImages
+            )
             // Halves stay sequential so their plans concatenate in order.
             let firstPlans = try await requestBatchPlans(client: client, job: firstJob, adaptiveDepth: adaptiveDepth + 1)
             let secondPlans = try await requestBatchPlans(client: client, job: secondJob, adaptiveDepth: adaptiveDepth + 1)
@@ -2416,22 +2590,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             uniqueKeysWithValues: files.enumerated().map { ($0.offset + 1, $0.element) }
         )
 
-        let fileNames = Set(files.map(visionAttachmentName))
-        var batchImages = imagePayload.filter { fileNames.contains($0.key) }
+        let fileNames = Set(files.map { Self.visionAttachmentName(for: $0) })
+        var batchImages = Self.visionImages(in: imagePayload, keyedBy: files)
         if batchImages.isEmpty, let visionBaseDirectory {
             let selectedFiles = visionFiles.filter {
-                fileNames.contains(visionAttachmentName(for: $0))
+                fileNames.contains(Self.visionAttachmentName(for: $0))
             }
             batchImages = try await prepareVisionPayload(
                 for: selectedFiles,
                 baseDirectory: visionBaseDirectory
             )
         }
-        let requestInstructions = batchImages.isEmpty
-            ? instructions
-            : instructions + "\n\n" + visionPromptInstructions(
-                for: batchImages.keys.sorted()
-            )
+        let requestInstructions = Self.requestInstructions(
+            base: instructions,
+            visionImages: batchImages
+        )
 
         do {
             let plan: OrganizationPlan
@@ -2848,7 +3021,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // this stays a diagnostic counter, not control flow.
         var failedFileCount = 0
         for file in files {
-            let key = visionAttachmentName(for: file)
+            let key = Self.visionAttachmentName(for: file)
             let materialized = prepared.keys.contains {
                 $0 == key || $0 == file.displayName || $0.hasPrefix(key + " [Page ")
             }
@@ -2895,10 +3068,58 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 return lhsDate > rhsDate
     }
 
-    private func visionPromptInstructions(for analyzedImageFilenames: [String]) -> String {
+    /// Builds one request's instructions: the base prompt plus a vision
+    /// context that lists exactly the attachments being sent.
+    nonisolated private static func requestInstructions(
+        base: String,
+        visionImages: [String: Data]
+    ) -> String {
+        guard !visionImages.isEmpty else { return base }
+        return base + "\n\n" + visionPromptInstructions(for: visionImages.keys.sorted())
+    }
+
+    /// Removes a previously appended vision context block so callers can
+    /// rebuild it from the attachments their own request sends.
+    nonisolated private static func strippingVisionContext(from instructions: String) -> String {
+        guard let range = instructions.range(of: "## AI VISION CONTEXT") else {
+            return instructions
+        }
+        return String(instructions[..<range.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Attachments whose keys belong to `files`. PDF pages decorate the base
+    /// attachment name with " [Page N]", so the decorated form matches too.
+    nonisolated private static func visionImages(
+        in images: [String: Data],
+        keyedBy files: [FileItem]
+    ) -> [String: Data] {
+        guard !images.isEmpty else { return [:] }
+        let names = files.map { visionAttachmentName(for: $0) }
+        guard !names.isEmpty else { return [:] }
+        return images.filter { key, _ in
+            names.contains { key == $0 || key.hasPrefix($0 + " [Page ") }
+        }
+    }
+
+    /// The subset of `visionFiles` whose attachments belong to `files`.
+    nonisolated private static func visionFiles(
+        in visionFiles: [FileItem],
+        matching files: [FileItem]
+    ) -> [FileItem] {
+        guard !visionFiles.isEmpty else { return [] }
+        let names = files.map { visionAttachmentName(for: $0) }
+        guard !names.isEmpty else { return [] }
+        return visionFiles.filter { file in
+            let key = visionAttachmentName(for: file)
+            return names.contains { key == $0 || key.hasPrefix($0 + " [Page ") }
+        }
+    }
+
+    nonisolated private static func visionPromptInstructions(for analyzedImageFilenames: [String]) -> String {
         let fileList = analyzedImageFilenames
             .enumerated()
-            .map { "\($0.offset + 1). \($0.element)" }
+            .map { "\($0.offset + 1). \(PromptBuilder.promptSafeFilename($0.element))" }
             .joined(separator: "\n")
 
         return """
@@ -2911,7 +3132,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         """
     }
 
-    private func visionAttachmentName(for file: FileItem) -> String {
+    /// Pure name mapping; kept nonisolated so batch-splitting code off the main
+    /// actor can filter a batch's vision attachments to its own files.
+    nonisolated private static func visionAttachmentName(for file: FileItem) -> String {
         file.relativePath ?? file.displayName
     }
 
@@ -2931,6 +3154,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         return instructions
+    }
+
+    /// Effective persona prompt for the current selection: a selected custom
+    /// persona wins when a custom store is configured, otherwise the standard
+    /// persona (or its custom prompt) is used.
+    private func effectivePersonaPrompt() -> String? {
+        guard let personaManager else { return nil }
+        if let customPersonaStore {
+            return personaManager.getEffectivePrompt(customStore: customPersonaStore)
+        }
+        return personaManager.getPrompt(for: personaManager.selectedPersona)
     }
 
     /// Builds @mention context from the already-scanned inventory instead of
@@ -2977,7 +3211,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 DateFormatter.localizedString(from: $0, dateStyle: .medium, timeStyle: .short)
             } ?? "unknown modified date"
             let relativePath = file.relativePath ?? file.displayName
-            matches.append("- @\(file.displayName): relative path \"\(relativePath)\", extension \"\(file.extension)\", size \(size), modified \(modified)")
+            let safeName = PromptBuilder.promptSafeFilename(file.displayName)
+            let safeRelativePath = PromptBuilder.promptSafeFilename(relativePath)
+            let safeExtension = PromptBuilder.promptSafeFilename(file.extension)
+            matches.append("- @\(safeName): relative path \"\(safeRelativePath)\", extension \"\(safeExtension)\", size \(size), modified \(modified)")
             if matches.count >= 400 { break }
             checked += 1
             if checked.isMultiple(of: 100) {
@@ -3352,10 +3589,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         isStreaming = false
     }
 
-    private func cancelInternal() {
+    /// Stops the tracked task. The active run token is invalidated unless the
+    /// caller just claimed it, so a superseded run's deferred cleanup cannot
+    /// clear a newer run's task.
+    private func cancelInternal(preservingToken: UInt64? = nil) {
         isCancellationRequested = true
         currentTask?.cancel()
         currentTask = nil
+        if activeOrganizeRunToken != preservingToken {
+            activeOrganizeRunToken = nil
+        }
         displayUpdateTask?.cancel()
         displayUpdateTask = nil
         insightExtractionTask?.cancel()
@@ -3365,17 +3608,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     private func cancelCurrentOperationForRestart() async {
         suppressCancellationReset = true
-        isCancellationRequested = true
-
         let taskToCancel = currentTask
-        currentTask?.cancel()
-        currentTask = nil
-        displayUpdateTask?.cancel()
-        displayUpdateTask = nil
-        insightExtractionTask?.cancel()
-        insightExtractionTask = nil
-        stopTimeoutTimer()
-
+        cancelInternal()
         _ = await taskToCancel?.result
         suppressCancellationReset = false
     }
@@ -3453,7 +3687,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     @MainActor
-    private func handleOrganizationError(_ error: Error, directory: URL, source: OrganizationEntrySource = .manual) {
+    private func handleOrganizationError(
+        _ error: Error,
+        directory: URL,
+        source: OrganizationEntrySource = .manual,
+        recordsHistory: Bool = true
+    ) {
         // Don't record history or show UI for cancellation errors
         if Self.isCancellationError(error) {
             resetToIdleUnlessCancellationResetIsSuppressed(source: source)
@@ -3461,18 +3700,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         let displayMessage = userFacingErrorMessage(for: error)
-        let failedEntry = OrganizationHistoryEntry(
-            directoryPath: directory.path,
-            filesOrganized: 0,
-            foldersCreated: 0,
-            plan: nil,
-            success: false,
-            status: .failed,
-            errorMessage: displayMessage,
-            rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
-            source: source
-        )
-        history.addEntry(failedEntry)
+        if recordsHistory {
+            let failedEntry = OrganizationHistoryEntry(
+                directoryPath: directory.path,
+                filesOrganized: 0,
+                foldersCreated: 0,
+                plan: nil,
+                success: false,
+                status: .failed,
+                errorMessage: displayMessage,
+                rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
+                source: source
+            )
+            history.addEntry(failedEntry)
+        }
 
         transition(to: .error(error), force: true)
         errorMessage = displayMessage
@@ -3774,12 +4015,19 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Incremental organization blocked: Already in progress")
             return
         }
+        // Claim before the first await so a run started while this one loads
+        // persisted state cannot cancel it and then clobber its task/state.
+        guard let runToken = claimOrganizeRun() else {
+            DebugLogger.log("Incremental organization blocked: another run is active")
+            return
+        }
+        defer { releaseOrganizeRun(runToken) }
 
         await exclusionRules?.loadPersistedState()
         await personaManager?.loadPersistedState()
         await customPersonaStore?.loadPersistedState()
 
-        cancelInternal()
+        cancelInternal(preservingToken: runToken)
         isCancellationRequested = false
         currentRunInstructions = customPrompt ?? customInstructions
         modelExcludedCurrentRun = false
@@ -3794,14 +4042,28 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 modelOverride: modelOverride,
                 mode: mode,
                 historySource: historySource,
-                autoApply: autoApply
+                autoApply: autoApply,
+                runToken: runToken
             )
         }
-        defer { currentTask = nil }
+        defer {
+            // Only the run that still owns the token may clear the task; a
+            // superseded run must not clobber the winner.
+            if isCurrentOrganizeRun(runToken) {
+                currentTask = nil
+            }
+        }
 
         do {
             try await currentTask?.value
         } catch where Self.isCancellationError(error) {
+            guard isCurrentOrganizeRun(runToken) else {
+                // A superseded run must not reset the newer run's state;
+                // consume any pending suppression so it cannot mute a later
+                // legitimate cancellation.
+                suppressCancellationReset = false
+                throw CancellationError()
+            }
             resetToIdleUnlessCancellationResetIsSuppressed(source: historySource)
         }
     }
@@ -3815,8 +4077,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         modelOverride: String? = nil,
         mode: OrganizationMode,
         historySource: OrganizationEntrySource = .manual,
-        autoApply: Bool
+        autoApply: Bool,
+        runToken: UInt64
     ) async throws {
+        // Clear any apply-failure flag left by an earlier run so a pre-apply
+        // failure here still records its own history entry.
+        performApplyRecordedFailure = false
         AnalyticsManager.shared.captureWorkflow(
             workflow: "organize",
             stage: "started",
@@ -3909,9 +4175,33 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 exclusionMatcher: exclusionMatcher
             )
             
-            // Filter: Only top-level files (no folders, no deep scan) for incremental drop
-            files = allFiles.filter {
-                let relativePath = $0.path.replacingOccurrences(of: directory.path + "/", with: "")
+            // Filter: Only top-level files (no folders, no deep scan) for incremental drop.
+            // The scanner already computed each path relative to the scan root,
+            // so prefer it (pure string work) instead of a realpath syscall per
+            // file on the main actor. The resolved-prefix comparison stays as
+            // the fallback for scan roots whose enumeration spelling differs
+            // (e.g. /var vs /private/var), where the scanner's own relative
+            // path degrades to the last path component.
+            let rawBasePath = directory.standardizedFileURL.path
+            // One realpath for the root, not one per scanned file: the fallback
+            // below only needs the resolved root prefix.
+            let resolvedBasePath = directory.resolvingSymlinksInPath().standardizedFileURL.path
+            files = allFiles.filter { file in
+                let rawFilePath = URL(fileURLWithPath: file.path).standardizedFileURL.path
+                if rawFilePath.hasPrefix(rawBasePath + "/") {
+                    if let scannerRelativePath = file.relativePath, !scannerRelativePath.isEmpty {
+                        return !scannerRelativePath.contains("/") // Only files in root
+                    }
+                    let relativePath = String(rawFilePath.dropFirst(rawBasePath.count + 1))
+                    return !relativePath.contains("/") // Only files in root
+                }
+
+                let filePath = URL(fileURLWithPath: file.path)
+                    .resolvingSymlinksInPath()
+                    .standardizedFileURL
+                    .path
+                guard filePath.hasPrefix(resolvedBasePath + "/") else { return false }
+                let relativePath = String(filePath.dropFirst(resolvedBasePath.count + 1))
                 return !relativePath.contains("/") // Only files in root
             }
             setScannedFiles(files)
@@ -3935,7 +4225,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         do {
             try checkCancellation()
 
-            let existingFolderContext = PromptBuilder.buildExistingFoldersContext(at: directory)
+            let existingFolderContext = try await PromptBuilder.buildExistingFoldersContextOffMain(at: directory)
                 ?? "No descendant folders currently exist."
             let contextPrompt: String
             switch mode {
@@ -3991,7 +4281,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
             finalPrompt += exclusionInstructions(forRenameOnly: mode == .renameOnly)
             
-            let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
+            let personaPrompt = effectivePersonaPrompt()
 
             let plan = try await analyzeInBoundedBatches(
                 files: files,
@@ -4090,12 +4380,25 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 dryRun: false,
                 enableTagging: operationConfig.enableFileTagging,
                 source: historySource,
-                modeOverride: mode
+                modeOverride: mode,
+                runToken: runToken
             )
 
         } catch {
+            // A superseded run must not stop the winner's timeout timer, record
+            // a failure for the old directory, or consume the winner's
+            // performApply failure flag.
+            guard isCurrentOrganizeRun(runToken) else { throw error }
             stopTimeoutTimer()
-            handleOrganizationError(error, directory: directory, source: historySource)
+            // performApply records its own failure entries; without this the
+            // auto-apply failure would land in history twice.
+            let recordedByApply = consumePerformApplyFailureRecording()
+            handleOrganizationError(
+                error,
+                directory: directory,
+                source: historySource,
+                recordsHistory: !recordedByApply
+            )
             throw error
         }
     }
@@ -4249,8 +4552,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Selected files organization blocked: Already in progress")
             return 0
         }
+        // Claim before taking over the task slot so a run that started during
+        // the scans above cannot cancel this one and then clobber its state.
+        guard let runToken = claimOrganizeRun() else {
+            DebugLogger.log("Selected files organization blocked: another run is active")
+            return 0
+        }
+        defer { releaseOrganizeRun(runToken) }
 
-        cancelInternal()
+        cancelInternal(preservingToken: runToken)
         isCancellationRequested = false
         userInitiatedAction = true
 
@@ -4259,15 +4569,26 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 directory: directory,
                 files: files,
                 customPrompt: customPrompt,
-                temperature: temperature
+                temperature: temperature,
+                runToken: runToken
             )
         }
-        defer { currentTask = nil }
+        defer {
+            // Only the run that still owns the token may clear the task; a
+            // superseded run must not clobber the winner.
+            if isCurrentOrganizeRun(runToken) {
+                currentTask = nil
+            }
+        }
 
         do {
             try await currentTask?.value
             return files.count
         } catch where Self.isCancellationError(error) {
+            guard isCurrentOrganizeRun(runToken) else {
+                suppressCancellationReset = false
+                return 0
+            }
             resetToIdleUnlessCancellationResetIsSuppressed()
             return 0
         }
@@ -4277,11 +4598,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         directory: URL,
         files: [FileItem],
         customPrompt: String?,
-        temperature: Double?
+        temperature: Double?,
+        runToken: UInt64
     ) async throws {
         guard let client = aiClient else {
             throw OrganizationError.clientNotConfigured
         }
+        // Clear any apply-failure flag left by an earlier run so a pre-apply
+        // failure here still records its own history entry.
+        performApplyRecordedFailure = false
 
         updateState(.organizing, stage: "Analyzing \(files.count) selected files...", progress: 0.3)
         await MainActor.run {
@@ -4296,7 +4621,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             // Get existing folders to use as context
             let contents = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey])
             let existingFolders = contents.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false }
-                .map { $0.lastPathComponent }
+                .map { PromptBuilder.promptSafeFilename($0.lastPathComponent) }
                 .filter { !$0.hasPrefix(".") }
 
             let contextPrompt = """
@@ -4330,7 +4655,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
             finalPrompt += exclusionInstructions(forRenameOnly: aiConfig?.mode == .renameOnly)
 
-            let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
+            let personaPrompt = effectivePersonaPrompt()
 
             let plan = try await analyzeInBoundedBatches(
                 files: files,
@@ -4391,11 +4716,27 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             // Apply the organization (same task so outer cancel keeps working)
-            try await performApply(at: directory, dryRun: false, enableTagging: aiConfig?.enableFileTagging ?? true)
+            try await performApply(
+                at: directory,
+                dryRun: false,
+                enableTagging: aiConfig?.enableFileTagging ?? true,
+                runToken: runToken
+            )
 
         } catch {
+            // A superseded run must not stop the winner's timeout timer, record
+            // a failure for the old directory, or consume the winner's
+            // performApply failure flag.
+            guard isCurrentOrganizeRun(runToken) else { throw error }
             stopTimeoutTimer()
-            handleOrganizationError(error, directory: directory)
+            // performApply records its own failure entries; without this the
+            // auto-apply failure would land in history twice.
+            let recordedByApply = consumePerformApplyFailureRecording()
+            handleOrganizationError(
+                error,
+                directory: directory,
+                recordsHistory: !recordedByApply
+            )
             throw error
         }
     }
@@ -4432,6 +4773,19 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 actual: baseURL.path
             )
         }
+        // A live run owns the task slot; applying now would cancel it and let
+        // it clobber this apply when it resumes. Claiming synchronously also
+        // blocks a second apply before the .applying transition below.
+        guard let runToken = claimOrganizeRun() else {
+            organizationStage = "Another operation is still running..."
+            LogManager.shared.log(
+                "Ignoring apply() while another run is active",
+                level: .warning,
+                category: "FolderOrganizer"
+            )
+            return
+        }
+        defer { releaseOrganizeRun(runToken) }
         // Claim .applying synchronously (before the first await) so a second
         // apply() observes .applying and no-ops instead of cancelling this run
         // via cancelInternal and starting a concurrent file-move pass.
@@ -4444,7 +4798,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
         // Run the apply inside the tracked task so cancel() aborts the
         // file moves (FileSystemManager polls Task cancellation per file).
-        cancelInternal()
+        cancelInternal(preservingToken: runToken)
         isCancellationRequested = false
         currentTask = Task {
             try await performApply(
@@ -4452,13 +4806,27 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 dryRun: dryRun,
                 enableTagging: enableTagging,
                 source: source,
-                modeOverride: modeOverride
+                modeOverride: modeOverride,
+                runToken: runToken
             )
         }
-        defer { currentTask = nil }
+        defer {
+            // Only the run that still owns the token may clear the task; a
+            // superseded run must not clobber the winner.
+            if isCurrentOrganizeRun(runToken) {
+                currentTask = nil
+            }
+        }
         do {
             try await currentTask?.value
         } catch where Self.isCancellationError(error) {
+            guard isCurrentOrganizeRun(runToken) else {
+                // A superseded run must not reset the newer run's state;
+                // consume any pending suppression so it cannot mute a later
+                // legitimate cancellation.
+                suppressCancellationReset = false
+                throw CancellationError()
+            }
             if suppressCancellationReset {
                 suppressCancellationReset = false
                 throw CancellationError()
@@ -4473,10 +4841,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         dryRun: Bool = false,
         enableTagging: Bool = true,
         source: OrganizationEntrySource = .manual,
-        modeOverride: OrganizationMode? = nil
+        modeOverride: OrganizationMode? = nil,
+        runToken: UInt64
     ) async throws {
         guard let currentPlan else {
             throw OrganizationError.noCurrentPlan
+        }
+        // This layer owns apply-failure history; clear any flag left over from
+        // an earlier run before recording fresh failures. A superseded run must
+        // not clear a flag the winner is about to consume.
+        if isCurrentOrganizeRun(runToken) {
+            performApplyRecordedFailure = false
         }
         let reliabilitySpan = ReliabilityManager.shared.startSpan(
             name: "apply_plan",
@@ -4533,6 +4908,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 mode: operationMode
             )
         } catch {
+            // A superseded run must not replace the winner's state with its own
+            // validation failure.
+            guard isCurrentOrganizeRun(runToken) else { throw error }
             let displayMessage = userFacingErrorMessage(for: error)
             transition(to: .error(error), force: true)
             errorMessage = displayMessage
@@ -4589,6 +4967,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
             completedOperationsBeforeHistory = operations
 
+            #if DEBUG
+            // Lets tests cancel deterministically after moves complete but
+            // before the post-move cancellation check.
+            if let postMoveTestHook {
+                await postMoveTestHook()
+            }
+            #endif
+
             try checkCancellation()
             
             // Track rule applications for learning feedback
@@ -4629,6 +5015,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 organizationStage = "Complete!"
                 progress = 1.0
                 transition(to: .completed)
+                // The enforced mode is now applied; consume the one-shot
+                // watched-review override so it cannot leak into a later plan.
+                preparedPlanModeOverride = nil
                 persistManualSession(directory: baseURL, plan: planToApply, stateHint: .completed, instructions: currentRunInstructions)
             }
 
@@ -4682,6 +5071,39 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
 
         } catch where Self.isCancellationError(error) {
+            // Persist whatever was already moved before the cancellation
+            // surfaced. resetToIdle() only records for .organizing/.ready and
+            // the state here is .applying, so without this entry the moved
+            // files would have no undo path.
+            let partialOperations: [FileSystemManager.FileOperation]
+            if case FileSystemError.partialApplyFailure(let operations, _) = error,
+               !operations.isEmpty {
+                partialOperations = operations
+            } else {
+                partialOperations = completedOperationsBeforeHistory
+            }
+            if !partialOperations.isEmpty {
+                let cancelledEntry = OrganizationHistoryEntry(
+                    directoryPath: baseURL.path,
+                    filesOrganized: partialOperations.filter { $0.type == .moveFile || $0.type == .renameFile }.count,
+                    foldersCreated: partialOperations.filter { $0.type == .createFolder }.count,
+                    plan: planToApply,
+                    success: false,
+                    status: .partiallyUndone,
+                    errorMessage: "User cancelled the operation",
+                    rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
+                    operations: partialOperations,
+                    source: source
+                )
+                // Kept even when superseded: this entry is the only undo path
+                // for the files that already moved before the cancellation.
+                await MainActor.run {
+                    history.addEntry(cancelledEntry)
+                }
+                if isCurrentOrganizeRun(runToken) {
+                    performApplyRecordedFailure = true
+                }
+            }
             AnalyticsManager.shared.captureWorkflow(
                 workflow: "organize",
                 stage: "apply",
@@ -4694,7 +5116,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     "mode": operationMode.rawValue,
                 ]) { current, _ in current }
             )
-            resetToIdleUnlessCancellationResetIsSuppressed(source: source)
+            if isCurrentOrganizeRun(runToken) {
+                resetToIdleUnlessCancellationResetIsSuppressed(source: source)
+            }
             throw CancellationError()
         } catch {
             let partialOperations: [FileSystemManager.FileOperation]?
@@ -4727,15 +5151,22 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 source: source
             )
 
-            await MainActor.run {
-                history.addEntry(failedEntry)
-                if wasCancelled {
-                    resetToIdleUnlessCancellationResetIsSuppressed(source: source)
-                } else {
-                    transition(to: .error(error), force: true)
-                    errorMessage = userFacingErrorMessage(for: error)
-                    organizationStage = errorMessage ?? "Apply failed"
+            // A superseded run must not record a failure for the old directory
+            // or overwrite the winner's state; the entry it built is dropped.
+            if isCurrentOrganizeRun(runToken) {
+                await MainActor.run {
+                    history.addEntry(failedEntry)
+                    if wasCancelled {
+                        resetToIdleUnlessCancellationResetIsSuppressed(source: source)
+                    } else {
+                        transition(to: .error(error), force: true)
+                        errorMessage = userFacingErrorMessage(for: error)
+                        organizationStage = errorMessage ?? "Apply failed"
+                    }
                 }
+                // performApply owns this failure's history row; enclosing catches
+                // must not add a duplicate via handleOrganizationError.
+                performApplyRecordedFailure = true
             }
 
             AnalyticsManager.shared.captureWorkflow(
@@ -4772,6 +5203,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         currentDirectory = baseURL
         currentPlan = plan
         currentPlanBaseURL = baseURL
+        // A redo is a manual apply of a historical plan; it must not inherit a
+        // watched-review mode override (even when the plan id is unchanged).
+        preparedPlanModeOverride = nil
 
         // Do not pre-transition to .applying here: apply() owns the
         // idle/ready/completed -> applying transition and treats a second apply
@@ -4822,7 +5256,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         let tempClient = try AIClientFactory.createClient(config: tempConfig)
         
-        let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
+        let personaPrompt = effectivePersonaPrompt()
         
         let isRenameOnly = tempConfig.mode == .renameOnly
         var instructions = PromptBuilder.wrapDirectUserInstructions(customInstructions ?? self.customInstructions)
@@ -4941,18 +5375,34 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard !isOperationInProgress() else {
             return
         }
+        guard let runToken = claimOrganizeRun() else {
+            DebugLogger.log("Regenerate blocked: another run is already in progress")
+            return
+        }
+        defer { releaseOrganizeRun(runToken) }
 
         // Run inside the tracked task so cancel() aborts the AI request
         // instead of letting it keep generating a response nobody will use.
-        cancelInternal()
+        cancelInternal(preservingToken: runToken)
         isCancellationRequested = false
         currentTask = Task {
             try await performRegenerateWithProvider(provider, files: files)
         }
-        defer { currentTask = nil }
+        defer {
+            if isCurrentOrganizeRun(runToken) {
+                currentTask = nil
+            }
+        }
         do {
             try await currentTask?.value
         } catch where Self.isCancellationError(error) {
+            guard isCurrentOrganizeRun(runToken) else {
+                // A superseded run must not reset the newer run's state;
+                // consume any pending suppression so it cannot mute a later
+                // legitimate cancellation.
+                suppressCancellationReset = false
+                throw CancellationError()
+            }
             if suppressCancellationReset {
                 suppressCancellationReset = false
                 throw CancellationError()
@@ -5092,7 +5542,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 progress = 0.08
             }
 
-            try await runOrganizationTask(directory: directory, customPrompt: nil, temperature: nil)
+            // The cancelled run's token was cleared, but another run can
+            // legitimately claim it while the old task unwinds. Use a
+            // non-stealing claim so that run keeps ownership instead of being
+            // orphaned, and skip the restart if it won the slot.
+            guard let restartToken = claimOrganizeRun() else {
+                DebugLogger.log("Restart blocked: another run claimed the organize slot while unwinding")
+                return
+            }
+            defer { releaseOrganizeRun(restartToken) }
+            try await runOrganizationTask(directory: directory, customPrompt: nil, temperature: nil, runToken: restartToken)
             return
         }
 
@@ -5109,18 +5568,34 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard !isOperationInProgress() else {
             return
         }
+        guard let runToken = claimOrganizeRun() else {
+            DebugLogger.log("Regenerate blocked: another run is already in progress")
+            return
+        }
+        defer { releaseOrganizeRun(runToken) }
 
         // Run inside the tracked task so cancel() aborts the AI request
         // instead of letting it keep generating a response nobody will use.
-        cancelInternal()
+        cancelInternal(preservingToken: runToken)
         isCancellationRequested = false
         currentTask = Task {
             try await performRegenerateWithModel(provider: provider, model: model, files: files)
         }
-        defer { currentTask = nil }
+        defer {
+            if isCurrentOrganizeRun(runToken) {
+                currentTask = nil
+            }
+        }
         do {
             try await currentTask?.value
         } catch where Self.isCancellationError(error) {
+            guard isCurrentOrganizeRun(runToken) else {
+                // A superseded run must not reset the newer run's state;
+                // consume any pending suppression so it cannot mute a later
+                // legitimate cancellation.
+                suppressCancellationReset = false
+                throw CancellationError()
+            }
             if suppressCancellationReset {
                 suppressCancellationReset = false
                 throw CancellationError()
@@ -5236,6 +5711,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard !isOperationInProgress() else {
             return
         }
+        guard let runToken = claimOrganizeRun() else {
+            DebugLogger.log("Regenerate preview blocked: another run is already in progress")
+            return
+        }
+        defer { releaseOrganizeRun(runToken) }
 
         // Get original files from the current plan
         var allFiles: [FileItem] = []
@@ -5256,15 +5736,26 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         // Run inside the tracked task so cancel() aborts the AI request
         // instead of letting it keep generating a response nobody will use.
-        cancelInternal()
+        cancelInternal(preservingToken: runToken)
         isCancellationRequested = false
         currentTask = Task {
             try await performRegeneratePreview(allFiles: allFiles, basePlan: basePlan)
         }
-        defer { currentTask = nil }
+        defer {
+            if isCurrentOrganizeRun(runToken) {
+                currentTask = nil
+            }
+        }
         do {
             try await currentTask?.value
         } catch where Self.isCancellationError(error) {
+            guard isCurrentOrganizeRun(runToken) else {
+                // A superseded run must not reset the newer run's state;
+                // consume any pending suppression so it cannot mute a later
+                // legitimate cancellation.
+                suppressCancellationReset = false
+                throw CancellationError()
+            }
             if suppressCancellationReset {
                 suppressCancellationReset = false
                 throw CancellationError()
@@ -5322,7 +5813,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             // Generate new plan
-            let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
+            let personaPrompt = effectivePersonaPrompt()
             
             var instructions = PromptBuilder.wrapDirectUserInstructions(customInstructions)
             if let learnedContext = learningsManager?.generatePromptContext(forFolder: currentDirectory?.path), !learnedContext.isEmpty {
@@ -5690,33 +6181,43 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             self.isCancellationRequested = false
             self.updateState(.applying, stage: "Undoing change...", progress: 0.3, force: true)
 
-            let siblingOperations = (detailedEntry.operations ?? []).filter { $0.id != currentOperation.id }
-            let result = try await self.fileSystemManager.restoreSingleOperation(
-                currentOperation,
-                protectedSiblingOperations: siblingOperations
-            )
+            do {
+                let siblingOperations = (detailedEntry.operations ?? []).filter { $0.id != currentOperation.id }
+                let result = try await self.fileSystemManager.restoreSingleOperation(
+                    currentOperation,
+                    protectedSiblingOperations: siblingOperations
+                )
 
-            await MainActor.run {
-                var updatedEntry = detailedEntry
-                let shouldRetainOperation = result.retryableFailedOperationIDs.contains(currentOperation.id)
-                if !shouldRetainOperation {
-                    updatedEntry.operations?.removeAll { $0.id == currentOperation.id }
-                    if updatedEntry.operations?.isEmpty == true {
-                        updatedEntry.operations = nil
+                await MainActor.run {
+                    var updatedEntry = detailedEntry
+                    let shouldRetainOperation = result.retryableFailedOperationIDs.contains(currentOperation.id)
+                    if !shouldRetainOperation {
+                        updatedEntry.operations?.removeAll { $0.id == currentOperation.id }
+                        if updatedEntry.operations?.isEmpty == true {
+                            updatedEntry.operations = nil
+                        }
                     }
+
+                    let fullyUndone = updatedEntry.operations == nil && !result.hasIssues
+                    updatedEntry.isUndone = fullyUndone
+                    updatedEntry.status = fullyUndone ? .undo : .partiallyUndone
+                    updatedEntry.undoRestoredCount = (detailedEntry.undoRestoredCount ?? 0) + result.successfulOperations
+                    updatedEntry.undoFailedFiles = result.hasIssues ? result.missingFiles : nil
+
+                    self.history.updateEntry(updatedEntry)
                 }
+                self.updateState(.idle, stage: "Undo complete", progress: 1.0, force: true)
 
-                let fullyUndone = updatedEntry.operations == nil && !result.hasIssues
-                updatedEntry.isUndone = fullyUndone
-                updatedEntry.status = fullyUndone ? .undo : .partiallyUndone
-                updatedEntry.undoRestoredCount = (detailedEntry.undoRestoredCount ?? 0) + result.successfulOperations
-                updatedEntry.undoFailedFiles = result.hasIssues ? result.missingFiles : nil
-
-                self.history.updateEntry(updatedEntry)
+                return result
+            } catch {
+                // A failed single-file revert must not leave the organizer
+                // stuck in .applying; mirror the batch undo error transition.
+                await MainActor.run {
+                    self.transition(to: .error(error), force: true)
+                    self.errorMessage = error.localizedDescription
+                }
+                throw error
             }
-            self.updateState(.idle, stage: "Undo complete", progress: 1.0, force: true)
-
-            return result
         }
     }
 
