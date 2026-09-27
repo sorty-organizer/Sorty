@@ -244,7 +244,7 @@ public struct SortyCommands: Commands {
             
             Link(destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!) { Label("Documentation", systemImage: "book") }
             
-            Link(destination: URL(string: "https://github.com/shirishpothi/Sorty/issues")!) { Label("Report Issue", systemImage: "ladybug") }
+            Link(destination: URL(string: "https://github.com/sorty-organizer/Sorty/issues/new?template=bug_report.md")!) { Label("Report Bug", systemImage: "ladybug") }
 
             if FeatureFlags.supportDeveloperEnabled {
                 Link(destination: URL(string: "https://github.com/sponsors/shirishpothi")!) { Label("Support the Developer", systemImage: "heart") }
