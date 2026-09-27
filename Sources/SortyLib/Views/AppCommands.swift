@@ -1669,7 +1669,7 @@ public class AppState: ObservableObject {
 
     /// Exports directly on the manager instead of notifying LearningsView,
     /// which only receives the request while it is mounted.
-    private func performLearningsProfileExport() {
+    func performLearningsProfileExport(destinationURL: URL? = nil) {
         currentView = .learnings
         guard let learningsManager = organizer?.learningsManager else { return }
 
@@ -1687,14 +1687,19 @@ public class AppState: ObservableObject {
             return
         }
 
-        let panel = NSSavePanel()
-        let learningsType = UTType(filenameExtension: "learnings", conformingTo: .json) ?? .json
-        panel.allowedContentTypes = [learningsType]
-        panel.nameFieldStringValue =
-            "learnings_profile_\(Date().formatted(date: .numeric, time: .omitted).replacingOccurrences(of: "/", with: "-")).learnings"
-        panel.message = "Export Learning Profile"
-
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let url: URL
+        if let destinationURL {
+            url = destinationURL
+        } else {
+            let panel = NSSavePanel()
+            let learningsType = UTType(filenameExtension: "learnings", conformingTo: .json) ?? .json
+            panel.allowedContentTypes = [learningsType]
+            panel.nameFieldStringValue =
+                "learnings_profile_\(Date().formatted(date: .numeric, time: .omitted).replacingOccurrences(of: "/", with: "-")).learnings"
+            panel.message = "Export Learning Profile"
+            guard panel.runModal() == .OK, let selectedURL = panel.url else { return }
+            url = selectedURL
+        }
 
         do {
             let summary = try learningsManager.exportProfile(to: url)

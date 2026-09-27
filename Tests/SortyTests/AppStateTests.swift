@@ -13,6 +13,14 @@ import Combine
 
 @MainActor
 class AppStateTests: XCTestCase {
+    private final class ExportSpyLearningsManager: LearningsManager {
+        var exportDestination: URL?
+
+        override func exportProfile(to url: URL) throws -> LearningsProfileArchiveSummary {
+            exportDestination = url
+            return try super.exportProfile(to: url)
+        }
+    }
     
     var appState: AppState!
     var organizer: FolderOrganizer!
@@ -440,15 +448,18 @@ class AppStateTests: XCTestCase {
         NotificationCenter.default.removeObserver(observer)
     }
     
-    func testExportLearningsProfileNavigatesDirectlyWithoutNotificationBridge() {
+    func testExportLearningsProfileUsesManagerWithoutNotificationBridge() {
         final class NotificationProbe: @unchecked Sendable {
             var wasPosted = false
         }
         let probe = NotificationProbe()
 
-        // Keep the export headless: with no manager there is no save panel, and
-        // the command must not fall back to the LearningsView notification.
-        organizer.learningsManager = nil
+        let manager = ExportSpyLearningsManager(userDefaults: testDefaults)
+        manager.currentProfile = LearningsProfile()
+        organizer.learningsManager = manager
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sorty-export-\(UUID().uuidString).learnings")
+        defer { try? FileManager.default.removeItem(at: destination) }
 
         let observer = NotificationCenter.default.addObserver(
             forName: .exportLearningsProfile,
@@ -459,9 +470,11 @@ class AppStateTests: XCTestCase {
         }
         defer { NotificationCenter.default.removeObserver(observer) }
 
-        appState.exportLearningsProfile()
+        appState.performLearningsProfileExport(destinationURL: destination)
 
         XCTAssertEqual(appState.currentView, .learnings)
+        XCTAssertEqual(manager.exportDestination, destination)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination.path))
         XCTAssertFalse(
             probe.wasPosted,
             "Export must act on the learnings manager directly, not through the removed notification bridge"

@@ -337,9 +337,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         get { presentationState.truncatedDisplayStreamingContent }
         set { updatePresentation { $0.truncatedDisplayStreamingContent = newValue } }
     }
-    /// ID -> file mapping for the AI request currently streaming. Compact prompts
-    /// number files per request batch (1-based), so live-stream consumers must
-    /// resolve `file_ids` through this table rather than indexing `scannedFiles`.
+    /// ID -> file mapping for the batch currently shown in the live stream.
     public private(set) var streamFileIDTable: [Int: FileItem] {
         get { presentationState.streamFileIDTable }
         set { updatePresentation { $0.streamFileIDTable = newValue } }
@@ -374,6 +372,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var lastDisplayUpdate: Date = .distantPast
     private var retainedStreamingByteCount = 0
     private var streamingContentRevision: UInt64 = 0
+    private var batchStreamChannels: [Int: BatchStreamChannel] = [:]
+    private var visibleBatchStreamIndex: Int?
     private let displayUpdateInterval: TimeInterval = 0.55 // Slightly slower cadence to reduce dropped frames during generation
     nonisolated private static let streamPreviewCharacterLimit = 1000
     nonisolated private static let streamUIPresentationCharacterLimit = 48_000
@@ -2147,10 +2147,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // batch ultimately fails, the group aborts but those good batches
         // stay cached in the resume checkpoint, and the halve-and-retry
         // inside requestBatchPlans retries only the failed batch.
-        // (Concurrent batches share the diagnostic stream buffer; completion
-        // order determines its retained tail. Parsed plans are unaffected.)
         let startBatchIndex = checkpoint?.nextBatchIndex ?? 0
         startTimeoutTimer()
+        defer {
+            batchStreamChannels.removeAll()
+            visibleBatchStreamIndex = nil
+            isStreaming = false
+            if batchCount == 1 {
+                var baseClient = client
+                baseClient.streamingDelegate = self
+            }
+        }
         // Throwing-group scope exit cancels stragglers on failure; merged
         // batches are already cached in the resume checkpoint above.
         try await withThrowingTaskGroup(of: (Int, [OrganizationPlan]).self) { group in
@@ -2169,6 +2176,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                         batchIndex: batchIndex,
                         batch: Array(files[start..<end]),
                         batchCount: batchCount,
+                        baseClient: client,
                         mode: mode,
                         completeInstructions: completeInstructions,
                         taxonomySnapshot: taxonomy,
@@ -2190,7 +2198,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                             : "\(suggestionAction) for \(GenerationStats.formatCount(files.count)) files..."
                     )
                     group.addTask {
-                        let plans = try await Self.requestBatchPlans(client: client, job: job)
+                        let plans = try await Self.requestBatchPlans(job: job)
                         return (job.batchIndex, plans)
                     }
                 }
@@ -2236,6 +2244,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                         stage: "Found suggestions for \(GenerationStats.formatCount(completedEnd)) of \(GenerationStats.formatCount(files.count)) files"
                     )
                     nextMerge += 1
+                    batchStreamChannels.removeValue(forKey: nextMerge - 1)
+                    if visibleBatchStreamIndex == nextMerge - 1 {
+                        visibleBatchStreamIndex = batchStreamChannels[nextMerge] == nil ? nil : nextMerge
+                        batchStreamChannels[nextMerge]?.present()
+                    }
                 }
             }
         }
@@ -2369,11 +2382,85 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorTimedOut
     }
 
+    /// Each concurrent request owns its stream and 1-based file IDs. Only the
+    /// earliest pending batch publishes into the organizer's visible stream.
+    @MainActor
+    private final class BatchStreamChannel: StreamingDelegate {
+        private weak var organizer: FolderOrganizer?
+        private let batchIndex: Int
+        private var files: [FileItem] = []
+        private var content = ""
+        private var hasStarted = false
+        private var isComplete = false
+
+        init(organizer: FolderOrganizer, batchIndex: Int) {
+            self.organizer = organizer
+            self.batchIndex = batchIndex
+        }
+
+        func beginRequest(files: [FileItem]) {
+            if hasStarted {
+                content = ""
+                isComplete = false
+                if organizer?.visibleBatchStreamIndex == batchIndex {
+                    organizer?.clearStreamingDisplayState()
+                }
+            }
+            hasStarted = true
+            self.files = files
+            if organizer?.visibleBatchStreamIndex == batchIndex {
+                publishFileIDs()
+            }
+        }
+
+        func didReceiveChunk(_ chunk: String) {
+            content = FolderOrganizer.retainingUTF8Suffix(
+                of: content + chunk,
+                maximumByteCount: FolderOrganizer.streamRetentionByteLimit
+            )
+            if organizer?.visibleBatchStreamIndex == batchIndex {
+                organizer?.didReceiveChunk(chunk)
+            }
+        }
+
+        func didComplete(content: String) {
+            self.content = FolderOrganizer.retainedStreamCompletion(content)
+            isComplete = true
+            if organizer?.visibleBatchStreamIndex == batchIndex {
+                present()
+            }
+        }
+
+        func didFail(error: Error) {
+            // The batch task decides whether to retry or surface this error.
+        }
+
+        func present() {
+            guard let organizer else { return }
+            organizer.clearStreamingDisplayState()
+            publishFileIDs()
+            if !content.isEmpty {
+                organizer.didReceiveChunk(content)
+            }
+            if isComplete {
+                organizer.isStreaming = false
+            }
+        }
+
+        private func publishFileIDs() {
+            organizer?.streamFileIDTable = Dictionary(
+                uniqueKeysWithValues: files.enumerated().map { ($0.offset + 1, $0.element) }
+            )
+        }
+    }
+
     /// Sendable unit of AI batch work. Built on the main actor (prompt
     /// slicing, taxonomy snapshot, vision prep) and executed concurrently off
     /// it, so TaskGroup children never capture the organizer.
     private struct BatchAnalysisJob: Sendable {
         let batchIndex: Int
+        let client: AIClientProtocol
+        let streamChannel: BatchStreamChannel
         var files: [FileItem]
         var batchImages: [String: Data]
         var requestInstructions: String
@@ -2398,6 +2485,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         batchIndex: Int,
         batch: [FileItem],
         batchCount: Int,
+        baseClient: AIClientProtocol,
         mode: OrganizationMode,
         completeInstructions: String,
         taxonomySnapshot: [String],
@@ -2409,11 +2497,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     ) async throws -> BatchAnalysisJob {
         try checkCancellation()
 
-        // Compact prompts number this request's files 1-based; publish the same
-        // mapping so the live-stream UI can resolve `file_ids` while streaming.
-        streamFileIDTable = Dictionary(
-            uniqueKeysWithValues: batch.enumerated().map { ($0.offset + 1, $0.element) }
-        )
+        var batchClient: AIClientProtocol
+        if batchCount == 1 {
+            batchClient = baseClient
+        } else {
+            batchClient = try await AIClientFactory.createClientDetached(config: baseClient.config)
+        }
+        let streamChannel = BatchStreamChannel(organizer: self, batchIndex: batchIndex)
+        batchClient.streamingDelegate = streamChannel
+        batchStreamChannels[batchIndex] = streamChannel
+        if visibleBatchStreamIndex == nil {
+            visibleBatchStreamIndex = batchIndex
+        }
 
         var batchInstructions = completeInstructions
         if batchCount > 1 {
@@ -2466,6 +2561,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         return BatchAnalysisJob(
             batchIndex: batchIndex,
+            client: batchClient,
+            streamChannel: streamChannel,
             files: batch,
             batchImages: batchImages,
             requestInstructions: requestInstructions,
@@ -2481,7 +2578,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// that batch on splittable failures. Runs off the main actor; UI state
     /// is never touched here (the merge loop owns progress and taxonomy).
     nonisolated private static func requestBatchPlans(
-        client: AIClientProtocol,
         job: BatchAnalysisJob,
         adaptiveDepth: Int = 0
     ) async throws -> [OrganizationPlan] {
@@ -2493,8 +2589,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         do {
+            await job.streamChannel.beginRequest(files: job.files)
             if job.batchImages.isEmpty {
-                let plan = try await client.analyze(
+                let plan = try await job.client.analyze(
                     files: job.files,
                     customInstructions: job.requestInstructions,
                     personaPrompt: job.personaPrompt,
@@ -2502,7 +2599,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 )
                 return [plan]
             }
-            let plan = try await client.analyzeWithImages(
+            let plan = try await job.client.analyzeWithImages(
                 files: job.files,
                 imageData: job.batchImages,
                 customInstructions: job.requestInstructions,
@@ -2562,8 +2659,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 visionImages: secondJob.batchImages
             )
             // Halves stay sequential so their plans concatenate in order.
-            let firstPlans = try await requestBatchPlans(client: client, job: firstJob, adaptiveDepth: adaptiveDepth + 1)
-            let secondPlans = try await requestBatchPlans(client: client, job: secondJob, adaptiveDepth: adaptiveDepth + 1)
+            let firstPlans = try await requestBatchPlans(job: firstJob, adaptiveDepth: adaptiveDepth + 1)
+            let secondPlans = try await requestBatchPlans(job: secondJob, adaptiveDepth: adaptiveDepth + 1)
             return firstPlans + secondPlans
         }
     }
