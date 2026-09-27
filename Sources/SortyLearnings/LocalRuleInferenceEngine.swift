@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import SortyModels
 
 /// A lightweight rule inference engine that runs locally without AI
 public actor LocalRuleInferenceEngine {
@@ -728,7 +729,7 @@ extension LearningsManager {
         currentProfile = workingProfile
         await forceSave()
         
-        LogManager.shared.log("Local rule inference complete: \(inferredRules.count) new rules inferred", category: "Learnings")
+        ModelLog.log("Local rule inference complete: \(inferredRules.count) new rules inferred", category: "Learnings")
     }
     
     /// Trigger automatic rule inference when enough new data is available

@@ -1900,52 +1900,7 @@ public final class FolderWatcher: @unchecked Sendable {
         at url: URL,
         resourceValues: URLResourceValues? = nil
     ) -> Bool {
-        if resourceValues?.ubiquitousItemDownloadingStatus == .notDownloaded {
-            return true
-        }
-
-        let fileName = url.lastPathComponent
-        let pathExtension = url.pathExtension.lowercased()
-        if (fileName.hasPrefix(".") && pathExtension == "icloud") || pathExtension == "cloud" {
-            return true
-        }
-
-        guard resourceValues?.fileSize == 0 else { return false }
-        // getxattr is a syscall per zero-byte file; negative results are
-        // cached briefly because re-scans revisit the same files.
-        if Self.cachedDropboxNegative(for: url.path) {
-            return false
-        }
-        let hasAttr = getxattr(url.path, "com.dropbox.attrs", nil, 0, 0, 0) > 0
-        if !hasAttr {
-            Self.cacheDropboxNegative(for: url.path)
-        }
-        return hasAttr
-    }
-
-    private static let dropboxNegativeCacheLock = NSLock()
-    nonisolated(unsafe) private static var dropboxNegativeCache: [String: Date] = [:]
-    private static let dropboxNegativeCacheTTL: TimeInterval = 60
-
-    private static func cachedDropboxNegative(for path: String) -> Bool {
-        dropboxNegativeCacheLock.lock()
-        defer { dropboxNegativeCacheLock.unlock() }
-        guard let expires = dropboxNegativeCache[path] else { return false }
-        if expires < Date() {
-            dropboxNegativeCache.removeValue(forKey: path)
-            return false
-        }
-        return true
-    }
-
-    private static func cacheDropboxNegative(for path: String) {
-        dropboxNegativeCacheLock.lock()
-        defer { dropboxNegativeCacheLock.unlock() }
-        if dropboxNegativeCache.count > 4_096 {
-            let cutoff = Date()
-            dropboxNegativeCache = dropboxNegativeCache.filter { $0.value > cutoff }
-        }
-        dropboxNegativeCache[path] = Date().addingTimeInterval(dropboxNegativeCacheTTL)
+        CloudPlaceholderDetector.shouldIgnore(at: url, resourceValues: resourceValues)
     }
 
     private func performOnQueueSyncIfNeeded<T>(_ block: () -> T) -> T {

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SortyModels
 
 // MARK: - Labeled Example
 

@@ -10,6 +10,8 @@ import Foundation
 import SwiftUI
 import Combine
 import CryptoKit
+import SortyModels
+import SortyAI
 
 /// Main manager for "The Learnings" feature
 @MainActor
@@ -26,8 +28,7 @@ public class LearningsManager: ObservableObject {
     @Published public var isLocked: Bool = false
     @Published public var requiresInitialSetup: Bool = false
     @Published public var showingImportPicker: Bool = false
-    public let securityManager = SecurityManager.shared
-    public let consentManager: LearningsConsentManager
+        public let consentManager: LearningsConsentManager
     
     // Learning Controls
     // NOTE: didSet writes stay synchronous: they are trivial scalar writes
@@ -475,7 +476,7 @@ public class LearningsManager: ObservableObject {
     }
     
     public func lock() {
-        securityManager.lock()
+        LearningsRuntime.lockSession()
         isLocked = true
         currentProfile = nil
         analysisResult = nil
@@ -574,7 +575,7 @@ public class LearningsManager: ObservableObject {
 
             return true
         } catch {
-            ReliabilityManager.shared.capture(
+            LearningsRuntime.capture(
                 error: error,
                 feature: "learnings",
                 operation: "clear_data",
@@ -608,7 +609,7 @@ public class LearningsManager: ObservableObject {
         } catch {
             loadOutcome = "failed"
             profileLoadFailureDate = Date()
-            ReliabilityManager.shared.capture(
+            LearningsRuntime.capture(
                 error: error,
                 feature: "learnings",
                 operation: "load_profile"
@@ -622,13 +623,9 @@ public class LearningsManager: ObservableObject {
             currentProfile = nil
         }
         isLoading = false
-        AnalyticsManager.shared.captureWorkflow(
-            workflow: "learnings_profile",
-            stage: "loaded",
-            outcome: loadOutcome,
-            properties: AnalyticsManager.durationProperties(
-                Date().timeIntervalSince(loadStartedAt)
-            )
+        LearningsRuntime.reportProfileLoad(
+            loadOutcome,
+            Date().timeIntervalSince(loadStartedAt)
         )
     }
     
@@ -660,7 +657,7 @@ public class LearningsManager: ObservableObject {
             // `currentProfile` nil makes callers no-op and lets a later call
             // (or the backoff window) retry the load.
             profileLoadFailureDate = Date()
-            ReliabilityManager.shared.capture(
+            LearningsRuntime.capture(
                 error: error,
                 feature: "learnings",
                 operation: "load_profile_for_collection"
@@ -684,7 +681,7 @@ public class LearningsManager: ObservableObject {
                 do {
                     try LearningsFileManager.save(profile: snapshot)
                 } catch {
-                    LogManager.shared.log(
+                    ModelLog.log(
                         "Failed to save Learnings profile: \(error.localizedDescription)",
                         level: .error,
                         category: "LearningsFile"
@@ -2778,7 +2775,7 @@ public class LearningsManager: ObservableObject {
             let rule = profile.inferredRules[index]
             if rule.failureRate > 0.3 && (rule.successCount + rule.failureCount) >= 5 {
                 profile.inferredRules[index].isEnabled = false
-                DebugLogger.log("Auto-disabled rule '\(rule.explanation)' due to high failure rate")
+                ModelLog.debug("Auto-disabled rule '\(rule.explanation)' due to high failure rate")
             }
             
             currentProfile = profile
@@ -2990,12 +2987,12 @@ public class LearningsManager: ObservableObject {
                 let data = try JSONEncoder().encode(learningsModelSelection)
                 userDefaults.set(data, forKey: Self.learningsModelSelectionKey)
             } catch {
-                ReliabilityManager.shared.capture(
+                LearningsRuntime.capture(
                     error: error,
                     feature: "learnings",
                     operation: "save_model_selection"
                 )
-                DebugLogger.log("Failed to save learnings model selection: \(error.localizedDescription)")
+                ModelLog.debug("Failed to save learnings model selection: \(error.localizedDescription)")
             }
         } else {
             userDefaults.removeObject(forKey: Self.learningsModelSelectionKey)
@@ -3054,7 +3051,7 @@ public class LearningsManager: ObservableObject {
                 userDefaults.set(encoded, forKey: Self.modelDirectoriesKey)
             } else {
                 let description = outcome.1 ?? "encoding failed"
-                ReliabilityManager.shared.capture(
+                LearningsRuntime.capture(
                     error: NSError(
                         domain: "LearningsManager",
                         code: 1,
@@ -3063,7 +3060,7 @@ public class LearningsManager: ObservableObject {
                     feature: "learnings",
                     operation: "save_model_directories"
                 )
-                DebugLogger.log("Failed to save model directories: \(description)")
+                ModelLog.debug("Failed to save model directories: \(description)")
             }
         }
     }
@@ -3092,7 +3089,7 @@ public class LearningsManager: ObservableObject {
                 relativeTo: nil
             )
         } catch {
-            DebugLogger.log("Failed to create security-scoped bookmark for \(url.path): \(error.localizedDescription)")
+            ModelLog.debug("Failed to create security-scoped bookmark for \(url.path): \(error.localizedDescription)")
         }
         
         let directory = ReferenceModelDirectory(
@@ -3347,7 +3344,7 @@ public class LearningsManager: ObservableObject {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory),
               isDirectory.boolValue else {
-            DebugLogger.log("Cannot scan inaccessible directory: \(directory.displayName)")
+            ModelLog.debug("Cannot scan inaccessible directory: \(directory.displayName)")
             modelDirectoryScanStates[id] = .unavailable
             return
         }
@@ -3359,7 +3356,7 @@ public class LearningsManager: ObservableObject {
             modelDirectoryScanStates[id] = scanState(for: directory)
             return
         } catch {
-            DebugLogger.log(
+            ModelLog.debug(
                 "Preserving previous snapshot for \(directory.displayName) after scan failure: \(error.localizedDescription)"
             )
             modelDirectoryScanStates[id] = .failed(error.localizedDescription)

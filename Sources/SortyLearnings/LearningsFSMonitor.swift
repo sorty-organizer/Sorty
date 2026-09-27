@@ -8,6 +8,8 @@
 
 import Foundation
 import Combine
+import SortyFileSystem
+import SortyModels
 
 /// Snapshot of a directory's contents for detecting moves
 public struct FSSnapshot: Sendable {
@@ -213,7 +215,7 @@ public class LearningsFSMonitor: ObservableObject {
     /// Start monitoring a directory for file moves
     public func startMonitoring(directory: URL) {
         guard monitoringGenerations[directory] == nil else {
-            LogManager.shared.log("Already monitoring: \(directory.lastPathComponent)", level: .debug, category: "LearningsFSMonitor")
+            ModelLog.log("Already monitoring: \(directory.lastPathComponent)", level: .debug, category: "LearningsFSMonitor")
             return
         }
         
@@ -249,7 +251,7 @@ public class LearningsFSMonitor: ObservableObject {
                     recordsCorrections: false
                 )
             }
-            LogManager.shared.log("Started monitoring: \(directory.lastPathComponent) (\(snapshot.files.count) files)", level: .debug, category: "LearningsFSMonitor")
+            ModelLog.log("Started monitoring: \(directory.lastPathComponent) (\(snapshot.files.count) files)", level: .debug, category: "LearningsFSMonitor")
         }
     }
     
@@ -271,7 +273,7 @@ public class LearningsFSMonitor: ObservableObject {
         directoriesNeedingFullSnapshot.remove(directory)
         pendingCorrectionScopes.removeValue(forKey: directory)
         
-        LogManager.shared.log("Stopped monitoring: \(directory.lastPathComponent)", level: .debug, category: "LearningsFSMonitor")
+        ModelLog.log("Stopped monitoring: \(directory.lastPathComponent)", level: .debug, category: "LearningsFSMonitor")
         
         // Restart FSEvents stream without this path
         if monitoringGenerations.isEmpty {
@@ -485,13 +487,13 @@ public class LearningsFSMonitor: ObservableObject {
         // Notify about detected moves
         for move in detection.moves
         where reportsCorrection(move.fromPath) || reportsCorrection(move.toPath) {
-            LogManager.shared.log("Detected a monitored file move", level: .debug, category: "LearningsFSMonitor")
+            ModelLog.log("Detected a monitored file move", level: .debug, category: "LearningsFSMonitor")
             onFileMoveDetected?(move)
         }
         
         // Notify about removed files (moved outside monitored scope or deleted)
         for removedPath in detection.removed where reportsCorrection(removedPath) {
-            LogManager.shared.log("Detected a monitored file removal", level: .debug, category: "LearningsFSMonitor")
+            ModelLog.log("Detected a monitored file removal", level: .debug, category: "LearningsFSMonitor")
             onFileRemoved?(removedPath)
         }
 
@@ -548,7 +550,7 @@ public class LearningsFSMonitor: ObservableObject {
             try? await Task.sleep(nanoseconds: UInt64(correlationWindowSeconds * 1_000_000_000))
             guard !Task.isCancelled else { return }
             
-            LogManager.shared.log("Correlation window expired for: \(directory.lastPathComponent)", level: .debug, category: "LearningsFSMonitor")
+            ModelLog.log("Correlation window expired for: \(directory.lastPathComponent)", level: .debug, category: "LearningsFSMonitor")
             self.onMonitoringWindowExpired?(directory)
             self.stopMonitoring(directory: directory)
         }

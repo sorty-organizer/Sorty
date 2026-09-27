@@ -9,6 +9,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import SortyLearnings
 
 private actor RevertOperationTracker {
     private var activeEntryIDs: Set<UUID> = []

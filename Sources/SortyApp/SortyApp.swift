@@ -966,6 +966,7 @@ struct SortyApp: App {
         // Let the first window reach the screen before restoring folders,
         // initializing telemetry, or starting automation.
         await Task.yield()
+        LiveLearningsServices.configure()
 
         // Harness/UI-test seeding runs here, not in `init`, so file and
         // defaults writes never block scene creation. Seeding stays before

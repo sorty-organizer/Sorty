@@ -1,4 +1,5 @@
 import Foundation
+import SortyModels
 
 public enum LearningsAttributionScope: String, Sendable {
     case fileRuleMatch

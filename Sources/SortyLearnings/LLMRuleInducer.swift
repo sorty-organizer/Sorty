@@ -7,6 +7,8 @@
 //
 
 import Foundation
+import SortyModels
+import SortyAI
 
 /// Uses AI to induce organization rules from labeled examples
 public actor LLMRuleInducer {
@@ -58,7 +60,7 @@ public actor LLMRuleInducer {
             let response = try await aiClient.generateText(prompt: prompt, systemPrompt: enhancedSystemPrompt)
             return parseResponse(response)
         } catch {
-            DebugLogger.log("LLM Rule Induction failed: \(error)")
+            ModelLog.debug("LLM Rule Induction failed: \(error)")
             return []
         }
     }
@@ -291,8 +293,8 @@ public actor LLMRuleInducer {
                 )
             }
         } catch {
-            DebugLogger.log("Failed to parse LLM response: \(error)")
-            DebugLogger.log("Raw Response: \(response)")
+            ModelLog.debug("Failed to parse LLM response: \(error)")
+            ModelLog.debug("Raw Response: \(response)")
             return []
         }
     }

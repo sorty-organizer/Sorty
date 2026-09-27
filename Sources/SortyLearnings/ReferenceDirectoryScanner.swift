@@ -7,6 +7,8 @@
 //
 
 import Foundation
+import SortyFileSystem
+import SortyAI
 
 public struct ReferenceDirectoryScanner: Sendable {
     
@@ -93,7 +95,7 @@ public struct ReferenceDirectoryScanner: Sendable {
                 }
                 if values.isDirectory == true {
                     subdirs.append(item)
-                } else if !FolderWatcher.shouldIgnoreCloudPlaceholder(
+                } else if !CloudPlaceholderDetector.shouldIgnore(
                         at: item,
                         resourceValues: values
                 ) {

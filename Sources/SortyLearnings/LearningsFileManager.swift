@@ -8,6 +8,7 @@
 
 import Foundation
 import CryptoKit
+import SortyModels
 
 /// Manages secure storage of learning profiles in encrypted .learning files
 public struct LearningsFileManager {
@@ -54,7 +55,7 @@ public struct LearningsFileManager {
         // leave a truncated profile behind.
         try encryptedData.write(to: profileURL, options: .atomic)
         
-        LogManager.shared.log("Saved profile to \(profileURL.lastPathComponent)", category: "LearningsFile")
+        ModelLog.log("Saved profile to \(profileURL.lastPathComponent)", category: "LearningsFile")
     }
     
     /// Load profile from encrypted .learning file
@@ -72,7 +73,7 @@ public struct LearningsFileManager {
         // later launch with the key can read it; if the item is definitively
         // gone, the file can never be decrypted again and must be recovered.
         guard let key = getEncryptionKey() else {
-            guard KeychainManager.itemStatus(key: encryptionKeychainKey) == .notFound else {
+            guard LearningsKeychain.shared.itemStatus(key: encryptionKeychainKey) == .notFound else {
                 throw LearningsFileError.noEncryptionKey
             }
 
@@ -81,7 +82,7 @@ public struct LearningsFileManager {
             // forever. `getOrCreateEncryptionKey` performs the quarantine and
             // stores/caches the new key; callers retry with a fresh profile.
             _ = try getOrCreateEncryptionKey()
-            LogManager.shared.log(
+            ModelLog.log(
                 "Learnings encryption key was missing; quarantined the profile and rotated the key",
                 level: .warning,
                 category: "LearningsFile"
@@ -98,7 +99,7 @@ public struct LearningsFileManager {
             decoder.dateDecodingStrategy = .iso8601
             let profile = try decoder.decode(LearningsProfile.self, from: jsonData)
 
-            LogManager.shared.log("Loaded profile from \(profileURL.lastPathComponent)", category: "LearningsFile")
+            ModelLog.log("Loaded profile from \(profileURL.lastPathComponent)", category: "LearningsFile")
             return profile
         } catch {
             // The key is available yet the contents are unreadable (truncated
@@ -123,11 +124,11 @@ public struct LearningsFileManager {
         try deleteStoredFiles(fileManager: fileManager, directory: targetDirectory)
         invalidateCachedKey()
 
-        guard KeychainManager.delete(key: encryptionKeychainKey) else {
+        guard LearningsKeychain.shared.delete(key: encryptionKeychainKey) else {
             throw LearningsFileError.keychainDeleteFailed
         }
 
-        LogManager.shared.log("Deleted all Learnings data", category: "LearningsFile")
+        ModelLog.log("Deleted all Learnings data", category: "LearningsFile")
     }
 
     static func deleteStoredFiles(
@@ -184,13 +185,13 @@ public struct LearningsFileManager {
             return existing
         }
 
-        // `KeychainManager.get` returns nil both when no key was ever stored and
+        // `LearningsKeychain.shared.get` returns nil both when no key was ever stored and
         // when the Keychain is temporarily unreadable (locked keychain, denied
         // access). Only a definitive "every service says item-not-found" may
         // rotate the key: treating a transient failure as "missing" quarantines
         // a healthy profile and orphans its data under a fresh key.
-        guard KeychainManager.itemStatus(key: encryptionKeychainKey) == .notFound else {
-            LogManager.shared.log(
+        guard LearningsKeychain.shared.itemStatus(key: encryptionKeychainKey) == .notFound else {
+            ModelLog.log(
                 "Learnings encryption key is currently unavailable; keeping the existing key and profile",
                 level: .warning,
                 category: "LearningsFile"
@@ -210,7 +211,7 @@ public struct LearningsFileManager {
         let keyData = key.withUnsafeBytes { Data($0) }
         
         // Store in Keychain
-        guard KeychainManager.save(key: encryptionKeychainKey, value: keyData.base64EncodedString()) else {
+        guard LearningsKeychain.shared.save(key: encryptionKeychainKey, value: keyData.base64EncodedString()) else {
             throw LearningsFileError.keychainSaveFailed
         }
 
@@ -223,7 +224,7 @@ public struct LearningsFileManager {
         if let cached = cachedKey() {
             return cached
         }
-        guard let base64Key = KeychainManager.get(key: encryptionKeychainKey),
+        guard let base64Key = LearningsKeychain.shared.get(key: encryptionKeychainKey),
               let keyData = Data(base64Encoded: base64Key) else {
             return nil
         }
@@ -268,11 +269,11 @@ public struct LearningsFileManager {
                 try FileManager.default.removeItem(at: quarantineURL)
             }
             try FileManager.default.moveItem(at: profileURL, to: quarantineURL)
-            LogManager.shared.log(
+            ModelLog.log(
                 "Quarantined unreadable profile to \(quarantineURL.lastPathComponent)",
                 level: .warning, category: "LearningsFile")
         } catch {
-            LogManager.shared.log(
+            ModelLog.log(
                 "Failed to quarantine unreadable profile: \(error.localizedDescription)",
                 level: .error, category: "LearningsFile")
         }

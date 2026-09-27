@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import SortyModels
 
 public struct LearningsProfile: Codable, Sendable {
     /// Timestamp of when this profile was created
@@ -260,7 +261,7 @@ public struct RegenerationFilePreference: Codable, Sendable, Equatable {
     public let wasAcceptedAsUnorganized: Bool
 }
 
-enum PlanPreferenceDiffer {
+package enum PlanPreferenceDiffer {
     private static let maxRecordedFileChangesPerAttempt = 200
 
     private struct FilePlacement {
@@ -270,7 +271,7 @@ enum PlanPreferenceDiffer {
         let isUnorganized: Bool
     }
 
-    static func compare(
+    package static func compare(
         rejectedPlans: [OrganizationPlan],
         acceptedPlan: OrganizationPlan,
         folderPath: String,

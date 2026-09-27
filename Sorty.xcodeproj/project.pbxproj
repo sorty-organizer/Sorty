@@ -257,6 +257,7 @@
 		C02609260000000000000006 /* SortyFileSystem in Frameworks */ = {isa = PBXBuildFile; productRef = C02609260000000000000005 /* SortyFileSystem */; };
 		C02609260000000000000008 /* SortyModels in Frameworks */ = {isa = PBXBuildFile; productRef = C02609260000000000000007 /* SortyModels */; };
 		C0260926000000000000000A /* SortyAI in Frameworks */ = {isa = PBXBuildFile; productRef = C02609260000000000000009 /* SortyAI */; };
+		C0260926000000000000000C /* SortyLearnings in Frameworks */ = {isa = PBXBuildFile; productRef = C0260926000000000000000B /* SortyLearnings */; };
 /* End PBXBuildFile section */
 
 
@@ -577,7 +578,7 @@
 		5A5EDDBAA2D94114C3B2A296 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLib/Views/FlowLayout.swift"; sourceTree = SOURCE_ROOT; };
 		6187E5189847A706A5B2543B /* OrganizationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyCore/Organizer/OrganizationState.swift"; sourceTree = SOURCE_ROOT; };
 		CFA6EA186A5D415D9B226A77 /* OrganizationProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyCore/Organizer/OrganizationProgress.swift"; sourceTree = SOURCE_ROOT; };
-		4A1EE75F6D188CC654798CE5 /* LearningExclusionMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyCore/Learnings/LearningExclusionMonitor.swift"; sourceTree = SOURCE_ROOT; };
+		4A1EE75F6D188CC654798CE5 /* LearningExclusionMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyLearnings/LearningExclusionMonitor.swift"; sourceTree = SOURCE_ROOT; };
 		D153A402BA5FF77EE10EA803 /* DuplicateRestorationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyCore/FileSystem/DuplicateRestorationManager.swift"; sourceTree = SOURCE_ROOT; };
 		2D6ACF796DAE946A054493E3 /* FileSystemError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/SortyCore/FileSystem/FileSystemError.swift"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -602,6 +603,7 @@
 				C02609260000000000000006 /* SortyFileSystem in Frameworks */,
 				C02609260000000000000008 /* SortyModels in Frameworks */,
 				C0260926000000000000000A /* SortyAI in Frameworks */,
+				C0260926000000000000000C /* SortyLearnings in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -646,7 +648,7 @@
 				AABBCC110001000000000018 /* LocalRuleInferenceEngine.swift */,
 				CC110001000000000000A005 /* FileLearningsAttributionResolver.swift */,
 			);
-			path = Sources/SortyCore/Learnings;
+			path = Sources/SortyLearnings;
 			sourceTree = "<group>";
 		};
 		3353FC222F0124320097CD23 /* AI */ = {
@@ -1164,6 +1166,7 @@
 				C02609260000000000000005 /* SortyFileSystem */,
 				C02609260000000000000007 /* SortyModels */,
 				C02609260000000000000009 /* SortyAI */,
+				C0260926000000000000000B /* SortyLearnings */,
 			);
 			productName = SortyTests;
 			productReference = 33A1286F2F01230200A86470 /* SortyTests.xctest */;
@@ -1920,6 +1923,10 @@
 		C02609260000000000000009 /* SortyAI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SortyAI;
+		};
+		C0260926000000000000000B /* SortyLearnings */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SortyLearnings;
 		};
 		D4A500600000000000000001 /* SortyLib */ = {
 			isa = XCSwiftPackageProductDependency;

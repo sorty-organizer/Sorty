@@ -1,6 +1,7 @@
 import XCTest
 @testable import SortyLib
 @testable import SortyCore
+@testable import SortyLearnings
 
 final class FileLearningsAttributionResolverTests: XCTestCase {
     func testResolveReturnsEmptyWhenSuggestionHasNoRuleAttribution() {

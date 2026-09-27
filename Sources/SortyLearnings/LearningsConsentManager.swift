@@ -7,8 +7,9 @@
 //
 
 import Foundation
-import Combine
 import SwiftUI
+import Combine
+import SortyModels
 
 /// Manages user consent state for the Learnings feature
 @MainActor
@@ -45,7 +46,7 @@ public class LearningsConsentManager: ObservableObject {
         userDefaults.set(true, forKey: consentKey)
         userDefaults.set(now.timeIntervalSince1970, forKey: consentDateKey)
         
-        LogManager.shared.log("Consent granted at \(now)", category: "ConsentManager")
+        ModelLog.log("Consent granted at \(now)", category: "ConsentManager")
     }
     
     /// Revoke consent (stops data collection but keeps existing data)
@@ -54,7 +55,7 @@ public class LearningsConsentManager: ObservableObject {
         
         userDefaults.set(false, forKey: consentKey)
         
-        LogManager.shared.log("Consent withdrawn", category: "ConsentManager")
+        ModelLog.log("Consent withdrawn", category: "ConsentManager")
     }
     
     /// Mark initial setup as complete (triggers Touch ID requirement)
@@ -62,7 +63,7 @@ public class LearningsConsentManager: ObservableObject {
         hasCompletedInitialSetup = true
         userDefaults.set(true, forKey: setupCompleteKey)
         
-        LogManager.shared.log("Initial setup complete, Touch ID will be required", category: "ConsentManager")
+        ModelLog.log("Initial setup complete, Touch ID will be required", category: "ConsentManager")
     }
     
     /// Reset initial setup (for testing or re-onboarding)
@@ -83,7 +84,7 @@ public class LearningsConsentManager: ObservableObject {
         userDefaults.removeObject(forKey: consentDateKey)
         userDefaults.removeObject(forKey: setupCompleteKey)
         
-        LogManager.shared.log("All data deleted successfully", category: "ConsentManager")
+        ModelLog.log("All data deleted successfully", category: "ConsentManager")
     }
     
     /// Check if data collection is allowed

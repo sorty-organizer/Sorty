@@ -15,7 +15,8 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | **SortyFileSystem** | `Sources/SortyFileSystem/` | File naming, hashing, path validation, and storage path primitives |
 | **SortyModels** | `Sources/SortyModels/` | Data models, history, undo operations, and model-layer logging; depends on `SortyFileSystem` only |
 | **SortyAI** | `Sources/SortyAI/` | AI clients, prompts, keychain/vision seams; depends on `SortyFileSystem` + `SortyModels` |
-| **SortyCore** | `Sources/SortyCore/` | File operations, services, and shared app logic; depends on `SortyModels` + `SortyAI` |
+| **SortyLearnings** | `Sources/SortyLearnings/` | Preference learning and encrypted profiles; depends on `SortyFileSystem` + `SortyModels` + `SortyAI` |
+| **SortyCore** | `Sources/SortyCore/` | File operations, services, and shared app logic; depends on `SortyLearnings` and its lower layers |
 | **SortyLib** | `Sources/SortyLib/` | SwiftUI views, view helpers, and app resources; depends on `SortyCore` |
 | **SortyFinderSync** | `Sources/SortyFinderSync/` | Finder Sync extension |
 | **SortyWidgets** | `Sources/SortyWidgets/` | WidgetKit extension embedded by the Xcode app target |
@@ -26,11 +27,11 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 |-----------|----------|
 | `SortyAI/` | AI clients, prompt builders, response parsers, keychain/vision seams |
 | `SortyModels/` | Data models (`AIConfig`, `FileItem`, `OrganizationPlan`, `FeatureFlags`), history, `FileOperation`, content metadata |
+| `SortyLearnings/` | Preference learning, profile storage, rule inference, and observation; Core injects Keychain, telemetry, and session locking |
 | `SortyLib/Views/` | SwiftUI views |
 | `SortyCore/ViewModels/` | View models |
 | `SortyCore/Managers/` | `@MainActor ObservableObject` state managers |
 | `SortyCore/Organizer/` | Core workflow orchestration (`FolderOrganizer` state machine) |
-| `SortyCore/Learnings/` | Preference learning (`LearningsManager`, `LearningsAnalyzer`, `LocalRuleInferenceEngine`, `LLMRuleInducer`) |
 | `SortyCore/Utilities/` | Keychain, logging, deeplinks, security |
 | `SortyFileSystem/` | File naming, hashing, and path helpers used by `SortyCore` |
 | `SortyCore/DesignSystem/` | Shared design tokens; view helpers remain in `SortyLib` |

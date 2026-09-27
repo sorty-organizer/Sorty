@@ -15,6 +15,8 @@
 
 import Foundation
 import Combine
+import SortyFileSystem
+import SortyModels
 
 @MainActor
 public class ContinuousLearningObserver: ObservableObject {
@@ -117,7 +119,7 @@ public class ContinuousLearningObserver: ObservableObject {
     public func startSession(
         folderPath: String,
         historyEntryId: String?,
-        operations: [FileSystemManager.FileOperation]? = nil,
+        operations: [FileOperation]? = nil,
         learningExcluded: Bool = false
     ) {
         guard canCollect else { return }
@@ -160,7 +162,7 @@ public class ContinuousLearningObserver: ObservableObject {
         }
 
         persistSessionUpdate(session, appendIfNeeded: true)
-        LogManager.shared.log("Started learning session \(session.id)", level: .debug, category: "LearningObserver")
+        ModelLog.log("Started learning session \(session.id)", level: .debug, category: "LearningObserver")
     }
     
     /// Record that a specific rule was applied to a file
@@ -198,7 +200,7 @@ public class ContinuousLearningObserver: ObservableObject {
             if !unclaimedFinishedSessionIDs.contains(session.id) {
                 unclaimedFinishedSessionIDs.append(session.id)
             }
-            LogManager.shared.log("Ended learning session \(session.id)", level: .debug, category: "LearningObserver")
+            ModelLog.log("Ended learning session \(session.id)", level: .debug, category: "LearningObserver")
         }
     }
     
@@ -225,7 +227,7 @@ public class ContinuousLearningObserver: ObservableObject {
         learningsManager.recordGuidingInstruction(prompt)
         learningsManager.recordSteeringPrompt(prompt, folderPath: folderPath ?? currentSession?.folderPath, sessionId: currentSession?.id)
         
-        LogManager.shared.log("Recorded steering prompt", level: .debug, category: "LearningObserver")
+        ModelLog.log("Recorded steering prompt", level: .debug, category: "LearningObserver")
     }
     
     private func handleSteeringPrompt(_ notification: Notification) {
@@ -236,7 +238,7 @@ public class ContinuousLearningObserver: ObservableObject {
             if let folderPath {
                 excludeCurrentRun(folderPath: folderPath)
             }
-            LogManager.shared.log(
+            ModelLog.log(
                 "Excluded current run from learning",
                 level: .info,
                 category: "LearningObserver"
@@ -249,7 +251,7 @@ public class ContinuousLearningObserver: ObservableObject {
         if let exclusionPattern = parseExclusionFromPrompt(prompt) {
             Task {
                 await learningsManager.addLearningExclusion(exclusionPattern)
-                LogManager.shared.log("Added learning exclusion from steering prompt", level: .info, category: "LearningObserver")
+                ModelLog.log("Added learning exclusion from steering prompt", level: .info, category: "LearningObserver")
             }
         }
     }
@@ -347,7 +349,7 @@ public class ContinuousLearningObserver: ObservableObject {
         learningsManager.upsertOrganizationSession(session)
     }
 
-    private func applyOperations(_ operations: [FileSystemManager.FileOperation], to session: inout OrganizationSession) {
+    private func applyOperations(_ operations: [FileOperation], to session: inout OrganizationSession) {
         var movedFiles = session.filesMoved
         var updatedCount = 0
         for operation in operations {
@@ -442,7 +444,7 @@ public class ContinuousLearningObserver: ObservableObject {
         guard !isPathInExcludedRun(src), !isPathInExcludedRun(dst) else { return }
         
         if learningsManager.isPathExcludedFromLearning(src) || learningsManager.isPathExcludedFromLearning(dst) {
-            LogManager.shared.log("Skipped learning for an excluded path", level: .debug, category: "LearningObserver")
+            ModelLog.log("Skipped learning for an excluded path", level: .debug, category: "LearningObserver")
             return
         }
         
@@ -467,7 +469,7 @@ public class ContinuousLearningObserver: ObservableObject {
             
             if let aiOp = operations.first(where: { $0.destinationPath == src }) {
                 // Found the AI action that put the file here
-                LogManager.shared.log("Recorded a user correction to an AI placement", category: "LearningObserver")
+                ModelLog.log("Recorded a user correction to an AI placement", category: "LearningObserver")
                 
                 let change = DirectoryChange(
                     originalPath: src, 
@@ -559,7 +561,7 @@ public class ContinuousLearningObserver: ObservableObject {
         guard !isPathInExcludedRun(path) else { return }
         
         if learningsManager.isPathExcludedFromLearning(path) {
-            LogManager.shared.log("Skipped learning for an excluded path", level: .debug, category: "LearningObserver")
+            ModelLog.log("Skipped learning for an excluded path", level: .debug, category: "LearningObserver")
             return
         }
         
@@ -573,7 +575,7 @@ public class ContinuousLearningObserver: ObservableObject {
             guard let operations = entry.operations else { continue }
             
             if let aiOp = operations.first(where: { $0.destinationPath == path }) {
-                LogManager.shared.log("Recorded a removal after an AI placement", category: "LearningObserver")
+                ModelLog.log("Recorded a removal after an AI placement", category: "LearningObserver")
                 learningsManager.recordRejection(originalPath: aiOp.sourcePath)
                 
                 // Track in session if within correlation window
@@ -627,7 +629,7 @@ public class ContinuousLearningObserver: ObservableObject {
         guard !isRunExcluded(folderPath) else { return }
         
         learningsManager.recordAdditionalInstruction(instruction, for: folderPath)
-        LogManager.shared.log("Recorded an additional instruction", level: .debug, category: "LearningObserver")
+        ModelLog.log("Recorded an additional instruction", level: .debug, category: "LearningObserver")
     }
     
     /// Track when user provides guiding instructions for next attempt
@@ -641,7 +643,7 @@ public class ContinuousLearningObserver: ObservableObject {
         }
         
         learningsManager.recordGuidingInstruction(instruction)
-        LogManager.shared.log("Recorded guiding instruction", level: .debug, category: "LearningObserver")
+        ModelLog.log("Recorded guiding instruction", level: .debug, category: "LearningObserver")
     }
     
     // MARK: - History Revert Tracking
@@ -669,7 +671,7 @@ public class ContinuousLearningObserver: ObservableObject {
             guard !alreadyProcessed else { return }
         }
 
-        LogManager.shared.log("Learning from a reverted session", category: "LearningObserver")
+        ModelLog.log("Learning from a reverted session", category: "LearningObserver")
 
         // Record the revert event before any session lookup. The event is
         // evidence on its own: a backing-off profile must not drop it, and a
@@ -969,7 +971,7 @@ public class ContinuousLearningObserver: ObservableObject {
     /// After organization, check if related project files (e.g., package.json + pnpm-lock.yaml)
     /// were moved to different locations or if some were moved while others weren't.
     private func checkRelatedFilesSeparation(
-        operations: [FileSystemManager.FileOperation],
+        operations: [FileOperation],
         folderPath: String
     ) {
         guard canCollect else { return }

@@ -7,6 +7,8 @@
 
 import Foundation
 import Combine
+import SortyModels
+import SortyAI
 
 /// A scanned file together with the organization root it was found under.
 /// Batch analysis covers every root, so each file must keep its own root for
