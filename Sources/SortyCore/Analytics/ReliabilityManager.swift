@@ -34,6 +34,10 @@ public final class ReliabilityManager {
         ]
     }
 
+    public var canSubmitBugFeedback: Bool {
+        isActive && consent == .granted && !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled
+    }
+
     private init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
@@ -246,6 +250,36 @@ public final class ReliabilityManager {
             scope.setTag(value: reportID, key: "diagnostic_report_id")
         }
         return eventID == .empty ? nil : eventID.sentryIdString
+    }
+
+    /// Links explicitly submitted bug text to a bounded Sentry event.
+    @discardableResult
+    public func submitBugFeedback(_ message: String) -> String? {
+        let comment = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard canSubmitBugFeedback,
+              !comment.isEmpty,
+              comment.count <= 2_000,
+              captureRateLimiter.shouldCapture()
+        else {
+            return nil
+        }
+
+        let eventID = SentrySDK.capture(message: "sorty.user_bug_report") { scope in
+            scope.setTag(value: "mac_app", key: "platform_surface")
+            scope.setTag(value: "user_feedback", key: "feature")
+            scope.setTag(value: "report_bug", key: "operation")
+        }
+        guard eventID != .empty else { return nil }
+
+        let feedback = SentryFeedback(
+            message: comment,
+            name: nil,
+            email: nil,
+            source: .custom,
+            associatedEventId: eventID
+        )
+        SentrySDK.capture(feedback: feedback)
+        return eventID.sentryIdString
     }
 
     public func startSpan(

@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { LegalPage, LegalSection } from '@/components/legal-page'
 import { PageStructuredData } from '@/components/page-structured-data'
-import { sitePath } from '@/lib/site-paths'
 import { OG_IMAGE_PATH, SITE_URL } from '@/lib/site-metadata'
 
 export const metadata: Metadata = {
@@ -96,10 +95,12 @@ export default function PrivacyPolicyPage() {
 
       <LegalSection id="data-we-collect" heading="2. Data We Collect">
         <p>
-          There is no Sorty account and we do not collect names, email
-          addresses, advertising identifiers, file names, folder names, file
-          paths, file contents, prompts, custom instructions, AI responses, API
-          keys, or the names of files involved in an error.
+          There is no Sorty account. Automatic analytics does not collect names,
+          email addresses, advertising identifiers, file names, folder names,
+          file paths, file contents, prompts, custom instructions, AI responses,
+          API keys, or the names of files involved in an error. If you choose to
+          send a bug description to Sentry, that text may contain details you
+          include yourself.
         </p>
         <h3 className="pt-1 text-base font-medium text-foreground">
           Optional Mac app analytics
@@ -109,6 +110,14 @@ export default function PrivacyPolicyPage() {
           &quot;Share Anonymous Analytics.&quot; If you decline, no analytics or
           crash report is sent and the denial itself is not reported. You can
           change this choice later in Settings → Advanced → Privacy.
+        </p>
+        <p>
+          The Report Bug form can also send the description you type to Sentry
+          when you select its separate sharing option. This requires anonymous
+          analytics consent and internet access. Sorty sends that text with an
+          associated app event ID, without your name, email, or attachments.
+          Review the description for private details first. The GitHub issue
+          opens as a draft for you to submit separately.
         </p>
         <p>
           When enabled, the App sends a random anonymous installation

@@ -16,6 +16,99 @@ public struct AppStateFocusedKey: FocusedValueKey {
     public typealias Value = AppState
 }
 
+/// Collects one bug description for a GitHub draft and optional Sentry feedback.
+public struct BugReportView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var description = ""
+    @State private var sendToSentry = false
+    @State private var sentryEventID: String?
+    @State private var errorMessage: String?
+
+    public init() {}
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Report a bug")
+                .font(.title2.weight(.semibold))
+
+            Text("Describe what happened. GitHub will open a draft for you to review and submit.")
+                .foregroundStyle(.secondary)
+
+            Text("What happened?")
+                .font(.headline)
+            TextEditor(text: $description)
+                .frame(height: 120)
+                .accessibilityIdentifier("BugReportDescription")
+                .onChange(of: description) { _, newValue in
+                    if newValue.count > 2_000 {
+                        description = String(newValue.prefix(2_000))
+                    }
+                }
+
+            Toggle("Also send this description to Sentry", isOn: $sendToSentry)
+                .disabled(!ReliabilityManager.shared.canSubmitBugFeedback)
+                .accessibilityIdentifier("SendBugReportToSentryToggle")
+
+            Text(ReliabilityManager.shared.canSubmitBugFeedback
+                 ? "Sentry receives this text with a linked app event. Review it for private details before sending."
+                 : "Sentry sharing requires anonymous analytics to be allowed in Settings and internet access to be enabled.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .accessibilityAddTraits(.isStaticText)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Open GitHub Issue") { openIssue() }
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier("OpenGitHubBugIssueButton")
+            }
+        }
+        .padding(24)
+        .frame(width: 480)
+    }
+
+    private func openIssue() {
+        let comment = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        if sendToSentry {
+            guard let eventID = ReliabilityManager.shared.submitBugFeedback(comment) else {
+                errorMessage = "Sentry is unavailable. Turn off Sentry sharing to continue with GitHub."
+                return
+            }
+            sentryEventID = eventID
+            sendToSentry = false // Retrying GitHub must not send a duplicate report.
+        }
+
+        var components = URLComponents(string: "https://github.com/sorty-organizer/Sorty/issues/new")!
+        if comment.isEmpty {
+            components.queryItems = [URLQueryItem(name: "template", value: "bug_report.md")]
+        } else {
+            var body = "## Bug description\n\n\(comment)\n\n## Steps to reproduce\n\n## Expected behavior\n\n## Actual behavior\n"
+            if let sentryEventID {
+                body += "\nSentry event ID: `\(sentryEventID)`\n"
+            }
+            components.queryItems = [
+                URLQueryItem(name: "title", value: "[BUG] "),
+                URLQueryItem(name: "body", value: body),
+            ]
+        }
+
+        guard let url = components.url, NSWorkspace.shared.open(url) else {
+            errorMessage = "GitHub could not open. Try again."
+            return
+        }
+        HapticFeedbackManager.shared.tap()
+        dismiss()
+    }
+}
+
 public struct OrganizerFocusedKey: FocusedValueKey {
     public typealias Value = FolderOrganizer
 }
@@ -244,7 +337,10 @@ public struct SortyCommands: Commands {
             
             Link(destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!) { Label("Documentation", systemImage: "book") }
             
-            Link(destination: URL(string: "https://github.com/sorty-organizer/Sorty/issues/new?template=bug_report.md")!) { Label("Report Bug", systemImage: "ladybug") }
+            Button("Report Bug", systemImage: "ladybug") {
+                appState?.showBugReportSheet = true
+            }
+            .disabled(appState == nil)
 
             if FeatureFlags.supportDeveloperEnabled {
                 Link(destination: URL(string: "https://github.com/sponsors/shirishpothi")!) { Label("Support the Developer", systemImage: "heart") }
@@ -482,6 +578,7 @@ public class AppState: ObservableObject {
     @Published public var lastOrganizedDirectory: URL?
     @Published public var navigatedFromSettings: Bool = false
     @Published public var showDeleteUsageDataConfirmation: Bool = false
+    @Published public var showBugReportSheet = false
     /// True while `deleteUsageData()` is running. The blocking portion runs off
     /// the main actor, so views use this for busy affordances instead of assuming
     /// the call completes synchronously.

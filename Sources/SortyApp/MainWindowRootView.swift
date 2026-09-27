@@ -99,6 +99,9 @@ struct MainWindowRootView: View {
                     markWhatsNewSeen()
                 }
             }
+            .sheet(isPresented: $windowSession.appState.showBugReportSheet) {
+                BugReportView()
+            }
     }
 
     private func recordLaunchSmokeSuccessIfRequested() {
