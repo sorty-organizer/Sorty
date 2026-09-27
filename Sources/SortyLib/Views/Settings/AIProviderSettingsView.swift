@@ -57,20 +57,11 @@ struct AIProviderSettingsView: View {
     private var providerSelectionSection: some View {
         SettingsCard(title: "Select Provider", icon: "cpu", color: .purple) {
             LazyVGrid(columns: providerColumns, alignment: .leading, spacing: 10) {
-                ForEach(Array(AIProvider.userSelectableProviders), id: \.self) { provider in
+                ForEach(AIProvider.userSelectableProviders.filter { $0 != .openCodeGo }, id: \.self) { provider in
                     AIProviderRow(
                         provider: provider,
-                        isSelected: viewModel.config.provider == provider,
-                        action: {
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.85)) {
-                                viewModel.config.provider = provider
-                                if let defaultURL = provider.defaultAPIURL {
-                                    viewModel.config.apiURL = defaultURL
-                                }
-                                viewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
-                                HapticFeedbackManager.shared.selection()
-                            }
-                        }
+                        selectedProvider: viewModel.config.provider,
+                        action: selectProvider
                     )
                     .settingsFocusable(
                         .providerChoice(provider),
@@ -197,6 +188,17 @@ struct AIProviderSettingsView: View {
     private var apiConfigSection: some View {
         SettingsCard(title: "API Configuration", icon: "key", color: .orange) {
             VStack(alignment: .leading, spacing: 12) {
+                if [.openCodeZen, .openCodeGo].contains(viewModel.config.provider) {
+                    Picker("OpenCode plan", selection: Binding(
+                        get: { viewModel.config.provider },
+                        set: { selectProvider($0) }
+                    )) {
+                        Text("Zen").tag(AIProvider.openCodeZen)
+                        Text("Go").tag(AIProvider.openCodeGo)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 if [.openAICompatible, .ollama].contains(viewModel.config.provider) {
                     SettingsTextField(
                         title: "API URL",
@@ -239,6 +241,17 @@ struct AIProviderSettingsView: View {
 
     private var supportsSubscriptionAuthUI: Bool {
         FeatureFlags.subscriptionAuthEnabled && viewModel.config.provider.supportsSubscriptionAuth
+    }
+
+    private func selectProvider(_ provider: AIProvider) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.85)) {
+            viewModel.config.provider = provider
+            if let defaultURL = provider.defaultAPIURL {
+                viewModel.config.apiURL = defaultURL
+            }
+            viewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
+            HapticFeedbackManager.shared.selection()
+        }
     }
 
     private var selectedAuthMethod: Binding<ProviderAuthMethod> {

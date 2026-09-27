@@ -195,8 +195,9 @@ entire layout to the subscription-auth mirror merely to trigger refresh
 methods. Model refreshes
 cancel superseded presentation tasks and apply results only when their captured
 provider is still selected, preventing rapid selection changes from publishing
-stale model lists. OpenCode Zen and Go use the shared API key and model picker
-flow. Their separate keys stay in separate Keychain slots.
+stale model lists. OpenCode uses one provider card; its Zen/Go selector sits in
+the configuration panel. Both plans use the API key and model picker flow, with
+separate Keychain slots.
 
 Model picker callbacks include the selected OpenAI authentication method. Apply
 it alongside the model in settings, retries, history, learnings, and automation;

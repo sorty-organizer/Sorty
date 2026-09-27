@@ -10,14 +10,21 @@ import SwiftUI
 struct AIProviderRow: View {
     @SortyHotReload private var hotReload
     let provider: AIProvider
-    let isSelected: Bool
-    let action: () -> Void
+    let selectedProvider: AIProvider
+    let action: (AIProvider) -> Void
     
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
+
+    private var isOpenCodeCard: Bool { provider == .openCodeZen }
+    private var isSelected: Bool {
+        selectedProvider == provider || (isOpenCodeCard && selectedProvider == .openCodeGo)
+    }
     
     var body: some View {
-        Button(action: action) {
+        Button {
+            action(isOpenCodeCard && selectedProvider == .openCodeGo ? .openCodeGo : provider)
+        } label: {
             HStack(alignment: .center, spacing: 8) {
                 ProviderLogoView(provider: provider, size: 17)
                     .frame(width: 28, height: 28)
@@ -43,13 +50,13 @@ struct AIProviderRow: View {
                     }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(provider.selectorTitle)
+                    Text(isOpenCodeCard ? "OpenCode" : provider.selectorTitle)
                         .font(.subheadline.weight(isSelected ? .semibold : .medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.88)
 
-                    Text(provider.selectorDescription)
+                    Text(isOpenCodeCard ? "Zen or Go" : provider.selectorDescription)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -61,26 +68,26 @@ struct AIProviderRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? provider.brandColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025)))
-            )
-            .contentShape(Rectangle())
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(isSelected ? provider.brandColor.opacity(0.35) : Color.secondary.opacity(0.1), lineWidth: 1)
-            )
         }
-        .buttonStyle(.plain)
-        .minimumHitTarget()
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isSelected ? provider.brandColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025)))
+        )
+        .contentShape(Rectangle())
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(isSelected ? provider.brandColor.opacity(0.35) : Color.secondary.opacity(0.1), lineWidth: 1)
+        )
         .onHover { hovering in
             isHovered = hovering
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovered)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isSelected)
+        .buttonStyle(.plain)
+        .minimumHitTarget()
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        .accessibilityHint("Selects \(provider.displayName) as the AI provider")
-        .help("Use \(provider.displayName)")
+        .accessibilityHint("Selects \(isOpenCodeCard ? "OpenCode" : provider.displayName) as the AI provider")
+        .help("Use \(isOpenCodeCard ? "OpenCode" : provider.displayName)")
     }
 }
 

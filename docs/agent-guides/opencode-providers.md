@@ -1,7 +1,7 @@
 # OpenCode providers
 
-Sorty offers OpenCode Zen and OpenCode Go as separate API key providers. Add
-the key for each plan in Provider Settings. Sorty stores the keys in separate
+Sorty shows one OpenCode provider card. Select Zen or Go in API Configuration.
+Add the key for each plan in Provider Settings. Sorty stores the keys in separate
 Keychain entries and sends requests to the plan's `/chat/completions` endpoint.
 
 When an existing Copilot selection is loaded, Sorty uses the saved automation

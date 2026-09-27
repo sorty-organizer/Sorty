@@ -297,6 +297,17 @@ public struct ProviderSelectionStepView: View {
     @ViewBuilder
     private var providerConfigSection: some View {
         VStack(alignment: .leading, spacing: 16) {
+            if [.openCodeZen, .openCodeGo].contains(settingsViewModel.config.provider) {
+                Picker("OpenCode plan", selection: Binding(
+                    get: { settingsViewModel.config.provider },
+                    set: { selectProvider($0) }
+                )) {
+                    Text("Zen").tag(AIProvider.openCodeZen)
+                    Text("Go").tag(AIProvider.openCodeGo)
+                }
+                .pickerStyle(.segmented)
+            }
+
             if settingsViewModel.config.provider == .openAICompatible || settingsViewModel.config.provider == .ollama {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("API URL")
@@ -1101,12 +1112,12 @@ private struct ProviderSelectionGrid: View, Equatable {
             ),
             spacing: 8
         ) {
-            ForEach(AIProvider.userSelectableProviders, id: \.self) { provider in
+            ForEach(AIProvider.userSelectableProviders.filter { $0 != .openCodeGo }, id: \.self) { provider in
                 OnboardingProviderRow(
                     provider: provider,
-                    isSelected: selectedProvider == provider
-                ) {
-                    onSelect(provider)
+                    selectedProvider: selectedProvider
+                ) { selected in
+                    onSelect(selected)
                 }
             }
         }
@@ -1140,10 +1151,16 @@ struct PrivacyFeatureRow: View {
 struct OnboardingProviderRow: View {
     @SortyHotReload private var hotReload
     let provider: AIProvider
-    let isSelected: Bool
-    let action: () -> Void
+    let selectedProvider: AIProvider
+    let action: (AIProvider) -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovering = false
+
+    private var isOpenCodeCard: Bool { provider == .openCodeZen }
+    private var isSelected: Bool {
+        selectedProvider == provider || (isOpenCodeCard && selectedProvider == .openCodeGo)
+    }
 
     private var subtitle: String? {
         switch provider {
@@ -1158,9 +1175,11 @@ struct OnboardingProviderRow: View {
     }
 
     var body: some View {
-        Button(action: {
-            if provider.isAvailable { action() }
-        }) {
+        Button {
+            if provider.isAvailable {
+                action(isOpenCodeCard && selectedProvider == .openCodeGo ? .openCodeGo : provider)
+            }
+        } label: {
             HStack(spacing: 9) {
                 ProviderLogoView(provider: provider, size: 20)
                     .frame(width: 28, height: 28)
@@ -1177,7 +1196,7 @@ struct OnboardingProviderRow: View {
                     }
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(provider.selectorTitle)
+                    Text(isOpenCodeCard ? "OpenCode" : provider.selectorTitle)
                         .font(.system(size: 13, weight: isSelected ? .semibold : .regular, design: .rounded))
                         .foregroundColor(provider.isAvailable ? .primary : .secondary)
                         .lineLimit(1)
@@ -1206,30 +1225,30 @@ struct OnboardingProviderRow: View {
             .padding(.vertical, 8)
             .padding(.horizontal, 10)
             .frame(minHeight: 46, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(
-                        isSelected
-                            ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12)
-                            : (isHovering ? Color.primary.opacity(0.05) : Color.clear)
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(
-                        isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.45) : Color.clear,
-                        lineWidth: 1
-                    )
-            )
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(
+                    isSelected
+                        ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12)
+                        : (isHovering ? Color.primary.opacity(0.05) : Color.clear)
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(
+                    isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.45) : Color.clear,
+                    lineWidth: 1
+                )
+        )
+        .contentShape(Rectangle())
         .opacity(provider.isAvailable ? 1.0 : 0.6)
         .onHover { hovering in
             if provider.isAvailable { isHovering = hovering }
         }
-        .animation(.easeOut(duration: 0.15), value: isSelected)
-        .animation(.easeOut(duration: 0.15), value: isHovering)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isSelected)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovering)
         .accessibilityIdentifier("OnboardingProvider_\(provider.rawValue)")
     }
 }
