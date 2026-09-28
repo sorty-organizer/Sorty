@@ -504,6 +504,23 @@ public class SettingsViewModel: ObservableObject {
             if self.availableModels != resolvedModels {
                 self.availableModels = resolvedModels
             }
+            let isKnownCodexModel = provider == .openAI
+                && ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: self.config) == .accountSignIn
+                && ModelCatalog.shared.isCodexSubscriptionModel(self.config.model)
+            let keepsCustomModelID = [.openAICompatible, .ollama].contains(provider)
+                && !self.config.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            if !resolvedModels.isEmpty, !isKnownCodexModel, !resolvedModels.contains(self.config.model) {
+                // A raw catalog can lead with embedding/audio models, and a
+                // custom endpoint ID must not be clobbered by one of them.
+                if !keepsCustomModelID {
+                    let replacement = ModelCatalog.shared.chatCapableModelIDs(for: provider).first
+                        ?? provider.recommendedModels.first
+                        ?? provider.defaultModel
+                    if replacement != self.config.model {
+                        self.config.model = replacement
+                    }
+                }
+            }
             self.isLoadingModels = false
             AnalyticsManager.shared.captureWorkflow(
                 workflow: "model_catalog",
