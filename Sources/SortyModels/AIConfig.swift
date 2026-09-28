@@ -103,14 +103,15 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
-        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
         if rawValue == "github_copilot" {
             self = .unavailableProvider
         } else if let provider = Self(rawValue: rawValue) {
             self = provider
         } else {
             throw DecodingError.dataCorruptedError(
-                in: try decoder.singleValueContainer(),
+                in: container,
                 debugDescription: "Unknown AI provider: \(rawValue)"
             )
         }

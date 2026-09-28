@@ -860,12 +860,14 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     /// `automationProvider` means "use the main provider/model", which is the
     /// client already configured on the organizer, so no override is passed.
     private func automationOverrides(for folder: WatchedFolder) -> (provider: AIProvider?, model: String?) {
-        if let providerOverride = folder.providerOverride {
+        // A stale .unavailableProvider override means "no override": fall through to global.
+        if let providerOverride = folder.providerOverride, providerOverride != .unavailableProvider {
             let model = folder.modelOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
             return (providerOverride, model?.isEmpty == false ? model : nil)
         }
         guard let config = organizer.aiClient?.config,
-              let automationProvider = config.automationProvider else {
+              let automationProvider = config.automationProvider,
+              automationProvider != .unavailableProvider else {
             return (nil, nil)
         }
         let configuredModel = config.automationModel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
