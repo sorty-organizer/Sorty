@@ -13,6 +13,9 @@ struct StreamingProgressBeam: View {
     var matchesInsightsWidth: Bool = false
 
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var isWindowVisible = true
 
     /// Compact width used when the banner stands alone (removes empty space).
     private static let collapsedWidth: CGFloat = 440
@@ -23,7 +26,8 @@ struct StreamingProgressBeam: View {
     }
 
     private var isAnimationActive: Bool {
-        controlActiveState != .inactive
+        !reduceMotion && isWindowVisible && scenePhase == .active
+            && controlActiveState != .inactive
     }
 
     private var percent: Int {
@@ -70,7 +74,8 @@ struct StreamingProgressBeam: View {
             progressCard
         }
         .frame(width: targetWidth)
-        .animation(.spring(response: 0.5, dampingFraction: 0.82), value: matchesInsightsWidth)
+        .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.82), value: matchesInsightsWidth)
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Organization progress")
         .accessibilityValue(progressAccessibilityValue)
@@ -137,7 +142,6 @@ struct StreamingProgressBeam: View {
             cornerRadius: 16,
             strength: 1.0
         )
-        .referenceBeamFallback(cornerRadius: 16, active: true)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -155,75 +159,6 @@ struct StreamingProgressBeam: View {
             return "Organizing files..."
         }
         return stage
-    }
-}
-
-private extension View {
-    func referenceBeamFallback(
-        cornerRadius: CGFloat,
-        active: Bool
-    ) -> some View {
-        overlay {
-            ReferenceBeamFallback(
-                cornerRadius: cornerRadius,
-                active: active
-            )
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
-    }
-}
-
-private struct ReferenceBeamFallback: View {
-    @SortyHotReload private var hotReload
-    let cornerRadius: CGFloat
-    let active: Bool
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.controlActiveState) private var controlActiveState
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var isWindowVisible = true
-
-    private var shouldAnimate: Bool {
-        active && !reduceMotion && isWindowVisible && controlActiveState != .inactive
-            && scenePhase == .active
-    }
-
-    var body: some View {
-        SwiftUI.TimelineView(
-            .animation(minimumInterval: 1.0 / 12.0, paused: !shouldAnimate)
-        ) { timeline in
-            let time = timeline.date.timeIntervalSinceReferenceDate
-            let phase = shouldAnimate ? time / 1.96 : 0
-            // Stroke-only fallback: Beam already supplies interior light, so
-            // the blurred interior glow is dropped entirely.
-            beamStroke(phase: phase)
-                .opacity(active ? 0.82 : 0)
-                .animation(.easeOut(duration: 0.6), value: active)
-        }
-        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
-    }
-
-    private func beamStroke(phase: TimeInterval) -> some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .strokeBorder(
-                AngularGradient(
-                    stops: [
-                        .init(color: .clear, location: 0.00),
-                        .init(color: .clear, location: 0.08),
-                        .init(color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.36), location: 0.16),
-                        .init(color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.62), location: 0.25),
-                        .init(color: .white.opacity(0.88), location: 0.32),
-                        .init(color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.54), location: 0.39),
-                        .init(color: Color(red: 0.40, green: 0.20, blue: 1.0).opacity(0.36), location: 0.48),
-                        .init(color: .clear, location: 0.58),
-                        .init(color: .clear, location: 1.00),
-                    ],
-                    center: .center,
-                    angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
-                ),
-                lineWidth: 1
-            )
     }
 }
 

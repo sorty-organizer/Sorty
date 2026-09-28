@@ -27,14 +27,14 @@ Important implementation details:
   Beam 0.1.0 loader checks that signed macOS resource location before falling
   back to `Bundle.module`. Otherwise `.beam(...)` can build successfully but
   render no border in a shipped app.
-- The progress card also has `referenceBeamFallback(cornerRadius:active:)` so
-  the border remains visible if Beam's package shader lookup fails.
-  layered above the Beam modifier. This fallback is intentionally lightweight:
-  one `SwiftUI.TimelineView`-driven 1px animated angular border, no blur/glow
-  pass, no extra pill animation. The earlier blurred fallback was visibly laggy.
+- The progress card uses only Beam's shader border. Do not layer an animated
+  fallback over it: the previous 12 fps gradient competed with the 30 fps
+  shader and produced visibly stepped motion.
+- The card stops its decorative effect while hidden, inactive, or under
+  Reduce Motion. Its width transition also respects Reduce Motion.
 - Qualify this as `SwiftUI.TimelineView`; Sorty has its own `TimelineView`
   type for history, and an unqualified reference resolves to the wrong type.
 
-If this UI needs further tuning, keep the fallback cheap. Avoid adding animated
+If this UI needs further tuning, keep a single animation driver. Avoid adding animated
 blurred strokes, large drawing groups, or multiple timeline layers around this
 card; they make the analysis screen lag during active organization.
