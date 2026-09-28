@@ -73,10 +73,13 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 }
                 return ["role": message["role"] ?? "user", "content": content]
             }
-            let payload: [String: Any] = [
+            var payload: [String: Any] = [
                 "model": config.model, "input": input,
                 "max_output_tokens": max(16, maxTokens), "stream": streaming, "store": false
             ]
+            // Temperature is a standard Responses parameter; reasoning effort stays
+            // out because native endpoints manage reasoning themselves.
+            if let temperature = body["temperature"] { payload["temperature"] = temperature }
             return try AIRequestSupport.makeJSONRequest(
                 url: base.appendingPathComponent("responses"), headers: headers, body: payload
             )
@@ -169,6 +172,9 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             for part in content["parts"] as? [[String: Any]] ?? [] where part["thought"] as? Bool != true {
                 text += part["text"] as? String ?? ""
             }
+            // Some Gemini responses omit finishReason on success; accept usable
+            // text as a completed stop so valid output is not discarded.
+            if finish == nil, !streaming, !text.isEmpty { finish = "stop" }
             if !streaming && finish == nil { throw AIClientError.invalidResponse }
         }
         var choice: [String: Any] = [streaming ? "delta" : "message": ["content": text]]
@@ -376,7 +382,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             "temperature": AIConfig.organizationTemperature
         ]
         
-        requestBody["max_tokens"] = config.maxTokens ?? 4096
+        requestBody["max_tokens"] = config.maxTokens ?? config.provider.defaultOrganizeMaxTokens
 
         Self.configureTextGenerationOutput(
             in: &requestBody,

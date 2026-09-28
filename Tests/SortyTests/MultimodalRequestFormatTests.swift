@@ -82,7 +82,7 @@ final class MultimodalRequestFormatTests: XCTestCase {
         XCTAssertEqual(request.url?.absoluteString, "https://opencode.ai/zen/v1/responses")
         let body = try request.jsonBody()
         XCTAssertNil(body["messages"])
-        XCTAssertNil(body["temperature"])
+        XCTAssertEqual(body["temperature"] as? Double, AIConfig.organizationTemperature)
         XCTAssertEqual((body["input"] as? [[String: Any]])?.count, 2)
         XCTAssertEqual(body["store"] as? Bool, false)
     }
@@ -104,6 +104,17 @@ final class MultimodalRequestFormatTests: XCTestCase {
         let choices = try XCTUnwrap(result["choices"] as? [[String: Any]])
         XCTAssertEqual(AIRequestSupport.extractChatMessageText(from: choices[0]), "visible")
         XCTAssertThrowsError(try gemini.normalizedCompletion(["candidates": [["finishReason": "MAX_TOKENS"]]]))
+    }
+
+    func testOpenCodeGeminiAcceptsTextWithoutFinishReason() throws {
+        let gemini = OpenAIClient(config: AIConfig(provider: .openCodeZen, model: "gemini-3.1-pro"))
+        let result = try gemini.normalizedCompletion(["candidates": [[
+            "content": ["parts": [["text": "visible"]]]
+        ]]])
+        let choices = try XCTUnwrap(result["choices"] as? [[String: Any]])
+        XCTAssertEqual(AIRequestSupport.extractChatMessageText(from: choices[0]), "visible")
+        XCTAssertEqual(choices[0]["finish_reason"] as? String, "stop")
+        XCTAssertThrowsError(try gemini.normalizedCompletion(["candidates": [[:]]]))
     }
 
     func testOpenCodeResponsesStreamRequiresCompletionEvent() async throws {
