@@ -3,6 +3,10 @@
 Sorty shows one OpenCode provider card. Select Zen or Go in API Configuration.
 Add the key for each plan in Provider Settings. Sorty stores the keys in separate
 Keychain entries and sends requests to the plan's `/chat/completions` endpoint.
+Connection checks send a one-token completion to the selected model to validate
+the key and model access. These probes can consume a small amount of quota.
+The public model-list endpoint alone cannot validate credentials.
+
 The card and model picker use OpenCode's Zen and Go marks from its
 [MIT-licensed icon set](https://github.com/anomalyco/opencode/tree/dev/packages/ui/src/assets/icons/provider).
 

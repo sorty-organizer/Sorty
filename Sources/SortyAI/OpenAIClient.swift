@@ -294,14 +294,15 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     ) {
         guard let requestValue = effort.requestValue else { return }
 
-        requestBody.removeValue(forKey: "temperature")
         switch provider {
         case .openRouter:
+            requestBody.removeValue(forKey: "temperature")
             requestBody["reasoning"] = [
                 "effort": requestValue,
                 "exclude": true
             ]
         case .openAI, .gemini:
+            requestBody.removeValue(forKey: "temperature")
             requestBody["reasoning_effort"] = requestValue
         case .unavailableProvider, .openCodeZen, .openCodeGo, .groq, .openAICompatible, .ollama, .anthropic, .appleFoundationModel:
             break
@@ -342,11 +343,22 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
         }
 
-        let url = try AIRequestSupport.openAIModelsURL(from: apiURL)
-
         let headers = authHeaders()
-
-        var request = try AIRequestSupport.makeJSONRequest(url: url, method: "GET", headers: headers)
+        var request: URLRequest
+        if config.provider == .openCodeZen || config.provider == .openCodeGo {
+            // OpenCode's public model catalog does not validate credentials or
+            // model access. Probe the selected model with a bounded completion.
+            let url = try AIRequestSupport.openAIChatCompletionsURL(from: apiURL)
+            request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: [
+                "model": config.model,
+                "messages": [["role": "user", "content": "Reply OK."]],
+                "max_tokens": 1,
+                "stream": false
+            ])
+        } else {
+            let url = try AIRequestSupport.openAIModelsURL(from: apiURL)
+            request = try AIRequestSupport.makeJSONRequest(url: url, method: "GET", headers: headers)
+        }
         request.timeoutInterval = min(AIRequestSupport.clampedTimeout(config.requestTimeout), 60)
 
         let session = await AIRequestSupport.session(for: config)
