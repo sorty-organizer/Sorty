@@ -139,6 +139,12 @@ public final class ModelCatalog: ObservableObject {
     nonisolated static func isChatCapable(_ model: ModelInfo) -> Bool {
         let id = model.id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !id.isEmpty else { return false }
+        // SystemOne (OpenCode `jev-`) models have no Sorty adapter; never
+        // auto-select them even if a stale cache entry carries chat caps.
+        if model.provider == .openCodeZen || model.provider == .openCodeGo,
+           model.provider.openCodeAPIFormat(for: model.id) == .systemOne {
+            return false
+        }
         let caps = Set((model.capabilities ?? []).compactMap { Self.normalizeCapabilityTag($0) })
 
         // Explicit chat signals win even when the ID looks unusual.

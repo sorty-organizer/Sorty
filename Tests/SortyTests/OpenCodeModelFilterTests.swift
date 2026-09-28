@@ -36,4 +36,20 @@ final class OpenCodeModelFilterTests: XCTestCase {
         // Qwen and MiniMax now use the Messages client on Go.
         XCTAssertEqual(result.sorted(), ["glm-5.3", "hy3", "longcat-2.0", "minimax-m3", "omen-alpha", "qwen3.8-max"])
     }
+
+    func testSystemOneNeverChatCapable() {
+        // Even a stale cache entry with chat caps must not be auto-selected,
+        // since Sorty has no SystemOne adapter.
+        let systemOne = ModelInfo(
+            id: "jev-1.13", displayName: "jev-1.13", provider: .openCodeZen,
+            capabilities: ["chat", "completion"]
+        )
+        XCTAssertFalse(ModelCatalog.isChatCapable(systemOne))
+        XCTAssertFalse(ModelCatalog.isChatCapable(ModelInfo(
+            id: "jev-2.0", displayName: "jev-2.0", provider: .openCodeGo
+        )))
+        XCTAssertTrue(ModelCatalog.isChatCapable(ModelInfo(
+            id: "glm-5.3", displayName: "glm-5.3", provider: .openCodeZen
+        )))
+    }
 }
