@@ -38,3 +38,12 @@ Validation for this pass:
 - An optimized standalone benchmark compared the original and changed streaming-payload functions on the same 248,000-byte Unicode response and asserted identical output. Median time across five batches of 100 calls was 0.2651 seconds before and 0.04584 seconds after, about 83% less time for this operation. This does not measure total analysis time or battery life.
 
 Full-app power measurements remain outstanding. Background organization, file watching, network requests, and visible animations retain their existing behavior. These source-level wakeup reductions do not establish a battery-life delta without matched signed Release measurements.
+
+## OpenCode progress updates, September 28, 2026
+
+The organizing card uses one Beam shader instead of layering a 12 fps gradient
+over it. It stops the effect when hidden, inactive, or under Reduce Motion.
+OpenAI-compatible and native OpenCode streams use the existing chunk coalescer
+to limit main-actor updates to roughly 100 ms or 4 KB of text, with a final
+flush before completion. No text is dropped. These changes remove duplicate
+rendering and per-token UI updates; frame pacing has not been measured.

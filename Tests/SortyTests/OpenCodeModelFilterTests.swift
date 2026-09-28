@@ -2,8 +2,7 @@ import XCTest
 @testable import SortyCore
 
 /// OpenCode serves mixed API protocols from one `/models` endpoint. The
-/// catalog keeps everything except documented non-chat models so newly
-/// added chat models appear without an allowlist update.
+/// catalog keeps all supported protocols and excludes SystemOne.
 final class OpenCodeModelFilterTests: XCTestCase {
     private func filtered(_ ids: [String], for provider: AIProvider) -> [String] {
         ModelCatalog.openCodeChatModels(
@@ -12,7 +11,7 @@ final class OpenCodeModelFilterTests: XCTestCase {
         ).map(\.id)
     }
 
-    func testZenDropsNonChatProtocolsKeepsChatAndUnknown() {
+    func testZenKeepsNativeProtocolsAndUnknownModels() {
         let result = filtered(
             [
                 "glm-5.3", "qwen3.8-max", "minimax-m3",
@@ -22,10 +21,11 @@ final class OpenCodeModelFilterTests: XCTestCase {
             ],
             for: .openCodeZen
         )
-        XCTAssertEqual(result.sorted(), ["future-chat-9", "glm-5.3", "minimax-m3", "qwen3.8-max"])
+        XCTAssertEqual(result.count, 10)
+        XCTAssertFalse(result.contains("jev-1.13"))
     }
 
-    func testGoDropsPlanSpecificNonChatModels() {
+    func testGoKeepsMessagesModels() {
         let result = filtered(
             [
                 "glm-5.3", "qwen3.8-max", "minimax-m3",
@@ -33,7 +33,7 @@ final class OpenCodeModelFilterTests: XCTestCase {
             ],
             for: .openCodeGo
         )
-        // Qwen/Minimax are Messages-only on Go; unknown IDs stay included.
-        XCTAssertEqual(result.sorted(), ["glm-5.3", "hy3", "longcat-2.0", "omen-alpha"])
+        // Qwen and MiniMax now use the Messages client on Go.
+        XCTAssertEqual(result.sorted(), ["glm-5.3", "hy3", "longcat-2.0", "minimax-m3", "omen-alpha", "qwen3.8-max"])
     }
 }

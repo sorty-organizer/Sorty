@@ -79,6 +79,10 @@ public struct ReasoningEffort: RawRepresentable, Codable, Hashable, Sendable {
     }
 }
 
+public enum OpenCodeAPIFormat: Equatable, Sendable {
+    case chatCompletions, messages, responses, gemini, systemOne
+}
+
 public enum AIProvider: String, Codable, CaseIterable, Sendable {
     case unavailableProvider = "unavailable_provider"
     case openAI = "openai"
@@ -459,14 +463,11 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .ollama:
             return ["llava", "llama3.2-vision", "qwen2.5vl", "gemma3", "llama4", "moondream", "llama3.1"]
         case .openCodeZen:
-            // Chat-completions models only: Sorty's OpenAI-compatible client
-            // cannot drive the Responses/Messages/Gemini/SystemOne endpoints.
-            // Keep in sync with the Zen endpoints table (opencode.ai/v2/docs/console/models).
-            return ["glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "deepseek-v4-flash-free", "minimax-m3", "minimax-m2.7", "qwen3.8-max", "big-pickle", "space-bunny-free", "longcat-2.5-preview-free", "mimo-v2.6-flash-free", "mimo-v2.5-free", "ling-3.0-flash-fin-free", "nemotron-3-ultra-free", "nemotron-3.5-lightning-free"]
+            // Offline defaults across the supported OpenCode protocols.
+            return ["gpt-6-luna", "grok-4.7", "qwen3.8-max", "minimax-m3", "glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "deepseek-v4-flash-free", "minimax-m2.7", "big-pickle", "space-bunny-free", "longcat-2.5-preview-free", "mimo-v2.6-flash-free", "mimo-v2.5-free", "ling-3.0-flash-fin-free", "nemotron-3-ultra-free", "nemotron-3.5-lightning-free", "claude-sonnet-4-6", "gemini-3.1-pro", "qwen3.8-flash"]
         case .openCodeGo:
-            // Same chat-completions constraint for Go (opencode.ai/v2/docs/console/go).
-            // Note Minimax/Qwen are Messages-only on Go, unlike Zen.
-            return ["glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-5", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "kimi-k2.5", "longcat-2.0", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "mimo-v2.6-flash", "mimo-v2.6-pro", "mimo-v2.5", "mimo-v2.5-pro", "hy4-preview", "hy3", "space-bunny-free", "longcat-2.5-preview-free"]
+            // Go routes Qwen and MiniMax through Messages.
+            return ["gpt-6-luna", "grok-4.7", "qwen3.8-max", "minimax-m3", "glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-5", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "kimi-k2.5", "longcat-2.0", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "mimo-v2.6-flash", "mimo-v2.6-pro", "mimo-v2.5", "mimo-v2.5-pro", "hy4-preview", "hy3", "space-bunny-free", "longcat-2.5-preview-free", "qwen3.8-flash", "minimax-m2.7"]
         case .openAICompatible:
             return ["gpt-5.4-mini", "gpt-5.4", "gpt-4.1", "gpt-4o"]
         case .appleFoundationModel:
@@ -474,32 +475,29 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    /// Exact OpenCode model IDs served over a non-chat protocol (Responses,
-    /// Messages, Gemini-native, SystemOne). The live `/models` filter drops
-    /// these and keeps everything else, so newly added chat models appear
-    /// without a hardcoded allowlist update. Only add IDs here when the
-    /// endpoint tables document them as non-chat.
-    public var openCodeNonChatModelIDs: [String] {
+    /// Routes OpenCode models using the plan-specific endpoint tables.
+    public func openCodeAPIFormat(for model: String) -> OpenCodeAPIFormat? {
+        guard self == .openCodeZen || self == .openCodeGo else { return nil }
+        let id = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if id.hasPrefix("jev-") { return .systemOne }
+        if id.hasPrefix("gpt-") || id.hasPrefix("grok-") || id.hasPrefix("muse-spark-") {
+            return .responses
+        }
+        if id.hasPrefix("gemini-") { return .gemini }
+        if id.hasPrefix("claude-") || openCodeMessagesModelIDs.contains(id)
+            || (self == .openCodeGo && (id.hasPrefix("qwen") || id.hasPrefix("minimax-"))) {
+            return .messages
+        }
+        return .chatCompletions
+    }
+
+    /// Qwen models using Messages on Zen; Go routes the whole Qwen family there.
+    private var openCodeMessagesModelIDs: [String] {
         switch self {
         case .openCodeZen:
             // Messages-only on Zen; qwen3.8-max stays because it is chat.
             return ["qwen3.8-flash", "qwen3.7-max", "qwen3.7-plus", "qwen3.6-plus", "qwen3.5-plus"]
         case .openCodeGo, .unavailableProvider, .openAI, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini, .appleFoundationModel:
-            return []
-        }
-    }
-
-    /// Non-chat ID prefixes per OpenCode plan, matched case-insensitively.
-    /// Families are stable per the endpoint tables (GPT/Grok/Muse via
-    /// Responses, Claude via Messages, Gemini natively, Jev via SystemOne);
-    /// Minimax and Qwen differ per plan, so they are scoped accordingly.
-    public var openCodeNonChatModelIDPrefixes: [String] {
-        switch self {
-        case .openCodeZen:
-            return ["gpt-", "grok-", "claude-", "gemini-", "muse-spark-", "jev-"]
-        case .openCodeGo:
-            return ["gpt-", "grok-", "claude-", "gemini-", "muse-spark-", "jev-", "qwen", "minimax-"]
-        case .unavailableProvider, .openAI, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini, .appleFoundationModel:
             return []
         }
     }

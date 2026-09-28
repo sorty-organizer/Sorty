@@ -39,6 +39,142 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         }
         return headers
     }
+
+    private var usesNativeOpenCodeCompletion: Bool {
+        let format = config.provider.openCodeAPIFormat(for: config.model)
+        return format == .responses || format == .gemini
+    }
+
+    /// Converts the shared prompt into the protocol required by this OpenCode model.
+    func makeCompletionRequest(url: URL, headers: [String: String], body: [String: Any]) throws -> URLRequest {
+        let format = config.provider.openCodeAPIFormat(for: config.model)
+        guard usesNativeOpenCodeCompletion else {
+            return try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: body)
+        }
+        let base = url.deletingLastPathComponent().deletingLastPathComponent()
+        let messages = body["messages"] as? [[String: Any]] ?? []
+        let streaming = body["stream"] as? Bool ?? false
+        let maxTokens = body["max_tokens"] as? Int ?? resolvedMaxTokens()
+        if format == .responses {
+            let input: [[String: Any]] = messages.map { message in
+                let content: [[String: Any]]
+                if let text = message["content"] as? String {
+                    content = [["type": "input_text", "text": text]]
+                } else {
+                    content = (message["content"] as? [[String: Any]] ?? []).compactMap { part in
+                        if let text = part["text"] as? String {
+                            return ["type": "input_text", "text": text]
+                        }
+                        if let image = part["image_url"] as? [String: Any], let url = image["url"] as? String {
+                            return ["type": "input_image", "image_url": url, "detail": image["detail"] ?? "auto"]
+                        }
+                        return nil
+                    }
+                }
+                return ["role": message["role"] ?? "user", "content": content]
+            }
+            let payload: [String: Any] = [
+                "model": config.model, "input": input,
+                "max_output_tokens": max(16, maxTokens), "stream": streaming, "store": false
+            ]
+            return try AIRequestSupport.makeJSONRequest(
+                url: base.appendingPathComponent("responses"), headers: headers, body: payload
+            )
+        }
+
+        var systemParts: [[String: Any]] = []
+        var contents: [[String: Any]] = []
+        for message in messages {
+            var parts: [[String: Any]] = []
+            if let text = message["content"] as? String {
+                parts.append(["text": text])
+            } else {
+                for part in message["content"] as? [[String: Any]] ?? [] {
+                    if let text = part["text"] as? String { parts.append(["text": text]) }
+                    if let image = part["image_url"] as? [String: Any],
+                       let dataURL = image["url"] as? String,
+                       dataURL.hasPrefix("data:"), let comma = dataURL.firstIndex(of: ",") {
+                        let mime = dataURL.dropFirst(5).prefix { $0 != ";" }
+                        parts.append(["inlineData": [
+                            "mimeType": String(mime), "data": String(dataURL[dataURL.index(after: comma)...])
+                        ]])
+                    }
+                }
+            }
+            if message["role"] as? String == "system" {
+                systemParts += parts
+            } else {
+                contents.append(["role": message["role"] as? String == "assistant" ? "model" : "user", "parts": parts])
+            }
+        }
+        var generation: [String: Any] = ["maxOutputTokens": maxTokens]
+        if let temperature = body["temperature"] { generation["temperature"] = temperature }
+        var payload: [String: Any] = ["contents": contents, "generationConfig": generation]
+        if !systemParts.isEmpty { payload["systemInstruction"] = ["parts": systemParts] }
+        let method = streaming ? "streamGenerateContent" : "generateContent"
+        let endpoint = base.appendingPathComponent("models").appendingPathComponent("\(config.model):\(method)")
+        guard var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else {
+            throw AIClientError.invalidURL
+        }
+        if streaming { components.queryItems = [URLQueryItem(name: "alt", value: "sse")] }
+        guard let endpointURL = components.url else { throw AIClientError.invalidURL }
+        return try AIRequestSupport.makeJSONRequest(url: endpointURL, headers: headers, body: payload)
+    }
+
+    /// Normalize native output without exposing reasoning text as organization JSON.
+    func normalizedCompletion(_ raw: [String: Any], streaming: Bool = false) throws -> [String: Any] {
+        guard usesNativeOpenCodeCompletion else { return raw }
+        if let error = raw["error"] as? [String: Any] {
+            throw AIClientError.apiError(statusCode: 502, message: error["message"] as? String ?? "OpenCode returned an error.")
+        }
+        var text = ""
+        var finish: String?
+        if config.provider.openCodeAPIFormat(for: config.model) == .responses {
+            let type = raw["type"] as? String ?? ""
+            let response = raw["response"] as? [String: Any] ?? raw
+            let status = response["status"] as? String
+            if type == "response.incomplete" || status == "incomplete" {
+                throw AIClientError.apiError(statusCode: 422, message: "OUTPUT_LIMIT: The model response was incomplete. Use a smaller batch or a higher output limit.")
+            }
+            if type == "response.failed" || type == "error" || status == "failed" || status == "cancelled" {
+                let error = response["error"] as? [String: Any]
+                throw AIClientError.apiError(statusCode: 502, message: error?["message"] as? String ?? "OpenCode could not complete the response.")
+            }
+            if streaming {
+                if type == "response.output_text.delta" { text = raw["delta"] as? String ?? "" }
+                if type == "response.completed" { finish = "stop" }
+            } else {
+                guard status == "completed" else { throw AIClientError.invalidResponse }
+                for output in response["output"] as? [[String: Any]] ?? [] where output["type"] as? String == "message" {
+                    for part in output["content"] as? [[String: Any]] ?? [] where part["type"] as? String == "output_text" {
+                        text += part["text"] as? String ?? ""
+                    }
+                }
+                finish = "stop"
+            }
+        } else {
+            if let feedback = raw["promptFeedback"] as? [String: Any], feedback["blockReason"] != nil {
+                throw AIClientError.apiError(statusCode: 422, message: "The model blocked this prompt.")
+            }
+            let candidate = (raw["candidates"] as? [[String: Any]])?.first ?? [:]
+            if let reason = candidate["finishReason"] as? String {
+                guard reason == "STOP" else {
+                    throw AIClientError.apiError(statusCode: 422, message: reason == "MAX_TOKENS"
+                        ? "OUTPUT_LIMIT: The model reached its output limit."
+                        : "The model stopped without a usable response: \(reason)")
+                }
+                finish = "stop"
+            }
+            let content = candidate["content"] as? [String: Any] ?? [:]
+            for part in content["parts"] as? [[String: Any]] ?? [] where part["thought"] as? Bool != true {
+                text += part["text"] as? String ?? ""
+            }
+            if !streaming && finish == nil { throw AIClientError.invalidResponse }
+        }
+        var choice: [String: Any] = [streaming ? "delta" : "message": ["content": text]]
+        if let finish { choice["finish_reason"] = finish }
+        return ["choices": [choice]]
+    }
     
     private func resolvedTemperature(_ override: Double?) -> Double {
         override ?? AIConfig.organizationTemperature
@@ -250,7 +386,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         )
         
         let headers = authHeaders()
-        var request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
+        var request = try makeCompletionRequest(url: url, headers: headers, body: requestBody)
         request.timeoutInterval = min(AIRequestSupport.clampedTimeout(config.requestTimeout), 60)
 
         let session = await AIRequestSupport.session(for: config)
@@ -260,9 +396,10 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
         _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
         
-        let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let rawResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        let jsonResponse = try normalizedCompletion(rawResponse)
         
-        guard let choices = jsonResponse?["choices"] as? [[String: Any]],
+        guard let choices = jsonResponse["choices"] as? [[String: Any]],
               let firstChoice = choices.first,
               let content = AIRequestSupport.extractChatMessageText(from: firstChoice),
               !content.isEmpty else {
@@ -349,7 +486,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             // OpenCode's public model catalog does not validate credentials or
             // model access. Probe the selected model with a bounded completion.
             let url = try AIRequestSupport.openAIChatCompletionsURL(from: apiURL)
-            request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: [
+            request = try makeCompletionRequest(url: url, headers: headers, body: [
                 "model": config.model,
                 "messages": [["role": "user", "content": "Reply OK."]],
                 "max_tokens": 1,
@@ -418,7 +555,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         let startTime = Date()
         let headers = authHeaders()
 
-        var request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
+        var request = try makeCompletionRequest(url: url, headers: headers, body: requestBody)
         applyOrganizeTimeout(to: &request)
 
         let session = await AIRequestSupport.session(for: config)
@@ -431,11 +568,12 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
             _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
             
-            guard let jsonResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            guard let rawResponse = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 throw AIClientError.jsonDecodingError(
                     context: "The provider returned a JSON value that was not a chat-completion object."
                 )
             }
+            let jsonResponse = try normalizedCompletion(rawResponse)
 
             guard let choices = jsonResponse["choices"] as? [[String: Any]],
                   let firstChoice = choices.first else {
@@ -497,7 +635,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         
         let headers = authHeaders()
 
-        var request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: streamingRequestBody)
+        var request = try makeCompletionRequest(url: url, headers: headers, body: streamingRequestBody)
         applyOrganizeTimeout(to: &request)
         
         let startTime = Date()
@@ -524,11 +662,18 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             // Payloads are buffered per event so spec-compliant multi-line data
             // events decode once instead of being dropped.
             var openRouterStreamFallback = false
+            var receivedNativeCompletion = false
+            var coalescer = StreamingChunkCoalescer()
             try await AIRequestSupport.consumeSSEEvents(bytes) { jsonString in
                 // Parse the JSON chunk
                 guard let jsonData = jsonString.data(using: .utf8),
-                      let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+                      let raw = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
                     return true
+                }
+                let json = try normalizedCompletion(raw, streaming: true)
+                if let choices = json["choices"] as? [[String: Any]],
+                   choices.first?["finish_reason"] as? String == "stop" {
+                    receivedNativeCompletion = true
                 }
 
                 if let streamError = Self.streamError(from: json) {
@@ -558,10 +703,20 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
                 accumulatedContent += completionChunk
 
-                await MainActor.run {
-                    streamingDelegate?.didReceiveChunk(completionChunk)
+                if let payload = coalescer.append(completionChunk) {
+                    await MainActor.run {
+                        streamingDelegate?.didReceiveChunk(payload)
+                    }
                 }
                 return true
+            }
+            if let tail = coalescer.flush() {
+                await MainActor.run {
+                    streamingDelegate?.didReceiveChunk(tail)
+                }
+            }
+            if usesNativeOpenCodeCompletion && !receivedNativeCompletion {
+                throw AIClientError.jsonDecodingError(context: "The model stream ended before its completion event.")
             }
             if openRouterStreamFallback {
                 return try await retryOpenRouterWithoutStreaming(

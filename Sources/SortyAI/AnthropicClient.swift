@@ -11,7 +11,17 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
     public let config: AIConfig
     @MainActor public weak var streamingDelegate: StreamingDelegate?
 
-    private static let messagesURL = URL(string: "https://api.anthropic.com/v1/messages")!
+    private let sessionID = UUID().uuidString
+    private var isOpenCode: Bool {
+        config.provider == .openCodeZen || config.provider == .openCodeGo
+    }
+
+    private func messagesURL() throws -> URL {
+        guard isOpenCode else { return URL(string: "https://api.anthropic.com/v1/messages")! }
+        let base = try AIRequestSupport.requireAPIURL(from: config)
+        return try AIRequestSupport.openAIChatCompletionsURL(from: base)
+            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("messages")
+    }
     private static let modelsURL = URL(string: "https://api.anthropic.com/v1/models")!
     
     public init(config: AIConfig) {
@@ -19,20 +29,25 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
     }
 
     private func requiredHeaders() throws -> [String: String] {
-        guard let authHeader = ProviderAuthResolver.authHeader(for: .anthropic, config: config) else {
+        guard let authHeader = ProviderAuthResolver.authHeader(for: config.provider, config: config) else {
             throw AIClientError.missingAPIKey
         }
 
-        return [
+        var headers = [
             authHeader.field: authHeader.value,
             "anthropic-version": "2023-06-01"
         ]
+        if config.provider == .openCodeGo {
+            headers["User-Agent"] = "Sorty/1.0"
+            headers["x-opencode-session"] = sessionID
+        }
+        return headers
     }
     
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         let headers = try requiredHeaders()
 
-        let url = Self.messagesURL
+        let url = try messagesURL()
         
         let prompts = SharedOrganizePipeline.buildPrompts(
             config: config,
@@ -64,7 +79,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
     public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         let headers = try requiredHeaders()
 
-        let url = Self.messagesURL
+        let url = try messagesURL()
         let orderedImageNames = Self.orderedImageFilenames(from: imageData)
 
         let prompts = SharedOrganizePipeline.buildPrompts(
@@ -339,9 +354,14 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         let headers = try requiredHeaders()
 
         var request = try AIRequestSupport.makeJSONRequest(
-            url: Self.modelsURL,
-            method: "GET",
-            headers: headers
+            url: isOpenCode ? try messagesURL() : Self.modelsURL,
+            method: isOpenCode ? "POST" : "GET",
+            headers: headers,
+            body: isOpenCode ? [
+                "model": config.model,
+                "max_tokens": 1,
+                "messages": [["role": "user", "content": "Reply OK."]]
+            ] : nil
         )
         request.timeoutInterval = AIRequestSupport.interactiveTimeout(for: config)
         // Health checks never wake constrained/expensive radios.
@@ -358,7 +378,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
     public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
         let headers = try requiredHeaders()
         
-        let url = Self.messagesURL
+        let url = try messagesURL()
         
         let requestBody: [String: Any] = [
             "model": config.model,

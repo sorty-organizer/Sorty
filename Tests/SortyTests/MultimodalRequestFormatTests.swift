@@ -37,6 +37,127 @@ final class MultimodalRequestFormatTests: XCTestCase {
         super.tearDown()
     }
 
+    func testOpenCodeGoMessagesUsePlanEndpointAndCredentials() async throws {
+        let config = AIConfig(provider: .openCodeGo, apiURL: AIProvider.openCodeGo.defaultAPIURL,
+                              apiKey: "go-test-key", model: "minimax-m3", enableStreaming: false)
+        let client = try AIClientFactory.createClient(config: config)
+        XCTAssertTrue(client is AnthropicClient)
+        MockHTTPURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(#"{"content":[{"type":"text","text":"OK"}],"stop_reason":"end_turn"}"#.utf8))
+        }
+        let text = try await client.generateText(prompt: "Hello", systemPrompt: nil)
+        XCTAssertEqual(text, "OK")
+        let request = try XCTUnwrap(MockHTTPURLProtocol.lastRequest)
+        XCTAssertEqual(request.url?.absoluteString, "https://opencode.ai/zen/go/v1/messages")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer go-test-key")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "Sorty/1.0")
+        let session = try XCTUnwrap(request.value(forHTTPHeaderField: "x-opencode-session"))
+        try await client.checkHealth()
+        let health = try XCTUnwrap(MockHTTPURLProtocol.lastRequest)
+        XCTAssertEqual(health.httpMethod, "POST")
+        XCTAssertEqual(health.url, request.url)
+        XCTAssertEqual(health.value(forHTTPHeaderField: "x-opencode-session"), session)
+    }
+
+    func testOpenCodeRoutingDiffersByPlan() throws {
+        XCTAssertEqual(AIProvider.openCodeZen.openCodeAPIFormat(for: "qwen3.8-max"), .chatCompletions)
+        XCTAssertEqual(AIProvider.openCodeGo.openCodeAPIFormat(for: "qwen3.8-max"), .messages)
+        XCTAssertEqual(AIProvider.openCodeZen.openCodeAPIFormat(for: " CLAUDE-SONNET-4-6 "), .messages)
+        XCTAssertEqual(AIProvider.openCodeGo.openCodeAPIFormat(for: "gpt-6-luna"), .responses)
+        XCTAssertEqual(AIProvider.openCodeZen.openCodeAPIFormat(for: "gemini-3.1-pro"), .gemini)
+    }
+
+    func testOpenCodeResponsesRequestAndTextExtraction() async throws {
+        let config = AIConfig(provider: .openCodeZen, apiURL: AIProvider.openCodeZen.defaultAPIURL,
+                              apiKey: "zen-test-key", model: "gpt-6-luna", enableStreaming: false)
+        let client = try AIClientFactory.createClient(config: config)
+        MockHTTPURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data(#"{"status":"completed","output":[{"type":"reasoning","summary":[]},{"type":"message","content":[{"type":"output_text","text":"OK"}]}]}"#.utf8))
+        }
+        let text = try await client.generateText(prompt: "Hello", systemPrompt: "Be concise")
+        XCTAssertEqual(text, "OK")
+        let request = try XCTUnwrap(MockHTTPURLProtocol.lastRequest)
+        XCTAssertEqual(request.url?.absoluteString, "https://opencode.ai/zen/v1/responses")
+        let body = try request.jsonBody()
+        XCTAssertNil(body["messages"])
+        XCTAssertNil(body["temperature"])
+        XCTAssertEqual((body["input"] as? [[String: Any]])?.count, 2)
+        XCTAssertEqual(body["store"] as? Bool, false)
+    }
+
+    func testOpenCodeNativeStreamsRejectTruncationAndIgnoreReasoning() throws {
+        let responseClient = OpenAIClient(config: AIConfig(provider: .openCodeGo, model: "gpt-6-luna"))
+        XCTAssertThrowsError(try responseClient.normalizedCompletion([
+            "type": "response.incomplete", "response": ["status": "incomplete"]
+        ], streaming: true))
+        let chunk = try responseClient.normalizedCompletion([
+            "type": "response.output_text.delta", "delta": "hello"
+        ], streaming: true)
+        XCTAssertEqual(AIRequestSupport.streamCompletionChunk(from: chunk), "hello")
+        let gemini = OpenAIClient(config: AIConfig(provider: .openCodeZen, model: "gemini-3.1-pro"))
+        let result = try gemini.normalizedCompletion(["candidates": [[
+            "content": ["parts": [["text": "secret", "thought": true], ["text": "visible"]]],
+            "finishReason": "STOP"
+        ]]])
+        let choices = try XCTUnwrap(result["choices"] as? [[String: Any]])
+        XCTAssertEqual(AIRequestSupport.extractChatMessageText(from: choices[0]), "visible")
+        XCTAssertThrowsError(try gemini.normalizedCompletion(["candidates": [["finishReason": "MAX_TOKENS"]]]))
+    }
+
+    func testOpenCodeResponsesStreamRequiresCompletionEvent() async throws {
+        let config = AIConfig(provider: .openCodeGo, apiURL: AIProvider.openCodeGo.defaultAPIURL,
+                              apiKey: "go-test-key", model: "gpt-6-luna", enableStreaming: true)
+        let files = [FileItem(path: "/tmp/photo1.jpg", name: "photo1", extension: "jpg")]
+        for completes in [true, false] {
+            MockHTTPURLProtocol.requestHandler = { request in
+                let plan = #"{"folders":[{"name":"Images","files":["photo1.jpg"]}],"unorganized":[]}"#
+                let delta = try JSONSerialization.data(withJSONObject: [
+                    "type": "response.output_text.delta", "delta": plan
+                ])
+                var events = "data: \(String(decoding: delta, as: UTF8.self))\n\n"
+                if completes {
+                    events += "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n"
+                }
+                let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                                               headerFields: ["Content-Type": "text/event-stream"])!
+                return (response, Data(events.utf8))
+            }
+            do {
+                _ = try await OpenAIClient(config: config).analyze(files: files)
+                XCTAssertTrue(completes, "A truncated stream must not produce an accepted plan")
+            } catch {
+                if completes { throw error }
+                guard case AIClientError.jsonDecodingError = error else {
+                    return XCTFail("Expected an incomplete stream error, got \(error)")
+                }
+            }
+        }
+    }
+
+    func testOpenCodeGeminiRequestPreservesImagesAndSystemPrompt() throws {
+        let client = OpenAIClient(config: AIConfig(provider: .openCodeZen, model: "gemini-3.1-pro"))
+        let request = try client.makeCompletionRequest(
+            url: URL(string: "https://opencode.ai/zen/v1/chat/completions")!, headers: [:], body: [
+                "messages": [
+                    ["role": "system", "content": "Be concise"],
+                    ["role": "user", "content": [
+                        ["type": "text", "text": "Describe"],
+                        ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,AQID"]]
+                    ]]
+                ], "max_tokens": 512, "stream": true
+            ])
+        XCTAssertEqual(request.url?.path, "/zen/v1/models/gemini-3.1-pro:streamGenerateContent")
+        XCTAssertEqual(request.url?.query, "alt=sse")
+        let body = try request.jsonBody()
+        XCTAssertNotNil(body["systemInstruction"])
+        let contents = try XCTUnwrap(body["contents"] as? [[String: Any]])
+        let parts = try XCTUnwrap(contents[0]["parts"] as? [[String: Any]])
+        let image = try XCTUnwrap(parts[1]["inlineData"] as? [String: String])
+        XCTAssertEqual(image, ["mimeType": "image/jpeg", "data": "AQID"])
+    }
+
     func testOpenAIClientBuildsImageURLPartsWithConfigurableDetail() async throws {
         let config = AIConfig(
             provider: .openAI,

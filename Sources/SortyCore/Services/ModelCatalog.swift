@@ -979,17 +979,12 @@ public final class ModelCatalog: ObservableObject {
         }
     }
     
-    /// OpenCode publishes mixed API protocols. The live `/models` list is
-    /// filtered by denylist: documented non-chat IDs are dropped and
-    /// everything else is kept, so newly added chat models appear without
-    /// an allowlist update. Unknown IDs are included optimistically.
+    /// Keep models supported by the native protocol clients. SystemOne has no
+    /// adapter yet; sending those models to chat completions would fail.
     nonisolated static func openCodeChatModels(_ models: [ModelInfo], for provider: AIProvider) -> [ModelInfo] {
-        let excludedIDs = Set(provider.openCodeNonChatModelIDs.map { $0.lowercased() })
-        let excludedPrefixes = provider.openCodeNonChatModelIDPrefixes.map { $0.lowercased() }
-        return models.filter { model in
-            let id = model.id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard !id.isEmpty, !excludedIDs.contains(id) else { return false }
-            return !excludedPrefixes.contains(where: id.hasPrefix)
+        models.filter {
+            !$0.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && provider.openCodeAPIFormat(for: $0.id) != .systemOne
         }
     }
 
@@ -1254,6 +1249,9 @@ public final class ModelCatalog: ObservableObject {
                     guard wrapper.openAIAuthMethod == .apiKey else { continue }
                     openAIAuthMethod = wrapper.openAIAuthMethod
                 }
+                if provider == .openCodeZen || provider == .openCodeGo {
+                    guard wrapper.openCodeProtocolVersion == 1 else { continue }
+                }
                 models[provider] = wrapper.models
                 timestamps[provider] = wrapper.timestamp
             } catch {
@@ -1272,7 +1270,8 @@ public final class ModelCatalog: ObservableObject {
         let wrapper = CacheWrapper(
             models: models,
             timestamp: Date(),
-            openAIAuthMethod: provider == .openAI ? cachedOpenAIAuthMethod : nil
+            openAIAuthMethod: provider == .openAI ? cachedOpenAIAuthMethod : nil,
+            openCodeProtocolVersion: (provider == .openCodeZen || provider == .openCodeGo) ? 1 : nil
         )
 
         // Encode + write off the MainActor; only @Published-adjacent state
@@ -1640,6 +1639,8 @@ public final class ModelCatalog: ObservableObject {
                 return candidate.hasPrefix("claude")
             case .gemini:
                 return candidate.hasPrefix("gemini")
+            case .openCodeZen, .openCodeGo:
+                return candidate.hasPrefix("gpt-") || candidate.hasPrefix("claude-") || candidate.hasPrefix("gemini-")
             case .groq:
                 return candidate.contains("vision-preview") || candidate.contains("llama-4-scout")
             default:
@@ -1739,10 +1740,13 @@ private struct CacheWrapper: Codable {
     /// discarded on load because they may contain Codex-only models.
     let openAIAuthMethod: ProviderAuthMethod?
 
-    init(models: [ModelInfo], timestamp: Date, openAIAuthMethod: ProviderAuthMethod? = nil) {
+    let openCodeProtocolVersion: Int?
+
+    init(models: [ModelInfo], timestamp: Date, openAIAuthMethod: ProviderAuthMethod? = nil, openCodeProtocolVersion: Int? = nil) {
         self.models = models
         self.timestamp = timestamp
         self.openAIAuthMethod = openAIAuthMethod
+        self.openCodeProtocolVersion = openCodeProtocolVersion
     }
 }
 

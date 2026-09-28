@@ -2,8 +2,8 @@
 
 Sorty shows one OpenCode provider card. Select Zen or Go in API Configuration.
 Add the key for each plan in Provider Settings. Sorty stores the keys in separate
-Keychain entries and sends requests to the plan's `/chat/completions` endpoint.
-Connection checks send a one-token completion to the selected model to validate
+Keychain entries. Each model uses its plan's native API endpoint.
+Connection checks send a bounded completion to the selected model to validate
 the key and model access. These probes can consume a small amount of quota.
 The public model-list endpoint alone cannot validate credentials.
 
@@ -15,13 +15,17 @@ provider and model if both are usable. If no usable automation choice exists,
 Sorty shows a provider error and asks the user to choose one. Incomplete
 automation overrides also show an error instead of selecting a default model.
 
-The model picker shows the plan's live `/models` response minus models
-documented for non-chat endpoints (Responses, Messages, Gemini-native,
-SystemOne), which Sorty's OpenAI-compatible client does not send. Unknown
-model IDs stay included so newly added chat models appear without an app
-update; only add to the exclusion lists when the endpoint tables document
-a model or family as non-chat. The fallback list uses the same
-chat-compatible model IDs when catalog refresh is unavailable.
+The model picker includes the live catalog's Chat Completions, Messages,
+Responses, and Gemini models. The client routes each model using OpenCode's
+plan-specific endpoint table. Qwen3.8 Max and MiniMax use Chat Completions on
+Zen but Messages on Go. GPT, Grok, and Muse use Responses; Claude uses
+Messages; Gemini uses its native generateContent API. Streaming requests use
+the corresponding native events and exclude reasoning text from output JSON.
+
+Jev models remain excluded because their SystemOne protocol is not supported.
+Unknown model IDs retain the chat-completions path. Catalog caches from the
+old chat-only implementation are discarded once so they cannot hide newly
+supported models. Offline fallback lists include examples of supported families.
 
 Go's [V2 documentation](https://opencode.ai/v2/docs/console/go) says clients
 should send typical coding agent traffic. Sorty sends file organization

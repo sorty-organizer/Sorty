@@ -29,7 +29,16 @@ public struct AIClientFactory {
             }
             return OpenAIClient(config: config)
 
-        case .openCodeZen, .openCodeGo, .groq, .openAICompatible, .openRouter, .ollama, .gemini:
+        case .openCodeZen, .openCodeGo:
+            if config.provider.openCodeAPIFormat(for: config.model) == .systemOne {
+                throw AIClientError.apiError(statusCode: 400, message: "This OpenCode model uses SystemOne, which Sorty does not support. Choose another model.")
+            }
+            if config.provider.openCodeAPIFormat(for: config.model) == .messages {
+                return AnthropicClient(config: config)
+            }
+            return OpenAIClient(config: config)
+
+        case .groq, .openAICompatible, .openRouter, .ollama, .gemini:
             return OpenAIClient(config: config)
             
         case .anthropic:

@@ -87,6 +87,9 @@ final class ModelCatalogVisionSupportTests: XCTestCase {
     func testProviderSpecificHeuristics() {
         XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "llava:latest", provider: .ollama))
         XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "deepseek-v4-flash-vision-exp", provider: .openCodeGo))
+        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "claude-sonnet-4-6", provider: .openCodeZen))
+        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "gemini-3.1-pro", provider: .openCodeZen))
+        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "gpt-5.4", provider: .openCodeGo))
         XCTAssertFalse(ModelCatalog.shared.supportsVision(modelId: "glm-5.3", provider: .openCodeGo))
     }
 
