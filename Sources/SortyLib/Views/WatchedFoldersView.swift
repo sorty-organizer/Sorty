@@ -1969,10 +1969,13 @@ struct WatchedFolderConfigView: View {
     }
 
     private var globalAutomationSelection: (provider: AIProvider, model: String) {
-        let provider =
-            settingsViewModel.config.automationProvider ?? settingsViewModel.config.provider
+        // A stale .unavailableProvider (ex-Copilot placeholder) means "no override".
+        let automationProvider =
+            settingsViewModel.config.automationProvider == .unavailableProvider
+            ? nil : settingsViewModel.config.automationProvider
+        let provider = automationProvider ?? settingsViewModel.config.provider
         let configuredModel =
-            settingsViewModel.config.automationProvider == nil
+            automationProvider == nil
             ? settingsViewModel.config.model
             : (settingsViewModel.config.automationModel ?? "")
         return (provider, configuredModel)
@@ -2005,7 +2008,8 @@ struct WatchedFolderConfigView: View {
 
         if useCustomModel {
             updated.providerOverride = selectedProvider
-            updated.modelOverride = selectedModel
+            let trimmedModel = selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            updated.modelOverride = trimmedModel.isEmpty ? nil : trimmedModel
         } else {
             updated.providerOverride = nil
             updated.modelOverride = nil

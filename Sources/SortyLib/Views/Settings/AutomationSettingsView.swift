@@ -125,7 +125,8 @@ struct AutomationSettingsView: View {
                         viewModel.config.automationModel = nil
                     } else {
                         viewModel.config.automationProvider = selectedProvider
-                        viewModel.config.automationModel = selectedModel.isEmpty ? nil : selectedModel
+                        let trimmedModel = selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+                        viewModel.config.automationModel = trimmedModel.isEmpty ? nil : trimmedModel
                     }
                     if !isLoadingSettings {
                         AnalyticsManager.shared.captureSettingChanged(
@@ -181,10 +182,11 @@ struct AutomationSettingsView: View {
                 if let authMethod {
                     viewModel.config.setAuthMethod(authMethod, for: provider)
                 }
+                let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
                 selectedProvider = provider
-                selectedModel = model
+                selectedModel = trimmedModel
                 viewModel.config.automationProvider = provider
-                viewModel.config.automationModel = model
+                viewModel.config.automationModel = trimmedModel.isEmpty ? nil : trimmedModel
             },
             isSubscriptionSelected: viewModel.config.authMethod(for: selectedProvider) == .accountSignIn
         )
