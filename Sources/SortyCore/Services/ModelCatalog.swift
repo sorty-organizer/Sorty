@@ -1721,7 +1721,7 @@ public final class ModelCatalog: ObservableObject {
                 !lowercaseId.contains("embedding") &&
                 !lowercaseId.contains("tts") &&
                 !lowercaseId.contains("speech")
-        case .openAI, .anthropic, .groq:
+        case .openAI, .anthropic, .groq, .openCodeZen, .openCodeGo:
             return Self.visionKeywords.contains(where: { lowercaseId.contains($0) })
         case .openRouter:
             // OpenRouter often includes vision in the name or we can check the ID

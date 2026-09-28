@@ -4203,7 +4203,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                let apiKey = OrganizerServices.keychainReader(providerOverride.keychainKey) {
                 operationConfig.apiKey = apiKey
             }
-            operationConfig.apiURL = providerOverride.defaultAPIURL
+            // Preserve a custom endpoint when the folder override matches the
+            // global provider (same pattern as generatePlanWithProvider).
+            if [.openAICompatible, .ollama].contains(providerOverride),
+               aiConfig?.provider == providerOverride,
+               !(aiConfig?.apiURL?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty {
+                operationConfig.apiURL = aiConfig?.apiURL ?? providerOverride.defaultAPIURL
+            } else {
+                operationConfig.apiURL = providerOverride.defaultAPIURL
+            }
             client = try AIClientFactory.createClient(config: operationConfig)
         } else if defaultClient.config.mode == operationConfig.mode,
                   defaultClient.config.enableSmartRename == operationConfig.enableSmartRename {

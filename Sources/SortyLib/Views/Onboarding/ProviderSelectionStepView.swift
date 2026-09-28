@@ -1190,6 +1190,8 @@ struct OnboardingProviderRow: View {
     var body: some View {
         Button {
             if provider.isAvailable {
+                // The OpenCode card covers both plans: staying on Go keeps Go,
+                // otherwise the card selects Zen; plan switching lives in the plan picker.
                 action(isOpenCodeCard && selectedProvider == .openCodeGo ? .openCodeGo : provider)
             }
         } label: {
@@ -1263,6 +1265,8 @@ struct OnboardingProviderRow: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isSelected)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovering)
         .accessibilityIdentifier("OnboardingProvider_\(provider.rawValue)")
+        .accessibilityHint(isOpenCodeCard ? "Selects OpenCode. Switch between the Zen and Go plans in the plan picker." : "Selects \(provider.displayName).")
+        .help(isOpenCodeCard ? "Use OpenCode (switch plans in the plan picker)" : "Use \(provider.displayName)")
     }
 }
 

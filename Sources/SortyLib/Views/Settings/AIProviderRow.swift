@@ -26,6 +26,8 @@ struct AIProviderRow: View {
     
     var body: some View {
         Button {
+            // The OpenCode card covers both plans: staying on Go keeps Go,
+            // otherwise the card selects Zen; plan switching lives in the plan picker.
             action(isOpenCodeCard && selectedProvider == .openCodeGo ? .openCodeGo : provider)
         } label: {
             HStack(alignment: .center, spacing: 8) {
@@ -89,8 +91,8 @@ struct AIProviderRow: View {
         .buttonStyle(.plain)
         .minimumHitTarget()
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        .accessibilityHint("Selects \(isOpenCodeCard ? "OpenCode" : provider.displayName) as the AI provider")
-        .help("Use \(isOpenCodeCard ? "OpenCode" : provider.displayName)")
+        .accessibilityHint(isOpenCodeCard ? "Selects OpenCode as the AI provider. Switch between the Zen and Go plans in the plan picker." : "Selects \(provider.displayName) as the AI provider")
+        .help(isOpenCodeCard ? "Use OpenCode (switch plans in the plan picker)" : "Use \(provider.displayName)")
     }
 }
 
