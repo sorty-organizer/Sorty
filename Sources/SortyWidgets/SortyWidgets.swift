@@ -1,6 +1,6 @@
 import SwiftUI
 import WidgetKit
-import SortyLib
+import SortyModels
 
 private struct SortyWidgetEntry: TimelineEntry {
     let date: Date
@@ -204,10 +204,8 @@ private struct SortyOverviewWidgetEntryView: View {
         }
     }
 
-    // NOTE: The SortyWidgets extension target lives in Sorty.xcodeproj
-    // (SortyWidgets.appex); it is intentionally not an SPM target because
-    // WidgetKit extensions require Xcode signing/entitlements. It links
-    // SortyLib types via the Xcode target's dependencies.
+    // The extension stays in Xcode for WidgetKit signing and reads its
+    // snapshot from SortyModels without linking the app's view target.
     private static func safeURL(_ string: String) -> URL? {
         guard let url = URL(string: string),
               let scheme = url.scheme?.lowercased(),

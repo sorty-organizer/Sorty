@@ -13,7 +13,7 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 |-------|----------|---------|
 | **SortyApp** | `Sources/SortyApp/` | SwiftUI lifecycle, `AppCoordinator` for background tasks |
 | **SortyFileSystem** | `Sources/SortyFileSystem/` | File naming, hashing, path validation, and storage path primitives |
-| **SortyModels** | `Sources/SortyModels/` | Data models, history, undo operations, and model-layer logging; depends on `SortyFileSystem` only |
+| **SortyModels** | `Sources/SortyModels/` | Data models, history, undo operations, widget snapshots, and model-layer logging; depends on `SortyFileSystem` only |
 | **SortyAI** | `Sources/SortyAI/` | AI clients, prompts, keychain/vision seams; depends on `SortyFileSystem` + `SortyModels` |
 | **SortyLearnings** | `Sources/SortyLearnings/` | Preference learning and encrypted profiles; depends on `SortyFileSystem` + `SortyModels` + `SortyAI` |
 | **SortyFS** | `Sources/SortyFS/` | Scanning, content analysis, file operations, and folder watching; depends on `SortyFileSystem` + `SortyModels` |
@@ -21,7 +21,7 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | **SortyCore** | `Sources/SortyCore/` | Shared app logic and service adapters; depends on `SortyOrganizer`, `SortyLearnings`, `SortyFS`, and their lower layers |
 | **SortyLib** | `Sources/SortyLib/` | SwiftUI views, view helpers, and app resources; depends on `SortyCore` |
 | **SortyFinderSync** | `Sources/SortyFinderSync/` | Finder Sync extension |
-| **SortyWidgets** | `Sources/SortyWidgets/` | WidgetKit extension embedded by the Xcode app target |
+| **SortyWidgets** | `Sources/SortyWidgets/` | WidgetKit extension embedded by the Xcode app target; links only `SortyModels` |
 
 ### Library directories
 
