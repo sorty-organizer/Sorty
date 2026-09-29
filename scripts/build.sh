@@ -1108,6 +1108,22 @@ prune_nonshipping_resources() {
         "${resources_dir}/dmg-layout.json" \
         "${resources_dir}/whats-new-mid-generation.png" \
         "${resources_dir}/whats-new-rename-only.png"
+
+    # Xcode can leave a second SwiftPM resource layout inside the flattened
+    # app resources. Drop only byte-identical copies; its localization files
+    # can differ from the compiled strings at the app resource root.
+    local nested_dir="${resources_dir}/Contents/Resources"
+    if [ -d "${nested_dir}" ]; then
+        local nested_file relative_path root_file
+        while IFS= read -r -d '' nested_file; do
+            relative_path="${nested_file#${nested_dir}/}"
+            root_file="${resources_dir}/${relative_path}"
+            if [ -f "${root_file}" ] && cmp -s "${nested_file}" "${root_file}"; then
+                rm -f "${nested_file}"
+            fi
+        done < <(find "${nested_dir}" -type f -print0)
+        find "${nested_dir}" -depth -type d -empty -delete
+    fi
 }
 
 bundle_background_agent_plist() {
