@@ -10,6 +10,37 @@ import XCTest
 @testable import SortyCore
 @testable import SortyLearnings
 
+private final class ProfileImportTestKeychain: LearningsKeychainStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String: String] = [:]
+
+    func get(key: String) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return values[key]
+    }
+
+    func itemStatus(key: String) -> LearningsKeyStatus {
+        lock.lock()
+        defer { lock.unlock() }
+        return values[key] == nil ? .notFound : .found
+    }
+
+    func save(key: String, value: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        values[key] = value
+        return true
+    }
+
+    func delete(key: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        values.removeValue(forKey: key)
+        return true
+    }
+}
+
 @MainActor
 final class LearningsManagerTests: XCTestCase {
     
@@ -1286,6 +1317,17 @@ final class EnhancedLearningsTests: XCTestCase {
     }
 
     func testProfileImportMergesRecordsRestoresSettingsAndPreservesConsent() async throws {
+        let storageDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SortyProfileImport-\(UUID().uuidString)")
+        let previousKeychain = LearningsKeychain.shared
+        LearningsFileManager.storageDirectoryOverride = storageDirectory
+        LearningsKeychain.shared = ProfileImportTestKeychain()
+        defer {
+            try? LearningsFileManager.secureDelete()
+            LearningsFileManager.storageDirectoryOverride = nil
+            LearningsKeychain.shared = previousKeychain
+        }
+
         var exportedProfile = LearningsProfile(consentGranted: false)
         exportedProfile.corrections = [
             LabeledExample(

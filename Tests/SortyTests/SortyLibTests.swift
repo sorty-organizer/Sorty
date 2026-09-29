@@ -178,6 +178,8 @@ class SortyTests: XCTestCase {
         }
 
         folderOrganizer.setAIClientForTesting(mockClient)
+        let batchClient = mockClient
+        folderOrganizer.setBatchClientFactoryForTesting { _, _ in batchClient }
         await mockClient.setHandler { files in
             OrganizationPlan(
                 suggestions: [
@@ -275,6 +277,7 @@ class SortyTests: XCTestCase {
         let renameClient = MockAIClient(config: renameConfig)
         let timeoutTracker = ResumeTimeoutTracker()
         folderOrganizer.setAIClientForTesting(renameClient)
+        folderOrganizer.setBatchClientFactoryForTesting { _, _ in renameClient }
         await renameClient.setHandler { files in
             try await timeoutTracker.plan(for: files)
         }

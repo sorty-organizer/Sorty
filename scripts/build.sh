@@ -1961,6 +1961,7 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
 
     ENTITLEMENTS_FILE="${PROJECT_DIR}/Sorty.entitlements"
     FINDER_SYNC_ENTITLEMENTS="${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements"
+    WIDGETS_ENTITLEMENTS="${PROJECT_DIR}/SortyWidgets/SortyWidgets.entitlements"
     REPAIR_ENTITLEMENTS_FILE="${PROJECT_DIR}/Sources/SortyLib/Resources/SortyAppRepair.entitlements"
 
     validate_adhoc_entitlements "${ENTITLEMENTS_FILE}" "Sorty.entitlements"
@@ -1995,6 +1996,12 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
         log_detail "Signed SortyFinderSync.appex"
     fi
 
+    if [ -d "${APP_PATH}/Contents/PlugIns/SortyWidgets.appex" ]; then
+        run_quiet codesign_cmd "${APP_PATH}/Contents/PlugIns/SortyWidgets.appex/Contents/MacOS/SortyWidgets"
+        run_quiet codesign_cmd --entitlements "${WIDGETS_ENTITLEMENTS}" "${APP_PATH}/Contents/PlugIns/SortyWidgets.appex"
+        log_detail "Signed SortyWidgets.appex"
+    fi
+
     # 3. Sign the main app bundle (outermost — must be last)
     # Finder Sync depends on the containing app carrying the same sandbox/app-group
     # entitlements as the embedded extension. Do not silently strip them.
@@ -2015,6 +2022,7 @@ else
     # at launch with CODESIGNING / Invalid Page. Sign only the modified bundles;
     # leave the already-valid Sparkle components untouched.
     FINDER_SYNC_ENTITLEMENTS="${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements"
+    WIDGETS_ENTITLEMENTS="${PROJECT_DIR}/SortyWidgets/SortyWidgets.entitlements"
     ENTITLEMENTS_FILE="${PROJECT_DIR}/Sorty.entitlements"
 
     if [ -d "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" ]; then
@@ -2023,6 +2031,10 @@ else
         else
             run_quiet codesign --force --sign - "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex"
         fi
+    fi
+
+    if [ -d "${APP_PATH}/Contents/PlugIns/SortyWidgets.appex" ]; then
+        run_quiet codesign --force --sign - --entitlements "${WIDGETS_ENTITLEMENTS}" "${APP_PATH}/Contents/PlugIns/SortyWidgets.appex"
     fi
 
     if [ -f "${ENTITLEMENTS_FILE}" ]; then

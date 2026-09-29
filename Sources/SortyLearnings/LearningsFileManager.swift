@@ -12,10 +12,13 @@ import SortyModels
 
 /// Manages secure storage of learning profiles in encrypted .learning files
 public struct LearningsFileManager {
+    // Tests can isolate profile writes from the user's Application Support data.
+    nonisolated(unsafe) static var storageDirectoryOverride: URL?
     
     // MARK: - Configuration
     
     private static var learningsDirectory: URL {
+        if let storageDirectoryOverride { return storageDirectoryOverride }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         return base.appendingPathComponent("Sorty/Learnings")
