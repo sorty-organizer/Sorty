@@ -71,7 +71,7 @@ const SCREENSHOTS = [
     width: 1123,
     height: 896,
     title: 'Sorty 1.2.0 artwork',
-    description: 'Release artwork for the latest Sorty update.',
+    description: 'Release artwork for Sorty 1.2.0.',
   },
 ]
 
