@@ -45,6 +45,36 @@ export const metadata: Metadata = {
 
 const RELEASES = [
   {
+    version: 'Sorty 1.2.2',
+    status: 'Released',
+    date: 'September 29, 2026',
+    title: 'More provider choices and safer organizing',
+    summary:
+      'OpenCode Zen and OpenCode Go join the AI provider choices. This update also strengthens file-operation safety, separates concurrent AI streams, and adds optional in-app bug reports.',
+    highlights: [
+      {
+        icon: Sparkles,
+        title: 'OpenCode Zen and Go',
+        body: 'Choose either OpenCode provider in Sorty settings.',
+      },
+      {
+        icon: ShieldCheck,
+        title: 'Safer file operations',
+        body: 'Organization and undo now reject missing or replaced files and ambiguous paths.',
+      },
+      {
+        icon: FolderGit2,
+        title: 'Independent AI batches',
+        body: 'Concurrent batches keep their model streams separate.',
+      },
+      {
+        icon: ShieldCheck,
+        title: 'Optional bug reports',
+        body: 'Share a report with Sentry from the app and label the area involved.',
+      },
+    ],
+  },
+  {
     version: 'Sorty 1.2.1',
     status: 'Released',
     date: 'September 23, 2026',
@@ -477,6 +507,7 @@ export default function ChangelogPage() {
                     </div>
 
                     <div className="relative p-3 sm:p-4">
+                      {release.version === 'Sorty 1.2.1' ? (
                         <div className="release-metrics-card flex h-full flex-col justify-center rounded-[1.35rem] border border-white/10 p-5 sm:p-7">
                           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                             Measured against 1.2.0
@@ -513,6 +544,13 @@ export default function ChangelogPage() {
                           </div>
                           <a href="https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md" target="_blank" rel="noreferrer" className="mt-7 inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-background/65 px-4 py-2 text-sm font-medium text-foreground/85 transition-colors hover:border-primary/40 hover:text-foreground">See full benchmark notes<ArrowUpRight className="size-4" /></a>
                         </div>
+                      ) : (
+                        <div className="flex h-full flex-col justify-center gap-5 rounded-[1.35rem] border border-white/10 bg-background/30 p-7">
+                          <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">In this update</p>
+                          <p className="text-xl font-medium">More ways to connect Sorty to an AI provider.</p>
+                          <p className="text-sm leading-7 text-muted-foreground">File operations and concurrent AI requests have additional safeguards. The new bug report form is available when you choose Sentry sharing.</p>
+                        </div>
+                      )}
                     </div>
                   </div>
 

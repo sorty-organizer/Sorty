@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sorty 1.2.1</title>
+  <title>Sorty 1.2.2</title>
   <style>
     :root { color-scheme: light dark; }
     body { margin: 0; padding: 28px; font: -apple-system-body; color: CanvasText; background: Canvas; }
@@ -44,60 +44,12 @@
 </head>
 <body>
   <main>
-    <h1>Sorty 1.2.1</h1>
-    <p class="summary">A maintenance update with a refreshed app icon, faster launch, lower idle CPU use, faster large-folder planning, and reliability fixes.</p>
+    <h1>Sorty 1.2.2</h1>
+    <p class="summary">New OpenCode provider choices, safer file operations, and optional in-app bug reports.</p>
     <div class="callout"><strong>Update:</strong> Install this release in Sorty with <strong>Check for Updates</strong>, or download <code>Sorty.zip</code> for a new installation.</div>
-    <section class="performance" aria-label="Sorty 1.2.1 performance comparison">
-      <h2>Measured against 1.2.0</h2>
-      <div class="metrics"><div class="metric blue">
-          <div class="metric-heading"><strong>Time to first window</strong><strong>50% faster</strong></div>
-          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>2,262 ms</span></div>
-          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 49.8%"></div></div><span>1,127 ms</span></div>
-        </div><div class="metric green">
-          <div class="metric-heading"><strong>Settled idle CPU</strong><strong>Near zero</strong></div>
-          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>51.4%</span></div>
-          <div class="bar-row"><span>1.2.1</span><div class="track zero"></div><span>0%</span></div>
-        </div><div class="metric green">
-          <div class="metric-heading"><strong>Idle CPU when minimized</strong><strong>Timers pause</strong></div>
-          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>55%</span></div>
-          <div class="bar-row"><span>1.2.1</span><div class="track zero"></div><span>0%</span></div>
-        </div><div class="metric green">
-          <div class="metric-heading"><strong>Idle CPU with animated HUD</strong><strong>About 3× lower</strong></div>
-          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>51.4%</span></div>
-          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 32.1%"></div></div><span>16.5%</span></div>
-        </div><div class="metric blue">
-          <div class="metric-heading"><strong>1,000-file prompt size</strong><strong>91% fewer</strong></div>
-          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>132,059 tokens</span></div>
-          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 9.1%"></div></div><span>11,961 tokens</span></div>
-        </div><div class="metric blue">
-          <div class="metric-heading"><strong>1,000-file prompt preparation</strong><strong>59% faster</strong></div>
-          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>12.1 ms</span></div>
-          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 41.3%"></div></div><span>5 ms</span></div>
-        </div><div class="metric blue">
-          <div class="metric-heading"><strong>Repeated batch manifest</strong><strong>81% fewer</strong></div>
-          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>13,686 tokens</span></div>
-          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 19.2%"></div></div><span>2,627 tokens</span></div>
-        </div><div class="metric purple">
-          <div class="metric-heading"><strong>Duplicate text-feature work</strong><strong>86% less work</strong></div>
-          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>100 % of old work</span></div>
-          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 14.0%"></div></div><span>14 % of old work</span></div>
-        </div><div class="metric blue">
-          <div class="metric-heading"><strong>Progress-line parsing work</strong><strong>45% less work</strong></div>
-          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>100 % of old work</span></div>
-          <div class="bar-row"><span>1.2.1</span><div class="track"><div class="bar after" style="width: 55.0%"></div></div><span>55 % of old work</span></div>
-        </div><div class="metric purple">
-          <div class="metric-heading"><strong>Flight queue work over 120 frames</strong><strong>O(1) per frame</strong></div>
-          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>100 % of old work</span></div>
-          <div class="bar-row"><span>1.2.1</span><div class="track zero"></div><span>0 % of old work</span></div>
-        </div><div class="metric blue">
-          <div class="metric-heading"><strong>Unicode stream counting, 100 runs</strong><strong>About 40.6 s saved</strong></div>
-          <div class="bar-row"><span>1.2.0</span><div class="track"><div class="bar before"></div></div><span>40.6 s</span></div>
-          <div class="bar-row"><span>1.2.1</span><div class="track zero"></div><span>0 s</span></div>
-        </div></div>
-      <p><a href="https://github.com/sorty-organizer/Sorty/blob/main/docs/performance.md">How we measured</a></p>
-    </section>
-    <section><h2>New</h2><ul><li>Updated the main Sorty app icon with the new release artwork.</li><li>Added in-app support checks and clearer diagnostics for watched folders and Finder integration.</li></ul></section><section><h2>Improved</h2><ul><li>Cut median time to the first visible window from 2,262 ms to 1,127 ms in a same-machine Release comparison with eight runs per build.</li><li>Reduced settled idle CPU from a 51.4% mean to 0% in a 60-second visible-window test with no animated HUD. Minimized-window idle CPU also fell from about 55% to 0%; with an animated HUD, measured CPU was 16.5%, about three times below the previous idle result.</li><li>Capped organization prompts for very large folders. In a 1,000-file deep-scan benchmark, the prompt fell from 132,059 tokens to 11,961, and preparation time fell from 12.1 ms to 5.0 ms. At 200 files, prompt size fell 56%; at 350 files, 74%; and at 500 files, 82%.</li><li>Reduced repeated context in multi-batch AI requests by 81% in a 1,050-file benchmark, and cut repeated text-feature work in the duplicate-detection benchmark by 86%.</li><li>Cut progress-line parsing work by 45%, removed repeated full-list scanning from the 120-frame flight queue benchmark, and reduced 100 Unicode stream-counting runs from 40.6 seconds to about zero.</li><li>Reduced repeated work during organization, AI streaming, duplicate review, and persisted-state loading.</li></ul></section><section><h2>Fixed</h2><ul><li>Fixed organization, cancellation, and undo edge cases, including overlapping runs.</li><li>Fixed Finder action routing, permission recovery, provider errors, and stale status after configuration changes.</li></ul></section>
-    <p><a href="https://github.com/sorty-organizer/Sorty/releases/tag/v1.2.1">View this release on GitHub</a></p>
+
+    <section><h2>New</h2><ul><li>Added OpenCode Zen and OpenCode Go as AI provider choices.</li><li>Added an optional in-app bug report form for users who choose to share a report with Sentry. The form can include a report area to help route the issue.</li></ul></section><section><h2>Improved</h2><ul><li>Moved several settings and learnings reads off the main actor so opening those screens does not wait on keychain or profile loading.</li><li>Separated file system, model, AI, learnings, and organization code into smaller modules for maintainability.</li></ul></section><section><h2>Fixed</h2><ul><li>Guarded organization and undo against missing or replaced files, ambiguous paths, and overlapping operations.</li><li>Isolated concurrent AI batch streams and improved recovery from partial renames and cancelled model reads.</li><li>Fixed Finder automation and widget target integration issues.</li><li>Kept internal telemetry separate from user reports and limited bug-report controls to the sharing choice.</li></ul></section>
+    <p><a href="https://github.com/sorty-organizer/Sorty/releases/tag/v1.2.2">View this release on GitHub</a></p>
   </main>
 </body>
 </html>

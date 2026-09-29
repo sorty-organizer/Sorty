@@ -397,7 +397,7 @@ jobs:
           python3 scripts/generate_sparkle_release_notes.py \
             --version "${{ needs.prepare-release.outputs.version }}" \
             --title "Sorty ${{ needs.prepare-release.outputs.version }}" \
-            --summary "A maintenance update focused on bug fixes, faster launch, and far less idle CPU work." \
+            --summary "New OpenCode provider choices, safer file operations, and optional in-app bug reports." \
             --changelog CHANGELOG.md \
             --markdown releases/release-notes.md \
             --html releases/release-notes.html
