@@ -68,6 +68,10 @@ repeated regressions — do not attempt `isTemplate`-based approaches.
 - ❌ Drawing the SF Symbol into the full `NSRect(origin: .zero, size: menuIconSize)` — non-square symbols (e.g. "eye") get distorted. Always compute a proportional draw rect.
 
 ## Troubleshooting
+- In a release ZIP, `SortyFinderSync.appex/Contents/Info.plist` must identify
+  `com.sorty.app.SortyFinderSync`, name `SortyFinderSync` as its executable,
+  and declare the `com.apple.FinderSync` extension point. A signed `.appex`
+  with the host app's `Info.plist` will not register with Finder.
 - Verify extension target builds:
   - `xcodebuild -project Sorty.xcodeproj -target SortyFinderSync -configuration Debug -destination 'platform=macOS' build`
 - Watch icon assets (used by Quick Actions, NOT by Finder Sync):

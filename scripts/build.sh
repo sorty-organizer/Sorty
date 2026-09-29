@@ -1547,8 +1547,6 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         -jobs "${XCODE_BUILD_JOBS}" \
         -skipPackagePluginValidation \
         -showBuildTimingSummary \
-        INFOPLIST_FILE="${PROJECT_DIR}/Info.plist" \
-        PRODUCT_BUNDLE_IDENTIFIER="${APP_BUNDLE_ID}" \
         CODE_SIGN_IDENTITY="-" \
         CODE_SIGNING_ALLOWED=NO \
         CODE_SIGNING_REQUIRED=NO \

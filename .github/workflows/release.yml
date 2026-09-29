@@ -382,6 +382,21 @@ jobs:
           echo "$ARCHS" | grep -qw arm64
           echo "$ARCHS" | grep -qw x86_64
 
+          for extension in SortyFinderSync SortyWidgets; do
+            EXTENSION="releases/Sorty.app/Contents/PlugIns/${extension}.appex/Contents"
+            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$EXTENSION/Info.plist")" = \
+              "com.sorty.app.${extension}"
+            test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$EXTENSION/Info.plist")" = \
+              "$extension"
+            test -x "$EXTENSION/MacOS/$extension"
+          done
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' \
+            releases/Sorty.app/Contents/PlugIns/SortyFinderSync.appex/Contents/Info.plist)" = \
+            "com.apple.FinderSync"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' \
+            releases/Sorty.app/Contents/PlugIns/SortyWidgets.appex/Contents/Info.plist)" = \
+            "com.apple.widgetkit-extension"
+
           if unzip -Z1 releases/Sorty.zip | grep -Ev '^(Sorty\.app/|__MACOSX/)' | grep -q .; then
             echo "Sorty.zip contains unexpected top-level content." >&2
             exit 1
