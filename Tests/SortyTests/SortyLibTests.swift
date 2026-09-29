@@ -178,7 +178,7 @@ class SortyTests: XCTestCase {
         }
 
         folderOrganizer.setAIClientForTesting(mockClient)
-        let batchClient = mockClient
+        let batchClient: MockAIClient = mockClient
         folderOrganizer.setBatchClientFactoryForTesting { _, _ in batchClient }
         await mockClient.setHandler { files in
             OrganizationPlan(
