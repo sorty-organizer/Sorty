@@ -4,6 +4,8 @@ The Debug and Release PNGs are full-bleed source artwork. Before packaging them
 for macOS, scale the **whole tile** to 824 × 824 pixels and center it on a
 transparent 1024 × 1024 canvas. This leaves a 100-pixel margin on each side.
 Shrinking the robot inside the tile does not fix an oversized Dock icon.
+Keep the Release tile's outer edge smooth like Debug's; a bright frame in the
+source PNG will remain visible in every generated icon size.
 
 Run `python3 scripts/generate_app_icons.py` from the repository root after changing
 either source PNG. It requires ImageMagick and regenerates both variant ICNS
