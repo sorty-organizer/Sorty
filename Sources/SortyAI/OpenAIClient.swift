@@ -721,7 +721,13 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                     streamingDelegate?.didReceiveChunk(tail)
                 }
             }
-            if usesNativeOpenCodeCompletion && !receivedNativeCompletion {
+            // Gemini sometimes omits finishReason on success (mirroring the
+            // non-streaming fallback in normalizedCompletion): accept delivered
+            // content and let ResponseParser judge truncation. Responses always
+            // sends response.completed, so a missing event there means failure.
+            let isGeminiStream = config.provider.openCodeAPIFormat(for: config.model) == .gemini
+            if usesNativeOpenCodeCompletion && !receivedNativeCompletion
+                && (!isGeminiStream || accumulatedContent.isEmpty) {
                 throw AIClientError.jsonDecodingError(context: "The model stream ended before its completion event.")
             }
             if openRouterStreamFallback {
