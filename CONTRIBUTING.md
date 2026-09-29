@@ -285,6 +285,7 @@ Prefer small, reviewable commits and push them early. The goal is to get Blacksm
 ## Release Process
 
 Releases are validated and built on Blacksmith. Do not create release confidence from local `make release`, `make prerelease`, or `make ci` output.
+Use [the Sorty release checklist](.agents/skills/sorty-release/SKILL.md) to prepare version metadata, release notes, artwork, the in-app tour, Sparkle, and the website before publishing.
 
 1. Push `main` and wait for **Swift CI** to pass on Blacksmith.
 2. Trigger the **Release** workflow from GitHub Actions with the target version, or push the intended `v*` tag.
