@@ -150,10 +150,10 @@ jobs:
             !.build/**/Index.noindex
             !.build/logs
             !.build/**/*.log
-          key: ${{ runner.os }}-${{ runner.arch }}-spm-tests-v5-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-spm-tests-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-spm-tests-v5-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
-            ${{ runner.os }}-${{ runner.arch }}-spm-tests-v5-${{ steps.toolchain.outputs.key }}-
+            ${{ runner.os }}-${{ runner.arch }}-spm-tests-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
+            ${{ runner.os }}-${{ runner.arch }}-spm-tests-v6-${{ steps.toolchain.outputs.key }}-
 
       - name: Restore unchanged source timestamps
         run: python3 scripts/ci_source_cache.py restore
@@ -220,10 +220,10 @@ jobs:
             !.build/**/Index.noindex
             !.build/logs
             !.build/**/*.log
-          key: ${{ runner.os }}-${{ runner.arch }}-xcode-release-v5-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-release-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-xcode-release-v5-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
-            ${{ runner.os }}-${{ runner.arch }}-xcode-release-v5-${{ steps.toolchain.outputs.key }}-
+            ${{ runner.os }}-${{ runner.arch }}-xcode-release-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
+            ${{ runner.os }}-${{ runner.arch }}-xcode-release-v6-${{ steps.toolchain.outputs.key }}-
 
       - name: Restore unchanged source timestamps
         run: python3 scripts/ci_source_cache.py restore
