@@ -146,7 +146,8 @@ public extension SettingsFocusTarget {
         case .openCodeZen:
             return .providerOpenCodeZen
         case .openCodeGo:
-            return .providerOpenCodeGo
+            // Zen and Go share one provider card, so focus the shared card.
+            return .providerOpenCodeZen
         case .groq:
             return .providerGroq
         case .openAICompatible:
@@ -354,7 +355,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Connection Testing", "Validate credentials and endpoint connectivity before organizing files.", keywords: ["test connection", "connection status"], target: .providerConnection),
                 feature("OpenAI", "Use OpenAI with an API key or ChatGPT subscription.", keywords: ["gpt", "chatgpt", "codex"], target: .providerOpenAI),
                 feature("OpenCode Zen", "Use models through OpenCode Zen.", keywords: ["opencode", "zen"], target: .providerOpenCodeZen),
-                feature("OpenCode Go", "Use models through OpenCode Go.", keywords: ["opencode", "go", "subscription"], target: .providerOpenCodeGo),
+                // Zen and Go share one provider card; both snippets focus it.
+                feature("OpenCode Go", "Use models through OpenCode Go.", keywords: ["opencode", "go", "subscription"], target: .providerOpenCodeZen),
                 feature("Groq", "Use Groq for fast hosted inference.", keywords: ["fast inference"], target: .providerGroq),
                 feature("OpenAI-Compatible API", "Connect Sorty to a custom OpenAI-compatible endpoint.", keywords: ["compatible api", "custom endpoint"], target: .providerCompatibleAPI),
                 feature("OpenRouter", "Use OpenRouter’s multi-provider model catalog.", keywords: ["model router"], target: .providerOpenRouter),
