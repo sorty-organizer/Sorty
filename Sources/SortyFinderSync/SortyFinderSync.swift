@@ -274,26 +274,10 @@ final class SortyFinderSync: FIFinderSync {
     }
 
     private static func normalizedMenuIcon(_ image: NSImage, isTemplate: Bool) -> NSImage {
-        let menuIconSize = NSSize(width: 16, height: 16)
-        let sourceImage = (image.copy() as? NSImage) ?? image
-
-        let sourceSize = sourceImage.size
-        let maxDimension = max(sourceSize.width, sourceSize.height, 1)
-        let scale = min(menuIconSize.width, menuIconSize.height) / maxDimension
-        let drawSize = NSSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
-        let drawRect = NSRect(
-            x: (menuIconSize.width - drawSize.width) / 2,
-            y: (menuIconSize.height - drawSize.height) / 2,
-            width: drawSize.width,
-            height: drawSize.height
-        )
-
-        let rendered = NSImage(size: menuIconSize)
-        rendered.lockFocus()
-        sourceImage.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1.0)
-        rendered.unlockFocus()
-        rendered.isTemplate = isTemplate
-        return rendered
+        let icon = (image.copy() as? NSImage) ?? image
+        icon.size = NSSize(width: 16, height: 16)
+        icon.isTemplate = isTemplate
+        return icon
     }
 
     private static func reportHeartbeat(event: String) {

@@ -126,6 +126,10 @@ public struct WhatsNewTourView: View {
                 description: "OpenCode Zen and Go, safer organization, and clearer support."
             ),
             WhatsNewPage(
+                title: "A clearer menu bar",
+                description: "The old and new icons for all seven Sorty activities."
+            ),
+            WhatsNewPage(
                 title: "Sorty 1.2.2",
                 description: "New providers, clearer menu bar status, safer file operations, and easier bug reports."
             ),
@@ -258,6 +262,7 @@ public struct WhatsNewTourView: View {
                         symbol: "arrow.up.right.circle.fill",
                         color: .green,
                         items: [
+                            "Refreshed menu bar icons for all seven activities",
                             "Settings and learnings reads avoid blocking the main actor",
                             "Smaller modules for file, model, AI, and organizer code"
                         ]
@@ -355,7 +360,10 @@ public struct WhatsNewTourView: View {
                 )
                 .accessibilityHidden(true)
             }
-            if let imageName = page.activeImageName(at: imageIndex(for: page)) {
+            if currentPage == 1 {
+                menuIconComparison
+                    .frame(width: 640, height: 400)
+            } else if let imageName = page.activeImageName(at: imageIndex(for: page)) {
                 bundledImage(imageName, fillsFrame: page.imageNames.count > 1)
                     .frame(width: 640, height: 400)
                     .clipped()
@@ -371,16 +379,18 @@ public struct WhatsNewTourView: View {
                     .frame(width: 640, height: 400)
             }
 
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: Color(nsColor: .windowBackgroundColor).opacity(0.20), location: 0.45),
-                    .init(color: Color(nsColor: .windowBackgroundColor), location: 1.0),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .allowsHitTesting(false)
+            if currentPage != 1 {
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: Color(nsColor: .windowBackgroundColor).opacity(0.20), location: 0.45),
+                        .init(color: Color(nsColor: .windowBackgroundColor), location: 1.0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .allowsHitTesting(false)
+            }
         }
         .frame(width: 640, height: 400)
         .animation(imageTransitionAnimation, value: workflowImageIndex)
@@ -388,6 +398,52 @@ public struct WhatsNewTourView: View {
 
     private func imageIndex(for page: WhatsNewPage) -> Int {
         page.imageNames.count > 1 ? workflowImageIndex : 0
+    }
+
+    // The 1.2.2 comparison is temporary. Remove this page and the Old PNGs
+    // after the release is confirmed; later tours should show current artwork.
+    private var menuIconComparison: some View {
+        let activities: [(name: String, resource: String)] = [
+            ("Idle", "Idle"),
+            ("Greeting", "Greeting"),
+            ("Organizing", "Organizing"),
+            ("Renaming", "Renaming"),
+            ("Watched folder", "WatchedFolder"),
+            ("Duplicate scan", "DuplicateScanning"),
+            ("Learning", "Learning")
+        ]
+
+        return VStack(spacing: 5) {
+            HStack {
+                Text("Activity")
+                    .frame(width: 160, alignment: .leading)
+                Text("Before")
+                    .frame(width: 82)
+                Text("Now")
+                    .frame(width: 82)
+            }
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+            .padding(.bottom, 4)
+
+            ForEach(activities, id: \.resource) { activity in
+                HStack(spacing: 0) {
+                    Text(activity.name)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .frame(width: 160, alignment: .leading)
+
+                    bundledImage("SortyMenuOld\(activity.resource).png", fillsFrame: false)
+                        .frame(width: 82, height: 40)
+                        .accessibilityLabel("Previous \(activity.name) icon")
+
+                    bundledImage("SortyMenu\(activity.resource).png", fillsFrame: false)
+                        .frame(width: 82, height: 40)
+                        .accessibilityLabel("New \(activity.name) icon")
+                }
+                .frame(height: 40)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder

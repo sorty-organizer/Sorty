@@ -16,15 +16,18 @@ private struct MenuBarMascotIcon: View {
     var size: CGSize = CGSize(width: 18, height: 18)
 
     private var mascotImage: Image {
-        if let image = SortyResources.image(named: activity.resourceName, withExtension: "png") {
-            return Image(nsImage: image)
-        }
-        return Image(nsImage: SortyResources.menuBarLabelNSImage())
+        let source = SortyResources.image(named: activity.resourceName, withExtension: "png")
+            ?? SortyResources.menuBarLabelNSImage()
+        let resized = (source.copy() as? NSImage) ?? source
+        let iconSize = min(size.width, size.height)
+        resized.size = NSSize(width: iconSize, height: iconSize)
+        return Image(nsImage: resized)
     }
 
     var body: some View {
         mascotImage
             .resizable()
+            .interpolation(.high)
             .scaledToFit()
             .frame(width: size.width, height: size.height)
             .accessibilityLabel(activity.accessibilityLabel)
