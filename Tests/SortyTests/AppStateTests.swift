@@ -643,17 +643,6 @@ class AppStateTests: XCTestCase {
     }
 }
 
-// MARK: - SortyCommands Tests
-
-@MainActor
-class SortyCommandsTests: XCTestCase {
-
-    func testSortyCommandsInitialization() {
-        let commands = SortyCommands()
-        XCTAssertNotNil(commands)
-    }
-}
-
 // MARK: - OrganizationState Tests
 
 class OrganizationStateTests: XCTestCase {

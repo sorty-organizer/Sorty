@@ -123,26 +123,6 @@ final class ResourceLoadingTests: XCTestCase {
         XCTAssertEqual(controller.activity, .organizing)
     }
     
-    // MARK: - Fallback Behavior Tests
-
-    func testProviderWithMissingImageUsesFallback() {
-        // The ProviderLogoView should gracefully fall back to system icon
-        // when an image cannot be loaded via SortyResources.image()
-        //
-        // SortyResources.image() tries:
-        // 1. Asset catalog (if compiled .car file exists)
-        // 2. Images subdirectory (SPM .copy() resources)
-        // 3. Direct bundle resource lookup
-        //
-        // ProviderLogoView falls back to system icon if all fail
-
-        // All real providers should work - we just verify no crashes
-        for provider in AIProvider.allCases {
-            let _ = ProviderLogoView(provider: provider)
-        }
-        XCTAssertTrue(true, "All providers should load with graceful fallback")
-    }
-
     // MARK: - Bundle Resolver Robustness Tests
 
     func testBundleResolverMultiLayerDetection() {

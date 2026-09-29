@@ -497,36 +497,6 @@ final class UndoRedoSafetyTests: XCTestCase {
         }
     }
     
-    @MainActor
-    func testUndoGracefullyHandlesMissingFiles() async throws {
-        // Create a file and organize it
-        let file = tempDir.appendingPathComponent("test.txt")
-        try "content".write(to: file, atomically: true, encoding: .utf8)
-        
-        let fileItem = FileItem(path: file.path, name: "test", extension: "txt", size: 7, isDirectory: false)
-        let plan = OrganizationPlan(
-            suggestions: [
-                FolderSuggestion(folderName: "Dest", description: "", files: [fileItem], subfolders: [], reasoning: "")
-            ],
-            unorganizedFiles: [],
-            notes: ""
-        )
-        
-        let ops = try await fsManager.applyOrganization(plan, at: tempDir)
-        
-        // Manually delete the moved file (simulate external change)
-        let movedFile = tempDir.appendingPathComponent("Dest/test.txt")
-        try? fileManager.removeItem(at: movedFile)
-        
-        // Undo should handle gracefully (not crash)
-        do {
-            _ = try await fsManager.reverseOperations(ops)
-            // May succeed (no-op) or throw - both are acceptable
-        } catch {
-            // Expected - file was externally deleted
-            XCTAssertTrue(true, "Gracefully handled missing file during undo")
-        }
-    }
 }
 
 // MARK: - Exclusion Pattern Tests

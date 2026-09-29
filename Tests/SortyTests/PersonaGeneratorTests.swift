@@ -40,16 +40,6 @@ final class PersonaGeneratorTests: XCTestCase {
         XCTAssertNil(generator2.error)
     }
     
-    // MARK: - enforceNameLength Tests (via public behavior)
-    
-    func testNameLengthEnforcementViaReflection() {
-        let generator = PersonaGenerator()
-        
-        let mirror = Mirror(reflecting: generator)
-        let hasEnforceNameLength = mirror.children.contains { $0.label == "enforceNameLength" } == false
-        XCTAssertTrue(hasEnforceNameLength || true)
-    }
-    
     // MARK: - HoningAnswer Tests
     
     func testHoningAnswerCreation() {
