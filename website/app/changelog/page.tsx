@@ -50,7 +50,7 @@ const RELEASES = [
     date: 'September 29, 2026',
     title: 'More provider choices and safer organizing',
     summary:
-      'OpenCode Zen and OpenCode Go join the AI provider choices. This update also strengthens file-operation safety, separates concurrent AI streams, and adds optional in-app bug reports.',
+      'OpenCode Zen and OpenCode Go join the AI provider choices. Refreshed menu bar icons show Sorty’s activity, alongside safer file operations and optional in-app bug reports.',
     highlights: [
       {
         icon: Sparkles,

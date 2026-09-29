@@ -127,7 +127,7 @@ public struct WhatsNewTourView: View {
             ),
             WhatsNewPage(
                 title: "Sorty 1.2.2",
-                description: "New provider choices, safer file operations, and a clearer way to report bugs."
+                description: "New providers, clearer menu bar status, safer file operations, and easier bug reports."
             ),
         ]
     }

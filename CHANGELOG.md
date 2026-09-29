@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Improved
 
+- Refreshed all seven menu bar activity icons and increased their displayed size for clearer status at a glance.
 - Moved several settings and learnings reads off the main actor so opening those screens does not wait on keychain or profile loading.
 - Separated file system, model, AI, learnings, and organization code into smaller modules for maintainability.
 

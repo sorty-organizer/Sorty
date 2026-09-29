@@ -126,7 +126,7 @@ public struct MenuBarLabel: View {
         Image(nsImage: image)
             .resizable()
             .scaledToFit()
-            .frame(width: 18, height: 18)
+            .frame(width: 20, height: 20)
             .accessibilityLabel(controller.activity.accessibilityLabel)
             .task(id: controller.activity) {
                 let activity = controller.activity
@@ -136,7 +136,7 @@ public struct MenuBarLabel: View {
                 ) else { return }
                 guard !Task.isCancelled, controller.activity == activity else { return }
                 let resized = (loaded.copy() as? NSImage) ?? loaded
-                resized.size = NSSize(width: 18, height: 18)
+                resized.size = NSSize(width: 20, height: 20)
                 resized.isTemplate = false
                 image = resized
             }
