@@ -1367,9 +1367,9 @@ struct WatchedFolderConfigView: View {
         self.folder = folder
         self.onOpenFullOrganization = onOpenFullOrganization
         _customPrompt = State(initialValue: folder.customPrompt ?? "")
-        _useCustomModel = State(initialValue: folder.modelOverride != nil)
+        _useCustomModel = State(initialValue: folder.modelOverride != nil || folder.providerOverride != nil)
         _selectedProvider = State(initialValue: folder.providerOverride ?? .openAI)
-        _selectedModel = State(initialValue: folder.modelOverride ?? AIProvider.openAI.defaultModel)
+        _selectedModel = State(initialValue: folder.modelOverride ?? "")
         _selectedMode = State(initialValue: folder.effectiveOrganizationMode)
         _selectedApplyPolicy = State(initialValue: folder.effectiveApplyPolicy)
     }
@@ -1431,6 +1431,7 @@ struct WatchedFolderConfigView: View {
                     save()
                 }
                 .buttonStyle(.sortyProminent)
+                .disabled(useCustomModel && isCustomModelInvalid)
             }
             .padding()
             .systemLiquidGlassBackground(cornerRadius: 12)
@@ -1673,7 +1674,7 @@ struct WatchedFolderConfigView: View {
                                     ModelSelectorCompactButton(
                                         provider: selectedProvider,
                                         label: selectedModel.isEmpty
-                                            ? selectedProvider.defaultModel
+                                            ? "Choose model"
                                             : selectedModel,
                                         onTap: { showModelPicker = true }
                                     )
@@ -1684,6 +1685,11 @@ struct WatchedFolderConfigView: View {
                                         ? .opacity
                                         : AnyTransition(.blurReplace)
                                 )
+                                if isCustomModelInvalid {
+                                    Label("Choose an available provider and model before saving.", systemImage: "exclamationmark.triangle")
+                                        .font(.caption)
+                                        .foregroundStyle(.orange)
+                                }
                             }
                         }
                         .animation(
@@ -1963,18 +1969,24 @@ struct WatchedFolderConfigView: View {
     }
 
     private var globalAutomationSelection: (provider: AIProvider, model: String) {
-        let provider =
-            settingsViewModel.config.automationProvider ?? settingsViewModel.config.provider
+        // A stale .unavailableProvider (ex-Copilot placeholder) means "no override".
+        let automationProvider =
+            settingsViewModel.config.automationProvider == .unavailableProvider
+            ? nil : settingsViewModel.config.automationProvider
+        let provider = automationProvider ?? settingsViewModel.config.provider
         let configuredModel =
-            settingsViewModel.config.automationProvider == nil
+            automationProvider == nil
             ? settingsViewModel.config.model
             : (settingsViewModel.config.automationModel ?? "")
-        let model = configuredModel.isEmpty ? provider.defaultModel : configuredModel
-        return (provider, model)
+        return (provider, configuredModel)
+    }
+
+    private var isCustomModelInvalid: Bool {
+        !selectedProvider.isAvailable || selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func primeModelSelectionFromGlobalDefaultsIfNeeded() {
-        guard folder.modelOverride == nil || folder.providerOverride == nil else {
+        guard folder.modelOverride == nil && folder.providerOverride == nil else {
             return
         }
 
@@ -1996,7 +2008,8 @@ struct WatchedFolderConfigView: View {
 
         if useCustomModel {
             updated.providerOverride = selectedProvider
-            updated.modelOverride = selectedModel
+            let trimmedModel = selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            updated.modelOverride = trimmedModel.isEmpty ? nil : trimmedModel
         } else {
             updated.providerOverride = nil
             updated.modelOverride = nil

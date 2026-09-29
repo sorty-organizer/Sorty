@@ -79,9 +79,15 @@ public struct ReasoningEffort: RawRepresentable, Codable, Hashable, Sendable {
     }
 }
 
+public enum OpenCodeAPIFormat: Equatable, Sendable {
+    case chatCompletions, messages, responses, gemini, systemOne
+}
+
 public enum AIProvider: String, Codable, CaseIterable, Sendable {
+    case unavailableProvider = "unavailable_provider"
     case openAI = "openai"
-    case githubCopilot = "github_copilot"
+    case openCodeZen = "opencode_zen"
+    case openCodeGo = "opencode_go"
     case groq = "groq"
     case openAICompatible = "openai_compatible"
     case openRouter = "open_router"
@@ -93,15 +99,39 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     public static let appleFoundationModelName = "Apple Foundation Model"
 
     public static var userSelectableProviders: [AIProvider] {
-        allCases
+        allCases.filter { $0 != .unavailableProvider }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        if rawValue == "github_copilot" {
+            self = .unavailableProvider
+        } else if let provider = Self(rawValue: rawValue) {
+            self = provider
+        } else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unknown AI provider: \(rawValue)"
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
     
     public var displayName: String {
         switch self {
+        case .unavailableProvider:
+            return "Provider unavailable"
         case .openAI:
             return "OpenAI"
-        case .githubCopilot:
-            return "GitHub Copilot"
+        case .openCodeZen:
+            return "OpenCode Zen"
+        case .openCodeGo:
+            return "OpenCode Go"
         case .groq:
             return "Groq"
         case .openAICompatible:
@@ -121,29 +151,37 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     
     public var isAvailable: Bool {
         switch self {
-        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini:
+        case .openAI, .openCodeZen, .openCodeGo, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini:
             return true
         case .appleFoundationModel:
             return true
+        case .unavailableProvider:
+            return false
         }
     }
     
     public var unavailabilityReason: String? {
         switch self {
-        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini:
+        case .openAI, .openCodeZen, .openCodeGo, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini:
             return nil
         case .appleFoundationModel:
             return nil
+        case .unavailableProvider:
+            return "Choose another provider before organizing files."
         }
     }
     
     /// Default API URL for this provider
     public var defaultAPIURL: String? {
         switch self {
+        case .unavailableProvider:
+            return nil
         case .openAI:
             return "https://api.openai.com"
-        case .githubCopilot:
-            return "https://api.githubcopilot.com"
+        case .openCodeZen:
+            return "https://opencode.ai/zen/v1"
+        case .openCodeGo:
+            return "https://opencode.ai/zen/go/v1"
         case .groq:
             return "https://api.groq.com/openai"
         case .openAICompatible:
@@ -164,10 +202,14 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     /// Default model for this provider
     public var defaultModel: String {
         switch self {
+        case .unavailableProvider:
+            return ""
         case .openAI:
             return "gpt-5.4-mini"
-        case .githubCopilot:
-            return "gpt-5-mini"
+        case .openCodeZen:
+            return "glm-5.3"
+        case .openCodeGo:
+            return "glm-5.3"
         case .groq:
             return "openai/gpt-oss-120b"
         case .openAICompatible:
@@ -188,7 +230,9 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     /// Whether this provider typically requires an API key
     public var typicallyRequiresAPIKey: Bool {
         switch self {
-        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic, .gemini:
+        case .unavailableProvider:
+            return false
+        case .openAI, .openCodeZen, .openCodeGo, .groq, .openAICompatible, .openRouter, .anthropic, .gemini:
             return true
         case .ollama:
             return false
@@ -202,10 +246,12 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     /// Help text for obtaining API keys
     public var apiKeyHelpText: String {
         switch self {
+        case .unavailableProvider:
+            return "Choose an AI provider in Settings."
         case .openAI:
             return "Get your API key from platform.openai.com"
-        case .githubCopilot:
-            return "Use your GitHub Personal Access Token with Copilot enabled"
+        case .openCodeZen, .openCodeGo:
+            return "Get your OpenCode API key from opencode.ai/auth"
         case .groq:
             return "Get your API key from console.groq.com"
         case .openAICompatible:
@@ -226,10 +272,12 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     /// URL where users can get their API key
     public var apiKeyURL: URL? {
         switch self {
+        case .unavailableProvider:
+            return nil
         case .openAI:
             return URL(string: "https://platform.openai.com/api-keys")
-        case .githubCopilot:
-            return URL(string: "https://github.com/settings/tokens")
+        case .openCodeZen, .openCodeGo:
+            return URL(string: "https://opencode.ai/auth")
         case .groq:
             return URL(string: "https://console.groq.com/keys")
         case .openAICompatible:
@@ -250,10 +298,12 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     /// Short label for the API key link
     public var apiKeyLinkLabel: String {
         switch self {
+        case .unavailableProvider:
+            return ""
         case .openAI:
             return "platform.openai.com"
-        case .githubCopilot:
-            return "github.com/settings/tokens"
+        case .openCodeZen, .openCodeGo:
+            return "opencode.ai/auth"
         case .groq:
             return "console.groq.com"
         case .openAICompatible:
@@ -274,10 +324,14 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     /// URL to the provider's model documentation
     public var modelDocumentationURL: URL? {
         switch self {
+        case .unavailableProvider:
+            return nil
         case .openAI:
             return URL(string: "https://platform.openai.com/docs/models")
-        case .githubCopilot:
-            return URL(string: "https://docs.github.com/en/copilot/reference/ai-models/supported-models")
+        case .openCodeZen:
+            return URL(string: "https://opencode.ai/docs/zen/")
+        case .openCodeGo:
+            return URL(string: "https://opencode.ai/docs/go/")
         case .groq:
             return URL(string: "https://console.groq.com/docs/models")
         case .openAICompatible:
@@ -298,10 +352,14 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     /// Short label for the model documentation link
     public var modelDocsLinkLabel: String {
         switch self {
+        case .unavailableProvider:
+            return ""
         case .openAI:
             return "OpenAI Models"
-        case .githubCopilot:
-            return "Copilot Models"
+        case .openCodeZen:
+            return "OpenCode Zen Models"
+        case .openCodeGo:
+            return "OpenCode Go Models"
         case .groq:
             return "Groq Models"
         case .openAICompatible:
@@ -321,8 +379,10 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     
     public var logoImageName: String {
         switch self {
+        case .unavailableProvider: return "exclamationmark.triangle"
         case .openAI: return "ChatGPT"
-        case .githubCopilot: return "GitHubCopilot"
+        case .openCodeZen: return "OpenCodeZen"
+        case .openCodeGo: return "OpenCodeGo"
         case .groq: return "Groq"
         case .openRouter: return "OpenRouter"
         case .ollama: return "Ollama"
@@ -347,13 +407,15 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
 
     public var usesSystemImage: Bool {
         switch self {
-        case .openAICompatible, .appleFoundationModel: return true
+        case .unavailableProvider, .openAICompatible, .appleFoundationModel: return true
         default: return false
         }
     }
 
     public var brandColor: Color {
         switch self {
+        case .unavailableProvider:
+            return .orange
         case .openAI:
             return Color(red: 0.13, green: 0.71, blue: 0.42)
         case .anthropic:
@@ -362,7 +424,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return Color(red: 0.95, green: 0.45, blue: 0.25)
         case .ollama:
             return .primary
-        case .githubCopilot:
+        case .openCodeZen, .openCodeGo:
             return Color(red: 0.32, green: 0.35, blue: 0.94)
         case .appleFoundationModel:
             return Color.gray
@@ -387,6 +449,8 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     /// Recommended models for this provider
     public var recommendedModels: [String] {
         switch self {
+        case .unavailableProvider:
+            return []
         case .openAI:
             return ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2", "gpt-5-mini", "gpt-5-nano", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini"]
         case .anthropic:
@@ -399,8 +463,12 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return ["anthropic/claude-sonnet-4.6", "openai/gpt-5.4-mini", "openai/gpt-4o", "google/gemini-2.5-pro", "google/gemini-2.5-flash", "meta-llama/llama-4-scout-17b-16e-instruct"]
         case .ollama:
             return ["llava", "llama3.2-vision", "qwen2.5vl", "gemma3", "llama4", "moondream", "llama3.1"]
-        case .githubCopilot:
-            return ["gpt-5-mini", "gpt-5.4-mini", "gpt-5.4", "gpt-5.3-codex", "claude-sonnet-4.6", "claude-opus-4.6", "claude-haiku-4.5", "gemini-3.1-pro", "gemini-3-flash", "grok-code-fast-1", "gpt-4.1"]
+        case .openCodeZen:
+            // Offline defaults across the supported OpenCode protocols.
+            return ["gpt-6-luna", "grok-4.7", "qwen3.8-max", "minimax-m3", "glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "deepseek-v4-flash-free", "minimax-m2.7", "big-pickle", "space-bunny-free", "longcat-2.5-preview-free", "mimo-v2.6-flash-free", "mimo-v2.5-free", "ling-3.0-flash-fin-free", "nemotron-3-ultra-free", "nemotron-3.5-lightning-free", "claude-sonnet-4-6", "gemini-3.1-pro", "qwen3.8-flash"]
+        case .openCodeGo:
+            // Go routes Qwen and MiniMax through Messages.
+            return ["gpt-6-luna", "grok-4.7", "qwen3.8-max", "minimax-m3", "glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-5", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "kimi-k2.5", "longcat-2.0", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "mimo-v2.6-flash", "mimo-v2.6-pro", "mimo-v2.5", "mimo-v2.5-pro", "hy4-preview", "hy3", "space-bunny-free", "longcat-2.5-preview-free", "qwen3.8-flash", "minimax-m2.7"]
         case .openAICompatible:
             return ["gpt-5.4-mini", "gpt-5.4", "gpt-4.1", "gpt-4o"]
         case .appleFoundationModel:
@@ -408,16 +476,59 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// Routes OpenCode models using the plan-specific endpoint tables.
+    public func openCodeAPIFormat(for model: String) -> OpenCodeAPIFormat? {
+        guard self == .openCodeZen || self == .openCodeGo else { return nil }
+        let id = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if id.hasPrefix("jev-") { return .systemOne }
+        if id.hasPrefix("gpt-") || id.hasPrefix("grok-") || id.hasPrefix("muse-spark-") {
+            return .responses
+        }
+        if id.hasPrefix("gemini-") { return .gemini }
+        if id.hasPrefix("claude-") || openCodeMessagesModelIDs.contains(id)
+            || (self == .openCodeGo && (id.hasPrefix("qwen") || id.hasPrefix("minimax-"))) {
+            return .messages
+        }
+        return .chatCompletions
+    }
+
+    /// Qwen models using Messages on Zen; Go routes the whole Qwen family there.
+    private var openCodeMessagesModelIDs: [String] {
+        switch self {
+        case .openCodeZen:
+            // Messages-only on Zen; qwen3.8-max stays because it is chat.
+            return ["qwen3.8-flash", "qwen3.7-max", "qwen3.7-plus", "qwen3.6-plus", "qwen3.5-plus"]
+        case .openCodeGo, .unavailableProvider, .openAI, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini, .appleFoundationModel:
+            return []
+        }
+    }
+
+    /// Default `max_tokens` for organization requests. Sorty's own cap was
+    /// the binding constraint on large batches: a plan entry costs tens of
+    /// tokens per file, so 4096 truncates batches these models could otherwise
+    /// finish (surfacing as OUTPUT_LIMIT). Cloud models with >=8k output get
+    /// 8192; local/custom endpoints keep 4096 to stay inside small contexts.
+    public var defaultOrganizeMaxTokens: Int {
+        switch self {
+        case .openAI, .openCodeZen, .openCodeGo, .anthropic, .gemini, .groq, .openRouter:
+            return 8192
+        case .unavailableProvider, .ollama, .openAICompatible, .appleFoundationModel:
+            return 4096
+        }
+    }
+
     /// The key used in Keychain to store the API key for this provider
     public var keychainKey: String {
         switch self {
+        case .unavailableProvider: return "unavailableProvider"
         case .openAI: return "openAIAPIKey"
         case .anthropic: return "anthropicAPIKey"
         case .gemini: return "geminiAPIKey"
         case .groq: return "groqAPIKey"
         case .openRouter: return "openRouterAPIKey"
         case .ollama: return "ollamaAPIKey"
-        case .githubCopilot: return "github_access_token" // Special case handled by GitHubCopilotAuthManager
+        case .openCodeZen: return "openCodeZenAPIKey"
+        case .openCodeGo: return "openCodeGoAPIKey"
         case .openAICompatible: return "openAICompatibleAPIKey"
         case .appleFoundationModel: return "appleFoundationAPIKey"
         }
@@ -565,12 +676,7 @@ public enum VisionDetailLevel: String, Codable, CaseIterable, Sendable {
     }
 
     public static func defaultFor(provider: AIProvider) -> VisionDetailLevel {
-        switch provider {
-        case .githubCopilot:
-            return .low
-        default:
-            return .auto
-        }
+        .auto
     }
 }
 
@@ -668,7 +774,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
     
     // Automation-specific settings (for background/watched folder operations)
     public var automationProvider: AIProvider?  // nil = use main provider
-    public var automationModel: String?         // nil = use main model
+    public var automationModel: String?         // required when automationProvider is set
     public var openAIAuthMethod: ProviderAuthMethod = .apiKey
     public var anthropicAuthMethod: ProviderAuthMethod = .apiKey
 
@@ -797,12 +903,24 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        let decodedProvider = try container.decodeIfPresent(AIProvider.self, forKey: .provider) ?? .openAICompatible
+        let hadCopilotProvider = (try? container.decode(String.self, forKey: .provider)) == "github_copilot"
+        let storedAutomationProvider = try container.decodeIfPresent(AIProvider.self, forKey: .automationProvider)
+        let storedAutomationModel = try container.decodeIfPresent(String.self, forKey: .automationModel)
+        let automationModelChoice = storedAutomationModel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let fallbackProvider = storedAutomationProvider.flatMap { provider in
+            provider.isAvailable && provider != .openAICompatible && !automationModelChoice.isEmpty
+                ? provider : nil
+        }
+        let decodedProvider = hadCopilotProvider
+            ? fallbackProvider ?? .unavailableProvider
+            : try container.decodeIfPresent(AIProvider.self, forKey: .provider) ?? .openAICompatible
         provider = decodedProvider
-        apiURL = try container.decodeIfPresent(String.self, forKey: .apiURL)
-        apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey)
+        apiURL = hadCopilotProvider
+            ? provider.defaultAPIURL
+            : try container.decodeIfPresent(String.self, forKey: .apiURL)
+        apiKey = hadCopilotProvider ? nil : try container.decodeIfPresent(String.self, forKey: .apiKey)
         let decodedModel = try container.decodeIfPresent(String.self, forKey: .model)
-        model = decodedModel ?? provider.defaultModel
+        model = hadCopilotProvider ? (fallbackProvider == nil ? "" : automationModelChoice) : decodedModel ?? provider.defaultModel
         _ = try container.decodeIfPresent(Double.self, forKey: .temperature)
         let decodedRequestTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .requestTimeout) ?? 120
         requestTimeout = min(
@@ -817,7 +935,9 @@ public struct AIConfig: Codable, Sendable, Equatable {
         systemPromptOverride = try container.decodeIfPresent(String.self, forKey: .systemPromptOverride)
         maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens)
         enableStreaming = try container.decodeIfPresent(Bool.self, forKey: .enableStreaming) ?? true
-        requiresAPIKey = try container.decodeIfPresent(Bool.self, forKey: .requiresAPIKey) ?? provider.typicallyRequiresAPIKey
+        requiresAPIKey = hadCopilotProvider
+            ? provider.typicallyRequiresAPIKey
+            : try container.decodeIfPresent(Bool.self, forKey: .requiresAPIKey) ?? provider.typicallyRequiresAPIKey
         enableReasoning = try container.decodeIfPresent(Bool.self, forKey: .enableReasoning) ?? false
         reasoningEffortByModel = try container.decodeIfPresent(
             [String: ReasoningEffort].self,
@@ -854,8 +974,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         visionDetailLevel = try container.decodeIfPresent(VisionDetailLevel.self, forKey: .visionDetailLevel) ?? VisionDetailLevel.defaultFor(provider: provider)
         ocrLanguages = try container.decodeIfPresent([String].self, forKey: .ocrLanguages) ?? ["en-US"]
         customOCRKeywords = try container.decodeIfPresent([String].self, forKey: .customOCRKeywords)
-        automationProvider = try container.decodeIfPresent(AIProvider.self, forKey: .automationProvider)
-        automationModel = try container.decodeIfPresent(String.self, forKey: .automationModel)
+        automationProvider = storedAutomationProvider
+        automationModel = storedAutomationModel
         openAIAuthMethod = try container.decodeIfPresent(ProviderAuthMethod.self, forKey: .openAIAuthMethod) ?? .apiKey
         anthropicAuthMethod = try container.decodeIfPresent(ProviderAuthMethod.self, forKey: .anthropicAuthMethod) ?? .apiKey
     }
@@ -996,9 +1116,6 @@ public extension AIConfig {
     }
 
     public var effectiveVisionDetailLevel: VisionDetailLevel {
-        if provider == .githubCopilot && visionDetailLevel == .auto {
-            return .low
-        }
         return visionDetailLevel
     }
 

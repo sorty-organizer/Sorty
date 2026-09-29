@@ -21,7 +21,7 @@ A native macOS SwiftUI app that uses AI to organize files into relevant, semanti
 - **The Learnings Profile**: A passive learning system that trains from your existing folder structures, manual corrections, and even cancelled organizations to continuously improve future suggestions.
 - **Custom Personas**: Create and edit specialized profiles for different workflows (e.g., Developer, Photographer, Student).
 - **Multiple AI Providers**: 
-  - OpenAI, Anthropic, Gemini, GitHub Copilot, Groq, OpenRouter, Ollama, and custom OpenAI-compatible endpoints.
+  - OpenAI, OpenCode Zen and Go, Anthropic, Gemini, Groq, OpenRouter, Ollama, and custom OpenAI-compatible endpoints.
   - Apple Foundation Models (on-device and privacy-focused; requires macOS 26+ with Apple Intelligence).
 - **Vision Support**: Multimodal analysis for providers that support it to understand image content when organizing.
 - **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
@@ -212,7 +212,7 @@ flowchart LR
     subgraph AIProviders["AI Providers"]
         OpenAI["OpenAI-compatible<br/>OpenAI, Groq, OpenRouter, Gemini, Ollama"]
         Anthropic["Anthropic"]
-        Copilot["GitHub Copilot"]
+        OpenCode["OpenCode Zen and Go"]
         Codex["Codex subscription"]
         AppleFM["Apple Foundation Models"]
     end
@@ -285,7 +285,7 @@ flowchart LR
     AIClientFactory --> AIClient
     AIClient --> OpenAI
     AIClient --> Anthropic
-    AIClient --> Copilot
+    AIClient --> OpenCode
     AIClient --> Codex
     AIClient --> AppleFM
     AIClient --> ResponseParser

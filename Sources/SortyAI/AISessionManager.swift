@@ -395,9 +395,11 @@ public class AISessionManager: ObservableObject {
 
         let modelsPathSuffix: String
         switch provider {
+        case .unavailableProvider:
+            return []
         case .openRouter:
             modelsPathSuffix = "api/v1/models"
-        case .githubCopilot:
+        case .openCodeZen, .openCodeGo:
             modelsPathSuffix = "models"
         case .ollama:
             modelsPathSuffix = "api/tags"

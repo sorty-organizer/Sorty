@@ -9,6 +9,7 @@ import XCTest
 @testable import SortyLib
 @testable import SortyCore
 @testable import SortyFS
+@testable import SortyAI
 
 // MARK: - ContentMetadata Tests (Additional Coverage)
 
@@ -842,11 +843,7 @@ final class AIConfigOCRKeywordsTests: XCTestCase {
         XCTAssertEqual(decoded.ocrLanguages, ["en-US", "fr-FR"])
     }
 
-    func testCopilotDefaultsVisionDetailToLow() {
-        let config = AIConfig(provider: .githubCopilot, model: "gpt-4o")
-        XCTAssertEqual(config.visionDetailLevel, .low)
-        XCTAssertEqual(config.effectiveVisionDetailLevel, .low)
-    }
+
 }
 
 // MARK: - Helper Extension for Tests

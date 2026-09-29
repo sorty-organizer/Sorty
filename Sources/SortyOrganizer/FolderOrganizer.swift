@@ -2568,8 +2568,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         adaptiveDepth: Int = 0
     ) async throws -> [OrganizationPlan] {
         // Cap halve-and-retry recursion so a persistently failing batch cannot
-        // recurse without bound; depth 4 splits 350 -> ~22 files minimum.
-        let maxAdaptiveDepth = 4
+        // recurse without bound; depth 5 splits 350 -> ~5 files minimum.
+        let maxAdaptiveDepth = 5
         if job.cancellationRequested || Task.isCancelled {
             throw CancellationError()
         }
@@ -2662,8 +2662,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         adaptiveDepth: Int = 0
     ) async throws -> [OrganizationPlan] {
         // Cap halve-and-retry recursion so a persistently failing batch cannot
-        // recurse without bound; depth 4 splits 350 -> ~22 files minimum.
-        let maxAdaptiveDepth = 4
+        // recurse without bound; depth 5 splits 350 -> ~5 files minimum.
+        let maxAdaptiveDepth = 5
         try checkCancellation()
 
         // Compact prompts number this request's files 1-based; publish the same
@@ -4187,7 +4187,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         operationConfig.enableSmartRename = mode != .organize
 
         let client: AIClientProtocol
-        if let providerOverride, let modelOverride {
+        if let providerOverride {
+            guard let modelOverride,
+                  !modelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw AIClientError.apiError(
+                    statusCode: 400,
+                    message: "Choose an automation model for \(providerOverride.displayName) before running this folder."
+                )
+            }
             operationConfig.provider = providerOverride
             operationConfig.model = modelOverride
             operationConfig.requiresAPIKey = providerOverride.typicallyRequiresAPIKey
@@ -4196,7 +4203,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                let apiKey = OrganizerServices.keychainReader(providerOverride.keychainKey) {
                 operationConfig.apiKey = apiKey
             }
-            operationConfig.apiURL = providerOverride.defaultAPIURL
+            // Preserve a custom endpoint when the folder override matches the
+            // global provider (same pattern as generatePlanWithProvider).
+            if [.openAICompatible, .ollama].contains(providerOverride),
+               aiConfig?.provider == providerOverride,
+               !(aiConfig?.apiURL?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty {
+                operationConfig.apiURL = aiConfig?.apiURL ?? providerOverride.defaultAPIURL
+            } else {
+                operationConfig.apiURL = providerOverride.defaultAPIURL
+            }
             client = try AIClientFactory.createClient(config: operationConfig)
         } else if defaultClient.config.mode == operationConfig.mode,
                   defaultClient.config.enableSmartRename == operationConfig.enableSmartRename {

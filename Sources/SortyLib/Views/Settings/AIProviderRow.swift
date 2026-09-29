@@ -10,16 +10,28 @@ import SwiftUI
 struct AIProviderRow: View {
     @SortyHotReload private var hotReload
     let provider: AIProvider
-    let isSelected: Bool
-    let action: () -> Void
+    let selectedProvider: AIProvider
+    let action: (AIProvider) -> Void
     
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
+
+    private var isOpenCodeCard: Bool { provider == .openCodeZen }
+    private var isSelected: Bool {
+        selectedProvider == provider || (isOpenCodeCard && selectedProvider == .openCodeGo)
+    }
+    private var logoProvider: AIProvider {
+        isOpenCodeCard && selectedProvider == .openCodeGo ? .openCodeGo : provider
+    }
     
     var body: some View {
-        Button(action: action) {
+        Button {
+            // The OpenCode card covers both plans: staying on Go keeps Go,
+            // otherwise the card selects Zen; plan switching lives in the plan picker.
+            action(isOpenCodeCard && selectedProvider == .openCodeGo ? .openCodeGo : provider)
+        } label: {
             HStack(alignment: .center, spacing: 8) {
-                ProviderLogoView(provider: provider, size: 17)
+                ProviderLogoView(provider: logoProvider, size: 17)
                     .frame(width: 28, height: 28)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -43,13 +55,13 @@ struct AIProviderRow: View {
                     }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(provider.selectorTitle)
+                    Text(isOpenCodeCard ? "OpenCode" : provider.selectorTitle)
                         .font(.subheadline.weight(isSelected ? .semibold : .medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.88)
 
-                    Text(provider.selectorDescription)
+                    Text(isOpenCodeCard ? "Zen or Go" : provider.selectorDescription)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -61,26 +73,26 @@ struct AIProviderRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? provider.brandColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025)))
-            )
-            .contentShape(Rectangle())
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(isSelected ? provider.brandColor.opacity(0.35) : Color.secondary.opacity(0.1), lineWidth: 1)
-            )
         }
-        .buttonStyle(.plain)
-        .minimumHitTarget()
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isSelected ? provider.brandColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025)))
+        )
+        .contentShape(Rectangle())
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(isSelected ? provider.brandColor.opacity(0.35) : Color.secondary.opacity(0.1), lineWidth: 1)
+        )
         .onHover { hovering in
             isHovered = hovering
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovered)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isSelected)
+        .buttonStyle(.plain)
+        .minimumHitTarget()
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        .accessibilityHint("Selects \(provider.displayName) as the AI provider")
-        .help("Use \(provider.displayName)")
+        .accessibilityHint(isOpenCodeCard ? "Selects OpenCode as the AI provider. Switch between the Zen and Go plans in the plan picker." : "Selects \(provider.displayName) as the AI provider")
+        .help(isOpenCodeCard ? "Use OpenCode (switch plans in the plan picker)" : "Use \(provider.displayName)")
     }
 }
 
@@ -89,8 +101,8 @@ struct AIProviderRow: View {
 extension AIProvider {
     var selectorTitle: String {
         switch self {
-        case .githubCopilot:
-            return "Copilot"
+        case .unavailableProvider:
+            return "Unavailable"
         case .openAICompatible:
             return "Compatible API"
         case .openRouter:
@@ -106,6 +118,8 @@ extension AIProvider {
 
     var selectorDescription: String {
         switch self {
+        case .unavailableProvider:
+            return "Choose a provider"
         case .openAI:
             return "API key or ChatGPT"
         case .anthropic:
@@ -114,8 +128,10 @@ extension AIProvider {
             return "Fast inference"
         case .ollama:
             return "Local models"
-        case .githubCopilot:
-            return "Subscription models"
+        case .openCodeZen:
+            return "OpenCode models"
+        case .openCodeGo:
+            return "Go models"
         case .appleFoundationModel:
             return "On-device"
         case .openAICompatible:
@@ -129,6 +145,8 @@ extension AIProvider {
 
     var iconName: String {
         switch self {
+        case .unavailableProvider:
+            return "exclamationmark.triangle"
         case .openAI:
             return "circle.hexagongrid.fill"
         case .anthropic:
@@ -137,8 +155,8 @@ extension AIProvider {
             return "bolt.fill"
         case .ollama:
             return "cube.fill"
-        case .githubCopilot:
-            return "person.badge.key.fill"
+        case .openCodeZen, .openCodeGo:
+            return "server.rack"
         case .appleFoundationModel:
             return "apple.logo"
         case .openAICompatible:
@@ -154,6 +172,8 @@ extension AIProvider {
 
     var description: String {
         switch self {
+        case .unavailableProvider:
+            return "Choose an available provider"
         case .openAI:
             return "GPT-5.2, GPT-5 mini, and more"
         case .anthropic:
@@ -162,8 +182,10 @@ extension AIProvider {
             return "Ultra-fast inference provider"
         case .ollama:
             return "Local models on your machine"
-        case .githubCopilot:
-            return "Use your Copilot subscription"
+        case .openCodeZen:
+            return "Use your OpenCode balance"
+        case .openCodeGo:
+            return "Use your OpenCode Go subscription"
         case .appleFoundationModel:
             return "On-device Apple Foundation Models"
         case .openAICompatible:

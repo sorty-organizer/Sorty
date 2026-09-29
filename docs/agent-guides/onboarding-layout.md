@@ -195,21 +195,15 @@ entire layout to the subscription-auth mirror merely to trigger refresh
 methods. Model refreshes
 cancel superseded presentation tasks and apply results only when their captured
 provider is still selected, preventing rapid selection changes from publishing
-stale model lists. The onboarding-specific Copilot catalog request is likewise
-single-flight and is cancelled when the provider pane disappears or selection
-moves away from Copilot.
+stale model lists. OpenCode uses one provider card; its Zen/Go selector sits in
+the configuration panel. Both plans use the API key and model picker flow, with
+separate Keychain slots.
 
 Model picker callbacks include the selected OpenAI authentication method. Apply
 it alongside the model in settings, retries, history, learnings, and automation;
 other providers leave authentication unchanged. API and subscription catalog
 caches must not substitute for each other. Forced refreshes bypass both cache
 layers, and successful refreshes clear earlier error and fallback indicators.
-
-GitHub Copilot authentication follows the same distinct-state rule: cancelled
-status checks stop before publishing, profile refresh stays inside the single
-coalesced check, and terminal device-flow errors end polling. Never keep
-publishing the same error or auth fields into the provider step after polling
-has already failed.
 
 Keep scheduling and event bookkeeping out of SwiftUI state. Trackpad swipe
 deltas, cancellable task handles, service references used only by actions, and

@@ -60,7 +60,7 @@ public struct ProviderLogoView: View {
     }
 
     private var foregroundColor: Color {
-        provider == .openAI || provider == .openRouter || provider == .githubCopilot ? .primary : provider.brandColor
+        provider == .openAI || provider == .openRouter ? .primary : provider.brandColor
     }
 
     public var body: some View {

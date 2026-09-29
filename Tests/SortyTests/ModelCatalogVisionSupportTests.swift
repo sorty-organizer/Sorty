@@ -86,8 +86,11 @@ final class ModelCatalogVisionSupportTests: XCTestCase {
 
     func testProviderSpecificHeuristics() {
         XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "llava:latest", provider: .ollama))
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "gpt-4o", provider: .githubCopilot))
-        XCTAssertFalse(ModelCatalog.shared.supportsVision(modelId: "gpt-3.5-turbo", provider: .githubCopilot))
+        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "deepseek-v4-flash-vision-exp", provider: .openCodeGo))
+        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "claude-sonnet-4-6", provider: .openCodeZen))
+        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "gemini-3.1-pro", provider: .openCodeZen))
+        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "gpt-5.4", provider: .openCodeGo))
+        XCTAssertFalse(ModelCatalog.shared.supportsVision(modelId: "glm-5.3", provider: .openCodeGo))
     }
 
     func testOpenAICompatibleDetectsLocalAndNamespacedVisionModels() {
@@ -165,16 +168,16 @@ final class ModelCatalogVisionSupportTests: XCTestCase {
 
     func testCachedModelsFiltersBlankAndDuplicateModelIDs() {
         let catalog = ModelCatalog()
-        catalog.modelsByProvider[.githubCopilot] = [
-            ModelInfo(id: "", displayName: "", provider: .githubCopilot),
-            ModelInfo(id: "   ", displayName: "  ", provider: .githubCopilot),
-            ModelInfo(id: "gpt-4.1", displayName: "gpt-4.1", provider: .githubCopilot),
-            ModelInfo(id: " gpt-4.1 ", displayName: " gpt-4.1 ", provider: .githubCopilot)
+        catalog.modelsByProvider[.openCodeZen] = [
+            ModelInfo(id: "", displayName: "", provider: .openCodeZen),
+            ModelInfo(id: "   ", displayName: "  ", provider: .openCodeZen),
+            ModelInfo(id: "glm-5.3", displayName: "glm-5.3", provider: .openCodeZen),
+            ModelInfo(id: " glm-5.3 ", displayName: " glm-5.3 ", provider: .openCodeZen)
         ]
 
-        let models = catalog.cachedModels(for: .githubCopilot)
-        XCTAssertEqual(models.map(\.id), ["gpt-4.1"])
-        XCTAssertEqual(models.map(\.displayName), ["gpt-4.1"])
+        let models = catalog.cachedModels(for: .openCodeZen)
+        XCTAssertEqual(models.map(\.id), ["glm-5.3"])
+        XCTAssertEqual(models.map(\.displayName), ["glm-5.3"])
     }
 
     func testReasoningConfigurationUsesProviderModelMetadata() {

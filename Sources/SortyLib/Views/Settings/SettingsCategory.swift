@@ -41,7 +41,8 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case providerConfiguration = "settings.provider.configuration"
     case providerConnection = "settings.provider.connection"
     case providerOpenAI = "settings.provider.openai"
-    case providerGitHubCopilot = "settings.provider.github-copilot"
+    case providerOpenCodeZen = "settings.provider.opencode-zen"
+    case providerOpenCodeGo = "settings.provider.opencode-go"
     case providerGroq = "settings.provider.groq"
     case providerCompatibleAPI = "settings.provider.compatible-api"
     case providerOpenRouter = "settings.provider.openrouter"
@@ -138,10 +139,15 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
 public extension SettingsFocusTarget {
     static func providerChoice(_ provider: AIProvider) -> SettingsFocusTarget {
         switch provider {
+        case .unavailableProvider:
+            return .providerSelect
         case .openAI:
             return .providerOpenAI
-        case .githubCopilot:
-            return .providerGitHubCopilot
+        case .openCodeZen:
+            return .providerOpenCodeZen
+        case .openCodeGo:
+            // Zen and Go share one provider card, so focus the shared card.
+            return .providerOpenCodeZen
         case .groq:
             return .providerGroq
         case .openAICompatible:
@@ -162,7 +168,7 @@ public extension SettingsFocusTarget {
     var category: SettingsCategory {
         switch self {
         case .providerSelect, .providerConfiguration, .providerConnection,
-             .providerOpenAI, .providerGitHubCopilot, .providerGroq,
+             .providerOpenAI, .providerOpenCodeZen, .providerOpenCodeGo, .providerGroq,
              .providerCompatibleAPI, .providerOpenRouter, .providerOllama,
              .providerAnthropic, .providerGemini, .providerApple,
              .providerTestConnection:
@@ -298,7 +304,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     public var searchKeywords: [String] {
         switch self {
         case .provider:
-            return ["api key", "provider", "model", "endpoint", "token", "connection", "copilot", "ollama", "openrouter", "anthropic", "gemini"]
+            return ["api key", "provider", "model", "endpoint", "token", "connection", "opencode", "ollama", "openrouter", "anthropic", "gemini"]
         case .strategy:
             return ["strategy", "analysis", "fast mode", "deep scan", "deep scanning", "content analysis", "vision", "image analysis", "naming style", "rename", "renaming", "folder structure", "organization style"]
         case .rules:
@@ -342,13 +348,15 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .provider:
             return [
-                feature("Select Provider", "Choose OpenAI, Anthropic, Gemini, Copilot, Ollama, or OpenAI-compatible APIs.", target: .providerSelect),
+                feature("Select Provider", "Choose OpenAI, OpenCode, Anthropic, Gemini, Ollama, or OpenAI-compatible APIs.", target: .providerSelect),
                 feature("API Configuration", "Set endpoint URL and API key/token details for your selected provider.", keywords: ["api key", "endpoint", "token", "authentication"], target: .providerConfiguration),
                 feature("Model Catalog", "Search and pick models available for each provider.", keywords: ["model picker", "model selection"], target: .providerConfiguration),
                 feature("Reasoning Effort", "Choose how much reasoning supported models use.", keywords: ["reasoning", "thinking", "effort", "speed"], target: .providerConfiguration),
                 feature("Connection Testing", "Validate credentials and endpoint connectivity before organizing files.", keywords: ["test connection", "connection status"], target: .providerConnection),
                 feature("OpenAI", "Use OpenAI with an API key or ChatGPT subscription.", keywords: ["gpt", "chatgpt", "codex"], target: .providerOpenAI),
-                feature("GitHub Copilot", "Use models through a GitHub Copilot subscription.", keywords: ["copilot", "subscription"], target: .providerGitHubCopilot),
+                feature("OpenCode Zen", "Use models through OpenCode Zen.", keywords: ["opencode", "zen"], target: .providerOpenCodeZen),
+                // Zen and Go share one provider card; both snippets focus it.
+                feature("OpenCode Go", "Use models through OpenCode Go.", keywords: ["opencode", "go", "subscription"], target: .providerOpenCodeZen),
                 feature("Groq", "Use Groq for fast hosted inference.", keywords: ["fast inference"], target: .providerGroq),
                 feature("OpenAI-Compatible API", "Connect Sorty to a custom OpenAI-compatible endpoint.", keywords: ["compatible api", "custom endpoint"], target: .providerCompatibleAPI),
                 feature("OpenRouter", "Use OpenRouter’s multi-provider model catalog.", keywords: ["model router"], target: .providerOpenRouter),

@@ -927,7 +927,7 @@ struct ModelSelectionPopover: View {
             return isOpenAIFastModeEnabled
         case .openRouter:
             return isOpenRouterFastModeEnabled
-        case .githubCopilot, .groq, .openAICompatible, .ollama, .anthropic, .gemini, .appleFoundationModel:
+        case .unavailableProvider, .openCodeZen, .openCodeGo, .groq, .openAICompatible, .ollama, .anthropic, .gemini, .appleFoundationModel:
             return false
         }
     }

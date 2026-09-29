@@ -3177,40 +3177,6 @@
         }
       }
     },
-    "Access frontier AI models via your GitHub Copilot subscription.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zugriff auf frontier AI-Modelle über Ihre GitHub Copilot-Abonnement."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Accede a modelos AI frontales a través de tu suscripción de GitHub Copilot."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Accédez aux modèles d'IA frontière via votre abonnement GitHub Copilot."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub Copilotサブスクリプションで frontier AI モデルにアクセスしてください。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "通过您的GitHub Copilot订阅访问前沿AI模型。"
-          }
-        }
-      }
-    },
     "Accreditations": {
       "localizations": {
         "de": {
@@ -25093,40 +25059,6 @@
         }
       }
     },
-    "Requires an active GitHub Copilot subscription. This is an unofficial integration.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Er需要 eine aktive GitHub Copilot-Abonnement. Dies ist eine unoffizielle Integration."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Requiere una suscripción activa de GitHub Copilot. Esta es una integración no oficial."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Exige une abonnement actif à Copilot GitHub. Cela est une intégration non officielle."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アクティブな GitHub Copilot サブスクリプションが必要です。これは公式ではない統合です。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "需要有效的GitHub Copilot订阅。这是一个非官方集成。"
-          }
-        }
-      }
-    },
     "Reset": {
       "localizations": {
         "de": {
@@ -29169,40 +29101,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "通过GitHub登录"
-          }
-        }
-      }
-    },
-    "Sign in with GitHub to use Copilot models.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mit GitHub anmelden, um Copilot-Modelle zu verwenden."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Iniciar sesión con GitHub para usar modelos Copilot."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Se connecter avec GitHub pour utiliser les modèles Copilot."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub でサインインして Copilot モデルを使用できます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "通过GitHub登录以使用Copilot模型。"
           }
         }
       }
@@ -44268,41 +44166,6 @@
         }
       }
     },
-    "Choose OpenAI, Anthropic, Gemini, Copilot, Ollama, or OpenAI-compatible APIs.": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wähle OpenAI, Anthropic, Gemini, Copilot, Ollama oder APIs, die mit OpenAI kompatibel sind."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elija OpenAI, Anthropic, Gemini, Copilot, Ollama o APIs compatibles con OpenAI."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisir OpenAI, Anthropic, Gemini, Copilot, Ollama ou des API compatibles avec OpenAI."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "OpenAI、Anthropic、Gemini、Copilot、Ollama、またはOpenAI互換のAPIを選択してください。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "选择 OpenAI、Anthropic、Gemini、Copilot、Ollama 或 OpenAI 兼容的 API。"
-          }
-        }
-      }
-    },
     "Set endpoint URL and API key/token details for your selected provider.": {
       "extractionState": "manual",
       "localizations": {
@@ -44474,76 +44337,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "在组织文件之前验证凭证和端点连通性。"
-          }
-        }
-      }
-    },
-    "GitHub Copilot": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub Copilot"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub Copilot"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub Copilot"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub Copilot"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub Copilot"
-          }
-        }
-      }
-    },
-    "Configure Copilot integration and model options.": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copilot-Integration und Modelloptionen konfigurieren."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Configurar la integración de Copilot y las opciones del modelo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Configurez l'intégration de Copilot et les options du modèle."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copilotの統合とモデルオプションを構成します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "配置 Copilot 集成和模型选项。"
           }
         }
       }

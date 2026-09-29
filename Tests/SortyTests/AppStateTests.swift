@@ -197,7 +197,6 @@ class AppStateTests: XCTestCase {
         let status = OnboardingSetupValidator.providerStatus(
             context: ProviderSetupContext(
                 config: config,
-                isGitHubCopilotAuthenticated: false,
                 isCodexAuthenticated: false,
                 isCodexInstalled: false,
                 isAppleFoundationModelAvailable: false
@@ -221,7 +220,6 @@ class AppStateTests: XCTestCase {
         let status = OnboardingSetupValidator.providerStatus(
             context: ProviderSetupContext(
                 config: config,
-                isGitHubCopilotAuthenticated: false,
                 isCodexAuthenticated: false,
                 isCodexInstalled: false,
                 isAppleFoundationModelAvailable: false
@@ -244,7 +242,6 @@ class AppStateTests: XCTestCase {
         let status = OnboardingSetupValidator.providerStatus(
             context: ProviderSetupContext(
                 config: config,
-                isGitHubCopilotAuthenticated: false,
                 isCodexAuthenticated: false,
                 isCodexInstalled: true,
                 isAppleFoundationModelAvailable: false

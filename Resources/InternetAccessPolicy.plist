@@ -114,13 +114,13 @@
         </dict>
         <dict>
             <key>Host</key>
-            <string>api.githubcopilot.com</string>
+            <string>opencode.ai</string>
             <key>Relevance</key>
             <string>Essential</string>
             <key>Purpose</key>
-            <string>Sorty sends AI requests to GitHub Copilot when you choose GitHub Copilot.</string>
+            <string>Sorty sends AI requests to OpenCode when you choose OpenCode Zen or OpenCode Go.</string>
             <key>DenyConsequences</key>
-            <string>If you deny these connections, GitHub Copilot organization and model checks will fail.</string>
+            <string>If you deny these connections, OpenCode-powered organization and model checks will fail.</string>
         </dict>
         <dict>
             <key>Host</key>
@@ -128,9 +128,9 @@
             <key>Relevance</key>
             <string>Essential</string>
             <key>Purpose</key>
-            <string>Sorty uses GitHub sign-in endpoints for GitHub Copilot authentication and also checks for and downloads app updates hosted on GitHub Releases.</string>
+            <string>Sorty checks for and downloads app updates hosted on GitHub Releases.</string>
             <key>DenyConsequences</key>
-            <string>If you deny these connections, GitHub Copilot sign-in and in-app update delivery will fail.</string>
+            <string>If you deny these connections, in-app update delivery will fail.</string>
         </dict>
         <dict>
             <key>Host</key>
@@ -138,9 +138,9 @@
             <key>Relevance</key>
             <string>Essential</string>
             <key>Purpose</key>
-            <string>Sorty calls GitHub APIs for Copilot token and account validation, release metadata checks, and optional contributor data.</string>
+            <string>Sorty calls GitHub APIs for release metadata checks and optional contributor data.</string>
             <key>DenyConsequences</key>
-            <string>If you deny these connections, GitHub Copilot token refresh, release checks, and contributor data loading may fail.</string>
+            <string>If you deny these connections, release checks and contributor data loading may fail.</string>
         </dict>
         <dict>
             <key>Host</key>

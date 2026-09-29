@@ -139,6 +139,12 @@ public final class ModelCatalog: ObservableObject {
     nonisolated static func isChatCapable(_ model: ModelInfo) -> Bool {
         let id = model.id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !id.isEmpty else { return false }
+        // SystemOne (OpenCode `jev-`) models have no Sorty adapter; never
+        // auto-select them even if a stale cache entry carries chat caps.
+        if model.provider == .openCodeZen || model.provider == .openCodeGo,
+           model.provider.openCodeAPIFormat(for: model.id) == .systemOne {
+            return false
+        }
         let caps = Set((model.capabilities ?? []).compactMap { Self.normalizeCapabilityTag($0) })
 
         // Explicit chat signals win even when the ID looks unusual.
@@ -472,6 +478,8 @@ public final class ModelCatalog: ObservableObject {
     
     private func fetchModels(for provider: AIProvider, force: Bool, authMethod: ProviderAuthMethod?, refreshID: UUID) async throws -> (models: [ModelInfo], isFallback: Bool) {
         switch provider {
+        case .unavailableProvider:
+            return ([], true)
         case .openAI:
             return try await fetchOpenAIModels(force: force, authMethod: authMethod, refreshID: refreshID)
         case .anthropic:
@@ -484,8 +492,8 @@ public final class ModelCatalog: ObservableObject {
             return (try await fetchOpenRouterModels(), false)
         case .ollama:
             return (try await fetchOllamaModels(), false)
-        case .githubCopilot:
-            return try await fetchGitHubCopilotModels()
+        case .openCodeZen, .openCodeGo:
+            return try await fetchOpenCodeModels(for: provider)
         case .appleFoundationModel:
             return (appleFoundationModels(), false)
         case .openAICompatible:
@@ -977,273 +985,51 @@ public final class ModelCatalog: ObservableObject {
         }
     }
     
-    private func fetchGitHubCopilotModels() async throws -> (models: [ModelInfo], isFallback: Bool) {
-        guard let url = URL(string: "https://api.githubcopilot.com/models") else {
+    /// Keep models supported by the native protocol clients. SystemOne has no
+    /// adapter yet; sending those models to chat completions would fail.
+    nonisolated static func openCodeChatModels(_ models: [ModelInfo], for provider: AIProvider) -> [ModelInfo] {
+        models.filter {
+            !$0.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && provider.openCodeAPIFormat(for: $0.id) != .systemOne
+        }
+    }
+
+    private func fetchOpenCodeModels(for provider: AIProvider) async throws -> (models: [ModelInfo], isFallback: Bool) {
+        guard let baseURL = provider.defaultAPIURL,
+              let url = URL(string: baseURL + "/models") else {
             throw ModelCatalogError.invalidURL
         }
         try ensureNetworkAllowed(url)
 
-        let authManager = GitHubCopilotAuthManager.shared
-        let initialToken = try await authManager.getCopilotToken()
-        let (initialData, initialStatusCode) = try await fetchGitHubCopilotModelsResponse(url: url, token: initialToken)
-
-        var data = initialData
-        var statusCode = initialStatusCode
-
-        // Recover from stale cached Copilot token by forcing a refresh once.
-        if statusCode == 401 || statusCode == 403 {
-            authManager.invalidateCachedCopilotToken()
-            let refreshedToken = try await authManager.getCopilotToken(forceRefresh: true)
-            let retryResult = try await fetchGitHubCopilotModelsResponse(url: url, token: refreshedToken)
-            data = retryResult.data
-            statusCode = retryResult.statusCode
-        }
-
-        guard (200...299).contains(statusCode) else {
-            if statusCode == 401 || statusCode == 403 {
-                throw GitHubAuthError.accessDenied
-            }
-            throw ModelCatalogError.fetchFailed
-        }
-
-        let decodedModels = decodeGitHubCopilotModelPayloads(from: data)
-        if decodedModels.isEmpty {
-            throw ModelCatalogError.fetchFailed
-        }
-
-        let models = decodedModels.compactMap { model -> ModelInfo? in
-            guard let modelID = model.resolvedID else { return nil }
-            let capabilityTags = mergeCapabilityTags([
-                model.modalities,
-                model.capabilities,
-                model.resolvedInputModalities,
-                model.resolvedInputModalities?.map { "input:\($0)" },
-                model.resolvedOutputModalities,
-                model.resolvedOutputModalities?.map { "output:\($0)" }
-            ])
-            return ModelInfo(
-                id: modelID,
-                displayName: modelID,
-                provider: .githubCopilot,
-                capabilities: capabilityTags,
-                supportedReasoningEfforts: model.resolvedReasoningEfforts,
-                defaultReasoningEffort: model.resolvedDefaultReasoningEffort,
-                updatedAt: Date()
-            )
-        }
-
-        if models.isEmpty {
-            throw ModelCatalogError.fetchFailed
-        }
-
-        return (models, false)
-    }
-
-    private func fetchGitHubCopilotModelsResponse(url: URL, token: String) async throws -> (data: Data, statusCode: Int) {
-        try ensureNetworkAllowed(url)
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 10
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("vscode/1.85.1", forHTTPHeaderField: "Editor-Version")
-        request.setValue("copilot/1.138.0", forHTTPHeaderField: "Editor-Plugin-Version")
-        request.setValue("GithubCopilot/1.138.0", forHTTPHeaderField: "User-Agent")
-
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw ModelCatalogError.fetchFailed
+        if let key = await KeychainManager.getAsync(key: provider.keychainKey), !key.isEmpty {
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         }
 
-        return (data, httpResponse.statusCode)
-    }
-
-    private func decodeGitHubCopilotModelPayloads(from data: Data) -> [GitHubCopilotModelPayload] {
-        let decoder = JSONDecoder()
-
-        if let wrapped = try? decoder.decode(GitHubCopilotModelsResponse.self, from: data),
-           let wrappedModels = wrapped.preferredModels,
-           !wrappedModels.isEmpty {
-            return wrappedModels
-        }
-
-        if let topLevelArray = try? decoder.decode([GitHubCopilotModelPayload].self, from: data),
-           !topLevelArray.isEmpty {
-            return topLevelArray
-        }
-
-        return decodeGitHubCopilotModelPayloadsLoosely(from: data)
-    }
-
-    private func decodeGitHubCopilotModelPayloadsLoosely(from data: Data) -> [GitHubCopilotModelPayload] {
-        guard let json = try? JSONSerialization.jsonObject(with: data) else {
-            return []
-        }
-
-        let rawModels: [[String: Any]]
-        if let dictionary = json as? [String: Any] {
-            if let dataArray = dictionary["data"] as? [[String: Any]] {
-                rawModels = dataArray
-            } else if let modelsArray = dictionary["models"] as? [[String: Any]] {
-                rawModels = modelsArray
-            } else {
-                rawModels = []
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                throw AIClientError.apiError(
+                    statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1,
+                    message: "OpenCode model list request failed."
+                )
             }
-        } else if let array = json as? [[String: Any]] {
-            rawModels = array
-        } else {
-            rawModels = []
-        }
-
-        return rawModels.compactMap { GitHubCopilotModelPayload(dictionary: $0) }
-    }
-
-    private struct GitHubCopilotModelsResponse: Decodable {
-        let data: [GitHubCopilotModelPayload]?
-        let models: [GitHubCopilotModelPayload]?
-
-        var preferredModels: [GitHubCopilotModelPayload]? {
-            if let data, !data.isEmpty { return data }
-            if let models, !models.isEmpty { return models }
-            return nil
-        }
-    }
-
-    private struct GitHubCopilotModelPayload: Decodable {
-        let id: String?
-        let model: String?
-        let name: String?
-        let modalities: [String]?
-        let capabilities: [String]?
-        let input_modalities: [String]?
-        let output_modalities: [String]?
-        let inputModalities: [String]?
-        let outputModalities: [String]?
-        let supported_reasoning_efforts: [String]?
-        let supportedReasoningEfforts: [String]?
-        let default_reasoning_effort: String?
-        let defaultReasoningEffort: String?
-
-        var resolvedID: String? {
-            [id, model, name]
-                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .first(where: { !$0.isEmpty })
-        }
-
-        var resolvedInputModalities: [String]? {
-            if let input_modalities, !input_modalities.isEmpty {
-                return input_modalities
-            }
-            return inputModalities
-        }
-
-        var resolvedOutputModalities: [String]? {
-            if let output_modalities, !output_modalities.isEmpty {
-                return output_modalities
-            }
-            return outputModalities
-        }
-
-        var resolvedReasoningEfforts: [ReasoningEffort]? {
-            let values = supported_reasoning_efforts ?? supportedReasoningEfforts
-            let efforts = values?.map(ReasoningEffort.init(rawValue:)) ?? []
-            return efforts.isEmpty ? nil : efforts
-        }
-
-        var resolvedDefaultReasoningEffort: ReasoningEffort? {
-            (default_reasoning_effort ?? defaultReasoningEffort)
-                .map(ReasoningEffort.init(rawValue:))
-        }
-
-        init(
-            id: String? = nil,
-            model: String? = nil,
-            name: String? = nil,
-            modalities: [String]? = nil,
-            capabilities: [String]? = nil,
-            input_modalities: [String]? = nil,
-            output_modalities: [String]? = nil,
-            inputModalities: [String]? = nil,
-            outputModalities: [String]? = nil,
-            supported_reasoning_efforts: [String]? = nil,
-            supportedReasoningEfforts: [String]? = nil,
-            default_reasoning_effort: String? = nil,
-            defaultReasoningEffort: String? = nil
-        ) {
-            self.id = id
-            self.model = model
-            self.name = name
-            self.modalities = modalities
-            self.capabilities = capabilities
-            self.input_modalities = input_modalities
-            self.output_modalities = output_modalities
-            self.inputModalities = inputModalities
-            self.outputModalities = outputModalities
-            self.supported_reasoning_efforts = supported_reasoning_efforts
-            self.supportedReasoningEfforts = supportedReasoningEfforts
-            self.default_reasoning_effort = default_reasoning_effort
-            self.defaultReasoningEffort = defaultReasoningEffort
-        }
-
-        init?(dictionary: [String: Any]) {
-            let id = dictionary["id"] as? String
-            let model = dictionary["model"] as? String
-            let name = dictionary["name"] as? String
-            let modalities = Self.stringArray(from: dictionary["modalities"])
-            let capabilities = Self.stringArray(from: dictionary["capabilities"])
-            let inputModalitiesSnake = Self.stringArray(from: dictionary["input_modalities"])
-            let outputModalitiesSnake = Self.stringArray(from: dictionary["output_modalities"])
-            let inputModalitiesCamel = Self.stringArray(from: dictionary["inputModalities"])
-            let outputModalitiesCamel = Self.stringArray(from: dictionary["outputModalities"])
-            let reasoningEffortsSnake = Self.reasoningEffortArray(from: dictionary["supported_reasoning_efforts"])
-            let reasoningEffortsCamel = Self.reasoningEffortArray(from: dictionary["supportedReasoningEfforts"])
-
-            let payload = GitHubCopilotModelPayload(
-                id: id,
-                model: model,
-                name: name,
-                modalities: modalities,
-                capabilities: capabilities,
-                input_modalities: inputModalitiesSnake,
-                output_modalities: outputModalitiesSnake,
-                inputModalities: inputModalitiesCamel,
-                outputModalities: outputModalitiesCamel,
-                supported_reasoning_efforts: reasoningEffortsSnake,
-                supportedReasoningEfforts: reasoningEffortsCamel,
-                default_reasoning_effort: dictionary["default_reasoning_effort"] as? String,
-                defaultReasoningEffort: dictionary["defaultReasoningEffort"] as? String
+            let models = try await Self.decodedOpenAICompatibleModels(
+                from: data,
+                provider: provider,
+                usesCreatedTimestamp: false
             )
-
-            guard payload.resolvedID != nil else { return nil }
-            self = payload
-        }
-
-        private static func stringArray(from value: Any?) -> [String]? {
-            if let values = value as? [String] {
-                return values
-            }
-
-            if let values = value as? [Any] {
-                let strings = values.compactMap { $0 as? String }
-                return strings.isEmpty ? nil : strings
-            }
-
-            return nil
-        }
-
-        private static func reasoningEffortArray(from value: Any?) -> [String]? {
-            if let strings = stringArray(from: value) {
-                return strings
-            }
-            guard let values = value as? [[String: Any]] else { return nil }
-            let strings = values.compactMap {
-                $0["reasoningEffort"] as? String ?? $0["reasoning_effort"] as? String
-            }
-            return strings.isEmpty ? nil : strings
+            let chatModels = Self.openCodeChatModels(models, for: provider)
+            return chatModels.isEmpty ? (fallbackModels(for: provider), true) : (chatModels, false)
+        } catch {
+            lastError[provider] = error
+            return (fallbackModels(for: provider), true)
         }
     }
-    
+
     private func fetchGeminiModels() async throws -> (models: [ModelInfo], isFallback: Bool) {
         guard let url = URL(string: "https://generativelanguage.googleapis.com/v1/models") else {
             throw ModelCatalogError.invalidURL
@@ -1469,6 +1255,9 @@ public final class ModelCatalog: ObservableObject {
                     guard wrapper.openAIAuthMethod == .apiKey else { continue }
                     openAIAuthMethod = wrapper.openAIAuthMethod
                 }
+                if provider == .openCodeZen || provider == .openCodeGo {
+                    guard wrapper.openCodeProtocolVersion == 1 else { continue }
+                }
                 models[provider] = wrapper.models
                 timestamps[provider] = wrapper.timestamp
             } catch {
@@ -1487,7 +1276,8 @@ public final class ModelCatalog: ObservableObject {
         let wrapper = CacheWrapper(
             models: models,
             timestamp: Date(),
-            openAIAuthMethod: provider == .openAI ? cachedOpenAIAuthMethod : nil
+            openAIAuthMethod: provider == .openAI ? cachedOpenAIAuthMethod : nil,
+            openCodeProtocolVersion: (provider == .openCodeZen || provider == .openCodeGo) ? 1 : nil
         )
 
         // Encode + write off the MainActor; only @Published-adjacent state
@@ -1747,19 +1537,8 @@ public final class ModelCatalog: ObservableObject {
         .anthropic: ["claude-3-5-sonnet", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "claude-3.5", "claude-3.7", "claude-sonnet-4", "claude-opus-4", "claude-haiku-4", "claude-sonnet", "claude-opus"],
         .gemini: ["gemini-3", "gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-exp", "gemini-pro-vision"],
         .groq: ["llama-3.2-11b-vision", "llama-3.2-90b-vision", "llama-4-scout"],
-        .githubCopilot: ["gpt-5", "gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1", "o1", "o3", "o4", "claude-3", "claude-sonnet", "claude-opus", "gemini"]
-    ]
-    
-    /// Known vision-capable model families for GitHub Copilot
-    private static let copilotVisionFamilies: [String] = [
-        // OpenAI GPT models
-        "gpt-5", "gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1",
-        // OpenAI reasoning models
-        "o1", "o3", "o4",
-        // Anthropic models (both old and new naming)
-        "claude-3", "claude-sonnet", "claude-opus",
-        // Google models
-        "gemini"
+        .openCodeZen: ["deepseek-v4-flash-vision-exp"],
+        .openCodeGo: ["deepseek-v4-flash-vision-exp"]
     ]
     
     /// Try to determine vision support from model metadata capabilities
@@ -1866,10 +1645,10 @@ public final class ModelCatalog: ObservableObject {
                 return candidate.hasPrefix("claude")
             case .gemini:
                 return candidate.hasPrefix("gemini")
+            case .openCodeZen, .openCodeGo:
+                return candidate.hasPrefix("gpt-") || candidate.hasPrefix("claude-") || candidate.hasPrefix("gemini-")
             case .groq:
                 return candidate.contains("vision-preview") || candidate.contains("llama-4-scout")
-            case .githubCopilot:
-                return Self.copilotVisionFamilies.contains { family in candidate.contains(family.lowercased()) }
             default:
                 return false
             }
@@ -1932,16 +1711,6 @@ public final class ModelCatalog: ObservableObject {
 
         // Provider-specific heuristics
         switch provider {
-        case .githubCopilot:
-            // GitHub Copilot exposes models from multiple providers (OpenAI, Anthropic, Google)
-            // Check against known vision-capable model families
-            for family in Self.copilotVisionFamilies {
-                if lowercaseId.contains(family.lowercased()) {
-                    return true
-                }
-            }
-            // Check for vision keywords in model name
-            return Self.visionKeywords.contains(where: { lowercaseId.contains($0) })
         case .ollama:
             // Ollama often uses models like 'llava', 'bakllava' for vision
             return Self.openAICompatibleVisionKeywords.contains { keyword in
@@ -1958,7 +1727,7 @@ public final class ModelCatalog: ObservableObject {
                 !lowercaseId.contains("embedding") &&
                 !lowercaseId.contains("tts") &&
                 !lowercaseId.contains("speech")
-        case .openAI, .anthropic, .groq:
+        case .openAI, .anthropic, .groq, .openCodeZen, .openCodeGo:
             return Self.visionKeywords.contains(where: { lowercaseId.contains($0) })
         case .openRouter:
             // OpenRouter often includes vision in the name or we can check the ID
@@ -1977,10 +1746,13 @@ private struct CacheWrapper: Codable {
     /// discarded on load because they may contain Codex-only models.
     let openAIAuthMethod: ProviderAuthMethod?
 
-    init(models: [ModelInfo], timestamp: Date, openAIAuthMethod: ProviderAuthMethod? = nil) {
+    let openCodeProtocolVersion: Int?
+
+    init(models: [ModelInfo], timestamp: Date, openAIAuthMethod: ProviderAuthMethod? = nil, openCodeProtocolVersion: Int? = nil) {
         self.models = models
         self.timestamp = timestamp
         self.openAIAuthMethod = openAIAuthMethod
+        self.openCodeProtocolVersion = openCodeProtocolVersion
     }
 }
 
