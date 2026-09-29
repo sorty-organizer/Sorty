@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import SwiftUI
+import Beam
 
 public struct WhatsNewTourView: View {
     @SortyHotReload private var hotReload
