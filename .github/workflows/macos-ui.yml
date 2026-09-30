@@ -10,6 +10,7 @@ on:
         options:
           - blacksmith-6vcpu-macos-15
           - macos-15
+          - self-hosted-macOS
 
 permissions:
   contents: read
@@ -20,7 +21,7 @@ concurrency:
 
 jobs:
   ui-tests:
-    runs-on: ${{ inputs.runner }}
+    runs-on: ${{ inputs.runner == 'self-hosted-macOS' && fromJSON('["self-hosted", "macOS"]') || inputs.runner }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
@@ -33,13 +34,23 @@ jobs:
       - name: Inspect the macOS desktop session
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p artifacts
           stat -f 'Console user: %Su' /dev/console | tee artifacts/desktop-session.log
           swift - <<'SWIFT' | tee -a artifacts/desktop-session.log
           import CoreGraphics
           import Foundation
-          print("Session:", CGSessionCopyCurrentDictionary() as Any)
+          let session = CGSessionCopyCurrentDictionary() as? [String: Any]
+          print("Session:", session as Any)
           print("Online displays:", CGMainDisplayID())
+          guard let session, CGMainDisplayID() != 0 else {
+              fputs("UI validation requires a logged-in macOS desktop with a display.\n", stderr)
+              exit(1)
+          }
+          if (session["CGSSessionScreenIsLocked"] as? NSNumber)?.boolValue == true {
+              fputs("The runner desktop is locked. Use an unlocked Mac runner for UI tests and screenshots.\n", stderr)
+              exit(1)
+          }
           SWIFT
 
       - name: Build the native app and UI tests
