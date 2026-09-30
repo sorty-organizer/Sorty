@@ -414,7 +414,7 @@ public struct WhatsNewTourView: View {
         ]
 
         return VStack(spacing: 5) {
-            HStack {
+            HStack(spacing: 0) {
                 Text("Activity")
                     .frame(width: 160, alignment: .leading)
                 Text("Before")
@@ -429,10 +429,10 @@ public struct WhatsNewTourView: View {
             .padding(.bottom, 4)
 
             ForEach(activities, id: \.resource) { activity in
-                HStack(spacing: 0) {
+                HStack(alignment: .center, spacing: 0) {
                     Text(activity.name)
                         .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .frame(width: 160, alignment: .leading)
+                        .frame(width: 160, height: 40, alignment: .leading)
 
                     bundledImage("SortyMenuOld\(activity.resource).png", fillsFrame: false)
                         .frame(width: 82, height: 40)
