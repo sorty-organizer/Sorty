@@ -98,6 +98,9 @@ or widget targets.
   `rm -rf .build/arm64-apple-macosx/debug/ModuleCache` (same via
   `$SORTY_BUILD_DIR`; see `make cache-clear-module`). Seen under parallel
   load with a warm cache, e.g. after toolchain/SDK updates.
+  Recovery also recognizes `expected identifier` with `expanded from macro
+  'major'` in `AvailabilityInternalLegacy.h`, which can break PostHog's
+  `PLCrashHostInfo.m` without a source change.
 - The recursive `os_unfair_lock` crash on `InjectionQueue`, reported by make as
   `[hot] Error 9`, is addressed by the vendored save queue. Quit any older hot
   process and start `make hot` again to build and load the fix.

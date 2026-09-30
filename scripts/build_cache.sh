@@ -736,7 +736,14 @@ swiftpm_module_cache_poison_detected() {
     fi
 
     grep -Eq "has no member '(main|current|standard)'" "${log_file}" ||
-        grep -Eq "cannot infer contextual base in reference to member 'common'" "${log_file}"
+        grep -Eq "cannot infer contextual base in reference to member 'common'" "${log_file}" ||
+        {
+            # A corrupted SDK module can replace a C struct field with an
+            # availability attribute, as seen in PostHog's crash reporter.
+            grep -Eq "error: expected identifier" "${log_file}" &&
+                grep -Eq "note: expanded from macro 'major'" "${log_file}" &&
+                grep -Eq 'AvailabilityInternalLegacy\.h' "${log_file}"
+        }
 }
 
 reset_clang_module_caches() {
