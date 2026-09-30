@@ -421,6 +421,8 @@ public struct WhatsNewTourView: View {
                     .frame(width: 82)
                 Text("Now")
                     .frame(width: 82)
+                Text("White")
+                    .frame(width: 82)
             }
             .font(.system(size: 12, weight: .semibold, design: .rounded))
             .foregroundStyle(.secondary)
@@ -439,6 +441,10 @@ public struct WhatsNewTourView: View {
                     bundledImage("SortyMenu\(activity.resource).png", fillsFrame: false)
                         .frame(width: 82, height: 40)
                         .accessibilityLabel("New \(activity.name) icon")
+
+                    bundledImage("SortyMenuWhite\(activity.resource).png", fillsFrame: false)
+                        .frame(width: 82, height: 40)
+                        .accessibilityLabel("Glassy white \(activity.name) icon")
                 }
                 .frame(height: 40)
             }
