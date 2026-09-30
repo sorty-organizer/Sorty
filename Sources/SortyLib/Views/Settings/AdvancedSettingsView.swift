@@ -235,6 +235,7 @@ struct AdvancedSettingsView: View {
             Text(diagnosticReportError ?? "")
         }
         .onChange(of: usesAppleNativeIconStyle) { _, newValue in
+            MenuBarIconPreferences.notifyFinderStyleChanged(usesAppleNativeStyle: newValue)
             HapticFeedbackManager.shared.selection()
             AnalyticsManager.shared.captureSettingChanged(
                 "Menu Bar Icon Style",

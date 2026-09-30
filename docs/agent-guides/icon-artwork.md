@@ -13,7 +13,11 @@ New comparison includes a White column for reviewing this set in the candidate.
 Finder Organize and Watch use the white artwork for Apple Native style; Exclude
 uses a native Finder symbol. Quick Actions use native symbols in this style.
 The white mascot PNGs retain their colors and detail rather than using template
-rendering. Existing Quick Actions need reinstalling to update their saved icons.
+rendering. Changing the style broadcasts the selected value to running Finder Sync
+instances, so newly opened action menus use it without waiting for defaults to
+reach disk. Installed Quick Action icons are rewritten automatically. Finder may
+cache an existing toolbar button image until it reloads the extension; the setting
+does not restart Finder.
 
 Activity symbols are a waving hand for Greeting, a folder with a down arrow for
 Organizing, a pencil for Renaming, an eye for Watched Folder, two overlapping

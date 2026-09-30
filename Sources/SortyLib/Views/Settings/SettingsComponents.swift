@@ -492,17 +492,23 @@ struct SettingsSubsettingRow<Control: View>: View {
             Divider()
                 .padding(.trailing, 8)
 
-            HStack(alignment: .center, spacing: 16) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
                 Image(systemName: "arrow.turn.down.right")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(.secondary)
                     .frame(width: 20)
+                    .alignmentGuide(.firstTextBaseline) { dimensions in
+                        dimensions[VerticalAlignment.center]
+                    }
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(LocalizedStringKey(title))
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.primary)
+                        .alignmentGuide(.firstTextBaseline) { dimensions in
+                            dimensions[VerticalAlignment.center]
+                        }
 
                     if let description {
                         Text(LocalizedStringKey(description))
@@ -514,6 +520,9 @@ struct SettingsSubsettingRow<Control: View>: View {
 
                 Spacer(minLength: 12)
                 control
+                    .alignmentGuide(.firstTextBaseline) { dimensions in
+                        dimensions[VerticalAlignment.center]
+                    }
             }
             .padding(.leading, 4)
             .padding(.vertical, 8)

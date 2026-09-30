@@ -13,9 +13,19 @@ final class SortyFinderSync: FIFinderSync {
         UserDefaults(suiteName: "group.com.sorty.app") ?? .standard
     }
     private static let iconStylePreferenceKey = "useWhiteMenuBarIcons"
+    private static let iconStyleChangedNotification = Notification.Name("SortyIconStyleChanged")
+    private static let iconStyleLock = NSLock()
+    nonisolated(unsafe) private static var notifiedAppleNativeStyle: Bool?
 
     override init() {
         super.init()
+
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(iconStyleDidChange(_:)),
+            name: Self.iconStyleChangedNotification,
+            object: nil
+        )
 
         refreshMonitoredDirectories()
 
@@ -38,6 +48,16 @@ final class SortyFinderSync: FIFinderSync {
 
     deinit {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        DistributedNotificationCenter.default().removeObserver(self)
+    }
+
+    @objc private func iconStyleDidChange(_ notification: Notification) {
+        guard let style = notification.object as? String,
+              style == "appleNative" || style == "sorty" else { return }
+        // Carry the value across processes without waiting for defaults to reach disk.
+        Self.iconStyleLock.lock()
+        Self.notifiedAppleNativeStyle = style == "appleNative"
+        Self.iconStyleLock.unlock()
     }
 
     override var toolbarItemName: String {
@@ -275,7 +295,10 @@ final class SortyFinderSync: FIFinderSync {
         symbolName: String,
         accessibilityDescription: String
     ) -> NSImage {
-        let usesAppleNativeStyle = iconStyleDefaults.bool(forKey: iconStylePreferenceKey)
+        iconStyleLock.lock()
+        let notifiedStyle = notifiedAppleNativeStyle
+        iconStyleLock.unlock()
+        let usesAppleNativeStyle = notifiedStyle ?? iconStyleDefaults.bool(forKey: iconStylePreferenceKey)
         if usesAppleNativeStyle,
            let appleNativeResourceName,
            let imageURL = Bundle.main.url(forResource: appleNativeResourceName, withExtension: "png"),

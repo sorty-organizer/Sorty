@@ -44,6 +44,17 @@ public enum MenuBarActivity: String, CaseIterable, Sendable {
 public enum MenuBarIconPreferences {
     public static let preferenceKey = "useWhiteMenuBarIcons"
     public static let appGroupIdentifier = "group.com.sorty.app"
+    public static let changeNotification = Notification.Name("SortyIconStyleChanged")
+
+    public static func notifyFinderStyleChanged(usesAppleNativeStyle: Bool) {
+        defaults.set(usesAppleNativeStyle, forKey: preferenceKey)
+        DistributedNotificationCenter.default().postNotificationName(
+            changeNotification,
+            object: usesAppleNativeStyle ? "appleNative" : "sorty",
+            userInfo: nil,
+            deliverImmediately: true
+        )
+    }
 
     public static var defaults: UserDefaults {
         let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) ?? .standard
