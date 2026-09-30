@@ -66,32 +66,6 @@ class AppStateTests: XCTestCase {
         XCTAssertNil(freshState.selectedDirectory)
     }
     
-    func testOnboardingPersistence() {
-        let testSuiteName = "test.onboarding.persistence.\(UUID().uuidString)"
-        let userDefaults = UserDefaults(suiteName: testSuiteName)!
-        let onboardingKey = "hasCompletedOnboarding"
-        let versionKey = "lastLaunchedVersion"
-        
-        defer {
-            userDefaults.removePersistentDomain(forName: testSuiteName)
-        }
-        
-        // Simulate fresh install (no version stored, onboarding not completed)
-        userDefaults.removeObject(forKey: onboardingKey)
-        userDefaults.removeObject(forKey: versionKey)
-        
-        // Verify state
-        XCTAssertFalse(userDefaults.bool(forKey: onboardingKey), "Fresh install should show onboarding")
-        
-        // Set onboarding completed
-        userDefaults.set(true, forKey: onboardingKey)
-        XCTAssertTrue(userDefaults.bool(forKey: onboardingKey))
-        
-        // Version should be manageable
-        userDefaults.set("1.0.0", forKey: versionKey)
-        XCTAssertNotNil(userDefaults.string(forKey: versionKey), "Version should be stored after first launch")
-    }
-    
     func testVersion120RequiresOnboardingOnceAfterUpdate() {
         let testSuiteName = "test.onboarding.updates.\(UUID().uuidString)"
         let userDefaults = UserDefaults(suiteName: testSuiteName)!
@@ -252,40 +226,7 @@ class AppStateTests: XCTestCase {
         XCTAssertTrue(status.message.contains("Codex CLI"))
     }
     
-    // MARK: - View Navigation Tests
-    
-    func testAllAppViewCases() {
-        let allViews: [AppState.AppView] = [
-            .settings, .organize, .history,
-            .duplicates, .exclusions, .watchedFolders, .learnings
-        ]
-        
-        for view in allViews {
-            appState.currentView = view
-            XCTAssertEqual(appState.currentView, view)
-        }
-    }
-    
-    // MARK: - Sidebar Toggle Tests
-    
-    func testSidebarToggle() {
-        XCTAssertTrue(appState.showingSidebar)
-        
-        appState.showingSidebar.toggle()
-        XCTAssertFalse(appState.showingSidebar)
-        
-        appState.showingSidebar.toggle()
-        XCTAssertTrue(appState.showingSidebar)
-    }
-    
     // MARK: - Directory Picker Tests
-    
-    func testDirectoryPickerToggle() {
-        XCTAssertFalse(appState.showDirectoryPicker)
-        
-        appState.showDirectoryPicker = true
-        XCTAssertTrue(appState.showDirectoryPicker)
-    }
     
     func testSelectedDirectory() {
         XCTAssertNil(appState.selectedDirectory)

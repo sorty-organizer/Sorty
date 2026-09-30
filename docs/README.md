@@ -17,6 +17,7 @@ Welcome to the official Sorty documentation. Sorty is a smart file organization 
 - [App Deeplinks](#app-deeplinks)
 - [Codex Skill](sorty-skill.md)
 - [Startup performance](agent-guides/startup-performance.md)
+- [Test audit](agent-guides/test-audit.md)
 - [CLI Tool](#cli-tool)
 - [Analytics](analytics.md)
 - [Privacy & Security](#privacy--security)

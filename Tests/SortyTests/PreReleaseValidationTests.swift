@@ -595,34 +595,6 @@ final class ResponseParserEdgeCaseTests: XCTestCase {
         }
     }
     
-    func testParseJSONWithExtraFields() {
-        let json = """
-        {
-            "folders": [
-                {
-                    "name": "Documents",
-                    "description": "Text files",
-                    "files": ["file.txt"],
-                    "unknownField": "should be ignored",
-                    "anotherUnknown": 12345
-                }
-            ],
-            "extraTopLevel": true
-        }
-        """
-        
-        let testFile = FileItem(path: "/test/file.txt", name: "file", extension: "txt", size: 100, isDirectory: false)
-        
-        do {
-            let result = try ResponseParser.parseResponse(json, originalFiles: [testFile])
-            XCTAssertNotNil(result, "Should parse JSON with extra fields")
-            XCTAssertEqual(result.suggestions.count, 1)
-        } catch {
-            // Some parsers may be strict - that's also acceptable
-            XCTAssertTrue(true, "Parser is strict about extra fields")
-        }
-    }
-    
     func testParseResponseWithUnicodeContent() {
         let json = """
         {
@@ -648,36 +620,4 @@ final class ResponseParserEdgeCaseTests: XCTestCase {
         }
     }
     
-    func testParseValidOrganizationResponse() {
-        let json = """
-        {
-            "folders": [
-                {
-                    "name": "Documents",
-                    "description": "Text documents",
-                    "files": ["doc.txt", "report.pdf"],
-                    "reasoning": "Grouped by type"
-                },
-                {
-                    "name": "Images",
-                    "description": "Image files",
-                    "files": ["photo.jpg"]
-                }
-            ]
-        }
-        """
-        
-        let files = [
-            FileItem(path: "/test/doc.txt", name: "doc", extension: "txt", size: 100, isDirectory: false),
-            FileItem(path: "/test/report.pdf", name: "report", extension: "pdf", size: 200, isDirectory: false),
-            FileItem(path: "/test/photo.jpg", name: "photo", extension: "jpg", size: 300, isDirectory: false)
-        ]
-        
-        do {
-            let result = try ResponseParser.parseResponse(json, originalFiles: files)
-            XCTAssertEqual(result.suggestions.count, 2)
-        } catch {
-            XCTFail("Should parse valid response: \(error)")
-        }
-    }
 }

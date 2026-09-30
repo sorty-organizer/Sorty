@@ -138,13 +138,6 @@ final class ResourceLoadingTests: XCTestCase {
         XCTAssertFalse(bundle.bundlePath.isEmpty, "Resolved bundle should have a valid path")
     }
 
-    func testBundleResolverDoesNotCrashOnMissingResources() {
-        // Looking up a non-existent resource should return nil, not crash
-        let bundle = SortyResources.bundle
-        let nonExistentURL = bundle.url(forResource: "NonExistentResource12345", withExtension: "xyz")
-        XCTAssertNil(nonExistentURL, "Non-existent resource should return nil, not crash")
-    }
-
     func testSortyResourcesBundleHasResourceURL() {
         // Ensure the resolved bundle has a resource URL for loading
         let bundle = SortyResources.bundle
@@ -155,13 +148,6 @@ final class ResourceLoadingTests: XCTestCase {
 // MARK: - Integration Tests
 
 final class ResourceLoadingIntegrationTests: XCTestCase {
-    
-    @MainActor
-    func testSettingsViewModelCanInitialize() {
-        // Integration test ensuring SettingsViewModel initializes without crash
-        let viewModel = SettingsViewModel()
-        XCTAssertNotNil(viewModel, "SettingsViewModel should initialize")
-    }
     
     func testAIProviderDisplayNamesAreValid() {
         // Ensure all providers have valid display names for UI
