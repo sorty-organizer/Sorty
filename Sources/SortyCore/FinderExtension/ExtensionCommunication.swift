@@ -1639,14 +1639,14 @@ public struct ExtensionCommunication {
             switch style {
             case .organize:
                 return quickActionSystemSymbol(
-                    "folder.fill.badge.gearshape",
+                    "folder.fill",
                     accessibilityDescription: "Organize with Sorty"
                 )
             case .watch:
                 return quickActionSystemSymbol("eye", accessibilityDescription: "Watch with Sorty")
             case .exclude:
                 return quickActionSystemSymbol(
-                    "folder.badge.minus",
+                    "minus.circle.fill",
                     accessibilityDescription: "Exclude from Sorty"
                 )
             }
@@ -1741,13 +1741,14 @@ public struct ExtensionCommunication {
         let size = NSSize(width: 256, height: 256)
         let rendered = NSImage(size: size)
         rendered.lockFocus()
-        color.set()
         configured.draw(
             in: NSRect(origin: .zero, size: size),
             from: .zero,
             operation: .sourceOver,
             fraction: 1
         )
+        color.setFill()
+        NSRect(origin: .zero, size: size).fill(using: .sourceIn)
         rendered.unlockFocus()
         rendered.isTemplate = false
         return rendered

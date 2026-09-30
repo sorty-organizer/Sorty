@@ -10,11 +10,14 @@ The white PNGs use glossy pearl-white glass, silver-gray highlights, and a dark
 face panel with white eyes and smile. They reuse the seven image-generated
 glass variants from the icon review, exported at 512 pixels. The 1.2.2 What's
 New comparison includes a White column for reviewing this set in the candidate.
-Finder Organize, Watch, and Exclude use white mascot artwork for Apple Native
-style. Exclude uses `SortyExcludeMascotWhite.png`, with a white shield and dark
-minus. Quick Actions use native symbols in this style.
-The white mascot PNGs retain their colors and detail rather than using template
-rendering. Changing the style broadcasts the selected value to running Finder Sync
+Apple Native Finder actions use distinct SF Symbols at 16 points: `folder.fill`
+for Organize, `eye` for Watch, and `minus.circle.fill` for Exclude. Quick Actions
+use the same symbols. The shared robot silhouette obscured the different props
+at menu size, so Finder uses symbols rather than white mascot artwork in this
+style. Finder Sync rasterizes the symbols with a white tint in dark appearance
+and black in light appearance to avoid relying on template tinting across the
+process boundary. The menu bar and popover keep their white mascot artwork.
+Changing the style broadcasts the selected value to running Finder Sync
 instances, so newly opened action menus use it without waiting for defaults to
 reach disk. Installed Quick Action icons are rewritten automatically. Finder may
 cache an existing toolbar button image until it reloads the extension; the setting
@@ -33,14 +36,14 @@ Avoid flat stencils, threshold conversions, speckles, text, and extra symbols.
 The former SVG set and Python generator have been removed.
 
 Finder Sync bundles `SortyFinderSync/SortyWatchMascot.png` and
-`SortyFinderSync/SortyExcludeMascot.png` and
-`SortyFinderSync/SortyExcludeMascotWhite.png` through its Xcode Resources phase.
+`SortyFinderSync/SortyExcludeMascot.png` through its Xcode Resources phase
+for the colorful Sorty style.
 Watch reuses `SortyMenuWatchedFolder.png`. Exclude uses the matching robot with
 a shield and minus sign. Keep those resource names when replacing artwork.
 The Organize icon references `SortyMenuOrganizing.png` directly.
 
 The scripted bundle fingerprint includes the dedicated Finder PNGs. The Finder
-extension cache also checks the colored and white action PNGs and the Xcode project, so
+extension cache also checks the colored action PNGs and the Xcode project, so
 artwork changes trigger an extension rebuild on the next build.
 
 The Exclude artwork was made with the built-in image editor using the current

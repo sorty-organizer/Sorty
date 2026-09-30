@@ -67,8 +67,7 @@ final class SortyFinderSync: FIFinderSync {
     override var toolbarItemImage: NSImage {
         Self.finderActionImage(
             named: "SortyMenuOrganizing",
-            appleNativeResourceName: "SortyMenuWhiteOrganizing",
-            symbolName: "folder.fill.badge.gearshape",
+            symbolName: "folder.fill",
             accessibilityDescription: "Organize with Sorty"
         )
     }
@@ -82,20 +81,17 @@ final class SortyFinderSync: FIFinderSync {
         let menu = NSMenu()
         let organizeImage = Self.finderActionImage(
             named: "SortyMenuOrganizing",
-            appleNativeResourceName: "SortyMenuWhiteOrganizing",
-            symbolName: "folder.fill.badge.gearshape",
+            symbolName: "folder.fill",
             accessibilityDescription: "Organize with Sorty"
         )
         let watchImage = Self.finderActionImage(
             named: "SortyWatchMascot",
-            appleNativeResourceName: "SortyMenuWhiteWatchedFolder",
             symbolName: "eye",
             accessibilityDescription: "Watch with Sorty"
         )
         let excludeImage = Self.finderActionImage(
             named: "SortyExcludeMascot",
-            appleNativeResourceName: "SortyExcludeMascotWhite",
-            symbolName: "folder.badge.minus",
+            symbolName: "minus.circle.fill",
             accessibilityDescription: "Exclude from Sorty"
         )
 
@@ -292,7 +288,6 @@ final class SortyFinderSync: FIFinderSync {
 
     private static func finderActionImage(
         named sortyResourceName: String,
-        appleNativeResourceName: String? = nil,
         symbolName: String,
         accessibilityDescription: String
     ) -> NSImage {
@@ -300,14 +295,6 @@ final class SortyFinderSync: FIFinderSync {
         let notifiedStyle = notifiedAppleNativeStyle
         iconStyleLock.unlock()
         let usesAppleNativeStyle = notifiedStyle ?? iconStyleDefaults.bool(forKey: iconStylePreferenceKey)
-        if usesAppleNativeStyle,
-           let appleNativeResourceName,
-           let imageURL = Bundle.main.url(forResource: appleNativeResourceName, withExtension: "png"),
-           let image = NSImage(contentsOf: imageURL) {
-            image.isTemplate = false
-            return normalizedMenuIcon(image)
-        }
-
         if !usesAppleNativeStyle,
            let imageURL = Bundle.main.url(forResource: sortyResourceName, withExtension: "png"),
            let image = NSImage(contentsOf: imageURL) {
@@ -319,8 +306,26 @@ final class SortyFinderSync: FIFinderSync {
             systemSymbolName: symbolName,
             accessibilityDescription: accessibilityDescription
         ) ?? NSImage(size: NSSize(width: 16, height: 16))
-        fallback.isTemplate = true
-        return normalizedMenuIcon(fallback)
+        let configured = fallback.withSymbolConfiguration(
+            NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        ) ?? fallback
+        let size = NSSize(width: 16, height: 16)
+        let rendered = NSImage(size: size)
+        let isDark = UserDefaults.standard.string(forKey: "AppleInterfaceStyle")?
+            .caseInsensitiveCompare("Dark") == .orderedSame
+        // Finder transfers extension images across processes, so bake in the tint
+        // rather than relying on template rendering surviving that transfer.
+        rendered.lockFocus()
+        let sourceSize = configured.size
+        let scale = min(size.width / max(sourceSize.width, 1), size.height / max(sourceSize.height, 1))
+        let drawSize = NSSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+        let origin = NSPoint(x: (size.width - drawSize.width) / 2, y: (size.height - drawSize.height) / 2)
+        configured.draw(in: NSRect(origin: origin, size: drawSize))
+        (isDark ? NSColor.white : NSColor.black).setFill()
+        NSRect(origin: .zero, size: size).fill(using: .sourceIn)
+        rendered.unlockFocus()
+        rendered.isTemplate = false
+        return rendered
     }
 
     private static func normalizedMenuIcon(_ image: NSImage) -> NSImage {
