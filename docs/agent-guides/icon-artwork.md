@@ -10,8 +10,9 @@ The white PNGs use glossy pearl-white glass, silver-gray highlights, and a dark
 face panel with white eyes and smile. They reuse the seven image-generated
 glass variants from the icon review, exported at 512 pixels. The 1.2.2 What's
 New comparison includes a White column for reviewing this set in the candidate.
-Finder Organize and Watch use the white artwork for Apple Native style; Exclude
-uses a native Finder symbol. Quick Actions use native symbols in this style.
+Finder Organize, Watch, and Exclude use white mascot artwork for Apple Native
+style. Exclude uses `SortyExcludeMascotWhite.png`, with a white shield and dark
+minus. Quick Actions use native symbols in this style.
 The white mascot PNGs retain their colors and detail rather than using template
 rendering. Changing the style broadcasts the selected value to running Finder Sync
 instances, so newly opened action menus use it without waiting for defaults to
@@ -32,7 +33,8 @@ Avoid flat stencils, threshold conversions, speckles, text, and extra symbols.
 The former SVG set and Python generator have been removed.
 
 Finder Sync bundles `SortyFinderSync/SortyWatchMascot.png` and
-`SortyFinderSync/SortyExcludeMascot.png` through its Xcode Resources phase.
+`SortyFinderSync/SortyExcludeMascot.png` and
+`SortyFinderSync/SortyExcludeMascotWhite.png` through its Xcode Resources phase.
 Watch reuses `SortyMenuWatchedFolder.png`. Exclude uses the matching robot with
 a shield and minus sign. Keep those resource names when replacing artwork.
 The Organize icon references `SortyMenuOrganizing.png` directly.

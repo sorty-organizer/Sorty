@@ -742,6 +742,7 @@ compute_bundle_fingerprint() {
             "${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements" \
             "${PROJECT_DIR}/SortyFinderSync/SortyWatchMascot.png" \
             "${PROJECT_DIR}/SortyFinderSync/SortyExcludeMascot.png" \
+            "${PROJECT_DIR}/SortyFinderSync/SortyExcludeMascotWhite.png" \
             "${PROJECT_DIR}/Sorty.xcodeproj/project.pbxproj" \
             "${PROJECT_DIR}/Package.swift" \
             "${PROJECT_DIR}/Package.resolved" \
@@ -1320,6 +1321,7 @@ bundle_finder_extension() {
             "${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements" \
             "${PROJECT_DIR}/SortyFinderSync/SortyWatchMascot.png" \
             "${PROJECT_DIR}/SortyFinderSync/SortyExcludeMascot.png" \
+            "${PROJECT_DIR}/SortyFinderSync/SortyExcludeMascotWhite.png" \
             "${PROJECT_DIR}/Sources/SortyLib/Resources/Images/SortyMenuOrganizing.png" \
             "${PROJECT_DIR}/Sources/SortyLib/Resources/Images/SortyMenuWhiteOrganizing.png" \
             "${PROJECT_DIR}/Sources/SortyLib/Resources/Images/SortyMenuWhiteWatchedFolder.png" \

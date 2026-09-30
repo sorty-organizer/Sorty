@@ -94,6 +94,7 @@ final class SortyFinderSync: FIFinderSync {
         )
         let excludeImage = Self.finderActionImage(
             named: "SortyExcludeMascot",
+            appleNativeResourceName: "SortyExcludeMascotWhite",
             symbolName: "folder.badge.minus",
             accessibilityDescription: "Exclude from Sorty"
         )
