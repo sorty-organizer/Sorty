@@ -45,7 +45,8 @@ public class SettingsViewModel: ObservableObject {
             if oldProvider != newProvider
                 || oldKey != newKey
                 || oldValue.apiURL != config.apiURL
-                || oldAuthMethod != newAuthMethod {
+                || oldAuthMethod != newAuthMethod
+                || oldValue.openCodeAuthSources != config.openCodeAuthSources {
                 AISessionManager.shared.resetPrewarmState(for: newProvider)
             }
 
@@ -59,6 +60,7 @@ public class SettingsViewModel: ObservableObject {
                 cancelCredentialHydration()
 
                 if oldAuthMethod == .apiKey,
+                   !oldValue.usesConnectedOpenCodeCredentials(for: oldProvider),
                    let oldKey = oldValue.apiKey,
                    !oldKey.isEmpty {
                     persistCredential(oldKey, for: newProvider)
@@ -96,6 +98,7 @@ public class SettingsViewModel: ObservableObject {
 
                 // Save the old provider's API key to its keychain slot
                 if oldAuthMethod == .apiKey,
+                   !oldValue.usesConnectedOpenCodeCredentials(for: oldProvider),
                    let oldKey = oldValue.apiKey,
                    !oldKey.isEmpty {
                     persistCredential(oldKey, for: oldProvider)
@@ -112,6 +115,7 @@ public class SettingsViewModel: ObservableObject {
                 userDefaults.set(config.model, forKey: modelSelectionKey(for: newProvider))
 
                 if newProvider.typicallyRequiresAPIKey,
+                   !config.usesConnectedOpenCodeCredentials(for: newProvider),
                    newAuthMethod == .apiKey {
                     hydrateStoredCredential(for: newProvider, authMethod: newAuthMethod)
                 }
@@ -138,6 +142,7 @@ public class SettingsViewModel: ObservableObject {
                     await AISessionManager.shared.prewarm(provider: newProvider, config: connectionConfig)
                 }
             } else if oldKey != newKey,
+                      !config.usesConnectedOpenCodeCredentials(for: newProvider),
                       newProvider.typicallyRequiresAPIKey,
                       newAuthMethod == .apiKey,
                       let newKey = newKey,
@@ -260,7 +265,8 @@ public class SettingsViewModel: ObservableObject {
     private func hydrateConfiguredCredentialIfNeeded() {
         let provider = config.provider
         let authMethod = ProviderAuthResolver.effectiveAuthMethod(for: provider, config: config)
-        guard !userDefaults.bool(forKey: disableStoredCredentialsForUITestsKey),
+        guard !config.usesConnectedOpenCodeCredentials(for: provider),
+              !userDefaults.bool(forKey: disableStoredCredentialsForUITestsKey),
               provider.typicallyRequiresAPIKey,
               authMethod == .apiKey else { return }
         hydrateStoredCredential(for: provider, authMethod: authMethod, migratesLegacyKey: true)
@@ -273,6 +279,7 @@ public class SettingsViewModel: ObservableObject {
     }
 
     public func updateAPIKey(_ value: String) {
+        guard !config.usesConnectedOpenCodeCredentials(for: config.provider) else { return }
         let apiKey = value.isEmpty ? nil : value
         config.apiKey = apiKey
 
@@ -298,23 +305,69 @@ public class SettingsViewModel: ObservableObject {
         guard provider == .openCodeZen || provider == .openCodeGo else {
             throw OpenCodeCredentials.ImportError.unsupportedProvider
         }
-        let originalKey = config.apiKey
+        let originalConfig = config
         let key = try await loadKey()
         try Task.checkCancellation()
-        guard config.provider == provider, config.apiKey == originalKey else {
+        guard config == originalConfig else {
             throw OpenCodeCredentials.ImportError.configurationChanged
         }
-        // Commit on the main actor so no provider switch or pending hydration
-        // can interleave with the Keychain write and in-memory publication.
-        guard credentialStore.saveImmediately(provider.keychainKey, key) else {
-            throw OpenCodeCredentials.ImportError.keychainWriteFailed
-        }
+        if config.usesConnectedOpenCodeCredentials(for: provider), config.apiKey == key { return }
         cancelCredentialHydration()
-        setInMemoryAPIKey(key)
+        providerConnectionTask?.cancel()
+        isApplyingConfigMutation = true
+        config.openCodeAuthSources[provider.rawValue] = .connected
+        config.apiKey = key
+        isApplyingConfigMutation = false
         ProviderAuthResolver.invalidateCredentialCache(for: provider)
+        AISessionManager.shared.resetPrewarmState(for: provider)
         AISessionManager.shared.invalidateAll()
         debouncedSave()
         updateAvailableModels(force: true)
+    }
+
+    /// Rechecks only while the authentication UI is visible or the user asks.
+    /// Missing/revoked credentials clear the observed state without using an old
+    /// Keychain copy. Startup hydration never invokes this probe.
+    public func refreshOpenCodeCredentials(allowsManualSource: Bool = false) async {
+        let provider = config.provider
+        let source = config.openCodeAuthSource(for: provider)
+        guard provider == .openCodeZen || provider == .openCodeGo,
+              source != .apiKey || allowsManualSource,
+              source == .connected || config.apiKey == nil || allowsManualSource,
+              !isConfiguredCredentialHydrating,
+              hasLoadedPersistedState,
+              !userDefaults.bool(forKey: disableStoredCredentialsForUITestsKey) else { return }
+        do {
+            try await importOpenCodeCredentials()
+        } catch {
+            if let importError = error as? OpenCodeCredentials.ImportError {
+                switch importError {
+                case .configurationChanged, .unsupportedProvider: return
+                case .unreadableFile, .invalidFile, .missingKey: break
+                }
+            }
+            guard !Task.isCancelled, config.provider == provider,
+                  config.openCodeAuthSource(for: provider) == source else { return }
+            if source == .connected {
+                setInMemoryAPIKey(nil)
+                AISessionManager.shared.resetPrewarmState(for: provider)
+            }
+        }
+    }
+
+    public func useManualOpenCodeAPIKey() {
+        let provider = config.provider
+        guard provider == .openCodeZen || provider == .openCodeGo else { return }
+        cancelCredentialHydration()
+        providerConnectionTask?.cancel()
+        isApplyingConfigMutation = true
+        config.openCodeAuthSources[provider.rawValue] = .apiKey
+        config.apiKey = nil
+        isApplyingConfigMutation = false
+        ProviderAuthResolver.invalidateCredentialCache(for: provider)
+        AISessionManager.shared.resetPrewarmState(for: provider)
+        debouncedSave()
+        hydrateStoredCredential(for: provider, authMethod: .apiKey)
     }
 
     private func persistCredential(_ apiKey: String, for provider: AIProvider) {
@@ -403,6 +456,7 @@ public class SettingsViewModel: ObservableObject {
         configToSave.apiKey = nil
 
         if provider.typicallyRequiresAPIKey,
+           !config.usesConnectedOpenCodeCredentials(for: provider),
            ProviderAuthResolver.effectiveAuthMethod(for: provider, config: config) == .apiKey {
             if let apiKey {
                 _ = credentialStore.saveImmediately(provider.keychainKey, apiKey)
@@ -434,6 +488,7 @@ public class SettingsViewModel: ObservableObject {
         
         // Save API key to provider-specific Keychain key
         if provider.typicallyRequiresAPIKey,
+           !config.usesConnectedOpenCodeCredentials(for: provider),
            ProviderAuthResolver.effectiveAuthMethod(for: provider, config: config) == .apiKey {
             let providerKey = provider.keychainKey
             if let apiKey = apiKey {

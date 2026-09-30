@@ -119,6 +119,12 @@ public enum ProviderAuthResolver {
     /// as the sync path; misses go through `AIKeychain.shared.getAsync`
     /// (already detached) instead of blocking the caller on SecItem calls.
     static func credentialAsync(for provider: AIProvider, method: ProviderAuthMethod, config: AIConfig) async -> String? {
+        if config.usesConnectedOpenCodeCredentials(for: provider) {
+            guard !UserDefaults.standard.bool(forKey: disableStoredCredentialsForUITestsKey) else { return nil }
+            return await Task.detached(priority: .userInitiated) {
+                try? OpenCodeCredentials.loadAPIKey(for: provider)
+            }.value
+        }
         if provider == .openAI, method == .accountSignIn {
             return nil
         }
@@ -178,6 +184,10 @@ public enum ProviderAuthResolver {
     }
 
     private static func configuredOrStoredAPIKey(for provider: AIProvider, config: AIConfig) -> String? {
+        if config.usesConnectedOpenCodeCredentials(for: provider) {
+            guard !UserDefaults.standard.bool(forKey: disableStoredCredentialsForUITestsKey) else { return nil }
+            return try? OpenCodeCredentials.loadAPIKey(for: provider)
+        }
         if let key = config.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty {
             return key
         }

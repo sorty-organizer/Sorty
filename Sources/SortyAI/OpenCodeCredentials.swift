@@ -8,7 +8,6 @@ public enum OpenCodeCredentials {
         case unreadableFile
         case invalidFile
         case missingKey
-        case keychainWriteFailed
         case configurationChanged
 
         public var errorDescription: String? {
@@ -17,7 +16,6 @@ public enum OpenCodeCredentials {
             case .unreadableFile: return "Couldn't read OpenCode credentials. Connect your plan in OpenCode, then try again."
             case .invalidFile: return "OpenCode credentials couldn't be decoded. Connect your plan in OpenCode again."
             case .missingKey: return "No API key was found for this plan. Run opencode auth login and select OpenCode Zen or Go, or get a key from OpenCode sign-in."
-            case .keychainWriteFailed: return "Couldn't save the OpenCode key to Keychain. Your existing key was kept."
             case .configurationChanged: return "Provider settings changed during import. Try again."
             }
         }
@@ -28,6 +26,27 @@ public enum OpenCodeCredentials {
             .map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? homeDirectory.appendingPathComponent(".local/share", isDirectory: true)
         return dataHome.appendingPathComponent("opencode/auth.json")
+    }
+
+    /// Uses a login shell like the existing Codex terminal flow. No keys or
+    /// user-provided strings are interpolated into this script.
+    public static func prepareLoginScript() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("sorty-opencode-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let url = directory.appendingPathComponent("connect.command")
+        let script = """
+        #!/bin/zsh -l
+        if command -v opencode >/dev/null 2>&1; then
+            exec opencode auth login
+        elif [ -x "$HOME/.opencode/bin/opencode" ]; then
+            exec "$HOME/.opencode/bin/opencode" auth login
+        else
+            printf '%s\\n' 'OpenCode CLI is not installed. Install it from https://opencode.ai, then run opencode auth login.'
+        fi
+        """
+        try script.write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
+        return url
     }
 
     public static func loadAPIKey(
