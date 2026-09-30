@@ -49,8 +49,8 @@ struct AdvancedSettingsView: View {
 
                     if showMenuBarExtra {
                         SettingsSubsettingRow(
-                            title: "Menu Bar Icon Style",
-                            description: "Choose between Sorty's colorful icons and Apple's native white icons."
+                            title: "Icon Style",
+                            description: "Use Sorty's colorful style or a white style with native Finder symbols."
                         ) {
                             Picker("Menu Bar Icon Style", selection: $usesAppleNativeIconStyle) {
                                 Text("Sorty").tag(false)

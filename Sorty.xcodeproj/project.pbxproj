@@ -72,6 +72,7 @@
 		F1A1B001B001B001B001B00A /* SortyExcludeMascot.png in Resources */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F009 /* SortyExcludeMascot.png */; };
 		F1A1B001B001B001B001B00B /* SortyMenuOrganizing.png in Resources */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F00A /* SortyMenuOrganizing.png */; };
 		F1A1B001B001B001B001B00C /* SortyMenuWhiteOrganizing.png in Resources */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F00C /* SortyMenuWhiteOrganizing.png */; };
+		F1A1B001B001B001B001B00D /* SortyMenuWhiteWatchedFolder.png in Resources */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F00D /* SortyMenuWhiteWatchedFolder.png */; };
 		3353FC632F0124320097CD23 /* SortyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC452F0124320097CD23 /* SortyApp.swift */; };
 		3353FC642F0124320097CD23 /* SystemPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC212F0124320097CD23 /* SystemPrompt.swift */; };
 		3353FC662F0124320097CD23 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC3C2F0124320097CD23 /* ContentView.swift */; };
@@ -331,6 +332,7 @@
 		F1A1F001F001F001F001F009 /* SortyExcludeMascot.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = SortyExcludeMascot.png; sourceTree = "<group>"; };
 		F1A1F001F001F001F001F00A /* SortyMenuOrganizing.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Sources/SortyLib/Resources/Images/SortyMenuOrganizing.png; sourceTree = SOURCE_ROOT; };
 		F1A1F001F001F001F001F00C /* SortyMenuWhiteOrganizing.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Sources/SortyLib/Resources/Images/SortyMenuWhiteOrganizing.png; sourceTree = SOURCE_ROOT; };
+		F1A1F001F001F001F001F00D /* SortyMenuWhiteWatchedFolder.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Sources/SortyLib/Resources/Images/SortyMenuWhiteWatchedFolder.png; sourceTree = SOURCE_ROOT; };
 		A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateSettingsView.swift; sourceTree = "<group>"; };
 		981E7344DFEC4943BA212BED /* LearningsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsView.swift; sourceTree = "<group>"; };
 		DD45CA7DAA5F44C7A079DB75 /* PersonaGeneratorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaGeneratorView.swift; sourceTree = "<group>"; };
@@ -851,6 +853,7 @@
 				F1A1F001F001F001F001F009 /* SortyExcludeMascot.png */,
 				F1A1F001F001F001F001F00A /* SortyMenuOrganizing.png */,
 				F1A1F001F001F001F001F00C /* SortyMenuWhiteOrganizing.png */,
+				F1A1F001F001F001F001F00D /* SortyMenuWhiteWatchedFolder.png */,
 				F1A1F001F001F001F001F001 /* SortyFinderSync.swift */,
 			);
 			path = SortyFinderSync;
@@ -1297,6 +1300,7 @@
 				F1A1B001B001B001B001B00A /* SortyExcludeMascot.png in Resources */,
 				F1A1B001B001B001B001B00B /* SortyMenuOrganizing.png in Resources */,
 				F1A1B001B001B001B001B00C /* SortyMenuWhiteOrganizing.png in Resources */,
+				F1A1B001B001B001B001B00D /* SortyMenuWhiteWatchedFolder.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

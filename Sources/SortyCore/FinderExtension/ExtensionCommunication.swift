@@ -1612,6 +1612,10 @@ public struct ExtensionCommunication {
     }
 
     private static func quickActionGeneratedMascotImage(named resourceName: String) -> NSImage? {
+        if let image = SortyResources.image(named: resourceName, withExtension: "png") {
+            image.isTemplate = false
+            return image
+        }
         let finderSyncResources = Bundle.main.builtInPlugInsURL?
             .appendingPathComponent("SortyFinderSync.appex/Contents/Resources", isDirectory: true)
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)

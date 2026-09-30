@@ -45,15 +45,14 @@ public enum MenuBarIconPreferences {
     public static let preferenceKey = "useWhiteMenuBarIcons"
     public static let appGroupIdentifier = "group.com.sorty.app"
 
-    public static let defaults: UserDefaults = {
+    public static var defaults: UserDefaults {
         let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) ?? .standard
         if sharedDefaults.object(forKey: preferenceKey) == nil,
            let legacyValue = UserDefaults.standard.object(forKey: preferenceKey) as? Bool {
             sharedDefaults.set(legacyValue, forKey: preferenceKey)
-            UserDefaults.standard.removeObject(forKey: preferenceKey)
         }
         return sharedDefaults
-    }()
+    }
 }
 
 @MainActor

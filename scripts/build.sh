@@ -1321,6 +1321,8 @@ bundle_finder_extension() {
             "${PROJECT_DIR}/SortyFinderSync/SortyWatchMascot.png" \
             "${PROJECT_DIR}/SortyFinderSync/SortyExcludeMascot.png" \
             "${PROJECT_DIR}/Sources/SortyLib/Resources/Images/SortyMenuOrganizing.png" \
+            "${PROJECT_DIR}/Sources/SortyLib/Resources/Images/SortyMenuWhiteOrganizing.png" \
+            "${PROJECT_DIR}/Sources/SortyLib/Resources/Images/SortyMenuWhiteWatchedFolder.png" \
             "${PROJECT_DIR}/Sorty.xcodeproj/project.pbxproj"; do
             if [ -f "${src_file}" ] && [ "${src_file}" -nt "${cached_appex}" ]; then
                 needs_rebuild=true

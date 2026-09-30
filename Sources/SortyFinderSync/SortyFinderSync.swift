@@ -9,7 +9,9 @@ final class SortyFinderSync: FIFinderSync {
     private static let heartbeatMinimumInterval: TimeInterval = 30
     private static let heartbeatLock = NSLock()
     nonisolated(unsafe) private static var lastHeartbeatDate: Date?
-    private static let iconStyleDefaults = UserDefaults(suiteName: "group.com.sorty.app") ?? .standard
+    private static var iconStyleDefaults: UserDefaults {
+        UserDefaults(suiteName: "group.com.sorty.app") ?? .standard
+    }
     private static let iconStylePreferenceKey = "useWhiteMenuBarIcons"
 
     override init() {
@@ -66,6 +68,7 @@ final class SortyFinderSync: FIFinderSync {
         )
         let watchImage = Self.finderActionImage(
             named: "SortyWatchMascot",
+            appleNativeResourceName: "SortyMenuWhiteWatchedFolder",
             symbolName: "eye",
             accessibilityDescription: "Watch with Sorty"
         )
@@ -277,7 +280,7 @@ final class SortyFinderSync: FIFinderSync {
            let appleNativeResourceName,
            let imageURL = Bundle.main.url(forResource: appleNativeResourceName, withExtension: "png"),
            let image = NSImage(contentsOf: imageURL) {
-            image.isTemplate = true
+            image.isTemplate = false
             return normalizedMenuIcon(image)
         }
 
