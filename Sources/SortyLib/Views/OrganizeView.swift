@@ -726,6 +726,7 @@ struct OrganizeView: View {
     }
     
     private func prewarmAIConnection() async {
+        await settingsViewModel.refreshOpenCodeCredentials()
         let provider = settingsViewModel.config.provider
         let config = settingsViewModel.config
         await AISessionManager.shared.prewarm(provider: provider, config: config)

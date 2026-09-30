@@ -5,6 +5,73 @@ import XCTest
 @testable import SortyModels
 
 final class SubscriptionAuthConfigurationTests: XCTestCase {
+    func testOpenCodeRequestCredentialsHonorSourceAndRotation() async throws {
+        let previousContent = ProcessInfo.processInfo.environment["OPENCODE_AUTH_CONTENT"]
+        let previousStore = AIKeychain.shared
+        let disableKey = "uitestDisableStoredProviderCredentials"
+        let previousDisabled = UserDefaults.standard.object(forKey: disableKey)
+        AIKeychain.shared = EphemeralAIKeychainStore()
+        UserDefaults.standard.set(false, forKey: disableKey)
+        ProviderAuthResolver.invalidateCredentialCache()
+        defer {
+            if let previousContent {
+                setenv("OPENCODE_AUTH_CONTENT", previousContent, 1)
+            } else {
+                unsetenv("OPENCODE_AUTH_CONTENT")
+            }
+            AIKeychain.shared = previousStore
+            if let previousDisabled {
+                UserDefaults.standard.set(previousDisabled, forKey: disableKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: disableKey)
+            }
+            ProviderAuthResolver.invalidateCredentialCache()
+        }
+
+        for provider in [AIProvider.openCodeZen, .openCodeGo] {
+            let plan = provider == .openCodeZen ? "opencode" : "opencode-go"
+            setenv("OPENCODE_AUTH_CONTENT", "{\"\(plan)\":{\"type\":\"api\",\"key\":\"connected-key\"}}", 1)
+            var config = AIConfig(provider: provider)
+            XCTAssertEqual(ProviderAuthResolver.authHeader(for: provider, config: config)?.value, "Bearer connected-key")
+            let automatic = await ProviderAuthResolver.credentialAsync(for: provider, method: .apiKey, config: config)
+            XCTAssertEqual(automatic, "connected-key")
+
+            _ = await AIKeychain.shared.saveAsync(key: provider.keychainKey, value: "manual-key")
+            ProviderAuthResolver.invalidateCredentialCache(for: provider)
+            XCTAssertEqual(ProviderAuthResolver.authHeader(for: provider, config: config)?.value, "Bearer manual-key")
+
+            config.openCodeAuthSources[provider.rawValue] = .connected
+            config.apiKey = "stale-in-memory-key"
+            let connected = await ProviderAuthResolver.credentialAsync(for: provider, method: .apiKey, config: config)
+            XCTAssertEqual(connected, "connected-key")
+            setenv("OPENCODE_AUTH_CONTENT", "{\"\(plan)\":{\"type\":\"api\",\"key\":\"rotated-key\"}}", 1)
+            XCTAssertEqual(ProviderAuthResolver.authHeader(for: provider, config: config)?.value, "Bearer rotated-key")
+            setenv("OPENCODE_AUTH_CONTENT", "{\"\(plan)\":{\"type\":\"api\",\"key\":\"\"}}", 1)
+            XCTAssertNil(ProviderAuthResolver.authHeader(for: provider, config: config))
+
+            config.openCodeAuthSources[provider.rawValue] = .apiKey
+            config.apiKey = nil
+            XCTAssertEqual(ProviderAuthResolver.authHeader(for: provider, config: config)?.value, "Bearer manual-key")
+        }
+    }
+
+    func testOpenCodeSetupValidationUsesHydratedCredentialSnapshot() {
+        for provider in [AIProvider.openCodeZen, .openCodeGo] {
+            var config = AIConfig(provider: provider)
+            config.openCodeAuthSources[provider.rawValue] = .connected
+            config.apiKey = "hydrated-key"
+            func status(_ config: AIConfig) -> ProviderSetupStatus {
+                OnboardingSetupValidator.providerStatus(context: ProviderSetupContext(
+                    config: config, isCodexAuthenticated: false, isCodexInstalled: false,
+                    isAppleFoundationModelAvailable: false
+                ))
+            }
+            XCTAssertTrue(status(config).isReady)
+            config.apiKey = "  "
+            XCTAssertFalse(status(config).isReady)
+        }
+    }
+
     func testOpenCodeImportSeparatesPlansAndPrefersStoredAPIKeys() throws {
         let data = Data(#"{"opencode":{"type":"api","key":" zen-key\n"},"opencode-go":{"type":"api","key":"go-key"},"openai":{"type":"oauth","access":"upstream-token"}}"#.utf8)
         let environment = ["OPENCODE_API_KEY": "environment-key"]

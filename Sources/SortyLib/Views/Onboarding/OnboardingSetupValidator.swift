@@ -104,7 +104,16 @@ public enum OnboardingSetupValidator {
             return readyStatus(for: provider)
         }
 
-        guard ProviderAuthResolver.hasRequiredCredential(for: provider, config: context.config) else {
+        // OpenCode's UI uses the asynchronously hydrated key snapshot. Live
+        // credential-file reads belong to request execution, never rendering.
+        let hasCredential: Bool
+        if provider == .openCodeZen || provider == .openCodeGo {
+            hasCredential = !context.config.requiresAPIKey
+                || context.config.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        } else {
+            hasCredential = ProviderAuthResolver.hasRequiredCredential(for: provider, config: context.config)
+        }
+        guard hasCredential else {
             return ProviderSetupStatus(
                 isReady: false,
                 title: "Credentials required",

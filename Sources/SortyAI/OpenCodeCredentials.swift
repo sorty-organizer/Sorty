@@ -9,6 +9,7 @@ public enum OpenCodeCredentials {
         case invalidFile
         case missingKey
         case configurationChanged
+        case missingCLI
 
         public var errorDescription: String? {
             switch self {
@@ -17,6 +18,7 @@ public enum OpenCodeCredentials {
             case .invalidFile: return "OpenCode credentials couldn't be decoded. Connect your plan in OpenCode again."
             case .missingKey: return "No API key was found for this plan. Run opencode auth login and select OpenCode Zen or Go, or get a key from OpenCode sign-in."
             case .configurationChanged: return "Provider settings changed during import. Try again."
+            case .missingCLI: return "OpenCode CLI is not installed. Install it from opencode.ai, then try signing in again."
             }
         }
     }
@@ -31,6 +33,17 @@ public enum OpenCodeCredentials {
     /// Uses a login shell like the existing Codex terminal flow. No keys or
     /// user-provided strings are interpolated into this script.
     public static func prepareLoginScript() throws -> URL {
+        // This probe runs in the caller's detached task and uses the same login
+        // shell and fallback path as the command below.
+        let probe = Process()
+        probe.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        probe.arguments = ["-lc", "command -v opencode >/dev/null 2>&1 || [ -x \"$HOME/.opencode/bin/opencode\" ]"]
+        probe.standardOutput = FileHandle.nullDevice
+        probe.standardError = FileHandle.nullDevice
+        try probe.run()
+        probe.waitUntilExit()
+        guard probe.terminationStatus == 0 else { throw ImportError.missingCLI }
+
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("sorty-opencode-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let url = directory.appendingPathComponent("connect.command")
@@ -42,6 +55,7 @@ public enum OpenCodeCredentials {
             exec "$HOME/.opencode/bin/opencode" auth login
         else
             printf '%s\\n' 'OpenCode CLI is not installed. Install it from https://opencode.ai, then run opencode auth login.'
+            exit 1
         fi
         """
         try script.write(to: url, atomically: true, encoding: .utf8)

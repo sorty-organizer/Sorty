@@ -118,7 +118,7 @@ public enum ProviderAuthResolver {
     /// Off-main credential read for catalog/session setup. Uses the same memo
     /// as the sync path; misses go through `AIKeychain.shared.getAsync`
     /// (already detached) instead of blocking the caller on SecItem calls.
-    static func credentialAsync(for provider: AIProvider, method: ProviderAuthMethod, config: AIConfig) async -> String? {
+    package static func credentialAsync(for provider: AIProvider, method: ProviderAuthMethod, config: AIConfig) async -> String? {
         if config.usesConnectedOpenCodeCredentials(for: provider) {
             guard !UserDefaults.standard.bool(forKey: disableStoredCredentialsForUITestsKey) else { return nil }
             return await Task.detached(priority: .userInitiated) {
@@ -137,13 +137,22 @@ public enum ProviderAuthResolver {
         let cacheKey = credentialCacheKey(for: provider, method: method, configAPIKey: nil)
         let cached = credentialCacheLock.withLock { credentialCache[cacheKey] }
         if let cached, Date().timeIntervalSince(cached.cachedAt) < credentialCacheLifetime {
-            return cached.value
+            if let value = cached.value { return value }
+            return await automaticOpenCodeCredential(for: provider, config: config)
         }
         let value = await AIKeychain.shared.getAsync(key: provider.keychainKey)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let stored = (value?.isEmpty == false) ? value : nil
         credentialCacheLock.withLock { credentialCache[cacheKey] = (stored, Date()) }
-        return stored
+        if let stored { return stored }
+        return await automaticOpenCodeCredential(for: provider, config: config)
+    }
+
+    private static func automaticOpenCodeCredential(for provider: AIProvider, config: AIConfig) async -> String? {
+        guard config.openCodeAuthSource(for: provider) == .automatic else { return nil }
+        return await Task.detached(priority: .userInitiated) {
+            try? OpenCodeCredentials.loadAPIKey(for: provider)
+        }.value
     }
 
     /// Off-main variant of `hasRequiredCredential` for catalog fetches.
@@ -199,13 +208,17 @@ public enum ProviderAuthResolver {
         let cacheKey = credentialCacheKey(for: provider, method: .apiKey, configAPIKey: nil)
         let cached = credentialCacheLock.withLock { credentialCache[cacheKey] }
         if let cached, Date().timeIntervalSince(cached.cachedAt) < credentialCacheLifetime {
-            return cached.value
+            if let value = cached.value { return value }
+            return config.openCodeAuthSource(for: provider) == .automatic
+                ? try? OpenCodeCredentials.loadAPIKey(for: provider) : nil
         }
         let stored = AIKeychain.shared.get(key: provider.keychainKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = (stored?.isEmpty == false) ? stored : nil
         credentialCacheLock.lock()
         credentialCache[cacheKey] = (value, Date())
         credentialCacheLock.unlock()
-        return value
+        if let value { return value }
+        return config.openCodeAuthSource(for: provider) == .automatic
+            ? try? OpenCodeCredentials.loadAPIKey(for: provider) : nil
     }
 }

@@ -13,6 +13,8 @@ there. Sorty observes the credential file while this login is pending and checks
 again when the app becomes active. **Refresh status** also connects credentials
 that already exist. Website sign-in alone does not create a local credential:
 use the CLI login or get a key from [OpenCode](https://opencode.ai/auth).
+Sorty checks for the CLI in a background login shell before opening Terminal.
+If it is missing, the panel shows installation instructions immediately.
 
 The reader uses `OPENCODE_AUTH_CONTENT` when set, otherwise
 `$XDG_DATA_HOME/opencode/auth.json` or `~/.local/share/opencode/auth.json`.
@@ -31,6 +33,11 @@ or deleting an existing manual key. Existing configurations keep manual keys
 and can automatically connect OpenCode when no manual key exists. Connection
 verification is reset when credentials change; local credential detection does
 not prove model access. Use Test Connection to verify it.
+Automatic mode resolves credentials at request time, preferring a manual key
+and then the selected plan's OpenCode credential. Model-list requests use the
+same resolver and the current settings snapshot, including unsaved source
+changes. UI setup validation uses the asynchronously refreshed in-memory key;
+it does not read the credential file during SwiftUI rendering.
 
 This follows [T3 Code's OpenCode integration](https://github.com/pingdotgg/t3code/blob/c18e5ea6ed741443a8ec4a5d22d4b6939b0ecd21/apps/server/src/provider/Layers/OpenCodeProvider.ts),
 which delegates upstream authentication to OpenCode's CLI/server and uses the

@@ -342,7 +342,7 @@ public class SettingsViewModel: ObservableObject {
         } catch {
             if let importError = error as? OpenCodeCredentials.ImportError {
                 switch importError {
-                case .configurationChanged, .unsupportedProvider: return
+                case .configurationChanged, .unsupportedProvider, .missingCLI: return
                 case .unreadableFile, .invalidFile, .missingKey: break
                 }
             }
@@ -581,7 +581,8 @@ public class SettingsViewModel: ObservableObject {
             await ModelCatalog.shared.refresh(
                 provider: provider,
                 force: force,
-                authMethod: ProviderAuthResolver.effectiveAuthMethod(for: provider, config: self.config)
+                authMethod: ProviderAuthResolver.effectiveAuthMethod(for: provider, config: self.config),
+                config: self.config
             )
             guard !Task.isCancelled, self.config.provider == provider else { return }
 

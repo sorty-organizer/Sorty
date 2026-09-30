@@ -1265,6 +1265,7 @@ struct OpenCodeCredentialLinkView: View {
     @State private var awaitingSignIn = false
     @State private var errorMessage: String?
     @State private var refreshID = UUID()
+    @State private var loginScriptURL: URL?
 
     private var isConnected: Bool {
         viewModel.config.usesConnectedOpenCodeCredentials(for: viewModel.config.provider)
@@ -1382,18 +1383,31 @@ struct OpenCodeCredentialLinkView: View {
                 let script = try await Task.detached(priority: .utility) {
                     try OpenCodeCredentials.prepareLoginScript()
                 }.value
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled else {
+                    try? FileManager.default.removeItem(at: script.deletingLastPathComponent())
+                    return
+                }
                 if NSWorkspace.shared.open(script) {
+                    loginScriptURL = script
                     awaitingSignIn = true
                 } else {
+                    try? FileManager.default.removeItem(at: script.deletingLastPathComponent())
                     errorMessage = "Could not open Terminal. Run opencode auth login, then refresh status."
                 }
             } catch {
-                errorMessage = "Could not start OpenCode sign-in. Run opencode auth login, then refresh status."
+                errorMessage = (error as? OpenCodeCredentials.ImportError)?.localizedDescription
+                    ?? "Could not start OpenCode sign-in. Run opencode auth login, then refresh status."
             }
         }
         .task(id: awaitingSignIn) {
             guard awaitingSignIn else { return }
+            let script = loginScriptURL
+            defer {
+                if let script {
+                    try? FileManager.default.removeItem(at: script.deletingLastPathComponent())
+                }
+                loginScriptURL = nil
+            }
             // Bounded polling exists only while an explicitly started login is
             // pending. View disappearance or manual-key selection cancels it.
             for _ in 0..<150 {

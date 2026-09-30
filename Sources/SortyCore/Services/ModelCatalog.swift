@@ -272,7 +272,8 @@ public final class ModelCatalog: ObservableObject {
     public func refresh(
         provider: AIProvider,
         force: Bool = false,
-        authMethod: ProviderAuthMethod? = nil
+        authMethod: ProviderAuthMethod? = nil,
+        config: AIConfig? = nil
     ) async {
         ensureCacheLoaded()
         // Callers may pass a raw auth method (e.g. the picker's Codex toggle)
@@ -324,7 +325,7 @@ public final class ModelCatalog: ObservableObject {
         }
         
         do {
-            let result = try await fetchModels(for: provider, force: force, authMethod: resolvedAuth, refreshID: refreshID)
+            let result = try await fetchModels(for: provider, force: force, authMethod: resolvedAuth, refreshID: refreshID, config: config)
             let sortedModels = filteredModels(
                 result.models.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending },
                 for: provider
@@ -476,7 +477,7 @@ public final class ModelCatalog: ObservableObject {
         }
     }
     
-    private func fetchModels(for provider: AIProvider, force: Bool, authMethod: ProviderAuthMethod?, refreshID: UUID) async throws -> (models: [ModelInfo], isFallback: Bool) {
+    private func fetchModels(for provider: AIProvider, force: Bool, authMethod: ProviderAuthMethod?, refreshID: UUID, config: AIConfig?) async throws -> (models: [ModelInfo], isFallback: Bool) {
         switch provider {
         case .unavailableProvider:
             return ([], true)
@@ -493,7 +494,7 @@ public final class ModelCatalog: ObservableObject {
         case .ollama:
             return (try await fetchOllamaModels(), false)
         case .openCodeZen, .openCodeGo:
-            return try await fetchOpenCodeModels(for: provider)
+            return try await fetchOpenCodeModels(for: provider, config: config)
         case .appleFoundationModel:
             return (appleFoundationModels(), false)
         case .openAICompatible:
@@ -994,7 +995,7 @@ public final class ModelCatalog: ObservableObject {
         }
     }
 
-    private func fetchOpenCodeModels(for provider: AIProvider) async throws -> (models: [ModelInfo], isFallback: Bool) {
+    private func fetchOpenCodeModels(for provider: AIProvider, config: AIConfig?) async throws -> (models: [ModelInfo], isFallback: Bool) {
         guard let baseURL = provider.defaultAPIURL,
               let url = URL(string: baseURL + "/models") else {
             throw ModelCatalogError.invalidURL
@@ -1004,7 +1005,13 @@ public final class ModelCatalog: ObservableObject {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 10
-        if let key = await KeychainManager.getAsync(key: provider.keychainKey), !key.isEmpty {
+        let authConfig: AIConfig
+        if let config {
+            authConfig = config
+        } else {
+            authConfig = await configForProviderAsync(provider)
+        }
+        if let key = await ProviderAuthResolver.credentialAsync(for: provider, method: .apiKey, config: authConfig), !key.isEmpty {
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         }
 
