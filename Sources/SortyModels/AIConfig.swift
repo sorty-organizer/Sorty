@@ -708,6 +708,12 @@ public enum VisionBatchStrategy: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum OpenCodeAuthSource: String, Codable, Sendable {
+    case automatic
+    case connected
+    case apiKey
+}
+
 public struct AIConfig: Codable, Sendable, Equatable {
     public static let organizationTemperature = 0.7
 
@@ -733,6 +739,16 @@ public struct AIConfig: Codable, Sendable, Equatable {
     }
     public var apiURL: String?
     public var apiKey: String?
+    public var openCodeAuthSources: [String: OpenCodeAuthSource] = [:]
+
+    public func openCodeAuthSource(for provider: AIProvider) -> OpenCodeAuthSource {
+        guard provider == .openCodeZen || provider == .openCodeGo else { return .apiKey }
+        return openCodeAuthSources[provider.rawValue] ?? .automatic
+    }
+
+    public func usesConnectedOpenCodeCredentials(for provider: AIProvider) -> Bool {
+        openCodeAuthSource(for: provider) == .connected
+    }
     public var model: String
     
     // Advanced Settings
@@ -863,6 +879,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         case provider
         case apiURL
         case apiKey
+        case openCodeAuthSources
         case model
         case temperature
         case requestTimeout
@@ -919,6 +936,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
             ? provider.defaultAPIURL
             : try container.decodeIfPresent(String.self, forKey: .apiURL)
         apiKey = hadCopilotProvider ? nil : try container.decodeIfPresent(String.self, forKey: .apiKey)
+        openCodeAuthSources = try container.decodeIfPresent([String: OpenCodeAuthSource].self, forKey: .openCodeAuthSources) ?? [:]
         let decodedModel = try container.decodeIfPresent(String.self, forKey: .model)
         model = hadCopilotProvider ? (fallbackProvider == nil ? "" : automationModelChoice) : decodedModel ?? provider.defaultModel
         _ = try container.decodeIfPresent(Double.self, forKey: .temperature)
@@ -985,6 +1003,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         try container.encode(provider, forKey: .provider)
         try container.encodeIfPresent(apiURL, forKey: .apiURL)
         try container.encodeIfPresent(apiKey, forKey: .apiKey)
+        try container.encode(openCodeAuthSources, forKey: .openCodeAuthSources)
         try container.encode(model, forKey: .model)
         try container.encode(Self.organizationTemperature, forKey: .temperature)
         try container.encode(requestTimeout, forKey: .requestTimeout)

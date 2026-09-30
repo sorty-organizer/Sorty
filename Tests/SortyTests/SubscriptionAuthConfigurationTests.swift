@@ -52,6 +52,33 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
         ], homeDirectory: dataHome))
     }
 
+    func testOpenCodeCredentialSourceSurvivesRestartWithoutStoringSecret() throws {
+        var config = AIConfig(provider: .openCodeGo)
+        config.openCodeAuthSources[AIProvider.openCodeGo.rawValue] = .connected
+        let data = try JSONEncoder().encode(config)
+        let restored = try JSONDecoder().decode(AIConfig.self, from: data)
+        XCTAssertNil(restored.apiKey)
+        XCTAssertTrue(restored.usesConnectedOpenCodeCredentials(for: .openCodeGo))
+        XCTAssertFalse(restored.usesConnectedOpenCodeCredentials(for: .openCodeZen))
+        let legacy = try JSONDecoder().decode(AIConfig.self, from: Data(#"{"provider":"opencode_go"}"#.utf8))
+        XCTAssertEqual(legacy.openCodeAuthSource(for: .openCodeGo), .automatic)
+    }
+
+    func testLiveOpenCodeCredentialsFollowRotationAndRevocation() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let environment = ["XDG_DATA_HOME": directory.path]
+        let file = OpenCodeCredentials.authFileURL(environment: environment, homeDirectory: directory)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        for key in ["first-key", "rotated-key"] {
+            let data = try JSONSerialization.data(withJSONObject: ["opencode-go": ["type": "api", "key": key]])
+            try data.write(to: file)
+            XCTAssertEqual(try OpenCodeCredentials.loadAPIKey(for: .openCodeGo, environment: environment, homeDirectory: directory), key)
+        }
+        try FileManager.default.removeItem(at: file)
+        XCTAssertThrowsError(try OpenCodeCredentials.loadAPIKey(for: .openCodeGo, environment: environment, homeDirectory: directory))
+    }
+
     func testCodexLoginScriptQuotesExecutablePathForShell() {
         let quoted = CodexCLIAuthManager.shellQuoted("/tmp/codex '$HOME'; touch /tmp/pwn")
 

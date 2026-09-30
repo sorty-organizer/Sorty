@@ -34,6 +34,7 @@ private final class ProviderSelectionTaskController {
     var initialProviderRefreshTask: Task<Void, Never>?
     var testDebounceTask: Task<Void, Never>?
     var connectionTestTask: Task<Void, Never>?
+    var connectionTestID: UUID?
     var codexTerminalResetTask: Task<Void, Never>?
     var codexVerifyResetTask: Task<Void, Never>?
     var apiKeyCommitTask: Task<Void, Never>?
@@ -232,7 +233,15 @@ public struct ProviderSelectionStepView: View {
                 settingsViewModel.refreshAppleModelStatus()
             }
         }
+        .onChange(of: settingsViewModel.config.openCodeAuthSources) { _, _ in
+            resetConnectionVerification()
+        }
         .onChange(of: settingsViewModel.config.apiKey) { _, apiKey in
+            if settingsViewModel.config.usesConnectedOpenCodeCredentials(for: settingsViewModel.config.provider) {
+                resetConnectionVerification()
+            } else {
+                scheduleConnectionTest()
+            }
             guard taskController.apiKeyCommitTask == nil else { return }
             let value = apiKey ?? ""
             if apiKeyDraft != value {
@@ -366,7 +375,9 @@ public struct ProviderSelectionStepView: View {
                             })
                             .id(settingsViewModel.config.provider)
                         }
-                        apiKeyInputSection
+                        if !settingsViewModel.config.usesConnectedOpenCodeCredentials(for: settingsViewModel.config.provider) {
+                            apiKeyInputSection
+                        }
                     }
                 }
             }
@@ -813,6 +824,16 @@ public struct ProviderSelectionStepView: View {
         commitAPIURLDraft()
     }
 
+    private func resetConnectionVerification() {
+        taskController.connectionTestID = nil
+        taskController.testDebounceTask?.cancel()
+        taskController.connectionTestTask?.cancel()
+        taskController.testDebounceTask = nil
+        taskController.connectionTestTask = nil
+        connectionStatus = .idle
+        connectionError = nil
+    }
+
     private func scheduleConnectionTest() {
         taskController.testDebounceTask?.cancel()
         taskController.connectionTestTask?.cancel()
@@ -832,21 +853,30 @@ public struct ProviderSelectionStepView: View {
 
     private func testConnection() {
         taskController.connectionTestTask?.cancel()
-        let provider = settingsViewModel.config.provider
+        let testedConfig = settingsViewModel.config
+        let testID = UUID()
+        taskController.connectionTestID = testID
         connectionStatus = .testing
         connectionError = nil
 
         taskController.connectionTestTask = Task {
-            defer { taskController.connectionTestTask = nil }
+            defer {
+                if taskController.connectionTestID == testID {
+                    taskController.connectionTestTask = nil
+                    taskController.connectionTestID = nil
+                }
+            }
             do {
                 try await settingsViewModel.testConnection()
                 guard !Task.isCancelled,
-                      settingsViewModel.config.provider == provider else { return }
+                      taskController.connectionTestID == testID,
+                      settingsViewModel.config == testedConfig else { return }
                 connectionStatus = .success
                 HapticFeedbackManager.shared.success()
             } catch let decodingError as DecodingError {
                 guard !Task.isCancelled,
-                      settingsViewModel.config.provider == provider else { return }
+                      taskController.connectionTestID == testID,
+                      settingsViewModel.config == testedConfig else { return }
                 // Provide a clearer message for JSON decoding errors
                 let context: String
                 switch decodingError {
@@ -866,12 +896,12 @@ public struct ProviderSelectionStepView: View {
                 HapticFeedbackManager.shared.error()
             } catch {
                 guard !Task.isCancelled,
-                      settingsViewModel.config.provider == provider else { return }
+                      taskController.connectionTestID == testID,
+                      settingsViewModel.config == testedConfig else { return }
                 connectionStatus = .failed
                 connectionError = error.localizedDescription
                 HapticFeedbackManager.shared.error()
             }
-            taskController.connectionTestTask = nil
         }
     }
 

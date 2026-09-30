@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class SettingsViewModelStartupTests: XCTestCase {
-    func testOpenCodeImportPreservesExistingKeyWhenKeychainWriteFails() async throws {
+    func testOpenCodeConnectionDoesNotRequireKeychainWrite() async throws {
         let suiteName = "OpenCodeImportTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -13,18 +13,44 @@ final class SettingsViewModelStartupTests: XCTestCase {
         config.provider = .openCodeGo
         defaults.set(try JSONEncoder().encode(config), forKey: "aiConfig")
         let viewModel = SettingsViewModel(userDefaults: defaults, credentialStore: SettingsCredentialStore(
-            load: { _ in "existing-key" }, save: { _, _ in true },
-            saveImmediately: { _, _ in false }, delete: { _ in true }
+            load: { _ in "existing-key" }, save: { _, _ in false },
+            saveImmediately: { _, _ in XCTFail("OpenCode connection must not write Keychain"); return false },
+            delete: { _ in XCTFail("OpenCode connection must not delete manual keys"); return false }
         ), observesNotifications: false)
         await viewModel.loadPersistedState()
-        // Wait for the independently scheduled credential hydration.
+        while viewModel.isConfiguredCredentialHydrating { await Task.yield() }
+        try await viewModel.importOpenCodeCredentials(loadKey: { "connected-key" })
+        XCTAssertEqual(viewModel.config.apiKey, "connected-key")
+        XCTAssertTrue(viewModel.config.usesConnectedOpenCodeCredentials(for: .openCodeGo))
+        XCTAssertFalse(viewModel.config.usesConnectedOpenCodeCredentials(for: .openCodeZen))
+        viewModel.forceSave()
+        let saved = try JSONDecoder().decode(AIConfig.self, from: XCTUnwrap(defaults.data(forKey: "aiConfig")))
+        XCTAssertNil(saved.apiKey)
+        XCTAssertTrue(saved.usesConnectedOpenCodeCredentials(for: .openCodeGo))
+    }
+
+    func testOpenCodeConnectionRejectsChangedConfiguration() async throws {
+        let suiteName = "OpenCodeImportTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        var config = AIConfig.default
+        config.provider = .openCodeZen
+        defaults.set(try JSONEncoder().encode(config), forKey: "aiConfig")
+        let viewModel = SettingsViewModel(userDefaults: defaults, credentialStore: SettingsCredentialStore(
+            load: { _ in nil }, save: { _, _ in true },
+            saveImmediately: { _, _ in true }, delete: { _ in true }
+        ), observesNotifications: false)
+        await viewModel.loadPersistedState()
         while viewModel.isConfiguredCredentialHydrating { await Task.yield() }
         do {
-            try await viewModel.importOpenCodeCredentials(loadKey: { "imported-key" })
-            XCTFail("Expected Keychain failure")
+            try await viewModel.importOpenCodeCredentials(loadKey: {
+                await MainActor.run { viewModel.config.model = "changed-during-connection" }
+                return "stale-key"
+            })
+            XCTFail("Expected changed-configuration rejection")
         } catch {
-            XCTAssertEqual(viewModel.config.apiKey, "existing-key")
-            XCTAssertEqual(viewModel.config.provider, .openCodeGo)
+            XCTAssertNil(viewModel.config.apiKey)
+            XCTAssertFalse(viewModel.config.usesConnectedOpenCodeCredentials(for: .openCodeZen))
         }
     }
 
