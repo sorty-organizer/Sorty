@@ -6,7 +6,7 @@ on:
       runner:
         description: macOS runner for native UI validation
         type: choice
-        default: blacksmith-6vcpu-macos-15
+        default: macos-15
         options:
           - blacksmith-6vcpu-macos-15
           - macos-15
