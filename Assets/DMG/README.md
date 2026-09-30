@@ -19,6 +19,18 @@ The mascot uses the release app icon as its reference, with a soft glow
 and no folder baked into the artwork. Its placement depends on the saved
 Applications icon position in `scripts/dmg-settings.py`.
 
+`dmg-background-base.png` preserves the background from before the mascot
+edit. `mascot-overlay.png` is a separate transparent layer, centered at
+x=448 with its paws at the folder's top edge near y=677. The base's blur,
+colors, dots, and cursor trail are preserved outside this small overlay.
+To recomposite without regenerating the background:
+
+```bash
+magick Assets/DMG/dmg-background-base.png Assets/DMG/mascot-overlay.png \
+  -geometry +373+559 -compose Over -composite Assets/DMG/dmg-background.png
+sips -s format tiff Assets/DMG/dmg-background.png --out Assets/DMG/dmgcanvas_bg.tiff
+```
+
 The release workflow runs `scripts/package-dmg.sh` after validating the app.
 It scales the PNG to a 464 × 564 Finder window and uses `scripts/dmg-settings.py`
 to center Sorty above the Applications shortcut, alongside the cursor trail.
