@@ -38,10 +38,11 @@ PROPS = {
         <path d="M24 46H40L44 50H59V64H24Z" fill="white" stroke="black"
         stroke-width="2.5"/>
         <circle cx="41" cy="57" r="3" fill="black"/>''',
-    "Learning": '''<rect x="8" y="43" width="22" height="9" rx="4" fill="white"/>
-        <rect x="34" y="43" width="22" height="9" rx="4" fill="white"/>
-        <rect x="8" y="55" width="22" height="9" rx="4" fill="white"/>
-        <rect x="34" y="55" width="22" height="9" rx="4" fill="white"/>''',
+    "Learning": '''<path d="M8 43Q20 39 32 46Q44 39 56 43V61
+        Q44 57 32 64Q20 57 8 61Z" fill="white"/>
+        <path d="M32 46V64M14 48Q20 47 26 50M38 50Q44 47 50 48
+        M14 54Q20 53 26 56M38 56Q44 53 50 54" fill="none" stroke="black"
+        stroke-width="2.5" stroke-linecap="round"/>''',
 }
 
 

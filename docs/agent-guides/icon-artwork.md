@@ -8,6 +8,7 @@ Regenerate the white PNGs and their SVG sources with
 `python3 scripts/generate_white_menu_icons.py`. These flat white shapes use
 transparent face panels and prop details, based on the existing SVG mascot.
 The generator requires `rsvg-convert` from librsvg.
+The white Learning icon uses an open book to make the activity recognizable.
 
 Finder Sync bundles `SortyFinderSync/SortyWatchMascot.png` and
 `SortyFinderSync/SortyExcludeMascot.png` through its Xcode Resources phase.

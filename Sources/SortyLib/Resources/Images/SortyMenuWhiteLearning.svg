@@ -1,15 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"
             viewBox="0 0 68 68">
             <defs><mask id="prop"><rect width="68" height="68" fill="black"/>
-            <rect x="8" y="43" width="22" height="9" rx="4" fill="white"/>
-        <rect x="34" y="43" width="22" height="9" rx="4" fill="white"/>
-        <rect x="8" y="55" width="22" height="9" rx="4" fill="white"/>
-        <rect x="34" y="55" width="22" height="9" rx="4" fill="white"/></mask>
+            <path d="M8 43Q20 39 32 46Q44 39 56 43V61
+        Q44 57 32 64Q20 57 8 61Z" fill="white"/>
+        <path d="M32 46V64M14 48Q20 47 26 50M38 50Q44 47 50 48
+        M14 54Q20 53 26 56M38 56Q44 53 50 54" fill="none" stroke="black"
+        stroke-width="2.5" stroke-linecap="round"/></mask>
             <mask id="head"><rect width="68" height="68" fill="white"/>
-            <rect x="8" y="43" width="22" height="9" rx="4" fill="black"/>
-        <rect x="34" y="43" width="22" height="9" rx="4" fill="black"/>
-        <rect x="8" y="55" width="22" height="9" rx="4" fill="black"/>
-        <rect x="34" y="55" width="22" height="9" rx="4" fill="black"/></mask></defs>
+            <path d="M8 43Q20 39 32 46Q44 39 56 43V61
+        Q44 57 32 64Q20 57 8 61Z" fill="black"/>
+        <path d="M32 46V64M14 48Q20 47 26 50M38 50Q44 47 50 48
+        M14 54Q20 53 26 56M38 56Q44 53 50 54" fill="none" stroke="black"
+        stroke-width="2.5" stroke-linecap="round"/></mask></defs>
             <g transform="translate(2 0)"><g mask="url(#head)">
 <path d="M32 21V13" stroke="white" stroke-width="4"/>
 <circle cx="32" cy="9" r="5" fill="white"/>
