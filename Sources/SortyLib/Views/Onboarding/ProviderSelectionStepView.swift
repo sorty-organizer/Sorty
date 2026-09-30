@@ -358,6 +358,14 @@ public struct ProviderSelectionStepView: View {
                             apiKeyInputSection
                         }
                     } else {
+                        if [.openCodeZen, .openCodeGo].contains(settingsViewModel.config.provider) {
+                            OpenCodeCredentialLinkView(viewModel: settingsViewModel, onWillImport: {
+                                taskController.apiKeyCommitTask?.cancel()
+                                taskController.apiKeyCommitTask = nil
+                                commitAPIKeyDraft()
+                            })
+                            .id(settingsViewModel.config.provider)
+                        }
                         apiKeyInputSection
                     }
                 }
