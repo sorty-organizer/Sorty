@@ -1,18 +1,26 @@
 name: macOS UI validation
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: macOS runner for native UI validation
+        type: choice
+        default: blacksmith-6vcpu-macos-15
+        options:
+          - blacksmith-6vcpu-macos-15
+          - macos-15
 
 permissions:
   contents: read
 
 concurrency:
-  group: macos-ui-${{ github.ref }}
+  group: macos-ui-${{ github.ref }}-${{ inputs.runner }}
   cancel-in-progress: true
 
 jobs:
   ui-tests:
-    runs-on: blacksmith-6vcpu-macos-15
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
