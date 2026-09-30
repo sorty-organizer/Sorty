@@ -9,18 +9,8 @@ final class SortyFinderSync: FIFinderSync {
     private static let heartbeatMinimumInterval: TimeInterval = 30
     private static let heartbeatLock = NSLock()
     nonisolated(unsafe) private static var lastHeartbeatDate: Date?
-    nonisolated(unsafe) private static let cachedOrganizeImage = normalizedMenuIcon(
-        finderActionImage(named: "SortyMenuOrganizing", fallbackSymbol: "folder.fill.badge.gearshape"),
-        isTemplate: false
-    )
-    nonisolated(unsafe) private static let cachedWatchImage = normalizedMenuIcon(
-        finderActionImage(named: "SortyWatchMascot", fallbackSymbol: "eye"),
-        isTemplate: false
-    )
-    nonisolated(unsafe) private static let cachedExcludeImage = normalizedMenuIcon(
-        finderActionImage(named: "SortyExcludeMascot", fallbackSymbol: "folder.badge.minus"),
-        isTemplate: false
-    )
+    private static let iconStyleDefaults = UserDefaults(suiteName: "group.com.sorty.app") ?? .standard
+    private static let iconStylePreferenceKey = "useWhiteMenuBarIcons"
 
     override init() {
         super.init()
@@ -53,7 +43,12 @@ final class SortyFinderSync: FIFinderSync {
     }
 
     override var toolbarItemImage: NSImage {
-        Self.cachedOrganizeImage
+        Self.finderActionImage(
+            named: "SortyMenuOrganizing",
+            appleNativeResourceName: "SortyMenuWhiteOrganizing",
+            symbolName: "folder.fill.badge.gearshape",
+            accessibilityDescription: "Organize with Sorty"
+        )
     }
 
     override var toolbarItemToolTip: String {
@@ -63,9 +58,22 @@ final class SortyFinderSync: FIFinderSync {
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
         Self.reportHeartbeat(event: Self.menuEventName(for: menuKind))
         let menu = NSMenu()
-        let organizeImage = Self.cachedOrganizeImage
-        let watchImage = Self.cachedWatchImage
-        let excludeImage = Self.cachedExcludeImage
+        let organizeImage = Self.finderActionImage(
+            named: "SortyMenuOrganizing",
+            appleNativeResourceName: "SortyMenuWhiteOrganizing",
+            symbolName: "folder.fill.badge.gearshape",
+            accessibilityDescription: "Organize with Sorty"
+        )
+        let watchImage = Self.finderActionImage(
+            named: "SortyWatchMascot",
+            symbolName: "eye",
+            accessibilityDescription: "Watch with Sorty"
+        )
+        let excludeImage = Self.finderActionImage(
+            named: "SortyExcludeMascot",
+            symbolName: "folder.badge.minus",
+            accessibilityDescription: "Exclude from Sorty"
+        )
 
         switch menuKind {
         case .contextualMenuForItems, .contextualMenuForContainer, .contextualMenuForSidebar:
@@ -258,25 +266,40 @@ final class SortyFinderSync: FIFinderSync {
         return components.url
     }
 
-    private static func finderActionImage(named resourceName: String, fallbackSymbol: String) -> NSImage {
-        if let imageURL = Bundle.main.url(forResource: resourceName, withExtension: "png"),
+    private static func finderActionImage(
+        named sortyResourceName: String,
+        appleNativeResourceName: String? = nil,
+        symbolName: String,
+        accessibilityDescription: String
+    ) -> NSImage {
+        let usesAppleNativeStyle = iconStyleDefaults.bool(forKey: iconStylePreferenceKey)
+        if usesAppleNativeStyle,
+           let appleNativeResourceName,
+           let imageURL = Bundle.main.url(forResource: appleNativeResourceName, withExtension: "png"),
+           let image = NSImage(contentsOf: imageURL) {
+            image.isTemplate = true
+            return normalizedMenuIcon(image)
+        }
+
+        if !usesAppleNativeStyle,
+           let imageURL = Bundle.main.url(forResource: sortyResourceName, withExtension: "png"),
            let image = NSImage(contentsOf: imageURL) {
             image.isTemplate = false
-            return image
+            return normalizedMenuIcon(image)
         }
 
         let fallback = NSImage(
-            systemSymbolName: fallbackSymbol,
-            accessibilityDescription: resourceName
+            systemSymbolName: symbolName,
+            accessibilityDescription: accessibilityDescription
         ) ?? NSImage(size: NSSize(width: 16, height: 16))
         fallback.isTemplate = true
-        return fallback
+        return normalizedMenuIcon(fallback)
     }
 
-    private static func normalizedMenuIcon(_ image: NSImage, isTemplate: Bool) -> NSImage {
+    private static func normalizedMenuIcon(_ image: NSImage) -> NSImage {
         let icon = (image.copy() as? NSImage) ?? image
         icon.size = NSSize(width: 16, height: 16)
-        icon.isTemplate = isTemplate
+        icon.isTemplate = image.isTemplate
         return icon
     }
 

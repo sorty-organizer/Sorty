@@ -468,6 +468,68 @@ struct SettingsToggle: View {
     }
 }
 
+struct SettingsSubsettingRow<Control: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let title: String
+    let description: String?
+    let focusTarget: SettingsFocusTarget?
+    @ViewBuilder let control: Control
+
+    init(
+        title: String,
+        description: String? = nil,
+        focusTarget: SettingsFocusTarget? = nil,
+        @ViewBuilder control: () -> Control
+    ) {
+        self.title = title
+        self.description = description
+        self.focusTarget = focusTarget
+        self.control = control()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .padding(.trailing, 8)
+
+            HStack(alignment: .center, spacing: 16) {
+                Image(systemName: "arrow.turn.down.right")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(LocalizedStringKey(title))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+
+                    if let description {
+                        Text(LocalizedStringKey(description))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 12)
+                control
+            }
+            .padding(.leading, 4)
+            .padding(.vertical, 8)
+        }
+        .settingsFocusableSetting(focusTarget)
+        .transition(
+            reduceMotion
+                ? .opacity
+                : .asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .opacity
+                )
+        )
+    }
+}
+
 extension View {
     func sortyFocusHighlight<FocusShape: InsettableShape>(
         isActive: Bool,

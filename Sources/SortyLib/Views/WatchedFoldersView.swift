@@ -1615,80 +1615,61 @@ struct WatchedFolderConfigView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                             if useCustomModel {
-                                HStack(spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        HStack(spacing: 6) {
-                                            Text("Folder Model")
-                                                .font(.subheadline)
+                                SettingsSubsettingRow(
+                                    title: "Folder Model",
+                                    description: "Used only for this watched folder"
+                                ) {
+                                    HStack(spacing: 8) {
+                                        ModelSelectorCompactButton(
+                                            provider: selectedProvider,
+                                            label: selectedModel.isEmpty
+                                                ? "Choose model"
+                                                : selectedModel,
+                                            onTap: { showModelPicker = true }
+                                        )
+                                        .modelSelectorTriggerBounds()
 
-                                            Button {
-                                                HapticFeedbackManager.shared.tap()
-                                                showFolderModelInfo.toggle()
-                                            } label: {
-                                                Image(systemName: "info.circle")
-                                                    .font(.caption)
-                                            }
-                                            .buttonStyle(.plain)
-                                            .foregroundStyle(.secondary)
-                                            .help("About using a separate watched folder model")
-                                            .accessibilityLabel(
-                                                "Separate watched folder model information"
-                                            )
-                                            .onHover { hovering in
-                                                if hovering {
-                                                    HapticFeedbackManager.shared.selection()
-                                                }
-                                                showFolderModelInfo = hovering
-                                            }
-                                            .popover(
-                                                isPresented: $showFolderModelInfo,
-                                                arrowEdge: .trailing
-                                            ) {
-                                                VStack(alignment: .leading, spacing: 8) {
-                                                    Text("Separate Watched Folder Model")
-                                                        .font(.headline)
-
-                                                    Text(
-                                                        "The main Organize page keeps using the model selected under AI Provider. For faster, more responsive automation, try a smaller model such as GPT-5.6 Luna."
-                                                    )
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .fixedSize(
-                                                        horizontal: false,
-                                                        vertical: true
-                                                    )
-                                                }
-                                                .padding(14)
-                                                .frame(width: 300, alignment: .leading)
-                                                .systemLiquidGlassPopover(cornerRadius: 12)
-                                            }
+                                        Button {
+                                            HapticFeedbackManager.shared.tap()
+                                            showFolderModelInfo.toggle()
+                                        } label: {
+                                            Image(systemName: "info.circle")
+                                                .font(.caption)
                                         }
+                                        .buttonStyle(.plain)
+                                        .foregroundStyle(.secondary)
+                                        .help("About using a separate watched folder model")
+                                        .accessibilityLabel("Separate watched folder model information")
+                                        .onHover { hovering in
+                                            if hovering {
+                                                HapticFeedbackManager.shared.selection()
+                                            }
+                                            showFolderModelInfo = hovering
+                                        }
+                                        .popover(isPresented: $showFolderModelInfo, arrowEdge: .trailing) {
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                Text("Separate Watched Folder Model")
+                                                    .font(.headline)
 
-                                        Text("Used only for this watched folder")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                                Text(
+                                                    "The main Organize page keeps using the model selected under AI Provider. For faster, more responsive automation, try a smaller model such as GPT-5.6 Luna."
+                                                )
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                            }
+                                            .padding(14)
+                                            .frame(width: 300, alignment: .leading)
+                                            .systemLiquidGlassPopover(cornerRadius: 12)
+                                        }
                                     }
-
-                                    Spacer()
-
-                                    ModelSelectorCompactButton(
-                                        provider: selectedProvider,
-                                        label: selectedModel.isEmpty
-                                            ? "Choose model"
-                                            : selectedModel,
-                                        onTap: { showModelPicker = true }
-                                    )
-                                    .modelSelectorTriggerBounds()
                                 }
-                                .transition(
-                                    reduceMotion
-                                        ? .opacity
-                                        : AnyTransition(.blurReplace)
-                                )
+
                                 if isCustomModelInvalid {
                                     Label("Choose an available provider and model before saving.", systemImage: "exclamationmark.triangle")
                                         .font(.caption)
                                         .foregroundStyle(.orange)
+                                        .padding(.leading, 36)
                                 }
                             }
                         }

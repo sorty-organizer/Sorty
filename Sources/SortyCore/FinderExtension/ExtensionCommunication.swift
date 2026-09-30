@@ -1501,6 +1501,10 @@ public struct ExtensionCommunication {
         isSystemUsingDarkAppearance() ? "dark" : "light"
     }
 
+    private static var usesAppleNativeIconStyle: Bool {
+        MenuBarIconPreferences.defaults.bool(forKey: MenuBarIconPreferences.preferenceKey)
+    }
+
     private static func preferredWatchIconBaseNames() -> [String] {
         if isSystemUsingDarkAppearance() {
             // Quick Action icons are rasterized files; use explicit white glyph in dark mode.
@@ -1627,6 +1631,23 @@ public struct ExtensionCommunication {
     }
 
     private static func quickActionIconImage(style: QuickActionIconStyle) -> NSImage {
+        if usesAppleNativeIconStyle {
+            switch style {
+            case .organize:
+                return quickActionSystemSymbol(
+                    "folder.fill.badge.gearshape",
+                    accessibilityDescription: "Organize with Sorty"
+                )
+            case .watch:
+                return quickActionSystemSymbol("eye", accessibilityDescription: "Watch with Sorty")
+            case .exclude:
+                return quickActionSystemSymbol(
+                    "folder.badge.minus",
+                    accessibilityDescription: "Exclude from Sorty"
+                )
+            }
+        }
+
         switch style {
         case .organize:
             if let mascot = quickActionGeneratedMascotImage(named: "SortyMenuOrganizing") {
@@ -1700,6 +1721,32 @@ public struct ExtensionCommunication {
             fallback.isTemplate = false
             return fallback
         }
+    }
+
+    private static func quickActionSystemSymbol(
+        _ symbolName: String,
+        accessibilityDescription: String
+    ) -> NSImage {
+        let symbol = NSImage(
+            systemSymbolName: symbolName,
+            accessibilityDescription: accessibilityDescription
+        ) ?? NSImage(size: NSSize(width: 256, height: 256))
+        let configuration = NSImage.SymbolConfiguration(pointSize: 120, weight: .regular)
+        let configured = symbol.withSymbolConfiguration(configuration) ?? symbol
+        let color = isSystemUsingDarkAppearance() ? NSColor.white : NSColor.black
+        let size = NSSize(width: 256, height: 256)
+        let rendered = NSImage(size: size)
+        rendered.lockFocus()
+        color.set()
+        configured.draw(
+            in: NSRect(origin: .zero, size: size),
+            from: .zero,
+            operation: .sourceOver,
+            fraction: 1
+        )
+        rendered.unlockFocus()
+        rendered.isTemplate = false
+        return rendered
     }
 
     private static func renderedPNGData(for image: NSImage, size: NSSize = NSSize(width: 256, height: 256)) -> Data? {
@@ -2435,6 +2482,51 @@ public struct ExtensionCommunication {
             DispatchQueue.global(qos: .utility).async {
                 let result = ensureQuickActionInstalled(forceRefreshServices: forceRefreshServices)
                 continuation.resume(returning: result)
+            }
+        }
+    }
+
+    public static func refreshInstalledQuickActionIconsAsync() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global(qos: .utility).async {
+                refreshInstalledQuickActionIcons()
+                continuation.resume()
+            }
+        }
+    }
+
+    private static func refreshInstalledQuickActionIcons() {
+        let workflows: [(name: String, bundleIdentifier: String, command: String, style: QuickActionIconStyle)] = [
+            (organizeQuickActionWorkflowName, organizeQuickActionBundleIdentifier, organizeQuickActionCommandMarker, .organize),
+            (watchQuickActionWorkflowName, watchQuickActionBundleIdentifier, watchQuickActionCommandMarker, .watch),
+            (excludeQuickActionWorkflowName, excludeQuickActionBundleIdentifier, excludeQuickActionCommandMarker, .exclude),
+            (previewQuickActionWorkflowName, previewQuickActionBundleIdentifier, previewQuickActionCommandMarker, .organize)
+        ]
+
+        for servicesDirectory in candidateServicesDirectories() {
+            for workflow in workflows {
+                let workflowDirectory = servicesDirectory.appendingPathComponent(workflow.name, isDirectory: true)
+                guard FileManager.default.fileExists(atPath: workflowDirectory.path) else { continue }
+
+                let contentsDirectory = workflowDirectory.appendingPathComponent("Contents", isDirectory: true)
+                let infoURL = contentsDirectory.appendingPathComponent("Info.plist")
+                guard let infoPlist = NSDictionary(contentsOf: infoURL) as? [String: Any],
+                      infoPlist["CFBundleIdentifier"] as? String == workflow.bundleIdentifier,
+                      workflowHasFinderContext(infoPlist: infoPlist) else {
+                    continue
+                }
+
+                let workflowURL = contentsDirectory.appendingPathComponent("document.wflow")
+                guard let contents = try? String(contentsOf: workflowURL, encoding: .utf8),
+                      contents.contains(xmlEscaped(workflow.command)) else {
+                    continue
+                }
+
+                applyQuickActionIcon(
+                    workflowDir: workflowDirectory,
+                    contentsDir: contentsDirectory,
+                    style: workflow.style
+                )
             }
         }
     }

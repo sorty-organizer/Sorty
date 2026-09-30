@@ -13,7 +13,8 @@ struct AdvancedSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var automationManager: AutomationManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
-    @AppStorage("useWhiteMenuBarIcons") private var useWhiteMenuBarIcons = false
+    @AppStorage(MenuBarIconPreferences.preferenceKey, store: MenuBarIconPreferences.defaults)
+    private var usesAppleNativeIconStyle = false
     @AppStorage("privacyModeEnabled") private var privacyModeEnabled = true
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @ObservedObject private var analytics = AnalyticsManager.shared
@@ -47,32 +48,28 @@ struct AdvancedSettingsView: View {
                     )
 
                     if showMenuBarExtra {
-                        Divider()
-
-                        HStack(alignment: .center, spacing: 16) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Menu Bar Icon Style")
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundColor(.primary)
-                                Text("Use white icons on dark menu bars")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                        SettingsSubsettingRow(
+                            title: "Menu Bar Icon Style",
+                            description: "Choose between Sorty's colorful icons and Apple's native white icons."
+                        ) {
+                            Picker("Menu Bar Icon Style", selection: $usesAppleNativeIconStyle) {
+                                Text("Sorty").tag(false)
+                                Text("Apple Native").tag(true)
                             }
-
-                            Spacer()
-
-                            Picker("Menu Bar Icon Style", selection: $useWhiteMenuBarIcons) {
-                                Text("Default").tag(false)
-                                Text("White").tag(true)
-                            }
-                            .pickerStyle(.segmented)
-                            .fixedSize()
+                            .pickerStyle(.menu)
+                            .labelsHidden()
                             .accessibilityIdentifier("MenuBarIconStylePicker")
-                            .settingsFocusableSetting(.advancedMenuBarIconStyle)
                         }
                     }
                 }
+                .animation(
+                    reduceMotion
+                        ? .easeInOut(duration: 0.14)
+                        : .spring(response: 0.34, dampingFraction: 0.78),
+                    value: showMenuBarExtra
+                )
             }
+            .settingsFocusable(.advancedMenuBarIconStyle)
             .animatedAppearance(delay: 0.0)
 
             SettingsCard(
@@ -236,6 +233,17 @@ struct AdvancedSettingsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(diagnosticReportError ?? "")
+        }
+        .onChange(of: usesAppleNativeIconStyle) { _, newValue in
+            HapticFeedbackManager.shared.selection()
+            AnalyticsManager.shared.captureSettingChanged(
+                "Menu Bar Icon Style",
+                isEnabled: newValue,
+                section: "advanced"
+            )
+            Task {
+                await ExtensionCommunication.refreshInstalledQuickActionIconsAsync()
+            }
         }
     }
 }

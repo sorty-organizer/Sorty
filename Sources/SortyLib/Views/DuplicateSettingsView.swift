@@ -11,6 +11,7 @@ struct DuplicateSettingsView: View {
     @SortyHotReload private var hotReload
     @ObservedObject var settingsManager: DuplicateSettingsManager
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     var body: some View {
         VStack(spacing: 0) {
@@ -64,24 +65,37 @@ struct DuplicateSettingsView: View {
                                 .fixedSize(horizontal: false, vertical: true)
 
                             if settingsManager.settings.includeSemanticDuplicates {
-                                Picker(
-                                    "Match range",
-                                    selection: $settingsManager.settings.semanticSimilarityThreshold
+                                SettingsSubsettingRow(
+                                    title: "Match range",
+                                    description: "Choose how closely files need to match."
                                 ) {
-                                    ForEach(SimilarFileMatchRange.allCases, id: \.self) { range in
-                                        Text(range.displayName).tag(range.threshold)
-                                    }
-                                    if !presetThresholds.contains(
-                                        settingsManager.settings.semanticSimilarityThreshold
+                                    Picker(
+                                        "Match range",
+                                        selection: $settingsManager.settings.semanticSimilarityThreshold
                                     ) {
-                                        Text("Custom").tag(
+                                        ForEach(SimilarFileMatchRange.allCases, id: \.self) { range in
+                                            Text(range.displayName).tag(range.threshold)
+                                        }
+                                        if !presetThresholds.contains(
                                             settingsManager.settings.semanticSimilarityThreshold
-                                        )
+                                        ) {
+                                            Text("Custom").tag(
+                                                settingsManager.settings.semanticSimilarityThreshold
+                                            )
+                                        }
                                     }
+                                    .pickerStyle(.menu)
+                                    .labelsHidden()
+                                    .accessibilityIdentifier("SemanticSimilarityThresholdPicker")
                                 }
-                                .pickerStyle(.menu)
                             }
                         }
+                        .animation(
+                            reduceMotion
+                                ? .easeInOut(duration: 0.14)
+                                : .spring(response: 0.34, dampingFraction: 0.78),
+                            value: settingsManager.settings.includeSemanticDuplicates
+                        )
                     }
 
                     SettingsCard(

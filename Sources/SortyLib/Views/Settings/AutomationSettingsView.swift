@@ -12,6 +12,7 @@ struct AutomationSettingsView: View {
     @SortyHotReload private var hotReload
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var loginItemManager: LoginItemManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @AppStorage("keepInBackground") private var keepInBackground = false
     
@@ -138,19 +139,10 @@ struct AutomationSettingsView: View {
                 }
                 
                 if useSeparateModel {
-                    Divider()
-
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Automation Model")
-                                .font(.subheadline)
-                            Text("Overrides the main organization model")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
+                    SettingsSubsettingRow(
+                        title: "Automation Model",
+                        description: "Overrides the model used on the Organize page"
+                    ) {
                         ModelSelectorCompactButton(
                             provider: selectedProvider,
                             label: selectedModelDisplay,
@@ -158,13 +150,16 @@ struct AutomationSettingsView: View {
                         )
                         .modelSelectorTriggerBounds()
                     }
+
                     if !selectedProvider.isAvailable || selectedModel.isEmpty {
                         Label("Choose an available automation provider and model before running watched folders.", systemImage: "exclamationmark.triangle")
                             .font(.caption)
                             .foregroundStyle(.orange)
+                            .padding(.leading, 36)
                     }
                 }
             }
+            .animation(subsettingAnimation, value: useSeparateModel)
         }
         .settingsFocusable(.automationGlobalModel)
         .modelSelectionOverlay(
@@ -194,6 +189,12 @@ struct AutomationSettingsView: View {
 
     private var selectedModelDisplay: String {
         selectedModel.isEmpty ? "Choose model" : selectedModel
+    }
+
+    private var subsettingAnimation: Animation {
+        reduceMotion
+            ? .easeInOut(duration: 0.14)
+            : .spring(response: 0.34, dampingFraction: 0.78)
     }
 
     private var backgroundBehaviorSection: some View {

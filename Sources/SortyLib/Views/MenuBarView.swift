@@ -12,11 +12,16 @@ import SwiftUI
 
 private struct MenuBarMascotIcon: View {
     @SortyHotReload private var hotReload
+    @AppStorage(MenuBarIconPreferences.preferenceKey, store: MenuBarIconPreferences.defaults)
+    private var usesAppleNativeStyle = false
     var activity: MenuBarActivity = .idle
     var size: CGSize = CGSize(width: 18, height: 18)
 
     private var mascotImage: Image {
-        let source = SortyResources.image(named: activity.resourceName, withExtension: "png")
+        let source = SortyResources.image(
+            named: activity.iconResourceName(usesAppleNativeStyle: usesAppleNativeStyle),
+            withExtension: "png"
+        )
             ?? SortyResources.menuBarLabelNSImage()
         let resized = (source.copy() as? NSImage) ?? source
         let iconSize = min(size.width, size.height)
@@ -118,7 +123,8 @@ private struct LaunchAtLoginIcon: View {
 public struct MenuBarLabel: View {
     @SortyHotReload private var hotReload
     @EnvironmentObject private var controller: MenuBarController
-    @AppStorage("useWhiteMenuBarIcons") private var useWhiteMenuBarIcons = false
+    @AppStorage(MenuBarIconPreferences.preferenceKey, store: MenuBarIconPreferences.defaults)
+    private var usesAppleNativeStyle = false
     @State private var image = NSImage(
         systemSymbolName: "sparkles",
         accessibilityDescription: "Sorty"
@@ -132,13 +138,10 @@ public struct MenuBarLabel: View {
             .scaledToFit()
             .frame(width: 20, height: 20)
             .accessibilityLabel(controller.activity.accessibilityLabel)
-            .task(id: "\(controller.activity.rawValue)-\(useWhiteMenuBarIcons)") {
+            .task(id: "\(controller.activity.rawValue)-\(usesAppleNativeStyle)") {
                 let activity = controller.activity
-                let resourceName = useWhiteMenuBarIcons
-                    ? "SortyMenuWhite\(activity.resourceName.dropFirst("SortyMenu".count))"
-                    : activity.resourceName
                 guard let loaded = await SortyResources.imageAsync(
-                    named: resourceName,
+                    named: activity.iconResourceName(usesAppleNativeStyle: usesAppleNativeStyle),
                     withExtension: "png"
                 ) else { return }
                 guard !Task.isCancelled, controller.activity == activity else { return }

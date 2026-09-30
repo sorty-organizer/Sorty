@@ -23,6 +23,11 @@ public enum MenuBarActivity: String, CaseIterable, Sendable {
         }
     }
 
+    package func iconResourceName(usesAppleNativeStyle: Bool) -> String {
+        guard usesAppleNativeStyle else { return resourceName }
+        return "SortyMenuWhite\(resourceName.dropFirst("SortyMenu".count))"
+    }
+
     package var accessibilityLabel: String {
         switch self {
         case .idle: "Sorty"
@@ -34,6 +39,21 @@ public enum MenuBarActivity: String, CaseIterable, Sendable {
         case .learning: "Sorty is learning"
         }
     }
+}
+
+public enum MenuBarIconPreferences {
+    public static let preferenceKey = "useWhiteMenuBarIcons"
+    public static let appGroupIdentifier = "group.com.sorty.app"
+
+    public static let defaults: UserDefaults = {
+        let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) ?? .standard
+        if sharedDefaults.object(forKey: preferenceKey) == nil,
+           let legacyValue = UserDefaults.standard.object(forKey: preferenceKey) as? Bool {
+            sharedDefaults.set(legacyValue, forKey: preferenceKey)
+            UserDefaults.standard.removeObject(forKey: preferenceKey)
+        }
+        return sharedDefaults
+    }()
 }
 
 @MainActor

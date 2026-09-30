@@ -453,7 +453,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .advanced:
             return [
                 feature("Show Menu Bar Icon", "Display the Sorty icon in the menu bar for quick access.", keywords: ["menu bar", "menubar"], target: .advancedMenuBar),
-                feature("Menu Bar Icon Style", "Choose white menu bar icons for dark menu bars.", keywords: ["white icons", "appearance", "menubar"], target: .advancedMenuBarIconStyle),
+                feature("Menu Bar Icon Style", "Choose between Sorty's colorful icons and Apple's native white icons.", keywords: ["white icons", "sorty style", "apple native", "appearance", "menubar"], target: .advancedMenuBarIconStyle),
                 feature("Finder Workflow", "Open Finder and highlight newly organized folders after each completed run.", keywords: ["automatically reveal organized folders", "view in finder", "auto reveal"], target: .advancedFinderWorkflow),
                 feature("Privacy Mode", "Mask sensitive paths, usernames, API keys, and raw AI details.", keywords: ["privacy", "redact", "mask", "hide"], target: .advancedPrivacyMode),
                 feature("Block Internet Connections", "Allow only localhost requests for local models and offline workflows.", keywords: ["internet privacy", "network privacy", "offline", "localhost"], target: .advancedInternetPrivacy),
