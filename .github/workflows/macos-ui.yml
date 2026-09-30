@@ -6,10 +6,10 @@ on:
       runner:
         description: macOS runner for native UI validation
         type: choice
-        default: macos-15
+        default: macos-26
         options:
-          - blacksmith-6vcpu-macos-15
-          - macos-15
+          - blacksmith-6vcpu-macos-26
+          - macos-26
           - self-hosted-macOS
 
 permissions:

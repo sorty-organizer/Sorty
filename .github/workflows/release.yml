@@ -120,7 +120,7 @@ jobs:
           PY
 
   unit-tests:
-    runs-on: blacksmith-6vcpu-macos-15
+    runs-on: blacksmith-6vcpu-macos-26
     needs: prepare-release
     if: inputs.reuse_test_run == ''
 
@@ -190,7 +190,7 @@ jobs:
           if-no-files-found: ignore
 
   build-universal:
-    runs-on: blacksmith-6vcpu-macos-15
+    runs-on: blacksmith-6vcpu-macos-26
     needs:
       - prepare-release
 
@@ -317,7 +317,7 @@ jobs:
           if-no-files-found: ignore
 
   release:
-    runs-on: blacksmith-6vcpu-macos-15
+    runs-on: blacksmith-6vcpu-macos-26
     needs:
       - prepare-release
       - unit-tests
