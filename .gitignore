@@ -46,6 +46,7 @@ Sorty.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 # Other
 *.app
 releases/.sorty-bundle-fingerprint
+releases/*.dmg
 *.swp
 *~
 TestResults.xcresult/
