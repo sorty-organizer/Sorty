@@ -2,409 +2,161 @@
 //  FinderIntegrationSettingsView.swift
 //  Sorty
 //
-//  Finder Integration settings section
+//  Finder actions and macOS extension setup.
 //
 
+import AppKit
 import SwiftUI
 
 struct FinderIntegrationSettingsView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isOrganizeActionInstalled = false
-    @State private var isWatchActionInstalled = false
-    @State private var isExcludeActionInstalled = false
-    @State private var watchActionMessage: String?
-    @State private var finderSyncActive = false
-    @State private var finderSyncMessage: String?
-    @State private var hasCompletedInitialStatusCheck = false
-    @State private var isShowingAutomationPermissionInfo = false
-    @State private var isShowingMissingAutomationRecovery = false
-    @State private var automationSettingsButtonFrameInScreen: CGRect = .zero
-    @EnvironmentObject var automationManager: AutomationManager
-    
+    @State private var setupState: ExtensionCommunication.FinderSetupState?
+    @State private var refreshGeneration = 0
+
     var body: some View {
         VStack(spacing: 14) {
-            SettingsCard(title: "Finder Integration", icon: "folder.badge.gearshape", color: .cyan) {
+            SettingsCard(title: "Sorty in Finder", icon: "folder", color: .cyan) {
                 VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .center, spacing: 12) {
-                        Image(systemName: overallStatusIcon)
-                            .font(.title3)
-                            .foregroundStyle(overallStatusColor)
-                            .frame(width: 16, height: 24)
-                            .symbolReplaceTransition(animationValue: overallStatusIcon)
-                            .accessibilityHidden(true)
+                    Text("Right-click a folder in Finder to use Sorty without opening the app first.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(overallStatusTitle)
-                                .font(.subheadline.weight(.semibold))
-                                .numericTextTransition(animationValue: overallStatusTitle)
-                            Text(overallStatusSubtitle)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .numericTextTransition(animationValue: overallStatusSubtitle)
-                        }
-
-                        Spacer()
-
-                        Button("Check Now") {
-                            Task {
-                                await refreshIntegrationStatus()
-                                refreshFinderContext()
-                            }
-                        }
-                        .buttonStyle(.sortySecondary(size: .regular))
-                        .accessibilityIdentifier("FinderIntegrationRefreshButton")
-                        .settingsFocusable(
-                            .finderCheckStatus,
-                            shape: Capsule(style: .continuous),
-                            horizontalRingPadding: 4,
-                            verticalRingPadding: 4
-                        )
-                    }
-
-                    Divider()
-                        .opacity(0.35)
-
-                    HStack(alignment: .center, spacing: 8) {
-                        Image(systemName: "cursorarrow.click.2")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 16, height: 16, alignment: .center)
-                            .accessibilityHidden(true)
-                        Text("In Finder, right-click a folder to use Organize, Watch, or Exclude.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .accessibilityElement(children: .combine)
-
-                    VStack(spacing: 8) {
-                        compactStatusRow(
-                            label: "Organize with Sorty",
-                            isHealthy: isOrganizeActionInstalled,
-                            focusTarget: .finderOrganize
-                        )
-
-                        compactStatusRow(
-                            label: "Watch with Sorty",
-                            isHealthy: isWatchActionInstalled,
-                            focusTarget: .finderWatch
-                        )
-
-                        compactStatusRow(
-                            label: "Exclude from Sorty",
-                            isHealthy: isExcludeActionInstalled,
-                            focusTarget: .finderExclude
-                        )
-
-                        compactStatusRow(
-                            label: "Finder extension",
-                            isHealthy: finderSyncActive,
-                            focusTarget: .finderExtension
-                        )
-
-                        compactStatusRow(
-                            label: "Automation permission",
-                            isHealthy: automationManager.automationStatus.isGranted,
-                            focusTarget: .finderAutomationPermission
-                        )
-                    }
+                    actionRow(
+                        title: "Organize with Sorty",
+                        detail: "Create an organization plan, then review it in Sorty before moving files.",
+                        icon: "folder.badge.gearshape",
+                        focusTarget: .finderOrganize
+                    )
+                    actionRow(
+                        title: "Watch with Sorty",
+                        detail: "Add a folder to Watched Folders to organize new files automatically.",
+                        icon: "eye",
+                        focusTarget: .finderWatch
+                    )
+                    actionRow(
+                        title: "Exclude from Sorty",
+                        detail: "Keep a file or folder out of future organization plans.",
+                        icon: "minus.circle",
+                        focusTarget: .finderExclude
+                    )
                 }
             }
             .settingsFocusable(.finderIntegration)
 
-            if shouldShowTroubleshooting {
-                SettingsCard(title: "Troubleshooting", icon: "wrench.and.screwdriver", color: .purple) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Sorty repairs the Finder menu action automatically where macOS allows it. Use these only if Finder still does not show Sorty actions.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        ViewThatFits(in: .horizontal) {
-                            HStack(spacing: 8) {
-                                finderExtensionButton()
-                                openExtensionsButton()
-
-                                if !areFinderMenuActionsInstalled {
-                                    repairMenuActionsButton()
-                                }
-
-                                runFullCheckButton()
-                            }
-
-                            VStack(spacing: 8) {
-                                finderExtensionButton(expands: true)
-
-                                HStack(spacing: 8) {
-                                    openExtensionsButton(expands: true)
-                                    runFullCheckButton(expands: true)
-                                }
-
-                                if !areFinderMenuActionsInstalled {
-                                    repairMenuActionsButton(expands: true)
-                                }
-                            }
-                        }
-
-                        if automationManager.automationStatus != .granted {
-                            HStack(spacing: 8) {
-                                Button("Open Automation Settings") {
-                                    HapticFeedbackManager.shared.tap()
-                                    automationManager.openAutomationSettings(
-                                        sourceFrameInScreen: automationSettingsButtonFrameInScreen.isEmpty
-                                            ? nil
-                                            : automationSettingsButtonFrameInScreen.integral,
-                                        onMissingApp: {
-                                            isShowingMissingAutomationRecovery = true
-                                        }
-                                    )
-                                }
-                                .buttonStyle(.sortySecondary(size: .regular))
-                                .background(
-                                    ScreenFrameReader(frameInScreen: $automationSettingsButtonFrameInScreen)
-                                        .allowsHitTesting(false)
-                                )
-
-                                Button("Recover Permission") {
-                                    HapticFeedbackManager.shared.tap()
-                                    automationManager.recoverAutomationState()
-                                    refreshFinderContext()
-                                }
-                                .buttonStyle(.sortySecondary(size: .regular))
-                                .accessibilityIdentifier("FinderAutomationRecoverButton")
-
-                                Button {
-                                    HapticFeedbackManager.shared.tap()
-                                    isShowingAutomationPermissionInfo = true
-                                } label: {
-                                    Label("Why this is needed", systemImage: "info.circle")
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-
-                        if let message = finderSyncMessage ?? watchActionMessage {
-                            HStack(alignment: .top, spacing: 6) {
-                                Image(systemName: "info.circle")
-                                    .foregroundStyle(.secondary)
-                                    .font(.caption)
-                                    .accessibilityHidden(true)
-                                Text(message)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .numericTextTransition(animationValue: message)
-                            }
-                            .transition(.scale.combined(with: .opacity))
+            SettingsCard(title: "Finder extension", icon: "puzzlepiece.extension", color: .cyan) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: statusIcon)
+                            .font(.title3)
+                            .foregroundStyle(setupState == .enabled ? Color.green : Color.secondary)
+                            .frame(width: 24)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(statusTitle)
+                                .font(.subheadline.weight(.semibold))
+                            Text(statusDetail)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("FinderIntegrationStatus")
+
+                    Button("Open macOS Extensions") {
+                        HapticFeedbackManager.shared.tap()
+                        ExtensionCommunication.openFinderExtensionSettings()
+                    }
+                    .buttonStyle(.sortySecondary(size: .regular))
+                    .accessibilityIdentifier("FinderIntegrationExtensionsButton")
+                    .settingsFocusable(
+                        .finderExtension,
+                        shape: Capsule(style: .continuous),
+                        horizontalRingPadding: 4,
+                        verticalRingPadding: 4
+                    )
                 }
-                .animatedAppearance(delay: 0.1)
-                .transition(.opacity)
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: shouldShowTroubleshooting)
-        .task {
-            await refreshIntegrationStatus()
-            refreshFinderContext()
-            hasCompletedInitialStatusCheck = true
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: setupState)
+        .task(id: refreshGeneration) {
+            let diagnostics = await ExtensionCommunication.prepareFinderIntegrationAsync()
+            guard !Task.isCancelled else { return }
+            setupState = diagnostics.setupState
         }
-        .sheet(isPresented: $isShowingAutomationPermissionInfo) {
-            PermissionEducationView(pages: [.automation]) {
-                isShowingAutomationPermissionInfo = false
-            }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshGeneration += 1
         }
-        .sheet(isPresented: $isShowingMissingAutomationRecovery) {
-            AutomationPermissionRecoveryView {
-                isShowingMissingAutomationRecovery = false
-            }
+        .onChange(of: setupState) { _, newValue in
+            guard newValue != nil else { return }
+            AccessibilityNotification.Announcement(statusTitle).post()
         }
     }
 
-    @ViewBuilder
-    private func compactStatusRow(
-        label: String,
-        isHealthy: Bool,
+    private func actionRow(
+        title: String,
+        detail: String,
+        icon: String,
         focusTarget: SettingsFocusTarget
     ) -> some View {
-        HStack(alignment: .center, spacing: 8) {
-            Image(systemName: compactStatusIcon(isHealthy: isHealthy))
-                .foregroundStyle(compactStatusColor(isHealthy: isHealthy))
-                .font(.caption)
-                .frame(width: 16, height: 16, alignment: .center)
-                .symbolReplaceTransition(animationValue: compactStatusIcon(isHealthy: isHealthy))
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(.cyan)
+                .frame(width: 24, height: 24)
                 .accessibilityHidden(true)
-            Text(label)
-                .font(.caption.weight(.medium))
-            Spacer()
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .settingsFocusableSetting(focusTarget)
         .accessibilityElement(children: .combine)
-        .accessibilityValue(compactStatusAccessibilityValue(isHealthy: isHealthy))
     }
 
-    private func compactStatusIcon(isHealthy: Bool) -> String {
-        guard hasCompletedInitialStatusCheck else { return "clock.fill" }
-        return isHealthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
-    }
-
-    private func compactStatusColor(isHealthy: Bool) -> Color {
-        guard hasCompletedInitialStatusCheck else { return .secondary }
-        return isHealthy ? .green : .orange
-    }
-
-    private func compactStatusAccessibilityValue(isHealthy: Bool) -> String {
-        guard hasCompletedInitialStatusCheck else { return "checking" }
-        return isHealthy ? "ready" : "needs attention"
-    }
-
-    private func refreshFinderContext() {
-        automationManager.checkPermissions(enableChecksIfNeeded: true)
-    }
-
-    private func finderExtensionButton(expands: Bool = false) -> some View {
-        Button {
-            HapticFeedbackManager.shared.tap()
-            Task {
-                let repair = await ExtensionCommunication.repairFinderSyncExtensionRegistrationAsync()
-                finderSyncActive = await ExtensionCommunication.isFinderSyncExtensionActiveAsync()
-                finderSyncMessage = repair.message
-                if repair.success {
-                    HapticFeedbackManager.shared.success()
-                } else {
-                    HapticFeedbackManager.shared.error()
-                }
-            }
-        } label: {
-            Text(finderSyncActive ? "Repair Extension" : "Activate Extension")
-                .fixedSize(horizontal: !expands, vertical: false)
-                .frame(maxWidth: expands ? .infinity : nil)
-                .numericTextTransition(animationValue: finderSyncActive)
-        }
-        .buttonStyle(.sortyPrimary(size: .regular))
-    }
-
-    private func openExtensionsButton(expands: Bool = false) -> some View {
-        Button {
-            HapticFeedbackManager.shared.tap()
-            ExtensionCommunication.openFinderExtensionSettings()
-        } label: {
-            Text("Open macOS Extensions")
-                .fixedSize(horizontal: !expands, vertical: false)
-                .frame(maxWidth: expands ? .infinity : nil)
-        }
-        .buttonStyle(.sortySecondary(size: .regular))
-    }
-
-    private func repairMenuActionsButton(expands: Bool = false) -> some View {
-        Button {
-            HapticFeedbackManager.shared.tap()
-            Task {
-                let result = await ExtensionCommunication.ensureQuickActionInstalledAsync(forceRefreshServices: true)
-                await refreshIntegrationStatus()
-                watchActionMessage = result.message
-                if result.installed {
-                    HapticFeedbackManager.shared.success()
-                } else {
-                    HapticFeedbackManager.shared.error()
-                }
-            }
-        } label: {
-            Text("Repair Menu Actions")
-                .fixedSize(horizontal: !expands, vertical: false)
-                .frame(maxWidth: expands ? .infinity : nil)
-        }
-        .buttonStyle(.sortySecondary(size: .regular))
-    }
-
-    private func runFullCheckButton(expands: Bool = false) -> some View {
-        Button {
-            HapticFeedbackManager.shared.tap()
-            Task {
-                await refreshIntegrationStatus()
-                refreshFinderContext()
-            }
-        } label: {
-            Text("Run Full Check")
-                .fixedSize(horizontal: !expands, vertical: false)
-                .frame(maxWidth: expands ? .infinity : nil)
-        }
-        .buttonStyle(.sortySecondary(size: .regular))
-    }
-
-    private var shouldShowTroubleshooting: Bool {
-        guard hasCompletedInitialStatusCheck else { return false }
-        return !areFinderMenuActionsInstalled || !finderSyncActive || !automationManager.automationStatus.isGranted || finderSyncMessage != nil || watchActionMessage != nil
-    }
-
-    private var isFullyReady: Bool {
-        areFinderMenuActionsInstalled && finderSyncActive && automationManager.automationStatus.isGranted
-    }
-
-    private var areFinderMenuActionsInstalled: Bool {
-        isOrganizeActionInstalled && isWatchActionInstalled && isExcludeActionInstalled
-    }
-
-    private var overallStatusIcon: String {
-        guard hasCompletedInitialStatusCheck else { return "clock.fill" }
-        if isFullyReady {
-            return "checkmark.circle.fill"
-        }
-        return automationManager.automationStatus == .denied ? "exclamationmark.triangle.fill" : "wrench.and.screwdriver.fill"
-    }
-
-    private var overallStatusColor: Color {
-        guard hasCompletedInitialStatusCheck else { return .cyan }
-        if isFullyReady {
-            return .green
-        }
-        return automationManager.automationStatus == .denied ? .orange : .cyan
-    }
-
-    private var overallStatusTitle: String {
-        guard hasCompletedInitialStatusCheck else { return "Checking Finder Sync" }
-        return isFullyReady ? "Finder actions are ready" : "Sorty is finishing Finder setup"
-    }
-
-    private var overallStatusSubtitle: String {
-        guard hasCompletedInitialStatusCheck else {
-            return "Sorty is checking the Finder menu actions, extension, and Automation permission."
-        }
-        if isFullyReady {
-            return "Use Finder's right-click menu to organize folders, add watched folders, or exclude paths. Sorty will keep checking this setup in the background."
-        }
-
-        if automationManager.automationStatus == .denied {
-            return "macOS Automation permission is blocking Finder selection. Sorty can repair the rest automatically, but this permission must be re-enabled in System Settings."
-        }
-
-        return "Sorty installs and repairs the Finder menu actions automatically. If macOS needs confirmation, the repair options below will take you to the right place."
-    }
-
-    private var automationStatusSummary: String {
-        switch automationManager.automationStatus {
-        case .granted:
-            return "Allowed"
-        case .denied:
-            return "Blocked"
-        case .unknown:
-            return "Checking"
+    private var statusIcon: String {
+        switch setupState {
+        case nil: "clock"
+        case .enabled: "checkmark.circle.fill"
+        case .needsEnable: "puzzlepiece.extension"
+        case .unavailable: "info.circle"
+        case .pending: "info.circle"
         }
     }
 
-    private func refreshIntegrationStatus() async {
-        _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-        let status = await ExtensionCommunication.getIntegrationStatusAsync()
-        isOrganizeActionInstalled = status.quickActionInstalled
-        isWatchActionInstalled = status.quickWatchActionInstalled
-        isExcludeActionInstalled = status.quickExcludeActionInstalled
-        finderSyncActive = status.finderSyncEnabled
+    private var statusTitle: String {
+        switch setupState {
+        case nil: "Setting up Finder actions"
+        case .enabled: "Enabled in Finder"
+        case .needsEnable: "Enable Sorty in macOS"
+        case .unavailable: "Finder extension unavailable"
+        case .pending: "Finder hasn't loaded Sorty yet"
+        }
+    }
+
+    private var statusDetail: String {
+        switch setupState {
+        case nil:
+            "Sorty is preparing the right-click menu automatically."
+        case .enabled:
+            "Right-click a folder and look for Sorty. macOS manages whether the extension is enabled."
+        case .needsEnable:
+            "In System Settings, open General > Login Items & Extensions > Finder and turn on Sorty. This page updates when you return."
+        case .pending:
+            "Open macOS Extensions to confirm Sorty is enabled. If Finder still shows an older copy of Sorty, reopen Finder after enabling it."
+        case .unavailable:
+            "This copy of Sorty could not load its Finder extension. Install the latest Sorty app to use it."
+        }
     }
 }
 
 #Preview {
     FinderIntegrationSettingsView()
-        .frame(width: 500, height: 400)
+        .frame(width: 500)
 }

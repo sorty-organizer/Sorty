@@ -274,12 +274,15 @@ final class FinderIntegrationStatusTests: XCTestCase {
             heartbeat: nil
         )
 
-        XCTAssertFalse(
-            ExtensionCommunication.shouldAutoRepairFinderSync(
-                diagnostics: diagnostics,
-                currentPath: preferredExtensionPath
+        for currentPath in [preferredExtensionPath, staleExtensionPath] {
+            XCTAssertFalse(
+                ExtensionCommunication.shouldAutoRepairFinderSync(
+                    diagnostics: diagnostics,
+                    currentPath: currentPath
+                ),
+                "Changing the preferred app copy must not override a disabled extension"
             )
-        )
+        }
     }
 
     func testAutoRepairTriggersWhenCurrentBuildPathDiffersFromPreferredRegistration() {

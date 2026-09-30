@@ -11,7 +11,7 @@ import AppKit
 import Darwin
 
 /// Shares one expensive Finder registration probe between callers that ask at
-/// the same time, such as Settings and the troubleshooting check.
+/// the same time, such as Settings and deferred Finder setup.
 private actor FinderSyncDiagnosticsGate {
     static let shared = FinderSyncDiagnosticsGate()
 
@@ -29,6 +29,28 @@ private actor FinderSyncDiagnosticsGate {
         let diagnostics = await task.value
         inFlight = nil
         return diagnostics
+    }
+}
+
+/// Keeps Settings and deferred startup from repairing the same registration
+/// concurrently. Failed registration attempts wait five minutes before retrying.
+private actor FinderIntegrationSetupGate {
+    static let shared = FinderIntegrationSetupGate()
+
+    private var inFlight: Task<ExtensionCommunication.FinderSyncDiagnostics, Never>?
+    private var lastAttempt: Date?
+
+    func run() async -> ExtensionCommunication.FinderSyncDiagnostics {
+        if let inFlight { return await inFlight.value }
+        let allowRepair = lastAttempt.map { Date().timeIntervalSince($0) >= 300 } ?? true
+        if allowRepair { lastAttempt = Date() }
+        let task = Task {
+            await ExtensionCommunication.maintainFinderIntegrationAsync(allowRepair: allowRepair)
+        }
+        inFlight = task
+        let result = await task.value
+        inFlight = nil
+        return result
     }
 }
 
@@ -297,6 +319,19 @@ public struct ExtensionCommunication {
             }
         }
 
+        package var setupState: FinderSetupState {
+            switch kind {
+            case .registered, .verified:
+                return .enabled
+            case .disabled, .indeterminate:
+                return .needsEnable
+            case .missing, .signatureInvalid:
+                return .unavailable
+            case .notRegistered, .activeElsewhere, .needsCleanup:
+                return .pending
+            }
+        }
+
         var isVerifiedWorking: Bool {
             kind == .verified
         }
@@ -318,10 +353,20 @@ public struct ExtensionCommunication {
         }
     }
 
+    package enum FinderSetupState: Sendable, Equatable {
+        case enabled
+        case needsEnable
+        case unavailable
+        case pending
+    }
+
     static func shouldAutoRepairFinderSync(
         diagnostics: FinderSyncDiagnostics,
         currentPath: String
     ) -> Bool {
+        // A disabled registration is the user's choice, even if another build
+        // is now preferred or its signature needs attention.
+        guard diagnostics.kind != .disabled else { return false }
         if diagnostics.needsCodeSignatureRepair {
             return true
         }
@@ -1251,6 +1296,40 @@ public struct ExtensionCommunication {
 
     public static func isFinderSyncExtensionActiveAsync() async -> Bool {
         (await getFinderSyncDiagnosticsAsync()).isOperational
+    }
+
+    /// Maintains Finder menu actions and registration without restarting Finder,
+    /// staging another app copy, or changing the app's code signature.
+    package static func prepareFinderIntegrationAsync() async -> FinderSyncDiagnostics {
+        await FinderIntegrationSetupGate.shared.run()
+    }
+
+    fileprivate static func maintainFinderIntegrationAsync(allowRepair: Bool) async -> FinderSyncDiagnostics {
+        let menus = await ensureQuickActionInstalledAsync()
+        if !menus.installed {
+            DebugLogger.log("Finder menu setup: \(menus.message)")
+        }
+        let diagnostics = await getFinderSyncDiagnosticsAsync()
+        guard allowRepair, let path = diagnostics.preferredPath,
+              shouldAutoRepairFinderSync(diagnostics: diagnostics, currentPath: path),
+              diagnostics.kind != .signatureInvalid else { return diagnostics }
+
+        // Register first. Only discard stale enabled copies after macOS accepts
+        // the preferred one. Keep disabled entries and macOS's election choice.
+        let registration = await runCommandAsync(
+            executablePath: "/usr/bin/pluginkit", arguments: ["-a", path]
+        )
+        guard registration.exitCode == 0 else {
+            DebugLogger.log("Finder registration: \(commandFailureSummary(registration) ?? "failed")")
+            return diagnostics
+        }
+        let entries = await registeredFinderSyncExtensionEntriesAsync()
+        if entries.contains(where: { extensionPathsMatch($0.path, path) && $0.isEnabled == true }) {
+            for entry in entries where entry.isEnabled == true && !extensionPathsMatch(entry.path, path) {
+                _ = await runCommandAsync(executablePath: "/usr/bin/pluginkit", arguments: ["-r", entry.path])
+            }
+        }
+        return await getFinderSyncDiagnosticsAsync()
     }
 
     public static func repairFinderSyncExtensionRegistrationAsync(restartFinder: Bool = true) async -> (success: Bool, message: String) {
@@ -3699,7 +3778,7 @@ public struct ExtensionCommunication {
         return FinderIntegrationAvailabilityStatus(
             state: .setupPending,
             title: "Finder Sync Needs Setup",
-            detail: "Finder integration is enabled in Sorty, but the macOS Finder Sync extension is currently \(diagnostics.statusText.lowercased()). Open Settings -> Finder Integration and run Repair to finish setup."
+            detail: "The Finder extension is currently \(diagnostics.statusText.lowercased()). Sorty maintains its registration automatically. Open Settings > Finder Integration for setup and macOS extension controls."
         )
     }
 

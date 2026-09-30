@@ -1110,14 +1110,7 @@ struct SortyApp: App {
             #endif
             AnalyticsManager.shared.reloadExperimentalFeatures()
             if hasCompletedOnboarding, finderIntegrationEnabled {
-                let defaults = UserDefaults.standard
-                let key = "finderQuickActionsVerifiedVersion"
-                if defaults.string(forKey: key) != BuildInfo.version {
-                    let result = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-                    if result.installed {
-                        defaults.set(BuildInfo.version, forKey: key)
-                    }
-                }
+                _ = await ExtensionCommunication.prepareFinderIntegrationAsync()
             }
 
             try? await Task.sleep(for: .seconds(15))

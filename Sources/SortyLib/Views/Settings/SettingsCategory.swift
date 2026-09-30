@@ -87,12 +87,10 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case deeplinksFinderExclude = "settings.deeplinks.finder-exclude"
     case deeplinksFinderSettings = "settings.deeplinks.finder-settings"
     case finderIntegration = "settings.finder.integration"
-    case finderCheckStatus = "settings.finder.check-status"
     case finderOrganize = "settings.finder.organize"
     case finderWatch = "settings.finder.watch"
     case finderExclude = "settings.finder.exclude"
     case finderExtension = "settings.finder.extension"
-    case finderAutomationPermission = "settings.finder.automation-permission"
     case notificationsPermission = "settings.notifications.permission"
     case notificationsInAppHUD = "settings.notifications.in-app-hud"
     case notificationsSystem = "settings.notifications.system"
@@ -196,8 +194,7 @@ public extension SettingsFocusTarget {
              .deeplinksFinderSettings:
             return .deeplinks
 
-        case .finderIntegration, .finderCheckStatus, .finderOrganize, .finderWatch, .finderExclude,
-             .finderExtension, .finderAutomationPermission:
+        case .finderIntegration, .finderOrganize, .finderWatch, .finderExclude, .finderExtension:
             return .finder
 
         case .notificationsPermission, .notificationsInAppHUD, .notificationsSystem,
@@ -422,11 +419,9 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .finder:
             return [
                 feature("Organize with Sorty", "Run Sorty directly from Finder context menus.", keywords: ["quick action", "service"], target: .finderOrganize),
-                feature("Check Finder Status", "Refresh Finder Integration status and permission checks.", keywords: ["check now", "refresh finder"], target: .finderCheckStatus),
                 feature("Watch with Sorty", "Add watched folders directly from Finder context menus.", keywords: ["quick action", "service", "watched folders"], target: .finderWatch),
                 feature("Exclude from Sorty", "Add files and folders to exclusions directly from Finder context menus.", keywords: ["quick action", "service", "exclude path", "exclusion rules"], target: .finderExclude),
-                feature("Finder Extension", "Activate or repair the Finder Sync extension and jump to macOS Extensions settings.", keywords: ["finder sync", "extensions"], target: .finderExtension),
-                feature("Automation Permission", "Grant and recover Finder automation permission required for workflow controls.", keywords: ["apple events", "recover permission"], target: .finderAutomationPermission)
+                feature("Finder Extension", "Enable Sorty or manage its Finder extension in macOS Extensions settings.", keywords: ["finder sync", "extensions", "enable finder", "setup"], target: .finderExtension)
             ]
         case .notifications:
             return [

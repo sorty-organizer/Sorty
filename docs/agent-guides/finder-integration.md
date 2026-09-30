@@ -4,29 +4,54 @@
 - Finder Sync extension target: `SortyFinderSync` (embedded `.appex`).
 - IPC uses app group `group.com.sorty.app`.
 - Finder Integration is a core app feature. The legacy defaults key `finderIntegrationEnabled` remains for migration and diagnostics, but new installs default to enabled.
-- In-app repair path: `ExtensionCommunication.repairFinderSyncExtensionRegistration`.
+- Automatic setup: `ExtensionCommunication.prepareFinderIntegrationAsync`.
 - Finder selection and window AppleScripts run through `/usr/bin/osascript` off the main actor. Each short query has a process deadline; the Automation permission request waits for the user's decision.
 
-## Preferred Repair Flow
-1. Open `Settings -> Finder Integration`.
-2. Use `Install/Reinstall` for Quick Action.
-3. Use `Repair Finder Sync` (or `Activate Extension`) for the `.appex`.
-4. Use `Open Extensions` and confirm `com.sorty.app.SortyFinderSync` is enabled.
+## Settings and setup
 
-## Extension Isolation
-- If Sorty is running from `/Applications` or `~/Applications`, Finder Sync is registered from that app bundle directly.
-- If Sorty is running from a non-Applications path (for example, a workspace `releases/` build), repair stages the app in `~/Applications/Sorty.app` and registers Finder Sync from there so Finder can activate right-click menus.
-- On launch the app auto-repairs the extension registration if it doesn't match the current build (`autoRepairFinderSyncIfNeeded`).
-- Repair also kills any stale `SortyFinderSync` process and force-removes the old `pluginkit` registration before re-adding.
+Settings > Finder Integration explains the right-click actions first:
 
-## Runtime Diagnostics & Auto-Repair
-- On launch the app calls `autoRepairFinderSyncIfNeeded` which evaluates `shouldAutoRepairFinderSync(diagnostics:currentPath:)`.
-- `finderSyncDiagnostics(entries:preferredPath:heartbeat:runningProcessPath:appBundleMissingEntitlements:)` is the central diagnostic function returning a `FinderSyncDiagnostics` struct with a `FinderSyncStatusKind`.
-- Status kinds: `missing`, `signatureInvalid`, `notRegistered`, `disabled`, `indeterminate`, `activeElsewhere`, `needsCleanup`, `registered`, `verified`.
-- A `verified` status requires either a recent `FinderSyncRuntimeHeartbeat` from the extension or a matching running process path.
-- The Finder Sync extension posts distributed notifications (`SortyFinderSyncHeartbeat`) on launch and periodically, cached via `UserDefaults` with a 180-second staleness threshold.
-- `parseFinderSyncRegistrationEntries(from:)` parses `pluginkit` output to determine registration state; `+` = enabled, `-` = disabled, no marker = indeterminate.
-- Auto-repair must not re-enable a `.disabled` extension. That state represents the user's macOS Extensions choice.
+- Organize with Sorty creates a plan to review before moving files.
+- Watch with Sorty adds a folder to Watched Folders.
+- Exclude from Sorty keeps a file or folder out of organization plans.
+
+The extension card shows one setup state and an **Open macOS Extensions**
+button. macOS 15+ puts Finder extensions under System Settings > General >
+Login Items & Extensions > Finder. The page checks again when Sorty becomes
+active, including after returning from System Settings. See [Apple's extension settings guide](https://support.apple.com/guide/mac-help/change-login-items-extensions-settings-mtusr003/mac).
+
+There is no troubleshooting checklist or manual repair control on this page.
+Automation permission is separate: Finder Sync sends selected paths directly
+to Sorty, so its menu actions do not require permission to script Finder.
+Finder selection and window automation still use Automation permission in
+Settings > Permissions.
+
+## Automatic maintenance
+
+`prepareFinderIntegrationAsync` runs after 30 seconds of deferred startup and
+when the Finder settings page opens or Sorty becomes active while it is visible.
+It restores compatible Quick Action workflows and refreshes Services using the
+existing registry throttle. It also adds missing extension registrations and
+removes stale enabled registrations after macOS accepts the preferred copy.
+
+Concurrent setup requests share one task. Registration repair attempts are
+limited to once every five minutes per app process. Status checks still run
+when returning from macOS Settings. Maintenance does not restart Finder, kill
+extensions, copy an app into Applications, or alter signing. It preserves
+macOS's enable/disable choice. A disabled extension requires the user to enable
+Sorty in macOS Extensions.
+
+`finderSyncDiagnostics` distinguishes registration from runtime confirmation.
+An enabled registration is sufficient for the settings label **Enabled in
+Finder**; a recent heartbeat or matching process is needed to call it verified.
+A quiet, lazily loaded extension must not trigger repeated repair.
+Missing extensions and invalid signatures are packaging problems; automatic
+maintenance cannot repair those by changing the installed app's signature.
+
+The older `repairFinderSyncExtensionRegistrationAsync` API remains available
+for explicit developer recovery. It can stage development builds in
+`~/Applications/Sorty.app`, alter signing, terminate the extension, and restart
+Finder. Do not use it for background maintenance.
 
 ## Toolbar integration
 
