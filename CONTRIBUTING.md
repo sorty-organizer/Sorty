@@ -300,7 +300,9 @@ gh workflow run release.yml --ref main -f version=1.2.1 -f validate_only=true
 ```
 
 This runs tests, builds both architectures, verifies the signed ZIP, launches the
-packaged app, and validates the Sparkle appcast. It skips Sentry publication,
+packaged app, builds the installer DMG, and validates the Sparkle appcast. The
+DMG is saved as the `release-dmg` workflow artifact, including validation runs.
+It skips Sentry publication,
 tag creation, and GitHub release publication. A successful run also saves the
 universal build cache on `main`, where subsequent releases can restore it.
 Normal releases leave `validate_only` off. Tests and the universal build run in
@@ -312,6 +314,14 @@ release succeeds. Check that job before treating crash symbolication as ready;
 retry it if needed. Compilation jobs in CI and Release pin Xcode 26.3.
 Release builds retain both architectures and whole-module Swift optimization,
 with Thin LTO disabled.
+
+The release publishes `Sorty.dmg` for drag-to-install setup and `Sorty.zip` for
+Sparkle updates. To package an existing release app locally, run
+`bash scripts/package-dmg.sh`. It uses a temporary Python environment with
+`dmgbuild==1.6.7`, the artwork in `Assets/DMG`, and a saved Finder layout without
+UI automation. Python 3.10+ and network access to PyPI are required. It verifies
+the app signature and disk image, then writes `releases/Sorty.dmg`. Temporary
+files are removed automatically. This does not sign or notarize the DMG.
 
 ## Commit Message Guidelines
 

@@ -13,5 +13,7 @@ reference layout and whitespace, replace its blue glow with Sorty's
 coral and rose colors, soften the cursor outlines, and replace the Aside
 footer with rounded sans-serif "Sorty" lettering.
 
-This asset is not wired into the release workflow. Set it as the background
-in the DMG authoring tool and check the icon placement before packaging.
+The release workflow runs `scripts/package-dmg.sh` after validating the app.
+It scales the PNG to a 464 × 564 Finder window and uses `scripts/dmg-settings.py`
+to place Sorty and the Applications shortcut. The TIFF is also available for
+manual use in DMG Canvas. Check the Finder layout before publishing.

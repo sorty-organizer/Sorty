@@ -407,6 +407,16 @@ jobs:
           chmod +x scripts/smoke_test_app_launch.sh
           scripts/smoke_test_app_launch.sh releases/Sorty.zip
 
+      - name: Package installer DMG
+        run: bash scripts/package-dmg.sh
+
+      - name: Upload installer DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-dmg
+          path: releases/Sorty.dmg
+          if-no-files-found: error
+
       - name: Generate release notes
         run: |
           python3 scripts/generate_sparkle_release_notes.py \
@@ -488,6 +498,7 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             releases/Sorty.zip
+            releases/Sorty.dmg
             releases/appcast.xml
             releases/appcast-v2.xml
             releases/release-notes.html
@@ -496,7 +507,8 @@ jobs:
             ${{ steps.changelog.outputs.release_changelog }}
 
             ## Install
-            Download `Sorty.zip`, open it, and move `Sorty.app` to `/Applications`.
+            Download `Sorty.dmg`, open it, and drag `Sorty` to `Applications`.
+            `Sorty.zip` is also available and remains the Sparkle update package.
             > ⚠️ **Note**: The app is not signed with an Apple Developer certificate. If macOS blocks the app, run:
             > ```bash
             > sudo xattr -cr /Applications/Sorty.app
@@ -511,7 +523,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
         run: |
-          EXPECTED_ASSETS=$(printf '%s\n' Sorty.zip appcast-v2.xml appcast.xml release-notes.html | sort)
+          EXPECTED_ASSETS=$(printf '%s\n' Sorty.zip Sorty.dmg appcast-v2.xml appcast.xml release-notes.html | sort)
           ACTUAL_ASSETS=$(gh release view "v${VERSION}" --json assets --jq '.assets[].name' | sort)
           if [ "$ACTUAL_ASSETS" != "$EXPECTED_ASSETS" ]; then
             echo "Unexpected release assets:" >&2
@@ -525,6 +537,10 @@ jobs:
             "https://github.com/${{ github.repository }}/releases/latest/download/Sorty.zip" \
             --output /tmp/Sorty.zip
           cmp releases/Sorty.zip /tmp/Sorty.zip
+          curl --fail --silent --show-error --location \
+            "https://github.com/${{ github.repository }}/releases/latest/download/Sorty.dmg" \
+            --output /tmp/Sorty.dmg
+          cmp releases/Sorty.dmg /tmp/Sorty.dmg
           curl --fail --silent --show-error --location \
             "https://github.com/${{ github.repository }}/releases/latest/download/appcast-v2.xml" \
             --output /tmp/appcast-v2.xml
