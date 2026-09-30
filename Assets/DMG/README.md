@@ -15,5 +15,6 @@ footer with rounded sans-serif "Sorty" lettering.
 
 The release workflow runs `scripts/package-dmg.sh` after validating the app.
 It scales the PNG to a 464 × 564 Finder window and uses `scripts/dmg-settings.py`
-to place Sorty and the Applications shortcut. The TIFF is also available for
+to center Sorty above the Applications shortcut, alongside the cursor trail.
+Both icons use a 112-pixel size. The TIFF is also available for
 manual use in DMG Canvas. Check the Finder layout before publishing.
