@@ -5,6 +5,53 @@ import XCTest
 @testable import SortyModels
 
 final class SubscriptionAuthConfigurationTests: XCTestCase {
+    func testOpenCodeImportSeparatesPlansAndPrefersStoredAPIKeys() throws {
+        let data = Data(#"{"opencode":{"type":"api","key":" zen-key\n"},"opencode-go":{"type":"api","key":"go-key"},"openai":{"type":"oauth","access":"upstream-token"}}"#.utf8)
+        let environment = ["OPENCODE_API_KEY": "environment-key"]
+        XCTAssertEqual(try OpenCodeCredentials.apiKey(for: .openCodeZen, data: data, environment: environment), "zen-key")
+        XCTAssertEqual(try OpenCodeCredentials.apiKey(for: .openCodeGo, data: data, environment: environment), "go-key")
+        let zenOnly = Data(#"{"opencode":{"type":"api","key":"zen-key"}}"#.utf8)
+        XCTAssertThrowsError(try OpenCodeCredentials.apiKey(for: .openCodeGo, data: zenOnly, environment: [:]))
+        XCTAssertEqual(try OpenCodeCredentials.apiKey(for: .openCodeGo, data: zenOnly, environment: environment), "environment-key")
+    }
+
+    func testOpenCodeImportRejectsOAuthEmptyKeysAndMalformedJSON() {
+        for content in [
+            #"{"opencode":{"type":"oauth","access":"never-import","refresh":"refresh"}}"#,
+            #"{"opencode":{"type":"wellknown","key":"never-import","token":"token"}}"#,
+            #"{"opencode":{"type":"api","key":"  "}}"#,
+            "not json", "[]"
+        ] {
+            XCTAssertThrowsError(try OpenCodeCredentials.apiKey(for: .openCodeZen, data: Data(content.utf8), environment: [:]))
+        }
+        XCTAssertThrowsError(try OpenCodeCredentials.apiKey(for: .openAI, data: Data("{}".utf8), environment: ["OPENCODE_API_KEY": "key"]))
+    }
+
+    func testOpenCodeImportUsesXDGPathAndAuthContentOverride() throws {
+        let home = URL(fileURLWithPath: "/tmp/opencode-test-home", isDirectory: true)
+        XCTAssertEqual(OpenCodeCredentials.authFileURL(environment: [:], homeDirectory: home).path,
+                       "/tmp/opencode-test-home/.local/share/opencode/auth.json")
+        XCTAssertEqual(OpenCodeCredentials.authFileURL(environment: ["XDG_DATA_HOME": "/tmp/custom-data"], homeDirectory: home).path,
+                       "/tmp/custom-data/opencode/auth.json")
+        XCTAssertEqual(try OpenCodeCredentials.loadAPIKey(for: .openCodeGo, environment: [
+            "OPENCODE_AUTH_CONTENT": #"{"opencode-go":{"type":"api","key":"override-key"}}"#
+        ], homeDirectory: home), "override-key")
+    }
+
+    func testOpenCodeImportReadsFileAndUsesEnvironmentWhenFileIsMissing() throws {
+        let dataHome = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dataHome) }
+        let environment = ["XDG_DATA_HOME": dataHome.path, "OPENCODE_API_KEY": "environment-key"]
+        let file = OpenCodeCredentials.authFileURL(environment: environment, homeDirectory: dataHome)
+        XCTAssertEqual(try OpenCodeCredentials.loadAPIKey(for: .openCodeZen, environment: environment, homeDirectory: dataHome), "environment-key")
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(#"{"opencode":{"type":"api","key":"file-key"}}"#.utf8).write(to: file)
+        XCTAssertEqual(try OpenCodeCredentials.loadAPIKey(for: .openCodeZen, environment: environment, homeDirectory: dataHome), "file-key")
+        XCTAssertThrowsError(try OpenCodeCredentials.loadAPIKey(for: .openCodeZen, environment: [
+            "XDG_DATA_HOME": dataHome.path, "OPENCODE_AUTH_CONTENT": "invalid"
+        ], homeDirectory: dataHome))
+    }
+
     func testCodexLoginScriptQuotesExecutablePathForShell() {
         let quoted = CodexCLIAuthManager.shellQuoted("/tmp/codex '$HOME'; touch /tmp/pwn")
 

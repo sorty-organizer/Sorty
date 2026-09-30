@@ -321,6 +321,10 @@ struct AIProviderSettingsView: View {
 
     private var apiKeySection: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if [.openCodeZen, .openCodeGo].contains(viewModel.config.provider) {
+                OpenCodeCredentialLinkView(viewModel: viewModel)
+                    .id(viewModel.config.provider)
+            }
             if viewModel.config.provider == .ollama {
                 // Sorty never stores or sends an Ollama credential, so a key
                 // field that silently drops the value would mislead users.
@@ -1247,4 +1251,59 @@ private struct CodexDeviceAuthStatusView: View {
         .environmentObject(SettingsViewModel())
         .environmentObject(codexAuthManager)
         .frame(width: 500, height: 600)
+}
+
+/// Shared by Settings and onboarding; importing is an explicit, cancellable action.
+struct OpenCodeCredentialLinkView: View {
+    @ObservedObject var viewModel: SettingsViewModel
+    var onWillImport: () -> Void = {}
+    @State private var importTask: Task<Void, Never>?
+    @State private var message: String?
+    @State private var hasError = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Button {
+                    onWillImport()
+                    message = nil
+                    HapticFeedbackManager.shared.tap()
+                    importTask = Task { @MainActor in
+                        defer { importTask = nil }
+                        do {
+                            try await viewModel.importOpenCodeCredentials()
+                            hasError = false
+                            message = "OpenCode key saved to Keychain. Test the connection to verify access."
+                            HapticFeedbackManager.shared.success()
+                        } catch is CancellationError {
+                            return
+                        } catch {
+                            hasError = true
+                            message = error.localizedDescription
+                            HapticFeedbackManager.shared.error()
+                        }
+                    }
+                } label: {
+                    Label(importTask == nil ? "Use OpenCode credentials" : "Importing…", systemImage: "link")
+                }
+                .buttonStyle(.sortyBordered)
+                .controlSize(.small)
+                .disabled(importTask != nil || viewModel.isConfiguredCredentialHydrating || !viewModel.hasLoadedPersistedState)
+                .accessibilityIdentifier("importOpenCodeCredentials")
+                .help("Import this plan's API key from OpenCode into Sorty's Keychain")
+
+                Link("OpenCode sign-in", destination: URL(string: "https://opencode.ai/auth")!)
+                    .font(.caption)
+                    .trackHoveredURL(URL(string: "https://opencode.ai/auth")!)
+            }
+            Text(message ?? "Already connected in OpenCode? Import your selected plan's key, or enter one below.")
+                .font(.caption)
+                .foregroundStyle(hasError ? Color.red : Color.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .onDisappear {
+            importTask?.cancel()
+            importTask = nil
+        }
+    }
 }

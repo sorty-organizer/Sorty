@@ -5,6 +5,56 @@ import XCTest
 
 @MainActor
 final class SettingsViewModelStartupTests: XCTestCase {
+    func testOpenCodeImportPreservesExistingKeyWhenKeychainWriteFails() async throws {
+        let suiteName = "OpenCodeImportTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        var config = AIConfig.default
+        config.provider = .openCodeGo
+        defaults.set(try JSONEncoder().encode(config), forKey: "aiConfig")
+        let viewModel = SettingsViewModel(userDefaults: defaults, credentialStore: SettingsCredentialStore(
+            load: { _ in "existing-key" }, save: { _, _ in true },
+            saveImmediately: { _, _ in false }, delete: { _ in true }
+        ), observesNotifications: false)
+        await viewModel.loadPersistedState()
+        // Wait for the independently scheduled credential hydration.
+        while viewModel.isConfiguredCredentialHydrating { await Task.yield() }
+        do {
+            try await viewModel.importOpenCodeCredentials(loadKey: { "imported-key" })
+            XCTFail("Expected Keychain failure")
+        } catch {
+            XCTAssertEqual(viewModel.config.apiKey, "existing-key")
+            XCTAssertEqual(viewModel.config.provider, .openCodeGo)
+        }
+    }
+
+    func testCancelledOpenCodeImportDoesNotWriteKeychain() async throws {
+        let suiteName = "OpenCodeImportTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        var config = AIConfig.default
+        config.provider = .openCodeZen
+        defaults.set(try JSONEncoder().encode(config), forKey: "aiConfig")
+        var writes = 0
+        let viewModel = SettingsViewModel(userDefaults: defaults, credentialStore: SettingsCredentialStore(
+            load: { _ in nil }, save: { _, _ in true },
+            saveImmediately: { _, _ in writes += 1; return true }, delete: { _ in true }
+        ), observesNotifications: false)
+        await viewModel.loadPersistedState()
+        while viewModel.isConfiguredCredentialHydrating { await Task.yield() }
+        let task = Task {
+            try await viewModel.importOpenCodeCredentials(loadKey: { "imported-key" })
+        }
+        task.cancel()
+        do {
+            try await task.value
+            XCTFail("Expected cancellation")
+        } catch is CancellationError {
+            XCTAssertEqual(writes, 0)
+            XCTAssertNil(viewModel.config.apiKey)
+        }
+    }
+
     func testInitializationDoesNotWaitForPersistedStateOrCredentialLookup() async throws {
         let suiteName = "SettingsViewModelStartupTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

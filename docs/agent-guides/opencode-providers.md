@@ -7,6 +7,29 @@ Connection checks send a bounded completion to the selected model to validate
 the key and model access. These probes can consume a small amount of quota.
 The public model-list endpoint alone cannot validate credentials.
 
+Settings and onboarding offer **Use OpenCode credentials** alongside the manual
+key field and an [OpenCode sign-in link](https://opencode.ai/auth). First connect
+the selected plan with `opencode auth login`, then import its key. The import is
+an explicit snapshot into Sorty's Keychain; reconnecting or rotating a key in
+OpenCode requires another import. It does not install or start OpenCode.
+
+The reader uses `OPENCODE_AUTH_CONTENT` when set, otherwise
+`$XDG_DATA_HOME/opencode/auth.json` or `~/.local/share/opencode/auth.json`.
+It selects `opencode` for Zen and `opencode-go` for Go, accepts only `type: api`
+entries, and uses `OPENCODE_API_KEY` when the selected entry has no API key.
+Stored API keys take precedence over that environment variable. GUI apps may
+not inherit shell environment variables. OAuth tokens for upstream providers
+are never imported. Read/decode/Keychain errors leave the existing Sorty key
+intact, and no credential file is read at launch.
+
+This follows [T3 Code's OpenCode integration](https://github.com/pingdotgg/t3code/blob/c18e5ea6ed741443a8ec4a5d22d4b6939b0ecd21/apps/server/src/provider/Layers/OpenCodeProvider.ts),
+which delegates upstream authentication to OpenCode's CLI/server and uses the
+SDK's connected-provider inventory. Its
+[Go credential reader](https://github.com/pingdotgg/t3code/blob/c18e5ea6ed741443a8ec4a5d22d4b6939b0ecd21/apps/server/src/provider/Layers/openCodeUsageLimits.ts)
+provides the file/environment precedence used here. Sorty continues to call
+Zen/Go directly rather than starting an agent server; importing a key does not
+prove model access, so use Test Connection after importing.
+
 The card and model picker use OpenCode's Zen and Go marks from its
 [MIT-licensed icon set](https://github.com/anomalyco/opencode/tree/dev/packages/ui/src/assets/icons/provider).
 

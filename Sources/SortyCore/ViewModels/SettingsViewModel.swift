@@ -283,6 +283,40 @@ public class SettingsViewModel: ObservableObject {
         _ = credentialStore.saveImmediately(config.provider.keychainKey, apiKey)
     }
 
+    /// Explicit user action; credential files are never inspected during launch.
+    public func importOpenCodeCredentials() async throws {
+        let provider = config.provider
+        try await importOpenCodeCredentials(loadKey: {
+            try await Task.detached(priority: .userInitiated) {
+                try OpenCodeCredentials.loadAPIKey(for: provider)
+            }.value
+        })
+    }
+
+    func importOpenCodeCredentials(loadKey: @Sendable () async throws -> String) async throws {
+        let provider = config.provider
+        guard provider == .openCodeZen || provider == .openCodeGo else {
+            throw OpenCodeCredentials.ImportError.unsupportedProvider
+        }
+        let originalKey = config.apiKey
+        let key = try await loadKey()
+        try Task.checkCancellation()
+        guard config.provider == provider, config.apiKey == originalKey else {
+            throw OpenCodeCredentials.ImportError.configurationChanged
+        }
+        // Commit on the main actor so no provider switch or pending hydration
+        // can interleave with the Keychain write and in-memory publication.
+        guard credentialStore.saveImmediately(provider.keychainKey, key) else {
+            throw OpenCodeCredentials.ImportError.keychainWriteFailed
+        }
+        cancelCredentialHydration()
+        setInMemoryAPIKey(key)
+        ProviderAuthResolver.invalidateCredentialCache(for: provider)
+        AISessionManager.shared.invalidateAll()
+        debouncedSave()
+        updateAvailableModels(force: true)
+    }
+
     private func persistCredential(_ apiKey: String, for provider: AIProvider) {
         Task { [credentialStore] in
             _ = await credentialStore.save(provider.keychainKey, apiKey)
