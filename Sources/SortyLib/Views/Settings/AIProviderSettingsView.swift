@@ -1282,6 +1282,7 @@ struct OpenCodeCredentialLinkView: View {
                     .foregroundStyle(isConnected ? Color.green : Color.secondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isConnected ? "Connected to \(viewModel.config.provider.displayName)" : "Connect with OpenCode")
+                        .accessibilityIdentifier("OpenCodeConnectionStatus")
                         .font(.subheadline.weight(.semibold))
                     Text(isConnected ? "Using your OpenCode credentials" : "Choose Zen or Go in OpenCode to connect this plan.")
                         .font(.caption)

@@ -237,7 +237,11 @@ public struct ProviderSelectionStepView: View {
             resetConnectionVerification()
         }
         .onChange(of: settingsViewModel.config.apiKey) { _, apiKey in
-            resetConnectionVerification()
+            if settingsViewModel.config.usesConnectedOpenCodeCredentials(for: settingsViewModel.config.provider) {
+                resetConnectionVerification()
+            } else {
+                scheduleConnectionTest()
+            }
             guard taskController.apiKeyCommitTask == nil else { return }
             let value = apiKey ?? ""
             if apiKeyDraft != value {
