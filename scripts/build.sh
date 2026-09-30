@@ -740,6 +740,8 @@ compute_bundle_fingerprint() {
             "${PROJECT_DIR}/Sorty.entitlements" \
             "${PROJECT_DIR}/SortyFinderSync/Info.plist" \
             "${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements" \
+            "${PROJECT_DIR}/SortyFinderSync/SortyWatchMascot.png" \
+            "${PROJECT_DIR}/SortyFinderSync/SortyExcludeMascot.png" \
             "${PROJECT_DIR}/Sorty.xcodeproj/project.pbxproj" \
             "${PROJECT_DIR}/Package.swift" \
             "${PROJECT_DIR}/Package.resolved" \
@@ -1315,7 +1317,11 @@ bundle_finder_extension() {
         for src_file in \
             "${PROJECT_DIR}/Sources/SortyFinderSync/SortyFinderSync.swift" \
             "${PROJECT_DIR}/SortyFinderSync/Info.plist" \
-            "${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements"; do
+            "${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements" \
+            "${PROJECT_DIR}/SortyFinderSync/SortyWatchMascot.png" \
+            "${PROJECT_DIR}/SortyFinderSync/SortyExcludeMascot.png" \
+            "${PROJECT_DIR}/Sources/SortyLib/Resources/Images/SortyMenuOrganizing.png" \
+            "${PROJECT_DIR}/Sorty.xcodeproj/project.pbxproj"; do
             if [ -f "${src_file}" ] && [ "${src_file}" -nt "${cached_appex}" ]; then
                 needs_rebuild=true
                 break

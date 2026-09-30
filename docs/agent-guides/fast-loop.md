@@ -158,6 +158,7 @@ These are already configured — no action needed:
 - **Sentry downloads only the linked variant** through `Packages/sentry-cocoa`. It uses the same upstream 9.23.0 binary, checksum, and linker helper. The six unused binary variants no longer consume cache space or download time. SwiftPM removes them when resolving the changed package graph.
 - **Content-addressed resource caches** reuse `Assets.car` and Beam `default.metallib` when their inputs and toolchains are unchanged. Metal keys include shader headers and the build recipe.
 - **Release resource pruning** removes byte-identical files from Xcode's nested `Contents/Resources` copy after flattening SortyLib resources. Distinct compiled localizations stay in place. Finder Sync mascot PNGs are losslessly compressed without changing decoded pixels. Unused shader sample artwork and the retired GitHub Copilot fallback image are omitted from SortyLib resources.
+- **Finder artwork cache inputs** include the Watch, Exclude, and Organize PNGs and the Xcode project. Updating those resources triggers an extension rebuild instead of reusing stale artwork.
 - **Scheduled cache pruning**: oversized build caches are pruned at most once per day by default, including `make now`, instead of growing unchecked or doing expensive cleanup every run.
 
 ## Cache Hygiene
