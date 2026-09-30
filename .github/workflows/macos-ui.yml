@@ -1,0 +1,108 @@
+name: macOS UI validation
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-ui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ui-tests:
+    runs-on: blacksmith-6vcpu-macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.3'
+
+      - name: Build and exercise the native app
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          xcodebuild test \
+            -project Sorty.xcodeproj \
+            -scheme Sorty \
+            -destination 'platform=macOS' \
+            -configuration Debug \
+            -derivedDataPath "$RUNNER_TEMP/SortyDerivedData" \
+            -resultBundlePath "$GITHUB_WORKSPACE/artifacts/SortyUI.xcresult" \
+            -parallel-testing-enabled NO \
+            -only-testing:SortyUITests/AppUITests/testAppHasMainWindow \
+            -only-testing:SortyUITests/AppUITests/testAllSidebarItemsExistAndAreClickable \
+            -only-testing:SortyUITests/AppUITests/testAllViewsLoadWithoutCrash \
+            -only-testing:SortyUITests/AppUITests/testRapidNavigationMaintainsStability \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee artifacts/xcodebuild.log
+          xcrun xcresulttool get test-results summary \
+            --path artifacts/SortyUI.xcresult > artifacts/test-summary.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          summary = json.loads(Path('artifacts/test-summary.json').read_text())
+          assert summary['totalTestCount'] == 4, summary
+          assert summary['passedTests'] == 4, summary
+          assert summary['failedTests'] == 0 and summary['skippedTests'] == 0, summary
+          print('All four selected native UI tests executed and passed.')
+          PY
+
+      - name: Open the built app and capture its window
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/SortyDerivedData/Build/Products/Debug/Sorty.app"
+          executable="$app/Contents/MacOS/Sorty"
+          test -x "$executable"
+          XCUITEST_FORCE_MAIN_APP=1 \
+            XCUITEST_DISABLE_STORED_PROVIDER_CREDENTIALS=1 \
+            "$executable" --uitesting > artifacts/app-launch.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          cat > "$RUNNER_TEMP/sorty-window.swift" <<'SWIFT'
+          import CoreGraphics
+          import Foundation
+
+          let pid = Int(CommandLine.arguments[1])!
+          let deadline = Date().addingTimeInterval(30)
+          repeat {
+              let windows = CGWindowListCopyWindowInfo(
+                  [.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID
+              ) as? [[String: Any]] ?? []
+              if let window = windows.first(where: { window in
+                  guard let owner = window[kCGWindowOwnerPID as String] as? Int,
+                        let layer = window[kCGWindowLayer as String] as? Int,
+                        let bounds = window[kCGWindowBounds as String] as? [String: Any],
+                        let width = bounds["Width"] as? Double,
+                        let height = bounds["Height"] as? Double else { return false }
+                  return owner == pid && layer == 0 && width > 100 && height > 100
+              }), let id = window[kCGWindowNumber as String] as? Int {
+                  print(id)
+                  exit(0)
+              }
+              Thread.sleep(forTimeInterval: 0.5)
+          } while Date() < deadline
+          fputs("No visible Sorty window appeared.\n", stderr)
+          exit(1)
+          SWIFT
+          window_id=$(swift "$RUNNER_TEMP/sorty-window.swift" "$app_pid")
+          screencapture -x -o -l "$window_id" artifacts/sorty-window.png
+          test -s artifacts/sorty-window.png
+          sips -g pixelWidth -g pixelHeight artifacts/sorty-window.png
+          ditto -c -k --keepParent "$app" artifacts/Sorty-debug.zip
+
+      - name: Upload screenshots, app, and Xcode results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sorty-macos-ui-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: error
