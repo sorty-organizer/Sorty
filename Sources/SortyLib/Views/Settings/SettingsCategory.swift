@@ -110,6 +110,7 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case permissionsStatusActions = "settings.permissions.status-actions"
     case permissionsUsage = "settings.permissions.usage"
     case advancedMenuBar = "settings.advanced.menu-bar"
+    case advancedMenuBarIconStyle = "settings.advanced.menu-bar-icon-style"
     case advancedFinderWorkflow = "settings.advanced.finder-workflow"
     case advancedPrivacyMode = "settings.advanced.privacy-mode"
     case advancedInternetPrivacy = "settings.advanced.internet-privacy"
@@ -210,7 +211,7 @@ public extension SettingsFocusTarget {
              .permissionsStatusActions, .permissionsUsage:
             return .permissions
 
-        case .advancedMenuBar, .advancedFinderWorkflow, .advancedPrivacyMode,
+        case .advancedMenuBar, .advancedMenuBarIconStyle, .advancedFinderWorkflow, .advancedPrivacyMode,
              .advancedInternetPrivacy, .advancedAnalytics, .advancedTimeouts, .advancedRequestTimeout,
              .advancedResourceTimeout, .advancedDeveloper, .advancedStats, .advancedErrorLogs:
             return .advanced
@@ -452,6 +453,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .advanced:
             return [
                 feature("Show Menu Bar Icon", "Display the Sorty icon in the menu bar for quick access.", keywords: ["menu bar", "menubar"], target: .advancedMenuBar),
+                feature("Menu Bar Icon Style", "Choose white menu bar icons for dark menu bars.", keywords: ["white icons", "appearance", "menubar"], target: .advancedMenuBarIconStyle),
                 feature("Finder Workflow", "Open Finder and highlight newly organized folders after each completed run.", keywords: ["automatically reveal organized folders", "view in finder", "auto reveal"], target: .advancedFinderWorkflow),
                 feature("Privacy Mode", "Mask sensitive paths, usernames, API keys, and raw AI details.", keywords: ["privacy", "redact", "mask", "hide"], target: .advancedPrivacyMode),
                 feature("Block Internet Connections", "Allow only localhost requests for local models and offline workflows.", keywords: ["internet privacy", "network privacy", "offline", "localhost"], target: .advancedInternetPrivacy),

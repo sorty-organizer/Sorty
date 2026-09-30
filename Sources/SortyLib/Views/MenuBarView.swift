@@ -118,6 +118,7 @@ private struct LaunchAtLoginIcon: View {
 public struct MenuBarLabel: View {
     @SortyHotReload private var hotReload
     @EnvironmentObject private var controller: MenuBarController
+    @AppStorage("useWhiteMenuBarIcons") private var useWhiteMenuBarIcons = false
     @State private var image = NSImage(
         systemSymbolName: "sparkles",
         accessibilityDescription: "Sorty"
@@ -131,10 +132,13 @@ public struct MenuBarLabel: View {
             .scaledToFit()
             .frame(width: 20, height: 20)
             .accessibilityLabel(controller.activity.accessibilityLabel)
-            .task(id: controller.activity) {
+            .task(id: "\(controller.activity.rawValue)-\(useWhiteMenuBarIcons)") {
                 let activity = controller.activity
+                let resourceName = useWhiteMenuBarIcons
+                    ? "SortyMenuWhite\(activity.resourceName.dropFirst("SortyMenu".count))"
+                    : activity.resourceName
                 guard let loaded = await SortyResources.imageAsync(
-                    named: activity.resourceName,
+                    named: resourceName,
                     withExtension: "png"
                 ) else { return }
                 guard !Task.isCancelled, controller.activity == activity else { return }

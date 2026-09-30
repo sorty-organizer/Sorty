@@ -13,6 +13,7 @@ struct AdvancedSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var automationManager: AutomationManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    @AppStorage("useWhiteMenuBarIcons") private var useWhiteMenuBarIcons = false
     @AppStorage("privacyModeEnabled") private var privacyModeEnabled = true
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @ObservedObject private var analytics = AnalyticsManager.shared
@@ -37,12 +38,40 @@ struct AdvancedSettingsView: View {
     var body: some View {
         VStack(spacing: 16) {
             SettingsCard(title: "Menu Bar", icon: "menubar.rectangle", color: .blue) {
-                SettingsToggle(
-                    isOn: $showMenuBarExtra,
-                    title: "Show Menu Bar Icon",
-                    description: "Display Sorty icon in the menu bar for quick access",
-                    focusTarget: .advancedMenuBar
-                )
+                VStack(spacing: 12) {
+                    SettingsToggle(
+                        isOn: $showMenuBarExtra,
+                        title: "Show Menu Bar Icon",
+                        description: "Display Sorty icon in the menu bar for quick access",
+                        focusTarget: .advancedMenuBar
+                    )
+
+                    if showMenuBarExtra {
+                        Divider()
+
+                        HStack(alignment: .center, spacing: 16) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Menu Bar Icon Style")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundColor(.primary)
+                                Text("Use white icons on dark menu bars")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            Picker("Menu Bar Icon Style", selection: $useWhiteMenuBarIcons) {
+                                Text("Default").tag(false)
+                                Text("White").tag(true)
+                            }
+                            .pickerStyle(.segmented)
+                            .fixedSize()
+                            .accessibilityIdentifier("MenuBarIconStylePicker")
+                            .settingsFocusableSetting(.advancedMenuBarIconStyle)
+                        }
+                    }
+                }
             }
             .animatedAppearance(delay: 0.0)
 
