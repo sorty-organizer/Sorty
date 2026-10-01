@@ -2,7 +2,8 @@
 
 Audited 1 October 2026 from `4e652c66` on `main`, using
 [mattpocock's codebase-design skill](https://github.com/mattpocock/skills/tree/main/skills/engineering/codebase-design).
-These are deletion candidates, not implemented removals. The deletion test asks
+The initial audit identified the candidates below. Implementation status is
+recorded at the end. The deletion test asks
 whether removing a module eliminates complexity or merely moves it into callers.
 Small files alone are not evidence of a shallow module.
 
@@ -78,3 +79,19 @@ the repo was reviewed. Existing complexity-audit decisions remain applicable.
 No app code or tests changed. No build, test run, computer use, or hosted CI
 was performed. Source inspection establishes the current caller relationships;
 it does not prove a proposed replacement's runtime behavior or performance.
+
+## Implemented, 1 October 2026
+
+- Removed `CoordinatedRefreshGroup` and its factory. `AnalysisRefreshManager`
+  now schedules, cancels, pauses, and resumes through its owned `RefreshManager`
+  directly. The underlying timer implementation and five-second cadence remain.
+- Removed DebugLogger's experiment metadata overload. Settings saves use
+  `LogManager.log` with category `Settings` and flat `hasAPIKey` and `provider`
+  data. No repository diagnostic consumer was found for the removed experiment
+  fields. The simple logging convenience method remains.
+- Kept `PromptContextHelper`. Moving its formatting implementation into the
+  already large organizer would offer too little benefit.
+
+No tests or UI elements changed. Local build, tests, computer use, and hosted
+CI were skipped for these minor cuts under AGENTS.md. Runtime behavior and
+accessibility have not been verified.

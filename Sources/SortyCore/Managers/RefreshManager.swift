@@ -116,13 +116,6 @@ public final class RefreshManager: ObservableObject {
         }
     }
 
-    // MARK: - Convenience Methods
-
-    /// Create a coordinated refresh group that can be controlled together
-    public func createCoordinatedGroup() -> CoordinatedRefreshGroup {
-        CoordinatedRefreshGroup(manager: self)
-    }
-
     private func normalizedRepeatingInterval(_ interval: TimeInterval) -> TimeInterval {
         guard interval.isFinite, interval > 0 else { return 1 }
         // Sub-second repeating timers wake the CPU up to 100Hz and drain the
@@ -133,48 +126,5 @@ public final class RefreshManager: ObservableObject {
             return 1.0
         }
         return interval
-    }
-}
-
-// MARK: - Coordinated Refresh Group
-
-/// A group of related refresh timers that can be controlled together
-@MainActor
-public final class CoordinatedRefreshGroup {
-    private weak var manager: RefreshManager?
-    private var timerIDs: [UUID] = []
-    
-    fileprivate init(manager: RefreshManager) {
-        self.manager = manager
-    }
-    
-    /// Add a timer to this coordinated group
-    @discardableResult
-    public func addTimer(interval: TimeInterval, action: @escaping @Sendable () -> Void) -> UUID {
-        guard let manager = manager else { return UUID() }
-        let id = manager.schedule(interval: interval, action: action)
-        timerIDs.append(id)
-        return id
-    }
-    
-    /// Cancel all timers in this group
-    public func cancelAll() {
-        guard let manager = manager else { return }
-        for id in timerIDs {
-            manager.cancel(id)
-        }
-        timerIDs.removeAll()
-    }
-    
-    /// Pause all timers in this group
-    public func pause() {
-        guard let manager = manager else { return }
-        manager.pause()
-    }
-    
-    /// Resume all timers in this group
-    public func resume() {
-        guard let manager = manager else { return }
-        manager.resume()
     }
 }

@@ -66,8 +66,7 @@ enum AnalysisIconProvider {
 
 // MARK: - Unified Refresh Manager
 
-/// Consolidates multiple timers into a single refresh manager to reduce memory overhead
-/// and potential retain cycles. Uses the shared RefreshManager for centralized control.
+/// Owns the status-message timer and pauses it while the analysis view is inactive.
 @MainActor
 final class AnalysisRefreshManager: ObservableObject {
     @Published var currentFunnyMessage: String = ""
@@ -75,7 +74,6 @@ final class AnalysisRefreshManager: ObservableObject {
 
     private var refreshManager: RefreshManager?
     private weak var organizer: FolderOrganizer?
-    private var timerGroup: CoordinatedRefreshGroup?
 
     private let funnyMessages = [
         "Teaching folders to play nice together...",
@@ -118,16 +116,12 @@ final class AnalysisRefreshManager: ObservableObject {
             funnyMessageOpacity = 1
         }
 
-        // Use the centralized RefreshManager with coordinated group
         refreshManager = RefreshManager()
-        timerGroup = refreshManager?.createCoordinatedGroup()
 
         startRefreshLoop()
     }
 
     func stop() {
-        timerGroup?.cancelAll()
-        timerGroup = nil
         refreshManager?.cancelAll()
         refreshManager = nil
         organizer = nil
@@ -136,17 +130,17 @@ final class AnalysisRefreshManager: ObservableObject {
     }
 
     func pause() {
-        timerGroup?.pause()
+        refreshManager?.pause()
     }
 
     func resume() {
-        timerGroup?.resume()
+        refreshManager?.resume()
     }
 
     private func startRefreshLoop() {
         // Use async tasks with weak self to prevent retain cycles
         // Funny message cycle: every 5s (reduced from 4s)
-        timerGroup?.addTimer(interval: 5.0) { [weak self] in
+        refreshManager?.schedule(interval: 5.0) { [weak self] in
             Task { [weak self] in
                 await self?.cycleFunnyMessage()
             }

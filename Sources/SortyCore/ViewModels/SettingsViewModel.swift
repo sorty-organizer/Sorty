@@ -481,10 +481,15 @@ public class SettingsViewModel: ObservableObject {
         configToSave.apiKey = nil // Don't store in UserDefaults
         let configData = try? JSONEncoder().encode(configToSave)
         
-        DebugLogger.log(hypothesisId: "B", location: "SettingsViewModel", message: "Saving config (debounced)", data: [
-            "hasAPIKey": apiKey != nil,
-            "provider": provider.rawValue
-        ])
+        LogManager.shared.log(
+            "Saving config (debounced)",
+            level: .debug,
+            category: "Settings",
+            data: [
+                "hasAPIKey": apiKey != nil,
+                "provider": provider.rawValue
+            ]
+        )
         
         // Save API key to provider-specific Keychain key
         if provider.typicallyRequiresAPIKey,
