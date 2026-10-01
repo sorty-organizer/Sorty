@@ -9,7 +9,7 @@ struct FocusedInstructionBeamBorder: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
-    @Environment(\.scenePhase) private var scenePhase
+    @State private var isAppActive = NSApp.isActive
     @State private var isWindowVisible = true
 
     var body: some View {
@@ -17,7 +17,7 @@ struct FocusedInstructionBeamBorder: View {
             .animation(
                 minimumInterval: 1.0 / 30.0,
                 paused: reduceMotion || !active || !isWindowVisible || controlActiveState == .inactive
-                    || scenePhase != .active
+                    || !isAppActive
             )
         ) { timeline in
             let phase = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate / 1.96
@@ -45,6 +45,13 @@ struct FocusedInstructionBeamBorder: View {
                 .animation(.easeOut(duration: 0.2), value: active)
         }
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
+        // AppKit-hosted editors do not inherit a SwiftUI scene's activation state.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            isAppActive = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            isAppActive = false
+        }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
