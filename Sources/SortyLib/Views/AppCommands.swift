@@ -87,7 +87,7 @@ public struct BugReportView: View {
                     FocusedInstructionBeamBorder(
                         active: !isDescriptionFocused,
                         cornerRadius: 8,
-                        duration: 8
+                        duration: 6
                     )
                 }
                 .accessibilityIdentifier("BugReportDescription")

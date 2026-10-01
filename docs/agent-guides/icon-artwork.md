@@ -56,3 +56,8 @@ App icon sources live in `Assets/AppIcon`. Run
 `python3 scripts/generate_app_icons.py` after changing those sources to update
 the ICNS files and release asset catalog. The generator adds the Dock margins.
 Changing source artwork does not update an existing release ZIP.
+
+The What's New tour loads `Sources/SortyLib/Resources/AppIcons/AppIcon-Release.png`.
+Keep that copy in sync with `Assets/AppIcon/AppIcon-Release.png` when replacing
+the release artwork. The first tour page fits the icon into a 380-point square
+with 10 points of space above and below it, inside the 400-point image area.

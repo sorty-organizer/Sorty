@@ -365,6 +365,7 @@ public struct WhatsNewTourView: View {
                     .frame(width: 640, height: 400)
             } else if let imageName = page.activeImageName(at: imageIndex(for: page)) {
                 bundledImage(imageName, fillsFrame: page.imageNames.count > 1)
+                    .padding(.vertical, currentPage == 0 ? 10 : 0)
                     .frame(width: 640, height: 400)
                     .clipped()
                     .id(imageName)
