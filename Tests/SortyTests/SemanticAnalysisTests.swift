@@ -72,17 +72,6 @@ class ContentMetadataTests: XCTestCase {
 
 class OCRResultTests: XCTestCase {
 
-    func testOCRResultPreview() {
-        let shortText = "Short text"
-        let shortResult = OCRResult(text: shortText, confidence: 0.9)
-        XCTAssertEqual(shortResult.preview, shortText)
-
-        let longText = String(repeating: "A", count: 500)
-        let longResult = OCRResult(text: longText, confidence: 0.9)
-        XCTAssertTrue(longResult.preview.count <= 303) // 300 + "..."
-        XCTAssertTrue(longResult.preview.hasSuffix("..."))
-    }
-
     func testOCRResultDetectedKeywords() {
         let taxText = "Internal Revenue Service Tax Return Form 1040"
         let result = OCRResult(text: taxText, confidence: 0.95)
@@ -220,27 +209,6 @@ class SemanticDuplicateTests: XCTestCase {
 
         let manual = SemanticDuplicateGroup.DuplicateRecommendation.manualReview
         XCTAssertTrue(manual.description.contains("manual"))
-    }
-
-    func testImageSimilarityFromHammingDistance() {
-        XCTAssertEqual(ImageSimilarity.from(hammingDistance: 0), .identical)
-        XCTAssertEqual(ImageSimilarity.from(hammingDistance: 3), .nearIdentical)
-        XCTAssertEqual(ImageSimilarity.from(hammingDistance: 8), .similar)
-        XCTAssertEqual(ImageSimilarity.from(hammingDistance: 15), .different)
-    }
-
-    func testHammingDistance() {
-        let hash1 = "abcd1234"
-        let hash2 = "abcd1234"
-        let hash3 = "abcd5678"
-
-        XCTAssertEqual(hash1.hammingDistance(to: hash2), 0)
-        XCTAssertNotNil(hash1.hammingDistance(to: hash3))
-        XCTAssertTrue(hash1.hammingDistance(to: hash3)! > 0)
-
-        // Different length hashes should return nil
-        let differentLength = "abc"
-        XCTAssertNil(hash1.hammingDistance(to: differentLength))
     }
 
     func testSemanticThresholdMapsToHammingDistance() {
@@ -864,63 +832,7 @@ class FileTypeCategoryTests: XCTestCase {
 // MARK: - Test-only helpers (moved from VisionAnalyzer.swift)
 
 private extension OCRResult {
-    /// Preview of the text content (first 300 chars)
-    var preview: String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.count > 300 {
-            return String(trimmed.prefix(300)) + "..."
-        }
-        return trimmed
-    }
-
     var detectedKeywords: [String] {
         detectKeywords(using: [])
-    }
-}
-
-private extension String {
-    func hammingDistance(to other: String) -> Int? {
-        guard count == other.count else { return nil }
-        guard let selfBinary = hexToBinary(self),
-              let otherBinary = hexToBinary(other) else {
-            return nil
-        }
-
-        var distance = 0
-        for (a, b) in zip(selfBinary, otherBinary) where a != b {
-            distance += 1
-        }
-        return distance
-    }
-
-    private func hexToBinary(_ hex: String) -> String? {
-        var binary = ""
-        for char in hex {
-            guard let value = Int(String(char), radix: 16) else {
-                return nil
-            }
-            binary += String(value, radix: 2).padding(toLength: 4, withPad: "0", startingAt: 0)
-        }
-        return binary
-    }
-}
-
-private enum ImageSimilarity {
-    case identical
-    case nearIdentical
-    case similar
-    case different
-
-    static func from(hammingDistance: Int) -> ImageSimilarity {
-        switch hammingDistance {
-        case 0:
-            return .identical
-        case 1...5:
-            return .nearIdentical
-        case 6...10:
-            return .similar
-        default:
-            return .different
-        }
     }
 }
