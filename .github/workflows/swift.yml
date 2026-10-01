@@ -131,7 +131,7 @@ jobs:
 
       - name: Save source timestamps with build cache
         id: source-cache
-        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        if: ${{ !cancelled() && (steps.compile.outcome == 'success' || steps.compile.outcome == 'failure') }}
         run: python3 scripts/ci_source_cache.py save
 
       - name: Save reusable build cache

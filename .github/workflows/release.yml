@@ -188,7 +188,7 @@ jobs:
 
       - name: Save source timestamps with build cache
         id: source-cache
-        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        if: ${{ !cancelled() && (steps.compile.outcome == 'success' || steps.compile.outcome == 'failure') }}
         run: python3 scripts/ci_source_cache.py save
 
       - name: Save reusable build cache
@@ -285,7 +285,7 @@ jobs:
 
       - name: Save source timestamps with build cache
         id: source-cache
-        if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
+        if: ${{ !cancelled() && (steps.compile.outcome == 'success' || steps.compile.outcome == 'failure') }}
         run: python3 scripts/ci_source_cache.py save
 
       - name: Save reusable build cache
@@ -299,6 +299,15 @@ jobs:
             !.build/logs
             !.build/**/*.log
           key: ${{ steps.build-cache.outputs.cache-primary-key }}
+
+      - name: Upload failed build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: universal-build-logs
+          path: .build/logs
+          retention-days: 3
+          if-no-files-found: ignore
 
       - name: Verify observability credentials are not packaged
         env:

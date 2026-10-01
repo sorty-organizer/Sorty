@@ -116,8 +116,9 @@ identify a hotspot. Moving code to another file alone does not prove faster buil
 Hosted caches use per-commit keys with compatible toolchain/manifest restore
 prefixes. Swift CI and release unit tests share the same cache namespace and
 paths; universal Xcode builds retain a separate cache. Restore/save actions keep
-the existing cache schema and save successfully compiled tests even if runtime
-tests or later packaging checks fail. Cache hits never skip test execution.
+the existing cache schema and save completed compiler work after a build attempt, even if compilation,
+runtime tests, or later packaging checks fail. The next run always invokes the
+compiler to finish incomplete work before executing tests or packaging. Cache hits never skip test execution.
 Hosted builds disable local disk-budget pruning and reset only host-specific
 maintenance stamps after restoration, preserving compiled products and source
 timestamps. Explicit cache saves happen before later release validation and
