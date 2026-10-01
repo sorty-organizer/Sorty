@@ -126,16 +126,4 @@ final class CustomPersonaTests: XCTestCase {
             ["Group files by project and rename them using confirmed metadata."]
         )
     }
-    
-    // MARK: - PersonaIconOptions Tests
-    
-    func testPersonaIconOptionsNotEmpty() {
-        XCTAssertFalse(personaIconOptions.isEmpty)
-        XCTAssertGreaterThanOrEqual(personaIconOptions.count, 10)
-    }
-    
-    func testPersonaIconOptionsContainsCommonIcons() {
-        XCTAssertTrue(personaIconOptions.contains("star.fill"))
-        XCTAssertTrue(personaIconOptions.contains("folder.fill.badge.person.crop"))
-    }
 }

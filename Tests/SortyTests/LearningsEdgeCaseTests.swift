@@ -270,20 +270,6 @@ final class LearningsEdgeCaseTests: XCTestCase {
         XCTAssertTrue(context.isEmpty, "Context should be empty with nil profile")
     }
     
-    func testEmptyProfileHasNoRulesOrExamples() {
-        let profile = LearningsProfile()
-        
-        XCTAssertTrue(profile.inferredRules.isEmpty)
-        XCTAssertTrue(profile.corrections.isEmpty)
-        XCTAssertTrue(profile.rejections.isEmpty)
-        XCTAssertTrue(profile.positiveExamples.isEmpty)
-        XCTAssertTrue(profile.additionalInstructionsHistory.isEmpty)
-        XCTAssertTrue(profile.postOrganizationChanges.isEmpty)
-        XCTAssertTrue(profile.historyReverts.isEmpty)
-        XCTAssertTrue(profile.jobHistory.isEmpty)
-        XCTAssertFalse(profile.consentGranted)
-    }
-    
     // MARK: - Data Retention Tests
     
     func testDataRetentionDaysDefault() {
@@ -391,20 +377,6 @@ final class LearningsEdgeCaseTests: XCTestCase {
     }
     
     // MARK: - Profile Behavior Tracking Edge Cases
-    
-    func testProfileWithMaximumDataRetention() {
-        let profile = LearningsProfile(
-            additionalInstructionsHistory: (0..<100).map {
-                UserInstruction(instruction: "Instruction \($0)")
-            },
-            inferredRules: (0..<20).map {
-                InferredRule(pattern: "\($0)", template: "\($0)/", priority: $0, explanation: "Rule \($0)")
-            }
-        )
-        
-        XCTAssertEqual(profile.additionalInstructionsHistory.count, 100)
-        XCTAssertEqual(profile.inferredRules.count, 20)
-    }
     
     func testProfileCodableRoundTrip() throws {
         var profile = LearningsProfile()

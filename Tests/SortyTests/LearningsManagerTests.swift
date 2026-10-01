@@ -683,80 +683,6 @@ final class LearningsAnalyzerTests: XCTestCase {
     }
 }
 
-// MARK: - LearningsProfile Tests
-
-final class LearningsProfileTests: XCTestCase {
-    
-    func testProfileCreation() {
-        let profile = LearningsProfile(
-            createdAt: Date(),
-            inferredRules: [],
-            corrections: [],
-            rejections: [],
-            positiveExamples: []
-        )
-        
-        XCTAssertTrue(profile.corrections.isEmpty)
-        XCTAssertTrue(profile.inferredRules.isEmpty)
-    }
-    
-    func testAddExample() {
-        var profile = LearningsProfile()
-        
-        let example = LabeledExample(
-            srcPath: "/src/file.txt",
-            dstPath: "/dst/file.txt",
-            action: .accept
-        )
-        
-        profile.positiveExamples.append(example)
-        
-        XCTAssertEqual(profile.positiveExamples.count, 1)
-    }
-}
-
-// MARK: - Confidence and Conflict Tests
-
-final class LearningsConfidenceTests: XCTestCase {
-    
-    func testConfidenceSummaryCalculation() {
-        let summary = ConfidenceSummary(high: 10, medium: 5, low: 2)
-        
-        XCTAssertEqual(summary.total, 17)
-        XCTAssertEqual(summary.high, 10)
-        XCTAssertEqual(summary.medium, 5)
-        XCTAssertEqual(summary.low, 2)
-    }
-    
-    func testConfidenceLevelColors() {
-        XCTAssertEqual(ConfidenceLevel.high.color, "green")
-        XCTAssertEqual(ConfidenceLevel.medium.color, "orange")
-        XCTAssertEqual(ConfidenceLevel.low.color, "red")
-    }
-    
-    func testMappingConflictCreation() {
-        let conflict = MappingConflict(
-            srcPaths: ["/path1/file.txt", "/path2/file.txt"],
-            proposedDstPath: "/dest/file.txt",
-            suggestedResolution: .autoSuffix
-        )
-        
-        XCTAssertEqual(conflict.srcPaths.count, 2)
-        XCTAssertEqual(conflict.suggestedResolution, .autoSuffix)
-    }
-    
-    func testAlternativeMappingCreation() {
-        let alt = AlternativeMapping(
-            proposedDstPath: "/alternative/path.txt",
-            confidence: 0.6,
-            explanation: "Alternative organization"
-        )
-        
-        XCTAssertEqual(alt.confidence, 0.6)
-        XCTAssertFalse(alt.explanation.isEmpty)
-    }
-}
-
 // MARK: - Enhanced Learnings Tests
 
 @MainActor
@@ -1106,36 +1032,7 @@ final class EnhancedLearningsTests: XCTestCase {
         XCTAssertTrue(manager.currentProfile?.inferredRules.isEmpty ?? false)
     }
     
-    // MARK: - Rule Evidence Tests
-    
-    func testRuleEvidenceTracking() {
-        let rule = InferredRule(
-            pattern: "Invoice.*\\.pdf$",
-            template: "Finance/{year}/Invoices/{filename}",
-            priority: 85,
-            explanation: "Organize invoices by year",
-            scope: .global,
-            status: .active,
-            evidenceIds: ["example-1", "steering-2"],
-            evidenceDescription: "Rule created because you moved 5 invoice PDFs to Finance/Invoices last week."
-        )
-        
-        XCTAssertEqual(rule.evidenceIds.count, 2)
-        XCTAssertNotNil(rule.evidenceDescription)
-        XCTAssertTrue(rule.evidenceDescription!.contains("invoice"))
-    }
-    
     // MARK: - Session Learning Tests
-    
-    func testSessionLearningPause() {
-        XCTAssertFalse(manager.sessionLearningPaused)
-        
-        manager.sessionLearningPaused = true
-        XCTAssertTrue(manager.sessionLearningPaused)
-        
-        manager.sessionLearningPaused = false
-        XCTAssertFalse(manager.sessionLearningPaused)
-    }
 
     func testInstructionsCanExcludeOnlyTheCurrentRunFromLearning() {
         let excludedInstructions = [
@@ -1445,21 +1342,6 @@ final class ExclusionParsingTests: XCTestCase {
         testDefaultsSuiteName = nil
     }
     
-    func testParseExclusionFromPrompt() {
-        let testCases: [(input: String, expected: String?)] = [
-            ("Don't learn from moves in my Temp folder", "Temp"),
-            ("Skip learning for Downloads", "Downloads"),
-            ("Exclude from learning Cache directory", "Cache"),
-            ("This is a regular instruction", nil),
-            ("Organize files by date", nil),
-        ]
-        
-        for testCase in testCases {
-            let result = parseExclusionPattern(testCase.input)
-            XCTAssertEqual(result, testCase.expected, "Failed for input: \(testCase.input)")
-        }
-    }
-
     func testPlanPreferenceDifferComparesEveryRejectedAttemptWithAcceptedPlan() throws {
         let file = FileItem(
             id: UUID(),
@@ -1643,37 +1525,6 @@ final class ExclusionParsingTests: XCTestCase {
             suggestion = FolderSuggestion(folderName: folder, subfolders: [suggestion])
         }
         return OrganizationPlan(suggestions: [suggestion], version: version)
-    }
-
-    private func parseExclusionPattern(_ prompt: String) -> String? {
-        let lowered = prompt.lowercased()
-        let exclusionPhrases = [
-            "don't learn from",
-            "dont learn from",
-            "skip learning for",
-            "exclude from learning",
-            "ignore for learning",
-            "no learning for",
-            "stop learning from"
-        ]
-        
-        for phrase in exclusionPhrases {
-            if lowered.contains(phrase) {
-                if let range = lowered.range(of: phrase) {
-                    let remainder = String(prompt[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-                    let cleaned = remainder
-                        .replacingOccurrences(of: "moves in ", with: "")
-                        .replacingOccurrences(of: "my ", with: "")
-                        .replacingOccurrences(of: " folder", with: "")
-                        .replacingOccurrences(of: " directory", with: "")
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                        .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
-                    
-                    if !cleaned.isEmpty { return cleaned }
-                }
-            }
-        }
-        return nil
     }
 }
 

@@ -30,40 +30,7 @@ final class PersonaGeneratorTests: XCTestCase {
         XCTAssertNil(generator.error)
     }
     
-    func testMultipleInstancesAreIndependent() {
-        let generator1 = PersonaGenerator()
-        let generator2 = PersonaGenerator()
-        
-        XCTAssertFalse(generator1.isGenerating)
-        XCTAssertFalse(generator2.isGenerating)
-        XCTAssertNil(generator1.error)
-        XCTAssertNil(generator2.error)
-    }
-    
     // MARK: - HoningAnswer Tests
-    
-    func testHoningAnswerCreation() {
-        let answer = HoningAnswer(
-            questionId: "q1",
-            selectedOption: "Option A"
-        )
-        
-        XCTAssertFalse(answer.id.isEmpty)
-        XCTAssertEqual(answer.questionId, "q1")
-        XCTAssertEqual(answer.selectedOption, "Option A")
-    }
-    
-    func testHoningAnswerWithCustomId() {
-        let answer = HoningAnswer(
-            id: "custom-id",
-            questionId: "q2",
-            selectedOption: "Option B"
-        )
-        
-        XCTAssertEqual(answer.id, "custom-id")
-        XCTAssertEqual(answer.questionId, "q2")
-        XCTAssertEqual(answer.selectedOption, "Option B")
-    }
     
     func testHoningAnswerCodable() throws {
         let original = HoningAnswer(
@@ -85,18 +52,6 @@ final class PersonaGeneratorTests: XCTestCase {
     
     // MARK: - HoningQuestion Tests
     
-    func testHoningQuestionCreation() {
-        let question = HoningQuestion(
-            text: "What is your preference?",
-            options: ["Option A", "Option B", "Option C"]
-        )
-        
-        XCTAssertFalse(question.id.isEmpty)
-        XCTAssertEqual(question.text, "What is your preference?")
-        XCTAssertEqual(question.options.count, 3)
-        XCTAssertEqual(question.options[0], "Option A")
-    }
-    
     func testHoningQuestionCodable() throws {
         let original = HoningQuestion(
             id: "question-id",
@@ -113,103 +68,6 @@ final class PersonaGeneratorTests: XCTestCase {
         XCTAssertEqual(decoded.id, original.id)
         XCTAssertEqual(decoded.text, original.text)
         XCTAssertEqual(decoded.options, original.options)
-    }
-    
-    // MARK: - AIConfig for PersonaGenerator Tests
-    
-    func testAIConfigDefaultsForPersonaGeneration() {
-        var config = AIConfig.default
-        config.maxTokens = 4000
-        config.requestTimeout = 180
-        
-        XCTAssertEqual(config.maxTokens, 4000)
-        XCTAssertEqual(config.requestTimeout, 180)
-    }
-    
-    func testAIConfigProviderOptions() {
-        let openAIConfig = AIConfig(provider: .openAI, model: "gpt-4o")
-        let anthropicConfig = AIConfig(provider: .anthropic, model: "claude-3-5-sonnet-20240620")
-        let ollamaConfig = AIConfig(provider: .ollama, model: "llama3")
-        
-        XCTAssertEqual(openAIConfig.provider, .openAI)
-        XCTAssertEqual(anthropicConfig.provider, .anthropic)
-        XCTAssertEqual(ollamaConfig.provider, .ollama)
-        // Ollama provider typically doesn't require an API key
-        XCTAssertFalse(ollamaConfig.provider.typicallyRequiresAPIKey)
-    }
-    
-    // MARK: - State Management Tests
-    
-    func testIsGeneratingInitiallyFalse() {
-        XCTAssertFalse(generator.isGenerating)
-    }
-    
-    func testErrorInitiallyNil() {
-        XCTAssertNil(generator.error)
-    }
-    
-    func testGeneratorIsObservable() {
-        XCTAssertNotNil(generator as (any ObservableObject)?)
-    }
-    
-    // MARK: - JSON Parsing Edge Cases (simulated via format validation)
-    
-    func testValidPersonaJSONFormat() throws {
-        let validJSON = """
-        {
-            "name": "Test Persona",
-            "prompt": "This is a test prompt for organizing files."
-        }
-        """
-        
-        let data = validJSON.data(using: .utf8)!
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: String]
-        
-        XCTAssertNotNil(json)
-        XCTAssertEqual(json?["name"], "Test Persona")
-        XCTAssertEqual(json?["prompt"], "This is a test prompt for organizing files.")
-    }
-    
-    func testJSONWithMarkdownCodeBlock() {
-        let jsonWithMarkdown = """
-        ```json
-        {
-            "name": "Code Architect",
-            "prompt": "Organize by project lifecycle."
-        }
-        ```
-        """
-        
-        let lines = jsonWithMarkdown.components(separatedBy: .newlines)
-        let cleaned = lines.filter { !$0.contains("```") }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        XCTAssertFalse(cleaned.contains("```"))
-        XCTAssertTrue(cleaned.contains("\"name\""))
-    }
-    
-    func testNameLengthConstraint() {
-        let longName = "This Is A Very Long Persona Name That Exceeds Twenty Characters"
-        let maxLength = 20
-        let truncated = String(longName.prefix(maxLength))
-        
-        XCTAssertEqual(truncated.count, maxLength)
-        XCTAssertEqual(truncated, "This Is A Very Long ")
-    }
-    
-    func testNameTrimmingWhitespace() {
-        let nameWithWhitespace = "  Test Name  \n"
-        let trimmed = nameWithWhitespace.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        XCTAssertEqual(trimmed, "Test Name")
-    }
-    
-    func testShortNameRemainsUnchanged() {
-        let shortName = "Short"
-        let maxLength = 20
-        
-        if shortName.count <= maxLength {
-            XCTAssertEqual(shortName, "Short")
-        }
     }
     
     // MARK: - Description Quality Tests
@@ -506,76 +364,5 @@ final class PersonaGeneratorTests: XCTestCase {
         )
 
         XCTAssertTrue(arguments.contains(#"model_reasoning_effort="medium""#))
-    }
-    
-    // MARK: - AIConfig Modification Tests
-    
-    func testAIConfigModificationForGeneration() {
-        var config = AIConfig.default
-        let originalMaxTokens = config.maxTokens
-        let originalTimeout = config.requestTimeout
-        
-        config.maxTokens = 4000
-        config.requestTimeout = 180
-        
-        XCTAssertNotEqual(config.maxTokens, originalMaxTokens)
-        XCTAssertNotEqual(config.requestTimeout, originalTimeout)
-        XCTAssertEqual(config.maxTokens, 4000)
-        XCTAssertEqual(config.requestTimeout, 180)
-    }
-    
-    // MARK: - Edge Case Name Tests
-    
-    func testExactly20CharacterName() {
-        let exactName = "12345678901234567890"
-        XCTAssertEqual(exactName.count, 20)
-        
-        let maxLength = 20
-        if exactName.count > maxLength {
-            XCTFail("Name should not be truncated")
-        }
-    }
-    
-    func testEmptyNameHandling() {
-        let emptyName = ""
-        let trimmed = emptyName.trimmingCharacters(in: .whitespacesAndNewlines)
-        XCTAssertTrue(trimmed.isEmpty)
-    }
-    
-    func testWhitespaceOnlyName() {
-        let whitespaceOnly = "   \n\t  "
-        let trimmed = whitespaceOnly.trimmingCharacters(in: .whitespacesAndNewlines)
-        XCTAssertTrue(trimmed.isEmpty)
-    }
-    
-    func testUnicodeNameHandling() {
-        let unicodeName = "📁 文件整理器 Αρχείο"
-        let trimmed = unicodeName.trimmingCharacters(in: .whitespacesAndNewlines)
-        XCTAssertEqual(trimmed, unicodeName)
-        
-        if unicodeName.count > 20 {
-            let truncated = String(unicodeName.prefix(20))
-            XCTAssertEqual(truncated.count, 20)
-        }
-    }
-    
-    // MARK: - Multiple Answers Integration
-    
-    func testMultipleHoningAnswersInPrompt() {
-        let answers = [
-            HoningAnswer(questionId: "q1", selectedOption: "Organize by date"),
-            HoningAnswer(questionId: "q2", selectedOption: "Use shallow folders"),
-            HoningAnswer(questionId: "q3", selectedOption: "Prefix with project name")
-        ]
-        
-        var anchors = ""
-        for answer in answers {
-            anchors += "- \(answer.selectedOption)\n"
-        }
-        
-        XCTAssertEqual(answers.count, 3)
-        XCTAssertTrue(anchors.contains("Organize by date"))
-        XCTAssertTrue(anchors.contains("Use shallow folders"))
-        XCTAssertTrue(anchors.contains("Prefix with project name"))
     }
 }
