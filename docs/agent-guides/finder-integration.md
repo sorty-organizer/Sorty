@@ -15,8 +15,12 @@ Settings > Finder Integration explains the right-click actions first:
 - Watch with Sorty adds a folder to Watched Folders.
 - Exclude from Sorty keeps a file or folder out of organization plans.
 
-The extension card shows one setup state and an **Open macOS Extensions**
-button. macOS 15+ puts Finder extensions under System Settings > General >
+The extension card shows **On** or **Off** after automatic maintenance.
+**On** reflects an enabled macOS registration, including extensions Finder
+has not loaded yet. The macOS Extensions button appears only when setup
+still needs macOS enablement or confirmation, with an animated arrow on hover.
+Missing or invalid extension packages instead direct users to reinstall Sorty.
+macOS 15+ puts Finder extensions under System Settings > General >
 Login Items & Extensions > Finder. The page checks again when Sorty becomes
 active, including after returning from System Settings. See [Apple's extension settings guide](https://support.apple.com/guide/mac-help/change-login-items-extensions-settings-mtusr003/mac).
 
@@ -42,10 +46,9 @@ macOS's enable/disable choice. A disabled extension requires the user to enable
 Sorty in macOS Extensions.
 
 `finderSyncDiagnostics` distinguishes registration from runtime confirmation.
-An enabled registration shows **Enabled in macOS** without a green success
-indicator. A recent heartbeat or matching process shows **Recently loaded by
-Finder**. Neither proves that the menu is visible for the current selection.
-The page clears its previous status while refreshing on app activation.
+The settings label reflects macOS enablement rather than runtime activity.
+It does not guarantee menu visibility for the current selection. The page
+clears its previous status while refreshing on app activation.
 A quiet, lazily loaded extension must not trigger repeated repair.
 Missing extensions and invalid signatures are packaging problems; automatic
 maintenance cannot repair those by changing the installed app's signature.

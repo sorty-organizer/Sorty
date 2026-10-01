@@ -13,6 +13,7 @@ struct FinderIntegrationSettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var setupState: ExtensionCommunication.FinderSetupState?
     @State private var refreshGeneration = 0
+    @State private var isHoveringExtensions = false
 
     var body: some View {
         VStack(spacing: 14) {
@@ -50,33 +51,54 @@ struct FinderIntegrationSettingsView: View {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: statusIcon)
                             .font(.title3)
-                            .foregroundStyle(setupState == .enabled ? Color.green : Color.secondary)
+                            .foregroundStyle(isOn ? Color.green : Color.secondary)
                             .frame(width: 24)
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(statusTitle)
                                 .font(.subheadline.weight(.semibold))
-                            Text(statusDetail)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            if !isOn {
+                                Text(statusDetail)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                     }
                     .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Finder extension: \(statusTitle)")
                     .accessibilityIdentifier("FinderIntegrationStatus")
 
-                    Button("Open macOS Extensions") {
-                        HapticFeedbackManager.shared.tap()
-                        ExtensionCommunication.openFinderExtensionSettings()
+                    if setupState != nil && !isOn && setupState != .unavailable {
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            ExtensionCommunication.openFinderExtensionSettings()
+                        } label: {
+                            Label("Open macOS Extensions", systemImage: isHoveringExtensions ? "arrow.up.right" : "gearshape")
+                                .contentTransition(.symbolEffect(.replace))
+                                .transaction { transaction in
+                                    if reduceMotion {
+                                        transaction.disablesAnimations = true
+                                    }
+                                }
+                        }
+                        .buttonStyle(.sortySecondary(size: .regular))
+                        .onHover { hovering in
+                            if hovering && !isHoveringExtensions {
+                                HapticFeedbackManager.shared.selection()
+                            }
+                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                isHoveringExtensions = hovering
+                            }
+                        }
+                        .accessibilityIdentifier("FinderIntegrationExtensionsButton")
+                        .settingsFocusable(
+                            .finderExtension,
+                            shape: Capsule(style: .continuous),
+                            horizontalRingPadding: 4,
+                            verticalRingPadding: 4
+                        )
                     }
-                    .buttonStyle(.sortySecondary(size: .regular))
-                    .accessibilityIdentifier("FinderIntegrationExtensionsButton")
-                    .settingsFocusable(
-                        .finderExtension,
-                        shape: Capsule(style: .continuous),
-                        horizontalRingPadding: 4,
-                        verticalRingPadding: 4
-                    )
                 }
             }
         }
@@ -121,42 +143,33 @@ struct FinderIntegrationSettingsView: View {
         .accessibilityElement(children: .combine)
     }
 
+    // On reflects macOS enablement; Finder loads the extension as needed.
+    private var isOn: Bool {
+        setupState == .enabled || setupState == .registered
+    }
+
     private var statusIcon: String {
-        switch setupState {
-        case nil: "clock"
-        case .enabled: "checkmark.circle.fill"
-        case .registered: "info.circle"
-        case .needsEnable: "puzzlepiece.extension"
-        case .unavailable: "info.circle"
-        case .pending: "info.circle"
-        }
+        if setupState == nil { return "clock" }
+        return isOn ? "checkmark.circle.fill" : "circle"
     }
 
     private var statusTitle: String {
-        switch setupState {
-        case nil: "Checking Finder extension"
-        case .enabled: "Recently loaded by Finder"
-        case .registered: "Enabled in macOS"
-        case .needsEnable: "Enable Sorty in macOS"
-        case .unavailable: "Finder extension unavailable"
-        case .pending: "Finder hasn't loaded Sorty yet"
-        }
+        if setupState == nil { return "Checking…" }
+        return isOn ? "On" : "Off"
     }
 
     private var statusDetail: String {
         switch setupState {
         case nil:
-            "Sorty is checking macOS settings and preparing Finder actions."
-        case .enabled:
-            "Finder recently loaded Sorty. Right-click a folder to look for its actions. Menu availability depends on the folder and Finder's current state."
-        case .registered:
-            "Sorty is enabled, but it has not confirmed that Finder loaded the extension. Right-click a folder to check for its actions."
+            "Sorty is checking and repairing Finder setup."
+        case .enabled, .registered:
+            ""
         case .needsEnable:
-            "In System Settings, open General > Login Items & Extensions > Finder and turn on Sorty. This page updates when you return."
+            "Turn on Sorty in macOS Extensions. This page updates when you return."
         case .pending:
-            "Open macOS Extensions to confirm Sorty is enabled. If Finder still shows an older copy of Sorty, reopen Finder after enabling it."
+            "Sorty couldn't finish setup automatically. Open macOS Extensions to enable it."
         case .unavailable:
-            "This copy of Sorty could not load its Finder extension. Install the latest Sorty app to use it."
+            "Install the latest Sorty app to restore the Finder extension."
         }
     }
 }
