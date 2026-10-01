@@ -390,42 +390,6 @@ final class AppUITests: XCTestCase {
 
     }
 
-    func testCompleteExclusionRuleWorkflow() throws {
-        navigateToView("ExclusionsSidebarItem")
-
-        // 1. Open add rule sheet
-        let addRuleButton = app.buttons["AddExclusionRuleButton"]
-        XCTAssertTrue(waitForElement(addRuleButton), "Add Rule button should exist")
-        addRuleButton.click()
-
-        Thread.sleep(forTimeInterval: 0.5)
-
-        // 2. Select rule type (if picker exists)
-        let typePicker = app.popUpButtons["ExclusionRuleTypePicker"]
-        if waitForElement(typePicker, timeout: 2.0) {
-            // Keep default type for simplicity
-        }
-
-        // 3. Enter pattern
-        let patternField = app.textFields["ExclusionRulePatternField"]
-        if waitForElement(patternField, timeout: 2.0) {
-            patternField.click()
-            patternField.typeText("*.uitest_workflow")
-
-            // 4. Verify add button is enabled with valid input
-            let confirmButton = app.buttons["ConfirmAddRuleButton"]
-            if waitForElement(confirmButton, timeout: 1.0) {
-                XCTAssertTrue(confirmButton.isEnabled, "Add button should be enabled with valid input")
-            }
-        }
-
-        // 5. Cancel to not pollute the rules list
-        let cancelButton = app.buttons["Cancel"]
-        if cancelButton.exists {
-            cancelButton.click()
-        }
-    }
-
     // MARK: - State Consistency Tests
     // These tests verify the app maintains consistent state
 

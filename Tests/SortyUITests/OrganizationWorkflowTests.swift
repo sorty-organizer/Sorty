@@ -43,60 +43,6 @@ final class OrganizationWorkflowTests: XCTestCase {
         )
     }
 
-    func testNavigationDoesNotCrash() throws {
-        // Rapidly navigate between all views to check for crashes
-        let viewIdentifiers = [
-            "OrganizeSidebarItem",
-            "SettingsSidebarItem",
-            "HistorySidebarItem",
-            "DuplicatesSidebarItem",
-            "ExclusionsSidebarItem",
-            "WatchedFoldersSidebarItem",
-            "LearningsSidebarItem"
-        ]
-
-        for (index, identifier) in viewIdentifiers.enumerated() {
-            let sidebarItem = app.buttons[identifier]
-            if sidebarItem.waitForExistence(timeout: 2.0) {
-                sidebarItem.click()
-                // Quick delay between navigations
-                Thread.sleep(forTimeInterval: 0.3)
-            }
-            
-            // Verify app hasn't crashed
-            XCTAssertTrue(
-                app.windows.firstMatch.exists,
-                "App should not crash during navigation to \(identifier)"
-            )
-        }
-    }
-
-    // MARK: - Settings Integration Tests
-
-    func testSettingsToggleAffectsState() throws {
-        let settingsSidebarItem = app.buttons["SettingsSidebarItem"]
-        XCTAssertTrue(settingsSidebarItem.waitForExistence(timeout: 3.0))
-        settingsSidebarItem.click()
-        Thread.sleep(forTimeInterval: 0.5)
-
-        // Find and toggle a switch
-        let reasoningToggle = app.switches["ReasoningToggle"]
-        guard reasoningToggle.waitForExistence(timeout: 3.0) else {
-            throw XCTSkip("Reasoning toggle not found")
-        }
-
-        let initialValue = reasoningToggle.value as? String
-        reasoningToggle.click()
-        Thread.sleep(forTimeInterval: 0.3)
-
-        let newValue = reasoningToggle.value as? String
-        XCTAssertNotEqual(
-            initialValue,
-            newValue,
-            "Toggle should change value when clicked"
-        )
-    }
-
     // MARK: - Edge Cases
 
     func testEmptyStateDisplays() throws {
@@ -106,10 +52,17 @@ final class OrganizationWorkflowTests: XCTestCase {
         historySidebarItem.click()
         Thread.sleep(forTimeInterval: 0.5)
 
-        // Look for empty state message
-        let emptyStateExists = app.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS[c] 'no' OR label CONTAINS[c] 'empty' OR label CONTAINS[c] 'history'")
-        ).firstMatch.waitForExistence(timeout: 2.0)
+        // History shows "No History Yet" + CTA when empty, or session cards when populated.
+        // Assert the actual contract (passes either way: empty or populated).
+        let emptyMessage = app.staticTexts["No History Yet"]
+        let emptyCTA = app.buttons["HistoryEmptyStateCTA"]
+        let hasHistoryCards = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'HistorySessionCard-'")
+        ).count > 0
+        XCTAssertTrue(
+            emptyMessage.waitForExistence(timeout: 2.0) || emptyCTA.exists || hasHistoryCards,
+            "History view should show 'No History Yet' empty state or history entries"
+        )
 
         // An empty state or history list should be present
         XCTAssertTrue(

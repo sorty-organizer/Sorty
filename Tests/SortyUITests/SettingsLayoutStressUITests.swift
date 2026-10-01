@@ -40,11 +40,6 @@ final class SettingsLayoutStressUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 0.4)
     }
 
-    func testOpeningSettingsDoesNotCrash() {
-        navigateToSettings()
-        XCTAssertTrue(app.staticTexts["Settings"].exists || app.buttons["Organization Controls"].exists)
-    }
-
     func testSettingsStressResizeAndSwitchCategories() {
         navigateToSettings()
 

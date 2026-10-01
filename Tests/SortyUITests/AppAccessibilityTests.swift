@@ -89,26 +89,8 @@ final class AppAccessibilityTests: XCTestCase {
     }
 
     // MARK: - Sidebar Navigation Identifiers
-
-    func testSidebarNavigationElementsExist() throws {
-        let sidebarItems = [
-            "OrganizeSidebarItem",
-            "DuplicatesSidebarItem",
-            "SettingsSidebarItem",
-            "HistorySidebarItem",
-            "ExclusionsSidebarItem",
-            "WatchedFoldersSidebarItem",
-            "LearningsSidebarItem"
-        ]
-
-        for identifier in sidebarItems {
-            let element = app.buttons[identifier]
-            XCTAssertTrue(
-                element.waitForExistence(timeout: 3.0),
-                "Sidebar item '\(identifier)' should exist for accessibility"
-            )
-        }
-    }
+    // Covered by AppUITests.testAllSidebarItemsExistAndAreClickable (same 7 identifiers
+    // + isEnabled + content routing) and AppUITests.testAllViewsLoadWithoutCrash.
 
     // MARK: - Duplicates View Accessibility
 

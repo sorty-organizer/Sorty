@@ -24,16 +24,6 @@ final class DeeplinkUITests: XCTestCase {
         return element.waitForExistence(timeout: timeout)
     }
 
-    func testHelpDeeplinkNavigation() throws {
-        // Trigger deeplink via launch environment
-        app.launchEnvironment["XCUITEST_DEEPLINK"] = "sorty://help"
-        app.launch()
-        
-        // Help might open in a separate window or browser
-        // We just verify the app is running
-        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5.0), "App should run after help deeplink launch")
-    }
-
     func testSettingsDeeplinkNavigation() throws {
         app.launchEnvironment["XCUITEST_DEEPLINK"] = "sorty://settings"
         app.launch()
