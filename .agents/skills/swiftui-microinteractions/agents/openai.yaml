@@ -1,4 +1,0 @@
-interface:
-  display_name: "SwiftUI Microinteractions"
-  short_description: "Generate premium SwiftUI micro-interaction animations"
-  default_prompt: "Use $swiftui-microinteractions to generate or edit a premium SwiftUI animation in the legendary-Animo style."

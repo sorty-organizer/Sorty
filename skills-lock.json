@@ -43,29 +43,11 @@
       "skillPath": "swift-testing-pro/SKILL.md",
       "computedHash": "576d9b4705c76262095e2470e99bb9a89324ac4467e7ee54b7032697a8789b3d"
     },
-    "swiftdata-pro": {
-      "source": "twostraws/swiftdata-agent-skill",
-      "sourceType": "github",
-      "skillPath": "swiftdata-pro/SKILL.md",
-      "computedHash": "2f979bad98ea3a6744084c5f93e27897f02e8d0ffe15dd03042e88aaae4da14c"
-    },
     "swiftui-accessibility-auditor": {
       "source": "rgmez/apple-accessibility-skills",
       "sourceType": "github",
       "skillPath": "skills/swiftui-accessibility-auditor/SKILL.md",
       "computedHash": "a69ea029a49c78d73ff17fbbf15255358cf11629930f1999a251d7d21b925f74"
-    },
-    "swiftui-design-principles": {
-      "source": "arjitj2/swiftui-design-principles",
-      "sourceType": "github",
-      "skillPath": "SKILL.md",
-      "computedHash": "2692dc771633b2915c1b75000009c1a9198af3e3f994ae46d175b48e008edc57"
-    },
-    "swiftui-microinteractions": {
-      "source": "iAmVishal16/swiftui-microinteractions",
-      "sourceType": "github",
-      "skillPath": "SKILL.md",
-      "computedHash": "c5656afbe8e1396f3f0dec8751c9f8df574d36a9bc1018f58857ad87dda5a9d1"
     },
     "swiftui-liquid-glass": {
       "source": "Dimillian/Skills",
@@ -96,12 +78,6 @@
       "sourceType": "github",
       "skillPath": "swiftui-view-refactor/SKILL.md",
       "computedHash": "eefd3e1e72a17ca627f8e50fce173efafaa23eb66515f562f4b5fca88325cb33"
-    },
-    "uikit-accessibility-auditor": {
-      "source": "rgmez/apple-accessibility-skills",
-      "sourceType": "github",
-      "skillPath": "skills/uikit-accessibility-auditor/SKILL.md",
-      "computedHash": "87adf6bb1a248e312b94cb4ffc0f12c4fb92beab322780e561ca00ec46258f46"
     }
   }
 }

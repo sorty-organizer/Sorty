@@ -1,5 +1,9 @@
 # Microinteractions Audit — Sorty
 
+> Historical proposal. The animation skill was removed on 1 October 2026.
+> This document is not an implementation checklist. Follow AGENTS.md for
+> native controls, system glass, accessibility, and deliberate motion.
+
 Audit of the Sorty SwiftUI surface against the `swiftui-microinteractions` skill
 (spring physics, SF Symbol 7 draw animations, CoreHaptics haptic ladder, Liquid
 Glass, drag-with-threshold, Canvas loaders, toasts/banners, stacked cards).
