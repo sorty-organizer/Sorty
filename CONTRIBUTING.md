@@ -137,92 +137,27 @@ Button("Organize") {}
 
 ## Adding a New AI Provider
 
-To add support for a new AI service:
-
-1. **Create Client Implementation** (`Sources/SortyLib/AI/NewProviderClient.swift`):
-```swift
-import Foundation
-
-public struct NewProviderClient: AIClientProtocol {
-    private let apiKey: String
-    private let baseURL: URL
-    
-    public var streamingDelegate: StreamingDelegate?
-    
-    public init(apiKey: String, baseURL: String) {
-        self.apiKey = apiKey
-        self.baseURL = URL(string: baseURL)!
-    }
-    
-    public func analyze(files: [FileItem], 
-                       persona: Persona,
-                       options: OrganizationOptions) async throws -> OrganizationPlan {
-        // 1. Build request using PromptBuilder
-        // 2. Make network request
-        // 3. Parse response with ResponseParser
-        // 4. Return OrganizationPlan
-    }
-    
-    public func checkHealth() async throws {
-        // Verify API connectivity
-    }
-}
-```
-
-2. **Register in Factory** (`AIClientFactory.swift`):
-```swift
-case .newProvider:
-    return NewProviderClient(apiKey: config.apiKey, baseURL: config.baseURL)
-```
-
-3. **Add Configuration** (`AIProvider.swift`):
-```swift
-public enum AIProvider: String, CaseIterable {
-    case newProvider = "New Provider Name"
-    
-    public var defaultModel: String {
-        switch self {
-        case .newProvider: return "default-model-name"
-        }
-    }
-}
-```
-
-4. **Add Tests** (`Tests/SortyTests/NewProviderClientTests.swift`):
-```swift
-func testAnalyze() async throws {
-    let client = NewProviderClient(apiKey: "test", baseURL: "http://localhost")
-    let files = [FileItem(name: "test.txt", path: "/tmp/test.txt")]
-    let plan = try await client.analyze(files: files, ...)
-    XCTAssertFalse(plan.operations.isEmpty)
-}
-```
-
-5. **Update Documentation**: Add provider details to README.md and `HELP.md` or `HelpSettingsView.swift`
+1. Add the client in `Sources/SortyAI/` and implement the current
+   [AIClientProtocol](Sources/SortyAI/AIClientProtocol.swift). Use an existing
+   client for the request, cancellation, streaming, and error-handling pattern.
+2. Add the provider case and configuration in
+   [AIConfig.swift](Sources/SortyModels/AIConfig.swift), including its default
+   model, endpoint, and supported authentication methods.
+3. Register the client in [AIClientFactory.swift](Sources/SortyAI/AIClientFactory.swift).
+   Keep credential resolution and transport details inside the AI target.
+4. Add focused coverage for the provider's distinct transport or authentication
+   contract. Follow the [test audit](.agents/skills/test-audit/SKILL.md) value bar;
+   reuse shared request and parser coverage.
+5. Update README.md and HELP.md for any user-facing setup or capability change.
 
 ## Testing Requirements
 
 ### Unit Tests
 
-All new functionality requires unit tests:
-
-```swift
-import XCTest
-@testable import SortyLib
-
-class FeatureNameTests: XCTestCase {
-    func testFeature() {
-        // Arrange
-        let input = ...
-        
-        // Act
-        let result = feature.process(input)
-        
-        // Assert
-        XCTAssertEqual(result.expected, actual)
-    }
-}
-```
+Add tests for observable behavior and credible regressions. Before adding or
+changing a test, follow the [test audit](.agents/skills/test-audit/SKILL.md).
+Extend existing owner-boundary coverage when it already exercises the contract;
+avoid tests that only restate defaults or implementation details.
 
 ### Testing Standards
 
@@ -252,8 +187,8 @@ Prefer small, reviewable commits and push them early. The goal is to get Blacksm
    - If Blacksmith fails, fix it in a follow-up commit and push again.
 
 2. **Keep local checks focused**:
-   - For small code changes, run one relevant local test only if it materially speeds debugging.
-   - For UI polish or documentation-only changes, local verification is optional.
+   - For minor changes, skip local verification as required by AGENTS.md.
+   - For larger changes, use focused diagnostics appropriate to the affected behavior.
    - Do not run `make ci-report`; Blacksmith checks must run for the pushed commit.
 
 3. **Check Code Style**:

@@ -111,7 +111,7 @@ Sorty is designed with security and privacy in mind:
 - File analysis happens via your chosen provider, including supported cloud services, Ollama, or Apple Foundation Models
 - Sorty sends relative folder structure and available file metadata to your selected provider; Deep Scan additionally extracts supported content locally and sends bounded text and metadata summaries
 - API keys are stored in the macOS Keychain
-- The Learnings profile is encrypted with AES-256 and protected by Touch ID or your Mac login password
+- The Learnings profile is encrypted with AES-256 and stored locally. Sensitive Action Authentication optionally protects actions with Touch ID or your Mac login password and is off by default. Learning analysis and organization send relevant learning context to the selected AI provider.
 - **Privacy Mode**: Enabled by default, blurs sensitive handles until hover and hides API keys with a manual reveal toggle.
 
 **Release Signing:**

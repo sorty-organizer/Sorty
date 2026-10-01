@@ -49,7 +49,7 @@ All managers are `@MainActor ObservableObject` classes created as `@StateObject`
 
 ## AI Client Pattern
 New AI providers must:
-1. Implement `AIClientProtocol` (in `AI/`)
+1. Implement `AIClientProtocol` in `Sources/SortyAI/`
 2. Add a case to `AIProvider` enum
 3. Register in `AIClientFactory`
 
@@ -95,8 +95,10 @@ URL scheme `sorty://` — see `DeeplinkHandler` for routes:
 
 ## Finder Extension
 Uses App Groups (`group.com.sorty.app`) for IPC. Finder Integration is a core app feature and defaults on for new installs.
-Quick Action and Finder Sync repair flows are exposed in-app via Finder Integration settings.
-The Finder Sync `.appex` registration repair path is `ExtensionCommunication.repairFinderSyncExtensionRegistration` and should be preferred over external terminal instructions.
+Finder Integration settings calls `ExtensionCommunication.prepareFinderIntegrationAsync`
+to prepare actions and diagnose extension setup. The page offers **Open macOS
+Extensions** when enabling is needed. Registration maintenance must preserve a
+macOS-disabled extension; normal setup does not require Terminal commands.
 
 ### Background Agent
 - `LoginItemManager` manages both the main app login item (via `SMAppService.mainApp`) and a background LaunchAgent (`com.sorty.app.background-agent.plist`).
@@ -139,7 +141,7 @@ All interactive buttons must use Sorty's pill-style button system defined in `So
 Always pair buttons with `HapticFeedbackManager.shared.tap()` on press, and use `HStack(spacing: 4)` with an SF Symbol icon + `.caption.bold()` text for compact pill button labels.
 
 ## Common Tasks
-- **Add AI provider**: Create client in `AI/`, implement `AIClientProtocol`, add to `AIProvider` enum + `AIClientFactory`
+- **Add AI provider**: Create client in `Sources/SortyAI/`, implement `AIClientProtocol`, add to `AIProvider` enum + `AIClientFactory`
 - **Add settings option**: Update `AIConfig`, `SettingsViewModel`, `SettingsView`
 - **Add new view**: Create in `Views/`, add case to `AppState.AppView`, add navigation in `ContentView`
 - **Test deeplinks**: Set `XCUITEST_DEEPLINK` environment variable before launch

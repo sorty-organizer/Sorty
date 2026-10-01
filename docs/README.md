@@ -19,7 +19,7 @@ Welcome to the official Sorty documentation. Sorty is a smart file organization 
 - [Startup performance](agent-guides/startup-performance.md)
 - [Test audit](agent-guides/test-audit.md)
 - [Complexity audit decisions](agent-guides/complexity-audit.md)
-- [CLI Tool](#cli-tool)
+- [App updates](updates.md)
 - [Analytics](analytics.md)
 - [Privacy & Security](#privacy--security)
 - [Uninstalling Sorty](#uninstalling-sorty)
@@ -40,7 +40,7 @@ Welcome to the official Sorty documentation. Sorty is a smart file organization 
 
 - macOS 15.0 or later
 - Apple Silicon or Intel Mac
-- An AI provider configured (Apple Intelligence, OpenAI, or local Ollama)
+- A configured AI provider. Apple Intelligence requires macOS 26 or later and an eligible Mac; Ollama can run locally on macOS 15.
 
 ---
 
@@ -97,9 +97,9 @@ The Learnings is a passive learning system that builds a personalized understand
 
 ### Security
 
-- **Biometric Protection**: Touch ID / Face ID required
-- **AES-256 Encryption**: All learning data encrypted
-- **Local Storage Only**: Data never leaves your device
+- The profile is encrypted with AES-256 and stored locally.
+- Enable Sensitive Action Authentication to require Touch ID or your Mac login password for protected actions. It is off by default.
+- Learning analysis and organization send relevant learning context to your selected AI provider.
 
 ---
 
@@ -193,14 +193,12 @@ entire list after every trigger or setting change.
 
 Sorty can expose Finder actions without needing terminal commands.
 
-### Quick Action and Finder Sync Repair (In-App)
+### Setup
 
-1. Open **Settings -> Finder Integration**
-2. In **Quick Action**, click **Install** (or **Uninstall/Install** to reinstall)
-3. Click **Repair Finder Sync** (or **Activate Extension**) to refresh the `.appex` registration
-4. Click **Open Extensions** and confirm Sorty is enabled under Finder extensions
-
-If Finder still shows stale state, run the in-app repair buttons again and then re-open Finder.
+Open **Settings -> Finder Integration** to see the available Finder actions.
+Sorty prepares its Quick Actions and checks extension registration automatically.
+If the extension needs enabling, click **Open macOS Extensions** and enable Sorty
+there. Sorty preserves an extension you have disabled in macOS.
 
 On the organize screen, click the **Right-Click** tip to open Finder at the selected
 folder. Before a folder is selected, it opens Finder at your home folder so you can
@@ -251,35 +249,6 @@ sorty://persona?action=generate&prompt=sci-fi%20collector
 sorty://watched?action=add&path=/Users/me/Downloads
 sorty://rules?action=add&type=pattern&pattern=*.log
 sorty://settings
-```
-
----
-
-## CLI Tool
-
-Sorty includes a CLI tool for terminal control.
-
-### Installation
-
-```bash
-make install
-```
-
-### Usage
-
-```bash
-# Organize a folder
-sorty organize /path/to/folder --persona developer
-
-# Scan for duplicates
-sorty duplicates /path/to/scan --auto
-
-# Add watched folder
-sorty watched add /path/to/watch
-
-# Manage learnings
-learnings-cli --status
-learnings-cli --clear
 ```
 
 ---

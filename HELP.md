@@ -121,10 +121,10 @@ The Learnings is a **passive learning system** that builds a personalized unders
 ### Getting Started
 
 1. **Enable Learning**: Navigate to **The Learnings** (⇧⌘L) and grant consent
-2. **Authenticate**: Set up Touch ID / Face ID / Passcode protection for your data
+2. **Optional authentication**: Enable Sensitive Action Authentication in Settings to protect sensitive actions with Touch ID or your Mac login password
 3. **Use the App Normally**: Organize files, provide feedback, and make corrections
 
-After initial setup, you'll need to authenticate each time you access The Learnings dashboard (for security).
+When Sensitive Action Authentication is enabled, protected actions require authentication after the session expires.
 
 ### What Gets Learned
 
@@ -159,30 +159,17 @@ Learnings are inferred passively from normal use, corrections, reversions, and f
 
 | Feature | Description |
 |---------|-------------|
-| **Biometric Protection** | Touch ID / Face ID required after initial setup |
+| **Authentication** | Optional Touch ID or Mac login password protection through Sensitive Action Authentication, off by default |
 | **AES-256 Encryption** | All learning data encrypted with Keychain-stored keys |
-| **Local Storage Only** | Data never leaves your device |
-| **Session Timeout** | Automatic lock after 5 minutes of inactivity |
+| **Local profile storage** | The profile stays on your Mac; analysis and organization send relevant learning context to your chosen AI provider |
+| **Session Timeout** | Authentication sessions expire after 5 minutes by default when authentication is enabled |
 | **Secure Deletion** | Data overwritten before removal |
 
 ### Data Management
 
 - **Pause Learning / Resume Learning**: Stop or restart data collection while preserving existing data
 - **Delete All Data**: Permanently and securely remove all learning data
-- **Export**: (Coming soon) Export your preferences as JSON
-
-### CLI Commands
-
-```bash
-# View learning status
-learnings-cli --status
-
-# Clear all learning data
-learnings-cli --clear
-
-# Open Learnings dashboard
-sorty learnings
-```
+- **Export / Import**: Save or restore a learning profile as JSON
 
 ### Deeplinks
 

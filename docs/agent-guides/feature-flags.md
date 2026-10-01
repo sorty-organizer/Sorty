@@ -1,6 +1,6 @@
 # Feature Flags
 
-Feature flags are controlled via `defaults` and defined in `Sources/SortyCore/Models/FeatureFlags.swift`.
+Feature flags are controlled via `defaults` and defined in `Sources/SortyModels/FeatureFlags.swift`.
 
 ## Usage
 ```bash
@@ -13,7 +13,7 @@ defaults write com.sorty.app <key> -bool false
 
 ## Available Flags
 
-Flags are defined in `Sources/SortyCore/Models/FeatureFlags.swift`. Terminal keys use the `com.sorty.app` defaults domain unless noted.
+Flags are defined in `Sources/SortyModels/FeatureFlags.swift`. Terminal keys use the `com.sorty.app` defaults domain unless noted.
 
 | Flag | Key | Default | Description |
 |------|-----|---------|-------------|
@@ -66,13 +66,9 @@ defaults -container com.sorty.app delete com.sorty.app supportDeveloperEnabled
 defaults -container com.sorty.app read com.sorty.app supportDeveloperEnabled
 ```
 
-## Finder Integration Repair
+## Finder integration setup
 
-Finder Integration is a core app feature. Quick Action and Finder Sync repair should be done from the app UI:
-
-1. Open Settings -> Finder Integration
-2. Use `Install`/`Reinstall` for Quick Action
-3. Use `Repair Finder Sync` (or `Activate Extension`) for the `.appex`
-4. Use `Open Extensions` to confirm Sorty is enabled in macOS Extensions settings
-
-Do not require users to run external terminal commands for normal Quick Action/Finder Sync repair.
+Open Settings -> Finder Integration. Sorty prepares its Finder actions and checks
+extension registration automatically. Use **Open macOS Extensions** when shown to
+enable the extension. An extension disabled in macOS stays disabled until you
+change it there. Normal setup does not need Terminal commands.
