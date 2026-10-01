@@ -78,14 +78,20 @@ Build-cache maintenance preserves package checkouts and binary artifacts,
 invalidates incompatible compiled outputs, repairs incomplete Sparkle artifacts,
 and prunes stale logs and resource outputs. Resource keys include content hashes,
 shader headers, and compiler recipes. Unchanged video/audio resources stay out of
-SwiftPM restaging. See [build_cache.sh](../../scripts/build_cache.sh) and
+SwiftPM restaging. Bundle fingerprints read resource metadata in batches and
+rehash only changed groups. Metadata changes alone do not trigger packaging when
+resource contents still match. Media keys include inode, size, mtime, and ctime
+so replacing a file or preserving its mtime cannot hide a content change.
+Scheduled maintenance removes indexes when build flags disable indexing and
+expires unused fingerprint records. Active Debug/current-configuration outputs
+and dependencies remain protected, so the size budget is a soft limit. See [build_cache.sh](../../scripts/build_cache.sh) and
 [build.sh](../../scripts/build.sh) for the implementation.
 
 | Override | Default |
 | --- | --- |
 | `BUILD_CACHE_PRUNE_INTERVAL_SECONDS` | `86400` |
-| `BUILD_CACHE_MAX_SIZE_MB` | `8192` |
-| `BUILD_CACHE_TARGET_SIZE_MB` | `6144` |
+| `BUILD_CACHE_MAX_SIZE_MB` | `4096` |
+| `BUILD_CACHE_TARGET_SIZE_MB` | `3072` |
 | `BUILD_CACHE_STALE_DAYS` | `30` |
 
 Use `BUILD_CACHE_PRUNE_INTERVAL_SECONDS=0 make now` to force maintenance, or
@@ -108,7 +114,15 @@ large SwiftUI expressions into views with explicit inputs when diagnostics
 identify a hotspot. Moving code to another file alone does not prove faster builds.
 
 Hosted caches use per-commit keys with compatible toolchain/manifest restore
-prefixes. [ci_source_cache.py](../../scripts/ci_source_cache.py) restores source
+prefixes. Swift CI and release unit tests share the same cache namespace and
+paths; universal Xcode builds retain a separate cache. Restore/save actions keep
+the existing cache schema and save successfully compiled tests even if runtime
+tests or later packaging checks fail. Cache hits never skip test execution.
+Hosted builds disable local disk-budget pruning and reset only host-specific
+maintenance stamps after restoration, preserving compiled products and source
+timestamps. Explicit cache saves happen before later release validation and
+publication. See the [cache action documentation](https://github.com/actions/cache#using-a-combination-of-restore-and-save-actions).
+[ci_source_cache.py](../../scripts/ci_source_cache.py) restores source
 timestamps only when contents match, preserving Swift's incremental inputs.
 Release retains both architectures, whole-module optimization, and no Thin LTO.
 Test discovery builds the bundle; execution uses `--skip-build`. Release tests

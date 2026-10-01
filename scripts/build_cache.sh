@@ -14,8 +14,8 @@ fi
 BUILD_LOG_DIR="${BUILD_LOG_DIR:-${WORKSPACE_BUILD_DIR:-${PROJECT_DIR}/.build}/logs}"
 AUTO_PRUNE_BUILD_CACHE="${AUTO_PRUNE_BUILD_CACHE:-true}"
 BUILD_CACHE_VALIDATE_INPUTS="${BUILD_CACHE_VALIDATE_INPUTS:-true}"
-BUILD_CACHE_MAX_SIZE_MB="${BUILD_CACHE_MAX_SIZE_MB:-8192}"
-BUILD_CACHE_TARGET_SIZE_MB="${BUILD_CACHE_TARGET_SIZE_MB:-6144}"
+BUILD_CACHE_MAX_SIZE_MB="${BUILD_CACHE_MAX_SIZE_MB:-4096}"
+BUILD_CACHE_TARGET_SIZE_MB="${BUILD_CACHE_TARGET_SIZE_MB:-3072}"
 BUILD_CACHE_STALE_DAYS="${BUILD_CACHE_STALE_DAYS:-30}"
 BUILD_CACHE_PRUNE_INTERVAL_SECONDS="${BUILD_CACHE_PRUNE_INTERVAL_SECONDS:-86400}"
 BUILD_CACHE_FORCE_PRUNE="${BUILD_CACHE_FORCE_PRUNE:-false}"
@@ -521,6 +521,19 @@ prune_stale_build_cache_paths() {
         fi
     done < <(build_cache_scratch_roots)
 
+    # Scripted builds disable indexing. Old editor indexes are regenerable;
+    # keep compiler objects, dependency artifacts, and incremental databases.
+    case " ${BUILD_FLAGS:-} ${XCODE_EXTRA_FLAGS:-} " in
+        *" --disable-index-store "*|*" COMPILER_INDEX_STORE_ENABLE=NO "*)
+            find "${BUILD_DIR}" -type d \( -name index -o -name Index.noindex \) \
+                -prune -exec rm -rf {} + 2>/dev/null || true
+            ;;
+    esac
+    if [ -d "${BUILD_CACHE_STATE_DIR}/bundle-fingerprints" ]; then
+        find "${BUILD_CACHE_STATE_DIR}/bundle-fingerprints" -type f \
+            -mtime +"${stale_days}" -delete 2>/dev/null || true
+    fi
+
     local current_finder_arch_key="${BUILD_ARCHS:-$(uname -m)}"
     current_finder_arch_key="${current_finder_arch_key// /-}"
     if [ -d "${BUILD_DIR}/FinderSyncDerivedData" ]; then
@@ -652,10 +665,10 @@ prune_oversized_build_cache() {
     local stale_days="${BUILD_CACHE_STALE_DAYS}"
 
     if ! [[ "${max_size_mb}" =~ ^[0-9]+$ ]]; then
-        max_size_mb=8192
+        max_size_mb=4096
     fi
     if ! [[ "${target_size_mb}" =~ ^[0-9]+$ ]]; then
-        target_size_mb=6144
+        target_size_mb=3072
     fi
     if ! [[ "${stale_days}" =~ ^[0-9]+$ ]]; then
         stale_days=30

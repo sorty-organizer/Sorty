@@ -608,17 +608,12 @@ bundle_fingerprint_cache_key() {
     printf '%s' "$1" | shasum -a 256 | awk '{print $1}'
 }
 
-bundle_fingerprint_file_metadata() {
-    local path="$1"
-    stat -f '%N inode=%i size=%z mtime=%Fm' "${path}"
-}
-
 bundle_fingerprint_media_hash() {
     local path="$1"
     local cache_key cache_file mtime cached_mtime cached_hash content_hash
     cache_key="$(bundle_fingerprint_cache_key "media:${path}")"
     cache_file="${BUNDLE_FINGERPRINT_CACHE_DIR}/media-${cache_key}"
-    mtime="$(stat -f '%Fm' "${path}")"
+    mtime="$(stat -f '%i:%z:%Fm:%Fc' "${path}")"
     cached_mtime="$(sed -n 's/^mtime=//p' "${cache_file}" 2>/dev/null | head -1)"
     cached_hash="$(sed -n 's/^hash=//p' "${cache_file}" 2>/dev/null | head -1)"
 
@@ -657,12 +652,18 @@ bundle_fingerprint_cached_group() {
     local existing_files=()
     for path in "$@"; do
         if [ -f "${path}" ]; then
-            bundle_fingerprint_file_metadata "${path}" >> "${temp_stat}"
             existing_files+=("${path}")
         else
             printf '%s missing\n' "${path}" >> "${temp_stat}"
+            printf '%s missing\n' "${path}" >> "${temp_hashes}"
         fi
     done
+
+    # One stat process per group instead of one per resource. Include ctime so
+    # same-size edits with a restored mtime still invalidate the stored hash.
+    if [ "${#existing_files[@]}" -gt 0 ]; then
+        stat -f '%N inode=%i size=%z mtime=%Fm ctime=%Fc' "${existing_files[@]}" >> "${temp_stat}"
+    fi
 
     if cmp -s "${temp_stat}" "${stat_file}" 2>/dev/null && [ -s "${hash_file}" ]; then
         cat "${hash_file}"
@@ -686,7 +687,9 @@ bundle_fingerprint_cached_group() {
     fi
 
     local group_hash
-    group_hash="$({ cat "${temp_stat}"; LC_ALL=C sort "${temp_hashes}"; } | build_cache_hash_stream)"
+    # Metadata decides when to rehash; only paths and contents decide whether
+    # packaging changed. Touching an identical resource must not force signing.
+    group_hash="$(LC_ALL=C sort "${temp_hashes}" | build_cache_hash_stream)"
     printf '%s group=%s\n' "${group_hash}" "${group_name}" > "${hash_file}.tmp.$$"
     mv "${hash_file}.tmp.$$" "${hash_file}"
     mv "${temp_stat}" "${stat_file}"
