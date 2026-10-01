@@ -38,35 +38,7 @@ final class LearningsEdgeCaseTests: XCTestCase {
     }
     
     // MARK: - Contradictory Rules
-    
-    func testContradictoryRulesHigherPriorityWins() {
-        var profile = LearningsProfile()
-        profile.consentGranted = true
-        
-        let rule1 = InferredRule(
-            pattern: ".*\\.pdf",
-            template: "Documents/{filename}",
-            priority: 50,
-            explanation: "Move PDFs to Documents"
-        )
-        let rule2 = InferredRule(
-            pattern: ".*\\.pdf",
-            template: "Archive/{filename}",
-            priority: 90,
-            explanation: "Move PDFs to Archive"
-        )
-        
-        profile.inferredRules = [rule1, rule2]
-        manager.currentProfile = profile
-        manager.learningStrength = 1.0
-        
-        let activeRules = manager.getActiveRules()
-        
-        XCTAssertFalse(activeRules.isEmpty)
-        XCTAssertEqual(activeRules.first?.explanation, "Move PDFs to Archive",
-                       "Higher priority rule should come first")
-    }
-    
+
     func testContradictoryRulesDisabledRuleExcluded() {
         var profile = LearningsProfile()
         profile.consentGranted = true
@@ -252,6 +224,31 @@ final class LearningsEdgeCaseTests: XCTestCase {
         XCTAssertEqual(activeRules[0].priority, 90)
         XCTAssertEqual(activeRules[1].priority, 50)
         XCTAssertEqual(activeRules[2].priority, 10)
+
+        // Contradictory-rules phase (folded from
+        // testContradictoryRulesHigherPriorityWins): same pattern, higher
+        // priority wins ordering.
+        profile.inferredRules = [
+            InferredRule(
+                pattern: ".*\\.pdf",
+                template: "Documents/{filename}",
+                priority: 50,
+                explanation: "Move PDFs to Documents"
+            ),
+            InferredRule(
+                pattern: ".*\\.pdf",
+                template: "Archive/{filename}",
+                priority: 90,
+                explanation: "Move PDFs to Archive"
+            ),
+        ]
+        manager.currentProfile = profile
+
+        let contradictoryRules = manager.getActiveRules()
+
+        XCTAssertFalse(contradictoryRules.isEmpty)
+        XCTAssertEqual(contradictoryRules.first?.explanation, "Move PDFs to Archive",
+                       "Higher priority rule should come first")
     }
     
     // MARK: - Empty / Nil Profile Tests
@@ -272,13 +269,18 @@ final class LearningsEdgeCaseTests: XCTestCase {
     
     // MARK: - Data Retention Tests
     
-    func testDataRetentionDaysDefault() {
-        let freshManager = LearningsManager(userDefaults: testDefaults)
-        // Default from UserDefaults is 0 (no retention limit)
-        XCTAssertEqual(freshManager.dataRetentionDays, testDefaults.integer(forKey: "learningDataRetentionDays"))
-    }
-    
     func testDataRetentionDaysPersists() {
+        // Default-value phase (folded from testDataRetentionDaysDefault): a
+        // fresh manager with no stored value uses the documented default of 0
+        // (no retention limit), asserted against the constant rather than a
+        // live read of the same defaults key.
+        let freshSuiteName = "LearningsEdgeCaseTests.DefaultRetention.\(UUID().uuidString)"
+        let freshDefaults = UserDefaults(suiteName: freshSuiteName)!
+        freshDefaults.removePersistentDomain(forName: freshSuiteName)
+        let freshManager = LearningsManager(userDefaults: freshDefaults)
+        XCTAssertEqual(freshManager.dataRetentionDays, 0)
+        freshDefaults.removePersistentDomain(forName: freshSuiteName)
+
         manager.dataRetentionDays = 90
         XCTAssertEqual(testDefaults.integer(forKey: "learningDataRetentionDays"), 90)
         

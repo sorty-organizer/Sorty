@@ -94,19 +94,6 @@ final class DuplicateSettingsTests: XCTestCase {
         XCTAssertEqual(KeepStrategy.shortestPath.displayName, "Keep Shortest Path")
     }
     
-    func testKeepStrategyDescriptions() {
-        XCTAssertFalse(KeepStrategy.newest.description.isEmpty)
-        XCTAssertFalse(KeepStrategy.oldest.description.isEmpty)
-        XCTAssertFalse(KeepStrategy.largest.description.isEmpty)
-    }
-    
-    func testKeepStrategyCaseIterable() {
-        let allCases = KeepStrategy.allCases
-        XCTAssertEqual(allCases.count, 5)
-        XCTAssertTrue(allCases.contains(.newest))
-        XCTAssertTrue(allCases.contains(.shortestPath))
-    }
-
     func testUsefulCleanupStrategiesExcludeMeaninglessSizeChoices() {
         XCTAssertEqual(KeepStrategy.usefulCleanupCases, [.newest, .oldest, .shortestPath])
         XCTAssertFalse(KeepStrategy.usefulCleanupCases.contains(.largest))

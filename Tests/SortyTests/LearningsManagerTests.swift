@@ -267,6 +267,10 @@ final class LearningsManagerTests: XCTestCase {
             action: .accept
         )
 
+        // Error-clear phase (folded from testErrorStateClearing): a stale
+        // error is cleared by a successful analyze with no inputs.
+        manager.error = "Previous error"
+
         await manager.analyze(rootPaths: [], examplePaths: [])
 
         XCTAssertNil(manager.error)
@@ -342,15 +346,6 @@ final class LearningsManagerTests: XCTestCase {
         XCTAssertFalse(context.contains("Learned rule 4"))
     }
     
-    
-    func testErrorStateClearing() async {
-       manager.error = "Previous error"
-       // Perform an action that clears error usually at start
-       // manager.analyze clears errors, but we need valid inputs so it doesn't fail again immediately
-       await manager.analyze(rootPaths: ["/tmp"], examplePaths: [])
-       
-       XCTAssertNil(manager.error)
-    }
     
     // MARK: - Model Directory Tests
     
