@@ -14,10 +14,6 @@ import SwiftUI
 import Sparkle
 #endif
 
-public enum SparkleUpdateFeed {
-    public static let stableAppcastURLString = "https://github.com/sorty-organizer/Sorty/releases/latest/download/appcast-v2.xml"
-}
-
 package enum SparkleVersionHistoryLink {
     private static let changelogURL = URL(
         string: "https://sorty-organizer.github.io/Sorty/changelog/"

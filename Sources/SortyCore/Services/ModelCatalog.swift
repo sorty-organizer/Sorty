@@ -59,7 +59,6 @@ public final class ModelCatalog: ObservableObject {
     @Published public var modelsByProvider: [AIProvider: [ModelInfo]] = [:]
     @Published public var isFetching: [AIProvider: Bool] = [:]
     @Published public var lastError: [AIProvider: Error?] = [:]
-    @Published public var searchResults: [(provider: AIProvider, models: [ModelInfo])] = []
     @Published public var usingFallback: [AIProvider: Bool] = [:]
     @Published public private(set) var codexSubscriptionModels: [ModelInfo] = []
     /// Latest Codex subscription fetch failure. Kept separate from `lastError[.openAI]`
@@ -69,7 +68,6 @@ public final class ModelCatalog: ObservableObject {
     private var cacheTimestamps: [AIProvider: Date] = [:]
     private let session: URLSession
     private let codexModelLoader: @MainActor () async throws -> [ModelInfo]
-    private var searchTask: Task<Void, Never>?
     private var codexModelsTimestamp: Date?
     private var cachedOpenAIAuthMethod: ProviderAuthMethod?
     private var refreshIDs: [AIProvider: UUID] = [:]
@@ -402,23 +400,6 @@ public final class ModelCatalog: ObservableObject {
         }
     }
     
-    public func searchAllProviders(query: String) -> [(provider: AIProvider, models: [ModelInfo])] {
-        let lowercased = query.lowercased()
-        var results: [(provider: AIProvider, models: [ModelInfo])] = []
-        
-        for (provider, models) in modelsByProvider {
-            let matching = models.filter {
-                $0.id.lowercased().contains(lowercased) ||
-                $0.displayName.lowercased().contains(lowercased)
-            }
-            if !matching.isEmpty {
-                results.append((provider, matching))
-            }
-        }
-        
-        return results.sorted { $0.provider.displayName < $1.provider.displayName }
-    }
-
     private func storedAIConfig() -> AIConfig? {
         guard let data = UserDefaults.standard.data(forKey: configKey) else {
             return nil
@@ -436,45 +417,6 @@ public final class ModelCatalog: ObservableObject {
         config.requiresAPIKey = provider.typicallyRequiresAPIKey
         config.apiKey = await KeychainManager.getAsync(key: provider.keychainKey)
         return config
-    }
-    
-    public func performDebouncedSearch(query: String) {
-        searchTask?.cancel()
-        
-        if query.isEmpty {
-            searchResults = []
-            return
-        }
-        
-        searchTask = Task { @MainActor in
-            do {
-                try await Task.sleep(nanoseconds: 150_000_000)
-            } catch {
-                return
-            }
-            
-            guard !Task.isCancelled else { return }
-            
-            let capturedModels = modelsByProvider
-            let lowercased = query.lowercased()
-            
-            let results: [(provider: AIProvider, models: [ModelInfo])] = await Task.detached {
-                var searchResults: [(provider: AIProvider, models: [ModelInfo])] = []
-                for (provider, models) in capturedModels {
-                    let matching = models.filter {
-                        $0.id.lowercased().contains(lowercased) ||
-                        $0.displayName.lowercased().contains(lowercased)
-                    }
-                    if !matching.isEmpty {
-                        searchResults.append((provider, matching))
-                    }
-                }
-                return searchResults.sorted { $0.provider.displayName < $1.provider.displayName }
-            }.value
-            
-            guard !Task.isCancelled else { return }
-            searchResults = results
-        }
     }
     
     private func fetchModels(for provider: AIProvider, force: Bool, authMethod: ProviderAuthMethod?, refreshID: UUID, config: AIConfig?) async throws -> (models: [ModelInfo], isFallback: Bool) {
@@ -1345,18 +1287,6 @@ public final class ModelCatalog: ObservableObject {
         }
 
         return tags.isEmpty ? nil : tags.sorted()
-    }
-
-    private func decodeOpenAICompatibleModels(
-        from data: Data,
-        provider: AIProvider,
-        usesCreatedTimestamp: Bool = true
-    ) throws -> [ModelInfo] {
-        try Self.decodedOpenAICompatibleModelsSync(
-            from: data,
-            provider: provider,
-            usesCreatedTimestamp: usesCreatedTimestamp
-        )
     }
 
     /// Detached decode so large model lists never parse on the MainActor.

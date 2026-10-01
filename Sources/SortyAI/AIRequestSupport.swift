@@ -327,13 +327,6 @@ enum AIRequestSupport {
         return extractChatDeltaText(from: firstChoice)
     }
 
-    /// Payload of an SSE `data:` line, or nil for other lines and empty payloads.
-    static func sseDataPayload(from line: String) -> String? {
-        guard line.hasPrefix("data:") else { return nil }
-        let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-        return payload.isEmpty ? nil : payload
-    }
-
     /// Buffers the `data:` lines that make up one SSE event. The SSE spec allows
     /// an event payload to span consecutive `data:` lines; decoding each line on
     /// its own silently drops those events. Other fields (comments, `event:`,
@@ -867,29 +860,6 @@ public enum VisionPayloadBudget {
         }
         return kept
     }
-}
-
-/// Single entry point for vision preparation: calls the injected file
-/// preparer once per request and clamps the result to the 32MB budget.
-/// The preparer is injected (rather than constructing ImageVisionAnalyzer
-/// here) so this target does not depend on SortyCore; the organizer batch
-/// loop supplies the live implementation.
-public func prepareVisionBatch(
-    files: [FileItem],
-    base: URL?,
-    pdfPageLimit: Int = 2,
-    progress: (@Sendable (Int, Int) async -> Void)? = nil,
-    prepare: @Sendable ([FileItem], URL?, Int, (@Sendable (Int, Int) async -> Void)?) async -> [String: Data]
-) async -> [String: Data] {
-    let prepared = await prepare(files, base, pdfPageLimit, progress)
-    return VisionPayloadBudget.clamped(prepared)
-}
-
-/// Releases per-batch image payloads after the request finishes.
-/// Call sites must not retain the full payload in resume checkpoints;
-/// re-prepare from the ImageVisionAnalyzer disk cache on resume instead.
-public func clearVisionBatch(_ payload: inout [String: Data]) {
-    payload.removeAll(keepingCapacity: false)
 }
 
 /// Extracts JSON from free-form LLM output.

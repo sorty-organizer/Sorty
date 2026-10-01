@@ -58,9 +58,28 @@ Implemented UI cuts:
   that cache. Drop delegates still validate and perform drops, track hover
   locally, and clear the shared `draggedFile` after a drop.
 
-No tests were removed. No local build, test run, computer use, or hosted CI
-was run for these minor dead-code cuts, following AGENTS.md. Live UI and
-accessibility behavior remain unverified.
+Implemented catalog and AI cuts:
+
+- Delete `ModelCatalog.searchAllProviders`, `performDebouncedSearch`, their
+  task and published result state, and the unused synchronous decoder wrapper.
+  `ModelSelector` owns the active search and debounce. Catalog fetching still
+  decodes through the existing off-main implementation.
+- Delete `sseDataPayload`, `prepareVisionBatch`, and `clearVisionBatch`. No app
+  or test calls them. Streaming still uses `SSEDataBuffer`; vision preparation
+  still uses the injected organizer service and `ImageVisionAnalyzer`.
+- Delete `SparkleUpdateFeed`. Its constant has no callers; the updater's feed
+  remains configured by the packaged `SUFeedURL`.
+
+These batches remove 357 production lines and no dependencies. Keep website
+`clsx` and `tailwind-merge`, which serve the shared `cn` helper, and `shadcn`,
+whose stylesheet is imported by `globals.css`. No dependency removal was
+established by this caller audit. Existing public callbacks, launch hydration,
+provider credential paths, and the earlier Keep decisions remain untouched.
+
+No tests were removed. No local build, test run, computer use, or hosted CI was
+run for these minor dead-code cuts, following AGENTS.md. Live UI and
+accessibility behavior remain unverified. Line counts measure source reduction,
+not build or runtime performance.
 
 ## Keep
 
