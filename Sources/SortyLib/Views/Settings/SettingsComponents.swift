@@ -298,30 +298,6 @@ struct SettingsCard<Content: View>: View {
     }
 }
 
-struct StepCard<Content: View>: View {
-    @SortyHotReload private var hotReload
-    let number: Int
-    let title: String
-    @ViewBuilder let content: Content
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text("\(number)")
-                .font(.caption.bold())
-                .foregroundColor(.white)
-                .frame(width: 20, height: 20)
-                .background(Color.accentColor)
-                .clipShape(Circle())
-            
-            VStack(alignment: .leading, spacing: 6) {
-                Text(LocalizedStringKey(title))
-                    .font(.subheadline.weight(.medium))
-                content
-            }
-        }
-    }
-}
-
 struct SettingsTextField: View {
     @SortyHotReload private var hotReload
     let title: String
@@ -554,15 +530,6 @@ extension View {
                 verticalRingPadding: verticalRingPadding
             )
         )
-    }
-
-    @ViewBuilder
-    func applyIdentifier(_ id: String?) -> some View {
-        if let id = id {
-            self.accessibilityIdentifier(id)
-        } else {
-            self
-        }
     }
 
     func settingsFocusTarget(_ target: SettingsFocusTarget?) -> some View {

@@ -119,9 +119,6 @@ class PreviewStore: ObservableObject {
     private var throttleWorkItem: DispatchWorkItem?
     private let throttleInterval: TimeInterval = 0.2 // 200ms
     
-    /// Weak reference to drag drop manager for cache coordination
-    weak var dragDropManager: DragDropManager?
-    
     /// Weak reference to learnings manager for recording user actions in the preview
     weak var learningsManager: LearningsManager?
     
@@ -147,7 +144,6 @@ class PreviewStore: ObservableObject {
         folderCountCache.removeAll()
         folderCountCacheValid = false
         updateThrottledFileCount()
-        dragDropManager?.clearDropTargetCache()
         
         rebuildFlattenedRows()
         cachedPlanVersion = newPlan.version
@@ -724,12 +720,6 @@ class PreviewStore: ObservableObject {
         }
     }
 
-    func regenerateRename(fileID: UUID, folderID: UUID) {
-        guard let file = findFile(by: fileID) else { return }
-        let candidate = localRenameCandidate(for: file)
-        updateRename(fileID: fileID, folderID: folderID, newName: candidate)
-    }
-
     func setRenameSelected(fileID: UUID, folderID: UUID, isSelected: Bool) {
         var updatedPlan = plan
         for i in 0..<updatedPlan.suggestions.count {
@@ -869,29 +859,6 @@ class PreviewStore: ObservableObject {
         return nil
     }
 
-    private func localRenameCandidate(for file: FileItem) -> String {
-        let ext = file.extension
-        let baseCandidate: String
-
-        if let title = file.contentMetadata?.documentTitle, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            baseCandidate = title
-        } else if let keywords = file.contentMetadata?.detectedKeywords, !keywords.isEmpty {
-            baseCandidate = keywords.prefix(4).joined(separator: " ")
-        } else if let preview = file.contentMetadata?.allTextContent, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            baseCandidate = preview.components(separatedBy: .newlines).first ?? preview
-        } else {
-            baseCandidate = (file.displayName as NSString).deletingPathExtension
-                .replacingOccurrences(of: #"(?i)\b(IMG|DSC|Screenshot|Screen Shot|Document|Copy of)[_\s-]*"#, with: "", options: .regularExpression)
-        }
-
-        let rawName = ext.isEmpty ? baseCandidate : "\(baseCandidate).\(ext)"
-        return FilenameNormalizer.normalize(
-            rawName,
-            originalFilename: file.displayName,
-            options: .default
-        ) ?? rawName
-    }
-
     private func updateDestinationInFolder(_ folder: FolderSuggestion, targetID: UUID, newDestinationPath: String) -> FolderSuggestion? {
         var updatedFolder = folder
         if folder.id == targetID {
@@ -925,7 +892,6 @@ class PreviewStore: ObservableObject {
         folderCountCache.removeAll()
         folderCountCacheValid = false
         updateThrottledFileCount()
-        dragDropManager?.clearDropTargetCache()
         rebuildFlattenedRows()
         cachedPlanVersion = finalPlan.version
     }
@@ -1515,20 +1481,6 @@ struct FlatFileRowView: View {
             onBeginDrag: beginDrag,
             onDisappear: resetInteractionState
         )
-    }
-    
-    private func fileIcon(for file: FileItem) -> String {
-        switch file.extension.lowercased() {
-        case "pdf": return "doc.richtext"
-        case "jpg", "jpeg", "png", "heic": return "photo"
-        case "mp4", "mov": return "video"
-        case "mp3", "wav", "aac", "m4a", "flac", "ogg": return "waveform"
-        case "zip", "gz", "rar": return "archivebox"
-        case "dmg", "iso": return "externaldrive"
-        case "pkg", "app": return "shippingbox"
-        case "swift", "js", "py", "ts": return "doc.text.fill"
-        default: return "doc"
-        }
     }
     
     private func startEditing(initialValue: String) {

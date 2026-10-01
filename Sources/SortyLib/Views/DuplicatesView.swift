@@ -237,31 +237,6 @@ struct DuplicatesView: View {
     }
 
     @ViewBuilder
-    private func duplicatesBaseDirectorySelector() -> some View {
-        HStack {
-            AppKitImageView(
-                image: NSWorkspace.shared.icon(forFile: "/tmp"),
-                size: CGSize(width: 28, height: 28),
-                opacity: 0.6
-            )
-            .frame(width: 28, height: 28)
-
-            Text("Select a directory to scan")
-                .foregroundStyle(.secondary)
-
-            Spacer()
-
-            Button("Choose...") {
-                selectDirectory()
-            }
-            .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
-            .accessibilityIdentifier("DuplicatesBaseChooseDirectory")
-        }
-        .padding()
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
-    }
-
-    @ViewBuilder
     private func duplicatesBaseEmptyState() -> some View {
         DuplicatesEmptyStateView(
             title: "Select a Directory",

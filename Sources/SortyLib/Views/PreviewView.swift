@@ -203,7 +203,6 @@ struct PreviewView: View {
             }
         }
         .onAppear {
-            previewStore.dragDropManager = dragDropManager
             previewStore.learningsManager = learningsManager
             refreshDerivedPlanStats()
             consumePendingNotificationActionIfNeeded()

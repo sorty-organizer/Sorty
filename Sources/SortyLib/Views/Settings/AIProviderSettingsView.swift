@@ -1014,13 +1014,6 @@ struct AIProviderSettingsView: View {
             codexDeviceAuthDismissTask = nil
         }
     }
-
-    private func openShortcutsApp() {
-        HapticFeedbackManager.shared.tap()
-        if let shortcutsURL = URL(string: "shortcuts://") {
-            NSWorkspace.shared.open(shortcutsURL)
-        }
-    }
 }
 
 private struct CodexDeviceAuthSheet: View {

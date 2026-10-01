@@ -36,6 +36,32 @@ graph and flags matched the original manifest in normal, diagnostics, hot, and
 combined hot/diagnostics modes. Existing workflow regression tests remain.
 No full app build, test suite, hosted CI, or live UI acceptance is claimed.
 
+## Follow-up caller audit, 1 October 2026
+
+The follow-up scanned app and test declarations, website dependencies, build
+scripts, and package boundaries. Each deletion below followed a tracked-tree
+caller search and inspection of the active path. A missing textual reference
+alone does not justify deleting framework callbacks, previews, manual tools,
+or a protocol implementation.
+
+Implemented UI cuts:
+
+- Delete `OnboardingProgressRow`, `StepCard`, `applyIdentifier`, the unused
+  duplicates directory selector, and the unused Shortcuts launcher. None has
+  an app or test caller. The active duplicates empty state still opens the
+  directory picker.
+- Delete the preview's local rename fallback and old file-icon switch. The
+  active row still regenerates names through `AIClientProtocol` and uses the
+  existing row presentation for icons.
+- Delete `DragDropManager`'s unused target state and validity cache, its unused
+  setters, and the store reference and invalidation calls that only served
+  that cache. Drop delegates still validate and perform drops, track hover
+  locally, and clear the shared `draggedFile` after a drop.
+
+No tests were removed. No local build, test run, computer use, or hosted CI
+was run for these minor dead-code cuts, following AGENTS.md. Live UI and
+accessibility behavior remain unverified.
+
 ## Keep
 
 | Candidate | Reason |
