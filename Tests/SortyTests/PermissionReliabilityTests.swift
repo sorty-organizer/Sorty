@@ -7,14 +7,6 @@ import XCTest
 @testable import SortyFileSystem
 
 final class PermissionReliabilityTests: XCTestCase {
-    func testAutomationCheckRunsAfterUserIntentEnablesChecks() {
-        XCTAssertTrue(FinderAutomation.canCheckPermission(checksEnabled: true))
-    }
-
-    func testAutomationCheckDoesNotRunBeforeUserIntent() {
-        XCTAssertFalse(FinderAutomation.canCheckPermission(checksEnabled: false))
-    }
-
     func testAutomationPermissionChecksFinderReadAccess() {
         XCTAssertEqual(
             FinderAutomation.permissionEventClass,

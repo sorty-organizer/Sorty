@@ -138,20 +138,6 @@ final class FilenameEdgeCaseTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(files.count, 4, "Should find hidden files when enabled")
     }
     
-    func testFilenamesWithNewlines() async throws {
-        // This is a valid but problematic filename on macOS
-        let fileURL = tempDir.appendingPathComponent("File\nwith\nnewlines.txt")
-        
-        do {
-            try "test".write(to: fileURL, atomically: true, encoding: .utf8)
-            let files = try await scanner.scanDirectory(at: tempDir)
-            XCTAssertEqual(files.count, 1, "Should handle filenames with newlines")
-        } catch {
-            // Some filesystems may reject this - that's acceptable
-            XCTAssertTrue(true, "Filesystem rejected newline in filename - acceptable")
-        }
-    }
-    
     func testFilenamesStartingWithDash() async throws {
         let fileURL = tempDir.appendingPathComponent("-dangerous-filename.txt")
         try "test".write(to: fileURL, atomically: true, encoding: .utf8)
@@ -321,15 +307,6 @@ final class FileSystemEdgeCaseTests: XCTestCase {
         XCTAssertEqual(files.count, 1)
         // The extension should be "gz" (last component)
         XCTAssertEqual(files.first?.extension, "gz")
-    }
-    
-    func testFilesWithOnlyExtension() async throws {
-        let onlyExtFile = tempDir.appendingPathComponent(".htaccess")
-        try "content".write(to: onlyExtFile, atomically: true, encoding: .utf8)
-        
-        let files = try await scanner.scanDirectory(at: tempDir, includeHidden: true)
-        let htaccessFiles = files.filter { $0.name == ".htaccess" || $0.name == "" }
-        XCTAssertGreaterThanOrEqual(htaccessFiles.count, 0, "Should handle dot-files")
     }
     
     func testVeryLargeFileMetadata() async throws {

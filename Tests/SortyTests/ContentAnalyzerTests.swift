@@ -409,18 +409,6 @@ final class ContentAnalyzerTests: XCTestCase {
     
     // MARK: - OCR Flag Tests
     
-    func testAnalyzeWithOCRDisabled() async throws {
-        let analyzer = ContentAnalyzer()
-        
-        let textFile = tempDirectory.appendingPathComponent("test.txt")
-        try "Content".write(to: textFile, atomically: true, encoding: .utf8)
-        
-        let result = await analyzer.analyze(fileURL: textFile, enableOCR: false)
-        
-        // Text files don't use OCR, but verify the parameter is accepted
-        XCTAssertNotNil(result)
-    }
-    
     // MARK: - UTF-8 Boundary Tests
     
     func testAnalyzeCJKTextFileSplitAtReadCapKeepsUTF8Text() async throws {
@@ -651,20 +639,6 @@ final class ContentAnalyzerDeepScanFlagTests: XCTestCase {
 
         let result = await analyzer.analyze(fileURL: rtfFile)
         XCTAssertNil(result, "RTF files should be skipped when enableDeepDocumentScan is false")
-    }
-
-    func testDeepScanDisabledStillAllowsMediaExtraction() async throws {
-        // Media extraction is considered "light" and should still work
-        let analyzer = ContentAnalyzer()
-        await analyzer.setEnableDeepDocumentScan(false)
-
-        // Can't easily create a real media file, but verify the extension is handled
-        let fakeMedia = tempDirectory.appendingPathComponent("test.mp3")
-        try Data().write(to: fakeMedia)
-
-        // Will return nil because it's not a valid mp3, but the point is it attempted extraction
-        _ = await analyzer.analyze(fileURL: fakeMedia)
-        // Just verify no crash
     }
 }
 

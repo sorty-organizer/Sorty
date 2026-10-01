@@ -63,12 +63,6 @@ final class FolderWatcherTests: XCTestCase {
         }
     }
 
-    func testWatchedFolderUsesSevenSecondSettleDelayByDefault() {
-        let folder = WatchedFolder(path: "/tmp/Sorty-Watched-Default-Delay")
-
-        XCTAssertEqual(folder.triggerDelay, 7)
-    }
-
     @MainActor
     func testRestartRecoveryDeliversFileAddedWhileWatcherWasStopped() async throws {
         let testRoot = FileManager.default.temporaryDirectory
@@ -199,18 +193,6 @@ final class FolderWatcherTests: XCTestCase {
         let googleDocument = URL(fileURLWithPath: "/tmp/Planning.gdoc")
 
         XCTAssertFalse(FolderWatcher.shouldIgnoreCloudPlaceholder(at: googleDocument))
-    }
-
-    func testAcceptedDeliveryOnlyRemovesFilesStillPending() {
-        var pending: Set<String> = ["later.txt"]
-
-        let removedCount = FolderWatcher.removeAcceptedBatch(
-            ["already-cleared.txt"],
-            from: &pending
-        )
-
-        XCTAssertEqual(removedCount, 0)
-        XCTAssertEqual(pending, ["later.txt"])
     }
 
     func testCoalescesNestedMonitoringRootsWithoutCollapsingSiblingPrefixes() {

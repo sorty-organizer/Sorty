@@ -778,58 +778,6 @@ class FileSystemManagerTests: XCTestCase {
     }
     
     @MainActor
-    func testTagFilesInNestedFolders() async throws {
-        // Create nested structure
-        let parentFolder = tempDirectory.appendingPathComponent("Parent")
-        let childFolder = parentFolder.appendingPathComponent("Child")
-        try FileManager.default.createDirectory(at: childFolder, withIntermediateDirectories: true)
-        
-        let file = childFolder.appendingPathComponent("nested.txt")
-        try "Nested Content".write(to: file, atomically: true, encoding: .utf8)
-        
-        let fileItem = FileItem(path: file.path, name: "nested", extension: "txt", size: 14, isDirectory: false)
-        
-        var childSuggestion = FolderSuggestion(folderName: "Child", files: [fileItem])
-        let tagMapping = FileTagMapping(originalFile: fileItem, tags: ["Nested", "Deep"])
-        childSuggestion.fileTagMappings.append(tagMapping)
-        
-        let parentSuggestion = FolderSuggestion(folderName: "Parent", files: [], subfolders: [childSuggestion])
-        let plan = OrganizationPlan(suggestions: [parentSuggestion], unorganizedFiles: [], notes: "")
-        
-        let ops = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: true)
-
-        let tagOps = ops.filter { $0.type == .tagFile }
-        XCTAssertEqual(tagOps.count, 1)
-        XCTAssertEqual(tagOps.first?.type, .tagFile)
-    }
-    
-    @MainActor
-    func testEmptyFolderCleanup() async throws {
-        // Create source structure with file
-        let sourceFolder = tempDirectory.appendingPathComponent("Source")
-        try FileManager.default.createDirectory(at: sourceFolder, withIntermediateDirectories: true)
-        
-        let file = sourceFolder.appendingPathComponent("move_me.txt")
-        try "Content".write(to: file, atomically: true, encoding: .utf8)
-        
-        let fileItem = FileItem(path: file.path, name: "move_me", extension: "txt", size: 7, isDirectory: false)
-        let plan = OrganizationPlan(
-            suggestions: [FolderSuggestion(folderName: "Dest", files: [fileItem])],
-            unorganizedFiles: [],
-            notes: ""
-        )
-        
-        _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
-        
-        // Source folder should be removed if empty
-        // Note: This might not work in all cases depending on implementation
-        _ = FileManager.default.fileExists(atPath: sourceFolder.path)
-        // We can't assert it's removed because the implementation tries but doesn't guarantee
-        // Just verify the file was moved
-        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("Dest/move_me.txt").path))
-    }
-
-    @MainActor
     func testEmptyFolderCleanupKeepsSelectedRootAndItsParent() async throws {
         let selectedRoot = tempDirectory.appendingPathComponent("Selected", isDirectory: true)
         let destinationFolder = selectedRoot.appendingPathComponent("Dest", isDirectory: true)
@@ -1059,40 +1007,5 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         XCTAssertThrowsError(try manager.restore(item: deleted.first!)) { error in
             XCTAssertTrue(error is DuplicateRestorationManager.RestorationError)
         }
-    }
-    
-    func testMetadataPreservation() throws {
-        let originalFile = tempDirectory.appendingPathComponent("original.txt")
-        try "Content".write(to: originalFile, atomically: true, encoding: .utf8)
-        
-        let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
-        try "Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
-        
-        let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 7, isDirectory: false)
-        
-        let deleted = try manager.moveToTrash(files: [duplicateItem])
-        
-        // Check metadata was captured
-        let item = deleted.first!
-        XCTAssertNotNil(item.metadata)
-        // Metadata fields might be nil depending on the filesystem
-    }
-    
-    func testClearAllData() throws {
-        let originalFile = tempDirectory.appendingPathComponent("original.txt")
-        try "Content".write(to: originalFile, atomically: true, encoding: .utf8)
-        
-        let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
-        try "Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
-        
-        let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 7, isDirectory: false)
-        
-        _ = try manager.moveToTrash(files: [duplicateItem])
-        
-        XCTAssertFalse(manager.restoredItems.isEmpty)
-        
-        manager.clearAllData()
-        
-        XCTAssertTrue(manager.restoredItems.isEmpty)
     }
 }

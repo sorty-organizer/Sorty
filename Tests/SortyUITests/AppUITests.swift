@@ -320,8 +320,8 @@ final class AppUITests: XCTestCase {
             // Check if instructions persisted
             if waitForElement(customInstructionsField, timeout: 2.0) {
                 let currentValue = customInstructionsField.value as? String ?? ""
-                XCTAssertTrue(currentValue.contains("Test instructions") || currentValue.isEmpty,
-                             "Custom instructions should either persist or be cleared cleanly")
+                XCTAssertTrue(currentValue.contains("Test instructions"),
+                             "Custom instructions should persist across navigation")
             }
         }
     }

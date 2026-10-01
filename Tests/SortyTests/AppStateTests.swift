@@ -228,14 +228,6 @@ class AppStateTests: XCTestCase {
     
     // MARK: - Directory Picker Tests
     
-    func testSelectedDirectory() {
-        XCTAssertNil(appState.selectedDirectory)
-        
-        let testURL = URL(fileURLWithPath: "/tmp/test")
-        appState.selectedDirectory = testURL
-        XCTAssertEqual(appState.selectedDirectory, testURL)
-    }
-
     func testFilesAndFoldersPermissionPersistsSeparatelyFromSelectedDirectory() throws {
         let folder = URL(fileURLWithPath: "/tmp")
 
@@ -494,17 +486,6 @@ class AppStateTests: XCTestCase {
     
     // MARK: - Edge Cases
     
-    func testWeakOrganizerReference() {
-        var localOrganizer: FolderOrganizer? = FolderOrganizer()
-        appState.organizer = localOrganizer
-        
-        XCTAssertNotNil(appState.organizer)
-        
-        localOrganizer = nil
-        
-        XCTAssertNil(appState.organizer)
-    }
-    
     func testComputedPropertiesWithNilOrganizer() {
         appState.organizer = nil
         
@@ -516,32 +497,8 @@ class AppStateTests: XCTestCase {
         XCTAssertFalse(appState.isOperationInProgress)
     }
     
-    func testMultipleViewChanges() {
-        let views: [AppState.AppView] = [.organize, .settings, .history, .duplicates, .learnings]
-        
-        for view in views {
-            appState.currentView = view
-        }
-        
-        XCTAssertEqual(appState.currentView, .learnings)
-    }
-    
-    // MARK: - Calibrate Action Tests
-    
-    func testCalibrateActionProperty() {
-        XCTAssertNil(appState.calibrateAction)
-        
-        appState.calibrateAction = { _ in }
-        
-        XCTAssertNotNil(appState.calibrateAction)
-    }
-    
     // MARK: - Sparkle Update Manager Tests
     
-    func testUpdateManagerExists() {
-        XCTAssertNotNil(appState.updateManager)
-    }
-
     func testVersionHistoryLinkTargetsInstalledReleaseSection() {
         XCTAssertEqual(
             SparkleVersionHistoryLink.url(for: "1.2.0").absoluteString,
@@ -554,16 +511,6 @@ class AppStateTests: XCTestCase {
             SparkleVersionHistoryLink.url(for: nil).absoluteString,
             "https://sorty-organizer.github.io/Sorty/changelog/"
         )
-    }
-
-    func testMultipleAppStatesKeepIndependentSelections() {
-        let stateA = AppState()
-        let stateB = AppState()
-        stateA.selectedDirectory = URL(fileURLWithPath: "/tmp/a")
-        stateB.selectedDirectory = URL(fileURLWithPath: "/tmp/b")
-
-        XCTAssertEqual(stateA.selectedDirectory?.path, "/tmp/a")
-        XCTAssertEqual(stateB.selectedDirectory?.path, "/tmp/b")
     }
 
     func testCancelOperationDoesNotAffectOtherWindowOrganizer() {

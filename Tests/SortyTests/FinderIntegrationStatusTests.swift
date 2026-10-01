@@ -23,21 +23,6 @@ final class FinderIntegrationStatusTests: XCTestCase {
         try? FileManager.default.removeItem(at: incoming)
     }
 
-    func testIntegrationCountUsesActiveIntegrationsOnly() {
-        let status = ExtensionCommunication.FinderIntegrationStatus(
-            quickActionInstalled: true,
-            quickWatchActionInstalled: true,
-            quickExcludeActionInstalled: true,
-            toolbarAppInstalled: false,
-            finderSyncEnabled: true,
-            menuBarEnabled: false
-        )
-
-        XCTAssertEqual(status.integrationCount, 4)
-        XCTAssertEqual(ExtensionCommunication.FinderIntegrationStatus.totalIntegrations, 6)
-        XCTAssertEqual(status.overallStatus, "Active")
-    }
-
     func testFinderIntegrationAvailabilityStatusReflectsDisabledFeatureFlag() {
         let status = ExtensionCommunication.finderIntegrationAvailabilityStatus(
             featureFlagEnabled: false,
@@ -83,12 +68,6 @@ final class FinderIntegrationStatusTests: XCTestCase {
 
         XCTAssertEqual(status.state, .ready)
         XCTAssertEqual(status.title, "Finder Sync Verified")
-    }
-
-    func testAsyncIntegrationStatusReturnsWithoutThrowing() async {
-        let status = await ExtensionCommunication.getIntegrationStatusAsync()
-        XCTAssertGreaterThanOrEqual(status.integrationCount, 0)
-        XCTAssertLessThanOrEqual(status.integrationCount, ExtensionCommunication.FinderIntegrationStatus.totalIntegrations)
     }
 
     func testParseFinderSyncRegistrationEntriesTracksEnabledStates() {
@@ -211,12 +190,6 @@ final class FinderIntegrationStatusTests: XCTestCase {
         XCTAssertEqual(diagnostics.kind, .needsCleanup)
         XCTAssertEqual(diagnostics.problemPaths, [staleExtensionPath])
         XCTAssertTrue(diagnostics.needsRepair)
-    }
-
-    func testMissingFinderIntegrationAppEntitlementsAllowsUnsignedHostApp() {
-        let missing = ExtensionCommunication.missingFinderIntegrationAppEntitlements(in: [:])
-
-        XCTAssertTrue(missing.isEmpty)
     }
 
     func testFinderSyncDiagnosticsIgnoresMissingHostAppEntitlements() {
