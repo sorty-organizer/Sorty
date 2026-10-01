@@ -3,63 +3,49 @@ import XCTest
 @testable import SortyCore
 
 final class AnalyticsCaptureRateLimiterTests: XCTestCase {
-    func testLimitsEventsWithinOneMinute() {
+    func testAnalyticsCaptureRateLimiting() {
         var limiter = AnalyticsCaptureRateLimiter()
 
+        // Phase 1: limit enforced within the window.
         for _ in 0..<120 {
             XCTAssertTrue(limiter.shouldCapture(now: 10))
         }
         XCTAssertFalse(limiter.shouldCapture(now: 10))
-    }
 
-    func testAllowsEventsAfterMinuteWindowResets() {
-        var limiter = AnalyticsCaptureRateLimiter()
-
-        for _ in 0..<120 {
-            XCTAssertTrue(limiter.shouldCapture(now: 10))
-        }
+        // Phase 2: window reset allows captures again.
         XCTAssertTrue(limiter.shouldCapture(now: 70))
-    }
 
-    func testResetClearsLimits() {
-        var limiter = AnalyticsCaptureRateLimiter()
-
+        // Phase 3: reset() clears the limit.
+        limiter.reset()
         for _ in 0..<120 {
             XCTAssertTrue(limiter.shouldCapture(now: 10))
         }
+        XCTAssertFalse(limiter.shouldCapture(now: 10))
         limiter.reset()
-
         XCTAssertTrue(limiter.shouldCapture(now: 10))
     }
 }
 
 final class ReliabilityCaptureRateLimiterTests: XCTestCase {
-    func testLimitsHandledErrorsWithinOneMinute() {
+    func testReliabilityCaptureRateLimiting() {
         var limiter = ReliabilityCaptureRateLimiter()
 
+        // Phase 1: limit enforced within the window.
         for _ in 0..<30 {
             XCTAssertTrue(limiter.shouldCapture(now: 10))
         }
         XCTAssertFalse(limiter.shouldCapture(now: 10))
-    }
 
-    func testAllowsHandledErrorsAfterMinuteWindowResets() {
-        var limiter = ReliabilityCaptureRateLimiter()
-
-        for _ in 0..<30 {
-            XCTAssertTrue(limiter.shouldCapture(now: 10))
-        }
+        // Phase 2: window reset allows captures again.
         XCTAssertTrue(limiter.shouldCapture(now: 70))
-    }
 
-    func testResetClearsHandledErrorLimits() {
-        var limiter = ReliabilityCaptureRateLimiter()
-
+        // Phase 3: reset() clears the limit.
+        limiter.reset()
         for _ in 0..<30 {
             XCTAssertTrue(limiter.shouldCapture(now: 10))
         }
+        XCTAssertFalse(limiter.shouldCapture(now: 10))
         limiter.reset()
-
         XCTAssertTrue(limiter.shouldCapture(now: 10))
     }
 }

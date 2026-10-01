@@ -207,9 +207,10 @@ final class PathEdgeCaseTests: XCTestCase {
         
         let files = try await scanner.scanDirectory(at: tempDir)
         
-        // Scanner should handle symlinks appropriately
-        // (either follow them or skip them, but not crash)
-        XCTAssertGreaterThanOrEqual(files.count, 1, "Should handle symlinks gracefully")
+        // The scanner never follows symlinks, so the fixture's real file is
+        // returned exactly once and the symlink itself is skipped, not counted.
+        XCTAssertEqual(files.count, 1, "Should return the real file and skip its symlink")
+        XCTAssertEqual(files.first?.name, "real_file")
     }
     
     func testSymlinkToDirectory() async throws {
@@ -224,7 +225,8 @@ final class PathEdgeCaseTests: XCTestCase {
         
         // Should not cause infinite recursion
         let files = try await scanner.scanDirectory(at: tempDir)
-        XCTAssertGreaterThanOrEqual(files.count, 1, "Should handle directory symlinks")
+        XCTAssertEqual(files.count, 1, "Should find the real file once and skip the directory symlink")
+        XCTAssertTrue(files.first?.path.contains("real_directory") ?? false)
     }
     
     func testBrokenSymlink() async throws {
@@ -235,8 +237,8 @@ final class PathEdgeCaseTests: XCTestCase {
         try fileManager.createSymbolicLink(at: brokenSymlink, withDestinationURL: nonExistentTarget)
         
         // Should not crash on broken symlinks
-        _ = try await scanner.scanDirectory(at: tempDir)
-        XCTAssertTrue(true, "Should handle broken symlinks without crashing")
+        let files = try await scanner.scanDirectory(at: tempDir)
+        XCTAssertEqual(files.count, 0, "Broken symlinks are skipped, leaving no scannable files")
     }
     
     func testPathsWithSpecialCharacters() async throws {
@@ -559,16 +561,21 @@ final class ResponseParserEdgeCaseTests: XCTestCase {
     
     func testParseEmptyResponseThrows() {
         // ResponseParser.parseResponse throws on empty input
-        XCTAssertThrowsError(try ResponseParser.parseResponse("", originalFiles: [])) { error in
-            // Should throw some kind of parser error
-            XCTAssertTrue(true, "Empty response correctly throws error")
+        do {
+            _ = try ResponseParser.parseResponse("", originalFiles: [])
+            XCTFail("Empty response should throw")
+        } catch {
+            XCTAssertTrue(error is ParserError, "Empty response should throw a ParserError, got \(type(of: error))")
         }
     }
     
     func testParseMalformedJSONThrows() {
         let malformed = "{ this is not: valid json }"
-        XCTAssertThrowsError(try ResponseParser.parseResponse(malformed, originalFiles: [])) { error in
-            XCTAssertTrue(true, "Malformed JSON correctly throws error")
+        do {
+            _ = try ResponseParser.parseResponse(malformed, originalFiles: [])
+            XCTFail("Malformed JSON should throw")
+        } catch {
+            XCTAssertTrue(error is ParserError, "Malformed JSON should throw a ParserError, got \(type(of: error))")
         }
     }
     

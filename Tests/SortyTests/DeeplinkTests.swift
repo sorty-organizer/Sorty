@@ -1,4 +1,4 @@
- //
+//
 //  DeeplinkTests.swift
 //  SortyTests
 //
@@ -11,324 +11,133 @@ import XCTest
 
 final class DeeplinkTests: XCTestCase {
     
-    // MARK: - URL Parsing Tests
+    // MARK: - URL Parsing Table
     
     @MainActor
-    func testOrganizeDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://organize?path=/Users/test/Downloads&persona=developer")!
-        handler.handle(url: url)
-        
-        if case .organize(let path, let persona, let mode, let autostart) = handler.pendingDestination {
-            XCTAssertEqual(path, "/Users/test/Downloads")
-            XCTAssertEqual(persona, "developer")
-            XCTAssertNil(mode)
-            XCTAssertFalse(autostart)
-        } else {
-            XCTFail("Expected organize destination")
-        }
-        
-        handler.clearPending()
-        XCTAssertNil(handler.pendingDestination)
-    }
-
-    @MainActor
-    func testOrganizeDeeplinkWithAutostart() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://organize?path=/tmp&autostart=true")!
-        handler.handle(url: url)
-        
-        if case let .organize(path, _, mode, autostart) = handler.pendingDestination {
-            XCTAssertEqual(path, "/tmp")
-            XCTAssertNil(mode)
-            XCTAssertTrue(autostart)
-        } else {
-            XCTFail("Expected .organize destination with autostart")
-        }
-        
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testOrganizeDeeplinkNoPath() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://organize")!
-        handler.handle(url: url)
-        
-        if case .organize(let path, _, _, _) = handler.pendingDestination {
-            XCTAssertNil(path)
-        } else {
-            XCTFail("Expected organize destination")
-        }
-        
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testDuplicatesDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://duplicates?path=/tmp/test")!
-        handler.handle(url: url)
-        
-        if case .duplicates(let path, let autostart) = handler.pendingDestination {
-            XCTAssertEqual(path, "/tmp/test")
-            XCTAssertFalse(autostart)
-        } else {
-            XCTFail("Expected duplicates destination")
-        }
-        
-        handler.clearPending()
-    }
-
-    @MainActor
-    func testDuplicatesDeeplinkWithAutostart() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://duplicates?path=/tmp/test&autostart=true")!
-        handler.handle(url: url)
-        
-        if case .duplicates(let path, let autostart) = handler.pendingDestination {
-            XCTAssertEqual(path, "/tmp/test")
-            XCTAssertTrue(autostart)
-        } else {
-            XCTFail("Expected duplicates destination")
-        }
-        
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testLearningsDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://learnings?project=Photos")!
-        handler.handle(url: url)
-        
-        if case .learnings(let action, let project) = handler.pendingDestination {
-            XCTAssertNil(action)
-            XCTAssertEqual(project, "Photos")
-        } else {
-            XCTFail("Expected learnings destination")
-        }
-        
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testSettingsDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://settings")!
-        handler.handle(url: url)
-        
-        XCTAssertEqual(handler.pendingDestination, .settings(section: nil))
-        handler.clearPending()
-    }
-
-    @MainActor
-    func testSettingsWithSectionDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://settings?section=provider")!
-        handler.handle(url: url)
-        
-        XCTAssertEqual(handler.pendingDestination, .settings(section: "provider"))
-        handler.clearPending()
-        
-        let url2 = URL(string: "sorty://settings?section=notifications")!
-        handler.handle(url: url2)
-        XCTAssertEqual(handler.pendingDestination, .settings(section: "notifications"))
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testHelpDeeplinkWithSection() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://help?section=personas")!
-        handler.handle(url: url)
-        
-        if case .help(let section) = handler.pendingDestination {
-            XCTAssertEqual(section, "personas")
-        } else {
-            XCTFail("Expected help destination")
-        }
-        
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testOpenDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://open")!
-        handler.handle(url: url)
-        
-        XCTAssertEqual(handler.pendingDestination, .open(path: nil))
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testOpenDeeplinkWithPath() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://open?path=/tmp/test")!
-        handler.handle(url: url)
-        
-        XCTAssertEqual(handler.pendingDestination, .open(path: "/tmp/test"))
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testHistoryDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://history")!
-        handler.handle(url: url)
-        
-        XCTAssertEqual(handler.pendingDestination, .history())
-        handler.clearPending()
-    }
-
-    @MainActor
-    func testHistoryEntryDeeplink() {
-        let handler = DeeplinkHandler.shared
+    func testDeeplinkParsingTable() {
         let entryID = UUID(uuidString: "93DC199E-F79F-436E-8F36-9EA949227CB6")!
+        let cases: [(url: String, expected: DeeplinkDestination?)] = [
+            (
+                "sorty://organize?path=/Users/test/Downloads&persona=developer",
+                .organize(path: "/Users/test/Downloads", persona: "developer", mode: nil, autostart: false)
+            ),
+            (
+                "sorty://organize?path=/tmp&autostart=true",
+                .organize(path: "/tmp", persona: nil, mode: nil, autostart: true)
+            ),
+            (
+                "sorty://organize",
+                .organize(path: nil, persona: nil, mode: nil, autostart: false)
+            ),
+            (
+                "sorty://organize?path=/tmp&mode=renameOnly&autostart=true",
+                .organize(path: "/tmp", persona: nil, mode: .renameOnly, autostart: true)
+            ),
+            (
+                "sorty://scan?path=/tmp/Inbox",
+                .organize(path: "/tmp/Inbox", persona: nil, mode: nil, autostart: true)
+            ),
+            (
+                "sorty://organize?path=/Users/test/My%20Documents",
+                .organize(path: "/Users/test/My Documents", persona: nil, mode: nil, autostart: false)
+            ),
+            (
+                "sorty://organize?path=/tmp/%E6%96%87%E4%BB%B6",
+                .organize(path: "/tmp/文件", persona: nil, mode: nil, autostart: false)
+            ),
+            (
+                "sorty:///Users/test/Downloads",
+                .organize(path: "/Users/test/Downloads", persona: nil, mode: nil, autostart: false)
+            ),
+            (
+                "sorty://duplicates?path=/tmp/test",
+                .duplicates(path: "/tmp/test", autostart: false)
+            ),
+            (
+                "sorty://duplicates?path=/tmp/test&autostart=true",
+                .duplicates(path: "/tmp/test", autostart: true)
+            ),
+            (
+                "sorty://learnings?project=Photos",
+                .learnings(action: nil, project: "Photos")
+            ),
+            (
+                "sorty://settings",
+                .settings(section: nil)
+            ),
+            (
+                "sorty://settings?section=provider",
+                .settings(section: "provider")
+            ),
+            (
+                "sorty://settings?section=notifications",
+                .settings(section: "notifications")
+            ),
+            (
+                "sorty://SeTTings?section=help",
+                .settings(section: "help")
+            ),
+            (
+                "sorty://help?section=personas",
+                .help(section: "personas")
+            ),
+            (
+                "sorty://open",
+                .open(path: nil)
+            ),
+            (
+                "sorty://open?path=/tmp/test",
+                .open(path: "/tmp/test")
+            ),
+            (
+                "sorty://history",
+                .history()
+            ),
+            (
+                "sorty://history?entry=93DC199E-F79F-436E-8F36-9EA949227CB6",
+                .history(entryID: entryID)
+            ),
+            (
+                "sorty://persona?action=generate&prompt=Organize%20my%20music",
+                .persona(action: "generate", prompt: "Organize my music", generate: false)
+            ),
+            (
+                "sorty://watched?action=add&path=/Users/test/Code",
+                .watched(action: "add", path: "/Users/test/Code")
+            ),
+            (
+                "sorty://watched",
+                .watched(action: nil, path: nil)
+            ),
+            (
+                "sorty://rules?action=add&pattern=*.tmp",
+                .rules(action: "add", type: nil, pattern: "*.tmp")
+            ),
+            (
+                "sorty://exclusions?action=add&pattern=*.tmp",
+                .exclusions(action: "add", pattern: "*.tmp")
+            ),
+            (
+                "sorty://storage?action=add&path=/tmp/archive",
+                .storage(action: "add", path: "/tmp/archive")
+            ),
+            ("sorty://unknown", nil),
+        ]
 
-        handler.handle(url: URL(string: "sorty://history?entry=\(entryID.uuidString)")!)
-
-        XCTAssertEqual(handler.pendingDestination, .history(entryID: entryID))
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testPersonaDeeplink() {
         let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://persona?action=generate&prompt=Organize%20my%20music")!
-        handler.handle(url: url)
-        
-        if case .persona(let action, let prompt, let generate) = handler.pendingDestination {
-            XCTAssertEqual(action, "generate")
-            XCTAssertEqual(prompt, "Organize my music")
-            XCTAssertFalse(generate)
-        } else {
-            XCTFail("Expected persona destination")
+        handler.clearPending()
+        for testCase in cases {
+            guard let url = URL(string: testCase.url) else {
+                XCTFail("Invalid test URL: \(testCase.url)")
+                continue
+            }
+            handler.handle(url: url)
+            XCTAssertEqual(handler.pendingDestination, testCase.expected, "Parsing failed for \(testCase.url)")
+            handler.clearPending()
         }
-        
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testWatchedDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://watched?action=add&path=/Users/test/Code")!
-        handler.handle(url: url)
-        
-        if case .watched(let action, let path) = handler.pendingDestination {
-            XCTAssertEqual(action, "add")
-            XCTAssertEqual(path, "/Users/test/Code")
-        } else {
-            XCTFail("Expected watched destination")
-        }
-        
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testRulesDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://rules?action=add&pattern=*.tmp")!
-        handler.handle(url: url)
-        
-        if case .rules(let action, _, let pattern) = handler.pendingDestination {
-            XCTAssertEqual(action, "add")
-            XCTAssertEqual(pattern, "*.tmp")
-        } else {
-            XCTFail("Expected rules destination")
-        }
-        
-        handler.clearPending()
     }
 
-    @MainActor
-    func testExclusionsDeeplink() {
-        let handler = DeeplinkHandler.shared
-
-        let url = URL(string: "sorty://exclusions?action=add&pattern=*.tmp")!
-        handler.handle(url: url)
-
-        if case .exclusions(let action, let pattern) = handler.pendingDestination {
-            XCTAssertEqual(action, "add")
-            XCTAssertEqual(pattern, "*.tmp")
-        } else {
-            XCTFail("Expected exclusions destination")
-        }
-
-        handler.clearPending()
-    }
-
-    @MainActor
-    func testStorageDeeplink() {
-        let handler = DeeplinkHandler.shared
-
-        let url = URL(string: "sorty://storage?action=add&path=/tmp/archive")!
-        handler.handle(url: url)
-
-        if case .storage(let action, let path) = handler.pendingDestination {
-            XCTAssertEqual(action, "add")
-            XCTAssertEqual(path, "/tmp/archive")
-        } else {
-            XCTFail("Expected storage destination")
-        }
-
-        handler.clearPending()
-    }
-
-    @MainActor
-    func testHostMatchingIsCaseInsensitive() {
-        let handler = DeeplinkHandler.shared
-
-        let url = URL(string: "sorty://SeTTings?section=help")!
-        handler.handle(url: url)
-
-        XCTAssertEqual(handler.pendingDestination, .settings(section: "help"))
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testWatchedListDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://watched")!
-        handler.handle(url: url)
-        
-        if case .watched(let action, let path) = handler.pendingDestination {
-            XCTAssertNil(action)
-            XCTAssertNil(path)
-        } else {
-            XCTFail("Expected watched destination")
-        }
-        
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testUnknownDeeplink() {
-        let handler = DeeplinkHandler.shared
-        handler.clearPending()
-        
-        let url = URL(string: "sorty://unknown")!
-        handler.handle(url: url)
-        
-        XCTAssertNil(handler.pendingDestination)
-    }
+    // MARK: - Pending-State Side Effects
     
     @MainActor
     func testUnknownDeeplinkClearsPriorDestination() {
@@ -354,140 +163,33 @@ final class DeeplinkTests: XCTestCase {
         XCTAssertNil(handler.pendingDestination)
     }
     
-    @MainActor
-    func testDeeplinkWithEncodedSpaces() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty://organize?path=/Users/test/My%20Documents")!
-        handler.handle(url: url)
-        
-        if case .organize(let path, _, _, _) = handler.pendingDestination {
-            XCTAssertEqual(path, "/Users/test/My Documents", "Should decode URL-encoded spaces")
-        } else {
-            XCTFail("Expected organize destination")
-        }
-        
-        handler.clearPending()
-    }
+    // MARK: - URL Generation Round-Trip
     
     @MainActor
-    func testDeeplinkWithEncodedUnicode() {
-        let handler = DeeplinkHandler.shared
-        
-        // "文件" URL-encoded
-        let url = URL(string: "sorty://organize?path=/tmp/%E6%96%87%E4%BB%B6")!
-        handler.handle(url: url)
-        
-        if case .organize(let path, _, _, _) = handler.pendingDestination {
-            XCTAssertEqual(path, "/tmp/文件", "Should decode URL-encoded unicode")
-        } else {
-            XCTFail("Expected organize destination")
-        }
-        
-        handler.clearPending()
-    }
-    
-    @MainActor
-    func testLegacyPathDeeplink() {
-        let handler = DeeplinkHandler.shared
-        
-        let url = URL(string: "sorty:///Users/test/Downloads")!
-        handler.handle(url: url)
-        
-        XCTAssertEqual(handler.pendingDestination, .organize(path: "/Users/test/Downloads", persona: nil, mode: nil, autostart: false))
-        handler.clearPending()
-    }
-    
-    // MARK: - URL Generation Tests
-    
-    @MainActor
-    func testGenerateOrganizeURL() {
-        let url = DeeplinkHandler.url(for: .organize(path: "/test/path", persona: nil, mode: nil, autostart: false))
-        XCTAssertEqual(url?.absoluteString, "sorty://organize?path=/test/path")
-    }
-
-    @MainActor
-    func testOrganizeDeeplinkWithMode() {
-        let handler = DeeplinkHandler.shared
-
-        let url = URL(string: "sorty://organize?path=/tmp&mode=renameOnly&autostart=true")!
-        handler.handle(url: url)
-
-        if case let .organize(path, _, mode, autostart) = handler.pendingDestination {
-            XCTAssertEqual(path, "/tmp")
-            XCTAssertEqual(mode, .renameOnly)
-            XCTAssertTrue(autostart)
-        } else {
-            XCTFail("Expected organize destination with mode")
-        }
-
-        handler.clearPending()
-    }
-
-    @MainActor
-    func testScanDeeplinkRoutesToAutostartOrganization() {
-        let handler = DeeplinkHandler.shared
-
-        handler.handle(url: URL(string: "sorty://scan?path=/tmp/Inbox")!)
-
-        XCTAssertEqual(
-            handler.pendingDestination,
-            .organize(path: "/tmp/Inbox", persona: nil, mode: nil, autostart: true)
-        )
-        handler.clearPending()
-    }
-
-    @MainActor
-    func testGenerateOrganizeURLWithMode() {
-        let url = DeeplinkHandler.url(for: .organize(path: "/test/path", persona: nil, mode: .renameOnly, autostart: true))
-        XCTAssertEqual(url?.absoluteString, "sorty://organize?path=/test/path&mode=renameOnly&autostart=true")
-    }
-    
-    @MainActor
-    func testGenerateSettingsURL() {
-        let url = DeeplinkHandler.url(for: .settings(section: nil))
-        XCTAssertEqual(url?.absoluteString, "sorty://settings")
-    }
-
-    @MainActor
-    func testGenerateHistoryEntryURL() {
+    func testGenerateRoundTrip() {
         let entryID = UUID(uuidString: "93DC199E-F79F-436E-8F36-9EA949227CB6")!
-        let url = DeeplinkHandler.url(for: .history(entryID: entryID))
+        let cases: [(destination: DeeplinkDestination, urlString: String)] = [
+            (.organize(path: "/test/path", persona: nil, mode: nil, autostart: false), "sorty://organize?path=/test/path"),
+            (.organize(path: "/test/path", persona: nil, mode: .renameOnly, autostart: true), "sorty://organize?path=/test/path&mode=renameOnly&autostart=true"),
+            (.settings(section: nil), "sorty://settings"),
+            (.history(entryID: entryID), "sorty://history?entry=93DC199E-F79F-436E-8F36-9EA949227CB6"),
+            (.open(path: nil), "sorty://open"),
+            (.open(path: "/tmp/test"), "sorty://open?path=/tmp/test"),
+            (.learnings(action: nil, project: "MyProject"), "sorty://learnings?project=MyProject"),
+            (.persona(action: "generate", prompt: "Test prompt", generate: true), "sorty://persona?action=generate&prompt=Test%20prompt&generate=true"),
+            (.exclusions(action: "add", pattern: "*.log"), "sorty://exclusions?action=add&pattern=*.log"),
+            (.storage(action: "add", path: "/tmp/archive"), "sorty://storage?action=add&path=/tmp/archive"),
+        ]
 
-        XCTAssertEqual(url?.absoluteString, "sorty://history?entry=93DC199E-F79F-436E-8F36-9EA949227CB6")
-    }
-    
-    @MainActor
-    func testGenerateOpenURL() {
-        let url = DeeplinkHandler.url(for: .open(path: nil))
-        XCTAssertEqual(url?.absoluteString, "sorty://open")
-        
-        let urlWithPath = DeeplinkHandler.url(for: .open(path: "/tmp/test"))
-        XCTAssertEqual(urlWithPath?.absoluteString, "sorty://open?path=/tmp/test")
-    }
-    
-    @MainActor
-    func testGenerateLearningsURL() {
-        let url = DeeplinkHandler.url(for: .learnings(action: nil, project: "MyProject"))
-        XCTAssertEqual(url?.absoluteString, "sorty://learnings?project=MyProject")
-        
-    }
-    
-    @MainActor
-    func testGeneratePersonaURL() {
-        let url = DeeplinkHandler.url(for: .persona(action: "generate", prompt: "Test prompt", generate: true))
-        XCTAssertEqual(url?.absoluteString, "sorty://persona?action=generate&prompt=Test%20prompt&generate=true")
-    }
+        let handler = DeeplinkHandler.shared
+        for testCase in cases {
+            let url = DeeplinkHandler.url(for: testCase.destination)
+            XCTAssertEqual(url?.absoluteString, testCase.urlString, "Generated URL mismatch for \(testCase.destination)")
 
-    @MainActor
-    func testGenerateExclusionsURL() {
-        let url = DeeplinkHandler.url(for: .exclusions(action: "add", pattern: "*.log"))
-        XCTAssertEqual(url?.absoluteString, "sorty://exclusions?action=add&pattern=*.log")
-    }
-
-    @MainActor
-    func testGenerateStorageURL() {
-        let url = DeeplinkHandler.url(for: .storage(action: "add", path: "/tmp/archive"))
-        XCTAssertEqual(url?.absoluteString, "sorty://storage?action=add&path=/tmp/archive")
+            guard let url else { continue }
+            handler.handle(url: url)
+            XCTAssertEqual(handler.pendingDestination, testCase.destination, "Round-trip failed for \(testCase.urlString)")
+            handler.clearPending()
+        }
     }
 }

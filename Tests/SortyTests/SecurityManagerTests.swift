@@ -44,36 +44,35 @@ final class SecurityManagerTests: XCTestCase {
         XCTAssertEqual(manager.sessionTimeoutInterval, 600, "Should accept custom timeout value")
     }
     
-    // MARK: - Session Expiration Tests
+    // MARK: - Lock and Expiry Transitions
     
-    func testSessionExpiredWhenNeverAuthenticated() {
+    func testLockAndExpiryTransitions() {
+        // Phase 1: never authenticated means expired.
         XCTAssertTrue(manager.isSessionExpired, "Session should be expired when never authenticated")
-    }
-    
-    func testSessionExpiredAfterLock() {
-        manager.lock()
-        XCTAssertTrue(manager.isSessionExpired, "Session should be expired after lock()")
-    }
-    
-    // MARK: - Lock/Unlock State Transitions
-    
-    func testLockResetsState() {
-        manager.lock()
         
+        // Phase 2: lock from the initial state resets everything.
+        manager.lock()
         XCTAssertFalse(manager.isUnlocked, "Should be locked after lock()")
         XCTAssertEqual(manager.authenticationMethod, .none, "Auth method should reset to none")
-        XCTAssertTrue(manager.isSessionExpired, "Session should be expired after lock")
-    }
-    
-    func testLockFromUnlockedState() {
+        XCTAssertTrue(manager.isSessionExpired, "Session should be expired after lock()")
+
+        // Phase 3: lock from an unlocked state transitions cleanly.
         manager.isUnlocked = true
         manager.authenticationMethod = .biometric
-        
+        manager.error = nil
         manager.lock()
-        
         XCTAssertFalse(manager.isUnlocked, "Should transition from unlocked to locked")
         XCTAssertEqual(manager.authenticationMethod, .none, "Auth method should reset")
+        XCTAssertTrue(manager.isSessionExpired, "Session should be expired after lock")
+
+        // Phase 4: a second lock keeps the state stable.
+        manager.lock()
+        XCTAssertFalse(manager.isUnlocked, "Double lock should keep state locked")
+        XCTAssertEqual(manager.authenticationMethod, .none)
+        XCTAssertTrue(manager.isSessionExpired)
     }
+
+    // MARK: - Lock/Unlock State Transitions
     
     func testMultipleLockCalls() {
         manager.lock()
@@ -167,18 +166,6 @@ final class SecurityManagerTests: XCTestCase {
     }
     
     // MARK: - State Consistency Tests
-    
-    func testStateConsistencyAfterLock() {
-        manager.isUnlocked = true
-        manager.authenticationMethod = .biometric
-        manager.error = nil
-        
-        manager.lock()
-        
-        XCTAssertFalse(manager.isUnlocked)
-        XCTAssertEqual(manager.authenticationMethod, .none)
-        XCTAssertTrue(manager.isSessionExpired)
-    }
     
     func testBiometryTypePreservedAfterLock() {
         manager.biometryType = .faceID

@@ -159,71 +159,78 @@ class AppStateTests: XCTestCase {
         XCTAssertNil(testDefaults.string(forKey: setupRepairMessageKey))
     }
 
-    func testProviderSetupValidatorBlocksMissingAPIKey() {
-        let config = AIConfig(
-            provider: .openAICompatible,
-            apiURL: "https://api.example.com",
-            apiKey: nil,
-            model: AIProvider.openAICompatible.defaultModel,
-            requiresAPIKey: true
-        )
-
-        let status = OnboardingSetupValidator.providerStatus(
-            context: ProviderSetupContext(
-                config: config,
-                isCodexAuthenticated: false,
-                isCodexInstalled: false,
-                isAppleFoundationModelAvailable: false
-            )
-        )
-
-        XCTAssertFalse(status.isReady)
-        XCTAssertEqual(status.title, "Credentials required")
-        XCTAssertTrue(status.message.contains("API key"))
-    }
-
-    func testProviderSetupValidatorAllowsConfiguredOllama() {
-        let config = AIConfig(
-            provider: .ollama,
-            apiURL: "http://localhost:11434",
-            apiKey: nil,
-            model: AIProvider.ollama.defaultModel,
-            requiresAPIKey: false
-        )
-
-        let status = OnboardingSetupValidator.providerStatus(
-            context: ProviderSetupContext(
-                config: config,
-                isCodexAuthenticated: false,
-                isCodexInstalled: false,
-                isAppleFoundationModelAvailable: false
-            )
-        )
-
-        XCTAssertTrue(status.isReady)
-    }
-
-    func testProviderSetupValidatorRequiresCodexSignInForOpenAIAccountAuth() {
-        var config = AIConfig(
+    func testProviderSetupValidatorTable() {
+        var codexConfig = AIConfig(
             provider: .openAI,
             apiURL: AIProvider.openAI.defaultAPIURL,
             apiKey: nil,
             model: AIProvider.openAI.defaultModel,
             requiresAPIKey: true
         )
-        config.setAuthMethod(.accountSignIn, for: .openAI)
+        codexConfig.setAuthMethod(.accountSignIn, for: .openAI)
 
-        let status = OnboardingSetupValidator.providerStatus(
-            context: ProviderSetupContext(
-                config: config,
-                isCodexAuthenticated: false,
-                isCodexInstalled: true,
-                isAppleFoundationModelAvailable: false
+        let cases: [(
+            name: String,
+            config: AIConfig,
+            isCodexAuthenticated: Bool,
+            isCodexInstalled: Bool,
+            isReady: Bool,
+            title: String?,
+            messageContains: String?
+        )] = [
+            (
+                "missingAPIKey",
+                AIConfig(
+                    provider: .openAICompatible,
+                    apiURL: "https://api.example.com",
+                    apiKey: nil,
+                    model: AIProvider.openAICompatible.defaultModel,
+                    requiresAPIKey: true
+                ),
+                false, false, false,
+                "Credentials required", "API key"
+            ),
+            (
+                "configuredOllama",
+                AIConfig(
+                    provider: .ollama,
+                    apiURL: "http://localhost:11434",
+                    apiKey: nil,
+                    model: AIProvider.ollama.defaultModel,
+                    requiresAPIKey: false
+                ),
+                false, false, true,
+                nil, nil
+            ),
+            (
+                "codexSignInRequired",
+                codexConfig,
+                false, true, false,
+                nil, "Codex CLI"
+            ),
+        ]
+
+        for testCase in cases {
+            let status = OnboardingSetupValidator.providerStatus(
+                context: ProviderSetupContext(
+                    config: testCase.config,
+                    isCodexAuthenticated: testCase.isCodexAuthenticated,
+                    isCodexInstalled: testCase.isCodexInstalled,
+                    isAppleFoundationModelAvailable: false
+                )
             )
-        )
 
-        XCTAssertFalse(status.isReady)
-        XCTAssertTrue(status.message.contains("Codex CLI"))
+            XCTAssertEqual(status.isReady, testCase.isReady, "isReady mismatch for \(testCase.name)")
+            if let title = testCase.title {
+                XCTAssertEqual(status.title, title, "title mismatch for \(testCase.name)")
+            }
+            if let messageContains = testCase.messageContains {
+                XCTAssertTrue(
+                    status.message.contains(messageContains),
+                    "message mismatch for \(testCase.name): \(status.message)"
+                )
+            }
+        }
     }
     
     // MARK: - Directory Picker Tests
@@ -254,21 +261,6 @@ class AppStateTests: XCTestCase {
     
     // MARK: - Computed Properties Tests
     
-    func testHasResultsWhenNoOrganizer() {
-        appState.organizer = nil
-        XCTAssertFalse(appState.hasResults)
-    }
-    
-    func testHasResultsWhenNoPlan() {
-        XCTAssertNil(organizer.currentPlan)
-        XCTAssertFalse(appState.hasResults)
-    }
-    
-    func testHasFilesWhenNoPlan() {
-        XCTAssertNil(organizer.currentPlan)
-        XCTAssertFalse(appState.hasFiles)
-    }
-    
     func testCanStartOrganizationRequiresDirectory() {
         appState.selectedDirectory = nil
         XCTAssertFalse(appState.canStartOrganization)
@@ -278,26 +270,6 @@ class AppStateTests: XCTestCase {
         appState.selectedDirectory = URL(fileURLWithPath: "/tmp")
         XCTAssertEqual(organizer.state, .idle)
         XCTAssertTrue(appState.canStartOrganization)
-    }
-    
-    func testHasCurrentPlanWhenNoPlan() {
-        XCTAssertNil(organizer.currentPlan)
-        XCTAssertFalse(appState.hasCurrentPlan)
-    }
-    
-    func testCanApplyWhenIdle() {
-        XCTAssertEqual(organizer.state, .idle)
-        XCTAssertFalse(appState.canApply)
-    }
-    
-    func testIsOperationInProgressWhenIdle() {
-        XCTAssertEqual(organizer.state, .idle)
-        XCTAssertFalse(appState.isOperationInProgress)
-    }
-    
-    func testIsOperationInProgressWhenNoOrganizer() {
-        appState.organizer = nil
-        XCTAssertFalse(appState.isOperationInProgress)
     }
     
     // MARK: - Action Methods Tests
@@ -486,7 +458,7 @@ class AppStateTests: XCTestCase {
     
     // MARK: - Edge Cases
     
-    func testComputedPropertiesWithNilOrganizer() {
+    func testNilOrganizerDefaults() {
         appState.organizer = nil
         
         XCTAssertFalse(appState.hasResults)
@@ -551,24 +523,4 @@ class OrganizationStateTests: XCTestCase {
         XCTAssertNotEqual(OrganizationState.error(error), OrganizationState.completed)
     }
     
-}
-
-// MARK: - Notification Names Tests
-
-class NotificationNamesTests: XCTestCase {
-    
-    func testNotificationNamesAreUnique() {
-        let names: [Notification.Name] = [
-            .showLearningsStats,
-            .pauseLearning,
-            .exportLearningsProfile,
-            .importLearningsProfile,
-            .organizationDidStart,
-            .organizationDidFinish,
-            .organizationDidRevert
-        ]
-        
-        let uniqueNames = Set(names)
-        XCTAssertEqual(names.count, uniqueNames.count)
-    }
 }

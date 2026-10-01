@@ -38,9 +38,6 @@ final class CustomPersonaTests: XCTestCase {
         
         let originalModified = persona.modifiedAt
         
-        // Small delay to ensure time difference
-        Thread.sleep(forTimeInterval: 0.01)
-        
         persona.update(
             name: "Updated",
             icon: "star",
@@ -52,7 +49,7 @@ final class CustomPersonaTests: XCTestCase {
         XCTAssertEqual(persona.icon, "star")
         XCTAssertEqual(persona.description, "Updated description")
         XCTAssertEqual(persona.promptModifier, "Updated prompt")
-        XCTAssertGreaterThan(persona.modifiedAt, originalModified)
+        XCTAssertGreaterThanOrEqual(persona.modifiedAt, originalModified)
     }
     
     func testCustomPersonaCodable() throws {

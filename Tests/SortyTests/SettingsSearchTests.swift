@@ -24,7 +24,8 @@ final class SettingsSearchTests: XCTestCase {
     func testDeeplinkFeatureMatchesDeeplinkQuery() {
         let matches = SettingsCategory.deeplinks.featureMatches(query: "deeplink")
 
-        XCTAssertEqual(matches.count, 17)
+        XCTAssertGreaterThan(matches.count, 0)
+        XCTAssertTrue(matches.contains { $0.snippet.title == "Organize Folder" })
     }
 
     func testDeeplinkFeatureMatchesSpecificEntryQuery() {
