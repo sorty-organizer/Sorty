@@ -744,13 +744,14 @@ final class PromptBuilderPrioritizationTests: XCTestCase {
         )
 
         // Every file should remain present and preserve the input order.
-        let firstFileRange = prompt.range(of: "file0.pdf")
-        let lastFileRange = prompt.range(of: "file59.pdf")
-
-        XCTAssertNotNil(firstFileRange)
-        XCTAssertNotNil(lastFileRange)
-        if let firstFileRange, let lastFileRange {
-            XCTAssertLessThan(firstFileRange.lowerBound, lastFileRange.lowerBound)
+        var searchFrom = prompt.startIndex
+        for i in 0..<60 {
+            let fileName = "file\(i).pdf"
+            guard let range = prompt.range(of: fileName, range: searchFrom..<prompt.endIndex) else {
+                XCTFail("\(fileName) should appear in the prompt in input order")
+                return
+            }
+            searchFrom = range.upperBound
         }
     }
 }

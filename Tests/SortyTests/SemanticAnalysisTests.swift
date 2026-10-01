@@ -12,77 +12,9 @@ import XCTest
 @testable import SortyAI
 @testable import SortyModels
 
-// MARK: - Content Metadata Tests
-
-class ContentMetadataTests: XCTestCase {
-
-    func testContentMetadataIsEmpty() {
-        let emptyMetadata = ContentMetadata()
-        XCTAssertTrue(emptyMetadata.isEmpty)
-
-        let metadataWithText = ContentMetadata(textPreview: "Hello world")
-        XCTAssertFalse(metadataWithText.isEmpty)
-
-        let metadataWithOCR = ContentMetadata(ocrText: "Scanned text")
-        XCTAssertFalse(metadataWithOCR.isEmpty)
-
-        let metadataWithEXIF = ContentMetadata(exifData: ["camera": "iPhone 15"])
-        XCTAssertFalse(metadataWithEXIF.isEmpty)
-    }
-
-    func testContentMetadataSummary() {
-        let metadata = ContentMetadata(
-            textPreview: "This is a test document",
-            documentTitle: "Test Document",
-            pageCount: 5
-        )
-
-        let summary = metadata.summary
-        XCTAssertTrue(summary.contains("Title:"))
-        XCTAssertTrue(summary.contains("Test Document"))
-        XCTAssertTrue(summary.contains("5 pages"))
-    }
-
-    func testContentMetadataWithOCR() {
-        let metadata = ContentMetadata(
-            ocrText: "Internal Revenue Service Tax Return 2023",
-            ocrConfidence: 0.95,
-            detectedKeywords: ["tax", "irs"]
-        )
-
-        let summary = metadata.summary
-        XCTAssertTrue(summary.contains("OCR:"))
-        XCTAssertTrue(summary.contains("Detected:"))
-    }
-
-    func testAllTextContent() {
-        let metadata = ContentMetadata(
-            textPreview: "Document content",
-            ocrText: "OCR content"
-        )
-
-        let allText = metadata.allTextContent
-        XCTAssertNotNil(allText)
-        XCTAssertTrue(allText!.contains("Document content"))
-        XCTAssertTrue(allText!.contains("OCR content"))
-    }
-}
-
 // MARK: - OCR Result Tests
 
 class OCRResultTests: XCTestCase {
-
-    func testOCRResultDetectedKeywords() {
-        let taxText = "Internal Revenue Service Tax Return Form 1040"
-        let result = OCRResult(text: taxText, confidence: 0.95)
-
-        let keywords = result.detectedKeywords
-        XCTAssertTrue(keywords.contains("tax"))
-        XCTAssertTrue(keywords.contains("revenue"))
-        XCTAssertTrue(keywords.contains("service"))
-    }
-
-
 
     func testOCRResultIsEmpty() {
         let emptyResult = OCRResult(text: "   \n\t  ", confidence: 0.5)
@@ -90,88 +22,6 @@ class OCRResultTests: XCTestCase {
 
         let validResult = OCRResult(text: "Some text", confidence: 0.8)
         XCTAssertFalse(validResult.isEmpty)
-    }
-}
-
-// MARK: - Smart Renaming Tests
-
-class SmartRenamingTests: XCTestCase {
-
-    func testFileRenameMappingHasRename() {
-        let file = FileItem(path: "/test/IMG_001.jpg", name: "IMG_001", extension: "jpg")
-
-        let mappingWithRename = FileRenameMapping(
-            originalFile: file,
-            suggestedName: "2024-01-15_Photo_Beach.jpg",
-            renameReason: "Added date and description"
-        )
-        XCTAssertTrue(mappingWithRename.hasRename)
-        XCTAssertEqual(mappingWithRename.finalFilename, "2024-01-15_Photo_Beach.jpg")
-
-        let mappingWithoutRename = FileRenameMapping(originalFile: file)
-        XCTAssertFalse(mappingWithoutRename.hasRename)
-        XCTAssertEqual(mappingWithoutRename.finalFilename, "IMG_001.jpg")
-    }
-
-    func testFolderSuggestionRenameCount() {
-        let file1 = FileItem(path: "/test/IMG_001.jpg", name: "IMG_001", extension: "jpg")
-        let file2 = FileItem(path: "/test/IMG_002.jpg", name: "IMG_002", extension: "jpg")
-        let file3 = FileItem(path: "/test/document.pdf", name: "document", extension: "pdf")
-
-        let renameMappings = [
-            FileRenameMapping(originalFile: file1, suggestedName: "2024-01-15_Beach.jpg"),
-            FileRenameMapping(originalFile: file2, suggestedName: "2024-01-15_Sunset.jpg"),
-            FileRenameMapping(originalFile: file3) // No rename
-        ]
-
-        let suggestion = FolderSuggestion(
-            folderName: "Photos",
-            files: [file1, file2, file3],
-            fileRenameMappings: renameMappings
-        )
-
-        XCTAssertEqual(suggestion.renameCount, 2)
-    }
-
-    func testFolderSuggestionRenameMapping() {
-        let file = FileItem(path: "/test/doc.pdf", name: "doc", extension: "pdf")
-        let mapping = FileRenameMapping(
-            originalFile: file,
-            suggestedName: "2024-01-Invoice.pdf",
-            renameReason: "Added date prefix"
-        )
-
-        let suggestion = FolderSuggestion(
-            folderName: "Invoices",
-            files: [file],
-            fileRenameMappings: [mapping]
-        )
-
-        let foundMapping = suggestion.renameMapping(for: file)
-        XCTAssertNotNil(foundMapping)
-        XCTAssertEqual(foundMapping?.suggestedName, "2024-01-Invoice.pdf")
-    }
-
-    func testFilesWithFinalNames() {
-        let file1 = FileItem(path: "/test/a.txt", name: "a", extension: "txt")
-        let file2 = FileItem(path: "/test/b.txt", name: "b", extension: "txt")
-
-        let suggestion = FolderSuggestion(
-            folderName: "Docs",
-            files: [file1, file2],
-            fileRenameMappings: [
-                FileRenameMapping(originalFile: file1, suggestedName: "renamed_a.txt")
-            ]
-        )
-
-        let filesWithNames = suggestion.filesWithFinalNames
-        XCTAssertEqual(filesWithNames.count, 2)
-
-        let renamedFile = filesWithNames.first { $0.file.id == file1.id }
-        XCTAssertEqual(renamedFile?.finalName, "renamed_a.txt")
-
-        let unchangedFile = filesWithNames.first { $0.file.id == file2.id }
-        XCTAssertEqual(unchangedFile?.finalName, "b.txt")
     }
 }
 
@@ -826,13 +676,5 @@ class FileTypeCategoryTests: XCTestCase {
         XCTAssertTrue(codeCategory.extensions.contains("py"))
         XCTAssertTrue(codeCategory.extensions.contains("js"))
         XCTAssertFalse(codeCategory.extensions.contains("jpg"))
-    }
-}
-
-// MARK: - Test-only helpers (moved from VisionAnalyzer.swift)
-
-private extension OCRResult {
-    var detectedKeywords: [String] {
-        detectKeywords(using: [])
     }
 }

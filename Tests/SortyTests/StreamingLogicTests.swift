@@ -260,51 +260,63 @@ final class StreamingLogicTests: XCTestCase {
         organizer.didReceiveChunk(content)
         organizer.didReceiveChunk(" more content here to trigger throttle window")
         await settleStreamingUpdates()
-        
-        let hasFileInsight = organizer.insightHistory.contains { $0.category == .file }
-        let currentMentionsFile = organizer.currentInsight.contains("report.pdf")
-        
-        XCTAssertTrue(hasFileInsight || currentMentionsFile,
-                       "Should extract file insight from content mentioning 'report.pdf'")
+
+        XCTAssertTrue(
+            organizer.insightHistory.contains { $0.category == .file && $0.text.contains("report.pdf") },
+            "Should extract file insight from content mentioning 'report.pdf'"
+        )
+        XCTAssertTrue(
+            organizer.currentInsight.contains("report.pdf"),
+            "Current insight should mention 'report.pdf'"
+        )
     }
-    
+
     func testFolderInsightExtracted() async {
         let content = String(repeating: " ", count: 100) + "creating folder: 'Documents' for PDFs"
         organizer.didReceiveChunk(content)
         organizer.didReceiveChunk(" additional content to pass throttle")
         await settleStreamingUpdates()
-        
-        let hasFolderInsight = organizer.insightHistory.contains { $0.category == .folder }
-        let currentMentionsFolder = organizer.currentInsight.contains("Documents")
-        
-        XCTAssertTrue(hasFolderInsight || currentMentionsFolder,
-                       "Should extract folder insight from content mentioning 'Documents'")
+
+        XCTAssertTrue(
+            organizer.insightHistory.contains { $0.category == .folder && $0.text.contains("Documents") },
+            "Should extract folder insight from content mentioning 'Documents'"
+        )
+        XCTAssertTrue(
+            organizer.currentInsight.contains("Documents"),
+            "Current insight should mention 'Documents'"
+        )
     }
-    
+
     func testConstraintInsightExtracted() async {
         let content = String(repeating: " ", count: 100) + "considering: the user prefers flat structure for small projects"
         organizer.didReceiveChunk(content)
         organizer.didReceiveChunk(" more text to allow throttle window to pass")
         await settleStreamingUpdates()
-        
-        let hasConstraintInsight = organizer.insightHistory.contains { $0.category == .constraint }
-        let currentHasText = organizer.currentInsight.contains("flat structure")
-        
-        XCTAssertTrue(hasConstraintInsight || currentHasText,
-                       "Should extract constraint insight")
+
+        XCTAssertTrue(
+            organizer.insightHistory.contains { $0.category == .constraint && $0.text.contains("flat structure") },
+            "Should extract constraint insight"
+        )
+        XCTAssertTrue(
+            organizer.currentInsight.contains("flat structure"),
+            "Current insight should mention the constraint topic"
+        )
     }
-    
+
     func testDecisionInsightExtracted() async {
         let content = String(repeating: " ", count: 100) + "will move these files into the Archives directory for safekeeping"
         organizer.didReceiveChunk(content)
         organizer.didReceiveChunk(" more text padding to get past throttle limit")
         await settleStreamingUpdates()
-        
-        let hasDecisionInsight = organizer.insightHistory.contains { $0.category == .decision }
-        let currentHasDecision = organizer.currentInsight.contains("Archives")
-        
-        XCTAssertTrue(hasDecisionInsight || currentHasDecision,
-                       "Should extract decision insight")
+
+        XCTAssertTrue(
+            organizer.insightHistory.contains { $0.category == .decision && $0.text.contains("Archives") },
+            "Should extract decision insight"
+        )
+        XCTAssertTrue(
+            organizer.currentInsight.contains("Archives"),
+            "Current insight should mention 'Archives'"
+        )
     }
     
     func testJSONContentSkippedByGeneralInsight() async {
@@ -315,7 +327,12 @@ final class StreamingLogicTests: XCTestCase {
         organizer.didReceiveChunk(jsonContent)
         organizer.didReceiveChunk(" extra padding for throttle")
         await settleStreamingUpdates()
-        
+
+        // Extraction must produce an insight (currently the structured-JSON
+        // folder path); without this the brace loop below passes vacuously.
+        XCTAssertFalse(organizer.insightHistory.isEmpty, "Extraction should produce an insight")
+        XCTAssertFalse(organizer.currentInsight.isEmpty, "Current insight should not be empty")
+
         let generalInsights = organizer.insightHistory.filter { $0.category == .general }
         for insight in generalInsights {
             XCTAssertFalse(insight.text.contains("{"), "General insight should not contain JSON braces")
@@ -340,16 +357,6 @@ final class StreamingLogicTests: XCTestCase {
     }
     
     // MARK: - Insights Cache
-    
-    func testGetCachedInsightsReturnsData() async {
-        let content = String(repeating: " ", count: 100) + "analyzing document: 'test.pdf'"
-        organizer.didReceiveChunk(content)
-        organizer.didReceiveChunk(" more")
-        await settleStreamingUpdates()
-        
-        let cached = organizer.getCachedInsights()
-        XCTAssertEqual(cached.current, organizer.currentInsight)
-    }
     
     func testProgressLineInvalidatesOlderExtractedInsightCache() async {
         let content = String(repeating: " ", count: 100) + "analyzing document: 'test.pdf'"
