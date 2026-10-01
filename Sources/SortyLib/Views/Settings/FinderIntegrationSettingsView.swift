@@ -82,6 +82,7 @@ struct FinderIntegrationSettingsView: View {
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: setupState)
         .task(id: refreshGeneration) {
+            setupState = nil
             let diagnostics = await ExtensionCommunication.prepareFinderIntegrationAsync()
             guard !Task.isCancelled else { return }
             setupState = diagnostics.setupState
@@ -124,6 +125,7 @@ struct FinderIntegrationSettingsView: View {
         switch setupState {
         case nil: "clock"
         case .enabled: "checkmark.circle.fill"
+        case .registered: "info.circle"
         case .needsEnable: "puzzlepiece.extension"
         case .unavailable: "info.circle"
         case .pending: "info.circle"
@@ -132,8 +134,9 @@ struct FinderIntegrationSettingsView: View {
 
     private var statusTitle: String {
         switch setupState {
-        case nil: "Setting up Finder actions"
-        case .enabled: "Enabled in Finder"
+        case nil: "Checking Finder extension"
+        case .enabled: "Recently loaded by Finder"
+        case .registered: "Enabled in macOS"
         case .needsEnable: "Enable Sorty in macOS"
         case .unavailable: "Finder extension unavailable"
         case .pending: "Finder hasn't loaded Sorty yet"
@@ -143,9 +146,11 @@ struct FinderIntegrationSettingsView: View {
     private var statusDetail: String {
         switch setupState {
         case nil:
-            "Sorty is preparing the right-click menu automatically."
+            "Sorty is checking macOS settings and preparing Finder actions."
         case .enabled:
-            "Right-click a folder and look for Sorty. macOS manages whether the extension is enabled."
+            "Finder recently loaded Sorty. Right-click a folder to look for its actions. Menu availability depends on the folder and Finder's current state."
+        case .registered:
+            "Sorty is enabled, but it has not confirmed that Finder loaded the extension. Right-click a folder to check for its actions."
         case .needsEnable:
             "In System Settings, open General > Login Items & Extensions > Finder and turn on Sorty. This page updates when you return."
         case .pending:

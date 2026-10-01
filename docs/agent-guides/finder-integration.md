@@ -42,8 +42,10 @@ macOS's enable/disable choice. A disabled extension requires the user to enable
 Sorty in macOS Extensions.
 
 `finderSyncDiagnostics` distinguishes registration from runtime confirmation.
-An enabled registration is sufficient for the settings label **Enabled in
-Finder**; a recent heartbeat or matching process is needed to call it verified.
+An enabled registration shows **Enabled in macOS** without a green success
+indicator. A recent heartbeat or matching process shows **Recently loaded by
+Finder**. Neither proves that the menu is visible for the current selection.
+The page clears its previous status while refreshing on app activation.
 A quiet, lazily loaded extension must not trigger repeated repair.
 Missing extensions and invalid signatures are packaging problems; automatic
 maintenance cannot repair those by changing the installed app's signature.

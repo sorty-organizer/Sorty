@@ -321,8 +321,10 @@ public struct ExtensionCommunication {
 
         package var setupState: FinderSetupState {
             switch kind {
-            case .registered, .verified:
+            case .verified:
                 return .enabled
+            case .registered:
+                return .registered
             case .disabled, .indeterminate:
                 return .needsEnable
             case .missing, .signatureInvalid:
@@ -355,6 +357,7 @@ public struct ExtensionCommunication {
 
     package enum FinderSetupState: Sendable, Equatable {
         case enabled
+        case registered
         case needsEnable
         case unavailable
         case pending
