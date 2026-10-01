@@ -6,6 +6,7 @@ struct FocusedInstructionBeamBorder: View {
     @SortyHotReload private var hotReload
     let active: Bool
     var cornerRadius: CGFloat = 10
+    var duration: TimeInterval = 1.96
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
@@ -20,7 +21,7 @@ struct FocusedInstructionBeamBorder: View {
                     || !isAppActive
             )
         ) { timeline in
-            let phase = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate / 1.96
+            let phase = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate / duration
 
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(

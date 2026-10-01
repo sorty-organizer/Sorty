@@ -84,7 +84,11 @@ public struct BugReportView: View {
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
-                    FocusedInstructionBeamBorder(active: isDescriptionFocused, cornerRadius: 8)
+                    FocusedInstructionBeamBorder(
+                        active: !isDescriptionFocused,
+                        cornerRadius: 8,
+                        duration: 8
+                    )
                 }
                 .accessibilityIdentifier("BugReportDescription")
                 .onChange(of: description) { _, newValue in
