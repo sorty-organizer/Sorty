@@ -218,47 +218,45 @@ final class StorageDestinationNormalizerTests: XCTestCase {
         )
     }
 
-    func testNormalizeDoesNotFallbackRemapRelativeFolderToSingleStorageRoot() {
+    func testNormalizeFallbackSkippedConditions() {
+        // Phase 1: relative folder is not fallback-remapped to a single storage root.
         let storageRoot = "/tmp/storage-root"
-        let file = FileItem(path: "/tmp/source/budget.xlsx", name: "budget", extension: "xlsx", size: 10, isDirectory: false)
-        let plan = OrganizationPlan(
-            suggestions: [FolderSuggestion(folderName: "Spreadsheets", files: [file])],
+        let singleFile = FileItem(path: "/tmp/source/budget.xlsx", name: "budget", extension: "xlsx", size: 10, isDirectory: false)
+        let singlePlan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Spreadsheets", files: [singleFile])],
             unorganizedFiles: []
         )
 
-        let normalized = StorageDestinationNormalizer.normalize(
-            plan: plan,
+        let singleNormalized = StorageDestinationNormalizer.normalize(
+            plan: singlePlan,
             allowedStorageLocations: [StorageLocation(path: storageRoot, name: "Archive")]
         )
 
-        XCTAssertEqual(normalized.suggestions.first?.folderName, "Spreadsheets")
-    }
+        XCTAssertEqual(singleNormalized.suggestions.first?.folderName, "Spreadsheets")
 
-    func testNormalizeFallbackSkippedWhenMultipleStorageLocations() {
-        let file = FileItem(path: "/tmp/source/budget.xlsx", name: "budget", extension: "xlsx", size: 10, isDirectory: false)
-        let plan = OrganizationPlan(
-            suggestions: [FolderSuggestion(folderName: "Spreadsheets", files: [file])],
+        // Phase 2: fallback skipped with multiple storage locations.
+        let multiFile = FileItem(path: "/tmp/source/budget.xlsx", name: "budget", extension: "xlsx", size: 10, isDirectory: false)
+        let multiPlan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Spreadsheets", files: [multiFile])],
             unorganizedFiles: []
         )
 
         // With multiple storage locations the fallback should NOT trigger
         // because we can't determine which root to use.
-        let normalized = StorageDestinationNormalizer.normalize(
-            plan: plan,
+        let multiNormalized = StorageDestinationNormalizer.normalize(
+            plan: multiPlan,
             allowedStorageLocations: [
                 StorageLocation(path: "/tmp/archive-root", name: "Archive"),
                 StorageLocation(path: "/tmp/projects-root", name: "Projects")
             ]
         )
 
-        XCTAssertEqual(normalized.suggestions.first?.folderName, "Spreadsheets")
-    }
+        XCTAssertEqual(multiNormalized.suggestions.first?.folderName, "Spreadsheets")
 
-    func testNormalizeFallbackSkippedWhenAlreadyResolvedToStorage() {
-        let storageRoot = "/tmp/storage-root"
+        // Phase 3: fallback skipped when another suggestion already resolved to storage.
         let file1 = FileItem(path: "/tmp/source/budget.xlsx", name: "budget", extension: "xlsx", size: 10, isDirectory: false)
         let file2 = FileItem(path: "/tmp/source/notes.txt", name: "notes", extension: "txt", size: 5, isDirectory: false)
-        let plan = OrganizationPlan(
+        let mixedPlan = OrganizationPlan(
             suggestions: [
                 FolderSuggestion(folderName: "/tmp/storage-root/Invoices", files: [file1]),
                 FolderSuggestion(folderName: "LocalStuff", files: [file2])
@@ -267,16 +265,16 @@ final class StorageDestinationNormalizerTests: XCTestCase {
         )
 
         // One folder already points to storage, so fallback should NOT remap the other.
-        let normalized = StorageDestinationNormalizer.normalize(
-            plan: plan,
+        let mixedNormalized = StorageDestinationNormalizer.normalize(
+            plan: mixedPlan,
             allowedStorageLocations: [StorageLocation(path: storageRoot, name: "Archive")]
         )
 
         XCTAssertEqual(
-            normalized.suggestions[0].folderName,
+            mixedNormalized.suggestions[0].folderName,
             StorageLocationPathResolver.canonicalPath("/tmp/storage-root/Invoices")
         )
-        XCTAssertEqual(normalized.suggestions[1].folderName, "LocalStuff")
+        XCTAssertEqual(mixedNormalized.suggestions[1].folderName, "LocalStuff")
     }
 
     func testNormalizeKeepsValidStorageAbsolutePathUnchanged() {

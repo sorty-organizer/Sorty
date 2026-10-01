@@ -107,6 +107,7 @@ class FileSystemManagerTests: XCTestCase {
 
     @MainActor
     func testMoveFilesRejectsSymlinkedDestinationOutsideBaseDirectory() async throws {
+        // Phase 1: direct symlinked destination (Escapes -> outside).
         let outsideDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("sorty-outside-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: outsideDirectory, withIntermediateDirectories: true)
@@ -136,6 +137,32 @@ class FileSystemManagerTests: XCTestCase {
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: sourceFile.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: outsideDirectory.appendingPathComponent("secret.txt").path))
+
+        // Phase 2: nested relative destination under a symlink (Linked/Export-style).
+        let nestedOutsideDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sorty-outside-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: nestedOutsideDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: nestedOutsideDirectory) }
+
+        let link = tempDirectory.appendingPathComponent("Linked", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: nestedOutsideDirectory)
+
+        let nestedFileItem = FileItem(path: sourceFile.path, name: "secret", extension: "txt", size: 6, isDirectory: false)
+        let nestedPlan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Linked/Export", files: [nestedFileItem])],
+            unorganizedFiles: [],
+            notes: ""
+        )
+
+        do {
+            _ = try await fileSystemManager.applyOrganization(nestedPlan, at: tempDirectory, dryRun: false)
+            XCTFail("Expected symlinked relative destination to be rejected")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("outside the selected directory"))
+        }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sourceFile.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: nestedOutsideDirectory.appendingPathComponent("Export/secret.txt").path))
     }
 
     @MainActor
@@ -159,37 +186,6 @@ class FileSystemManagerTests: XCTestCase {
         
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("NewDir/to_move.txt").path))
-    }
-
-    @MainActor
-    func testRelativeSymlinkDestinationCannotEscapeBaseDirectory() async throws {
-        let outsideDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sorty-outside-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: outsideDirectory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: outsideDirectory) }
-
-        let link = tempDirectory.appendingPathComponent("Linked", isDirectory: true)
-        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outsideDirectory)
-
-        let sourceFile = tempDirectory.appendingPathComponent("secret.txt")
-        try "secret".write(to: sourceFile, atomically: true, encoding: .utf8)
-
-        let fileItem = FileItem(path: sourceFile.path, name: "secret", extension: "txt", size: 6, isDirectory: false)
-        let plan = OrganizationPlan(
-            suggestions: [FolderSuggestion(folderName: "Linked/Export", files: [fileItem])],
-            unorganizedFiles: [],
-            notes: ""
-        )
-
-        do {
-            _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
-            XCTFail("Expected symlinked relative destination to be rejected")
-        } catch {
-            XCTAssertTrue(error.localizedDescription.contains("outside the selected directory"))
-        }
-
-        XCTAssertTrue(FileManager.default.fileExists(atPath: sourceFile.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: outsideDirectory.appendingPathComponent("Export/secret.txt").path))
     }
 
     @MainActor
@@ -684,31 +680,8 @@ class FileSystemManagerTests: XCTestCase {
     }
     
     @MainActor
-    func testTagFilesActualApplication() async throws {
-        let destFolder = tempDirectory.appendingPathComponent("Documents")
-        try FileManager.default.createDirectory(at: destFolder, withIntermediateDirectories: true)
-        
-        let file = destFolder.appendingPathComponent("test.txt")
-        try "Content".write(to: file, atomically: true, encoding: .utf8)
-        
-        let fileItem = FileItem(path: file.path, name: "test", extension: "txt", size: 7, isDirectory: false)
-        var suggestion = FolderSuggestion(folderName: "Documents", files: [fileItem])
-        
-        let tagMapping = FileTagMapping(originalFile: fileItem, tags: ["Finance", "2024"])
-        suggestion.fileTagMappings.append(tagMapping)
-        
-        let plan = OrganizationPlan(suggestions: [suggestion], unorganizedFiles: [], notes: "")
-        
-        let ops = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: true)
-
-        let tagOps = ops.filter { $0.type == .tagFile }
-        XCTAssertEqual(tagOps.count, 1)
-        XCTAssertNotNil(tagOps.first?.metadata?.originalTags)
-        XCTAssertNotNil(tagOps.first?.metadata?.newTags)
-    }
-    
-    @MainActor
     func testApplyOrganizationWithTagging() async throws {
+        // Phase 1: move + tag produces create/move/tag operations.
         let file = tempDirectory.appendingPathComponent("invoice.pdf")
         try "PDF Content".write(to: file, atomically: true, encoding: .utf8)
         
@@ -726,6 +699,28 @@ class FileSystemManagerTests: XCTestCase {
         XCTAssertTrue(ops.contains { $0.type == .createFolder })
         XCTAssertTrue(ops.contains { $0.type == .moveFile })
         XCTAssertTrue(ops.contains { $0.type == .tagFile })
+
+        // Phase 2: tag round-trip on an in-place file preserves tag metadata.
+        let destFolder = tempDirectory.appendingPathComponent("Documents")
+        try FileManager.default.createDirectory(at: destFolder, withIntermediateDirectories: true)
+
+        let inPlaceFile = destFolder.appendingPathComponent("test.txt")
+        try "Content".write(to: inPlaceFile, atomically: true, encoding: .utf8)
+
+        let inPlaceItem = FileItem(path: inPlaceFile.path, name: "test", extension: "txt", size: 7, isDirectory: false)
+        var inPlaceSuggestion = FolderSuggestion(folderName: "Documents", files: [inPlaceItem])
+
+        let inPlaceMapping = FileTagMapping(originalFile: inPlaceItem, tags: ["Finance", "2024"])
+        inPlaceSuggestion.fileTagMappings.append(inPlaceMapping)
+
+        let inPlacePlan = OrganizationPlan(suggestions: [inPlaceSuggestion], unorganizedFiles: [], notes: "")
+
+        let inPlaceOps = try await fileSystemManager.applyOrganization(inPlacePlan, at: tempDirectory, enableTagging: true)
+
+        let tagOps = inPlaceOps.filter { $0.type == .tagFile }
+        XCTAssertEqual(tagOps.count, 1)
+        XCTAssertNotNil(tagOps.first?.metadata?.originalTags)
+        XCTAssertNotNil(tagOps.first?.metadata?.newTags)
     }
     
     @MainActor

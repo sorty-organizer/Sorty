@@ -136,11 +136,6 @@ final class ResourceLoadingTests: XCTestCase {
         let bundle = SortyResources.bundle
         XCTAssertNotNil(bundle, "Bundle resolver should find a valid bundle")
         XCTAssertFalse(bundle.bundlePath.isEmpty, "Resolved bundle should have a valid path")
-    }
-
-    func testSortyResourcesBundleHasResourceURL() {
-        // Ensure the resolved bundle has a resource URL for loading
-        let bundle = SortyResources.bundle
         XCTAssertNotNil(bundle.resourceURL, "Bundle should have a resource URL")
     }
 }
@@ -149,16 +144,10 @@ final class ResourceLoadingTests: XCTestCase {
 
 final class ResourceLoadingIntegrationTests: XCTestCase {
     
-    func testAIProviderDisplayNamesAreValid() {
-        // Ensure all providers have valid display names for UI
+    func testAIProviderDisplayMetadataAreValid() {
+        // Ensure all providers have valid display names and logo image names for UI
         for provider in AIProvider.allCases {
             XCTAssertFalse(provider.displayName.isEmpty, "\(provider) should have a non-empty display name")
-        }
-    }
-    
-    func testAIProviderLogoImageNamesAreValid() {
-        // Ensure all providers have valid logo image names
-        for provider in AIProvider.allCases {
             XCTAssertFalse(provider.logoImageName.isEmpty, "\(provider) should have a non-empty logo image name")
         }
     }

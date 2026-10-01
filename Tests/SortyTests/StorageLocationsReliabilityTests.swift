@@ -54,6 +54,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
     }
 
     func testValidatorRejectsAbsoluteStorageDestinationThatEscapesThroughSymlink() throws {
+        // Phase 1: storageDir/outside link escapes to Outside.
         let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
         let storageDir = tempRoot.appendingPathComponent("Archive", isDirectory: true)
         let outsideDir = tempRoot.appendingPathComponent("Outside", isDirectory: true)
@@ -77,6 +78,43 @@ final class StorageLocationsReliabilityTests: XCTestCase {
                 plan,
                 at: sourceDir,
                 allowedStorageLocations: [StorageLocation(path: storageDir.path)]
+            )
+        ) { error in
+            guard case ValidationError.invalidStorageLocation = error else {
+                return XCTFail("Expected an invalid storage location error, got \(error)")
+            }
+        }
+
+        // Phase 2: spaced link name ("Outside Link") with a different file escapes the same way.
+        let secondSourceDir = tempRoot.appendingPathComponent("Source2", isDirectory: true)
+        let secondStorageDir = tempRoot.appendingPathComponent("Archive2", isDirectory: true)
+        let secondOutsideDir = tempRoot.appendingPathComponent("Outside2", isDirectory: true)
+        try FileManager.default.createDirectory(at: secondSourceDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: secondStorageDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: secondOutsideDir, withIntermediateDirectories: true)
+
+        let spacedLink = secondStorageDir.appendingPathComponent("Outside Link", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: spacedLink, withDestinationURL: secondOutsideDir)
+        let secondSourceFile = secondSourceDir.appendingPathComponent("private.txt")
+        try "private".write(to: secondSourceFile, atomically: true, encoding: .utf8)
+        let secondFile = FileItem(
+            path: secondSourceFile.path,
+            name: "private",
+            extension: "txt",
+            size: 7,
+            isDirectory: false
+        )
+        let secondPlan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: spacedLink.path, files: [secondFile])],
+            unorganizedFiles: [],
+            notes: "test"
+        )
+
+        XCTAssertThrowsError(
+            try FileOrganizationValidator.validate(
+                secondPlan,
+                at: secondSourceDir,
+                allowedStorageLocations: [StorageLocation(path: secondStorageDir.path)]
             )
         ) { error in
             guard case ValidationError.invalidStorageLocation = error else {
@@ -182,40 +220,6 @@ final class StorageLocationsReliabilityTests: XCTestCase {
         )
 
         XCTAssertNoThrow(
-            try FileOrganizationValidator.validate(
-                plan,
-                at: sourceDir,
-                allowedStorageLocations: [StorageLocation(path: storageDir.path)]
-            )
-        )
-    }
-
-    func testValidatorRejectsAbsoluteDestinationEscapingAllowedStorageThroughSymlink() throws {
-        let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
-        let storageDir = tempRoot.appendingPathComponent("Archive", isDirectory: true)
-        let outsideDir = tempRoot.appendingPathComponent("Outside", isDirectory: true)
-        try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: outsideDir, withIntermediateDirectories: true)
-
-        let link = storageDir.appendingPathComponent("Outside Link", isDirectory: true)
-        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outsideDir)
-        let sourceFile = sourceDir.appendingPathComponent("private.txt")
-        try "private".write(to: sourceFile, atomically: true, encoding: .utf8)
-        let file = FileItem(
-            path: sourceFile.path,
-            name: "private",
-            extension: "txt",
-            size: 7,
-            isDirectory: false
-        )
-        let plan = OrganizationPlan(
-            suggestions: [FolderSuggestion(folderName: link.path, files: [file])],
-            unorganizedFiles: [],
-            notes: "test"
-        )
-
-        XCTAssertThrowsError(
             try FileOrganizationValidator.validate(
                 plan,
                 at: sourceDir,
