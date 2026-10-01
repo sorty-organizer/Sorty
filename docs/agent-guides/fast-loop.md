@@ -83,7 +83,7 @@ rehash only changed groups. Metadata changes alone do not trigger packaging when
 resource contents still match. Media keys include inode, size, mtime, and ctime
 so replacing a file or preserving its mtime cannot hide a content change.
 Scheduled maintenance removes indexes when build flags disable indexing and
-expires unused fingerprint records. Active Debug/current-configuration outputs
+expires old fingerprint records. Active Debug/current-configuration outputs
 and dependencies remain protected, so the size budget is a soft limit. See [build_cache.sh](../../scripts/build_cache.sh) and
 [build.sh](../../scripts/build.sh) for the implementation.
 

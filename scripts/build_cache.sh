@@ -525,7 +525,9 @@ prune_stale_build_cache_paths() {
     # keep compiler objects, dependency artifacts, and incremental databases.
     case " ${BUILD_FLAGS:-} ${XCODE_EXTRA_FLAGS:-} " in
         *" --disable-index-store "*|*" COMPILER_INDEX_STORE_ENABLE=NO "*)
-            find "${BUILD_DIR}" -type d \( -name index -o -name Index.noindex \) \
+            find "${BUILD_DIR}" -type d \
+                \( -name checkouts -o -name repositories -o -name artifacts \) -prune -o \
+                -type d \( -name index -o -name Index.noindex \) \
                 -prune -exec rm -rf {} + 2>/dev/null || true
             ;;
     esac
