@@ -674,7 +674,7 @@ struct SortyApp: App {
     /// Attributes manager construction in Instruments and logs slow debug constructors.
     private static func timedLaunchInit<T>(_ name: StaticString, _ make: () -> T) -> T {
         let signpostID = OSSignpostID(log: launchSignpostLog)
-        os_signpost(.begin, log: launchSignpostLog, name: "Manager initialization", signpostID: signpostID, "%{public}s", name.utf8Start)
+        os_signpost(.begin, log: launchSignpostLog, name: "Manager initialization", signpostID: signpostID, "%{public}@", String(describing: name))
         defer {
             os_signpost(.end, log: launchSignpostLog, name: "Manager initialization", signpostID: signpostID)
         }
