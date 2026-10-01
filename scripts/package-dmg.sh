@@ -21,12 +21,19 @@ trap 'rm -rf "${DMG_WORK_DIR}"' EXIT
 python3 -m venv "${DMG_WORK_DIR}/venv"
 "${DMG_WORK_DIR}/venv/bin/python" -m pip install --disable-pip-version-check 'dmgbuild==1.6.7'
 
-# The source is 928 × 1128; the Finder window uses half-sized logical pixels.
-sips -z 564 464 "${PROJECT_DIR}/Assets/DMG/dmg-background.png" \
-    --out "${DMG_WORK_DIR}/background.png" >/dev/null
+# Give Finder both 1x and 2x representations at the same logical size.
+# A half-sized PNG alone gets enlarged and softens the gradient and dot field.
+sips -s format tiff -z 564 464 -s dpiWidth 72 -s dpiHeight 72 \
+    "${PROJECT_DIR}/Assets/DMG/dmg-background.png" \
+    --out "${DMG_WORK_DIR}/background-1x.tiff" >/dev/null
+sips -s format tiff -s dpiWidth 144 -s dpiHeight 144 \
+    "${PROJECT_DIR}/Assets/DMG/dmg-background.png" \
+    --out "${DMG_WORK_DIR}/background-2x.tiff" >/dev/null
+tiffutil -cathidpicheck "${DMG_WORK_DIR}/background-1x.tiff" \
+    "${DMG_WORK_DIR}/background-2x.tiff" -out "${DMG_WORK_DIR}/background.tiff"
 "${DMG_WORK_DIR}/venv/bin/dmgbuild" \
     -s "${SCRIPT_DIR}/dmg-settings.py" \
-    -D "app=${APP_PATH}" -D "background=${DMG_WORK_DIR}/background.png" \
+    -D "app=${APP_PATH}" -D "background=${DMG_WORK_DIR}/background.tiff" \
     "Sorty" "${DMG_WORK_DIR}/Sorty.dmg"
 hdiutil verify "${DMG_WORK_DIR}/Sorty.dmg"
 mv -f "${DMG_WORK_DIR}/Sorty.dmg" "${RELEASE_DIR}/Sorty.dmg"

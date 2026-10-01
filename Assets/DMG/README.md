@@ -33,7 +33,8 @@ sips -s format tiff Assets/DMG/dmg-background.png --out Assets/DMG/dmgcanvas_bg.
 ```
 
 The release workflow runs `scripts/package-dmg.sh` after validating the app.
-It scales the PNG to a 464 × 564 Finder window and uses `scripts/dmg-settings.py`
+It combines 464 × 564 and 928 × 1128 representations in a Retina TIFF for
+the 464 × 564 Finder window and uses `scripts/dmg-settings.py`
 to center Sorty above the Applications shortcut, alongside the cursor trail.
 Both icons use a 112-pixel size. The TIFF is also available for
 manual use in DMG Canvas. Check the Finder layout before publishing.
