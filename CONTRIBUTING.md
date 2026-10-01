@@ -323,6 +323,14 @@ UI automation. Python 3.10+ and network access to PyPI are required. It verifies
 the app signature and disk image, then writes `releases/Sorty.dmg`. Temporary
 files are removed automatically. This does not sign or notarize the DMG.
 
+The local `make release`, `scripts/release.sh`, and `scripts/auto-release.sh`
+also call this same DMG packager after creating the ZIP. `make release` keeps
+its ZIP name, `Sorty-macOS.zip`; the hosted workflow publishes `Sorty.zip`.
+All paths use the committed background and `scripts/dmg-settings.py` without
+regenerating the artwork or changing the Finder layout. Keep the window size,
+icon coordinates, icon size, text size, and Retina representations together
+when deliberately changing the design. See [the DMG layout](Assets/DMG/README.md).
+
 ## Commit Message Guidelines
 
 Use clear, descriptive commit messages:

@@ -43,6 +43,7 @@ export APP_ICON_VARIANT="${APP_ICON_VARIANT:-release}"
 
 # --- Step 2: Package ---
 "${SCRIPT_DIR}/package.sh"
+bash "${SCRIPT_DIR}/package-dmg.sh"
 
 # --- Step 3: Notarize (Optional) ---
 if [ -n "$NOTARIZATION_USERNAME" ] || [ -n "$KEYCHAIN_PROFILE" ]; then

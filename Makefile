@@ -153,17 +153,16 @@ install: build
 	@cp -R releases/Sorty.app /Applications/Sorty.app
 	@echo "✅ Installed! You can now find Sorty in your Applications folder."
 
-# Create a release zip for GitHub (manual)
+# Create local release packages for diagnostics
 release:
 	@echo "📦 Creating release package..."
 	@APP_ICON_VARIANT=release $(MAKE) build
 	@ZIP_NAME_OVERRIDE="Sorty-macOS.zip" ./scripts/package.sh
-	@echo "✅ Release package created: releases/Sorty-macOS.zip"
+	@bash scripts/package-dmg.sh
+	@echo "✅ Release packages created: releases/Sorty-macOS.zip and releases/Sorty.dmg"
 	@echo ""
 	@echo "📋 Next steps:"
-	@echo "   1. Create a new release on GitHub"
-	@echo "   2. Upload releases/Sorty-macOS.zip"
-	@echo "   3. Remind users to run: xattr -cr /Applications/Sorty.app"
+	@echo "   Publish through the Blacksmith Release workflow after candidate approval."
 
 friend-zip: prepare-swiftpm-scratch
 	@echo "📦 Creating friend-test ZIP in Downloads..."
@@ -268,7 +267,7 @@ help:
 	@echo "  make release-patch   - Auto-release with patch version bump (1.0.0 -> 1.0.1)"
 	@echo "  make release-minor   - Auto-release with minor version bump (1.0.0 -> 1.1.0)"
 	@echo "  make release-major   - Auto-release with major version bump (1.0.0 -> 2.0.0)"
-	@echo "  make release         - Create local release zip for diagnostics"
+	@echo "  make release         - Create local release ZIP and DMG for diagnostics"
 	@echo "  make friend-zip      - Build a friend-test ZIP in ~/Downloads"
 	@echo "  make prerelease      - Run local pre-release diagnostics"
 	@echo ""

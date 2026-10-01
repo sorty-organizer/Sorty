@@ -39,3 +39,16 @@ the 464 × 564 Finder window and uses `scripts/dmg-settings.py`
 to center Sorty above the Applications shortcut, alongside the cursor trail.
 Both icons use a 112-pixel size. The TIFF is also available for
 manual use in DMG Canvas. Check the Finder layout before publishing.
+
+The hosted workflow and local release commands all use this same packager.
+Packaging reads the committed artwork directly; it does not regenerate or
+recompose it. Preserve these values unless intentionally revising the layout:
+
+- Finder window: 464 × 564 logical pixels, at position 200, 200.
+- Sorty icon: 224, 140. Applications shortcut: 224, 380.
+- Icon size: 112. Label text size: 13.
+- Background: 928 × 1128 source pixels, packaged as 1x at 72 DPI and 2x at
+  144 DPI in one TIFF.
+
+The release app remains named `Sorty.app`, matching its saved icon location.
+Both `Sorty.dmg` and `Sorty.zip` are GitHub release assets; Sparkle uses the ZIP.

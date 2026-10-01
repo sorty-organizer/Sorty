@@ -98,7 +98,7 @@ if [ "$DRY_RUN" == "true" ]; then
     echo "  1. Bump version: $CURRENT_VERSION -> $NEW_VERSION"
     echo "  2. Run tests"
     echo "  3. Build app"
-    echo "  4. Create ZIP package"
+    echo "  4. Create ZIP and DMG packages"
     echo "  5. Generate appcast"
     echo "  6. Commit version bump"
     echo "  7. Create tag v$NEW_VERSION"
@@ -149,6 +149,7 @@ export APP_ICON_VARIANT="${APP_ICON_VARIANT:-release}"
 # Step 4: Package
 print_step 4 6 "Creating release package"
 "${SCRIPT_DIR}/package.sh"
+bash "${SCRIPT_DIR}/package-dmg.sh"
 
 # Step 5: Generate appcast (if script exists)
 print_step 5 6 "Generating appcast"
@@ -189,7 +190,8 @@ echo ""
 print_summary "Release Complete ✨" \
     "Version" "$NEW_VERSION" \
     "Tag" "$TAG_NAME" \
-    "ZIP" "${RELEASE_DIR}/Sorty.zip"
+    "ZIP" "${RELEASE_DIR}/Sorty.zip" \
+    "DMG" "${RELEASE_DIR}/Sorty.dmg"
 
 echo ""
 echo "Next steps:"
