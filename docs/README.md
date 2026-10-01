@@ -19,6 +19,7 @@ Welcome to the official Sorty documentation. Sorty is a smart file organization 
 - [Startup performance](agent-guides/startup-performance.md)
 - [Test audit](agent-guides/test-audit.md)
 - [Complexity audit decisions](agent-guides/complexity-audit.md)
+- [Shallow module audit](agent-guides/codebase-design-audit.md)
 - [App updates](updates.md)
 - [Analytics](analytics.md)
 - [Privacy & Security](#privacy--security)
