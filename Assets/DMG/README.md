@@ -21,14 +21,14 @@ Applications icon position in `scripts/dmg-settings.py`.
 
 `dmg-background-base.png` preserves the original gradient from commit
 `4ce717d4`, with only the footer area cleared. `mascot-overlay.png` is a
-separate transparent layer, centered at x=448 with its paws at the folder's
+separate transparent layer, centered at x=460 to clear the folder tab, with its paws at the folder's
 front rim near y=697, below its raised tab. The base's blur,
 colors, dots, and cursor trail are preserved outside this small overlay.
 To recomposite without regenerating the background:
 
 ```bash
 magick Assets/DMG/dmg-background-base.png Assets/DMG/mascot-overlay.png \
-  -geometry +373+575 -compose Over -composite Assets/DMG/dmg-background.png
+  -geometry +385+575 -compose Over -composite Assets/DMG/dmg-background.png
 sips -s format tiff Assets/DMG/dmg-background.png --out Assets/DMG/dmgcanvas_bg.tiff
 ```
 
