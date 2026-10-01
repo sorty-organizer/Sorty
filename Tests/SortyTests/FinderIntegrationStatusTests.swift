@@ -23,17 +23,17 @@ final class FinderIntegrationStatusTests: XCTestCase {
         try? FileManager.default.removeItem(at: incoming)
     }
 
-    func testFinderIntegrationAvailabilityStatusReflectsDisabledFeatureFlag() {
-        let status = ExtensionCommunication.finderIntegrationAvailabilityStatus(
+    func testFinderIntegrationAvailabilityStatusFlagsIncompleteFinderSyncSetup() {
+        // Phase 1: disabled feature flag maps to featureDisabled.
+        let disabledStatus = ExtensionCommunication.finderIntegrationAvailabilityStatus(
             featureFlagEnabled: false,
             diagnostics: nil
         )
 
-        XCTAssertEqual(status.state, .featureDisabled)
-        XCTAssertEqual(status.title, "Feature Flag Disabled")
-    }
+        XCTAssertEqual(disabledStatus.state, .featureDisabled)
+        XCTAssertEqual(disabledStatus.title, "Feature Flag Disabled")
 
-    func testFinderIntegrationAvailabilityStatusFlagsIncompleteFinderSyncSetup() {
+        // Phase 2: enabled flag with a disabled extension reports setup-pending.
         let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
             entries: [.init(path: preferredExtensionPath, isEnabled: false)],
             preferredPath: preferredExtensionPath,

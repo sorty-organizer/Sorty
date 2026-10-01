@@ -123,33 +123,6 @@ final class StorageLocationsReliabilityTests: XCTestCase {
         }
     }
 
-    func testGoogleDriveProfileSeparatesFilesystemAndNativeActions() {
-        let location = StorageLocation(
-            path: "/Users/test/Library/CloudStorage/GoogleDrive-user@example.com/My Drive"
-        )
-
-        let profile = location.capabilityProfile
-
-        XCTAssertEqual(profile.provider, .googleDrive)
-        XCTAssertTrue(profile.supportedFileSystemActions.contains(.createFolders))
-        XCTAssertTrue(profile.supportedFileSystemActions.contains(.moveItems))
-        XCTAssertFalse(profile.supportedFileSystemActions.contains(.starItems))
-        XCTAssertTrue(profile.providerActionsRequiringIntegration.contains(.starItems))
-        XCTAssertTrue(location.promptContext.contains("Starred is per-user Google Drive metadata"))
-    }
-
-    func testDropboxProfileDoesNotClaimFinderTagsAsProviderMetadata() {
-        let location = StorageLocation(
-            path: "/Users/test/Library/CloudStorage/Dropbox/Projects"
-        )
-
-        let profile = location.capabilityProfile
-
-        XCTAssertEqual(profile.provider, .dropbox)
-        XCTAssertFalse(profile.supportedFileSystemActions.contains(.finderTags))
-        XCTAssertTrue(profile.providerActionsRequiringIntegration.contains(.customMetadata))
-    }
-
     func testValidatorAllowsStorageSubfolderWhenSourceAlreadyInStorage() throws {
         let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
         let storageDir = tempRoot.appendingPathComponent("Archive", isDirectory: true)

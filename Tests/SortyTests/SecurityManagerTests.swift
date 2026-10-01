@@ -178,12 +178,12 @@ final class SecurityManagerTests: XCTestCase {
     // MARK: - Edge Cases
     
     func testZeroSessionTimeout() {
+        // Phase 1: zero timeout expires immediately.
         manager.sessionTimeoutInterval = 0
         manager.refreshSession()
         XCTAssertTrue(manager.isSessionExpired, "Session should immediately expire with zero timeout")
-    }
-    
-    func testNegativeSessionTimeout() {
+
+        // Phase 2: negative timeout also expires immediately.
         manager.sessionTimeoutInterval = -100
         manager.refreshSession()
         XCTAssertTrue(manager.isSessionExpired, "Session should be expired with negative timeout")

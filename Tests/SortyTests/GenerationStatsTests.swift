@@ -4,7 +4,7 @@ import XCTest
 
 final class GenerationStatsTests: XCTestCase {
 
-    func testResponseAndContextTokenAccessors() {
+    func testTokenAccessors() {
         let stats = GenerationStats(
             duration: 4.2,
             tps: 120,
@@ -16,10 +16,8 @@ final class GenerationStatsTests: XCTestCase {
 
         XCTAssertEqual(stats.responseTokens, 900)
         XCTAssertEqual(stats.totalContextTokens, 2000)
-    }
 
-    func testTotalContextTokensNilWhenPromptTokensMissing() {
-        let stats = GenerationStats(
+        let missingPromptTokens = GenerationStats(
             duration: 1,
             tps: 10,
             ttft: 0.2,
@@ -27,7 +25,7 @@ final class GenerationStatsTests: XCTestCase {
             model: "gpt-5.4"
         )
 
-        XCTAssertNil(stats.totalContextTokens)
+        XCTAssertNil(missingPromptTokens.totalContextTokens)
     }
 
     func testEstimatedTimeSavedReflectsFullManualOrganizationWork() {
