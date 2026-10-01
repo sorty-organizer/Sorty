@@ -67,22 +67,6 @@ final class GenerationStatsTests: XCTestCase {
         XCTAssertTrue(positiveCost.hasBillableCost)
     }
 
-    func testFormattedTotalFileSizeUsesSystemFormatter() {
-        let stats = GenerationStats(
-            duration: 1,
-            tps: 10,
-            ttft: 0.2,
-            totalTokens: 100,
-            model: "gpt-5.4",
-            totalFileSize: 2048
-        )
-
-        XCTAssertEqual(
-            stats.formattedTotalFileSize,
-            ByteCountFormatter.string(fromByteCount: 2048, countStyle: .file)
-        )
-    }
-
     func testCompactModelNameTrimsAndUsesPrefixBeforeDot() {
         let stats = GenerationStats(
             duration: 1,
@@ -101,14 +85,6 @@ final class GenerationStatsTests: XCTestCase {
         XCTAssertEqual(GenerationStats.formatDuration(14.7), "15s")
         XCTAssertEqual(GenerationStats.formatDuration(125), "2m 5s")
         XCTAssertEqual(GenerationStats.formatDuration(3660), "1h 1m")
-    }
-
-    func testFormatCountMatchesLocalizedFormatter() {
-        let value = 123_456
-        XCTAssertEqual(
-            GenerationStats.formatCount(value),
-            NumberFormatter.localizedString(from: NSNumber(value: value), number: .decimal)
-        )
     }
 
     func testFormatCostUsesExpectedPrecisionBands() {

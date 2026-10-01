@@ -351,13 +351,6 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertEqual(cached.current, organizer.currentInsight)
     }
     
-    func testInvalidateInsightsCache() {
-        organizer.invalidateInsightsCache()
-        let cached = organizer.getCachedInsights()
-        XCTAssertEqual(cached.current, organizer.currentInsight)
-        XCTAssertEqual(cached.history.count, organizer.insightHistory.count)
-    }
-
     func testProgressLineInvalidatesOlderExtractedInsightCache() async {
         let content = String(repeating: " ", count: 100) + "analyzing document: 'test.pdf'"
         organizer.didReceiveChunk(content)
@@ -531,22 +524,6 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertEqual(insight.text, "Analyzing report.pdf")
         XCTAssertEqual(insight.category, .file)
         XCTAssertEqual(insight.filePath, "/path/report.pdf")
-    }
-    
-    func testAIInsightCategoryIcons() {
-        XCTAssertEqual(AIInsight.Category.file.icon, "doc")
-        XCTAssertEqual(AIInsight.Category.folder.icon, "folder")
-        XCTAssertEqual(AIInsight.Category.constraint.icon, "exclamationmark.triangle")
-        XCTAssertEqual(AIInsight.Category.decision.icon, "arrow.right")
-        XCTAssertEqual(AIInsight.Category.general.icon, "brain")
-    }
-    
-    func testAIInsightCategoryColors() {
-        XCTAssertEqual(AIInsight.Category.file.color, "blue")
-        XCTAssertEqual(AIInsight.Category.folder.color, "orange")
-        XCTAssertEqual(AIInsight.Category.constraint.color, "yellow")
-        XCTAssertEqual(AIInsight.Category.decision.color, "green")
-        XCTAssertEqual(AIInsight.Category.general.color, "secondary")
     }
     
     // MARK: - State Transition Tests

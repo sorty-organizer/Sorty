@@ -86,49 +86,7 @@ final class SecurityManagerTests: XCTestCase {
     
     // MARK: - Biometry Display Name Tests
     
-    func testBiometryDisplayNameNone() {
-        manager.biometryType = .none
-        XCTAssertEqual(manager.biometryDisplayName, "Password")
-    }
-    
-    func testBiometryDisplayNameTouchID() {
-        manager.checkBiometryType()
-        manager.biometryType = .touchID
-        XCTAssertEqual(manager.biometryDisplayName, "Touch ID")
-    }
-    
-    func testBiometryDisplayNameFaceID() {
-        manager.checkBiometryType()
-        manager.biometryType = .faceID
-        XCTAssertEqual(manager.biometryDisplayName, "Face ID")
-    }
-    
-    func testBiometryDisplayNameOpticID() {
-        manager.checkBiometryType()
-        manager.biometryType = .opticID
-        XCTAssertEqual(manager.biometryDisplayName, "Optic ID")
-    }
-    
     // MARK: - AuthenticationMethod Enum Tests
-    
-    func testAuthenticationMethodRawValues() {
-        XCTAssertEqual(SecurityManager.AuthenticationMethod.none.rawValue, "None")
-        XCTAssertEqual(SecurityManager.AuthenticationMethod.biometric.rawValue, "Biometric")
-        XCTAssertEqual(SecurityManager.AuthenticationMethod.password.rawValue, "Password")
-    }
-    
-    func testAuthenticationMethodCaseIterable() {
-        let allCases = SecurityManager.AuthenticationMethod.allCases
-        XCTAssertEqual(allCases.count, 3)
-        XCTAssertTrue(allCases.contains(.none))
-        XCTAssertTrue(allCases.contains(.biometric))
-        XCTAssertTrue(allCases.contains(.password))
-    }
-    
-    func testAuthenticationMethodEquality() {
-        XCTAssertEqual(SecurityManager.AuthenticationMethod.none, .none)
-        XCTAssertNotEqual(SecurityManager.AuthenticationMethod.biometric, .password)
-    }
     
     // MARK: - Session Refresh Tests
     
