@@ -22,10 +22,7 @@ public enum FeatureFlags {
     /// Finder Integration is a core app feature. The key remains for migration and
     /// older installs that may have written it, but new installs default to enabled.
     public static var finderSyncEnabled: Bool {
-        if UserDefaults.standard.object(forKey: "finderIntegrationEnabled") == nil {
-            return true
-        }
-        return UserDefaults.standard.bool(forKey: "finderIntegrationEnabled")
+        enabledByDefault("finderIntegrationEnabled")
     }
 
     /// Controls privacy features like blurring sensitive handles and hiding API keys by default.
@@ -39,10 +36,7 @@ public enum FeatureFlags {
     /// defaults write com.sorty.app privacyModeEnabled -bool true
     /// ```
     public static var privacyModeEnabled: Bool {
-        if UserDefaults.standard.object(forKey: "privacyModeEnabled") == nil {
-            return true
-        }
-        return UserDefaults.standard.bool(forKey: "privacyModeEnabled")
+        enabledByDefault("privacyModeEnabled")
     }
 
     /// Controls internet network blocking privacy mode.
@@ -87,10 +81,7 @@ public enum FeatureFlags {
     /// defaults write com.sorty.app subscriptionAuthEnabled -bool true
     /// ```
     public static var subscriptionAuthEnabled: Bool {
-        if UserDefaults.standard.object(forKey: "subscriptionAuthEnabled") == nil {
-            return true
-        }
-        return UserDefaults.standard.bool(forKey: "subscriptionAuthEnabled")
+        enabledByDefault("subscriptionAuthEnabled")
     }
 
     /// Controls whether in-app links and buttons supporting the developer are shown.
@@ -104,10 +95,7 @@ public enum FeatureFlags {
     /// defaults -container com.sorty.app write com.sorty.app supportDeveloperEnabled -bool true
     /// ```
     public static var supportDeveloperEnabled: Bool {
-        if UserDefaults.standard.object(forKey: "supportDeveloperEnabled") == nil {
-            return true
-        }
-        return UserDefaults.standard.bool(forKey: "supportDeveloperEnabled")
+        enabledByDefault("supportDeveloperEnabled")
     }
 
     /// Preview harness mode for rapid development iteration.
@@ -123,5 +111,10 @@ public enum FeatureFlags {
         #else
         false
         #endif
+    }
+
+    private static func enabledByDefault(_ key: String) -> Bool {
+        UserDefaults.standard.object(forKey: key) == nil
+            || UserDefaults.standard.bool(forKey: key)
     }
 }

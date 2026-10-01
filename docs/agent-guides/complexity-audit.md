@@ -14,9 +14,27 @@ removing a feature or a safety check.
 - Remove the animation-generation skill. Keep its earlier audit as historical
   context, with a notice that its proposals are not an implementation checklist.
 - Remove the corresponding entries from `skills-lock.json`.
+- Remove BuildInfo's runtime Git subprocess and repository search. Packaged
+  builds use `commit.txt`; other launches can supply `GIT_COMMIT` or show
+  `unknown`. Short hashes use `prefix(9)`.
+- Share the identical Package.swift compiler and linker settings. Keep the
+  library-specific concurrency and warning flags, plus the hot-reload and
+  diagnostic opt-ins.
+- Use one helper for default-enabled flags while honoring persisted `false`
+  values, including the legacy Finder preference.
+- Replace the workflow transition if-chain with a tuple switch. Preserve
+  cancellation, error, retry, incremental apply, and apply re-entry rejection.
+- Condense the fast-loop guide into a command table and operational notes.
+  Keep cache recovery, hot-reload limits, signing, release evidence, and visual
+  acceptance guidance. Correct its outdated module map.
 
-These edits affect agent guidance only. No app build or UI verification was
-run for this batch, as required for minor changes by AGENTS.md.
+The skill cleanup had no app build or UI verification, as required for minor
+changes by AGENTS.md. For the workflow refactor, an isolated Swift 6 executable
+compared all 64 source/destination pairs against the original implementation,
+including two distinct errors. Every comparison passed. The evaluated package
+graph and flags matched the original manifest in normal, diagnostics, hot, and
+combined hot/diagnostics modes. Existing workflow regression tests remain.
+No full app build, test suite, hosted CI, or live UI acceptance is claimed.
 
 ## Keep
 

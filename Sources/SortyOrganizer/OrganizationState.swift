@@ -43,98 +43,27 @@ public enum OrganizationState: Equatable, Sendable {
         }
     }
 
-    /// Returns true if a transition from `from` state to `to` state is valid
+    /// Valid workflow transitions, including cancellation, retry, and incremental apply.
     public static func canTransition(from: OrganizationState, to: OrganizationState) -> Bool {
-        // Re-entrant apply is never a valid transition; callers must no-op via
-        // the apply() guard instead of restarting file moves. Checked before the
-        // same-state fast path so applying->applying reports false.
-        if from == .applying, to == .applying {
+        switch (from, to) {
+        // Re-entrant apply must not restart file moves.
+        case (.applying, .applying):
+            return false
+        case (_, .idle), (_, .error):
+            return true
+        // Incremental auto-apply can finish while organizing. Completed runs
+        // can regenerate, restore a preview, or apply undo/redo operations.
+        case (.organizing, _), (.completed, _):
+            return true
+        case (.idle, .scanning),
+             (.scanning, .scanning), (.scanning, .organizing), (.scanning, .ready),
+             (.ready, .ready), (.ready, .scanning), (.ready, .organizing), (.ready, .applying),
+             (.applying, .completed),
+             (.error, .scanning), (.error, .organizing), (.error, .applying):
+            return true
+        default:
             return false
         }
-        // Same state is always valid (no-op)
-        if from == to {
-            return true
-        }
-
-        // From idle: can go to scanning or error
-        if from == .idle {
-            switch to {
-            case .idle, .scanning, .error:
-                return true
-            default:
-                return false
-            }
-        }
-
-        // From scanning: can go to organizing, idle (cancel), or error
-        if from == .scanning {
-            switch to {
-            case .scanning, .organizing, .ready, .idle, .error:
-                return true
-            default:
-                return false
-            }
-        }
-
-        // From organizing: can go to ready, idle (cancel), restart scanning,
-        // apply (incremental auto-apply calls performApply while .organizing),
-        // complete (that apply's final transition), or error.
-        if from == .organizing {
-            switch to {
-            case .organizing, .scanning, .ready, .applying, .completed, .idle, .error:
-                return true
-            default:
-                return false
-            }
-        }
-
-        // From ready: can re-scan, regenerate, apply, cancel, or error.
-        // Ready is idle w.r.t. work (see isOperationInProgress), so re-organize
-        // must be able to leave ready via scanning.
-        if from == .ready {
-            switch to {
-            case .ready, .scanning, .applying, .idle, .organizing, .error:
-                return true
-            default:
-                return false
-            }
-        }
-
-        // From applying: can go to completed, idle (cancel), or error.
-        // Re-entrant applying->applying is a no-op handled by the apply()
-        // guard; it is intentionally not a valid transition so a second apply
-        // cannot restart file moves (same-state equality still no-ops).
-        if from == .applying {
-            switch to {
-            case .completed, .idle, .error:
-                return true
-            default:
-                return false
-            }
-        }
-
-        // From completed: a finished run can start a new organize (scanning),
-        // regenerate (organizing), restore a preview (ready), re-apply/undo/
-        // redo/restore (applying), reset (idle), or surface an error.
-        if from == .completed {
-            switch to {
-            case .completed, .idle, .scanning, .organizing, .ready, .applying, .error:
-                return true
-            }
-        }
-
-        // From error: can go to idle (retry/reset), retry the previous operation,
-        // or run undo/redo/restore (applying).
-        if case .error = from {
-            switch to {
-            case .error, .idle, .scanning, .organizing, .applying:
-                return true
-            default:
-                return false
-            }
-        }
-
-        return false
     }
 
     /// Human-readable description of the state

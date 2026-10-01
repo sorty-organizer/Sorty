@@ -20,25 +20,15 @@ if isHotReloadBuild {
     )
 }
 
-var sortyLibSwiftSettings: [SwiftSetting] = [
-    .define("DEBUG", .when(configuration: .debug)),
-    // Debug: Fast incremental build (SPM manages incremental builds internally)
-    .unsafeFlags(["-enable-batch-mode"], .when(configuration: .debug)),
-    // Release: Full optimization with whole-module
-    .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
-    // Swift 6 strict concurrency - minimal checking to reduce type-check cost
-    .unsafeFlags(["-strict-concurrency=minimal"])
-]
-var sortyLibLinkerSettings: [LinkerSetting] = [
-    // Skip deduplication in debug for faster linking
-    .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug))
-]
 var sortyAppSwiftSettings: [SwiftSetting] = [
     .define("DEBUG", .when(configuration: .debug)),
     .unsafeFlags(["-enable-batch-mode"], .when(configuration: .debug)),
     .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release))
 ]
-var sortyAppLinkerSettings: [LinkerSetting] = [
+var sortyLibSwiftSettings = sortyAppSwiftSettings + [
+    .unsafeFlags(["-strict-concurrency=minimal"])
+]
+var sortyLinkerSettings: [LinkerSetting] = [
     .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug))
 ]
 
@@ -65,9 +55,8 @@ if isHotReloadBuild {
         .when(configuration: .debug)
     )
     sortyLibSwiftSettings.append(opaqueTypeErasure)
-    sortyLibLinkerSettings.append(interposable)
+    sortyLinkerSettings.append(interposable)
     sortyAppSwiftSettings.append(opaqueTypeErasure)
-    sortyAppLinkerSettings.append(interposable)
 }
 
 var packageProducts: [Product] = [
@@ -131,7 +120,7 @@ var packageTargets: [Target] = [
         dependencies: ["SortyFileSystem", "SortyModels", "SortyAI", "SortyLearnings", "SortyFS", "SortyOrganizer"] + sortyLibDependencies,
         path: "Sources/SortyCore",
         swiftSettings: sortyLibSwiftSettings,
-        linkerSettings: sortyLibLinkerSettings
+        linkerSettings: sortyLinkerSettings
     ),
     .target(
         name: "SortyLib",
@@ -158,14 +147,14 @@ var packageTargets: [Target] = [
             // SwiftPM does not restage/re-hash them after source rebuilds.
         ],
         swiftSettings: sortyLibSwiftSettings,
-        linkerSettings: sortyLibLinkerSettings
+        linkerSettings: sortyLinkerSettings
     ),
     .executableTarget(
         name: "SortyApp",
         dependencies: ["SortyLib"],
         path: "Sources/SortyApp",
         swiftSettings: sortyAppSwiftSettings,
-        linkerSettings: sortyAppLinkerSettings
+        linkerSettings: sortyLinkerSettings
     ),
     .executableTarget(
         name: "SortyQuality",
