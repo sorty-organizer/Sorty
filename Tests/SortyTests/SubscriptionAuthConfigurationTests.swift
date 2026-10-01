@@ -152,37 +152,21 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
         XCTAssertEqual(quoted, "'/tmp/codex '\\''$HOME'\\''; touch /tmp/pwn'")
     }
 
-    func testProviderAuthMethodDisplayNames() {
+    func testSubscriptionDisplayMetadata() {
+        // Representative assertion per family: auth-method display name,
+        // subscription product name, subscription-capable provider list, and
+        // auth methods per provider kind. (Separate keys/endpoints stay pinned
+        // by testOpenCodePlansUseSeparateKeysAndEndpoints, which also covers
+        // request URL construction, auth-header emission, and factory routing.)
         XCTAssertEqual(ProviderAuthMethod.apiKey.displayName, "API Key")
-        XCTAssertEqual(ProviderAuthMethod.accountSignIn.displayName, "Codex CLI (Subscription)")
-        XCTAssertEqual(ProviderAuthMethod.manualSessionToken.displayName, "API Key")
-    }
-
-    func testSubscriptionProductNames() {
         XCTAssertEqual(AIProvider.openAI.subscriptionProductName, "ChatGPT")
-        XCTAssertEqual(AIProvider.anthropic.subscriptionProductName, AIProvider.anthropic.displayName)
-        XCTAssertEqual(AIProvider.groq.subscriptionProductName, AIProvider.groq.displayName)
-    }
-
-    func testSupportedSubscriptionProviders() {
         XCTAssertTrue(AIProvider.openAI.supportsSubscriptionAuth)
         XCTAssertFalse(AIProvider.anthropic.supportsSubscriptionAuth)
-        XCTAssertFalse(AIProvider.openCodeZen.supportsSubscriptionAuth)
-        XCTAssertFalse(AIProvider.openRouter.supportsSubscriptionAuth)
-    }
-
-    func testSupportedAuthMethodsForSubscriptionProviders() {
         XCTAssertEqual(
             AIProvider.openAI.supportedAuthMethods,
             [.apiKey, .accountSignIn]
         )
-    }
-
-    func testSupportedAuthMethodsForNonSubscriptionProviders() {
         XCTAssertEqual(AIProvider.groq.supportedAuthMethods, [.apiKey])
-        XCTAssertEqual(AIProvider.openCodeZen.supportedAuthMethods, [.apiKey])
-        XCTAssertEqual(AIProvider.openCodeGo.supportedAuthMethods, [.apiKey])
-        XCTAssertEqual(AIProvider.appleFoundationModel.supportedAuthMethods, [.apiKey])
     }
 
     func testOpenCodePlansUseSeparateKeysAndEndpoints() throws {

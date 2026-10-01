@@ -123,7 +123,7 @@ final class ManualSessionRestoreTests: XCTestCase {
         XCTAssertEqual(relaunched.state, .idle)
     }
 
-    func testUnchangedSnapshotDoesNotRewriteSessionFile() async throws {
+    func testSnapshotWriteCoalescing() async throws {
         let organizer = makeOrganizer()
         let plan = makePlan()
         organizer.persistManualSession(
@@ -134,6 +134,7 @@ final class ManualSessionRestoreTests: XCTestCase {
         )
         let firstData = try Data(contentsOf: sessionURL)
 
+        // Unchanged snapshot must not rewrite the session file.
         try await Task.sleep(for: .milliseconds(20))
         organizer.persistManualSession(
             directory: tempDirectory,
@@ -143,19 +144,8 @@ final class ManualSessionRestoreTests: XCTestCase {
         )
 
         XCTAssertEqual(try Data(contentsOf: sessionURL), firstData)
-    }
 
-    func testChangedSnapshotRewritesSessionFile() async throws {
-        let organizer = makeOrganizer()
-        let plan = makePlan()
-        organizer.persistManualSession(
-            directory: tempDirectory,
-            plan: plan,
-            stateHint: .ready,
-            instructions: "sort receipts"
-        )
-        let firstData = try Data(contentsOf: sessionURL)
-
+        // Changed snapshot must rewrite the session file.
         organizer.persistManualSession(
             directory: tempDirectory,
             plan: plan,

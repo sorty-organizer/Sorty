@@ -338,7 +338,7 @@ class FileSystemManagerTests: XCTestCase {
     }
 
     @MainActor
-    func testCrossVolumeRenamePathWithNameChange() async throws {
+    func testCrossVolumeCopyVerifiesContentMetadataAndTree() async throws {
         final class ProgressRecorder: @unchecked Sendable {
             private let lock = NSLock()
             private var values: [Double] = []
@@ -357,77 +357,117 @@ class FileSystemManagerTests: XCTestCase {
             }
         }
 
-        let source = tempDirectory.appendingPathComponent("camera.jpg")
-        try "image".write(to: source, atomically: true, encoding: .utf8)
+        // Real multi-volume fixtures are unavailable in CI, so every phase
+        // below forces the copy-then-verify path through the test detector.
+        await fileSystemManager.setCrossVolumeDetectorForTesting { _, _ in true }
 
-        let file = FileItem(path: source.path, name: "camera", extension: "jpg", size: 5, isDirectory: false)
-        var folder = FolderSuggestion(folderName: "Photos", files: [file])
-        folder.updateRename(for: file, newName: "Sunset.png") // extension must be preserved as .jpg
-        let plan = OrganizationPlan(suggestions: [folder], unorganizedFiles: [], notes: "")
+        // Phase 1: rename with an extension change preserves the original
+        // extension, reports progress, and is fully undoable.
+        let photoSource = tempDirectory.appendingPathComponent("camera.jpg")
+        try "image".write(to: photoSource, atomically: true, encoding: .utf8)
+
+        let photoFile = FileItem(path: photoSource.path, name: "camera", extension: "jpg", size: 5, isDirectory: false)
+        var photoFolder = FolderSuggestion(folderName: "Photos", files: [photoFile])
+        photoFolder.updateRename(for: photoFile, newName: "Sunset.png") // extension must be preserved as .jpg
+        let photoPlan = OrganizationPlan(suggestions: [photoFolder], unorganizedFiles: [], notes: "")
 
         let recorder = ProgressRecorder()
         await fileSystemManager.setCrossVolumeProgressHandler { _, progress in
             recorder.append(progress)
         }
-        await fileSystemManager.setCrossVolumeDetectorForTesting { _, _ in true }
 
-        let operations = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
-        let destination = tempDirectory.appendingPathComponent("Photos/Sunset.jpg")
+        let photoOperations = try await fileSystemManager.applyOrganization(photoPlan, at: tempDirectory, dryRun: false)
+        await fileSystemManager.setCrossVolumeProgressHandler(nil)
+        let photoDestination = tempDirectory.appendingPathComponent("Photos/Sunset.jpg")
         let progressEvents = recorder.snapshot()
 
-        XCTAssertTrue(FileManager.default.fileExists(atPath: destination.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: photoDestination.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: photoSource.path))
         XCTAssertTrue(progressEvents.contains { $0 >= 1.0 })
-        XCTAssertTrue(operations.contains { $0.type == .renameFile && $0.destinationPath == destination.path })
+        XCTAssertTrue(photoOperations.contains { $0.type == .renameFile && $0.destinationPath == photoDestination.path })
 
-        let restoreResult = try await fileSystemManager.reverseOperations(operations)
+        let restoreResult = try await fileSystemManager.reverseOperations(photoOperations)
 
         XCTAssertEqual(restoreResult.successfulOperations, 2)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: photoSource.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: photoDestination.path))
         let restoredContents = try FileManager.default.contentsOfDirectory(
-            atPath: source.deletingLastPathComponent().path
+            atPath: photoSource.deletingLastPathComponent().path
         )
         XCTAssertFalse(restoredContents.contains { $0.hasPrefix(".sorty-transfer-") })
 
-        await fileSystemManager.setCrossVolumeProgressHandler(nil)
-        await fileSystemManager.setCrossVolumeDetectorForTesting(nil)
-    }
-
-    @MainActor
-    func testCrossVolumeMovePreservesMetadataAndLeavesNoStagingFile() async throws {
-        let source = tempDirectory.appendingPathComponent("report.txt")
-        try "important".write(to: source, atomically: true, encoding: .utf8)
+        // Phase 2: modification metadata survives the copy path with no
+        // staging residue left behind.
+        let metadataSource = tempDirectory.appendingPathComponent("report.txt")
+        try "important".write(to: metadataSource, atomically: true, encoding: .utf8)
         let modificationDate = Date(timeIntervalSince1970: 1_700_000_000)
         try FileManager.default.setAttributes(
             [.modificationDate: modificationDate],
-            ofItemAtPath: source.path
+            ofItemAtPath: metadataSource.path
         )
-        let file = FileItem(
-            path: source.path,
+        let metadataFile = FileItem(
+            path: metadataSource.path,
             name: "report",
             extension: "txt",
             size: 9,
             isDirectory: false
         )
-        let plan = OrganizationPlan(
-            suggestions: [FolderSuggestion(folderName: "Archive", files: [file])],
+        let metadataPlan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Archive", files: [metadataFile])],
             unorganizedFiles: [],
             notes: ""
         )
-        await fileSystemManager.setCrossVolumeDetectorForTesting { _, _ in true }
 
-        _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
+        _ = try await fileSystemManager.applyOrganization(metadataPlan, at: tempDirectory, dryRun: false)
 
-        let destination = tempDirectory.appendingPathComponent("Archive/report.txt")
-        let attributes = try FileManager.default.attributesOfItem(atPath: destination.path)
+        let metadataDestination = tempDirectory.appendingPathComponent("Archive/report.txt")
+        let attributes = try FileManager.default.attributesOfItem(atPath: metadataDestination.path)
         let destinationDate = try XCTUnwrap(attributes[.modificationDate] as? Date)
         let archiveContents = try FileManager.default.contentsOfDirectory(
-            atPath: destination.deletingLastPathComponent().path
+            atPath: metadataDestination.deletingLastPathComponent().path
         )
         XCTAssertEqual(destinationDate.timeIntervalSince1970, modificationDate.timeIntervalSince1970, accuracy: 1)
         XCTAssertFalse(archiveContents.contains { $0.hasPrefix(".sorty-transfer-") })
 
+        // Phase 3: directory moves verify the entire tree at the destination.
+        let treeSource = tempDirectory.appendingPathComponent("Project", isDirectory: true)
+        let treeNested = treeSource.appendingPathComponent("Nested", isDirectory: true)
+        try FileManager.default.createDirectory(at: treeNested, withIntermediateDirectories: true)
+        try "alpha".write(
+            to: treeSource.appendingPathComponent("alpha.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "beta".write(
+            to: treeNested.appendingPathComponent("beta.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let treeItem = FileItem(
+            path: treeSource.path,
+            name: "Project",
+            extension: "",
+            size: 0,
+            isDirectory: true
+        )
+        let treePlan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "External", files: [treeItem])],
+            unorganizedFiles: [],
+            notes: ""
+        )
+
+        _ = try await fileSystemManager.applyOrganization(treePlan, at: tempDirectory, enableTagging: false)
+
+        let treeDestination = tempDirectory.appendingPathComponent("External/Project", isDirectory: true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: treeSource.path))
+        XCTAssertEqual(
+            try String(contentsOf: treeDestination.appendingPathComponent("alpha.txt"), encoding: .utf8),
+            "alpha"
+        )
+        XCTAssertEqual(
+            try String(contentsOf: treeDestination.appendingPathComponent("Nested/beta.txt"), encoding: .utf8),
+            "beta"
+        )
         await fileSystemManager.setCrossVolumeDetectorForTesting(nil)
     }
 
@@ -462,50 +502,6 @@ class FileSystemManagerTests: XCTestCase {
         XCTAssertEqual(result.retryableFailedOperationIDs, [failingOperation.id])
         XCTAssertTrue(FileManager.default.fileExists(atPath: restoredSource.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: failingDestination.path))
-    }
-
-    @MainActor
-    func testCrossVolumeDirectoryMoveVerifiesEntireTree() async throws {
-        let sourceFolder = tempDirectory.appendingPathComponent("Project", isDirectory: true)
-        let nestedFolder = sourceFolder.appendingPathComponent("Nested", isDirectory: true)
-        try FileManager.default.createDirectory(at: nestedFolder, withIntermediateDirectories: true)
-        try "alpha".write(
-            to: sourceFolder.appendingPathComponent("alpha.txt"),
-            atomically: true,
-            encoding: .utf8
-        )
-        try "beta".write(
-            to: nestedFolder.appendingPathComponent("beta.txt"),
-            atomically: true,
-            encoding: .utf8
-        )
-        let item = FileItem(
-            path: sourceFolder.path,
-            name: "Project",
-            extension: "",
-            size: 0,
-            isDirectory: true
-        )
-        let plan = OrganizationPlan(
-            suggestions: [FolderSuggestion(folderName: "External", files: [item])],
-            unorganizedFiles: [],
-            notes: ""
-        )
-        await fileSystemManager.setCrossVolumeDetectorForTesting { _, _ in true }
-
-        _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: false)
-
-        let destination = tempDirectory.appendingPathComponent("External/Project", isDirectory: true)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: sourceFolder.path))
-        XCTAssertEqual(
-            try String(contentsOf: destination.appendingPathComponent("alpha.txt"), encoding: .utf8),
-            "alpha"
-        )
-        XCTAssertEqual(
-            try String(contentsOf: destination.appendingPathComponent("Nested/beta.txt"), encoding: .utf8),
-            "beta"
-        )
-        await fileSystemManager.setCrossVolumeDetectorForTesting(nil)
     }
 
     @MainActor
@@ -890,7 +886,9 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         XCTAssertTrue(manager.restoredItems.isEmpty)
     }
 
-    func testMoveToTrashPersistsItemsMovedBeforeALaterFailure() throws {
+    func testPartialTrashFailurePreservesCompletedRestorationHistory() throws {
+        // Phase 1: a natural failure (second file missing after the scan)
+        // still preserves the already-completed move in history.
         let movedFile = tempDirectory.appendingPathComponent("moved.txt")
         try "Content".write(to: movedFile, atomically: true, encoding: .utf8)
         let missingFile = tempDirectory.appendingPathComponent("missing.txt")
@@ -904,9 +902,10 @@ final class DuplicateRestorationManagerTests: XCTestCase {
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: movedFile.path))
         XCTAssertEqual(manager.restoredItems.map(\.originalPath), [movedFile.path])
-    }
 
-    func testPartialTrashFailureImmediatelyPreservesCompletedRestorationHistory() throws {
+        // Phase 2: an injected mid-batch failure reports the moved items and
+        // preserves the completed restoration history immediately.
+        manager.clearAllData()
         let firstURL = tempDirectory.appendingPathComponent("first.txt")
         let secondURL = tempDirectory.appendingPathComponent("second.txt")
         try "first".write(to: firstURL, atomically: true, encoding: .utf8)
