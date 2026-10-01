@@ -365,15 +365,20 @@ final class PromptBuilderTests: XCTestCase {
     }
     
     // MARK: - Empty Input
-    
-    func testEmptyPathsReturnsEmpty() {
-        let result = PromptBuilder.buildReferenceDirectoryContext(paths: [])
-        XCTAssertTrue(result.isEmpty)
-    }
-    
-    func testMissingDirectorySkipped() {
-        let result = PromptBuilder.buildReferenceDirectoryContext(paths: ["/nonexistent/path/\(UUID().uuidString)"])
-        XCTAssertTrue(result.isEmpty)
+
+    func testReferenceDirectoryContextReturnsEmptyForNoUsableInput() {
+        XCTAssertTrue(
+            PromptBuilder.buildReferenceDirectoryContext(paths: []).isEmpty,
+            "Empty path list should produce empty context"
+        )
+        XCTAssertTrue(
+            PromptBuilder.buildReferenceDirectoryContext(paths: ["/nonexistent/path/\(UUID().uuidString)"]).isEmpty,
+            "Missing directory should be skipped, producing empty context"
+        )
+        XCTAssertTrue(
+            PromptBuilder.buildReferenceDirectoryContext(paths: [tempDir.path]).isEmpty,
+            "Empty directory should produce empty context"
+        )
     }
     
     // MARK: - Single Directory
@@ -392,12 +397,6 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(result.contains("reference examples only"))
     }
     
-    func testSingleDirectoryEmpty() throws {
-        // tempDir exists but has no subdirectories
-        let result = PromptBuilder.buildReferenceDirectoryContext(paths: [tempDir.path])
-        XCTAssertTrue(result.isEmpty, "Empty directory should produce empty context")
-    }
-    
     // MARK: - Multi-Directory
     
     func testMultipleDirectories() throws {
@@ -412,6 +411,16 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(result.contains("Reference2"))
         XCTAssertTrue(result.contains("Work"))
         XCTAssertTrue(result.contains("Personal"))
+
+        let validDir = tempDir.appendingPathComponent("ValidRef")
+        try FileManager.default.createDirectory(at: validDir.appendingPathComponent("Projects"), withIntermediateDirectories: true)
+
+        let mixedResult = PromptBuilder.buildReferenceDirectoryContext(
+            paths: ["/nonexistent/\(UUID().uuidString)", validDir.path]
+        )
+
+        XCTAssertTrue(mixedResult.contains("Projects"))
+        XCTAssertTrue(mixedResult.contains("REFERENCE MODEL DIRECTORIES"))
     }
     
     // MARK: - Truncation
@@ -457,18 +466,6 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertFalse(result.contains("L4"))
     }
     
-    func testMixedValidAndInvalidPaths() throws {
-        let validDir = tempDir.appendingPathComponent("ValidRef")
-        try FileManager.default.createDirectory(at: validDir.appendingPathComponent("Projects"), withIntermediateDirectories: true)
-        
-        let result = PromptBuilder.buildReferenceDirectoryContext(
-            paths: ["/nonexistent/\(UUID().uuidString)", validDir.path]
-        )
-        
-        XCTAssertTrue(result.contains("Projects"))
-        XCTAssertTrue(result.contains("REFERENCE MODEL DIRECTORIES"))
-    }
-
     func testDirectoryManifestContextIncludesRelativePathsAndExtensionSummary() throws {
         let invoicesDir = tempDir.appendingPathComponent("Invoices")
         try FileManager.default.createDirectory(at: invoicesDir, withIntermediateDirectories: true)
@@ -518,7 +515,9 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertEqual(offMain, synchronous)
     }
 
-    func testOffMainDirectoryManifestHonorsCallerCancellation() async {
+    func testOffMainDirectoryManifestRejectsCancelledBeforeStarting() async {
+        // Covers only the entry pre-check: the caller is already cancelled
+        // before manifest work starts, so no mid-work cancellation is exercised.
         let directory = tempDir!
         let task = Task {
             while !Task.isCancelled {
@@ -534,9 +533,9 @@ final class PromptBuilderTests: XCTestCase {
 
         do {
             _ = try await task.value
-            XCTFail("Expected manifest preparation to stop after cancellation")
+            XCTFail("Expected entry pre-check to reject already-cancelled manifest preparation")
         } catch is CancellationError {
-            // Expected.
+            // Expected: entry pre-check rejects work that never started.
         } catch {
             XCTFail("Expected CancellationError, got \(error)")
         }

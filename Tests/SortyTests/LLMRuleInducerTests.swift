@@ -77,11 +77,8 @@ final class LLMRuleInducerTests: XCTestCase {
         XCTAssertEqual(rules.first?.pattern, "Invoice.*")
         XCTAssertEqual(rules.first?.template, "Finance/{year}/Invoices/{filename}")
         XCTAssertEqual(rules.first?.explanation, "Organize invoices by year")
-    }
-    
-    func testInduceRulesWithMarkdownJSON() async {
-        // LLM often wraps JSON in markdown blocks
-        let jsonResponse = """
+
+        mockClient.generateTextResponse = """
         Here are the rules:
         ```json
         [
@@ -94,16 +91,15 @@ final class LLMRuleInducerTests: XCTestCase {
         ]
         ```
         """
-        mockClient.generateTextResponse = jsonResponse
-        
-        let examples = [
+
+        let fencedExamples = [
             LabeledExample(srcPath: "photo.jpg", dstPath: "Photos/2024/photo.jpg")
         ]
-        
-        let rules = await inducer.induceRules(from: examples, exampleFolders: [])
-        
-        XCTAssertEqual(rules.count, 1)
-        XCTAssertEqual(rules.first?.pattern, ".*\\.jpg$")
+
+        let fencedRules = await inducer.induceRules(from: fencedExamples, exampleFolders: [])
+
+        XCTAssertEqual(fencedRules.count, 1)
+        XCTAssertEqual(fencedRules.first?.pattern, ".*\\.jpg$")
     }
     
     func testInduceRulesWithInvalidJSON() async {

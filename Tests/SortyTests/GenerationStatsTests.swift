@@ -68,15 +68,24 @@ final class GenerationStatsTests: XCTestCase {
     }
 
     func testCompactModelNameTrimsAndUsesPrefixBeforeDot() {
-        let stats = GenerationStats(
-            duration: 1,
-            tps: 10,
-            ttft: 0.2,
-            totalTokens: 100,
-            model: "  gpt-5.4.high  "
-        )
+        let cases: [(input: String, expected: String)] = [
+            ("  gpt-5.4.high  ", "gpt-5"),
+            ("gpt-5", "gpt-5"),
+            ("   ", "   "),
+            ("", ""),
+        ]
 
-        XCTAssertEqual(stats.compactModelName, "gpt-5")
+        for testCase in cases {
+            let stats = GenerationStats(
+                duration: 1,
+                tps: 10,
+                ttft: 0.2,
+                totalTokens: 100,
+                model: testCase.input
+            )
+
+            XCTAssertEqual(stats.compactModelName, testCase.expected, "input: \(testCase.input)")
+        }
     }
 
     func testFormatDurationAcrossRanges() {

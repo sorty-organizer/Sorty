@@ -30,29 +30,27 @@ final class ImageVisionAnalyzerTests: XCTestCase {
     }
 
     func testPrepareImageForVisionResizesLargeImage() async throws {
-        let imageURL = tempDirectory.appendingPathComponent("large.png")
-        try createPNG(at: imageURL, width: 2000, height: 1000)
-
         let analyzer = ImageVisionAnalyzer()
-        let data = await analyzer.prepareImageForVision(at: imageURL)
 
-        XCTAssertNotNil(data)
-        let dimensions = imageDimensions(from: data)
-        XCTAssertEqual(dimensions?.width, 1024)
-        XCTAssertEqual(dimensions?.height, 512)
-    }
+        let largeURL = tempDirectory.appendingPathComponent("large.png")
+        try createPNG(at: largeURL, width: 2000, height: 1000)
 
-    func testPrepareImageForVisionKeepsSmallImageSize() async throws {
-        let imageURL = tempDirectory.appendingPathComponent("small.png")
-        try createPNG(at: imageURL, width: 100, height: 100)
+        let largeData = await analyzer.prepareImageForVision(at: largeURL)
 
-        let analyzer = ImageVisionAnalyzer()
-        let data = await analyzer.prepareImageForVision(at: imageURL)
+        XCTAssertNotNil(largeData)
+        let largeDimensions = imageDimensions(from: largeData)
+        XCTAssertEqual(largeDimensions?.width, 1024)
+        XCTAssertEqual(largeDimensions?.height, 512)
 
-        XCTAssertNotNil(data)
-        let dimensions = imageDimensions(from: data)
-        XCTAssertEqual(dimensions?.width, 100)
-        XCTAssertEqual(dimensions?.height, 100)
+        let smallURL = tempDirectory.appendingPathComponent("small.png")
+        try createPNG(at: smallURL, width: 100, height: 100)
+
+        let smallData = await analyzer.prepareImageForVision(at: smallURL)
+
+        XCTAssertNotNil(smallData)
+        let smallDimensions = imageDimensions(from: smallData)
+        XCTAssertEqual(smallDimensions?.width, 100)
+        XCTAssertEqual(smallDimensions?.height, 100)
     }
 
     func testPrepareImagesForVisionProcessesMultipleImages() async throws {

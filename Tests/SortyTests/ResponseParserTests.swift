@@ -165,37 +165,75 @@ class ResponseParserTests: XCTestCase {
 
 
     func testParsingWithTags() throws {
-        let json = """
-        {
-          "folders": [
-            {
-              "name": "TaggedDocs",
-              "files": [
+        let cases: [(json: String, file: FileItem, folderName: String, expectedTags: [String])] = [
+            (
+                json: """
                 {
-                  "filename": "invoice.pdf",
-                  "tags": ["Finance", "2024"]
+                  "folders": [
+                    {
+                      "name": "TaggedDocs",
+                      "files": [
+                        {
+                          "filename": "invoice.pdf",
+                          "tags": ["Finance", "2024"]
+                        }
+                      ]
+                    }
+                  ]
                 }
-              ]
-            }
-          ]
-        }
-        """
-        
-        let files = [
-            FileItem(path: "/path/invoice.pdf", name: "invoice", extension: "pdf", size: 100, isDirectory: false)
+                """,
+                file: FileItem(path: "/path/invoice.pdf", name: "invoice", extension: "pdf", size: 100, isDirectory: false),
+                folderName: "TaggedDocs",
+                expectedTags: ["Finance", "2024"]
+            ),
+            (
+                json: """
+                {
+                  "folders": [
+                    {
+                      "name": "Projects",
+                      "files": [
+                        {
+                          "filename": "project.pdf",
+                          "tags": ["Work", "Important", "2024", "Q1"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """,
+                file: FileItem(path: "/path/project.pdf", name: "project", extension: "pdf", size: 500, isDirectory: false),
+                folderName: "Projects",
+                expectedTags: ["Work", "Important", "2024", "Q1"]
+            ),
+            (
+                json: """
+                {
+                  "folders": [
+                    {
+                      "name": "NoTags",
+                      "files": ["simple.txt"]
+                    }
+                  ]
+                }
+                """,
+                file: FileItem(path: "/path/simple.txt", name: "simple", extension: "txt", size: 100, isDirectory: false),
+                folderName: "NoTags",
+                expectedTags: []
+            ),
         ]
-        
-        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
-        
-        XCTAssertEqual(plan.suggestions.count, 1)
-        let suggestion = plan.suggestions.first!
-        XCTAssertEqual(suggestion.folderName, "TaggedDocs")
-        
-        // Check tags
-        let tags = suggestion.tags(for: files[0])
-        XCTAssertEqual(tags.count, 2)
-        XCTAssertTrue(tags.contains("Finance"))
-        XCTAssertTrue(tags.contains("2024"))
+
+        for testCase in cases {
+            let plan = try ResponseParser.parseResponse(testCase.json, originalFiles: [testCase.file])
+
+            XCTAssertEqual(plan.suggestions.count, 1, "folder: \(testCase.folderName)")
+            let suggestion = try XCTUnwrap(plan.suggestions.first)
+            XCTAssertEqual(suggestion.folderName, testCase.folderName)
+
+            let tags = suggestion.tags(for: testCase.file)
+            XCTAssertEqual(tags.count, testCase.expectedTags.count, "folder: \(testCase.folderName)")
+            XCTAssertEqual(Set(tags), Set(testCase.expectedTags), "folder: \(testCase.folderName)")
+        }
     }
 
 
@@ -393,37 +431,6 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(mapping.renameConfidence, 0.29)
     }
     
-    func testParsingWithMultipleTagsPerFile() throws {
-        let json = """
-        {
-          "folders": [
-            {
-              "name": "Projects",
-              "files": [
-                {
-                  "filename": "project.pdf",
-                  "tags": ["Work", "Important", "2024", "Q1"]
-                }
-              ]
-            }
-          ]
-        }
-        """
-        
-        let files = [
-            FileItem(path: "/path/project.pdf", name: "project", extension: "pdf", size: 500, isDirectory: false)
-        ]
-        
-        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
-        
-        let tags = plan.suggestions.first!.tags(for: files[0])
-        XCTAssertEqual(tags.count, 4)
-        XCTAssertTrue(tags.contains("Work"))
-        XCTAssertTrue(tags.contains("Important"))
-        XCTAssertTrue(tags.contains("2024"))
-        XCTAssertTrue(tags.contains("Q1"))
-    }
-    
     func testParsingWithBothRenameAndTags() throws {
         let json = """
         {
@@ -461,28 +468,6 @@ class ResponseParserTests: XCTestCase {
         XCTAssertTrue(tags.contains("Receipt"))
     }
     
-    func testParsingFilesWithoutTags() throws {
-        let json = """
-        {
-          "folders": [
-            {
-              "name": "NoTags",
-              "files": ["simple.txt"]
-            }
-          ]
-        }
-        """
-        
-        let files = [
-            FileItem(path: "/path/simple.txt", name: "simple", extension: "txt", size: 100, isDirectory: false)
-        ]
-        
-        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
-        
-        let tags = plan.suggestions.first!.tags(for: files[0])
-        XCTAssertTrue(tags.isEmpty)
-    }
-
     func testDeduplicationAndFuzzyMatching() throws {
         let json = """
         {

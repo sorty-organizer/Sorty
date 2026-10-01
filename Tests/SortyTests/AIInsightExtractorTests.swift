@@ -64,34 +64,39 @@ final class AIInsightExtractorTests: XCTestCase {
         XCTAssertTrue(insight?.text.contains("Grouping records by quarter") == true)
     }
 
-    func testSkipsPromptNoiseConstraints() async {
+    func testRejectsLowSignalNoiseInputs() async {
         let extractor = AIInsightExtractor()
-        let content = """
-        IMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified.
-        """
+        let noiseContents = [
+            """
+            IMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified.
+            """,
+            """
+            Analyzing category (Documents). limit: <=10. Preferred categories: Documents.
+            """,
+            """
+            They are all .jpg files. We have .m4a too.
+            """,
+        ]
 
-        let insight = await extractor.extractInsight(
-            from: content,
-            scannedFilePathLookup: [:],
-            currentDirectoryPath: nil
+        for content in noiseContents {
+            let insight = await extractor.extractInsight(
+                from: content,
+                scannedFilePathLookup: [:],
+                currentDirectoryPath: nil
+            )
+
+            XCTAssertNil(insight, "Noise input should not produce an insight: \(content)")
+        }
+
+        let controlInsight = await extractor.extractInsight(
+            from: """
+            {"folders":[{"name":"Receipts","files":["report.pdf"]}]}
+            """,
+            scannedFilePathLookup: ["report.pdf": ["/tmp/report.pdf"]],
+            currentDirectoryPath: "/tmp"
         )
 
-        XCTAssertNil(insight)
-    }
-
-    func testDoesNotProduceCategoryLimitInsight() async {
-        let extractor = AIInsightExtractor()
-        let content = """
-        Analyzing category (Documents). limit: <=10. Preferred categories: Documents.
-        """
-
-        let insight = await extractor.extractInsight(
-            from: content,
-            scannedFilePathLookup: [:],
-            currentDirectoryPath: nil
-        )
-
-        XCTAssertNil(insight)
+        XCTAssertNotNil(controlInsight, "Positive control must stay non-nil so the test fails if the extractor dies")
     }
 
     func testKnownFileAndFolderMentionProducesAssignmentInsight() async {
@@ -128,21 +133,6 @@ final class AIInsightExtractorTests: XCTestCase {
         XCTAssertEqual(insight?.category, .file)
         XCTAssertEqual(insight?.filePath, "/tmp/Getting Started_1.tns")
         XCTAssertEqual(insight?.text, "Analyzing Getting Started_1.tns")
-    }
-
-    func testRejectsNaturalLanguageExtensionPhrases() async {
-        let extractor = AIInsightExtractor()
-        let content = """
-        They are all .jpg files. We have .m4a too.
-        """
-
-        let insight = await extractor.extractInsight(
-            from: content,
-            scannedFilePathLookup: [:],
-            currentDirectoryPath: nil
-        )
-
-        XCTAssertNil(insight)
     }
 
     func testSkipsGenericFolderNameAssignments() async {

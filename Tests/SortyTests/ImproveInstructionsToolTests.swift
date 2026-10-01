@@ -15,6 +15,16 @@ final class ImproveInstructionsToolTests: XCTestCase {
         )
 
         XCTAssertEqual(outcome, .replacement("Group invoices by client and year."))
+
+        let fencedOutcome = ImproveInstructionsTool.parse(
+            """
+            ```json
+            {"action":"replace","replacement":"Keep project files together."}
+            ```
+            """
+        )
+
+        XCTAssertEqual(fencedOutcome, .replacement("Keep project files together."))
     }
 
     func testParsesRequestUserInputAction() {
@@ -25,28 +35,15 @@ final class ImproveInstructionsToolTests: XCTestCase {
         XCTAssertEqual(outcome, .needsUserInput("Add the instruction you want improved."))
     }
 
-    func testParsesJSONInsideMarkdownFence() {
-        let outcome = ImproveInstructionsTool.parse(
-            """
-            ```json
-            {"action":"replace","replacement":"Keep project files together."}
-            ```
-            """
-        )
-
-        XCTAssertEqual(outcome, .replacement("Keep project files together."))
-    }
-
     func testInterceptsLegacyClarificationProse() {
-        let response = "Please provide specific instructions you would like me to improve. Your original input does not contain any text to refine."
+        let phrases = [
+            "Please provide specific instructions you would like me to improve. Your original input does not contain any text to refine.",
+            "I can't assist with improving those instructions.",
+        ]
 
-        XCTAssertEqual(ImproveInstructionsTool.parse(response), .needsUserInput(response))
-    }
-
-    func testInterceptsPlainTextRefusal() {
-        let response = "I can't assist with improving those instructions."
-
-        XCTAssertEqual(ImproveInstructionsTool.parse(response), .needsUserInput(response))
+        for phrase in phrases {
+            XCTAssertEqual(ImproveInstructionsTool.parse(phrase), .needsUserInput(phrase))
+        }
     }
 
     func testPreservesPlainTextFallbackAsReplacement() {

@@ -68,46 +68,38 @@ final class ModelCatalogVisionSupportTests: XCTestCase {
         XCTAssertEqual(catalog.isFetching[.openAI], false)
     }
 
-    func testKnownVisionModelsReturnTrue() {
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "gpt-4o", provider: .openAI))
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "claude-sonnet-4", provider: .anthropic))
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "gemini-2.5-flash", provider: .gemini))
-    }
+    func testSupportsVisionHeuristicTable() {
+        let cases: [(id: String, provider: AIProvider, expected: Bool)] = [
+            ("gpt-4o", .openAI, true),
+            ("claude-sonnet-4", .anthropic, true),
+            ("gemini-2.5-flash", .gemini, true),
+            ("gemma-flash", .openAICompatible, false),
+            ("gemma-2-flash", .openRouter, false),
+            ("gemma-flash", .openAI, false),
+            ("my-text-flash-model", .openAICompatible, false),
+            ("llava:latest", .ollama, true),
+            ("deepseek-v4-flash-vision-exp", .openCodeGo, true),
+            ("claude-sonnet-4-6", .openCodeZen, true),
+            ("gemini-3.1-pro", .openCodeZen, true),
+            ("gpt-5.4", .openCodeGo, true),
+            ("glm-5.3", .openCodeGo, false),
+            ("llava:latest", .openAICompatible, true),
+            ("ollama/llava:latest", .openAICompatible, true),
+            ("qwen2.5-vl-72b-instruct", .openAICompatible, true),
+            ("openai/gpt-4o", .openAICompatible, true),
+            ("gpt-4o", .ollama, false),
+            ("claude-sonnet-4", .openAICompatible, false),
+            ("gemma3", .ollama, true),
+            ("gemma3:latest", .openAICompatible, true),
+        ]
 
-    func testKnownNonVisionModelsReturnFalse() {
-        XCTAssertFalse(ModelCatalog.shared.supportsVision(modelId: "gemma-flash", provider: .openAICompatible))
-        XCTAssertFalse(ModelCatalog.shared.supportsVision(modelId: "gemma-2-flash", provider: .openRouter))
-    }
-
-    func testFlashHeuristicDoesNotCreateFalsePositiveForNonGeminiProviders() {
-        XCTAssertFalse(ModelCatalog.shared.supportsVision(modelId: "gemma-flash", provider: .openAI))
-        XCTAssertFalse(ModelCatalog.shared.supportsVision(modelId: "my-text-flash-model", provider: .openAICompatible))
-    }
-
-    func testProviderSpecificHeuristics() {
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "llava:latest", provider: .ollama))
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "deepseek-v4-flash-vision-exp", provider: .openCodeGo))
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "claude-sonnet-4-6", provider: .openCodeZen))
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "gemini-3.1-pro", provider: .openCodeZen))
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "gpt-5.4", provider: .openCodeGo))
-        XCTAssertFalse(ModelCatalog.shared.supportsVision(modelId: "glm-5.3", provider: .openCodeGo))
-    }
-
-    func testOpenAICompatibleDetectsLocalAndNamespacedVisionModels() {
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "llava:latest", provider: .openAICompatible))
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "ollama/llava:latest", provider: .openAICompatible))
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "qwen2.5-vl-72b-instruct", provider: .openAICompatible))
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "openai/gpt-4o", provider: .openAICompatible))
-    }
-
-    func testModelIdDoesNotLeakVisionAcrossProviders() {
-        XCTAssertFalse(ModelCatalog.shared.supportsVision(modelId: "gpt-4o", provider: .ollama))
-        XCTAssertFalse(ModelCatalog.shared.supportsVision(modelId: "claude-sonnet-4", provider: .openAICompatible))
-    }
-
-    func testGemma3NotForcedToNonVision() {
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "gemma3", provider: .ollama))
-        XCTAssertTrue(ModelCatalog.shared.supportsVision(modelId: "gemma3:latest", provider: .openAICompatible))
+        for testCase in cases {
+            XCTAssertEqual(
+                ModelCatalog.shared.supportsVision(modelId: testCase.id, provider: testCase.provider),
+                testCase.expected,
+                "id: \(testCase.id), provider: \(testCase.provider)"
+            )
+        }
     }
 
     func testModelMetadataFalseOverridesNameHeuristics() {

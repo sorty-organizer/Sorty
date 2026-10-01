@@ -12,17 +12,21 @@ final class OpenCodeModelFilterTests: XCTestCase {
     }
 
     func testZenKeepsNativeProtocolsAndUnknownModels() {
+        let kept = [
+            "glm-5.3", "qwen3.8-max", "minimax-m3",
+            "gpt-5.4", "grok-4.7", "claude-sonnet-4-6", "gemini-3-flash",
+            "muse-spark-1.3", "qwen3.8-flash",
+            "future-chat-9",
+        ]
         let result = filtered(
-            [
-                "glm-5.3", "qwen3.8-max", "minimax-m3",
-                "gpt-5.4", "grok-4.7", "claude-sonnet-4-6", "gemini-3-flash",
-                "muse-spark-1.3", "jev-1.13", "qwen3.8-flash",
-                "future-chat-9",
-            ],
+            kept + ["jev-1.13"],
             for: .openCodeZen
         )
-        XCTAssertEqual(result.count, 10)
         XCTAssertFalse(result.contains("jev-1.13"))
+        for id in kept {
+            XCTAssertTrue(result.contains(id), "Expected Zen to keep \(id)")
+        }
+        XCTAssertEqual(Set(result), Set(kept))
     }
 
     func testGoKeepsMessagesModels() {
