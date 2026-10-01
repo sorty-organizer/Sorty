@@ -246,6 +246,8 @@ public struct ContentView: View {
             HistoryView()
         case .duplicates:
             DuplicatesView()
+                .environmentObject(appState.duplicateManager)
+                .environmentObject(appState.duplicateSettings)
         case .exclusions:
             ExclusionRulesView()
         case .watchedFolders:

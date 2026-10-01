@@ -832,13 +832,27 @@ public class AppState: ObservableObject {
     }
     /// Persistent security-scoped bookmark for the folder selected in Files & Folders settings.
     @Published public private(set) var filesAndFoldersPermissionBookmark: Data?
+    private var hasLoadedFilesAndFoldersPermissionBookmark = false
     @Published public var updateManager: SparkleUpdateManager
     @Published public var selectedSettingsSection: SettingsCategory?
     @Published public var settingsFocusTarget: SettingsFocusTarget?
     @Published public var personaGeneratorPresentationContext:
         PersonaGeneratorPresentationContext?
-    @Published public var duplicateManager = DuplicateDetectionManager()
-    @Published public var duplicateSettings = DuplicateSettingsManager()
+    private var loadedDuplicateManager: DuplicateDetectionManager?
+    private var duplicateScanningSubscription: AnyCancellable?
+    @Published public private(set) var isDuplicateScanning = false
+
+    /// Constructs duplicate services only when the Duplicates destination opens.
+    public var duplicateManager: DuplicateDetectionManager {
+        if let loadedDuplicateManager { return loadedDuplicateManager }
+        let manager = DuplicateDetectionManager()
+        loadedDuplicateManager = manager
+        duplicateScanningSubscription = manager.$isScanning.dropFirst().sink { [weak self] isScanning in
+            self?.isDuplicateScanning = isScanning
+        }
+        return manager
+    }
+    public private(set) lazy var duplicateSettings = DuplicateSettingsManager()
     @Published public var duplicateSelectedDirectory: URL?
     @Published public var duplicateSelectedGroup: UnifiedDuplicateGroup?
     @Published public var debugMode: Bool = false
@@ -984,9 +998,6 @@ public class AppState: ObservableObject {
         self.windowSessionID = windowSessionID
         self.updateManager = updateManager
         self.userDefaults = userDefaults
-        self.filesAndFoldersPermissionBookmark = userDefaults.data(
-            forKey: Self.filesAndFoldersPermissionBookmarkKey
-        )
 
         // Onboarding completion is the source of truth. `lastLaunchedVersion`
         // can be written by a launch that never completed onboarding, so it
@@ -1041,6 +1052,7 @@ public class AppState: ObservableObject {
             return false
         }
 
+        hasLoadedFilesAndFoldersPermissionBookmark = true
         filesAndFoldersPermissionBookmark = bookmark
         userDefaults.set(bookmark, forKey: Self.filesAndFoldersPermissionBookmarkKey)
         return hasFilesAndFoldersPermission()
@@ -1049,6 +1061,10 @@ public class AppState: ObservableObject {
     /// Resolves the saved grant and proves that Sorty can still read the chosen directory.
     /// Resolving a bookmark does not make it the active workflow folder.
     public func hasFilesAndFoldersPermission() -> Bool {
+        if !hasLoadedFilesAndFoldersPermissionBookmark {
+            filesAndFoldersPermissionBookmark = userDefaults.data(forKey: Self.filesAndFoldersPermissionBookmarkKey)
+            hasLoadedFilesAndFoldersPermissionBookmark = true
+        }
         guard let bookmark = filesAndFoldersPermissionBookmark else { return false }
         let (isGranted, refreshedBookmark) = Self.verifyFilesAndFoldersBookmark(bookmark)
         if let refreshedBookmark {
@@ -1073,6 +1089,18 @@ public class AppState: ObservableObject {
     /// Checks folder access away from the main actor for settings refreshes.
     /// Only writes a renewed bookmark back if the selection has not changed.
     public func hasFilesAndFoldersPermissionAsync() async -> Bool {
+        if !hasLoadedFilesAndFoldersPermissionBookmark {
+            let reader = UserDefaultsDataReader(userDefaults)
+            let bookmarkKey = Self.filesAndFoldersPermissionBookmarkKey
+            let storedBookmark = await Task.detached(priority: .utility) {
+                reader.data(forKey: bookmarkKey)
+            }.value
+            // A grant or revocation during the read takes precedence.
+            if !hasLoadedFilesAndFoldersPermissionBookmark {
+                filesAndFoldersPermissionBookmark = storedBookmark
+                hasLoadedFilesAndFoldersPermissionBookmark = true
+            }
+        }
         guard let bookmark = filesAndFoldersPermissionBookmark else { return false }
         let (isGranted, refreshedBookmark) = await Task.detached(priority: .utility) {
             Self.verifyFilesAndFoldersBookmark(bookmark)
@@ -1139,6 +1167,7 @@ public class AppState: ObservableObject {
     }
 
     public func revokeFilesAndFoldersPermission() {
+        hasLoadedFilesAndFoldersPermissionBookmark = true
         filesAndFoldersPermissionBookmark = nil
         userDefaults.removeObject(forKey: Self.filesAndFoldersPermissionBookmarkKey)
     }
@@ -2198,7 +2227,7 @@ public class AppState: ObservableObject {
             SortyWidgetSnapshotStore.clear()
 
             organizer?.reset()
-            duplicateManager.clearResults()
+            loadedDuplicateManager?.clearResults()
             selectedDirectory = nil
             duplicateSelectedDirectory = nil
             duplicateSelectedGroup = nil

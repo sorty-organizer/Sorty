@@ -4,6 +4,27 @@ Keep the main thread available to draw Sorty's first window and handle input. La
 
 Apply this rule to dependencies reached through `SortyApp`, `WindowSession`, view-owned objects, and `.shared` properties. A cheap initializer can still trigger an expensive singleton. `Task { @MainActor in ... }` retains main-actor work; making a method `async` does not move its synchronous work off that actor.
 
+`StateObject(wrappedValue:)` takes an escaping autoclosure. Keep construction inside
+that expression so `SortyApp.init` does not create managers eagerly. SwiftUI still
+constructs them when the scene reads the objects, including environment injection.
+Moving a constructor into this autoclosure does not prove it runs after first paint.
+`timedLaunchInit` emits a "Manager initialization" signpost in all configurations,
+with the manager name on the begin event. Use those intervals in App Launch traces.
+
+Duplicate detection and settings are created when a window opens Duplicates.
+Inject them at that destination, rather than at the window root. AppState forwards
+scan activity to the menu bar without constructing the detection manager on launch.
+Files & Folders bookmark data loads on the first permission check. Async checks read
+it at utility priority and preserve grants or revocations made during that read.
+The production window receives the app's shared Sparkle manager and history;
+default constructor arguments remain available for previews and tests.
+
+The Dock uses the bundle icon directly. The app delegate does not read or decode
+an icon file during launch. Widget synchronization constructs its singleton on
+first use after startup gating. Legacy uninstall and Learnings defaults cleanup
+runs during deferred setup, with the obsolete Learnings key removed only if present.
+Sparkle restores its previous check date when the deferred launch check runs.
+
 ## Loading contract
 
 `SortyApp.configureGlobalsIfNeeded()` starts these loads in parallel from a view task:
@@ -47,6 +68,10 @@ For asynchronous bookmark restoration, snapshot the bookmark, item identity, and
 Manual-session restoration reads, decodes, resolves its bookmark, and checks the folder off the main actor. It rechecks the session generation and idle state before publishing the restored folder. The organizer owns a successful security scope until reset and releases scopes from discarded results immediately.
 
 The manual window becomes ready without waiting for history, Learnings, storage-location hydration, or automation folder access. Automation still waits for its history and Learnings state plus watched-folder and storage-location access. Sentry and PostHog start after the window session finishes its interactive setup. Provider authentication is not verified on launch: a persisted setup-repair state stays inline and non-modal, Provider Settings refreshes only the selected provider, and an explicit organize action verifies the cached repair state before touching files. `CodexCLIAuthManager` constructs without spawning a subprocess, reading Keychain credentials, or making a network request.
+
+Settings credential hydration uses detached Keychain reads on a cache miss and
+rejects results after provider changes, edits, or reset. Preserve that path rather
+than adding another detached wrapper.
 
 Manual and Learnings AI clients are configured on first use. The automation organizer and its client exist only while at least one watched folder is active. Sparkle starts after 45 seconds of idle startup time and only when its persisted daily interval has elapsed; PostHog feature flags, Finder menu-action verification, and the initial widget snapshot are similarly deferred. Finder runtime monitoring may start earlier because it only observes the extension heartbeat. Safe Finder registration maintenance runs with the deferred menu-action setup after 30 seconds. It coalesces requests and limits registration attempts to once every five minutes without restarting Finder, staging app copies, or changing signing.
 

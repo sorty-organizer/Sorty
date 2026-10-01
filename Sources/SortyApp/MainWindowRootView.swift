@@ -331,7 +331,7 @@ struct MainWindowRootView: View {
                     coordinator?.finishManualOrganization(sessionID: windowSession.id)
                 }
             }
-            .onChange(of: windowSession.appState.duplicateManager.isScanning) { _, _ in
+            .onChange(of: windowSession.appState.isDuplicateScanning) { _, _ in
                 updateMenuBarDuplicateActivity()
             }
             .onOpenURL { url in
@@ -366,7 +366,7 @@ struct MainWindowRootView: View {
 
     private func updateMenuBarDuplicateActivity() {
         menuBarController.setActivity(
-            windowSession.appState.duplicateManager.isScanning ? .duplicateScanning : nil,
+            windowSession.appState.isDuplicateScanning ? .duplicateScanning : nil,
             sourceID: "window.\(windowSession.id.uuidString).duplicates"
         )
     }
@@ -405,8 +405,6 @@ struct MainWindowRootView: View {
             .environmentObject(loginItemManager)
             .environmentObject(namingPresetManager)
             .environmentObject(steeringPromptManager)
-            .environmentObject(windowSession.appState.duplicateManager)
-            .environmentObject(windowSession.appState.duplicateSettings)
             .focusedSceneValue(\.appState, windowSession.appState)
             .focusedSceneValue(\.organizer, windowSession.organizer)
             .background(

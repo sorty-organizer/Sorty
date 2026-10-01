@@ -162,9 +162,6 @@ public class SparkleUpdateManager: ObservableObject {
     private var hasInitialized = false
 
     public init() {
-        if let savedDate = UserDefaults.standard.object(forKey: Self.lastAutoCheckKey) as? Date {
-            self.lastCheckDate = savedDate
-        }
         // No UserDefaults.didChangeNotification observer: updateChannel is a
         // build-time constant, and a blanket observer would wake on every
         // defaults write (including high-frequency caches).
@@ -305,12 +302,13 @@ public class SparkleUpdateManager: ObservableObject {
     public func checkOnLaunchIfNeeded(minimumInterval: TimeInterval = 0) {
         guard !hasRequestedLaunchCheck else { return }
         hasRequestedLaunchCheck = true
+        lastCheckDate = UserDefaults.standard.object(forKey: Self.lastAutoCheckKey) as? Date
         guard allowInternetUpdateAction() else { return }
 
         // Check the persisted date before loading and starting Sparkle. A
         // skipped background check should have no framework startup cost.
         if minimumInterval > 0,
-           let lastCheck = UserDefaults.standard.object(forKey: Self.lastAutoCheckKey) as? Date {
+           let lastCheck = lastCheckDate {
             let elapsed = Date.now.timeIntervalSince(lastCheck)
             if elapsed < minimumInterval {
                 LogManager.shared.log("Skipping auto-update check, last check was \(Int(elapsed / 60)) minutes ago", category: "SparkleUpdateManager")

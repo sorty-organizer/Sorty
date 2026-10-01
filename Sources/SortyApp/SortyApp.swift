@@ -155,14 +155,6 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // The Dock can retain the previous app icon after an in-place update.
-        // Set the running tile from this build's declared icon resource.
-        if let iconName = Bundle.main.object(forInfoDictionaryKey: "CFBundleIconFile") as? String,
-           let iconURL = Bundle.main.url(forResource: iconName, withExtension: "icns"),
-           let icon = NSImage(contentsOf: iconURL) {
-            NSApp.applicationIconImage = icon
-        }
-
         applicationRemovalMonitor = ApplicationRemovalMonitor { [weak self] movedApplicationURL in
             await self?.finishExternalUninstall(movedApplicationURL: movedApplicationURL) ?? false
         }
@@ -676,10 +668,16 @@ struct SortyApp: App {
     @State private var operationalServicesTask: Task<Void, Never>?
     @State private var idleStartupTask: Task<Void, Never>?
 
-    private let widgetSyncManager = SortyWidgetSyncManager.shared
+    private var widgetSyncManager: SortyWidgetSyncManager { .shared }
+    private static let launchSignpostLog = OSLog(subsystem: "com.sorty.app", category: .pointsOfInterest)
 
-    /// Times a manager construction during launch; logs anything over 1ms in debug builds.
+    /// Attributes manager construction in Instruments and logs slow debug constructors.
     private static func timedLaunchInit<T>(_ name: StaticString, _ make: () -> T) -> T {
+        let signpostID = OSSignpostID(log: launchSignpostLog)
+        os_signpost(.begin, log: launchSignpostLog, name: "Manager initialization", signpostID: signpostID, "%{public}s", name.utf8Start)
+        defer {
+            os_signpost(.end, log: launchSignpostLog, name: "Manager initialization", signpostID: signpostID)
+        }
         #if DEBUG
             let start = CFAbsoluteTimeGetCurrent()
             let value = make()
@@ -712,11 +710,8 @@ struct SortyApp: App {
         _menuBarController = StateObject(wrappedValue: Self.timedLaunchInit("MenuBarController") { MenuBarController() })
         _updateManager = StateObject(wrappedValue: Self.timedLaunchInit("SparkleUpdateManager") { SparkleUpdateManager() })
 
-        let organizationHistory = Self.timedLaunchInit("OrganizationHistory") { OrganizationHistory() }
-        _organizationHistory = StateObject(wrappedValue: organizationHistory)
-
-        let codexAuthManager = Self.timedLaunchInit("CodexCLIAuthManager") { CodexCLIAuthManager() }
-        _codexAuthManager = StateObject(wrappedValue: codexAuthManager)
+        _organizationHistory = StateObject(wrappedValue: Self.timedLaunchInit("OrganizationHistory") { OrganizationHistory() })
+        _codexAuthManager = StateObject(wrappedValue: Self.timedLaunchInit("CodexCLIAuthManager") { CodexCLIAuthManager() })
 
         UserDefaults.standard.register(defaults: [
             "showMenuBarExtra": true,
@@ -726,8 +721,6 @@ struct SortyApp: App {
             "confirmQuitWhileOrganizing": true,
             "finderIntegrationEnabled": true,
         ])
-
-        SortyUninstaller.discardLegacyRequest()
 
         // UI-test seeding stays off the init path; the harness task seeds
         // after first paint before any persisted-state load.
@@ -960,9 +953,10 @@ struct SortyApp: App {
         guard !hasConfiguredGlobals else { return }
         hasConfiguredGlobals = true
 
-        // Let the first window reach the screen before restoring folders,
-        // initializing telemetry, or starting automation.
+        // Offer scene rendering a scheduling opportunity before hydration.
+        // A yield alone does not establish that a frame reached the display.
         await Task.yield()
+        SortyUninstaller.discardLegacyRequest()
         LiveLearningsServices.configure()
         LiveSortyFSServices.configure()
         LiveOrganizerServices.configure()

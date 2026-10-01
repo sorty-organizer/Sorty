@@ -284,7 +284,6 @@ public class LearningsManager: ObservableObject {
         requiresInitialSetup = !consentManager.hasCompletedInitialSetup
         learningStrength = userDefaults.object(forKey: "learningStrength") as? Double ?? 0.5
         dataRetentionDays = userDefaults.integer(forKey: "learningDataRetentionDays")
-        userDefaults.removeObject(forKey: "useAIForLearnings")
     }
 
     private struct PersistedState: Sendable {
@@ -404,6 +403,9 @@ public class LearningsManager: ObservableObject {
     public func loadPersistedState() async {
         guard !hasLoadedPersistedState else { return }
 
+        if userDefaults.object(forKey: "useAIForLearnings") != nil {
+            userDefaults.removeObject(forKey: "useAIForLearnings")
+        }
         let generation = persistedStateLoadGeneration
         let task: Task<PersistedState, Never>
         if let persistedStateLoadTask {
