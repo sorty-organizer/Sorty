@@ -23,6 +23,7 @@ public struct BugReportView: View {
     @ObservedObject private var analytics = AnalyticsManager.shared
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @State private var description = ""
+    @FocusState private var isDescriptionFocused: Bool
     @State private var area: BugReportArea = .organize
     @State private var sendToSentry = false
     @State private var sentryEventID: String?
@@ -74,6 +75,7 @@ public struct BugReportView: View {
                     .numericTextTransition(animationValue: description.count)
             }
             TextEditor(text: $description)
+                .focused($isDescriptionFocused)
                 .font(.body)
                 .frame(height: showsSentryOption ? (sendToSentry ? 100 : 340) : 180)
                 .padding(4)
@@ -82,6 +84,7 @@ public struct BugReportView: View {
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
+                    FocusedInstructionBeamBorder(active: isDescriptionFocused, cornerRadius: 8)
                 }
                 .accessibilityIdentifier("BugReportDescription")
                 .onChange(of: description) { _, newValue in
