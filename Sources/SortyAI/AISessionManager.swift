@@ -258,12 +258,6 @@ public class AISessionManager: ObservableObject {
         prewarmTasks[provider] = nil
     }
 
-    /// Merged connection check: identical to `prewarm`, kept as the single
-    /// named entry point so call sites do not fan out testConnection + prewarm.
-    public func verifyConnection(provider: AIProvider, config: AIConfig) async {
-        await prewarm(provider: provider, config: config)
-    }
-
     private func runPrewarm(provider: AIProvider, config: AIConfig) async {
         guard !prewarmingProviders.contains(provider) else { return }
 

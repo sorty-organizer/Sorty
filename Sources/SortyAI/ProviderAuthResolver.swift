@@ -155,34 +155,6 @@ public enum ProviderAuthResolver {
         }.value
     }
 
-    /// Off-main variant of `hasRequiredCredential` for catalog fetches.
-    static func hasRequiredCredentialAsync(for provider: AIProvider, config: AIConfig) async -> Bool {
-        switch provider {
-        case .unavailableProvider:
-            return false
-        case .ollama, .appleFoundationModel:
-            return true
-        default:
-            let method = effectiveAuthMethod(for: provider, config: config)
-            switch method {
-            case .accountSignIn:
-                if provider == .openAI {
-                    return await Task.detached(priority: .userInitiated) {
-                        CodexCLIAuthManager.hasUsableSubscriptionLogin()
-                    }.value
-                }
-                return await credentialAsync(for: provider, method: method, config: config) != nil
-            case .manualSessionToken:
-                return await credentialAsync(for: provider, method: method, config: config) != nil
-            case .apiKey:
-                guard config.requiresAPIKey else {
-                    return true
-                }
-                return await credentialAsync(for: provider, method: method, config: config) != nil
-            }
-        }
-    }
-
     private static func credentialCacheKey(
         for provider: AIProvider,
         method: ProviderAuthMethod,

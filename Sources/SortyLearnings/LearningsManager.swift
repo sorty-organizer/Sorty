@@ -467,7 +467,7 @@ public class LearningsManager: ObservableObject {
     
     // MARK: - Security & Authentication
     
-    /// Unlock with Touch ID / password (required after initial setup)
+    /// Load the profile after the view has handled any required authentication.
     public func unlock() async {
         isLocked = false
         // Explicit user action: retry a previously failed load immediately.
@@ -482,7 +482,7 @@ public class LearningsManager: ObservableObject {
         analysisResult = nil
     }
     
-    /// Complete initial setup - future access will require Touch ID
+    /// Mark the initial learning setup complete.
     public func completeInitialSetup() {
         consentManager.completeInitialSetup()
         requiresInitialSetup = false
@@ -1921,11 +1921,6 @@ public class LearningsManager: ObservableObject {
         await runAnalysis(rootPaths: rootPaths, examplePaths: effectiveExamplePaths)
     }
 
-    /// Re-synthesize learning insights without requiring scan roots.
-    public func synthesizeLearnings() async {
-        await runAnalysis(rootPaths: [], examplePaths: enabledModelDirectoryPaths())
-    }
-    
     /// Accept a proposed mapping
     public func acceptMapping(_ mapping: ProposedMapping) {
         addLabeledExample(
@@ -1955,29 +1950,6 @@ public class LearningsManager: ObservableObject {
     
     // MARK: - Export
     
-    /// Export preview to JSON file
-    public func exportPreview(to url: URL) async throws {
-        guard let result = analysisResult else {
-            throw LearningsError.noAnalysisResult
-        }
-        
-        let data = try result.toJSON()
-        try data.write(to: url)
-    }
-    
-    /// Export rules to JSON file
-    public func exportRules(to url: URL) async throws {
-        guard let profile = currentProfile else {
-            throw LearningsError.noProject
-        }
-        
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        
-        let data = try encoder.encode(profile.inferredRules)
-        try data.write(to: url)
-    }
-
     /// Export a portable, integrity-checked profile archive.
     @discardableResult
     package func exportProfile(to url: URL) throws -> LearningsProfileArchiveSummary {
@@ -2264,153 +2236,6 @@ public class LearningsManager: ObservableObject {
         return merged
     }
     
-    // MARK: - Apply & Rollback
-    
-    @Published public var applyProgress: Double = 0
-    @Published public var isApplying: Bool = false
-    @Published public var lastJobId: String?
-    
-    /// Apply proposed mappings with optional backup
-    public func applyMappings(backupDirectory: URL?, onlyHighConfidence: Bool = false) async {
-        guard var profile = currentProfile, let result = analysisResult else {
-            error = "No profile or analysis result"
-            return
-        }
-        
-        isApplying = true
-        applyProgress = 0
-        error = nil
-        
-        let fm = FileManager.default
-        let backupMode: BackupMode = backupDirectory != nil ? .copyToBackupDir : .none
-        
-        // Filter mappings based on confidence
-        let mappingsToApply = result.proposedMappings.filter {
-            !onlyHighConfidence || $0.confidenceLevel == .high
-        }
-        
-        var entries: [JobManifestEntry] = []
-        var successCount = 0
-        var failCount = 0
-        
-        for (index, mapping) in mappingsToApply.enumerated() {
-            do {
-                var backupPath: String?
-                
-                // Create backup if needed
-                if let backupDir = backupDirectory {
-                    backupPath = backupDir.appendingPathComponent(
-                        "\(UUID().uuidString)_\(URL(fileURLWithPath: mapping.srcPath).lastPathComponent)"
-                    ).path
-                    
-                    try fm.createDirectory(at: backupDir, withIntermediateDirectories: true)
-                    try fm.copyItem(atPath: mapping.srcPath, toPath: backupPath!)
-                }
-                
-                // Create destination directory
-                let destDir = URL(fileURLWithPath: mapping.proposedDstPath).deletingLastPathComponent()
-                try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
-                
-                // Move file
-                try fm.moveItem(atPath: mapping.srcPath, toPath: mapping.proposedDstPath)
-                
-                entries.append(JobManifestEntry(
-                    originalPath: mapping.srcPath,
-                    destinationPath: mapping.proposedDstPath,
-                    backupPath: backupPath,
-                    status: .success
-                ))
-                successCount += 1
-            } catch {
-                entries.append(JobManifestEntry(
-                    originalPath: mapping.srcPath,
-                    destinationPath: mapping.proposedDstPath,
-                    status: .failed
-                ))
-                failCount += 1
-            }
-            
-            applyProgress = Double(index + 1) / Double(mappingsToApply.count)
-        }
-        
-        // Save job manifest
-        let job = JobManifest(
-            projectName: "User Profile",
-            entries: entries,
-            backupMode: backupMode,
-            status: .completed
-        )
-        
-        // Append to profile history
-        profile.jobHistory.append(job)
-        currentProfile = profile
-        lastJobId = job.id
-        
-        await saveProfile()
-        
-        isApplying = false
-        applyProgress = 1.0
-        
-        if failCount > 0 {
-            self.error = "Applied \(successCount) files, \(failCount) failed"
-        }
-    }
-    
-    /// Rollback a job by its ID
-    public func rollbackJob(jobId: String) async {
-        guard var profile = currentProfile else {
-            error = "No profile loaded"
-            return
-        }
-        
-        guard let job = profile.jobHistory.first(where: { $0.id == jobId }) else {
-            error = "Job not found: \(jobId)"
-            return
-        }
-        
-        isApplying = true
-        applyProgress = 0
-        error = nil
-        
-        let fm = FileManager.default
-        var successCount = 0
-        var failCount = 0
-        
-        for (index, entry) in job.entries.enumerated() {
-            do {
-                if let backupPath = entry.backupPath, fm.fileExists(atPath: backupPath) {
-                    // Remove current destination
-                    if fm.fileExists(atPath: entry.destinationPath) {
-                        try fm.removeItem(atPath: entry.destinationPath)
-                    }
-                    // Restore from backup
-                    try fm.moveItem(atPath: backupPath, toPath: entry.originalPath)
-                } else if fm.fileExists(atPath: entry.destinationPath) {
-                    // Move back without backup
-                    try fm.moveItem(atPath: entry.destinationPath, toPath: entry.originalPath)
-                }
-                successCount += 1
-            } catch {
-                failCount += 1
-            }
-            
-            applyProgress = Double(index + 1) / Double(job.entries.count)
-        }
-        
-        // Update job status
-        if let jobIndex = profile.jobHistory.firstIndex(where: { $0.id == jobId }) {
-            profile.jobHistory[jobIndex].status = .rolledBack
-            currentProfile = profile
-            await saveProfile()
-        }
-        
-        isApplying = false
-        applyProgress = 1.0
-        
-        if failCount > 0 {
-            self.error = "Rolled back \(successCount) files, \(failCount) failed"
-        }
-    }
     // MARK: - Prompt Context Generation
     
     /// Generates a prompt context string based on the current profile

@@ -81,6 +81,27 @@ run for these minor dead-code cuts, following AGENTS.md. Live UI and
 accessibility behavior remain unverified. Line counts measure source reduction,
 not build or runtime performance.
 
+## Stale documentation and command cleanup
+
+The next caller pass removed the unused Learnings `applyMappings` and
+`rollbackJob` commands, their published progress state, and the unused
+`synthesizeLearnings`, `exportPreview`, and `exportRules` entry points. No app or
+test calls these commands. Profile export/import, passive learning, and the
+normal organizer apply/undo path remain. Keep `jobHistory` and its models:
+profile decoding, merging, export, and the Applied Jobs view still use them.
+
+Also removed the unused `ProviderAuthResolver.hasRequiredCredentialAsync` and
+`AISessionManager.verifyConnection` wrappers. The active credential resolution
+and `prewarm` implementations remain. This batch removes 209 production lines
+and changes no persisted schema or tests. Local verification was skipped under
+the same minor-change rule.
+
+The docs now describe the current Finder setup, optional authentication and
+provider-bound learning context, available profile export, the correct AI and
+feature-flag locations, and focused test requirements. Removed the unshipped
+CLI instructions and replaced the removed nightly workflow's guide with
+[App updates](../updates.md), based on the current stable release workflow.
+
 ## Keep
 
 | Candidate | Reason |
