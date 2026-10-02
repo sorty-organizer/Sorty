@@ -117,7 +117,18 @@ String catalogs use a separate content cache of native `xcstringstool` output.
 Its key includes the entire catalog, table name, compiler recipe, and toolchain.
 Each hit verifies all generated files before copying them, preserving every
 localization. Corrupt output is compiled again. Maintenance retains the latest
-entry per table, so InfoPlist and Localizable can both remain cached.
+entry per table, so InfoPlist and Localizable can both remain cached. An October 3
+measurement of the real Localizable catalog took 0.47 seconds to compile and
+0.06 seconds for a verified cache hit. This measures catalog work, not the
+entire changed-source build.
+
+Bundle assembly clones the SwiftPM executable with `cp -c`. On APFS, the
+compiler output and staged executable initially share disk blocks; linkage and
+signing edits affect only the staged file. macOS falls back to a normal copy
+when cloning is unavailable. A 103 MB executable copied in 0.103 seconds and
+cloned in 0.0034 seconds. The two outputs matched byte for byte after applying
+the same linkage edits and signing identity, and the compiler output remained
+unchanged. Shared blocks are not reflected as a reduction in `du` totals.
 
 Set `SORTY_COLD_BUILD_CACHE=false` to disable packing and restoration. A bare
 `swift build -c release` can rebuild an archived configuration; use `make daily`

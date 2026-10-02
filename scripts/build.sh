@@ -1810,7 +1810,9 @@ else
     # Copy binary (SPM output target remains SortyApp; bundled executable is Sorty)
     show_inline_step_progress 3 $TOTAL_STEPS "Assembling App Bundle" "Installing Sorty executable"
     if [ -f "${BIN_PATH}/${SPM_BINARY_NAME}" ]; then
-        cp "${BIN_PATH}/${SPM_BINARY_NAME}" "${MACOS_DIR}/${BINARY_NAME}"
+        # APFS shares unchanged blocks with compiler output; signing and linkage
+        # edits remain private. cp falls back to a copy on other filesystems.
+        cp -c "${BIN_PATH}/${SPM_BINARY_NAME}" "${MACOS_DIR}/${BINARY_NAME}"
         chmod +x "${MACOS_DIR}/${BINARY_NAME}"
         normalize_app_executable_linkage "${MACOS_DIR}/${BINARY_NAME}"
         if [ "${BUILD_CONFIG}" != "debug" ]; then
