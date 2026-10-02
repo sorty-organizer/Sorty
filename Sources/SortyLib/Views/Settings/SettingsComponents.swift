@@ -451,7 +451,6 @@ struct SettingsSubsettingRow<Control: View>: View {
     let description: String?
     let focusTarget: SettingsFocusTarget?
     let controlAlignment: VerticalAlignment
-    let topPadding: CGFloat
     @ViewBuilder let control: Control
 
     init(
@@ -459,14 +458,12 @@ struct SettingsSubsettingRow<Control: View>: View {
         description: String? = nil,
         focusTarget: SettingsFocusTarget? = nil,
         controlAlignment: VerticalAlignment = .center,
-        topPadding: CGFloat = 8,
         @ViewBuilder control: () -> Control
     ) {
         self.title = title
         self.description = description
         self.focusTarget = focusTarget
         self.controlAlignment = controlAlignment
-        self.topPadding = topPadding
         self.control = control()
     }
 
@@ -499,8 +496,7 @@ struct SettingsSubsettingRow<Control: View>: View {
                 control
             }
             .padding(.leading, 4)
-            .padding(.top, topPadding)
-            .padding(.bottom, 8)
+            .padding(.vertical, 8)
         }
         .settingsFocusableSetting(focusTarget)
         .transition(

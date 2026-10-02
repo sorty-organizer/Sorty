@@ -52,8 +52,7 @@ struct AdvancedSettingsView: View {
                         SettingsSubsettingRow(
                             title: "Icon Style",
                             description: "Use Sorty's colorful style or a white style with native Finder symbols.",
-                            controlAlignment: .firstTextBaseline,
-                            topPadding: 24
+                            controlAlignment: .firstTextBaseline
                         ) {
                             MenuBarIconStyleControl(selection: $usesAppleNativeIconStyle)
                                 .frame(width: 250)

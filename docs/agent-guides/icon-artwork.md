@@ -9,8 +9,8 @@ The pink-red set remains the default.
 The settings selector previews the pink-red and white Idle mascots at 14 points
 beside their labels, with equal-width segments and the native control's intrinsic
 height. Its text baseline aligns with the Icon Style title above the description.
-The row leaves 24 points below the divider, matching its bottom padding plus the
-card inset. The preview draws from the full-resolution PNG with high interpolation
+The row uses the standard 8-point vertical padding.
+The preview draws from the full-resolution PNG with high interpolation
 at the display's backing scale rather than relying on segmented-control downsampling.
 The white PNGs use glossy pearl-white glass, silver-gray highlights, and a dark
 face panel with white eyes and smile. They reuse the seven image-generated
