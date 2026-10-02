@@ -49,24 +49,13 @@ struct AdvancedSettingsView: View {
                     )
 
                     if showMenuBarExtra {
-                        Divider()
-
-                        HStack(alignment: .center, spacing: 16) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Icon Style")
-                                    .font(.subheadline.weight(.medium))
-                                Text("Use Sorty's colorful style or a white style with native Finder symbols.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-
-                            Spacer(minLength: 12)
-
+                        SettingsSubsettingRow(
+                            title: "Icon Style",
+                            description: "Use Sorty's colorful style or a white style with native Finder symbols."
+                        ) {
                             MenuBarIconStyleControl(selection: $usesAppleNativeIconStyle)
                                 .frame(width: 210, height: 28)
                         }
-                        .padding(.vertical, 4)
                     }
                 }
                 .animation(
