@@ -6,8 +6,9 @@ The `SortyMenuWhite<Activity>.png` siblings are selectable in Advanced Settings
 under Show Menu Bar Icon > Icon Style. The choice applies to the menu bar label,
 popover mascot, and Finder actions through the shared app-group defaults.
 The pink-red set remains the default.
-The settings selector previews the pink-red and white Idle mascots inline beside
-their labels, with equal-width segments and the native control's intrinsic height.
+The settings selector previews the pink-red and white Idle mascots at 14 points
+beside their labels, with equal-width segments and the native control's intrinsic
+height. Its text baseline aligns with the Icon Style title above the description.
 The white PNGs use glossy pearl-white glass, silver-gray highlights, and a dark
 face panel with white eyes and smile. They reuse the seven image-generated
 glass variants from the icon review, exported at 512 pixels. The 1.2.2 What's

@@ -51,11 +51,16 @@ struct AdvancedSettingsView: View {
                     if showMenuBarExtra {
                         SettingsSubsettingRow(
                             title: "Icon Style",
-                            description: "Use Sorty's colorful style or a white style with native Finder symbols."
+                            description: "Use Sorty's colorful style or a white style with native Finder symbols.",
+                            controlAlignment: .firstTextBaseline
                         ) {
                             MenuBarIconStyleControl(selection: $usesAppleNativeIconStyle)
                                 .frame(width: 250)
                                 .fixedSize(horizontal: false, vertical: true)
+                                .alignmentGuide(.firstTextBaseline) { dimensions in
+                                    let font = NSFont.systemFont(ofSize: 11, weight: .medium)
+                                    return dimensions.height / 2 + (font.ascender + font.descender) / 2
+                                }
                         }
                     }
                 }
@@ -394,7 +399,7 @@ private struct MenuBarIconStyleControl: NSViewRepresentable {
                 withExtension: "png"
             )
             if let image = source?.copy() as? NSImage {
-                image.size = NSSize(width: 18, height: 18)
+                image.size = NSSize(width: 14, height: 14)
                 image.isTemplate = false
                 control.setImage(image, forSegment: segment)
                 control.setImageScaling(.scaleProportionallyDown, forSegment: segment)
