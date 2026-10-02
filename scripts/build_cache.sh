@@ -468,7 +468,7 @@ build_cache_prune_resource_caches_to_mru() {
         done < <(
             while IFS= read -r cache_path; do
                 printf '%s\t%s\n' "$(build_cache_path_mtime "${cache_path}")" "${cache_path}"
-            done < <(find "${resource_cache}" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null || true) | sort -rn
+            done < <(find "${resource_cache}" -mindepth 1 -maxdepth 1 -type d ! -name '.compile-*' -print 2>/dev/null || true) | sort -rn
         )
     done
 }

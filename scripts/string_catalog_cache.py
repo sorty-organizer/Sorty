@@ -30,8 +30,9 @@ def copy_outputs(source, destination):
 
 
 def compile_catalog(catalog, destination, cache_root, toolchain):
+    contents = catalog.read_bytes()
     key = hashlib.sha256(b"strings-v1\0" + toolchain.encode() + b"\0" + catalog.name.encode()
-                         + b"\0" + catalog.read_bytes()).hexdigest()
+                         + b"\0" + contents).hexdigest()
     cached = cache_root / key
     try:
         expected = json.loads((cached / "checksums.json").read_text())
@@ -49,10 +50,13 @@ def compile_catalog(catalog, destination, cache_root, toolchain):
     cache_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".compile-", dir=cache_root) as temporary:
         staging = Path(temporary)
+        source = staging / catalog.name
+        source.write_bytes(contents)
         outputs = staging / "outputs"
         outputs.mkdir()
-        subprocess.run(["xcrun", "xcstringstool", "compile", str(catalog),
+        subprocess.run(["xcrun", "xcstringstool", "compile", str(source),
                         "--output-directory", str(outputs)], check=True)
+        source.unlink()
         (staging / "checksums.json").write_text(json.dumps(hashes(outputs)))
         copy_outputs(outputs, destination)
         try:
