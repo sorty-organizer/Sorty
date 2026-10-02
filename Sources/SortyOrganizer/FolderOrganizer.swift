@@ -1738,10 +1738,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         } catch {
             // A superseded run must not record a failure for the old directory
             // or overwrite the winner's error state.
-            if isCurrentOrganizeRun(runToken) {
-                stopTimeoutTimer()
-                handleOrganizationError(error, directory: directory)
-            }
+            guard isCurrentOrganizeRun(runToken) else { throw error }
+            stopTimeoutTimer()
+            handleOrganizationError(error, directory: directory)
             OrganizerServices.captureWorkflow(
                 workflow: "organize",
                 stage: "plan_generation",
@@ -5076,6 +5075,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             
             // Track rule applications for learning feedback
             if let learningsObserver = learningsObserver, !dryRun, !currentRunLearningExcluded {
+                // Warm the profile off-main before synchronous feedback hooks
+                // read it, so a cold Keychain lookup cannot freeze the UI.
+                await learningsManager?.loadProfileIfNeededForCollectionAsync()
+                try checkCancellation()
                 // Pre-start the session so rule applications can be recorded
                 learningsObserver.startSession(folderPath: baseURL.path, historyEntryId: nil, operations: operations)
                 recordRuleApplications(for: planToApply, operations: operations, observer: learningsObserver)

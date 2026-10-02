@@ -97,6 +97,7 @@ public final class ReliabilityManager {
             options.environment = environmentName
             options.sendDefaultPii = false
             options.enableCrashHandler = true
+            options.attachStacktrace = true
             options.enableAppHangTracking = true
             options.enableAutoSessionTracking = true
             options.enableWatchdogTerminationTracking = true
@@ -235,6 +236,13 @@ public final class ReliabilityManager {
         )
 
         let event = Event(error: sanitizedError as NSError)
+        event.extra = Self.errorDiagnostics(error)
+        switch severity {
+        case "warning": event.level = .warning
+        case "info": event.level = .info
+        case "fatal": event.level = .fatal
+        default: event.level = .error
+        }
         event.fingerprint = [
             "sorty.handled_error",
             safeFeature,
@@ -483,19 +491,72 @@ public final class ReliabilityManager {
             || process.environment["SORTY_HARNESS_MODE"] == "1"
     }
 
-    private static func shouldIgnore(_ error: Error) -> Bool {
+    static func shouldIgnore(_ error: Error) -> Bool {
+        if let aiError = error as? AIClientError {
+            if case .internetAccessBlocked = aiError { return true }
+            if case .networkError(let underlying) = aiError { return shouldIgnore(underlying) }
+        }
         let nsError = error as NSError
         let description = nsError.localizedDescription.lowercased()
         return error is CancellationError
-            || nsError.code == NSUserCancelledError
-            || nsError.code == NSURLErrorCancelled
+            || (nsError.domain == NSCocoaErrorDomain && nsError.code == NSUserCancelledError)
+            || (nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled)
             || description.contains("cancelled")
             || description.contains("canceled")
             || description.contains("block internet")
             || description.contains("internet connections")
     }
 
-    private static func classify(_ error: Error) -> ReliabilityErrorClassification {
+    static func classify(_ error: Error) -> ReliabilityErrorClassification {
+        // Match typed failures before inspecting descriptions. Associated payloads
+        // stay local; only fixed causes and valid HTTP status codes are reported.
+        if let aiError = error as? AIClientError {
+            switch aiError {
+            case .missingAPIURL:
+                return .init(category: "configuration", cause: "missing_api_url", type: "provider_error")
+            case .missingAPIKey:
+                return .init(category: "authentication", cause: "missing_api_key", type: "provider_error")
+            case .invalidURL:
+                return .init(category: "configuration", cause: "invalid_api_url", type: "provider_error")
+            case .invalidResponse:
+                return .init(category: "validation", cause: "invalid_response", type: "provider_error")
+            case .invalidResponseFormat:
+                return .init(category: "validation", cause: "invalid_response_format", type: "provider_error")
+            case .jsonDecodingError:
+                return .init(category: "validation", cause: "json_decoding_failed", type: "provider_error")
+            case .internetAccessBlocked:
+                return .init(category: "network", cause: "privacy_mode_blocked", type: "provider_error")
+            case .networkError(let underlying):
+                let classification = classify(underlying)
+                if classification.category == "unknown" {
+                    return .init(category: "network", cause: "connection_failed", type: "provider_error")
+                }
+                return classification
+            case .apiError(let statusCode, _):
+                let cause = aiError.isQuotaExhausted ? "quota_exhausted"
+                    : ((100...599).contains(statusCode) ? "http_\(statusCode)" : "invalid_http_status")
+                let category = (statusCode == 401 || statusCode == 403) ? "authentication" : "provider"
+                return .init(category: category, cause: cause, type: "provider_error")
+            }
+        }
+        if let organizationError = error as? OrganizationError {
+            let category: String
+            let cause: String
+            switch organizationError {
+            case .clientNotConfigured: category = "configuration"; cause = "client_not_configured"
+            case .automationNotConfigured: category = "permission"; cause = "automation_not_granted"
+            case .noCurrentPlan: category = "validation"; cause = "missing_plan"
+            case .planDirectoryMismatch: category = "validation"; cause = "plan_directory_mismatch"
+            case .fileMoveFailed: category = "filesystem"; cause = "file_move_failed"
+            case .cancelled: category = "cancellation"; cause = "cancelled"
+            case .revertAlreadyInProgress: category = "workflow"; cause = "revert_in_progress"
+            }
+            return .init(category: category, cause: cause, type: "organization_error")
+        }
+        if error is DecodingError {
+            return .init(category: "validation", cause: "decoding_failed", type: "decoding_error")
+        }
+
         let nsError = error as NSError
         let description = nsError.localizedDescription.lowercased()
 
@@ -512,7 +573,7 @@ public final class ReliabilityManager {
             }
         }
 
-        if nsError.code == NSURLErrorTimedOut
+        if (nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorTimedOut)
             || description.contains("timed out")
             || description.contains("timeout")
         {
@@ -577,6 +638,34 @@ public final class ReliabilityManager {
         )
     }
 
+    /// Keep diagnostics numeric or allowlisted. Never serialize NSError userInfo,
+    /// decoding contexts, provider bodies, or arbitrary error domains.
+    static func errorDiagnostics(_ error: Error) -> [String: Any] {
+        var diagnostics: [String: Any] = ["diagnostics_version": 1]
+        var underlying = error
+        if let aiError = error as? AIClientError {
+            if case .apiError(let statusCode, _) = aiError, (100...599).contains(statusCode) {
+                diagnostics["http_status"] = statusCode
+            }
+            if case .networkError(let wrapped) = aiError { underlying = wrapped }
+        }
+        let nsError = underlying as NSError
+        if [NSURLErrorDomain, NSCocoaErrorDomain, NSPOSIXErrorDomain, NSOSStatusErrorDomain].contains(nsError.domain) {
+            diagnostics["system_error_domain"] = nsError.domain
+            diagnostics["system_error_code"] = nsError.code
+        }
+        if let decodingError = underlying as? DecodingError {
+            switch decodingError {
+            case .dataCorrupted: diagnostics["decoding_failure"] = "data_corrupted"
+            case .keyNotFound: diagnostics["decoding_failure"] = "key_not_found"
+            case .typeMismatch: diagnostics["decoding_failure"] = "type_mismatch"
+            case .valueNotFound: diagnostics["decoding_failure"] = "value_not_found"
+            @unknown default: diagnostics["decoding_failure"] = "unknown"
+            }
+        }
+        return diagnostics
+    }
+
     private static func boundedIdentifier(_ value: String, fallback: String) -> String {
         let normalized = value.lowercased().replacingOccurrences(
             of: #"[^a-z0-9_.-]+"#,
@@ -621,7 +710,7 @@ struct ReliabilityCaptureRateLimiter {
     }
 }
 
-private struct ReliabilityErrorClassification: Sendable {
+struct ReliabilityErrorClassification: Sendable {
     let category: String
     let cause: String
     let type: String
@@ -635,4 +724,7 @@ private struct SanitizedReliabilityError: LocalizedError, CustomNSError {
     static var errorDomain: String { "com.sorty.app.reliability" }
     var errorCode: Int { 1 }
     var errorDescription: String? { "\(category):\(cause):\(operation)" }
+    var errorUserInfo: [String: Any] {
+        [NSLocalizedDescriptionKey: errorDescription ?? "handled_error"]
+    }
 }

@@ -22,7 +22,7 @@ Filter PostHog events and dashboards on the event property `is_internal = false`
 
 ## Event taxonomy
 
-Handled macOS errors are grouped in Sentry by sanitized feature, operation, category, and cause. Model catalog refresh operations include the provider name. These fields contain no credentials or provider responses, and they let a failed model list stay separate from an unrelated network timeout.
+Handled macOS errors are grouped in Sentry by sanitized feature, operation, category, and cause. AI and organization failures use typed causes, separating HTTP status codes, exhausted quota, missing credentials, malformed responses, and invalid plans. Handled events attach the capture-time stack and a versioned diagnostic dictionary containing valid HTTP status codes, allowlisted system error domains and numeric codes, or a fixed decoding-failure kind. Stack traces identify the reporting path, not necessarily the original throw site. Error payloads, arbitrary domains, decoding keys and paths, and provider response bodies stay local. Reported severity sets the Sentry event level. Model catalog refresh operations include the provider name. These fields contain no credentials or provider responses, and they let a failed model list stay separate from an unrelated network timeout.
 
 | Event | Surface | Purpose |
 |---|---|---|
