@@ -105,7 +105,7 @@ jobs:
         run: |
           set -o pipefail
           CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
-          python3 scripts/ci_test_shards.py --workers "$CORES" test_inventory.log -- swift test -debug-info-format none -Xswiftc -gline-tables-only -Xcc -gline-tables-only -Xswiftc -module-cache-path -Xswiftc "$GITHUB_WORKSPACE/.build/ModuleCache" -Xcc "-fmodules-cache-path=$GITHUB_WORKSPACE/.build/ModuleCache" --disable-index-store --disable-sandbox --no-parallel --skip-build -j "$CORES" 2>&1 | tee unit_test_output.log
+          SORTY_BUILD_DIR="$GITHUB_WORKSPACE/.build" SORTY_VERBOSE=true ./scripts/swift_retry.sh ci_tests swift test -debug-info-format none -Xswiftc -gline-tables-only -Xcc -gline-tables-only -Xswiftc -module-cache-path -Xswiftc "$GITHUB_WORKSPACE/.build/ModuleCache" -Xcc "-fmodules-cache-path=$GITHUB_WORKSPACE/.build/ModuleCache" --disable-index-store --disable-sandbox --parallel --skip-build -j "$CORES" 2>&1 | tee unit_test_output.log
           echo "✅ Build & tests completed"
 
       - name: Build app via script
@@ -154,7 +154,6 @@ jobs:
           name: test-results
           path: |
             test_inventory.log
-            .build/logs/ci-shard-*.log
             unit_test_output.log
             build_output.log
           retention-days: 7

@@ -132,7 +132,7 @@ def selection(names):
 
 
 def snapshot(sources):
-    return {str(path): (path.lstat().st_mtime_ns, path.lstat().st_size, path.lstat().st_mode)
+    return {str(path): (path.lstat().st_mtime_ns, path.lstat().st_size, path.lstat().st_mode, path.lstat().st_ctime_ns)
             for source in sources for path in [source, *source.rglob("*")]
             if not path.is_dir() or path.is_symlink()}
 

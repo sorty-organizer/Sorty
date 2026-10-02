@@ -364,11 +364,15 @@ final class SortyUninstallerTests: XCTestCase {
         )
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
+        let started = Date()
         try process.run()
-        process.waitUntilExit()
+        // Reap the child before waiting for the helper polling its PID.
+        // An exited but unreaped child can still satisfy `kill -0`.
         sleeper.waitUntilExit()
+        process.waitUntilExit()
 
         XCTAssertEqual(process.terminationStatus, 0)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 10, "Successful removal must not exhaust the retry budget")
         XCTAssertFalse(fileManager.fileExists(atPath: target.path))
         XCTAssertFalse(fileManager.fileExists(atPath: ready.path))
     }

@@ -441,6 +441,16 @@ public enum SortyUninstaller {
                 for TARGET in "$@"; do
                     /bin/rm -rf "$TARGET"
                 done
+                REMAINING=false
+                for TARGET in "$@"; do
+                    if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
+                        REMAINING=true
+                        break
+                    fi
+                done
+                if [ "$REMAINING" = false ]; then
+                    exit 0
+                fi
                 ATTEMPT=$((ATTEMPT + 1))
                 /bin/sleep 0.2
             done

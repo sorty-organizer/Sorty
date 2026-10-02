@@ -159,11 +159,9 @@ publication. See the [cache action documentation](https://github.com/actions/cac
 timestamps only when contents match, preserving Swift's incremental inputs.
 Release retains both architectures, whole-module optimization, and no Thin LTO.
 Test discovery builds the bundle; execution uses `--skip-build`. Regular CI
-batches whole XCTest classes across workers instead of launching a process for
-every test, which is how [SwiftPM's parallel runner works](https://github.com/swiftlang/swift-package-manager/blob/main/Sources/Commands/SwiftTestCommand.swift).
-Each batch must execute exactly its discovered count, and any missing tests or
-failed batch fails the job. Logs remain under `.build/logs/ci-shard-*.log`.
-Release tests stay serial because they share Trash and Keychain services.
+runs tests in parallel. Release tests stay serial because they share Trash and
+Keychain services. The uninstall removal helper exits immediately after all
+targets disappear; its 30-second retry budget applies only to failed deletions.
 Both test workflows use the compact symbol profile and the poison-cache recovery
 wrapper. Universal releases retain full dSYMs and optimization settings.
 
