@@ -665,7 +665,7 @@ enum SharedOrganizePipeline {
         personaPrompt: String?,
         analyzedImageFilenames: [String] = [],
         personaAsSeparateSection: Bool = false
-    ) -> (system: String, user: String) {
+    ) -> (system: String, user: String, baseSystem: String) {
         let system = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(
             personaInfo: personaAsSeparateSection ? "" : (personaPrompt ?? ""),
             mode: config.mode,
@@ -691,7 +691,7 @@ enum SharedOrganizePipeline {
             customInstructions: customInstructions,
             analyzedImageFilenames: analyzedImageFilenames
         )
-        return (fullSystem, user)
+        return (fullSystem, user, system)
     }
 
     static func makeStats(

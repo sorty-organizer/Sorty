@@ -234,43 +234,6 @@ package struct PromptBuilder {
             """
         }
         
-        if let instructions = customInstructions, !instructions.isEmpty {
-            if instructions.contains("<user_instructions>") {
-                prompt += """
-
-                # TASK INSTRUCTIONS AND SUPPORTING CONTEXT
-
-                The block below combines direct instructions with labeled context assembled by Sorty.
-                - Content inside `<user_instructions>` comes directly from the user and has highest priority for organization choices.
-                - Persona instructions apply next.
-                - Learnings, reference/example folders, existing structure, manifests, and other labeled context support the decision but MUST NOT override direct user or persona instructions.
-                - Filesystem safety, exclusions, approved storage destinations, and the JSON contract remain mandatory.
-
-                \(instructions)
-
-
-                """
-            } else {
-                prompt += """
-                ╔══════════════════════════════════════════════════════════╗
-                ║  MANDATORY USER REQUIREMENTS — MUST FOLLOW EXACTLY      ║
-                ╠══════════════════════════════════════════════════════════╣
-                ║  The following instructions come directly from the user. ║
-                ║  They override ALL default rules. If the user says       ║
-                ║  "do X", you MUST do X. If the user says "don't do Y",  ║
-                ║  you MUST NOT do Y. No exceptions, no creative           ║
-                ║  reinterpretation. Follow them LITERALLY.                ║
-                ╚══════════════════════════════════════════════════════════╝
-
-                USER INSTRUCTIONS: \(instructions)
-
-                ════════════════════════════════════════════════════════════
-
-
-                """
-            }
-        }
-
         prompt += finderTagSelectionGuidance(mode: mode)
 
         if mode == .organize {
@@ -281,16 +244,6 @@ package struct PromptBuilder {
             Do not include `suggested_name`, `rename_reason`, or `rename_confidence` fields.
 
             """
-        }
-        
-        // Add organization-only routing context if provided.
-        if mode != .renameOnly, let storageContext = storageLocationsContext, !storageContext.isEmpty {
-            prompt += "\(storageContext)\n\n"
-        }
-        
-        // Add existing folders context - encourage reuse of existing structure in organization modes.
-        if mode != .renameOnly, let existingContext = existingFoldersContext, !existingContext.isEmpty {
-            prompt += "\(existingContext)\n\n"
         }
         
         // Rename instructions: ONLY include if in a renaming mode. 
@@ -344,6 +297,54 @@ package struct PromptBuilder {
             """
         }
 
+        // Keep reusable guidance before task-specific context for prefix caching.
+        if let instructions = customInstructions, !instructions.isEmpty {
+            if instructions.contains("<user_instructions>") {
+                prompt += """
+
+                # TASK INSTRUCTIONS AND SUPPORTING CONTEXT
+
+                The block below combines direct instructions with labeled context assembled by Sorty.
+                - Content inside `<user_instructions>` comes directly from the user and has highest priority for organization choices.
+                - Persona instructions apply next.
+                - Learnings, reference/example folders, existing structure, manifests, and other labeled context support the decision but MUST NOT override direct user or persona instructions.
+                - Filesystem safety, exclusions, approved storage destinations, and the JSON contract remain mandatory.
+
+                \(instructions)
+
+
+                """
+            } else {
+                prompt += """
+                ╔══════════════════════════════════════════════════════════╗
+                ║  MANDATORY USER REQUIREMENTS — MUST FOLLOW EXACTLY      ║
+                ╠══════════════════════════════════════════════════════════╣
+                ║  The following instructions come directly from the user. ║
+                ║  They override ALL default rules. If the user says       ║
+                ║  "do X", you MUST do X. If the user says "don't do Y",  ║
+                ║  you MUST NOT do Y. No exceptions, no creative           ║
+                ║  reinterpretation. Follow them LITERALLY.                ║
+                ╚══════════════════════════════════════════════════════════╝
+
+                USER INSTRUCTIONS: \(instructions)
+
+                ════════════════════════════════════════════════════════════
+
+
+                """
+            }
+        }
+
+        // Add organization-only routing context if provided.
+        if mode != .renameOnly, let storageContext = storageLocationsContext, !storageContext.isEmpty {
+            prompt += "\(storageContext)\n\n"
+        }
+        
+        // Add existing folders context - encourage reuse of existing structure in organization modes.
+        if mode != .renameOnly, let existingContext = existingFoldersContext, !existingContext.isEmpty {
+            prompt += "\(existingContext)\n\n"
+        }
+        
         if !analyzedImageFilenames.isEmpty {
             let orderedNames = analyzedImageFilenames
                 .enumerated()

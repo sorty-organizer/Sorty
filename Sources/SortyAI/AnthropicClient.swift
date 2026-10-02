@@ -29,15 +29,19 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
     }
 
     /// Cache reusable instructions independently of changing file lists and images.
-    private func systemContent(_ prompt: String) -> Any {
+    private func systemContent(_ prompt: String, basePrompt: String? = nil) -> Any {
         let supportsCaching = config.provider == .anthropic ||
             (isOpenCode && config.model.lowercased().hasPrefix("claude-"))
         guard supportsCaching, !prompt.isEmpty else { return prompt }
-        return [[
-            "type": "text",
-            "text": prompt,
-            "cache_control": ["type": "ephemeral"]
-        ]] as [[String: Any]]
+        var sections = [prompt]
+        if let basePrompt, !basePrompt.isEmpty, prompt.hasPrefix(basePrompt), prompt != basePrompt {
+            // A persona change can reuse the base instructions. Keep the
+            // complete persona prefix cacheable for subsequent batches too.
+            sections = [basePrompt, String(prompt.dropFirst(basePrompt.count))]
+        }
+        return sections.map { text -> [String: Any] in
+            ["type": "text", "text": text, "cache_control": ["type": "ephemeral"]]
+        }
     }
 
     private func requiredHeaders() throws -> [String: String] {
@@ -74,7 +78,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         let requestBody: [String: Any] = [
             "model": config.model,
             "max_tokens": config.maxTokens ?? config.provider.defaultOrganizeMaxTokens,
-            "system": systemContent(fullSystemPrompt),
+            "system": systemContent(fullSystemPrompt, basePrompt: prompts.baseSystem),
             "messages": [
                 ["role": "user", "content": userPrompt]
             ],
@@ -127,7 +131,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         let requestBody: [String: Any] = [
             "model": config.model,
             "max_tokens": config.maxTokens ?? config.provider.defaultOrganizeMaxTokens,
-            "system": systemContent(fullSystemPrompt),
+            "system": systemContent(fullSystemPrompt, basePrompt: prompts.baseSystem),
             "messages": [
                 ["role": "user", "content": contentArray]
             ],
