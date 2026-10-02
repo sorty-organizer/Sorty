@@ -388,16 +388,15 @@ package struct PromptBuilder {
             estimatedChars += extHeader.utf8.count
 
             // Prioritize files with content metadata (deep-scanned) before applying the cap
-            let sortedFiles: [FileItem]
-            if includeContentMetadata {
-                sortedFiles = fileList.sorted { a, b in
+            let sortedFiles = fileList.sorted { a, b in
+                if includeContentMetadata {
                     let aHasMetadata = a.contentMetadata != nil && !a.contentMetadata!.isEmpty
                     let bHasMetadata = b.contentMetadata != nil && !b.contentMetadata!.isEmpty
                     if aHasMetadata != bHasMetadata { return aHasMetadata }
-                    return false
                 }
-            } else {
-                sortedFiles = fileList
+                // Scan enumeration order must not change prompt prefixes or
+                // which files receive full metadata within the token budget.
+                return a.path < b.path
             }
 
             for file in sortedFiles {
@@ -786,7 +785,9 @@ package struct PromptBuilder {
     private static func compactFileSummary(files: [FileItem], maxExtensions: Int = 12) -> String {
         let grouped = Dictionary(grouping: files) { $0.extension.lowercased() }
         let summary = grouped
-            .sorted { $0.value.count > $1.value.count }
+            .sorted {
+                $0.value.count == $1.value.count ? $0.key < $1.key : $0.value.count > $1.value.count
+            }
             .prefix(maxExtensions)
             .map { ext, entries in
                 "\(ext.isEmpty ? "misc" : ext):\(entries.count)"
@@ -1159,17 +1160,17 @@ package struct PromptBuilder {
         }
 
         manifestEntries.sort {
-            $0.relativePath.localizedCaseInsensitiveCompare($1.relativePath) == .orderedAscending
+            $0.relativePath < $1.relativePath
         }
 
         let extensionSummary = extensionCounts
-        .sorted { $0.value > $1.value }
+        .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
         .prefix(12)
         .map { "\(promptSafeFilename($0.key)):\($0.value)" }
         .joined(separator: ", ")
 
         let parentSummary = parentCounts
-        .sorted { $0.value > $1.value }
+        .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
         .prefix(10)
         .map { "\(promptSafeFilename($0.key)): \($0.value)" }
         .joined(separator: ", ")

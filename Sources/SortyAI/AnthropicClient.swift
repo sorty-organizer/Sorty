@@ -28,6 +28,18 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         self.config = config
     }
 
+    /// Cache reusable instructions independently of changing file lists and images.
+    private func systemContent(_ prompt: String) -> Any {
+        let supportsCaching = config.provider == .anthropic ||
+            (isOpenCode && config.model.lowercased().hasPrefix("claude-"))
+        guard supportsCaching, !prompt.isEmpty else { return prompt }
+        return [[
+            "type": "text",
+            "text": prompt,
+            "cache_control": ["type": "ephemeral"]
+        ]] as [[String: Any]]
+    }
+
     private func requiredHeaders() throws -> [String: String] {
         guard let authHeader = ProviderAuthResolver.authHeader(for: config.provider, config: config) else {
             throw AIClientError.missingAPIKey
@@ -62,7 +74,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         let requestBody: [String: Any] = [
             "model": config.model,
             "max_tokens": config.maxTokens ?? config.provider.defaultOrganizeMaxTokens,
-            "system": fullSystemPrompt,
+            "system": systemContent(fullSystemPrompt),
             "messages": [
                 ["role": "user", "content": userPrompt]
             ],
@@ -115,7 +127,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         let requestBody: [String: Any] = [
             "model": config.model,
             "max_tokens": config.maxTokens ?? config.provider.defaultOrganizeMaxTokens,
-            "system": fullSystemPrompt,
+            "system": systemContent(fullSystemPrompt),
             "messages": [
                 ["role": "user", "content": contentArray]
             ],
@@ -383,7 +395,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         let requestBody: [String: Any] = [
             "model": config.model,
             "max_tokens": config.maxTokens ?? config.provider.defaultOrganizeMaxTokens,
-            "system": systemPrompt ?? "You are a helpful assistant.",
+            "system": systemContent(systemPrompt ?? "You are a helpful assistant."),
             "messages": [
                 ["role": "user", "content": prompt]
             ],
