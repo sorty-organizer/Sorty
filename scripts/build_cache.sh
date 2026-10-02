@@ -258,6 +258,8 @@ build_cache_fingerprint_archs() {
 
 build_cache_compiled_output_paths() {
     printf '%s\n' \
+        "${BUILD_DIR}/.sorty-cache/cold" \
+        "${BUILD_DIR}/ModuleCache" \
         "${BUILD_DIR}/DerivedData" \
         "${BUILD_DIR}/FinderSyncDerivedData" \
         "${BUILD_DIR}/debug" \
@@ -761,10 +763,32 @@ swiftpm_module_cache_poison_detected() {
         }
 }
 
+# Called only after a successful compile with the shared module-cache flags.
+# Remove legacy copies for that configuration once the replacement is usable.
+finish_swiftpm_cache_migration() {
+    local config="$1"
+    shift
+    local flags=" $* "
+    case "${flags}" in
+        *" -module-cache-path -Xswiftc ${BUILD_DIR}/ModuleCache "*)
+            [ -d "${BUILD_DIR}/ModuleCache" ] || return 0
+            prune_path_if_exists "${BUILD_DIR}/${config}/ModuleCache"
+            ;;
+    esac
+    case "${flags}" in
+        *" -debug-info-format none "*)
+            # SwiftPM leaves old dSYMs behind when switching symbol formats.
+            find -H "${BUILD_DIR}/${config}" -maxdepth 1 -type d -name 'SortyApp.dSYM' \
+                -exec rm -rf {} + 2>/dev/null || true
+            ;;
+    esac
+}
+
 reset_clang_module_caches() {
     local root
     while IFS= read -r root; do
         [ -n "${root}" ] || continue
+        prune_path_if_exists "${root}/ModuleCache"
         prune_path_if_exists "${root}/debug/ModuleCache"
         prune_path_if_exists "${root}/release/ModuleCache"
         prune_path_if_exists "${root}/DerivedData/ModuleCache.noindex"

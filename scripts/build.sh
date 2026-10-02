@@ -24,8 +24,8 @@ BUILD_AUTO_CLOSE_REQUEST_PATH="${HOME}/Library/Group Containers/group.com.sorty.
 BUILD_AUTO_CLOSE_REQUEST_ACTIVE=false
 AUTO_PRUNE_BUILD_CACHE="${AUTO_PRUNE_BUILD_CACHE:-true}"
 BUILD_CACHE_VALIDATE_INPUTS="${BUILD_CACHE_VALIDATE_INPUTS:-true}"
-BUILD_CACHE_MAX_SIZE_MB="${BUILD_CACHE_MAX_SIZE_MB:-8192}"
-BUILD_CACHE_TARGET_SIZE_MB="${BUILD_CACHE_TARGET_SIZE_MB:-6144}"
+BUILD_CACHE_MAX_SIZE_MB="${BUILD_CACHE_MAX_SIZE_MB:-4096}"
+BUILD_CACHE_TARGET_SIZE_MB="${BUILD_CACHE_TARGET_SIZE_MB:-3072}"
 BUILD_CACHE_STALE_DAYS="${BUILD_CACHE_STALE_DAYS:-30}"
 BUILD_CACHE_PRUNE_INTERVAL_SECONDS="${BUILD_CACHE_PRUNE_INTERVAL_SECONDS:-86400}"
 BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED="${BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED:-false}"
@@ -1448,6 +1448,12 @@ fi
 mkdir -p "${BUILD_DIR}"
 mkdir -p "${RELEASE_DIR}"
 manage_build_cache
+if [ "${BUILD_METHOD}" = "spm" ]; then
+    python3 "${SCRIPT_DIR}/cold_build_cache.py" restore "${BUILD_DIR}" "${BUILD_CONFIG}"
+    if [ "${SKIP_TESTS}" != "true" ]; then
+        python3 "${SCRIPT_DIR}/cold_build_cache.py" restore "${BUILD_DIR}" debug --tests
+    fi
+fi
 
 # Assemble into a private bundle so rebuilding cannot overwrite the executable
 # of a background Sorty instance that is still running. The finished bundle is
@@ -1738,6 +1744,15 @@ else
         exit 1
     fi
     BIN_PATH="${BUILD_DIR}/${BUILD_CONFIG}"
+    finish_swiftpm_cache_migration "${BUILD_CONFIG}" "${BUILD_FLAGS_ARRAY[@]}"
+    if [ "${BUILD_CONFIG}" = "debug" ]; then
+        python3 "${SCRIPT_DIR}/cold_build_cache.py" pack "${BUILD_DIR}" release
+        if [ "${SKIP_TESTS}" = "true" ]; then
+            python3 "${SCRIPT_DIR}/cold_build_cache.py" pack "${BUILD_DIR}" debug --tests
+        fi
+    else
+        python3 "${SCRIPT_DIR}/cold_build_cache.py" pack "${BUILD_DIR}" debug
+    fi
     BUILD_DURATION=$(get_step_duration "build")
     complete_inline_step 2 $TOTAL_STEPS "Compiling Project" "Compilation successful (${BUILD_DURATION})"
     ACTIVE_BUILD_STEP_NUM=""

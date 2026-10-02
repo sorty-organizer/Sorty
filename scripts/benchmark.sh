@@ -12,8 +12,8 @@ source "${SCRIPT_DIR}/config.sh"
 # deliberately for a stable compile-only signal.
 CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
 PARALLEL_FLAGS="-j ${CORES}"
-SWIFT_DEBUG_FLAGS="--disable-sandbox --disable-index-store"
-SWIFT_RELEASE_FLAGS="--disable-sandbox --disable-index-store"
+SWIFT_DEBUG_FLAGS=(--disable-sandbox --disable-index-store -debug-info-format none -Xswiftc -gline-tables-only -Xcc -gline-tables-only -Xswiftc -module-cache-path -Xswiftc "${BUILD_DIR}/ModuleCache" -Xcc "-fmodules-cache-path=${BUILD_DIR}/ModuleCache")
+SWIFT_RELEASE_FLAGS=(--disable-sandbox --disable-index-store -Xswiftc -module-cache-path -Xswiftc "${BUILD_DIR}/ModuleCache" -Xcc "-fmodules-cache-path=${BUILD_DIR}/ModuleCache")
 # Same product `make dev` builds: measuring the whole package would include
 # SortyQuality and test targets that the dev loop never compiles.
 BENCH_PRODUCT="--product SortyApp"
@@ -131,7 +131,7 @@ clean_debug_build() {
     swift package --scratch-path "${BUILD_DIR}" clean 2>/dev/null || true
     rm -rf "${BUILD_DIR}/debug" 2>/dev/null || true
     # shellcheck disable=SC2086
-    swift build --scratch-path "${BUILD_DIR}" -c debug ${PARALLEL_FLAGS} ${SWIFT_DEBUG_FLAGS} ${BENCH_PRODUCT}
+    swift build --scratch-path "${BUILD_DIR}" -c debug ${PARALLEL_FLAGS} "${SWIFT_DEBUG_FLAGS[@]}" ${BENCH_PRODUCT}
 }
 
 run_scenario 1 "clean_debug" "Clean debug build" clean_debug_build
@@ -141,7 +141,7 @@ run_scenario 1 "clean_debug" "Clean debug build" clean_debug_build
 incremental_build() {
     touch "${PROJECT_DIR}/${INCREMENTAL_FILE}"
     # shellcheck disable=SC2086
-    swift build --scratch-path "${BUILD_DIR}" -c debug ${PARALLEL_FLAGS} ${SWIFT_DEBUG_FLAGS} ${BENCH_PRODUCT}
+    swift build --scratch-path "${BUILD_DIR}" -c debug ${PARALLEL_FLAGS} "${SWIFT_DEBUG_FLAGS[@]}" ${BENCH_PRODUCT}
 }
 
 run_scenario 2 "incremental" "Incremental build (touch ${INCREMENTAL_FILE})" incremental_build
@@ -150,7 +150,7 @@ run_scenario 2 "incremental" "Incremental build (touch ${INCREMENTAL_FILE})" inc
 
 test_build_run() {
     # shellcheck disable=SC2086
-    swift test --scratch-path "${BUILD_DIR}" ${PARALLEL_FLAGS} ${BENCH_TEST_FLAGS} ${SWIFT_DEBUG_FLAGS}
+    swift test --scratch-path "${BUILD_DIR}" ${PARALLEL_FLAGS} ${BENCH_TEST_FLAGS} "${SWIFT_DEBUG_FLAGS[@]}"
 }
 
 run_scenario 3 "test" "Full test build + run" test_build_run
@@ -159,7 +159,7 @@ run_scenario 3 "test" "Full test build + run" test_build_run
 
 release_build() {
     # shellcheck disable=SC2086
-    swift build --scratch-path "${BUILD_DIR}" -c release ${PARALLEL_FLAGS} ${SWIFT_RELEASE_FLAGS} ${BENCH_PRODUCT}
+    swift build --scratch-path "${BUILD_DIR}" -c release ${PARALLEL_FLAGS} "${SWIFT_RELEASE_FLAGS[@]}" ${BENCH_PRODUCT}
 }
 
 run_scenario 4 "release" "Release build" release_build

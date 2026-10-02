@@ -18,6 +18,10 @@ SORTY_VERBOSE="${SORTY_VERBOSE:-${VERBOSE:-false}}"
 
 LOG_NAME="$1"
 shift
+python3 "${SCRIPT_DIR}/cold_build_cache.py" restore "${BUILD_DIR}" "${BUILD_CONFIG:-debug}"
+case " $* " in
+    *" test "*) python3 "${SCRIPT_DIR}/cold_build_cache.py" restore "${BUILD_DIR}" debug --tests ;;
+esac
 STARTED_AT="$(date +%s)"
 
 mkdir -p "${BUILD_LOG_DIR}"
@@ -35,6 +39,7 @@ run_logged() {
 }
 
 if run_logged "$@"; then
+    finish_swiftpm_cache_migration "${BUILD_CONFIG:-debug}" "$@"
     exit 0
 fi
 
@@ -53,6 +58,7 @@ done < <(strip_parallel_job_flags "$@")
 SERIAL_ARGS+=(-j 1)
 
 if run_logged "${SERIAL_ARGS[@]}"; then
+    finish_swiftpm_cache_migration "${BUILD_CONFIG:-debug}" "${SERIAL_ARGS[@]}"
     exit 0
 fi
 

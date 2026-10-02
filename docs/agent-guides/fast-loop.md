@@ -8,6 +8,7 @@ merge or release confidence.
 | --- | --- |
 | Debug build, no tests | `make dev` |
 | Debug build and launch, no tests | `make now` |
+| Full symbols for LLDB, separate scratch directory | `make debug` |
 | Reload Swift implementations in the running Debug app | `make hot` |
 | Build and run unit tests | `make build` |
 | Local fast-test diagnostics | `make test-fast` |
@@ -71,6 +72,13 @@ older hot process after updating it.
 
 Make shares a normal SwiftPM scratch directory through `SORTY_BUILD_DIR`, the
 `.build` symlink, and `SWIFTPM_BUILD_DIR`, with matching indexing settings.
+The Debug fast loop and Make test commands retain source-line tables, but omit
+full variable/type DWARF and dSYMs. This changes the compiler signature once;
+dependencies remain cached. `make debug` keeps full symbols in
+`<SORTY_BUILD_DIR>-debugger`, so debugger builds do not invalidate the fast loop.
+Make Debug and Release commands use `<SORTY_BUILD_DIR>/ModuleCache` for SDK
+modules; the compiler keys incompatible module variants itself. After a successful
+build with that path, maintenance removes the old cache for that configuration.
 Coverage, profiling, hot reload, and universal Xcode builds use separate settings
 or caches. Prefer an isolated scratch path for diagnostics with different flags.
 
@@ -93,6 +101,30 @@ and dependencies remain protected, so the size budget is a soft limit. See [buil
 | `BUILD_CACHE_MAX_SIZE_MB` | `4096` |
 | `BUILD_CACHE_TARGET_SIZE_MB` | `3072` |
 | `BUILD_CACHE_STALE_DAYS` | `30` |
+
+After successful local builds, inactive configurations and unused `.xctest`
+bundles move into LZFSE-compressed Apple Archives under `.sorty-cache/cold`.
+The active configuration, compiler objects, package checkouts, and dependencies
+stay expanded. `make now` restores Debug if needed; `make daily` restores Release;
+Make test commands restore the test bundle before SwiftPM checks it. Packing and
+restoration preserve nanosecond timestamps, permissions, symlinks, and contents.
+Archives carry SHA-256 digests and are verified before originals are removed and
+before restored files are published. A SwiftPM scratch lock prevents packing
+during compilation. A damaged archive stays available for inspection while the
+compiler rebuilds missing outputs.
+
+Set `SORTY_COLD_BUILD_CACHE=false` to disable packing and restoration. A bare
+`swift build -c release` can rebuild an archived configuration; use `make daily`
+to restore it first, or call
+`python3 scripts/cold_build_cache.py restore "$SORTY_BUILD_DIR" release`.
+Packing runs once per newly built inactive output. It adds compression time to
+that build, and profile switching adds extraction time; repeated Debug builds
+leave the cold outputs alone. Hosted CI keeps everything expanded.
+
+October's local snapshot fell from 2,723 MB to 1,952 MB. Release outputs compressed
+from 730 MiB to 250 MiB, and the test bundle from 206 MiB to 43 MiB. Concurrent
+source changes prevent treating those builds as a controlled compile-speed
+comparison. Measure cold, warm, and changed-source builds separately.
 
 Use `BUILD_CACHE_PRUNE_INTERVAL_SECONDS=0 make now` to force maintenance, or
 `make cache-prune`. Dependency eviction under size pressure is opt-in through
@@ -126,8 +158,14 @@ publication. See the [cache action documentation](https://github.com/actions/cac
 [ci_source_cache.py](../../scripts/ci_source_cache.py) restores source
 timestamps only when contents match, preserving Swift's incremental inputs.
 Release retains both architectures, whole-module optimization, and no Thin LTO.
-Test discovery builds the bundle; execution uses `--skip-build`. Release tests
-stay serial because they share Trash and Keychain services.
+Test discovery builds the bundle; execution uses `--skip-build`. Regular CI
+batches whole XCTest classes across workers instead of launching a process for
+every test, which is how [SwiftPM's parallel runner works](https://github.com/swiftlang/swift-package-manager/blob/main/Sources/Commands/SwiftTestCommand.swift).
+Each batch must execute exactly its discovered count, and any missing tests or
+failed batch fails the job. Logs remain under `.build/logs/ci-shard-*.log`.
+Release tests stay serial because they share Trash and Keychain services.
+Both test workflows use the compact symbol profile and the poison-cache recovery
+wrapper. Universal releases retain full dSYMs and optimization settings.
 
 Use the Release workflow's `validate_only=true` on `main` to exercise universal
 builds, signing, ZIP packaging, launch, and appcast validation without publication.

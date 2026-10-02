@@ -151,8 +151,9 @@ jobs:
             !.build/**/Index.noindex
             !.build/logs
             !.build/**/*.log
-          key: ${{ runner.os }}-${{ runner.arch }}-spm-tests-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-${{ github.sha }}
+          key: ${{ runner.os }}-${{ runner.arch }}-spm-tests-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-compact-${{ github.sha }}
           restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-spm-tests-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-compact-
             ${{ runner.os }}-${{ runner.arch }}-spm-tests-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
             ${{ runner.os }}-${{ runner.arch }}-spm-tests-v6-${{ steps.toolchain.outputs.key }}-
 
@@ -176,13 +177,13 @@ jobs:
         run: |
           set -o pipefail
           CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
-          swift test --disable-index-store --disable-sandbox -j "$CORES" --list-tests | tee release_test_inventory.log
+          SORTY_BUILD_DIR="$GITHUB_WORKSPACE/.build" SORTY_VERBOSE=true ./scripts/swift_retry.sh ci_tests swift test -debug-info-format none -Xswiftc -gline-tables-only -Xcc -gline-tables-only -Xswiftc -module-cache-path -Xswiftc "$GITHUB_WORKSPACE/.build/ModuleCache" -Xcc "-fmodules-cache-path=$GITHUB_WORKSPACE/.build/ModuleCache" --disable-index-store --disable-sandbox -j "$CORES" --list-tests | tee release_test_inventory.log
 
       - name: Run Unit Tests
         run: |
           set -o pipefail
           # Release tests run serially because Trash and Keychain are process-global macOS services.
-          swift test --disable-index-store --disable-sandbox --no-parallel --skip-build 2>&1 \
+          SORTY_BUILD_DIR="$GITHUB_WORKSPACE/.build" SORTY_VERBOSE=true ./scripts/swift_retry.sh ci_tests swift test -debug-info-format none -Xswiftc -gline-tables-only -Xcc -gline-tables-only -Xswiftc -module-cache-path -Xswiftc "$GITHUB_WORKSPACE/.build/ModuleCache" -Xcc "-fmodules-cache-path=$GITHUB_WORKSPACE/.build/ModuleCache" --disable-index-store --disable-sandbox --no-parallel --skip-build 2>&1 \
             | tee release_test.log \
             | tail -100
 

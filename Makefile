@@ -18,8 +18,13 @@ SWIFTPM_INDEX_STORE_FLAG := --disable-index-store
 
 # Package.swift owns compiler and linker settings so builds and tests share one
 # incremental compilation signature instead of invalidating each other.
-SWIFT_DEBUG_FLAGS := --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
-SWIFT_RELEASE_FLAGS := --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
+# Line tables keep crash locations without full type/variable DWARF or dSYMs.
+# Both configurations reuse SDK modules; Clang keys incompatible variants itself.
+SWIFTPM_COMPACT_FLAGS := -debug-info-format none -Xswiftc -gline-tables-only -Xcc -gline-tables-only
+SWIFTPM_MODULE_FLAGS := -Xswiftc -module-cache-path -Xswiftc "$(SORTY_BUILD_DIR)/ModuleCache" -Xcc "-fmodules-cache-path=$(SORTY_BUILD_DIR)/ModuleCache"
+SWIFT_DEBUG_FLAGS := --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG) $(SWIFTPM_COMPACT_FLAGS) $(SWIFTPM_MODULE_FLAGS)
+SWIFT_RELEASE_FLAGS := --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG) $(SWIFTPM_MODULE_FLAGS)
+DEBUGGER_BUILD_DIR ?= $(SORTY_BUILD_DIR)-debugger
 # Keep local app identity stable across rebuilds so macOS continues granting the
 # replacement binary access to Keychain credentials created by the prior build.
 ENABLE_FINDER_EXTENSION ?= false
@@ -61,7 +66,7 @@ run: build
 # builds with debug symbols and verbose logging
 debug: prepare-swiftpm-scratch
 	@echo "🛠️  Building in DEBUG mode with $(CORES) parallel jobs..."
-	@$(BUILD_SCRIPT_ENV) APP_ICON_VARIANT=debug BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) SORTY_BUILD_DIR="$(DEBUGGER_BUILD_DIR)" SWIFTPM_BUILD_DIR="$(DEBUGGER_BUILD_DIR)" APP_ICON_VARIANT=debug BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)" ./scripts/build.sh
 	@echo "🚀 Launching Debug Build..."
 	@open releases/Sorty.app
 
@@ -74,18 +79,18 @@ dev: prepare-swiftpm-scratch
 test: prepare-swiftpm-scratch
 	@echo "🧪 Running unit tests in parallel ($(CORES) jobs)..."
 	@chmod +x scripts/swift_retry.sh
-	@$(BUILD_SCRIPT_ENV) ./scripts/swift_retry.sh unit_tests swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
+	@$(BUILD_SCRIPT_ENV) ./scripts/swift_retry.sh unit_tests swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel $(SWIFT_DEBUG_FLAGS)
 
 # Quick test run - excludes slow UI/integration tests
 test-fast: prepare-swiftpm-scratch
 	@echo "🧪 Running fast unit tests only..."
 	@chmod +x scripts/swift_retry.sh
-	@$(BUILD_SCRIPT_ENV) ./scripts/swift_retry.sh unit_tests swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG) --filter SortyTests
+	@$(BUILD_SCRIPT_ENV) ./scripts/swift_retry.sh unit_tests swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) $(PARALLEL_FLAGS) --parallel $(SWIFT_DEBUG_FLAGS) --filter SortyTests
 
 test-full: prepare-swiftpm-scratch
 	@echo "🧪 Running unit tests with coverage..."
 	@chmod +x scripts/swift_retry.sh
-	@$(BUILD_SCRIPT_ENV) ./scripts/swift_retry.sh unit_tests swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox $(SWIFTPM_INDEX_STORE_FLAG)
+	@$(BUILD_SCRIPT_ENV) ./scripts/swift_retry.sh unit_tests swift test $(SWIFTPM_SCRATCH_FLAG) $(SWIFTPM_CACHE_FLAG) --enable-code-coverage $(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)
 	@echo "✅ All tests completed. Coverage reports available in $(SORTY_BUILD_DIR)/debug/codecov"
 
 # Profile build times to identify slow-compiling files
@@ -116,7 +121,7 @@ daily: prepare-swiftpm-scratch
 # Build and launch Sorty with its in-process InjectionLite hot-reload runtime.
 hot: prepare-swiftpm-scratch
 	@chmod +x scripts/build.sh scripts/hot_reload.sh scripts/hot_reload_frontend.sh
-	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" \
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_RELEASE_FLAGS)" \
 		./scripts/hot_reload.sh
 
 # Local CI-style diagnostics. Blacksmith GitHub Actions remain the release/PR gate.
