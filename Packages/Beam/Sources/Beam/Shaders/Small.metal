@@ -103,15 +103,28 @@ constant float3 smInnerColors[32] = {
 };
 // GENERATED-END: smInnerColors
 
-static float3 sampleSmallPalette(float2 p, float2 size, int variant, bool inner, float paletteScale) {
-  float3 c = float3(0.0);
+struct SmallPaletteSample {
+  float3 inner;
+  float3 border;
+};
+
+// Both layers use the same spot geometry. Evaluate each radial falloff once
+// and keep the original color tables and accumulation order for each layer.
+static SmallPaletteSample sampleSmallPalette(
+  float2 p, float2 size, int variant, float paletteScale,
+  bool needsInner, bool needsBorder
+) {
+  SmallPaletteSample sample = {float3(0.0), float3(0.0)};
+  if (!needsInner && !needsBorder) return sample;
   int base = variant * 8;
   for (int i = 0; i < 8; i++) {
     float4 ps = smSpotPosSize[i];
-    float3 color = inner ? smInnerColors[base + i] : smBorderColors[base + i];
-    c += radialSpot(p, size, ps.xy, ps.zw * paletteScale, color);
+    float2 local = (p - ps.xy * size) / (ps.zw * paletteScale);
+    float weight = saturate(1.0 - length(local));
+    if (needsInner) sample.inner += smInnerColors[base + i] * weight;
+    if (needsBorder) sample.border += smBorderColors[base + i] * weight;
   }
-  return c;
+  return sample;
 }
 
 // MARK: - Conic mask
@@ -171,15 +184,23 @@ static float smallInnerMask(float a) {
 
   float a = beamAngleFract(position, size, time, duration);
 
+  float mInner = smallInnerMask(a);
+  float mStroke = distFromEdge <= borderWidth ? strokeConicMask(a) : 0.0;
+  float mBloom = distFromEdge <= bloomReach ? bloomConicMask(a) : 0.0;
+  bool needFullSpots = (mStroke > 0.0) || (mBloom > 0.0);
+  SmallPaletteSample spots = sampleSmallPalette(
+    position, size, variant, paletteScale, mInner > 0.0, needFullSpots
+  );
+
   // Inner glow
   half3 innerPrem = half3(0.0);
   half  innerA = 0.0h;
   {
-    float m = smallInnerMask(a);
+    float m = mInner;
     if (m > 0.0) {
-      float3 spots = sampleSmallPalette(position, size, variant, true, paletteScale);
+      float3 innerSpots = spots.inner;
       float shadowFactor = exp(-(distFromEdge * distFromEdge) / (innerShadowSigma * innerShadowSigma)) * innerShadowAlpha * inkLuma;
-      float3 rgb = saturate(mix(spots, float3(inkLuma), shadowFactor));
+      float3 rgb = saturate(mix(innerSpots, float3(inkLuma), shadowFactor));
       // Gate alpha by final rgb so dim between-spot pixels don't paint dark
       // over the card (see the matching comment in Medium.metal).
       float rgbMax = max(max(rgb.r, rgb.g), rgb.b);
@@ -189,15 +210,7 @@ static float smallInnerMask(float a) {
     }
   }
 
-  // Stroke and bloom both sample the non-inner palette; compute it once.
-  bool strokeMaybe = (distFromEdge <= borderWidth);
-  bool bloomMaybe  = (distFromEdge <= bloomReach);
-  float mStroke = strokeMaybe ? strokeConicMask(a) : 0.0;
-  float mBloom  = bloomMaybe  ? bloomConicMask(a) : 0.0;
-  bool needFullSpots = (mStroke > 0.0) || (mBloom > 0.0);
-  float3 fullSpots = needFullSpots
-    ? sampleSmallPalette(position, size, variant, false, paletteScale)
-    : float3(0.0);
+  float3 fullSpots = spots.border;
   float fullGate = needFullSpots ? colorGate(fullSpots, inkLuma) : 0.0;
 
   // Stroke

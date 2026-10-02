@@ -1,3 +1,6 @@
+#if os(macOS)
+import AppKit
+#endif
 import SwiftUI
 
 // MARK: - Public API
@@ -122,6 +125,12 @@ struct BeamModifier: ViewModifier {
   // a single frame and snap fade transitions instead of easing them.
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.controlActiveState) private var controlActiveState
+  @State private var isWindowVisible = false
+
+  private var isRenderingPaused: Bool {
+    reduceMotion || controlActiveState == .inactive
+      || !isWindowVisible
+  }
 
   // Lifecycle state — drives the 0.6 s / 0.5 s fade in/out.
   @State private var visualOpacity: Double = 0
@@ -146,6 +155,13 @@ struct BeamModifier: ViewModifier {
     // overlay — that way the lens only warps the receiver's content, not
     // the beam itself sitting on top of it.
     lensApplied(content)
+      .background {
+        #if os(macOS)
+        BeamWindowVisibilityReader(isVisible: $isWindowVisible)
+        #else
+        Color.clear.onAppear { isWindowVisible = true }
+        #endif
+      }
       .overlay {
       Group {
         if visualOpacity > 0.001 {
@@ -235,7 +251,7 @@ struct BeamModifier: ViewModifier {
     TimelineView(
       .animation(
         minimumInterval: 1.0 / 30.0,
-        paused: reduceMotion || controlActiveState == .inactive
+        paused: isRenderingPaused
       )
     ) { timeline in
       // `timeIntervalSinceReferenceDate` is ~2.5e9 s, which loses ~1 ms of
@@ -260,7 +276,7 @@ struct BeamModifier: ViewModifier {
       TimelineView(
         .animation(
           minimumInterval: 1.0 / 30.0,
-          paused: controlActiveState == .inactive
+          paused: isRenderingPaused
         )
       ) { timeline in
         let t = timeline.date.timeIntervalSinceReferenceDate
@@ -338,6 +354,81 @@ struct BeamModifier: ViewModifier {
     )
   }
 }
+
+#if os(macOS)
+/// Window visibility is independent of keyboard focus. A minimized or fully
+/// covered window must park both timelines even if its controls stay active.
+private struct BeamWindowVisibilityReader: NSViewRepresentable {
+  @Binding var isVisible: Bool
+
+  func makeCoordinator() -> Coordinator { Coordinator(isVisible: $isVisible) }
+
+  func makeNSView(context: Context) -> ProbeView {
+    let view = ProbeView()
+    view.onWindowChange = { [weak coordinator = context.coordinator] window in
+      coordinator?.observe(window)
+    }
+    return view
+  }
+
+  func updateNSView(_ view: ProbeView, context: Context) {
+    context.coordinator.isVisible = $isVisible
+    context.coordinator.observe(view.window)
+  }
+
+  static func dismantleNSView(_ view: ProbeView, coordinator: Coordinator) {
+    coordinator.observe(nil)
+    view.onWindowChange = nil
+  }
+
+  @MainActor
+  final class Coordinator {
+    var isVisible: Binding<Bool>
+    private weak var observedWindow: NSWindow?
+    nonisolated(unsafe) private var observers: [NSObjectProtocol] = []
+
+    init(isVisible: Binding<Bool>) { self.isVisible = isVisible }
+
+    func observe(_ window: NSWindow?) {
+      guard observedWindow !== window else { return }
+      let center = NotificationCenter.default
+      observers.forEach(center.removeObserver)
+      observers.removeAll()
+      observedWindow = window
+      if let window {
+        for name in [NSWindow.didChangeOcclusionStateNotification,
+                     NSWindow.didMiniaturizeNotification,
+                     NSWindow.didDeminiaturizeNotification] {
+          observers.append(center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh() }
+          })
+        }
+      }
+      refresh()
+    }
+
+    private func refresh() {
+      let visible = observedWindow.map {
+        $0.isVisible && !$0.isMiniaturized && $0.occlusionState.contains(.visible)
+      } ?? false
+      if isVisible.wrappedValue != visible { isVisible.wrappedValue = visible }
+    }
+
+    deinit {
+      observers.forEach(NotificationCenter.default.removeObserver)
+    }
+  }
+
+  final class ProbeView: NSView {
+    var onWindowChange: ((NSWindow?) -> Void)?
+
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      onWindowChange?(window)
+    }
+  }
+}
+#endif
 
 // MARK: - Timing constants
 

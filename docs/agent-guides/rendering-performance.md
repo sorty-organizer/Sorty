@@ -47,3 +47,31 @@ OpenAI-compatible and native OpenCode streams use the existing chunk coalescer
 to limit main-actor updates to roughly 100 ms or 4 KB of text, with a final
 flush before completion. No text is dropped. These changes remove duplicate
 rendering and per-token UI updates; frame pacing has not been measured.
+
+## Beam rendering, October 3, 2026
+
+The shared Beam modifier now observes its host macOS window's visibility,
+occlusion, and minimization. Both its border and optional lens timelines pause
+when the window cannot be seen. Keyboard-focus and Reduce Motion gates remain
+in place. Visible rendering stays at 30 fps with the same palettes, fades,
+rotation duration, and lens distortion. The observer removes its notification
+subscriptions when the view leaves its window or is dismantled.
+
+The small-beam shader shares radial falloffs between its inner and border
+palettes. Pixels needing both layers evaluate eight radial falloffs instead of
+sixteen. Color tables, accumulation order, masks, and compositing stay the same.
+
+Validation:
+
+- The `SortyLib` SwiftPM target compiled successfully.
+- Both original and optimized Metal shader sources compiled. A temporary
+  offscreen Metal compute comparison evaluated the same shader functions at
+  Retina scale across three sizes, three shapes, four palettes, two themes,
+  and six animation times. All 432 frames, totaling 13,515,264 pixels, had
+  identical output channels. The compute wrapper inlined the stitchable entry
+  point to make it callable outside SwiftUI.
+
+This verifies shader math, not full-app appearance, visibility transitions,
+frame pacing, or battery life. Measure matched signed Release builds in the
+same visible, unfocused, occluded, and minimized states before claiming a power
+reduction. No UI or animation has been removed.

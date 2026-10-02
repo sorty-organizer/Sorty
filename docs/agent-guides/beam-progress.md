@@ -32,6 +32,10 @@ Important implementation details:
   shader and produced visibly stepped motion.
 - The card stops its decorative effect while hidden, inactive, or under
   Reduce Motion. Its width transition also respects Reduce Motion.
+- The shared Beam modifier also pauses both border and lens timelines based
+  on the host macOS window's visibility, occlusion, and minimization. Keep
+  this gate in the package so every beam consumer benefits, including views
+  hosted in manually created windows. Visible frame rates remain unchanged.
 - Qualify this as `SwiftUI.TimelineView`; Sorty has its own `TimelineView`
   type for history, and an unqualified reference resolves to the wrong type.
 
