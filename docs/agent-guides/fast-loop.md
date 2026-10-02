@@ -124,7 +124,9 @@ leave the cold outputs alone. Hosted CI keeps everything expanded.
 October's local snapshot fell from 2,723 MB to 1,952 MB. Release outputs compressed
 from 730 MiB to 250 MiB, and the test bundle from 206 MiB to 43 MiB. Concurrent
 source changes prevent treating those builds as a controlled compile-speed
-comparison. Measure cold, warm, and changed-source builds separately.
+comparison. An unchanged `make now` after the migration took 2.53 seconds and
+reused the signed bundle. Restoring the real Release archive took 2.64 seconds;
+packing it took 3.54 seconds. Measure cold, warm, and changed-source builds separately.
 
 Use `BUILD_CACHE_PRUNE_INTERVAL_SECONDS=0 make now` to force maintenance, or
 `make cache-prune`. Dependency eviction under size pressure is opt-in through
@@ -164,6 +166,18 @@ Keychain services. The uninstall removal helper exits immediately after all
 targets disappear; its 30-second retry budget applies only to failed deletions.
 Both test workflows use the compact symbol profile and the poison-cache recovery
 wrapper. Universal releases retain full dSYMs and optimization settings.
+
+On October 2, hosted run [36962297044](https://github.com/sorty-organizer/Sorty/actions/runs/36962297044)
+restored its cache in 4 seconds, compiled changed inputs in a 16-second step, and
+executed all 953 tests in a 16-second step. The previous test step took 46 seconds;
+removing unconditional uninstall retries eliminated its 33-second delay.
+The universal build in [36962299766](https://github.com/sorty-organizer/Sorty/actions/runs/36962299766)
+passed in 50 seconds with the small source change, versus 227 seconds for the
+preceding build. Repeating only the universal job with identical sources took
+33 seconds; the exact cache hit skipped upload. The release test step executed
+all 953 tests in 12 seconds. Existing SettingsSearch and WindowSession assertions still fail;
+both workflows save compiler caches despite those failures. These are observed
+step timings, not promises for large changes or incompatible toolchains.
 
 Use the Release workflow's `validate_only=true` on `main` to exercise universal
 builds, signing, ZIP packaging, launch, and appcast validation without publication.
