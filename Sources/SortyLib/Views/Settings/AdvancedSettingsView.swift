@@ -54,7 +54,8 @@ struct AdvancedSettingsView: View {
                             description: "Use Sorty's colorful style or a white style with native Finder symbols."
                         ) {
                             MenuBarIconStyleControl(selection: $usesAppleNativeIconStyle)
-                                .frame(width: 210, height: 28)
+                                .frame(width: 250)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
@@ -386,7 +387,19 @@ private struct MenuBarIconStyleControl: NSViewRepresentable {
         if control.responds(to: NSSelectorFromString("setRole:")) {
             control.setValue(1, forKey: "role")
         }
-        control.segmentDistribution = .fill
+        control.segmentDistribution = .fillEqually
+        for segment in 0..<2 {
+            let source = SortyResources.image(
+                named: MenuBarActivity.idle.iconResourceName(usesAppleNativeStyle: segment == 1),
+                withExtension: "png"
+            )
+            if let image = source?.copy() as? NSImage {
+                image.size = NSSize(width: 18, height: 18)
+                image.isTemplate = false
+                control.setImage(image, forSegment: segment)
+                control.setImageScaling(.scaleProportionallyDown, forSegment: segment)
+            }
+        }
         return control
     }
 
