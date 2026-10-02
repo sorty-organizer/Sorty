@@ -444,26 +444,23 @@ struct SettingsToggle: View {
     }
 }
 
-/// Positions a dependent setting beneath a divider, with configurable control alignment.
+/// Centers a dependent setting's control beside its title and description beneath a divider.
 struct SettingsSubsettingRow<Control: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     let description: String?
     let focusTarget: SettingsFocusTarget?
-    let controlAlignment: VerticalAlignment
     @ViewBuilder let control: Control
 
     init(
         title: String,
         description: String? = nil,
         focusTarget: SettingsFocusTarget? = nil,
-        controlAlignment: VerticalAlignment = .center,
         @ViewBuilder control: () -> Control
     ) {
         self.title = title
         self.description = description
         self.focusTarget = focusTarget
-        self.controlAlignment = controlAlignment
         self.control = control()
     }
 
@@ -472,7 +469,7 @@ struct SettingsSubsettingRow<Control: View>: View {
             Divider()
                 .padding(.trailing, 8)
 
-            HStack(alignment: controlAlignment, spacing: 16) {
+            HStack(alignment: .center, spacing: 16) {
                 Image(systemName: "arrow.turn.down.right")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(.secondary)

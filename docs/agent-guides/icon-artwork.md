@@ -8,7 +8,7 @@ popover mascot, and Finder actions through the shared app-group defaults.
 The pink-red set remains the default.
 The settings selector previews the pink-red and white Idle mascots at 14 points
 beside their labels, with equal-width segments and the native control's intrinsic
-height. Its text baseline aligns with the Icon Style title above the description.
+height. The selector is vertically centered beside the Icon Style title and description.
 The row uses the standard 8-point vertical padding.
 The preview draws from the full-resolution PNG with high interpolation
 at the display's backing scale rather than relying on segmented-control downsampling.

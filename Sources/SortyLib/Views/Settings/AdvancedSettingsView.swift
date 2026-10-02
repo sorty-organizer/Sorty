@@ -51,16 +51,11 @@ struct AdvancedSettingsView: View {
                     if showMenuBarExtra {
                         SettingsSubsettingRow(
                             title: "Icon Style",
-                            description: "Use Sorty's colorful style or a white style with native Finder symbols.",
-                            controlAlignment: .firstTextBaseline
+                            description: "Use Sorty's colorful style or a white style with native Finder symbols."
                         ) {
                             MenuBarIconStyleControl(selection: $usesAppleNativeIconStyle)
                                 .frame(width: 250)
                                 .fixedSize(horizontal: false, vertical: true)
-                                .alignmentGuide(.firstTextBaseline) { dimensions in
-                                    let font = NSFont.systemFont(ofSize: 11, weight: .medium)
-                                    return dimensions.height / 2 + (font.ascender + font.descender) / 2
-                                }
                         }
                     }
                 }
