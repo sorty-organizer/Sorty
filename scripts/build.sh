@@ -750,6 +750,7 @@ compute_bundle_fingerprint() {
             "${PROJECT_DIR}/Package.resolved" \
             "${PROJECT_DIR}/scripts/build.sh" \
             "${PROJECT_DIR}/scripts/build_cache.sh" \
+            "${PROJECT_DIR}/scripts/string_catalog_cache.py" \
             "${PROJECT_DIR}/scripts/utils.sh"
         bundle_fingerprint_tree \
             "${PROJECT_DIR}/.agents/skills/sorty" \
@@ -954,7 +955,8 @@ compile_string_catalogs() {
 
     while IFS= read -r catalog; do
         log_detail "Compiling string catalog $(basename "${catalog}")"
-        xcrun xcstringstool compile "${catalog}" --output-directory "${resources_dir}"
+        python3 "${SCRIPT_DIR}/string_catalog_cache.py" "${catalog}" "${resources_dir}" \
+            "${BUILD_CACHE_STATE_DIR}/strings/$(basename "${catalog}")" "$(build_cache_toolchain_hash)"
         rm -f "${catalog}"
     done < <(find "${resources_dir}" -maxdepth 1 -type f -name '*.xcstrings' | LC_ALL=C sort)
 }

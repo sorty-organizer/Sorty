@@ -113,6 +113,12 @@ before restored files are published. A SwiftPM scratch lock prevents packing
 during compilation. A damaged archive stays available for inspection while the
 compiler rebuilds missing outputs.
 
+String catalogs use a separate content cache of native `xcstringstool` output.
+Its key includes the entire catalog, table name, compiler recipe, and toolchain.
+Each hit verifies all generated files before copying them, preserving every
+localization. Corrupt output is compiled again. Maintenance retains the latest
+entry per table, so InfoPlist and Localizable can both remain cached.
+
 Set `SORTY_COLD_BUILD_CACHE=false` to disable packing and restoration. A bare
 `swift build -c release` can rebuild an archived configuration; use `make daily`
 to restore it first, or call
@@ -170,6 +176,14 @@ Keychain services. The uninstall removal helper exits immediately after all
 targets disappear; its 30-second retry budget applies only to failed deletions.
 Both test workflows use the compact symbol profile and the poison-cache recovery
 wrapper. Universal releases retain full dSYMs and optimization settings.
+
+Universal CI also enables Xcode's native compilation cache under
+`.build/CompilationCache.noindex`, included in the existing release cache upload.
+It can replay compiled results for previously seen inputs after ordinary build
+outputs have been replaced by later edits. Xcode keeps the store between runs
+and limits it to 4 GB. Compiler cache remarks remain in the full build log.
+Local `make now` keeps its existing SwiftPM compiler and disk policy.
+See [Apple's compilation cache settings](https://developer.apple.com/documentation/xcode/build-settings-reference).
 
 On October 2, hosted run [36962297044](https://github.com/sorty-organizer/Sorty/actions/runs/36962297044)
 restored its cache in 4 seconds, compiled changed inputs in a 16-second step, and

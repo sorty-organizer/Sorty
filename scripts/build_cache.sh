@@ -450,13 +450,13 @@ build_cache_is_protected_config_name() {
     return 1
 }
 
-# Content caches (assets/metal) are keyed by content hash; only the most
-# recently used entry per kind can ever be a hit, so drop all but the newest.
+# Keep the most recently used output for each compiler input. String catalogs
+# have separate roots because an app uses several tables in the same build.
 # The build.sh hit paths touch the hit directory, keeping LRU order accurate.
 build_cache_prune_resource_caches_to_mru() {
     local resource_cache cache_path newest_path
-    for resource_cache in assets metal; do
-        [ -d "${BUILD_CACHE_STATE_DIR}/${resource_cache}" ] || continue
+    for resource_cache in "${BUILD_CACHE_STATE_DIR}/assets" "${BUILD_CACHE_STATE_DIR}/metal" "${BUILD_CACHE_STATE_DIR}/strings/"*; do
+        [ -d "${resource_cache}" ] || continue
         newest_path=""
         while IFS=$'\t' read -r _ cache_path; do
             [ -n "${cache_path}" ] || continue
@@ -468,7 +468,7 @@ build_cache_prune_resource_caches_to_mru() {
         done < <(
             while IFS= read -r cache_path; do
                 printf '%s\t%s\n' "$(build_cache_path_mtime "${cache_path}")" "${cache_path}"
-            done < <(find "${BUILD_CACHE_STATE_DIR}/${resource_cache}" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null || true) | sort -rn
+            done < <(find "${resource_cache}" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null || true) | sort -rn
         )
     done
 }
