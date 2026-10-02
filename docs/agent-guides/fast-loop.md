@@ -126,9 +126,15 @@ Bundle assembly clones the SwiftPM executable with `cp -c`. On APFS, the
 compiler output and staged executable initially share disk blocks; linkage and
 signing edits affect only the staged file. macOS falls back to a normal copy
 when cloning is unavailable. A 103 MB executable copied in 0.103 seconds and
-cloned in 0.0034 seconds. The two outputs matched byte for byte after applying
-the same linkage edits and signing identity, and the compiler output remained
-unchanged. Shared blocks are not reflected as a reduction in `du` totals.
+cloned in 0.0034 seconds. Signing rewrites the full file, so local builds then
+reconstruct its exact signed bytes on another compiler-output clone, writing
+only changed 128 KB blocks. SHA-256 verification precedes atomic replacement;
+native `copyfile` preserves permissions, timestamps, ACLs, and extended
+attributes. The app passes strict signature verification before publication.
+The measured 103 MB executable needed only 451 KB of private APFS allocation
+after this 0.107-second step, saving about 103 MB of physical storage. Its signed
+bytes remained identical and compiler output stayed untouched. Shared blocks
+are not reflected as a reduction in `du` totals. CI skips this local operation.
 
 Set `SORTY_COLD_BUILD_CACHE=false` to disable packing and restoration. A bare
 `swift build -c release` can rebuild an archived configuration; use `make daily`
@@ -195,6 +201,15 @@ outputs have been replaced by later edits. Xcode keeps the store between runs
 and limits it to 4 GB. Compiler cache remarks remain in the full build log.
 Local `make now` keeps its existing SwiftPM compiler and disk policy.
 See [Apple's compilation cache settings](https://developer.apple.com/documentation/xcode/build-settings-reference).
+
+The October 3 [optimized compiler benchmark](https://github.com/sorty-organizer/Sorty/actions/runs/37045348328)
+compiled the real arm64 SortyLib release command in 117.48 seconds with replay
+disabled, then replayed identical inputs in 0.995 seconds. All 116 object files
+matched byte for byte. This measures one compilation command, not a complete
+release or first-time changed inputs. The [warm universal build](https://github.com/sorty-organizer/Sorty/actions/runs/37042682572)
+took 28 seconds, with a 12-second restore of the 1.89 GB compressed cache.
+The larger store trades CI space and transfer time for reuse across previously
+compiled inputs. New inputs still need normal compilation.
 
 On October 2, hosted run [36962297044](https://github.com/sorty-organizer/Sorty/actions/runs/36962297044)
 restored its cache in 4 seconds, compiled changed inputs in a 16-second step, and

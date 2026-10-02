@@ -751,6 +751,7 @@ compute_bundle_fingerprint() {
             "${PROJECT_DIR}/scripts/build.sh" \
             "${PROJECT_DIR}/scripts/build_cache.sh" \
             "${PROJECT_DIR}/scripts/string_catalog_cache.py" \
+            "${PROJECT_DIR}/scripts/share_signed_executable.py" \
             "${PROJECT_DIR}/scripts/utils.sh"
         bundle_fingerprint_tree \
             "${PROJECT_DIR}/.agents/skills/sorty" \
@@ -2088,6 +2089,14 @@ else
 
     SIGN_DURATION=$(get_step_duration "sign")
     log_success "Local signature repaired (${SIGN_DURATION})"
+fi
+
+# Signing rewrites the full Mach-O file. Rebuild its exact signed bytes on a
+# compiler-output clone so unchanged code pages remain shared on local APFS.
+if [ "${BUILD_METHOD}" = "spm" ] && [ "${CI:-false}" != "true" ]; then
+    python3 "${SCRIPT_DIR}/share_signed_executable.py" \
+        "${BIN_PATH}/${SPM_BINARY_NAME}" "${APP_PATH}/Contents/MacOS/${BINARY_NAME}"
+    run_quiet codesign --verify --deep --strict "${APP_PATH}"
 fi
 
 # Close existing Sorty app instances unless an organization is active. The
