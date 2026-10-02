@@ -5,6 +5,7 @@
 //  Advanced settings section
 //
 
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -48,18 +49,24 @@ struct AdvancedSettingsView: View {
                     )
 
                     if showMenuBarExtra {
-                        SettingsSubsettingRow(
-                            title: "Icon Style",
-                            description: "Use Sorty's colorful style or a white style with native Finder symbols."
-                        ) {
-                            Picker("Menu Bar Icon Style", selection: $usesAppleNativeIconStyle) {
-                                Text("Sorty").tag(false)
-                                Text("Apple Native").tag(true)
+                        Divider()
+
+                        HStack(alignment: .center, spacing: 16) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Icon Style")
+                                    .font(.subheadline.weight(.medium))
+                                Text("Use Sorty's colorful style or a white style with native Finder symbols.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
-                            .pickerStyle(.menu)
-                            .labelsHidden()
-                            .accessibilityIdentifier("MenuBarIconStylePicker")
+
+                            Spacer(minLength: 12)
+
+                            MenuBarIconStyleControl(selection: $usesAppleNativeIconStyle)
+                                .frame(width: 210, height: 28)
                         }
+                        .padding(.vertical, 4)
                     }
                 }
                 .animation(
@@ -360,4 +367,59 @@ private struct TimeoutSliderRow: View {
         .environmentObject(SettingsViewModel())
         .environmentObject(AutomationManager())
         .frame(width: 500, height: 500)
+}
+
+/// Uses the native capsule selector treatment shared with the History filters.
+private struct MenuBarIconStyleControl: NSViewRepresentable {
+    @Binding var selection: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(selection: $selection)
+    }
+
+    func makeNSView(context: Context) -> NSSegmentedControl {
+        let control = NSSegmentedControl(
+            labels: ["Sorty", "Apple Native"],
+            trackingMode: .selectOne,
+            target: context.coordinator,
+            action: #selector(Coordinator.selectionChanged(_:))
+        )
+        control.font = .systemFont(ofSize: 11, weight: .medium)
+        control.setAccessibilityLabel("Menu Bar Icon Style")
+        control.setAccessibilityIdentifier("MenuBarIconStylePicker")
+        if #available(macOS 26.0, *) {
+            control.controlSize = .extraLarge
+            control.borderShape = .capsule
+        } else {
+            control.controlSize = .large
+        }
+        // Adopt the public tabs role when the project moves to the macOS 27 SDK.
+        if control.responds(to: NSSelectorFromString("setRole:")) {
+            control.setValue(1, forKey: "role")
+        }
+        control.segmentDistribution = .fill
+        return control
+    }
+
+    func updateNSView(_ control: NSSegmentedControl, context: Context) {
+        context.coordinator.selection = $selection
+        control.selectedSegment = selection ? 1 : 0
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var selection: Binding<Bool>
+
+        init(selection: Binding<Bool>) {
+            self.selection = selection
+        }
+
+        @objc func selectionChanged(_ sender: NSSegmentedControl) {
+            guard sender.selectedSegment == 0 || sender.selectedSegment == 1 else { return }
+            let newSelection = sender.selectedSegment == 1
+            guard selection.wrappedValue != newSelection else { return }
+            selection.wrappedValue = newSelection
+            HapticFeedbackManager.shared.selection()
+        }
+    }
 }
