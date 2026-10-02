@@ -11,10 +11,10 @@ import SwiftUI
 struct HelpSettingsView: View {
     @SortyHotReload private var hotReload
     @EnvironmentObject var viewModel: SettingsViewModel
+    @EnvironmentObject private var appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let docsURL = URL(string: "https://github.com/sorty-organizer/Sorty/blob/main/HELP.md")!
-    private let issuesURL = URL(string: "https://github.com/sorty-organizer/Sorty/issues/new?template=bug_report.md")!
     private let changelogURL = URL(string: "https://sorty-organizer.github.io/Sorty/changelog")!
     private let privacyPolicyURL = URL(string: "https://sorty-organizer.github.io/Sorty/privacy-policy")!
     private let termsOfServiceURL = URL(string: "https://sorty-organizer.github.io/Sorty/terms")!
@@ -40,8 +40,8 @@ struct HelpSettingsView: View {
                             title: "Report Bug",
                             icon: "exclamationmark.bubble",
                             color: .red,
-                            url: issuesURL,
-                            focusTarget: .helpReportIssue
+                            focusTarget: .helpReportIssue,
+                            action: { appState.showBugReport() }
                         )
 
                         HelpIconLink(
@@ -377,15 +377,29 @@ private struct HelpIconLink: View {
     let title: String
     let icon: String
     let color: Color
-    let url: URL
+    var url: URL? = nil
     let focusTarget: SettingsFocusTarget
+    var action: (() -> Void)? = nil
 
     @State private var isHovered = false
 
+    @ViewBuilder
     var body: some View {
+        if let url {
+            button.trackHoveredURL(url)
+        } else {
+            button
+        }
+    }
+
+    private var button: some View {
         Button {
             HapticFeedbackManager.shared.tap()
-            NSWorkspace.shared.open(url)
+            if let action {
+                action()
+            } else if let url {
+                NSWorkspace.shared.open(url)
+            }
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: icon)
@@ -412,7 +426,6 @@ private struct HelpIconLink: View {
             focusTarget,
             shape: RoundedRectangle(cornerRadius: 8, style: .continuous)
         )
-        .trackHoveredURL(url)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering

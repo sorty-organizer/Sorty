@@ -514,7 +514,7 @@ View the full changelog at:
 
 ## Troubleshooting
 
-Choose **Help → Report Bug** to describe a problem. Sorty opens a GitHub issue draft for you to review and submit. If anonymous analytics is allowed and internet access is enabled, you can separately choose to send your description to Sentry. Review it for private details first. Sentry feedback is queued when you open the GitHub draft; the GitHub issue still needs your submission.
+Choose **Help → Report Bug** or **Settings → Help → Report Bug** to describe a problem. Both open the same reporting window. Sorty opens a GitHub issue draft for you to review and submit. If anonymous analytics is allowed and internet access is enabled, you can separately choose to send your description to Sentry. Review it for private details first. Sentry feedback is queued when you open the GitHub draft; the GitHub issue still needs your submission.
 
 ### Support Assistant
 
