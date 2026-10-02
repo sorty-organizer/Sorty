@@ -17,7 +17,12 @@ jobs:
           echo "key=$KEY" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v6
         with:
-          path: .build
+          path: |
+            .build
+            !.build/**/index
+            !.build/**/Index.noindex
+            !.build/logs
+            !.build/**/*.log
           key: benchmark-unused-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-xcode-release-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
