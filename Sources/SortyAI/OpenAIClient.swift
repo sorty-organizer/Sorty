@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import CryptoKit
 
 /// Persists the per-provider fast-mode toggles for API paths.
 /// Codex subscription fast mode keeps its own key in `CodexSubscriptionSettings`.
@@ -49,7 +50,27 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     func makeCompletionRequest(url: URL, headers: [String: String], body: [String: Any]) throws -> URLRequest {
         let format = config.provider.openCodeAPIFormat(for: config.model)
         guard usesNativeOpenCodeCompletion else {
-            return try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: body)
+            var payload = body
+            if (config.provider == .openAI && url.host == "api.openai.com") || config.provider == .openRouter,
+               let messages = body["messages"] as? [[String: Any]],
+               let system = messages.first,
+               system["role"] as? String == "system",
+               let instructions = system["content"] as? String,
+               !instructions.isEmpty {
+                // Fresh clients are created for batches. A per-client UUID or
+                // file-list hash would discard affinity between those batches.
+                let digest = SHA256.hash(data: Data(instructions.utf8))
+                    .map { String(format: "%02x", $0) }.joined()
+                let key = "sorty-v1-\(digest)"
+                if config.provider == .openRouter {
+                    // Applies to every routed model, including Gemini,
+                    // DeepSeek and Z.AI. Provider fallback remains available.
+                    payload["session_id"] = key
+                } else {
+                    payload["prompt_cache_key"] = key
+                }
+            }
+            return try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: payload)
         }
         let base = url.deletingLastPathComponent().deletingLastPathComponent()
         let messages = body["messages"] as? [[String: Any]] ?? []
