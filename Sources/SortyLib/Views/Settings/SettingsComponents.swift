@@ -444,13 +444,14 @@ struct SettingsToggle: View {
     }
 }
 
-/// Centers the dependency indicator and control beside the full title and description.
+/// Positions a dependent setting beneath a divider, with configurable control alignment.
 struct SettingsSubsettingRow<Control: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     let description: String?
     let focusTarget: SettingsFocusTarget?
     let controlAlignment: VerticalAlignment
+    let topPadding: CGFloat
     @ViewBuilder let control: Control
 
     init(
@@ -458,12 +459,14 @@ struct SettingsSubsettingRow<Control: View>: View {
         description: String? = nil,
         focusTarget: SettingsFocusTarget? = nil,
         controlAlignment: VerticalAlignment = .center,
+        topPadding: CGFloat = 8,
         @ViewBuilder control: () -> Control
     ) {
         self.title = title
         self.description = description
         self.focusTarget = focusTarget
         self.controlAlignment = controlAlignment
+        self.topPadding = topPadding
         self.control = control()
     }
 
@@ -496,7 +499,8 @@ struct SettingsSubsettingRow<Control: View>: View {
                 control
             }
             .padding(.leading, 4)
-            .padding(.vertical, 8)
+            .padding(.top, topPadding)
+            .padding(.bottom, 8)
         }
         .settingsFocusableSetting(focusTarget)
         .transition(

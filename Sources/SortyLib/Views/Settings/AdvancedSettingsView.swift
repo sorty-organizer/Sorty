@@ -52,7 +52,8 @@ struct AdvancedSettingsView: View {
                         SettingsSubsettingRow(
                             title: "Icon Style",
                             description: "Use Sorty's colorful style or a white style with native Finder symbols.",
-                            controlAlignment: .firstTextBaseline
+                            controlAlignment: .firstTextBaseline,
+                            topPadding: 24
                         ) {
                             MenuBarIconStyleControl(selection: $usesAppleNativeIconStyle)
                                 .frame(width: 250)
@@ -398,8 +399,18 @@ private struct MenuBarIconStyleControl: NSViewRepresentable {
                 named: MenuBarActivity.idle.iconResourceName(usesAppleNativeStyle: segment == 1),
                 withExtension: "png"
             )
-            if let image = source?.copy() as? NSImage {
-                image.size = NSSize(width: 14, height: 14)
+            if let source {
+                // Draw the full-resolution artwork at the destination's backing scale.
+                let image = NSImage(size: NSSize(width: 14, height: 14), flipped: false) { rect in
+                    NSGraphicsContext.current?.imageInterpolation = .high
+                    source.draw(
+                        in: rect,
+                        from: .zero,
+                        operation: .sourceOver,
+                        fraction: 1
+                    )
+                    return true
+                }
                 image.isTemplate = false
                 control.setImage(image, forSegment: segment)
                 control.setImageScaling(.scaleProportionallyDown, forSegment: segment)
