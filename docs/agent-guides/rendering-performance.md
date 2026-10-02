@@ -75,3 +75,20 @@ This verifies shader math, not full-app appearance, visibility transitions,
 frame pacing, or battery life. Measure matched signed Release builds in the
 same visible, unfocused, occluded, and minimized states before claiming a power
 reduction. No UI or animation has been removed.
+
+## Watched-folder countdowns, October 3, 2026
+
+The watched-folder list and its cards no longer observe the per-second clock.
+Only activity labels observe it. Waiting-for-stability, queued, and retrying
+labels request ticks while their window is visible and active. Empty lists,
+idle folders, running operations, and snoozed folders do not keep this clock
+alive. Multiple labels and windows share one clock with balanced demand counts.
+The first consumer refreshes the current time immediately on resume.
+
+Snooze controls refresh once at their stored expiry deadline. Changing the
+snooze date or removing the card cancels that task. Relative last-triggered
+labels retain SwiftUI's native date updates. Countdown text, icons, numeric
+transitions, and Reduce Motion behavior remain in place.
+
+The final `SortyLib` target compiled successfully. Full-app countdown lifecycle,
+snooze expiry, multiwindow behavior, and power measurements remain unverified.

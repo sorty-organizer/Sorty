@@ -9,9 +9,8 @@ import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Single shared 1s ticker for watched-folder countdown labels. One timer at
-/// the list level replaces N per-card TimelineViews ticking every second.
-/// Cards read `now` as a plain value; only text labels move, never layouts.
+/// One shared clock for visible countdown labels. Lists and cards do not
+/// observe it, and it stops when no countdown is visible.
 @MainActor
 final class WatchedFoldersTicker: ObservableObject {
     static let shared = WatchedFoldersTicker()
@@ -26,11 +25,12 @@ final class WatchedFoldersTicker: ObservableObject {
     private init() {}
 
     /// Registers one consumer. Every call must be paired with exactly one
-    /// `stop()`; `WatchedFoldersView` guards that pairing with its own demand
+    /// `stop()`; each countdown label guards that pairing with its own demand
     /// flag so an unbalanced call cannot freeze other windows.
     func start() {
         demandCount += 1
         guard tickTask == nil else { return }
+        now = Date()
         tickTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
@@ -51,18 +51,11 @@ final class WatchedFoldersTicker: ObservableObject {
 struct WatchedFoldersView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.controlActiveState) private var controlActiveState
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var appState: AppState
-    // Shared singleton: observed, never state-owned.
-    @ObservedObject private var ticker = WatchedFoldersTicker.shared
     @State private var showingFolderPicker = false
     @State private var selectedFolderForEdit: WatchedFolder?
     @State private var isDropTargeted = false
-    /// Whether this view currently holds one demand on the shared ticker.
-    /// Prevents a stop from a view that never started (or double stops) from
-    /// cancelling another window's countdowns.
-    @State private var holdsTickerDemand = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -99,7 +92,7 @@ struct WatchedFoldersView: View {
                                     Array(watchedFoldersManager.folders.enumerated()),
                                     id: \.element.id
                                 ) { index, folder in
-                                    WatchedFolderCard(folder: folder, now: ticker.now)
+                                    WatchedFolderCard(folder: folder)
                                     .id(folder.id)
                                     .animatedAppearance(
                                         delay: 0.05 + min(Double(index), 8) * 0.04
@@ -148,35 +141,8 @@ struct WatchedFoldersView: View {
         }
         .task {
             watchedFoldersManager.refreshFolderExistence()
-            if controlActiveState != .inactive {
-                acquireTickerDemand()
-            }
-        }
-        .onDisappear {
-            releaseTickerDemand()
-        }
-        .onChange(of: controlActiveState) { _, state in
-            if state == .inactive {
-                releaseTickerDemand()
-            } else {
-                acquireTickerDemand()
-            }
         }
         .navigationTitle("Watched Folders")
-    }
-
-    /// Balanced start/stop pairing for the shared ticker: callers may invoke
-    /// these repeatedly without unbalancing other windows' demand.
-    private func acquireTickerDemand() {
-        guard !holdsTickerDemand else { return }
-        holdsTickerDemand = true
-        ticker.start()
-    }
-
-    private func releaseTickerDemand() {
-        guard holdsTickerDemand else { return }
-        holdsTickerDemand = false
-        ticker.stop()
     }
 
     private func addWatchedFolder(from url: URL) {
@@ -444,9 +410,6 @@ struct WatchedFolderCard: View {
     }
 
     let folder: WatchedFolder
-    /// Shared 1s tick from the list level. Plain value: only countdown text
-    /// reads it, so the tick never re-triggers card layout or animations.
-    var now: Date = .now
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
@@ -458,9 +421,14 @@ struct WatchedFolderCard: View {
     @State private var highlightPulse = false
     @State private var isCardVisible = false
     @State private var isWindowVisible = true
+    @State private var expiredSnoozeDeadline: Date?
     @State private var accessRecoveryError: AccessRecoveryError?
     @State private var isConfirmingReviewDiscard = false
     @State private var isConfirmingFolderRemoval = false
+
+    private var isSnoozed: Bool {
+        folder.isSnoozed && expiredSnoozeDeadline != folder.snoozedUntil
+    }
 
     private var hasSavedReview: Bool {
         if case .awaitingReview = watchedFoldersManager.activityByFolder[folder.id] {
@@ -709,7 +677,7 @@ struct WatchedFolderCard: View {
 
     @ViewBuilder
     private var activityLine: some View {
-        if folder.isSnoozed, let until = folder.snoozedUntil {
+        if isSnoozed, let until = folder.snoozedUntil {
             Label(snoozedActivityText(until: until), systemImage: "clock.badge.pause")
                 .foregroundStyle(.orange)
         } else if let activity = watchedFoldersManager.activityByFolder[folder.id] {
@@ -718,22 +686,9 @@ struct WatchedFolderCard: View {
             } else if case .parked(let count) = activity {
                 parkedBatchLine(fileCount: count)
             } else {
-                // Countdowns read the shared list-level tick. No per-card
-                // TimelineView: one timer drives every label.
-                activityStatusLabel(activity, now: now)
+                WatchedFolderActivityLabel(activity: activity)
             }
         }
-    }
-
-    private func activityStatusLabel(_ activity: WatchedFolderActivity, now: Date) -> some View {
-        Label {
-            let status = activityText(activity, now: now)
-            Text(status)
-                .numericTextTransition(animationValue: status)
-        } icon: {
-            Image(systemName: activityIcon(activity))
-        }
-        .foregroundStyle(activityColor(activity))
     }
 
     private func parkedBatchLine(fileCount: Int) -> some View {
@@ -849,7 +804,7 @@ struct WatchedFolderCard: View {
 
     private var snoozeMenu: some View {
         Menu {
-            if folder.isSnoozed {
+            if isSnoozed {
                 Button("Resume Now") {
                     watchedFoldersManager.snooze(folder, until: nil)
                     HapticFeedbackManager.shared.selection()
@@ -867,38 +822,21 @@ struct WatchedFolderCard: View {
                 HapticFeedbackManager.shared.selection()
             }
         } label: {
-            Image(systemName: folder.isSnoozed ? "clock.badge.checkmark" : "clock.badge.pause")
+            Image(systemName: isSnoozed ? "clock.badge.checkmark" : "clock.badge.pause")
                 .font(.caption)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help(folder.isSnoozed ? "Change snooze" : "Snooze this watched folder")
+        .help(isSnoozed ? "Change snooze" : "Snooze this watched folder")
         .accessibilityLabel(
-            folder.isSnoozed ? "Change snooze for \(folder.name)" : "Snooze \(folder.name)"
+            isSnoozed ? "Change snooze for \(folder.name)" : "Snooze \(folder.name)"
         )
     }
 
     private func snooze(for duration: TimeInterval) {
         watchedFoldersManager.snooze(folder, until: Date().addingTimeInterval(duration))
         HapticFeedbackManager.shared.selection()
-    }
-
-    private func activityText(_ activity: WatchedFolderActivity, now: Date) -> String {
-        switch activity {
-        case .waitingForStability(let count, let date):
-            return "\(count) waiting for stability · \(countdown(to: date, from: now))"
-        case .queued(let count, let date):
-            return "\(count) queued · \(countdown(to: date, from: now))"
-        case .retrying(let count, let attempt, let date):
-            return "\(count) retrying (attempt \(attempt)) · \(countdown(to: date, from: now))"
-        case .parked(let count):
-            return "\(count) file\(count == 1 ? "" : "s") couldn’t be organized"
-        case .running(let count):
-            return "Organizing \(count) file\(count == 1 ? "" : "s")"
-        case .awaitingReview(let count):
-            return "\(count) file\(count == 1 ? "" : "s") ready to review"
-        }
     }
 
     private func snoozedActivityText(until: Date) -> String {
@@ -918,40 +856,6 @@ struct WatchedFolderCard: View {
             count = fileCount
         }
         return "Snoozed until \(time) · \(count) queued"
-    }
-
-    /// Activity dates come from persisted state (and from retry scheduling), so
-    /// they can be corrupt by the time they reach the UI. Clamp the interval to
-    /// a day before converting to `Int`, which would otherwise trap on values
-    /// outside `Int`'s range or on a non-finite subtraction result.
-    private static let maxCountdownSeconds: TimeInterval = 86_400
-
-    private func countdown(to date: Date, from now: Date) -> String {
-        let interval = date.timeIntervalSince(now)
-        guard interval.isFinite else { return "starting now" }
-        let clamped = min(max(interval, 0), Self.maxCountdownSeconds)
-        let seconds = Int(clamped.rounded(.up))
-        return seconds == 0 ? "starting now" : "in \(seconds)s"
-    }
-
-    private func activityIcon(_ activity: WatchedFolderActivity) -> String {
-        switch activity {
-        case .waitingForStability: "hourglass"
-        case .queued: "tray.full"
-        case .retrying: "arrow.clockwise"
-        case .parked: "exclamationmark.circle"
-        case .running: "arrow.triangle.2.circlepath"
-        case .awaitingReview: "eye"
-        }
-    }
-
-    private func activityColor(_ activity: WatchedFolderActivity) -> Color {
-        switch activity {
-        case .parked: .red
-        case .retrying: .orange
-        case .running, .awaitingReview: .blue
-        case .waitingForStability, .queued: .secondary
-        }
     }
 
     private func postPendingBatchNotification(_ notification: Notification.Name) {
@@ -1022,6 +926,20 @@ struct WatchedFolderCard: View {
         .shadow(color: cardShadowColor, radius: cardShadowRadius, x: 0, y: 1)
         .opacity(folderExists ? 1.0 : 0.8)
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
+        .task(id: folder.snoozedUntil) {
+            // Refresh snooze controls once at expiry instead of keeping every
+            // card subscribed to the per-second countdown clock.
+            guard let deadline = folder.snoozedUntil else { return }
+            let delay = deadline.timeIntervalSinceNow
+            guard delay.isFinite else { return }
+            do {
+                if delay > 0 { try await Task.sleep(for: .seconds(delay)) }
+                guard !Task.isCancelled else { return }
+                expiredSnoozeDeadline = deadline
+            } catch {
+                // A changed snooze date or removed card cancels this deadline.
+            }
+        }
         .onHover { hovering in
             guard hovering != isHovered else { return }
             isHovered = hovering
@@ -2271,4 +2189,114 @@ private struct WatchedFolderRecentActions: View {
         .environmentObject(WatchedFoldersManager())
         .environmentObject(FolderOrganizer())
         .frame(width: 600, height: 500)
+}
+
+/// Only this small label observes the clock. A running operation has no
+/// countdown, so it keeps its status without requesting periodic wakeups.
+private struct WatchedFolderActivityLabel: View {
+    let activity: WatchedFolderActivity
+    @ObservedObject private var ticker = WatchedFoldersTicker.shared
+    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isWindowVisible = false
+    @State private var holdsTickerDemand = false
+
+    private var needsTicks: Bool {
+        switch activity {
+        case .waitingForStability, .queued, .retrying: true
+        default: false
+        }
+    }
+
+    private var shouldTick: Bool {
+        needsTicks && isWindowVisible && controlActiveState != .inactive
+    }
+
+    var body: some View {
+        let status = activityText(activity, now: ticker.now)
+        Label {
+            Text(status)
+                .numericTextTransition(animationValue: status)
+        } icon: {
+            Image(systemName: activityIcon(activity))
+        }
+        .foregroundStyle(activityColor(activity))
+        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
+        .onAppear { updateTickerDemand() }
+        .onChange(of: shouldTick) { _, _ in updateTickerDemand() }
+        .onDisappear { releaseTickerDemand() }
+        .transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
+    }
+
+    private func updateTickerDemand() {
+        if shouldTick {
+            guard !holdsTickerDemand else { return }
+            holdsTickerDemand = true
+            ticker.start()
+        } else {
+            releaseTickerDemand()
+        }
+    }
+
+    private func releaseTickerDemand() {
+        guard holdsTickerDemand else { return }
+        holdsTickerDemand = false
+        ticker.stop()
+    }
+
+    private func activityText(_ activity: WatchedFolderActivity, now: Date) -> String {
+        switch activity {
+        case .waitingForStability(let count, let date):
+            return "\(count) waiting for stability · \(countdown(to: date, from: now))"
+        case .queued(let count, let date):
+            return "\(count) queued · \(countdown(to: date, from: now))"
+        case .retrying(let count, let attempt, let date):
+            return "\(count) retrying (attempt \(attempt)) · \(countdown(to: date, from: now))"
+        case .parked(let count):
+            return "\(count) file\(count == 1 ? "" : "s") couldn’t be organized"
+        case .running(let count):
+            return "Organizing \(count) file\(count == 1 ? "" : "s")"
+        case .awaitingReview(let count):
+            return "\(count) file\(count == 1 ? "" : "s") ready to review"
+        }
+    }
+
+    /// Activity dates come from persisted state (and from retry scheduling), so
+    /// they can be corrupt by the time they reach the UI. Clamp the interval to
+    /// a day before converting to `Int`, which would otherwise trap on values
+    /// outside `Int`'s range or on a non-finite subtraction result.
+    private static let maxCountdownSeconds: TimeInterval = 86_400
+
+    private func countdown(to date: Date, from now: Date) -> String {
+        let interval = date.timeIntervalSince(now)
+        guard interval.isFinite else { return "starting now" }
+        let clamped = min(max(interval, 0), Self.maxCountdownSeconds)
+        let seconds = Int(clamped.rounded(.up))
+        return seconds == 0 ? "starting now" : "in \(seconds)s"
+    }
+
+    private func activityIcon(_ activity: WatchedFolderActivity) -> String {
+        switch activity {
+        case .waitingForStability: "hourglass"
+        case .queued: "tray.full"
+        case .retrying: "arrow.clockwise"
+        case .parked: "exclamationmark.circle"
+        case .running: "arrow.triangle.2.circlepath"
+        case .awaitingReview: "eye"
+        }
+    }
+
+    private func activityColor(_ activity: WatchedFolderActivity) -> Color {
+        switch activity {
+        case .parked: .red
+        case .retrying: .orange
+        case .running, .awaitingReview: .blue
+        case .waitingForStability, .queued: .secondary
+        }
+    }
 }
