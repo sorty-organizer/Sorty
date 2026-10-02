@@ -159,6 +159,10 @@ timestamps. Explicit cache saves happen before later release validation and
 publication. See the [cache action documentation](https://github.com/actions/cache#using-a-combination-of-restore-and-save-actions).
 [ci_source_cache.py](../../scripts/ci_source_cache.py) restores source
 timestamps only when contents match, preserving Swift's incremental inputs.
+It also restores directory timestamps when every child is tracked and its
+contents match. Catalog folders recreated by checkout can otherwise invalidate
+asset compilation and generated Swift symbols. Changed, added, removed, and
+untracked children keep their fresh timestamps.
 Release retains both architectures, whole-module optimization, and no Thin LTO.
 Test discovery builds the bundle; execution uses `--skip-build`. Regular CI
 runs tests in parallel. Release tests stay serial because they share Trash and

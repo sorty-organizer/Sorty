@@ -20,6 +20,30 @@ def source_files(root):
             yield name, path
 
 
+def directory_entries(root, files):
+    # Xcode observes directory mtimes for catalogs and other recursive inputs.
+    # A directory is reusable only when every child belongs to this manifest.
+    children = {}
+    for name, entry in files.items():
+        path = Path(name)
+        if path.parent != Path("."):
+            children.setdefault(path.parent, {})[path.name] = entry[0]
+        for parent in path.parents:
+            if parent != Path("."):
+                children.setdefault(parent, {})
+    entries = {}
+    for directory in sorted(children, key=lambda path: len(path.parts), reverse=True):
+        path = root / directory
+        if path.is_symlink() or {child.name for child in path.iterdir()} != children[directory].keys():
+            continue
+        content = json.dumps(children[directory], sort_keys=True, separators=(",", ":"))
+        fingerprint = hashlib.sha256(content.encode()).hexdigest()
+        entries[str(directory) + "/"] = [fingerprint, path.stat().st_mtime_ns]
+        if directory.parent in children:
+            children[directory.parent][directory.name] = fingerprint
+    return entries
+
+
 def sync(mode, root, state):
     entries = {}
     if mode == "restore":
@@ -30,28 +54,33 @@ def sync(mode, root, state):
         except (OSError, ValueError):
             pass
 
-    restored = 0
+    current = {}
     for name, path in source_files(root):
         stat = path.stat()
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        if mode == "save":
-            entries[name] = [digest, stat.st_mtime_ns]
-        else:
+        current[name] = [digest, stat.st_mtime_ns]
+    current.update(directory_entries(root, current))
+
+    restored = 0
+    if mode == "restore":
+        for name, (digest, mtime) in current.items():
             cached = entries.get(name)
             if (isinstance(cached, list) and len(cached) == 2
                     and cached[0] == digest and isinstance(cached[1], int)
-                    and 0 <= cached[1] <= stat.st_mtime_ns):
+                    and 0 <= cached[1] <= mtime):
+                path = root / name
+                stat = path.stat()
                 os.utime(path, ns=(stat.st_atime_ns, cached[1]))
                 restored += 1
 
     if mode == "save":
         state.parent.mkdir(parents=True, exist_ok=True)
         temporary = state.with_suffix(".tmp")
-        temporary.write_text(json.dumps(entries, separators=(",", ":")))
+        temporary.write_text(json.dumps(current, separators=(",", ":")))
         temporary.replace(state)
-        print(f"Saved timestamps for {len(entries)} tracked files")
+        print(f"Saved timestamps for {len(current)} tracked files and directories")
     else:
-        print(f"Restored timestamps for {restored} unchanged tracked files")
+        print(f"Restored timestamps for {restored} unchanged tracked files and directories")
 
 
 if __name__ == "__main__":
