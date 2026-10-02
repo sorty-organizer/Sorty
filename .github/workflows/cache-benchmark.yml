@@ -1,0 +1,54 @@
+name: Compiler cache benchmark
+on:
+  workflow_dispatch: {}
+jobs:
+  benchmark:
+    runs-on: blacksmith-6vcpu-macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.3'
+      - name: Compute toolchain key
+        id: toolchain
+        run: |
+          KEY=$({ xcodebuild -version; swift --version; xcrun --sdk macosx --show-sdk-version; } | shasum -a 256 | awk '{print $1}')
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v6
+        with:
+          path: .build
+          key: benchmark-unused-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-xcode-release-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
+      - name: Benchmark real optimized compiler output
+        run: |
+          python3 scripts/ci_source_cache.py restore
+          python3 - <<'PY'
+          import hashlib, json, os, subprocess, time
+          from pathlib import Path
+          root = Path.cwd()
+          command = json.loads((root / '.github/cache-benchmark-command.json').read_text())
+          objects = root / '.build/DerivedData/Build/Intermediates.noindex/Sorty.build/Release/SortyLib.build/Objects-normal/arm64'
+          def fingerprint():
+              return {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in objects.glob('*.o')}
+          results = {}
+          os.chdir(root / 'Sorty.xcodeproj')
+          for name, flags in [('compile', ['-cache-disable-replay']), ('replay', [])]:
+              with (root / f'cache-{name}.log').open('w') as output:
+                  started = time.monotonic()
+                  subprocess.run(command + flags, stdout=output, stderr=subprocess.STDOUT, check=True)
+                  results[name] = time.monotonic() - started
+              if name == 'compile': expected = fingerprint()
+              else: assert expected and fingerprint() == expected, 'Cached object bytes differ'
+          print(json.dumps({'seconds': results, 'identical_objects': len(expected)}, indent=2))
+          (root / 'cache-benchmark.json').write_text(json.dumps(results))
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: compiler-cache-benchmark
+          path: |
+            cache-*.log
+            cache-benchmark.json
+          retention-days: 1
