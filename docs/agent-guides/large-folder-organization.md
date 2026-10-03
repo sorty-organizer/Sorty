@@ -23,7 +23,11 @@ on each file.
 
 Main navigation takes its dimensions from the window viewport, including windows
 smaller than the former 1,000 by 700 point minimum. HUD, link-hover, and consent
-views are overlays so they do not change the sidebar or page size.
+views are overlays so they do not change the sidebar or page size. Settings
+uses the same overlay rule and scrolls its category sidebar in short windows.
+Learnings fills the available page without imposing a separate minimum size.
+The shared link-hover host follows this rule in About, Thanks, What's New,
+Accreditations, and Internet Access Policy windows.
 
 The final plan receives a bounded semantic review of up to 40 questionable
 placements, sampled across destinations. One subset repair may follow. See

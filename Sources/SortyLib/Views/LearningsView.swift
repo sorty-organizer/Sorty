@@ -166,7 +166,7 @@ struct LearningsView: View {
             manager.configure(with: config)
         }
         .animation(.easeInOut(duration: 0.36), value: manager.consentManager.hasConsented)
-        .frame(minWidth: 700, minHeight: 600)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Learnings Dashboard")
         .task {

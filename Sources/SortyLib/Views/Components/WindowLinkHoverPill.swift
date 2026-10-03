@@ -143,10 +143,10 @@ private struct WindowLinkHoverPillHostModifier: ViewModifier {
     @StateObject private var hoverState = WindowLinkHoverState()
 
     func body(content: Content) -> some View {
-        ZStack {
-            content
-            WindowLinkHoverPillOverlay(hoverState: hoverState)
-        }
+        content
+            .overlay {
+                WindowLinkHoverPillOverlay(hoverState: hoverState)
+            }
         .environment(\.windowLinkHoverUpdate) { hovering, url, sourceID in
             MainActor.assumeIsolated {
                 hoverState.setHovering(hovering, url: url, sourceID: sourceID)

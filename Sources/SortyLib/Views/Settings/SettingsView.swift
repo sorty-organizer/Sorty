@@ -25,16 +25,18 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        ZStack {
-            HStack(spacing: 0) {
+        HStack(spacing: 0) {
+            ScrollView {
                 settingsSidebar
-                    .frame(width: 200)
-                    .animatedAppearance(delay: 0.03)
-                Divider()
-                contentView
-                    .animatedAppearance(delay: 0.08)
             }
-
+            .frame(width: 200)
+            .background(Color(NSColor.windowBackgroundColor))
+            .animatedAppearance(delay: 0.03)
+            Divider()
+            contentView
+                .animatedAppearance(delay: 0.08)
+        }
+        .overlay {
             WindowLinkHoverPillOverlay(hoverState: windowLinkHoverState)
         }
         .navigationTitle("Settings")
@@ -119,8 +121,8 @@ struct SettingsView: View {
                     }
                 }
             }
-            Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(Color(NSColor.windowBackgroundColor))
     }
