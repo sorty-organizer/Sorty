@@ -196,7 +196,8 @@ identify a hotspot. Moving code to another file alone does not prove faster buil
 
 Hosted caches separate dependency downloads, incremental outputs, and Xcode's
 compilation result store. Dependencies use manifest/lockfile keys and are saved
-only after successful compilation. Completed output snapshots include the toolchain, workspace path, and commit.
+only after successful compilation. Completed output snapshots include the toolchain, workspace path, commit, and
+job. Test-only snapshots cannot freeze the app-and-test snapshot for that commit.
 Exact completed hits skip uploads. Failed compilation saves a separate partial
 snapshot with the run ID and retry attempt. Restore prefers the same
 commit, then the same dependencies, then the latest compatible toolchain.
@@ -207,7 +208,9 @@ first run, avoiding a forced cold rebuild.
 Swift CI and release unit tests share the `spm-tests` namespace; universal
 Xcode builds use `xcode-release`. The two composite actions own identical
 restore/save paths for each layer. Dependencies and compilation results are
-excluded from output snapshots, so subsequent source edits upload compiler
+excluded from output snapshots through explicit compiler-directory paths.
+Do not cache the parent `.build` directory with negated child globs: tar can
+recursively include the excluded children through that parent. Subsequent source edits upload compiler
 outputs without duplicating downloads or the compilation store. Cache snapshots
 save before test execution. Cache hits never skip compilation or tests.
 Hosted builds disable local disk-budget pruning and reset only host-specific

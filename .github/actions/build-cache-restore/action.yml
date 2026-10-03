@@ -45,7 +45,7 @@ runs:
         echo "prefix=$BASE" >> "$GITHUB_OUTPUT"
         echo "dependencies=$BASE-deps-$DEPENDENCIES" >> "$GITHUB_OUTPUT"
         # Test-only snapshots must not freeze the app+tests snapshot for a SHA.
-        echo "build=$BASE-outputs-$DEPENDENCIES-$GITHUB_SHA-$GITHUB_JOB" >> "$GITHUB_OUTPUT"
+        echo "build=$BASE-products-$DEPENDENCIES-$GITHUB_SHA-$GITHUB_JOB" >> "$GITHUB_OUTPUT"
         echo "compilation=$BASE-cas-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
     - name: Restore dependency downloads
@@ -57,12 +57,47 @@ runs:
           .build/repositories
           .build/artifacts
           .build/DerivedData/SourcePackages
+          .build/FinderSyncDerivedData/**/SourcePackages
         key: ${{ steps.keys.outputs.dependencies }}
         restore-keys: |
           ${{ steps.keys.outputs.prefix }}-deps-
 
     - name: Restore incremental compiler outputs
       id: products
+      uses: actions/cache/restore@v6
+      with:
+        path: |
+          .build/*-apple-macosx
+          .build/debug
+          .build/release
+          .build/ModuleCache
+          .build/DerivedData/Build
+          .build/DerivedData/ModuleCache.noindex
+          .build/DerivedData/SDKStatCaches.noindex
+          .build/DerivedData/info.plist
+          .build/FinderSyncDerivedData/**/Build
+          .build/FinderSyncDerivedData/**/ModuleCache.noindex
+          .build/FinderSyncDerivedData/**/SDKStatCaches.noindex
+          .build/FinderSyncDerivedData/**/info.plist
+          .build/manifests
+          .build/*.yaml
+          .build/*.json
+          .build/build.db*
+          .build/.sorty-cache/source-mtimes.json
+          .build/.sorty-cache/assets
+          .build/.sorty-cache/metal
+          .build/.sorty-cache/strings
+          .build/.sorty-cache/bundle-fingerprints
+        key: ${{ steps.keys.outputs.build }}
+        restore-keys: |
+          ${{ steps.keys.outputs.prefix }}-products-${{ steps.keys.outputs.dependency-hash }}-${{ github.sha }}-${{ github.job }}-
+          ${{ steps.keys.outputs.prefix }}-products-${{ steps.keys.outputs.dependency-hash }}-${{ github.sha }}-
+          ${{ steps.keys.outputs.prefix }}-products-${{ steps.keys.outputs.dependency-hash }}-
+          ${{ steps.keys.outputs.prefix }}-products-
+
+    - name: Seed compiler outputs from the previous full snapshot
+      id: legacy
+      if: steps.products.outputs.cache-matched-key == ''
       uses: actions/cache/restore@v6
       with:
         path: |
@@ -78,9 +113,8 @@ runs:
           !.build/**/*.log
           !.build/.lock
           !.build/.sorty-cache/cold
-        key: ${{ steps.keys.outputs.build }}
+        key: ${{ steps.keys.outputs.prefix }}-outputs-${{ steps.keys.outputs.dependency-hash }}-${{ github.sha }}-${{ github.job }}
         restore-keys: |
-          ${{ steps.keys.outputs.prefix }}-outputs-${{ steps.keys.outputs.dependency-hash }}-${{ github.sha }}-${{ github.job }}-
           ${{ steps.keys.outputs.prefix }}-outputs-${{ steps.keys.outputs.dependency-hash }}-${{ github.sha }}-
           ${{ steps.keys.outputs.prefix }}-outputs-${{ steps.keys.outputs.dependency-hash }}-
           ${{ steps.keys.outputs.prefix }}-outputs-
@@ -88,7 +122,7 @@ runs:
     # Migrate existing v6 snapshots once rather than forcing a cold compile.
     # These paths must match the old cache action's path/version exactly.
     - name: Seed new layers from the previous cache
-      if: steps.products.outputs.cache-matched-key == '' && steps.dependencies.outputs.cache-matched-key == ''
+      if: steps.products.outputs.cache-matched-key == '' && steps.legacy.outputs.cache-matched-key == ''
       uses: actions/cache/restore@v6
       with:
         path: |

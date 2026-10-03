@@ -28,6 +28,10 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Remove disposable indexes before archiving compiler directories
+      shell: bash
+      run: find .build -type d \( -name index -o -name Index.noindex \) -prune -exec rm -rf {} +
+
     - name: Save source timestamps
       shell: bash
       run: python3 scripts/ci_source_cache.py save
@@ -41,6 +45,7 @@ runs:
           .build/repositories
           .build/artifacts
           .build/DerivedData/SourcePackages
+          .build/FinderSyncDerivedData/**/SourcePackages
         key: ${{ inputs.dependency-key }}
 
     - name: Save incremental compiler outputs
@@ -48,18 +53,27 @@ runs:
       uses: actions/cache/save@v6
       with:
         path: |
-          .build
-          !.build/checkouts
-          !.build/repositories
-          !.build/artifacts
-          !.build/DerivedData/SourcePackages
-          !.build/CompilationCache.noindex
-          !.build/**/index
-          !.build/**/Index.noindex
-          !.build/logs
-          !.build/**/*.log
-          !.build/.lock
-          !.build/.sorty-cache/cold
+          .build/*-apple-macosx
+          .build/debug
+          .build/release
+          .build/ModuleCache
+          .build/DerivedData/Build
+          .build/DerivedData/ModuleCache.noindex
+          .build/DerivedData/SDKStatCaches.noindex
+          .build/DerivedData/info.plist
+          .build/FinderSyncDerivedData/**/Build
+          .build/FinderSyncDerivedData/**/ModuleCache.noindex
+          .build/FinderSyncDerivedData/**/SDKStatCaches.noindex
+          .build/FinderSyncDerivedData/**/info.plist
+          .build/manifests
+          .build/*.yaml
+          .build/*.json
+          .build/build.db*
+          .build/.sorty-cache/source-mtimes.json
+          .build/.sorty-cache/assets
+          .build/.sorty-cache/metal
+          .build/.sorty-cache/strings
+          .build/.sorty-cache/bundle-fingerprints
         key: ${{ inputs.compile-outcome == 'success' && inputs.build-key || format('{0}-partial-{1}-{2}', inputs.build-key, github.run_id, github.run_attempt) }}
 
     - name: Save Xcode compilation results
