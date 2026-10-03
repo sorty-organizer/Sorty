@@ -229,6 +229,11 @@ struct CodexSkillInstallerCard: View {
 
 private struct SkillImportSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @StateObject private var revealAudio = WelcomeRevealAudio()
+    @State private var hasAppeared = false
+    @State private var isRevealing = true
     @EnvironmentObject private var settings: SettingsViewModel
     @EnvironmentObject private var exclusions: ExclusionRulesManager
     @EnvironmentObject private var watchedFolders: WatchedFoldersManager
@@ -244,9 +249,14 @@ private struct SkillImportSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
+                HStack(spacing: 12) {
+                    Image(systemName: "folder.badge.gearshape")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                        .frame(width: 32)
+                        .accessibilityHidden(true)
                     Text("Import into your skill")
-                        .font(.title2.weight(.semibold))
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
                     Spacer()
                     Button(allSelected ? "Deselect All" : "Select All") {
                         Task {
@@ -267,6 +277,9 @@ private struct SkillImportSheet: View {
                     .foregroundStyle(.secondary)
             }
             .padding(24)
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: reduceMotion || hasAppeared ? 0 : 8)
+            .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.85), value: hasAppeared)
 
             ScrollView {
                 VStack(spacing: 12) {
@@ -283,8 +296,9 @@ private struct SkillImportSheet: View {
                                 .accessibilityIdentifier("skill-import.choose-location")
                         }
                     }
-                    ForEach(SkillImportOption.Section.allCases, id: \.self) { section in
+                    ForEach(Array(SkillImportOption.Section.allCases.enumerated()), id: \.element) { index, section in
                         importSection(section)
+                            .animatedAppearance(delay: Double(index) * 0.05)
                     }
                     Text("Selected Learnings are stored as readable files in the skill. Your agent can use them in future requests. Watched folders are saved without starting background automation.")
                         .font(.caption)
@@ -300,6 +314,9 @@ private struct SkillImportSheet: View {
                 .padding(.bottom, 16)
             }
             .disabled(isLoading || isSaving)
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: reduceMotion || hasAppeared ? 0 : 12)
+            .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.85).delay(0.08), value: hasAppeared)
             Divider()
             HStack {
                 if isLoading || isSaving {
@@ -321,10 +338,31 @@ private struct SkillImportSheet: View {
                     .disabled(selected.isEmpty || isLoading || isSaving)
                     .accessibilityIdentifier("skill-import.confirm")
             }
-            .padding(20)
+            .padding(24)
+            .animatedAppearance(delay: 0.15)
         }
         .frame(width: 620, height: 650)
+        .background {
+            if !reduceTransparency {
+                AnimatedGradientBackground(revealed: hasAppeared, motionEnabled: isRevealing)
+                    .opacity(hasAppeared ? 0.65 : 0)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.8), value: hasAppeared)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+        .modifier(WindowGlassBackground())
+        .accessibilityIdentifier("skill-import.sheet")
         .interactiveDismissDisabled(isSaving)
+        .task {
+            revealAudio.playRevealSwell()
+            hasAppeared = true
+            do {
+                try await Task.sleep(for: .milliseconds(1500))
+            } catch { return }
+            isRevealing = false
+        }
+        .onDisappear { revealAudio.stop() }
         .task {
             await settings.loadPersistedState()
             await exclusions.loadPersistedState()
@@ -435,6 +473,17 @@ private struct SkillImportSheet: View {
             do {
                 try await installer.importSettings(options: options, selected: selected)
                 AccessibilityNotification.Announcement("Settings imported into your skill").post()
+                if let sound = NSSound(named: "Glass") {
+                    sound.volume = 0.20
+                    sound.play()
+                }
+                NotificationManager.shared.showHUDInfo(
+                    title: "Skill ready",
+                    message: "Your selected settings are saved in the skill.",
+                    icon: "checkmark.seal.fill",
+                    iconColor: .mint,
+                    identifier: "skill-import-complete"
+                )
                 dismiss()
             } catch {
                 errorMessage = error.localizedDescription

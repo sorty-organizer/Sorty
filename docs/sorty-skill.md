@@ -9,7 +9,9 @@ The Sorty skill organizes and renames files through your agent using preferences
 3. Choose the skill location and select what to bring over. Use Select All for a section or the entire list.
 4. Click Import Selected.
 
-The import sheet uses Sorty's normal settings cards and checkboxes. It offers:
+The import sheet uses the report dialog's rounded header and glass background, with onboarding reveal animation and sound. Background motion settles after the entrance and follows accessibility settings. A completion sound and HUD confirm the import.
+
+The app's normal cards and checkboxes let you select:
 
 - naming style, filename formatting, naming instructions, and rename rules;
 - whether to open the folder after organization;

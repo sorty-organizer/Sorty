@@ -20,12 +20,13 @@ struct AnimatedGradientBackground: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var isWindowVisible = true
     var revealed: Bool = true
+    var motionEnabled: Bool = true
     var color1: Color = .purple
     var color2: Color = .blue
     var color3: Color = .teal
 
     private var motionPaused: Bool {
-        reduceMotion || reduceTransparency || !isWindowVisible
+        !motionEnabled || reduceMotion || reduceTransparency || !isWindowVisible
             || controlActiveState == .inactive || scenePhase != .active
     }
 
@@ -38,7 +39,7 @@ struct AnimatedGradientBackground: View {
         ) { timeline in
             Canvas { context, size in
                 let seconds = timeline.date.timeIntervalSinceReferenceDate
-                let drift = motionPaused ? 0 : seconds * .pi * 2 / 12
+                let drift = reduceMotion || reduceTransparency ? 0 : seconds * .pi * 2 / 12
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 Self.blob(
                     context: &context,
@@ -563,7 +564,7 @@ public struct WelcomeStepView: View {
 
 /// Synthesizes a short swell/shimmer sound for the reveal animation
 @MainActor
-private class WelcomeRevealAudio: ObservableObject {
+final class WelcomeRevealAudio: ObservableObject {
     private final class AudioState: @unchecked Sendable {
         var engine: AVAudioEngine?
         var sourceNode: AVAudioSourceNode?
