@@ -2,6 +2,7 @@ import Combine
 import XCTest
 @testable import SortyLib
 @testable import SortyCore
+@testable import SortyLearnings
 
 @MainActor
 final class PreviewStoreRenameTests: XCTestCase {
@@ -161,6 +162,9 @@ final class PreviewStoreRenameTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let manager = LearningsManager(userDefaults: defaults)
+        // Seed a profile before consent so rule setup is deterministic
+        // (matches LearningsManagerTests pattern; load may no-op in tests).
+        manager.currentProfile = LearningsProfile()
         await manager.grantConsent()
         let usedRule = InferredRule(
             id: "footage-rule",
