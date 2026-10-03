@@ -597,104 +597,18 @@ normalize_app_executable_linkage() {
 # (built binary, plists, entitlements, resources, icon, extension sources,
 # versions, and assembly flags). File and tree metadata is checked first, so
 # unchanged inputs reuse their cached content hash. Large generated executables
-# use metadata only, and media files are rehashed only after their mtime changes.
+# use metadata only; other files are hashed individually after metadata changes.
 # When the fingerprint matches the stamp written after the last successful
 # publish, the whole assemble/sign/publish pipeline is skipped and the existing
 # bundle is reused.
 
 BUNDLE_FINGERPRINT_CACHE_DIR="${BUILD_DIR}/.sorty-cache/bundle-fingerprints"
 
-bundle_fingerprint_cache_key() {
-    printf '%s' "$1" | shasum -a 256 | awk '{print $1}'
-}
-
-bundle_fingerprint_media_hash() {
-    local path="$1"
-    local cache_key cache_file mtime cached_mtime cached_hash content_hash
-    cache_key="$(bundle_fingerprint_cache_key "media:${path}")"
-    cache_file="${BUNDLE_FINGERPRINT_CACHE_DIR}/media-${cache_key}"
-    mtime="$(stat -f '%i:%z:%Fm:%Fc' "${path}")"
-    cached_mtime="$(sed -n 's/^mtime=//p' "${cache_file}" 2>/dev/null | head -1)"
-    cached_hash="$(sed -n 's/^hash=//p' "${cache_file}" 2>/dev/null | head -1)"
-
-    if [ "${cached_mtime}" = "${mtime}" ] && [ -n "${cached_hash}" ]; then
-        printf '%s  %s\n' "${cached_hash}" "${path}"
-        return
-    fi
-
-    content_hash="$(shasum -a 256 -- "${path}" | awk '{print $1}')"
-    mkdir -p "${BUNDLE_FINGERPRINT_CACHE_DIR}"
-    local temp_file="${cache_file}.$$"
-    {
-        printf 'mtime=%s\n' "${mtime}"
-        printf 'hash=%s\n' "${content_hash}"
-    } > "${temp_file}"
-    mv "${temp_file}" "${cache_file}"
-    printf '%s  %s\n' "${content_hash}" "${path}"
-}
-
 bundle_fingerprint_cached_group() {
     local group_name="$1"
     shift
-
-    local cache_key cache_prefix stat_file hash_file temp_stat temp_hashes
-    cache_key="$(bundle_fingerprint_cache_key "${group_name}")"
-    cache_prefix="${BUNDLE_FINGERPRINT_CACHE_DIR}/${cache_key}"
-    stat_file="${cache_prefix}.stat"
-    hash_file="${cache_prefix}.hash"
-    temp_stat="${cache_prefix}.stat.$$"
-    temp_hashes="${cache_prefix}.hashes.$$"
-    mkdir -p "${BUNDLE_FINGERPRINT_CACHE_DIR}"
-    : > "${temp_stat}"
-    : > "${temp_hashes}"
-
-    local path
-    local existing_files=()
-    for path in "$@"; do
-        if [ -f "${path}" ]; then
-            existing_files+=("${path}")
-        else
-            printf '%s missing\n' "${path}" >> "${temp_stat}"
-            printf '%s missing\n' "${path}" >> "${temp_hashes}"
-        fi
-    done
-
-    # One stat process per group instead of one per resource. Include ctime so
-    # same-size edits with a restored mtime still invalidate the stored hash.
-    if [ "${#existing_files[@]}" -gt 0 ]; then
-        stat -f '%N inode=%i size=%z mtime=%Fm ctime=%Fc' "${existing_files[@]}" >> "${temp_stat}"
-    fi
-
-    if cmp -s "${temp_stat}" "${stat_file}" 2>/dev/null && [ -s "${hash_file}" ]; then
-        cat "${hash_file}"
-        rm -f "${temp_stat}" "${temp_hashes}"
-        return
-    fi
-
-    local regular_files=()
-    for path in "${existing_files[@]}"; do
-        case "${path}" in
-            *.mp4|*.m4a)
-                bundle_fingerprint_media_hash "${path}" >> "${temp_hashes}"
-                ;;
-            *)
-                regular_files+=("${path}")
-                ;;
-        esac
-    done
-    if [ "${#regular_files[@]}" -gt 0 ]; then
-        shasum -a 256 -- "${regular_files[@]}" >> "${temp_hashes}"
-    fi
-
-    local group_hash
-    # Metadata decides when to rehash; only paths and contents decide whether
-    # packaging changed. Touching an identical resource must not force signing.
-    group_hash="$(LC_ALL=C sort "${temp_hashes}" | build_cache_hash_stream)"
-    printf '%s group=%s\n' "${group_hash}" "${group_name}" > "${hash_file}.tmp.$$"
-    mv "${hash_file}.tmp.$$" "${hash_file}"
-    mv "${temp_stat}" "${stat_file}"
-    rm -f "${temp_hashes}"
-    cat "${hash_file}"
+    python3 "${SCRIPT_DIR}/bundle_fingerprint.py" \
+        "${BUNDLE_FINGERPRINT_CACHE_DIR}" "${group_name}" "$@"
 }
 
 bundle_fingerprint_generated_files() {
@@ -750,6 +664,7 @@ compute_bundle_fingerprint() {
             "${PROJECT_DIR}/Package.resolved" \
             "${PROJECT_DIR}/scripts/build.sh" \
             "${PROJECT_DIR}/scripts/build_cache.sh" \
+            "${PROJECT_DIR}/scripts/bundle_fingerprint.py" \
             "${PROJECT_DIR}/scripts/string_catalog_cache.py" \
             "${PROJECT_DIR}/scripts/share_signed_executable.py" \
             "${PROJECT_DIR}/scripts/utils.sh"

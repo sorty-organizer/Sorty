@@ -86,8 +86,10 @@ Build-cache maintenance preserves package checkouts and binary artifacts,
 invalidates incompatible compiled outputs, repairs incomplete Sparkle artifacts,
 and prunes stale logs and resource outputs. Resource keys include content hashes,
 shader headers, and compiler recipes. Unchanged video/audio resources stay out of
-SwiftPM restaging. Bundle fingerprints read resource metadata in batches and
-rehash only changed groups. Metadata changes alone do not trigger packaging when
+SwiftPM restaging. Bundle fingerprints retain a metadata signature and content hash per file.
+Editing one resource rehashes only that file, including same-size edits with a
+preserved modification time. Missing and removed files change the fingerprint.
+Records consolidate each group into one JSON file and recover from corrupt state. Metadata changes alone do not trigger packaging when
 resource contents still match. Media keys include inode, size, mtime, and ctime
 so replacing a file or preserving its mtime cannot hide a content change.
 Scheduled maintenance removes indexes when build flags disable indexing and
