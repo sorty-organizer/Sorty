@@ -113,6 +113,26 @@ before restored files are published. A SwiftPM scratch lock prevents packing
 during compilation. A damaged archive stays available for inspection while the
 compiler rebuilds missing outputs.
 
+Scheduled local maintenance also applies transparent LZFSE filesystem compression
+to SDK modules and downloaded dependency files of at least 1 MiB. Files stay at
+their original paths and remain directly readable, including through memory
+mapping. Compiler objects stay expanded. Compression runs under the SwiftPM
+scratch lock, verifies SHA-256, permissions, timestamps, and metadata before
+replacing anything, and preserves all platform slices and vendor signatures.
+The compression flag changes deliberately; macOS also assigns copied files its
+current process provenance. Other extended attributes are checked individually.
+Already-compressed and hard-linked files are skipped. A failed verification
+leaves the affected originals intact. CI skips this operation.
+
+On October 3, SDK modules and dependency artifacts fell from 784 MiB to 360 MiB,
+about 54% less allocated storage. The passes saved 169 MiB and 248 MiB,
+respectively. Subsequent maintenance took 0.08 seconds. An unchanged `make dev`
+after compression took 2.30 seconds and reused the signed app. Maintenance
+preserves ancestor directory timestamps too, avoiding framework-copy invalidation.
+These figures cover those cache trees, not the whole cache, which other builds
+can change concurrently. Force maintenance with `make cache-prune`, or run
+`python3 scripts/cold_build_cache.py compact "$SORTY_BUILD_DIR" debug` directly.
+
 String catalogs use a separate content cache of native `xcstringstool` output.
 Its key includes the entire catalog, table name, compiler recipe, and toolchain.
 Each hit verifies all generated files before copying them, preserving every
@@ -136,7 +156,7 @@ after this 0.107-second step, saving about 103 MB of physical storage. Its signe
 bytes remained identical and compiler output stayed untouched. Shared blocks
 are not reflected as a reduction in `du` totals. CI skips this local operation.
 
-Set `SORTY_COLD_BUILD_CACHE=false` to disable packing and restoration. A bare
+Set `SORTY_COLD_BUILD_CACHE=false` to disable compression, packing, and restoration. A bare
 `swift build -c release` can rebuild an archived configuration; use `make daily`
 to restore it first, or call
 `python3 scripts/cold_build_cache.py restore "$SORTY_BUILD_DIR" release`.

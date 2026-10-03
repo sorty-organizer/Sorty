@@ -2,6 +2,7 @@
 """Keep inactive compiler outputs in lossless Apple Archives, preserving mtimes."""
 
 import argparse
+import ctypes
 import fcntl
 import hashlib
 import json
@@ -9,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 
@@ -40,6 +42,9 @@ def sync(root, action, config, tests=False):
             return
         folder = root / ".sorty-cache/cold"
         folder.mkdir(parents=True, exist_ok=True)
+        if action == "compact":
+            compact(root, folder)
+            return
         kinds = [config + "-tests"] if tests else [config]
         for kind in kinds:
             archive = folder / (kind + ".aar")
@@ -131,6 +136,83 @@ def selection(names):
     return "^(" + "|".join(re.escape(name) for name in names) + ")($|/)"
 
 
+def compact(root, folder):
+    # SDK modules and vendor artifacts stay directly readable by the compiler.
+    # Leave active objects alone and preserve every platform/vendor signature.
+    for tree in (root / "ModuleCache", root / "artifacts"):
+        if not tree.is_dir() or tree.is_symlink():
+            continue
+        sources = [path for path in tree.rglob("*")
+                   if path.is_file() and not path.is_symlink()
+                   and path.stat().st_nlink == 1
+                   and path.stat().st_size >= 1048576
+                   and not path.stat().st_flags & stat.UF_COMPRESSED]
+        if not sources:
+            continue
+        before = snapshot(sources)
+        directory_times = {parent: (parent.stat().st_atime_ns, parent.stat().st_mtime_ns)
+                           for source in sources for parent in source.parents
+                           if parent.is_relative_to(tree)}
+        with tempfile.TemporaryDirectory(dir=folder) as directory:
+            temporary = Path(directory)
+            archive = temporary / "inputs.aar"
+            outputs = temporary / "outputs"
+            outputs.mkdir()
+            selected = selection([str(path.relative_to(tree)) for path in sources])
+            run("archive", "-d", tree, "-o", archive, "-a", "raw",
+                "-include-field", "sh2", "-include-regex", selected)
+            run("extract", "-i", archive, "-d", outputs, "-afsc", "lzfse", "-afsc-all")
+            # Compression deliberately adds UF_COMPRESSED; all other archive
+            # fields still match, and we verify remaining file flags below.
+            run("verify", "-i", archive, "-d", outputs, "-exclude-field", "flg,xat",
+                "-include-regex", selected)
+            if snapshot(sources) != before:
+                raise RuntimeError("Cache inputs changed during compression; originals retained")
+            if any((outputs / source.relative_to(tree)).stat().st_flags & ~stat.UF_COMPRESSED
+                   != source.stat().st_flags for source in sources):
+                raise ValueError("Filesystem compression changed unrelated file flags")
+            if any(xattrs(outputs / source.relative_to(tree)) != xattrs(source) for source in sources):
+                raise ValueError("Filesystem compression changed extended attributes")
+            saved = 0
+            for source in sources:
+                compressed = outputs / source.relative_to(tree)
+                reduction = (source.stat().st_blocks - compressed.stat().st_blocks) * 512
+                if compressed.stat().st_flags & stat.UF_COMPRESSED and reduction > 0:
+                    compressed.replace(source)
+                    saved += reduction
+            # Bundle directories are compiler inputs too. Changing their
+            # timestamps would unnecessarily recopy dependency frameworks.
+            for directory, times in directory_times.items():
+                if directory.stat().st_mtime_ns != times[1]:
+                    os.utime(directory, ns=times)
+            print(f"Filesystem-compressed {tree.name}: saved {saved // 1048576} MiB")
+
+
+def xattrs(path):
+    # macOS stamps new files with the current process's provenance. Native
+    # APIs hide compression storage attributes; compare every other attribute.
+    libc = ctypes.CDLL(None, use_errno=True)
+    name = os.fsencode(path)
+    count = libc.listxattr(name, None, 0, 0)
+    if count < 0:
+        raise OSError(ctypes.get_errno(), "Could not list extended attributes")
+    names = ctypes.create_string_buffer(count)
+    if libc.listxattr(name, names, count, 0) != count:
+        raise OSError("Extended attributes changed during compression")
+    values = {}
+    for attribute in names.raw.split(b"\0"):
+        if not attribute or attribute == b"com.apple.provenance":
+            continue
+        size = libc.getxattr(name, attribute, None, 0, 0, 0)
+        if size < 0:
+            raise OSError(ctypes.get_errno(), "Could not read extended attribute")
+        value = ctypes.create_string_buffer(size)
+        if libc.getxattr(name, attribute, value, size, 0, 0) != size:
+            raise OSError("Extended attribute changed during compression")
+        values[attribute] = value.raw
+    return values
+
+
 def snapshot(sources):
     return {str(path): (path.lstat().st_mtime_ns, path.lstat().st_size, path.lstat().st_mode, path.lstat().st_ctime_ns)
             for source in sources for path in [source, *source.rglob("*")]
@@ -139,7 +221,7 @@ def snapshot(sources):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("pack", "restore"))
+    parser.add_argument("action", choices=("pack", "restore", "compact"))
     parser.add_argument("root", type=Path)
     parser.add_argument("config", choices=("debug", "release"))
     parser.add_argument("--tests", action="store_true")
@@ -149,4 +231,5 @@ if __name__ == "__main__":
     except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError, RuntimeError) as error:
         # A cache cannot block a build. Keep failed archives for inspection;
         # SwiftPM will rebuild absent outputs from the sources.
-        print(f"Cold cache {args.action} skipped: {error}")
+        detail = f"Apple Archive exited {error.returncode}" if isinstance(error, subprocess.CalledProcessError) else error
+        print(f"Cold cache {args.action} skipped: {detail}")
