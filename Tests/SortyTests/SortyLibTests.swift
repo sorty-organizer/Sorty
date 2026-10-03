@@ -19,6 +19,7 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     var indexedAnalyzeHandler: (([FileItem], Int) async throws -> OrganizationPlan)?
     private(set) var analyzedBatchSizes: [Int] = []
     private(set) var analyzedInstructions: [String?] = []
+    var textHandler: (@Sendable (String) async throws -> String)?
     @MainActor weak var streamingDelegate: StreamingDelegate?
 
     init(config: AIConfig) {
@@ -54,7 +55,12 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     }
 
     func generateText(prompt: String, systemPrompt: String?) async throws -> String {
+        if let textHandler { return try await textHandler(prompt) }
         return "Mock response"
+    }
+
+    func setTextHandler(_ handler: @escaping @Sendable (String) async throws -> String) {
+        textHandler = handler
     }
     
     func checkHealth() async throws {
@@ -180,6 +186,13 @@ class SortyTests: XCTestCase {
         folderOrganizer.setAIClientForTesting(mockClient)
         let batchClient: MockAIClient = mockClient
         folderOrganizer.setBatchClientFactoryForTesting { _, _ in batchClient }
+        await mockClient.setTextHandler { prompt in
+            if prompt.hasPrefix("Plan reusable destinations") {
+                return #"{"destinations":[{"path":"Documents","purpose":"Project reference documents","examples":["file-0.txt"]}]}"#
+            }
+            let decisions = (1...40).map { #"{"file_id":\#($0),"verdict":"keep","reason":"Matches project reference purpose"}"# }
+            return "{\"decisions\":[" + decisions.joined(separator: ",") + "]}"
+        }
         await mockClient.setHandler { files in
             OrganizationPlan(
                 suggestions: [
@@ -194,6 +207,36 @@ class SortyTests: XCTestCase {
         XCTAssertEqual(batchSizes, [350, 1])
         XCTAssertEqual(folderOrganizer.currentPlan?.totalFiles, 351)
         XCTAssertEqual(folderOrganizer.currentPlan?.suggestions.count, 1)
+        let instructions = await mockClient.currentAnalyzedInstructions()
+        XCTAssertTrue(instructions.allSatisfy { $0?.contains("Project reference documents") == true })
+        XCTAssertFalse(folderOrganizer.currentPlan?.needsReview ?? true)
+    }
+
+    @MainActor
+    func testSemanticReviewRepairsOnlyContradictedPlacement() async throws {
+        try Data("Acme invoice for consulting services".utf8).write(to: tempDirectory.appendingPathComponent("scan001.txt"))
+        try Data("Approved budget".utf8).write(to: tempDirectory.appendingPathComponent("budget.txt"))
+        folderOrganizer.setAIClientForTesting(mockClient)
+        await mockClient.setTextHandler { _ in
+            #"{"decisions":[{"file_id":1,"verdict":"keep","reason":"Budget belongs in Budgets"},{"file_id":2,"verdict":"repair","reason":"Invoice content contradicts Travel"}]}"#
+        }
+        await mockClient.setIndexedHandler { files, call in
+            if call == 1 {
+                return OrganizationPlan(suggestions: [
+                    FolderSuggestion(folderName: "Budgets", files: files.filter { $0.name == "budget" }, reasoning: "Approved budget"),
+                    FolderSuggestion(folderName: "Travel", files: files.filter { $0.name == "scan001" }, reasoning: "Travel receipts"),
+                ])
+            }
+            return OrganizationPlan(suggestions: [FolderSuggestion(folderName: "Invoices", files: files, reasoning: "Consulting invoice")])
+        }
+        try await folderOrganizer.organize(directory: tempDirectory)
+        let plan = try XCTUnwrap(folderOrganizer.currentPlan)
+        XCTAssertEqual(plan.totalFiles, 2)
+        XCTAssertEqual(plan.suggestions.first { $0.folderName == "Budgets" }?.files.map(\.name), ["budget"])
+        XCTAssertEqual(plan.suggestions.first { $0.folderName == "Invoices" }?.files.map(\.name), ["scan001"])
+        XCTAssertFalse(plan.suggestions.contains { $0.folderName == "Travel" })
+        let sizes = await mockClient.currentAnalyzedBatchSizes()
+        XCTAssertEqual(sizes, [2, 1])
     }
 
     @MainActor

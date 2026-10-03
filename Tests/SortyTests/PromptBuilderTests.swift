@@ -853,11 +853,23 @@ final class PromptBuilderTests: XCTestCase {
         let prompt = PromptBuilder.buildOrganizationPrompt(files: files)
 
         XCTAssertTrue(prompt.contains("essential evidence"))
-        XCTAssertTrue(prompt.contains("full metadata is shown for the first 80 files"))
         // A file past the full-metadata cap keeps tags/title/hint while dates/sizes drop.
         XCTAssertTrue(prompt.contains("DegTag249"))
         XCTAssertTrue(prompt.contains("Deg Title 249"))
         XCTAssertFalse(prompt.contains("list path only"))
+    }
+
+    func testAmbiguousLateExtensionReceivesRichContentEvidence() {
+        var files = (0..<200).map {
+            FileItem(path: "/tmp/clear-\($0).aaa", name: "Annual budget \($0)", extension: "aaa")
+        }
+        files.append(FileItem(
+            path: "/tmp/scan001.zzz", name: "scan001", extension: "zzz",
+            contentMetadata: ContentMetadata(textPreview: String(repeating: "intro ", count: 50) + "Consulting invoice Acme")
+        ))
+        let prompt = PromptBuilder.buildOrganizationPrompt(files: files, includeContentMetadata: true)
+        XCTAssertTrue(prompt.contains("Consulting invoice Acme"))
+        XCTAssertTrue(files.allSatisfy { prompt.contains($0.displayName) })
     }
 
     func testCompactLinesOrderDisambiguatorsBeforeDates() {

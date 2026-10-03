@@ -372,30 +372,32 @@ package struct PromptBuilder {
         prompt += "Files to process (\(files.count) total):\n\n"
         prompt.reserveCapacity(65_536)
 
-        // Enforce the main-path token budget incrementally: full per-file
-        // metadata for the first N files, essential evidence afterwards. This
-        // keeps the JSON contract tail intact while bounding prompt growth.
+        // Reserve rich evidence across the whole batch before grouping by
+        // extension, so an early extension cannot consume every metadata slot.
         let maxFullMetadata = Self.maxFullMetadataFiles(for: files.count)
-        var fullMetadataRemaining = maxFullMetadata
+        let richEvidenceIDs = Set(files.sorted {
+            if $0.organizationEvidencePriority != $1.organizationEvidencePriority {
+                return $0.organizationEvidencePriority > $1.organizationEvidencePriority
+            }
+            return $0.path < $1.path
+        }.prefix(maxFullMetadata).map(\.id))
         var emittedMinimalLines = 0
-        // Incremental budget tracking: String.count walks every grapheme
-        // cluster, so re-measuring the whole prompt per file is quadratic.
-        // Count appended bytes instead and re-check the token estimate every
-        // 16 files (enforceMainPromptBudget below stays as the final guard).
-        var estimatedChars = prompt.utf8.count
-        var filesSinceBudgetCheck = 0
-        var overMainBudget = false
-
-        // Group files by extension for better context. Sort keys only instead
-        // of sorting key/value pairs, which copies every file list.
         let groupedByExtension = Dictionary(grouping: files) { $0.extension.lowercased() }
+        let minimalFileBytes = files.reduce(0) { total, file in
+            total + "  - \(file.relativePath ?? file.displayName)\(Self.essentialEvidenceSuffix(for: file))\n".utf8.count
+        }
+        // Reserve every lightweight file line and the contract tail before
+        // spending the remaining budget on rich evidence.
+        var remainingRichBytes = max(0, Self.mainPromptTokenBudget * 4 - prompt.utf8.count
+            - minimalFileBytes - groupedByExtension.count * 100 - 3_000)
+        let metadataExcerptLength = max(400, min(1_600,
+            remainingRichBytes / max(1, richEvidenceIDs.count) - 200))
 
         for ext in groupedByExtension.keys.sorted() {
             guard let fileList = groupedByExtension[ext] else { continue }
             let extLabel = ext.isEmpty ? "no extension" : ".\(ext)"
             let extHeader = "\(extLabel.uppercased()) files (\(fileList.count)):\n"
             prompt += extHeader
-            estimatedChars += extHeader.utf8.count
 
             // Prioritize files with content metadata (deep-scanned) before applying the cap
             let sortedFiles = fileList.sorted { a, b in
@@ -411,20 +413,12 @@ package struct PromptBuilder {
 
             for file in sortedFiles {
                 let promptPath = file.relativePath ?? file.displayName
-                if filesSinceBudgetCheck >= 16 {
-                    overMainBudget = estimatedChars / 4 >= Self.mainPromptTokenBudget
-                    filesSinceBudgetCheck = 0
-                }
-                let useMinimalLine = fullMetadataRemaining <= 0 || overMainBudget
-                if useMinimalLine {
+                let minimalLine = "  - \(promptPath)\(Self.essentialEvidenceSuffix(for: file))\n"
+                if !richEvidenceIDs.contains(file.id) || remainingRichBytes == 0 {
                     emittedMinimalLines += 1
-                    let minimalLine = "  - \(promptPath)\(Self.essentialEvidenceSuffix(for: file))\n"
                     prompt += minimalLine
-                    estimatedChars += minimalLine.utf8.count
-                    filesSinceBudgetCheck += 1
                     continue
                 }
-                fullMetadataRemaining -= 1
                 var fileDesc = "  - \(promptPath)"
 
                 fileDesc += " [\(file.isDirectory ? "directory" : "file"), \(file.size) bytes / \(file.formattedSize)]"
@@ -451,7 +445,7 @@ package struct PromptBuilder {
                         let label = mode == .renameOnly || mode == .organizeAndRename
                             ? "Rename Context"
                             : "Content Analysis"
-                        fileDesc += "\n    [\(label)] \(summary)"
+                        fileDesc += "\n    [\(label)] \(truncateForPrompt(summary, maxLength: metadataExcerptLength))"
                     }
                 }
 
@@ -474,9 +468,14 @@ package struct PromptBuilder {
                     fileDesc += ", SHA-256: \(hash)"
                 }
                 
-                prompt += "\(fileDesc)\n"
-                estimatedChars += fileDesc.utf8.count + 1
-                filesSinceBudgetCheck += 1
+                let extraBytes = max(0, fileDesc.utf8.count + 1 - minimalLine.utf8.count)
+                if extraBytes > remainingRichBytes {
+                    emittedMinimalLines += 1
+                    prompt += minimalLine
+                } else {
+                    remainingRichBytes -= extraBytes
+                    prompt += "\(fileDesc)\n"
+                }
             }
         }
 
@@ -506,7 +505,7 @@ package struct PromptBuilder {
         }
 
         if emittedMinimalLines > 0 {
-            prompt += "\n\nNote: \(emittedMinimalLines) file(s) show path plus essential evidence (Finder tags/color, document title, text/OCR excerpt) to stay within the \(mainPromptTokenBudget)-token prompt budget; full metadata is shown for the first \(maxFullMetadata) files."
+            prompt += "\n\nNote: \(emittedMinimalLines) file(s) show path plus essential evidence to stay within the \(mainPromptTokenBudget)-token prompt budget; full metadata prioritizes ambiguous names and available content across file types."
         }
 
         return enforceMainPromptBudget(prompt)

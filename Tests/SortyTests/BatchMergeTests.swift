@@ -6,6 +6,19 @@ import XCTest
 /// disjoint batches merge into one before validation, and quarantined
 /// subsets round-trip through the targeted retry helpers without drops.
 final class BatchMergeTests: XCTestCase {
+    func testPlacementReviewRejectsIncompleteOrDuplicateIdentityCoverage() throws {
+        let invalid = [
+            #"{"decisions":[{"file_id":1,"verdict":"keep","reason":"Project"}]}"#,
+            #"{"decisions":[{"file_id":1,"verdict":"keep","reason":"Project"},{"file_id":1,"verdict":"repair","reason":"Invoice"}]}"#,
+            #"{"decisions":[{"file_id":1,"verdict":"keep","reason":"Project"},{"file_id":3,"verdict":"repair","reason":"Invoice"}]}"#,
+        ]
+        for response in invalid {
+            XCTAssertThrowsError(try OrganizationPlacementReview.decisions(from: response, candidateCount: 2))
+        }
+        let valid = #"{"decisions":[{"file_id":2,"verdict":"needs_evidence","reason":"Scan has no text"},{"file_id":1,"verdict":"keep","reason":"Shared project"}]}"#
+        XCTAssertEqual(try OrganizationPlacementReview.decisions(from: valid, candidateCount: 2).map(\.fileID), [1, 2])
+    }
+
     private func file(_ name: String) -> FileItem {
         let url = URL(fileURLWithPath: "/tmp").appendingPathComponent(name)
         return FileItem(

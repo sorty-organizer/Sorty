@@ -26,6 +26,37 @@ correction, exclusion, consent, and pause checks remain in force.
 
 ## Evidence and measurement
 
+For runs needing several assignment batches, Sorty requests a shared taxonomy
+first. Every file contributes to source-folder/type counts. The planner sees up
+to 120 group summaries and 160 representative files spanning those groups.
+Destinations carry exact paths, purposes, and examples. All batches receive the
+same planning context; unseen evidence can justify a new destination. Resume
+checkpoints retain that context. A planning failure preserves the bounded batch
+workflow and adds a review warning.
+
+Rich prompt metadata prioritizes ambiguous names and available content across
+extensions, rather than letting the first extension consume the whole budget.
+
+After structural checks, Sorty reviews at most 40 questionable placements across
+destinations. Candidates include generated names, unorganized files, structural
+warnings, missing folder purposes, and shared project stems split between
+destinations. The reviewer must return one valid decision per local file ID.
+Missing, duplicate, or invented IDs invalidate the response.
+
+The reviewer can keep a placement, request more evidence, or flag a contradiction.
+Only files requesting evidence receive another local extraction, and only when
+Deep Scan is enabled. Cloud placeholders, downloads in progress, directories,
+and symlinks are skipped. Extraction reuses the content cache and OCR settings.
+One repair request handles the disputed subset. Path safety and complete file
+accounting must pass before it joins the original plan. Other assignments and
+their rename/tag mappings remain intact. Review failures keep the original plan
+with a warning; watched-folder auto-apply waits for review. Rename-only skips
+placement review.
+
+Planning and review run through the selected provider. They add requests and
+latency. Assignment token/cost statistics currently omit these `generateText`
+calls, so they must not be presented as the complete cost of a quality run.
+
 Use `SortyQuality` to report placement expectation matches, acceptance, manual
 preview edits, rename calibration, and reverts on a private reviewed corpus.
 Structural scores are diagnostics, not measurements of placement accuracy.

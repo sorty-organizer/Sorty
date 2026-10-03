@@ -133,6 +133,23 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         return "\(baseName).\(ext)"
     }
 
+    /// Generated names need more content evidence than descriptive labels.
+    /// Shared by prompt budgeting and the bounded placement reviewer.
+    package var hasAmbiguousOrganizationName: Bool {
+        let stem = name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let generatedPrefixes = ["img_", "dsc_", "dscn", "screenshot", "screen shot", "scan", "untitled", "document", "download", "file-"]
+        return stem.isEmpty || UUID(uuidString: stem) != nil
+            || !stem.unicodeScalars.contains(where: { CharacterSet.letters.contains($0) })
+            || generatedPrefixes.contains(where: { stem == $0 || stem.hasPrefix($0) })
+    }
+
+    package var organizationEvidencePriority: Int {
+        let hasContent = contentMetadata?.isEmpty == false || ocrText?.isEmpty == false
+        return (hasAmbiguousOrganizationName ? 4 : 0)
+            + (hasContent ? 2 : 0)
+            + (finderComment?.isEmpty == false ? 1 : 0)
+    }
+
     public var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
     }
