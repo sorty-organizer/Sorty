@@ -3,7 +3,7 @@
 All three Organize workflows share the same bounded pipeline:
 
 1. `DirectoryScanner` enumerates incrementally, publishes coarse progress, and limits deep content analysis to 2,000 files per run. It still retains the complete lightweight `FileItem` inventory because every source file must remain addressable through preview and apply.
-2. `FolderOrganizer` plans a shared destination taxonomy before multi-batch organization, using source-folder/type counts and representative content evidence. It then sends bounded concurrent AI batches: 350 files for organize-only and 120 files for rename or organize-and-rename. Every batch receives the shared paths, purposes, and examples. Assignments merge in order by file identity. Rename-only skips taxonomy planning.
+2. `FolderOrganizer` sends bounded concurrent AI batches: 350 files for organize-only and 120 files for rename or organize-and-rename. Assignments merge in order by file identity. There is no separate taxonomy-planning or placement-review request.
 3. `ResponseParser` indexes the batch inventory by ID, exact name, case-folded name, and extension so ordinary assignments resolve in constant time. Partial-name matching remains a fallback only.
 4. `PreviewStore` starts plans above 2,000 files collapsed and renders at most 500 file rows per expanded section. Hidden rows remain in the plan and are included when applying it.
 5. `FileSystemManager` builds per-folder rename/tag indexes once, throttles operation progress callbacks, and preserves the full operation journal required for partial-failure recovery and undo.
@@ -12,14 +12,9 @@ Streaming AI text is capped at 256,000 retained characters and 48,000 UI-present
 
 When changing these paths, keep progress tied to measured work, avoid per-file main-actor publications, and never trade away complete apply coverage for a smaller preview.
 
-Preview notices use compact neutral cards with a title, explanation, and native
-bordered action. Orange marks warnings without tinting the entire card. Duplicate
-filenames show an inline suggested name with a small Use suggestion button;
-Resolve all accepts every pending suggestion. Blocking collision checks remain
-visible before Apply. The header omits structural quality scores and aggregate
-rename-confidence badges. Partial-plan details appear in the Apply confirmation
-rather than a separate banner. Individual rename confidence remains available
-on each file.
+Preview shows the proposed destinations without structural quality scores,
+parse-warning notices, confidence summaries, or filename-collision cards.
+Apply uses the normal confirmation and file-system conflict handling.
 
 Main navigation takes its dimensions from the window viewport, including windows
 smaller than the former 1,000 by 700 point minimum. HUD, link-hover, and consent
@@ -29,8 +24,8 @@ Learnings fills the available page without imposing a separate minimum size.
 The shared link-hover host follows this rule in About, Thanks, What's New,
 Accreditations, and Internet Access Policy windows.
 
-The final plan receives a bounded semantic review of up to 40 questionable
-placements, sampled across destinations. One subset repair may follow. See
-[Organization quality](organization-quality.md) for evidence handling and failure
-behavior. Shared planning and review add AI requests; the existing assignment
-token and cost statistics do not include `generateText` calls.
+Manual-session snapshots store only direct user instructions. Assembled request
+context stays inside the AI pipeline. Legacy snapshots recover the user block
+and remove generated exclusions before populating the Instructions editor.
+See [Organization quality](organization-quality.md) for the retained learning
+and measurement behavior.

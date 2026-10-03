@@ -56,11 +56,12 @@ New AI providers must:
 ## FolderOrganizer State Machine
 `idle → scanning → organizing → ready → applying → completed`
 
-### Plan quality gate
+### Plan validation
 
-`FolderOrganizer.validationPhase` runs filesystem safety checks first, then scores the proposed structure before preview. `PlanQualityEvaluator` deducts points for duplicate folder names, vague or single-file folders, mixed file-type buckets, needless nesting, and near-matches that ignore an existing folder. Rename-only runs skip structural scoring because they cannot move files or create folders.
-
-A score below 75 triggers one new AI request. The correction prompt lists every measured problem and asks the model to preserve sound placements. Sorty scores the replacement too. If it still fails, `keepingCertainItems` keeps placements that were not implicated and moves affected files to the unorganized review section. It never applies a low-quality placement by default.
+`FolderOrganizer.validationPhase` checks source files, destination paths, and
+user-configured exclusions. It does not score folder structure, run a quality
+retry, quarantine low-confidence placements, or request semantic placement review.
+Preview Apply uses the normal confirmation without parse-warning or quality gates.
 
 ### Apple Foundation Model prompt compaction
 

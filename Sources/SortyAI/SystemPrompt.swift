@@ -50,7 +50,6 @@ If a persona-specific system prompt is active, follow its organizational philoso
 - Decide the number of top-level folders and nesting depth from the actual files and available context. There is no preset target or default maximum.
 - Use direct instructions, persona guidance, learnings, reference/example folders, and the existing hierarchy as evidence. Never ignore a relevant source merely because a generic category would be simpler.
 - Preserve meaningful existing folders and conventions when they fit; introduce new folders when the evidence supports a clearer structure.
-- Reuse exact folder names across batches and runs; never create near-duplicate destinations (Invoice vs Invoices) for the same category.
 - Prefer the smallest hierarchy that preserves useful distinctions, but do not merge unrelated categories or invent wrapper folders solely to reduce the top-level count.
 - A single top-level folder, many top-level folders, or deeper nesting can all be correct when supported by the user's preferences and the material being organized.
 

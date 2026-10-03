@@ -37,12 +37,6 @@ struct PreviewView: View {
     @State private var memoizedCurrentDiff: OrganizationPlanDiff.Source?
     @State private var memoizedPreviousDiff: OrganizationPlanDiff.Source?
     @State private var memoizedNextDiff: OrganizationPlanDiff.Source?
-    // Preview derivations for the displayed plan. Refreshed in
-    // refreshDerivedPlanStats alongside the rename count.
-    @State private var memoizedLowConfidenceCount: Int
-    @State private var memoizedHiddenFileCount: Int
-    @State private var memoizedCollisionGroups: [FilenameCollisionGroup]
-    @State private var memoizedStorageDestinationCount: Int
 
     private var displayedPlan: OrganizationPlan {
         Self.planForApply(
@@ -95,28 +89,8 @@ struct PreviewView: View {
     private var mode: OrganizationMode { settingsViewModel.config.mode }
     private var emptyStateType: PreviewListView.EmptyStateType {
         if displayedPlan.totalFiles == 0 { return .emptyDirectory }
-        if displayedPlan.suggestions.isEmpty && !displayedPlan.unorganizedFiles.isEmpty {
-            return .allUnorganized(count: displayedPlan.unorganizedFiles.count, reasons: displayedPlan.unorganizedDetails)
-        }
+        if displayedPlan.suggestions.isEmpty && !displayedPlan.unorganizedFiles.isEmpty { return .allUnorganized(displayedPlan.unorganizedFiles.count) }
         return .none
-    }
-
-    /// Warn about incomplete plans, conflicts, uncertain renames, or older previews.
-    private var applyWarningActive: Bool {
-        isViewingHistory
-            || displayedPlan.isPartial
-            || displayedPlan.needsReview
-            || memoizedLowConfidenceCount > 0
-            || !memoizedCollisionGroups.isEmpty
-    }
-
-    /// Unresolved 3+-way name conflicts block Apply until each file has a
-    /// unique name. Two-way conflicts auto-rename safely and never block.
-    private var applyBlockedReason: String? {
-        guard !isViewingHistory else { return nil }
-        guard let blocking = memoizedCollisionGroups.first(where: \.isBlocking) else { return nil }
-        return "\"\(blocking.collidingName)\" is claimed by \(blocking.files.count) files in "
-            + "\(blocking.folderPath) — accept an inline suggestion for each file before applying."
     }
     
     init(
@@ -131,10 +105,6 @@ struct PreviewView: View {
         _previewStore = StateObject(wrappedValue: PreviewStore(plan: plan))
         _editablePlan = State(initialValue: plan)
         _memoizedRenameCount = State(initialValue: plan.suggestions.reduce(0) { $0 + $1.renameCount })
-        _memoizedLowConfidenceCount = State(initialValue: PreviewPlanInsights.flaggableRenames(in: plan).count)
-        _memoizedHiddenFileCount = State(initialValue: PreviewPlanInsights.hiddenFileCount(in: plan))
-        _memoizedCollisionGroups = State(initialValue: PreviewPlanInsights.collisionGroups(in: plan))
-        _memoizedStorageDestinationCount = State(initialValue: PreviewPlanInsights.storageDestinationCount(in: plan))
     }
     
     var body: some View {
@@ -178,7 +148,6 @@ struct PreviewView: View {
                 PreviewStatsView(stats: displayedPlan.generationStats, showStatsForNerds: true, estimatedTimeRemaining: nil, currentFile: currentFileProgress(for: displayedPlan.totalFiles), totalFiles: displayedPlan.totalFiles, stage: organizer.organizationStage)
             }
             Divider()
-            previewNotices
             PreviewListView(
                 store: previewStore,
                 dragDropManager: dragDropManager,
@@ -240,15 +209,6 @@ struct PreviewView: View {
         }
         .task {
             await learningsManager.loadProfileIfNeededForCollectionAsync()
-            await loadExistingFolderPathsForRescore()
-        }
-        .onChange(of: previewStore.plan.qualityAssessment) { _, _ in
-            // Sync the displayed plan when the debounced off-main re-score lands.
-            // User edits already sync via onPlanChanged,
-            // so this only fires for quality-only refreshes.
-            guard viewingHistoryIndex == nil else { return }
-            editablePlan = previewStore.plan
-            refreshDerivedPlanStats()
         }
         .onChange(of: plan) { _, newPlan in
             viewingHistoryIndex = nil
@@ -328,10 +288,6 @@ struct PreviewView: View {
     private func refreshDerivedPlanStats() {
         let shown = displayedPlan
         memoizedRenameCount = shown.suggestions.reduce(0) { $0 + $1.renameCount }
-        memoizedLowConfidenceCount = PreviewPlanInsights.flaggableRenames(in: shown).count
-        memoizedHiddenFileCount = PreviewPlanInsights.hiddenFileCount(in: shown)
-        memoizedCollisionGroups = PreviewPlanInsights.collisionGroups(in: shown)
-        memoizedStorageDestinationCount = PreviewPlanInsights.storageDestinationCount(in: shown)
         if viewingHistoryIndex == nil, hasEdits {
             memoizedCurrentDiff = OrganizationPlanDiff.Source(
                 oldPlan: plan,
@@ -350,121 +306,6 @@ struct PreviewView: View {
         memoizedNextDiff = diff(from: displayedVersionIndex, to: displayedVersionIndex + 1)
     }
     
-    /// Explain older previews, hidden rows, and filename conflicts above the tree.
-    @ViewBuilder
-    private var previewNotices: some View {
-        if isViewingHistory || memoizedHiddenFileCount > 0 || !memoizedCollisionGroups.isEmpty {
-            VStack(spacing: 8) {
-                if isViewingHistory {
-                    noticeRow(
-                        icon: "clock.arrow.circlepath",
-                        color: .blue,
-                        title: "Earlier preview",
-                        text: "Viewing older preview v\(displayedPlan.version) of \(totalVersions) — Apply uses this version and discards current edits.",
-                        accessibilityID: "StaleHistoryNotice",
-                        actionTitle: "Return to latest",
-                        actionID: "ReturnToLatestButton",
-                        action: {
-                            HapticFeedbackManager.shared.selection()
-                            viewingHistoryIndex = nil
-                        }
-                    )
-                }
-                if !memoizedCollisionGroups.isEmpty {
-                    noticeRow(
-                        icon: "exclamationmark.triangle.fill",
-                        color: .orange,
-                        title: "Duplicate filenames",
-                        text: collisionNoticeText,
-                        accessibilityID: "FilenameCollisionNotice",
-                        actionTitle: "Resolve all",
-                        actionID: "FixAllCollisionsButton",
-                        action: fixAllCollisions
-                    )
-                }
-                if memoizedHiddenFileCount > 0 {
-                    noticeRow(
-                        icon: "eye.slash.fill",
-                        color: .secondary,
-                        title: "Showing a limited preview",
-                        text: "Preview hides \(memoizedHiddenFileCount) files for performance — Apply includes all \(displayedPlan.totalFiles) files.",
-                        accessibilityID: "TruncatedPreviewNotice",
-                        actionTitle: nil,
-                        actionID: nil,
-                        action: nil
-                    )
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-        }
-    }
-
-    /// Collision notice: blocking 3+-way conflicts name the file and pause
-    /// Apply; two-way conflicts auto-rename with inline suggestions.
-    private var collisionNoticeText: String {
-        let blocking = memoizedCollisionGroups.filter(\.isBlocking)
-        if let first = blocking.first {
-            return "\"\(first.collidingName)\" is claimed by \(first.files.count) files in "
-                + "\(first.folderPath). Give each file a unique name to enable Apply."
-        }
-        let files = memoizedCollisionGroups.reduce(0) { $0 + $1.files.count }
-        return "\(files) files share destination names. Choose the suggested names below or resolve them all. Apply will otherwise rename them automatically."
-    }
-
-    /// Applies every pending uniquified suggestion, then re-syncs the plan.
-    private func fixAllCollisions() {
-        HapticFeedbackManager.shared.success()
-        previewStore.acceptAllCollisionSuggestions()
-        hasEdits = true
-        editablePlan = previewStore.plan
-        refreshDerivedPlanStats()
-    }
-
-    private func noticeRow(
-        icon: String,
-        color: Color,
-        title: String,
-        text: String,
-        accessibilityID: String,
-        actionTitle: String?,
-        actionID: String?,
-        action: (() -> Void)?
-    ) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(color)
-                .frame(width: 28, height: 28)
-                .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: 7))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.primary)
-                Text(text)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if let actionTitle, let action {
-                Button(actionTitle) { action() }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .fixedSize()
-                    .accessibilityIdentifier(actionID ?? "")
-            }
-        }
-        .padding(12)
-        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 10))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        }
-        .accessibilityIdentifier(accessibilityID)
-    }
-
     @ViewBuilder
     private var bottomToolbar: some View {
         VStack(spacing: 0) {
@@ -492,8 +333,6 @@ struct PreviewView: View {
                     shouldDisableButtons: shouldDisableButtons,
                     editsCapturedCount: previewStore.editsCapturedCount,
                     mode: mode,
-                    showsApplyWarning: applyWarningActive,
-                    applyBlockedReason: applyBlockedReason,
                     onCancel: { recordCancelledOrganization(); cancelToStart() },
                     onReset: { HapticFeedbackManager.shared.tap(); editablePlan = plan; previewStore.updatePlan(plan); previewStore.resetEditsCaptured(); hasEdits = false },
                     onRegenerate: regeneratePreview,
@@ -508,75 +347,15 @@ struct PreviewView: View {
         if !newValue.isEmpty && learningsManager.consentManager.canCollectData { NotificationCenter.default.post(name: .steeringPromptProvided, object: nil, userInfo: ["prompt": newValue, "folderPath": baseURL.path]) }
     }
 
-    /// Caches on-disk folders for edit re-scores (convention-match context).
-    /// Runs once off-main; until it lands, re-scores fall back to no context.
-    private func loadExistingFolderPathsForRescore() async {
-        do {
-            let paths = try await PlanQualityEvaluator.existingFolderPathsOffMain(at: baseURL)
-            previewStore.setExistingFolderPaths(paths)
-        } catch {
-            // Re-scores fall back to no convention context.
-            return
-        }
-    }
-
     private var applyConfirmationMessage: String {
-        let planToApply = displayedPlan
-        let base: String
         switch mode {
         case .renameOnly:
-            base = "\(renameCount) suggested name changes will be applied in place. \(planToApply.unorganizedFiles.count) files will be left unchanged."
+            return "\(renameCount) suggested name changes will be applied in place. \(displayedPlan.unorganizedFiles.count) files will be left unchanged."
         case .organizeAndRename:
-            base = "\(planToApply.totalFiles) files will be organized, with \(renameCount) name changes. \(planToApply.unorganizedFiles.count) files will remain in place."
+            return "\(displayedPlan.totalFiles) files will be organized, with \(renameCount) name changes. \(displayedPlan.unorganizedFiles.count) files will remain in place."
         case .organize:
-            base = "\(planToApply.totalFiles) files will be organized. \(planToApply.unorganizedFiles.count) files will remain in place."
+            return "\(displayedPlan.totalFiles) files will be organized. \(displayedPlan.unorganizedFiles.count) files will remain in place."
         }
-
-        var extras: [String] = []
-        if isViewingHistory {
-            extras.append("You are viewing older preview v\(planToApply.version) of \(totalVersions) — applying it discards your current edits.")
-        }
-        if planToApply.isPartial || planToApply.needsReview {
-            let warningCount = planToApply.parseWarnings.count
-            extras.append(warningCount > 0
-                ? "This plan is incomplete (\(warningCount) parse warnings) — review it before applying."
-                : "This plan is incomplete — review it before applying.")
-        }
-        if mode != .renameOnly {
-            let split = folderCreationSplit(for: planToApply)
-            if split.new > 0 || split.existing > 0 {
-                extras.append("\(split.new) new top-level folders will be created (\(split.existing) already exist).")
-            }
-            if memoizedStorageDestinationCount > 0 {
-                extras.append("\(memoizedStorageDestinationCount) folders target external storage locations.")
-            }
-        }
-        extras.append(contentsOf: PreviewPlanInsights.collisionConfirmationLines(groups: memoizedCollisionGroups))
-        if memoizedLowConfidenceCount > 0 {
-            extras.append("\(memoizedLowConfidenceCount) renames have medium or low confidence and are flagged inline.")
-        }
-        if memoizedHiddenFileCount > 0 {
-            extras.append("The preview hides \(memoizedHiddenFileCount) files for performance; apply includes all \(planToApply.totalFiles) files.")
-        }
-        return ([base] + extras).joined(separator: " ")
-    }
-
-    /// New-vs-existing split for top-level relative folders, checked against
-    /// the live filesystem at confirmation time. Cheap: a handful of stat
-    /// calls, only when the confirmation message is built.
-    private func folderCreationSplit(for planToApply: OrganizationPlan) -> (new: Int, existing: Int) {
-        let fileManager = FileManager.default
-        var new = 0
-        var existing = 0
-        for suggestion in planToApply.suggestions where !suggestion.folderName.hasPrefix("/") {
-            let url = baseURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
-            if fileManager.fileExists(atPath: url.path) {
-                existing += 1
-            } else {
-                new += 1
-            }
-        }
-        return (new, existing)
     }
     
     private func regeneratePreview() {

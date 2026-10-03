@@ -67,6 +67,12 @@ For asynchronous bookmark restoration, snapshot the bookmark, item identity, and
 
 Manual-session restoration reads, decodes, resolves its bookmark, and checks the folder off the main actor. It rechecks the session generation and idle state before publishing the restored folder. The organizer owns a successful security scope until reset and releases scopes from discarded results immediately.
 
+Manual-session snapshots persist direct user instructions only. Assembled AI
+request text, exclusions, and supporting context must not populate the editable
+Instructions field after restart or Back. Versioned snapshots preserve literal
+user text; unversioned snapshots recover the user block and remove known generated
+context sections before assigning the field.
+
 The manual window becomes ready without waiting for history, Learnings, storage-location hydration, or automation folder access. Automation still waits for its history and Learnings state plus watched-folder and storage-location access. Sentry and PostHog start after the window session finishes its interactive setup. Provider authentication is not verified on launch: a persisted setup-repair state stays inline and non-modal, Provider Settings refreshes only the selected provider, and an explicit organize action verifies the cached repair state before touching files. `CodexCLIAuthManager` constructs without spawning a subprocess, reading Keychain credentials, or making a network request.
 
 Settings credential hydration uses detached Keychain reads on a cache miss and

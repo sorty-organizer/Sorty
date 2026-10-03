@@ -20,7 +20,7 @@ struct PreviewListView: View {
     var onExitPreview: (() -> Void)? = nil
     
     enum EmptyStateType {
-        case allUnorganized(count: Int, reasons: [UnorganizedFile])
+        case allUnorganized(Int)  // Int is the file count
         case emptyDirectory
         case none
         
@@ -71,7 +71,7 @@ struct PreviewListView: View {
                 ]
             )
             
-        case .allUnorganized(let count, let reasons):
+        case .allUnorganized(let count):
             EmptyPreviewState(
                 icon: "questionmark.folder",
                 iconColor: .orange,
@@ -90,8 +90,7 @@ struct PreviewListView: View {
                         accessibilityID: "PreviewEmptyStateRegenerate",
                         action: { onRegenerate?() }
                     )
-                ],
-                details: reasons
+                ]
             )
             
         case .none:
@@ -109,10 +108,6 @@ struct EmptyPreviewState: View {
     let title: String
     let message: String
     var actions: [EmptyAction] = []
-    /// Per-file unorganized reasons ("filename: reason"). Shown capped with
-    /// an overflow count so an all-unorganized plan explains itself.
-    var details: [UnorganizedFile] = []
-    private static let maxShownDetails = 6
     
     @State private var isHovered = false
     
@@ -133,33 +128,6 @@ struct EmptyPreviewState: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 400)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if !details.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(details.prefix(Self.maxShownDetails).enumerated()), id: \.offset) { _, detail in
-                        HStack(alignment: .top, spacing: 6) {
-                            Text(detail.filename)
-                                .fontWeight(.medium)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Text(detail.reason)
-                                .lineLimit(2)
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if details.count > Self.maxShownDetails {
-                        Text("…and \(details.count - Self.maxShownDetails) more")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .frame(maxWidth: 420)
-                .padding(10)
-                .systemLiquidGlassBackground(cornerRadius: 8, interactive: false)
-                .accessibilityIdentifier("PreviewUnorganizedReasons")
             }
             
             if !actions.isEmpty {
@@ -243,10 +211,7 @@ struct EmptyAction: Identifiable {
         store: PreviewStore(plan: OrganizationPlan()),
         dragDropManager: DragDropManager(),
         onPlanChanged: {},
-        emptyStateType: .allUnorganized(count: 12, reasons: [
-            UnorganizedFile(filename: "random.tmp", reason: "Temporary file — unclear purpose"),
-            UnorganizedFile(filename: "notes.bak", reason: "Backup copy of an organized file"),
-        ])
+        emptyStateType: .allUnorganized(12)
     )
     .frame(width: 800, height: 400)
 }

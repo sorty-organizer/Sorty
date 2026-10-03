@@ -49,7 +49,7 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
     public var qualityAssessment: PlanQualityAssessment?
     public var learningToolCall: LearningToolCall?
     /// True when the AI response omitted, garbled, or hallucinated mappings.
-    /// UI should surface a retry hint instead of presenting the plan as fully valid.
+    /// Retained as parser diagnostics; the preview does not show a warning banner.
     public var isPartial: Bool
     public var needsReview: Bool
     public var parseWarnings: [String]
@@ -166,25 +166,8 @@ public struct PlanQualityAssessment: Codable, Hashable, Sendable {
 
     public var passes: Bool { score >= Self.passingScore }
     public var uncertainFileIDs: Set<UUID> {
-        // Quarantine placements flagged for structural quality after a failed
-        // retry, not just disguised `unorganized` buckets. Meta issues are
-        // excluded: excessiveUnorganized files are already unorganized,
-        // missingExplanation is not placement uncertainty, and oversizedFolder
-        // needs splitting rather than stranding 50+ files as unorganized.
         Set(issues
-            .filter {
-                guard $0.deduction > 0 else { return false }
-                switch $0.kind {
-                case .unorganizedFolderDestination,
-                    .vagueOrSingleFileFolder,
-                    .invalidFolderName,
-                    .duplicateFolderNames,
-                    .existingConventionMismatch:
-                    return true
-                case .excessiveUnorganizedFiles, .missingExplanation, .oversizedFolder, .mixedFileTypes, .unnecessaryNesting:
-                    return false
-                }
-            }
+            .filter { $0.kind == .unorganizedFolderDestination }
             .flatMap(\.fileIDs))
     }
 }
@@ -199,6 +182,7 @@ public struct PlanQualityIssue: Codable, Hashable, Sendable, Identifiable {
         case unnecessaryNesting
         case existingConventionMismatch
         case missingExplanation
+        // Decode quality issues in history written before the quality gates were removed.
         case invalidFolderName
         case oversizedFolder
     }

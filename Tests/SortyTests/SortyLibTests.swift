@@ -19,7 +19,6 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     var indexedAnalyzeHandler: (([FileItem], Int) async throws -> OrganizationPlan)?
     private(set) var analyzedBatchSizes: [Int] = []
     private(set) var analyzedInstructions: [String?] = []
-    var textHandler: (@Sendable (String) async throws -> String)?
     @MainActor weak var streamingDelegate: StreamingDelegate?
 
     init(config: AIConfig) {
@@ -55,12 +54,7 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     }
 
     func generateText(prompt: String, systemPrompt: String?) async throws -> String {
-        if let textHandler { return try await textHandler(prompt) }
         return "Mock response"
-    }
-
-    func setTextHandler(_ handler: @escaping @Sendable (String) async throws -> String) {
-        textHandler = handler
     }
     
     func checkHealth() async throws {
@@ -148,35 +142,6 @@ class SortyTests: XCTestCase {
     }
 
     @MainActor
-    func testLowQualityPlanRetriesOnceWithConcreteDeficiencies() async throws {
-        for name in ["one.pdf", "two.jpg", "three.mov", "four.csv", "five.txt"] {
-            try Data().write(to: tempDirectory.appendingPathComponent(name))
-        }
-        folderOrganizer.setAIClientForTesting(mockClient)
-        await mockClient.setIndexedHandler { files, requestIndex in
-            if requestIndex == 1 {
-                return OrganizationPlan(suggestions: [
-                    FolderSuggestion(folderName: "Misc", files: Array(files.prefix(4))),
-                    FolderSuggestion(folderName: "Other", files: Array(files.suffix(1)))
-                ])
-            }
-            return OrganizationPlan(suggestions: [
-                FolderSuggestion(folderName: "Reference Material", files: files)
-            ])
-        }
-
-        try await folderOrganizer.organize(directory: tempDirectory)
-
-        let instructions = await mockClient.currentAnalyzedInstructions()
-        XCTAssertEqual(instructions.count, 2)
-        XCTAssertTrue(instructions[1]?.contains("PLAN QUALITY CORRECTION") == true)
-        XCTAssertTrue(instructions[1]?.contains("\"Misc\"") == true)
-        XCTAssertTrue(instructions[1]?.contains("vague name") == true)
-        XCTAssertEqual(folderOrganizer.currentPlan?.qualityAssessment?.didRetry, true)
-        XCTAssertEqual(folderOrganizer.currentPlan?.suggestions.map(\.folderName), ["Reference Material"])
-    }
-
-    @MainActor
     func testLargeOrganizeFlowUsesBoundedAIBatches() async throws {
         for index in 0..<351 {
             let fileURL = tempDirectory.appendingPathComponent("file-\(index).txt")
@@ -186,13 +151,6 @@ class SortyTests: XCTestCase {
         folderOrganizer.setAIClientForTesting(mockClient)
         let batchClient: MockAIClient = mockClient
         folderOrganizer.setBatchClientFactoryForTesting { _, _ in batchClient }
-        await mockClient.setTextHandler { prompt in
-            if prompt.hasPrefix("Plan reusable destinations") {
-                return #"{"destinations":[{"path":"Documents","purpose":"Project reference documents","examples":["file-0.txt"]}]}"#
-            }
-            let decisions = (1...40).map { #"{"file_id":\#($0),"verdict":"keep","reason":"Matches project reference purpose"}"# }
-            return "{\"decisions\":[" + decisions.joined(separator: ",") + "]}"
-        }
         await mockClient.setHandler { files in
             OrganizationPlan(
                 suggestions: [
@@ -207,36 +165,6 @@ class SortyTests: XCTestCase {
         XCTAssertEqual(batchSizes, [350, 1])
         XCTAssertEqual(folderOrganizer.currentPlan?.totalFiles, 351)
         XCTAssertEqual(folderOrganizer.currentPlan?.suggestions.count, 1)
-        let instructions = await mockClient.currentAnalyzedInstructions()
-        XCTAssertTrue(instructions.allSatisfy { $0?.contains("Project reference documents") == true })
-        XCTAssertFalse(folderOrganizer.currentPlan?.needsReview ?? true)
-    }
-
-    @MainActor
-    func testSemanticReviewRepairsOnlyContradictedPlacement() async throws {
-        try Data("Acme invoice for consulting services".utf8).write(to: tempDirectory.appendingPathComponent("scan001.txt"))
-        try Data("Approved budget".utf8).write(to: tempDirectory.appendingPathComponent("budget.txt"))
-        folderOrganizer.setAIClientForTesting(mockClient)
-        await mockClient.setTextHandler { _ in
-            #"{"decisions":[{"file_id":1,"verdict":"keep","reason":"Budget belongs in Budgets"},{"file_id":2,"verdict":"repair","reason":"Invoice content contradicts Travel"}]}"#
-        }
-        await mockClient.setIndexedHandler { files, call in
-            if call == 1 {
-                return OrganizationPlan(suggestions: [
-                    FolderSuggestion(folderName: "Budgets", files: files.filter { $0.name == "budget" }, reasoning: "Approved budget"),
-                    FolderSuggestion(folderName: "Travel", files: files.filter { $0.name == "scan001" }, reasoning: "Travel receipts"),
-                ])
-            }
-            return OrganizationPlan(suggestions: [FolderSuggestion(folderName: "Invoices", files: files, reasoning: "Consulting invoice")])
-        }
-        try await folderOrganizer.organize(directory: tempDirectory)
-        let plan = try XCTUnwrap(folderOrganizer.currentPlan)
-        XCTAssertEqual(plan.totalFiles, 2)
-        XCTAssertEqual(plan.suggestions.first { $0.folderName == "Budgets" }?.files.map(\.name), ["budget"])
-        XCTAssertEqual(plan.suggestions.first { $0.folderName == "Invoices" }?.files.map(\.name), ["scan001"])
-        XCTAssertFalse(plan.suggestions.contains { $0.folderName == "Travel" })
-        let sizes = await mockClient.currentAnalyzedBatchSizes()
-        XCTAssertEqual(sizes, [2, 1])
     }
 
     @MainActor
@@ -562,313 +490,6 @@ private actor ResumeTimeoutTracker {
             suggestions: [
                 FolderSuggestion(folderName: "", files: files)
             ]
-        )
-    }
-}
-
-final class PlanQualityEvaluatorTests: XCTestCase {
-    func testScoresNamedStructuralDeficiencies() {
-        let files = [
-            file("a.pdf"), file("b.jpg"), file("c.mov"), file("d.csv")
-        ]
-        let plan = OrganizationPlan(suggestions: [
-            FolderSuggestion(folderName: "Misc", files: files),
-            FolderSuggestion(folderName: "Miscs", files: [file("e.txt")])
-        ])
-
-        let assessment = PlanQualityEvaluator.assess(
-            plan,
-            existingFolderPaths: ["Archive/Miscellaneous"]
-        )
-
-        XCTAssertFalse(assessment.passes)
-        XCTAssertTrue(assessment.issues.contains { $0.kind == .duplicateFolderNames })
-        XCTAssertTrue(assessment.issues.contains { $0.kind == .vagueOrSingleFileFolder })
-        XCTAssertTrue(assessment.issues.contains { $0.kind == .mixedFileTypes })
-    }
-
-    func testFlagsUnnecessaryNestingAndExistingConventionMismatch() {
-        let report = file("report.pdf")
-        let plan = OrganizationPlan(suggestions: [
-            FolderSuggestion(
-                folderName: "Projects",
-                subfolders: [
-                    FolderSuggestion(
-                        folderName: "Invoices",
-                        subfolders: [FolderSuggestion(folderName: "Reportz", files: [report])]
-                    )
-                ]
-            )
-        ])
-
-        let assessment = PlanQualityEvaluator.assess(
-            plan,
-            existingFolderPaths: ["Projects/Invoices/Reports"]
-        )
-
-        XCTAssertTrue(assessment.issues.contains { $0.kind == .unnecessaryNesting })
-        XCTAssertTrue(assessment.issues.contains { $0.kind == .existingConventionMismatch })
-    }
-
-    func testFlagsFolderWithoutConcreteReviewExplanation() {
-        let plan = OrganizationPlan(suggestions: [
-            FolderSuggestion(folderName: "Invoices", files: [file("may.pdf"), file("june.pdf")])
-        ])
-
-        let assessment = PlanQualityEvaluator.assess(plan, existingFolderPaths: [])
-
-        XCTAssertTrue(assessment.issues.contains { $0.kind == .missingExplanation })
-        XCTAssertTrue(PlanQualityEvaluator.retryInstructions(for: assessment).contains("shared subject"))
-    }
-
-    func testExcessiveUnorganizedFilesTriggerQualityRetry() {
-        let assigned = (1...10).map { file("assigned-\($0).txt") }
-        let unorganized = (1...5).map { file("unorganized-\($0).zip") }
-        let plan = OrganizationPlan(
-            suggestions: [FolderSuggestion(folderName: "Documents", files: assigned, reasoning: "Shared documents")],
-            unorganizedFiles: unorganized
-        )
-
-        let assessment = PlanQualityEvaluator.assess(plan, existingFolderPaths: [])
-
-        XCTAssertFalse(assessment.passes)
-        XCTAssertTrue(assessment.issues.contains { $0.kind == .excessiveUnorganizedFiles })
-        XCTAssertTrue(PlanQualityEvaluator.retryInstructions(for: assessment).contains("Ambiguity or a standalone role is not enough"))
-    }
-
-    func testUnorganizedFilesFolderTriggersQualityRetry() {
-        let files = (1...6).map { file("download-\($0).bin") }
-        let plan = OrganizationPlan(suggestions: [
-            FolderSuggestion(
-                folderName: "Unorganized Files",
-                files: files,
-                reasoning: "Files without a clearer destination"
-            )
-        ])
-
-        let assessment = PlanQualityEvaluator.assess(plan, existingFolderPaths: [])
-
-        XCTAssertFalse(assessment.passes)
-        XCTAssertTrue(assessment.issues.contains { $0.kind == .unorganizedFolderDestination })
-        XCTAssertEqual(assessment.uncertainFileIDs, Set(files.map(\.id)))
-        XCTAssertTrue(PlanQualityEvaluator.retryInstructions(for: assessment).contains("disguised unorganized bucket"))
-    }
-
-    func testLowScoreKeepsStructuralWarningsAndDemotesOnlyFallbackFolderFiles() {
-        let certain = file("statement.pdf")
-        let uncertain = file("download.bin")
-        let plan = OrganizationPlan(suggestions: [
-            FolderSuggestion(folderName: "Bank Statements", files: [certain, file("statement-2.pdf")]),
-            FolderSuggestion(folderName: "Unorganized", files: [uncertain])
-        ])
-        let assessment = PlanQualityAssessment(
-            score: 60,
-            issues: [
-                PlanQualityIssue(
-                    kind: .unorganizedFolderDestination,
-                    message: "Unorganized is a fallback folder.",
-                    folderPaths: ["Unorganized"],
-                    fileIDs: [uncertain.id],
-                    deduction: 40
-                ),
-                PlanQualityIssue(
-                    kind: .mixedFileTypes,
-                    message: "Bank Statements contains several file types.",
-                    folderPaths: ["Bank Statements"],
-                    fileIDs: [certain.id],
-                    deduction: 10
-                )
-            ],
-            didRetry: true
-        )
-
-        let reviewed = PlanQualityEvaluator.keepingCertainItems(in: plan, assessment: assessment)
-
-        XCTAssertEqual(reviewed.suggestions.map(\.folderName), ["Bank Statements"])
-        XCTAssertEqual(Set(reviewed.unorganizedFiles.map(\.id)), Set([uncertain.id]))
-        XCTAssertEqual(reviewed.qualityAssessment?.didRetry, true)
-    }
-
-    func testFlagsMegaFolderWithoutSubfolders() {
-        let files = (1...55).map { file("archive-\($0).pdf") }
-        let plan = OrganizationPlan(suggestions: [
-            FolderSuggestion(
-                folderName: "Project Archives",
-                files: files,
-                reasoning: "Shared project history"
-            )
-        ])
-
-        let assessment = PlanQualityEvaluator.assess(plan, existingFolderPaths: [])
-
-        let oversized = assessment.issues.filter { $0.kind == .oversizedFolder }
-        XCTAssertEqual(oversized.count, 1)
-        XCTAssertEqual(oversized.first?.deduction, 0)
-        XCTAssertEqual(oversized.first?.folderPaths, ["Project Archives"])
-        XCTAssertTrue(PlanQualityEvaluator.retryInstructions(for: assessment).isEmpty)
-        // Mega-folders need splitting, not quarantine: the files stay placed.
-        XCTAssertTrue(assessment.uncertainFileIDs.isDisjoint(with: Set(files.map(\.id))))
-    }
-
-    func testMegaFolderThresholdAllowsFiftyFiles() {
-        let files = (1...50).map { file("archive-\($0).pdf") }
-        let plan = OrganizationPlan(suggestions: [
-            FolderSuggestion(
-                folderName: "Project Archives",
-                files: files,
-                reasoning: "Shared project history"
-            )
-        ])
-
-        let assessment = PlanQualityEvaluator.assess(plan, existingFolderPaths: [])
-
-        XCTAssertFalse(assessment.issues.contains { $0.kind == .oversizedFolder })
-    }
-
-    func testFlagsNestingBeyondThreeLevelsWithoutDuplicatingIssues() {
-        let leafFiles = [file("a.pdf"), file("b.pdf")]
-        let plan = OrganizationPlan(suggestions: [
-            FolderSuggestion(
-                folderName: "Projects",
-                subfolders: [FolderSuggestion(
-                    folderName: "Invoices",
-                    subfolders: [FolderSuggestion(
-                        folderName: "Receipts",
-                        subfolders: [FolderSuggestion(
-                            folderName: "Scans",
-                            files: leafFiles,
-                            reasoning: "Deepest"
-                        )],
-                        reasoning: "Third"
-                    )],
-                    reasoning: "Second"
-                )],
-                reasoning: "Top"
-            )
-        ])
-
-        let assessment = PlanQualityEvaluator.assess(plan, existingFolderPaths: [])
-        let deep = assessment.issues.filter {
-            $0.kind == .unnecessaryNesting && $0.folderPaths == ["Projects/Invoices/Receipts/Scans"]
-        }
-
-        XCTAssertEqual(deep.count, 1)
-        XCTAssertEqual(deep.first?.deduction, 0)
-        XCTAssertTrue(deep.first?.message.contains("4 levels deep") == true)
-    }
-
-    private func file(_ name: String) -> FileItem {
-        let url = URL(fileURLWithPath: "/tmp").appendingPathComponent(name)
-        return FileItem(
-            path: url.path,
-            name: url.deletingPathExtension().lastPathComponent,
-            extension: url.pathExtension
-        )
-    }
-}
-
-final class FileOrganizationValidatorAccountingTests: XCTestCase {
-    func testExactAccountingPasses() throws {
-        let organized = [validatorFile("a.pdf"), validatorFile("b.pdf")]
-        let leftover = validatorFile("c.pdf")
-        let plan = OrganizationPlan(
-            suggestions: [
-                FolderSuggestion(folderName: "Docs", files: organized, reasoning: "Docs")
-            ],
-            unorganizedFiles: [leftover]
-        )
-
-        XCTAssertNoThrow(
-            try FileOrganizationValidator.validateFileAccounting(
-                plan,
-                expectedFiles: organized + [leftover]
-            )
-        )
-    }
-
-    func testMissingFileThrows() {
-        let present = validatorFile("a.pdf")
-        let absent = validatorFile("dropped.pdf")
-        let plan = OrganizationPlan(
-            suggestions: [FolderSuggestion(folderName: "Docs", files: [present], reasoning: "Docs")]
-        )
-
-        XCTAssertThrowsError(
-            try FileOrganizationValidator.validateFileAccounting(
-                plan,
-                expectedFiles: [present, absent]
-            )
-        ) { error in
-            guard case ValidationError.missingFiles(let names) = error else {
-                return XCTFail("Wrong error: \(error)")
-            }
-            XCTAssertTrue(names.joined(separator: " ").contains("dropped.pdf"))
-        }
-    }
-
-    func testDuplicatedFileThrows() {
-        let repeated = validatorFile("a.pdf")
-        let plan = OrganizationPlan(
-            suggestions: [
-                FolderSuggestion(folderName: "Docs", files: [repeated], reasoning: "Docs"),
-                FolderSuggestion(folderName: "More Docs", files: [repeated], reasoning: "Docs")
-            ]
-        )
-
-        XCTAssertThrowsError(
-            try FileOrganizationValidator.validateFileAccounting(
-                plan,
-                expectedFiles: [repeated]
-            )
-        ) { error in
-            guard case ValidationError.duplicatedFiles(let names) = error else {
-                return XCTFail("Wrong error: \(error)")
-            }
-            XCTAssertTrue(names.joined(separator: " ").contains("a.pdf"))
-        }
-    }
-
-    func testFileInFolderAndUnorganizedThrowsAsDuplicate() {
-        let repeated = validatorFile("a.pdf")
-        let plan = OrganizationPlan(
-            suggestions: [FolderSuggestion(folderName: "Docs", files: [repeated], reasoning: "Docs")],
-            unorganizedFiles: [repeated]
-        )
-
-        XCTAssertThrowsError(
-            try FileOrganizationValidator.validateFileAccounting(plan, expectedFiles: [repeated])
-        ) { error in
-            guard case ValidationError.duplicatedFiles = error else {
-                return XCTFail("Wrong error: \(error)")
-            }
-        }
-    }
-
-    func testUnexpectedFileThrows() {
-        let expected = validatorFile("a.pdf")
-        let hallucinated = validatorFile("ghost.pdf")
-        let plan = OrganizationPlan(
-            suggestions: [
-                FolderSuggestion(folderName: "Docs", files: [expected, hallucinated], reasoning: "Docs")
-            ]
-        )
-
-        XCTAssertThrowsError(
-            try FileOrganizationValidator.validateFileAccounting(plan, expectedFiles: [expected])
-        ) { error in
-            guard case ValidationError.unexpectedFiles(let names) = error else {
-                return XCTFail("Wrong error: \(error)")
-            }
-            XCTAssertTrue(names.joined(separator: " ").contains("ghost.pdf"))
-        }
-    }
-
-    private func validatorFile(_ name: String) -> FileItem {
-        let url = URL(fileURLWithPath: "/tmp").appendingPathComponent(name)
-        return FileItem(
-            path: url.path,
-            name: url.deletingPathExtension().lastPathComponent,
-            extension: url.pathExtension
         )
     }
 }

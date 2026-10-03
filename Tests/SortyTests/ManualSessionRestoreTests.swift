@@ -58,6 +58,62 @@ final class ManualSessionRestoreTests: XCTestCase {
         XCTAssertEqual(relaunched.customInstructions, "sort receipts")
     }
 
+    func testReadyRunRestoresOnlyDirectUserInstructions() async throws {
+        let organizer = makeOrganizer()
+        try Data("Receipt".utf8).write(to: tempDirectory.appendingPathComponent("receipt.txt"))
+        let config = AIConfig(provider: .openAI, apiKey: "test", model: "gpt-4o")
+        try await organizer.configure(with: config)
+        let client = MockAIClient(config: config)
+        await client.setHandler { files in
+            OrganizationPlan(suggestions: [FolderSuggestion(
+                folderName: "Receipts", files: files, reasoning: "Receipt records"
+            )])
+        }
+        organizer.setAIClientForTesting(client)
+        try await organizer.organize(directory: tempDirectory, customPrompt: "sort receipts")
+
+        let relaunched = makeOrganizer()
+        _ = await relaunched.restorePersistedManualSession()
+        XCTAssertEqual(relaunched.customInstructions, "sort receipts")
+        XCTAssertEqual(relaunched.state, .ready)
+        relaunched.reset()
+        XCTAssertEqual(relaunched.customInstructions, "sort receipts")
+    }
+
+    func testLegacyRequestSnapshotsRecoverUserTextWithoutGeneratedContext() async throws {
+        let exclusion = "IMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:"
+        let cases: [(String, String)] = [
+            ("<user_instructions>\nsort receipts\n</user_instructions>\n\n" + exclusion + "\n- private", "sort receipts"),
+            ("<user_instructions>\n<user_instructions>\nsort receipts\n</user_instructions>\n" + exclusion + "\n</user_instructions>", "sort receipts"),
+            ("<user_instructions>\n" + exclusion + "\n- private\n</user_instructions>", ""),
+            (exclusion + "\n- private", ""),
+            ("## SOURCE FOLDER CONTEXT\nInternal file inventory", ""),
+            ("## ORGANIZATION LOCATIONS\nApproved storage", ""),
+            ("DUPLICATE FILES DETECTED:\nInternal duplicate list", ""),
+            ("sort receipts", "sort receipts")
+        ]
+        for (leaked, expected) in cases {
+            let organizer = makeOrganizer()
+            organizer.persistManualSession(directory: tempDirectory, plan: makePlan(), stateHint: .ready, instructions: leaked)
+            var snapshot = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: sessionURL)) as? [String: Any])
+            snapshot.removeValue(forKey: "instructionsFormatVersion")
+            try JSONSerialization.data(withJSONObject: snapshot).write(to: sessionURL)
+
+            let relaunched = makeOrganizer()
+            _ = await relaunched.restorePersistedManualSession()
+            XCTAssertEqual(relaunched.customInstructions, expected)
+        }
+    }
+
+    func testVersionedSnapshotsPreserveLiteralPromptMarkers() async {
+        let instructions = "  Keep <user_instructions> as a filename.\n## SOURCE FOLDER CONTEXT is my folder name.  "
+        let organizer = makeOrganizer()
+        organizer.persistManualSession(directory: tempDirectory, plan: makePlan(), stateHint: .ready, instructions: instructions)
+        let relaunched = makeOrganizer()
+        _ = await relaunched.restorePersistedManualSession()
+        XCTAssertEqual(relaunched.customInstructions, instructions)
+    }
+
     func testInterruptedRestoresFolderWithoutPlanOrWork() async {
         let organizer = makeOrganizer()
         organizer.persistManualSession(
