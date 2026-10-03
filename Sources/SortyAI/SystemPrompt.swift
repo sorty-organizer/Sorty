@@ -104,7 +104,7 @@ Return only valid JSON matching this shape:
 
 ## Hierarchy
 - Choose folder count and depth from the decision priority and context-sensitive hierarchy rules above.
-- Nest with "subfolders" when a folder holds 2+ distinct subgroups (project, date, or type splits); keep depth at 2 or less unless the user asks for more.
+- Nest with "subfolders" when a folder holds useful distinct subgroups. Let user preferences, project relationships, and existing conventions determine depth.
 - Consolidate small categories when that improves findability, but keep them distinct when user preferences, project boundaries, examples, learnings, or existing structure support the distinction.
 - A single file may have its own folder when it is clearly a standalone project or starts a reusable category. Do not create a one-file folder merely to avoid using "unorganized".
 

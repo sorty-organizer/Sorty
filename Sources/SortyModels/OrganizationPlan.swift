@@ -173,16 +173,15 @@ public struct PlanQualityAssessment: Codable, Hashable, Sendable {
         // needs splitting rather than stranding 50+ files as unorganized.
         Set(issues
             .filter {
+                guard $0.deduction > 0 else { return false }
                 switch $0.kind {
                 case .unorganizedFolderDestination,
                     .vagueOrSingleFileFolder,
-                    .mixedFileTypes,
                     .invalidFolderName,
                     .duplicateFolderNames,
-                    .unnecessaryNesting,
                     .existingConventionMismatch:
                     return true
-                case .excessiveUnorganizedFiles, .missingExplanation, .oversizedFolder:
+                case .excessiveUnorganizedFiles, .missingExplanation, .oversizedFolder, .mixedFileTypes, .unnecessaryNesting:
                     return false
                 }
             }

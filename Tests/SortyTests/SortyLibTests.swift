@@ -612,10 +612,6 @@ final class PlanQualityEvaluatorTests: XCTestCase {
     }
 
     func testLowScoreKeepsStructuralWarningsAndDemotesOnlyFallbackFolderFiles() {
-        // NOTE: mixedFileTypes is quarantinable since the quarantine-all
-        // low-confidence-placements change, so keepingCertainItems demotes
-        // both the fallback-bucket file and the mixed-type file. Bank
-        // Statements survives on its remaining file (statement-2.pdf).
         let certain = file("statement.pdf")
         let uncertain = file("download.bin")
         let plan = OrganizationPlan(suggestions: [
@@ -646,7 +642,7 @@ final class PlanQualityEvaluatorTests: XCTestCase {
         let reviewed = PlanQualityEvaluator.keepingCertainItems(in: plan, assessment: assessment)
 
         XCTAssertEqual(reviewed.suggestions.map(\.folderName), ["Bank Statements"])
-        XCTAssertEqual(Set(reviewed.unorganizedFiles.map(\.id)), Set([certain.id, uncertain.id]))
+        XCTAssertEqual(Set(reviewed.unorganizedFiles.map(\.id)), Set([uncertain.id]))
         XCTAssertEqual(reviewed.qualityAssessment?.didRetry, true)
     }
 
@@ -664,9 +660,9 @@ final class PlanQualityEvaluatorTests: XCTestCase {
 
         let oversized = assessment.issues.filter { $0.kind == .oversizedFolder }
         XCTAssertEqual(oversized.count, 1)
-        XCTAssertEqual(oversized.first?.deduction, 10)
+        XCTAssertEqual(oversized.first?.deduction, 0)
         XCTAssertEqual(oversized.first?.folderPaths, ["Project Archives"])
-        XCTAssertTrue(PlanQualityEvaluator.retryInstructions(for: assessment).contains("Split it"))
+        XCTAssertTrue(PlanQualityEvaluator.retryInstructions(for: assessment).isEmpty)
         // Mega-folders need splitting, not quarantine: the files stay placed.
         XCTAssertTrue(assessment.uncertainFileIDs.isDisjoint(with: Set(files.map(\.id))))
     }
@@ -714,7 +710,7 @@ final class PlanQualityEvaluatorTests: XCTestCase {
         }
 
         XCTAssertEqual(deep.count, 1)
-        XCTAssertEqual(deep.first?.deduction, 14)
+        XCTAssertEqual(deep.first?.deduction, 0)
         XCTAssertTrue(deep.first?.message.contains("4 levels deep") == true)
     }
 

@@ -74,6 +74,7 @@ public enum RuleStatus: String, Codable, Sendable {
 
 public enum OrganizationSessionReaction: String, Codable, Sendable {
     case inProgress
+    case unreviewed
     case accepted
     case corrected
     case reverted

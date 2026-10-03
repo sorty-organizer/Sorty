@@ -935,30 +935,26 @@ public class ContinuousLearningObserver: ObservableObject {
             return
         }
 
-        if session.userCorrections.isEmpty {
-            session.reaction = .accepted
-            session.timeToReaction = Date().timeIntervalSince(session.timestamp)
-            session.events.append(
-                OrganizationSessionEvent(
-                    kind: .accepted,
-                    summary: "No post-organization corrections were detected during the correlation window"
-                )
-            )
-
-            for movedFile in session.filesMoved {
-                learningsManager.addPositiveExample(srcPath: movedFile.sourcePath, dstPath: movedFile.destinationPath)
-            }
-
-            for ruleId in session.usedRuleIds.subtracting(session.failedRuleIds) {
-                learningsManager.recordRuleSuccess(ruleId: ruleId)
-            }
+        // Monitoring silence does not establish that the user approved any placement.
+        // Use the persisted reaction because explicit history feedback can arrive
+        // while the observer still holds an older session snapshot.
+        if let persisted = learningsManager.currentProfile?.sessions.first(where: { $0.id == session.id }) {
+            session = persisted
+        }
+        if session.userCorrections.isEmpty, session.reaction == .inProgress {
+            session.reaction = .unreviewed
+            session.events.append(OrganizationSessionEvent(
+                kind: .feedback,
+                summary: "Monitoring ended without explicit placement feedback",
+                metadata: ["outcome": "unreviewed"]
+            ))
         }
 
         persistSessionUpdate(session)
 
-        // Generate an inline learning moment for accepted sessions.
+        // Ask about uncertain placements without treating silence as approval.
         // Keep the first pending moment and enforce max once per session.
-        if session.reaction == .accepted, pendingLearningMoment == nil {
+        if session.reaction == .unreviewed, pendingLearningMoment == nil {
             if let sessionId = session.id as String?,
                !sessionId.isEmpty, presentedLearningMomentSessionIDs.contains(sessionId) {
                 // Already asked for this session; do not re-prompt.

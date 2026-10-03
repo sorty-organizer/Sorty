@@ -68,7 +68,7 @@ final class ContinuousLearningObserverTests: XCTestCase {
         XCTAssertEqual(manager.currentProfile?.sessions.first?.reaction, .corrected)
     }
 
-    func testMonitoringWindowExpiryCreatesAcceptedSessionAndPositiveExamples() async throws {
+    func testMonitoringWindowExpiryDoesNotReinforceUnreviewedPlacements() async throws {
         let rule = InferredRule(
             id: "rule-invoices",
             pattern: ".*\\.pdf$",
@@ -92,12 +92,19 @@ final class ContinuousLearningObserverTests: XCTestCase {
         observer.handleMonitoringWindowExpired(for: "/Users/test")
 
         let session = try XCTUnwrap(manager.currentProfile?.sessions.first)
-        XCTAssertEqual(session.reaction, .accepted)
+        XCTAssertEqual(session.reaction.rawValue, "unreviewed")
         XCTAssertEqual(session.filesMoved.count, 1)
-        XCTAssertEqual(manager.currentProfile?.positiveExamples.count, 1)
-        XCTAssertEqual(manager.currentProfile?.positiveExamples.first?.dstPath, destinationPath)
-        XCTAssertEqual(manager.currentProfile?.inferredRules.first?.successCount, 1)
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.count, 0)
+        XCTAssertEqual(manager.currentProfile?.inferredRules.first?.successCount, 0)
         XCTAssertEqual(manager.currentProfile?.inferredRules.first?.failureCount, 0)
+
+        manager.recordSessionOutcomeFeedback(sessionId: "history-1", outcome: .useful)
+        manager.recordSessionOutcomeFeedback(sessionId: "history-1", outcome: .useful)
+        observer.handleMonitoringWindowExpired(for: "/Users/test")
+        XCTAssertEqual(manager.currentProfile?.sessions.first?.reaction, .accepted)
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.count, 1)
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.first?.metadata?["folder_scope"], "/Users/test")
+        XCTAssertEqual(manager.currentProfile?.inferredRules.first?.successCount, 1)
     }
 
     func testLearningExcludedRunNeverCreatesSession() {

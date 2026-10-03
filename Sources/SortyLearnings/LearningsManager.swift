@@ -1425,15 +1425,26 @@ public class LearningsManager: ObservableObject {
             resolvedSessionID = sessionId
         }
 
+        var approvedSession: OrganizationSession?
         mutateSession(in: &profile, sessionId: resolvedSessionID, folderPath: folderPath, createIfMissing: false) { session in
+            let alreadyReinforced = session.events.contains {
+                $0.kind == .feedback && $0.metadata?["placement_reinforced"] == "true"
+            }
+            let canReinforce = outcome == .useful && !alreadyReinforced
+                && !session.wasReverted && session.userCorrections.isEmpty
+                && session.completedAt != nil
+                && !session.events.contains { $0.kind == .feedback && $0.metadata?["outcome"] == "notUseful" }
+            if canReinforce { approvedSession = session }
             var metadata: [String: String]? {
-                guard let resolvedReason else { return ["outcome": outcome.rawValue] }
-                return ["outcome": outcome.rawValue, "reason": resolvedReason]
+                var values = ["outcome": outcome.rawValue]
+                if let resolvedReason { values["reason"] = resolvedReason }
+                if canReinforce { values["placement_reinforced"] = "true" }
+                return values
             }
             switch outcome {
             case .useful:
                 // Mark as accepted if not already corrected/reverted
-                if session.reaction == .inProgress {
+                if session.reaction == .inProgress || session.reaction == .unreviewed {
                     session.reaction = .accepted
                 }
                 session.events.append(
@@ -1475,10 +1486,30 @@ public class LearningsManager: ObservableObject {
             }
         }
 
+        if let approvedSession {
+            for moved in approvedSession.filesMoved where
+                !shouldExcludeLearning(paths: [moved.sourcePath, moved.destinationPath]) {
+                guard !profile.positiveExamples.contains(where: {
+                    $0.srcPath == moved.sourcePath && $0.dstPath == moved.destinationPath
+                }) else { continue }
+                profile.positiveExamples.append(LabeledExample(
+                    srcPath: moved.sourcePath,
+                    dstPath: moved.destinationPath,
+                    metadata: ["folder_scope": approvedSession.folderPath, "session_id": approvedSession.id],
+                    action: .accept
+                ))
+            }
+            profile.positiveExamples = Array(profile.positiveExamples.suffix(Self.maxLabeledExamplesPerList))
+            let approvedRules = approvedSession.usedRuleIds.subtracting(approvedSession.failedRuleIds)
+            for index in profile.inferredRules.indices where approvedRules.contains(profile.inferredRules[index].id) {
+                profile.inferredRules[index].successCount += 1
+                profile.inferredRules[index].lastAppliedAt = Date()
+            }
+        }
         currentProfile = profile
         debouncedSave()
     }
-    
+
     /// Get the count of active rules applicable to a specific folder
     public func activeRuleCount(forFolder folderPath: String) -> Int {
         guard let profile = currentProfile else { return 0 }
@@ -2458,6 +2489,8 @@ public class LearningsManager: ObservableObject {
             return "\(date): Cancelled run in \(folderName). The proposed structure was not accepted."
         case .regenerated:
             return "\(date): Regenerated run in \(folderName). The first plan needed a second attempt."
+        case .unreviewed:
+            return "\(date): Run in \(folderName) has no explicit feedback. Do not infer placement preferences from it."
         case .inProgress:
             return "\(date): Recent run in \(folderName) is still collecting feedback."
         }

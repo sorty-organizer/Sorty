@@ -502,7 +502,7 @@ public struct PlanQualityEvaluator {
     }
 
     public static func retryInstructions(for assessment: PlanQualityAssessment) -> String {
-        assessment.issues.enumerated().map { index, issue in
+        assessment.issues.filter { $0.deduction > 0 }.enumerated().map { index, issue in
             "\(index + 1). \(issue.message)"
         }.joined(separator: "\n")
     }
@@ -585,10 +585,10 @@ public struct PlanQualityEvaluator {
             let problem = vague && singleFile ? "a vague name and only one file" : vague ? "a vague name" : "only one file"
             return PlanQualityIssue(
                 kind: .vagueOrSingleFileFolder,
-                message: "Folder \"\(folder.path)\" has \(problem). Use a specific reusable category, merge it, or leave the file in place.",
+                message: "Folder \"\(folder.path)\" has \(problem). Check whether its name and scope help retrieval. A standalone project or reusable category may contain one file.",
                 folderPaths: [folder.path],
                 fileIDs: folder.files.map(\.id),
-                deduction: vague ? 14 : 7
+                deduction: vague ? 14 : 0
             )
         }
     }
@@ -606,10 +606,10 @@ public struct PlanQualityEvaluator {
             let scope = folder.depth <= 1 ? "Top-level folder" : "Folder"
             return PlanQualityIssue(
                 kind: .mixedFileTypes,
-                message: "\(scope) \"\(folder.path)\" mixes incompatible file types: \(families.sorted().joined(separator: ", ")). Split it by purpose or leave ambiguous files unchanged.",
+                message: "\(scope) \"\(folder.path)\" contains several file types: \(families.sorted().joined(separator: ", ")). Keep them together when they share a project or purpose; file types alone do not establish a problem.",
                 folderPaths: [folder.path],
                 fileIDs: folder.files.map(\.id),
-                deduction: 14
+                deduction: 0
             )
         }
     }
@@ -622,25 +622,23 @@ public struct PlanQualityEvaluator {
             if deepNesting {
                 return PlanQualityIssue(
                     kind: .unnecessaryNesting,
-                    message: "Folder \"\(folder.path)\" sits \(folder.depth) levels deep. Flatten this branch to at most 3 levels unless the existing structure requires it.",
+                    message: "Folder \"\(folder.path)\" sits \(folder.depth) levels deep. Keep this depth when user preferences, project boundaries, or the existing structure support it.",
                     folderPaths: [folder.path],
                     fileIDs: folder.files.map(\.id),
-                    deduction: 14
+                    deduction: 0
                 )
             }
             return PlanQualityIssue(
                 kind: .unnecessaryNesting,
-                message: "Folder \"\(folder.path)\" adds a level without improving retrieval. Flatten this branch unless the existing structure requires it.",
+                message: "Folder \"\(folder.path)\" adds a level. Keep it when user preferences or meaningful distinctions support it.",
                 folderPaths: [folder.path],
                 fileIDs: folder.files.map(\.id),
-                deduction: 10
+                deduction: 0
             )
         }
     }
 
-    /// Flat folders holding more than `megaFolderFileThreshold` files with no
-    /// subfolders are unretrievable buckets. Flagged for splitting on retry,
-    /// not quarantine: stranding 50+ files as unorganized is worse.
+    /// Large flat folders warrant review, but a coherent archive may stay flat.
     private static let megaFolderFileThreshold = 50
 
     private static func megaFolderIssues(in folders: [FolderRecord]) -> [PlanQualityIssue] {
@@ -649,10 +647,10 @@ public struct PlanQualityEvaluator {
                   folder.suggestion.subfolders.isEmpty else { return nil }
             return PlanQualityIssue(
                 kind: .oversizedFolder,
-                message: "Folder \"\(folder.path)\" holds \(folder.suggestion.files.count) files with no subfolders. Split it into focused subfolders by purpose, project, or date so files stay retrievable.",
+                message: "Folder \"\(folder.path)\" holds \(folder.suggestion.files.count) files with no subfolders. Consider subfolders only when the contents have useful distinctions; a coherent archive may remain flat.",
                 folderPaths: [folder.path],
                 fileIDs: folder.files.map(\.id),
-                deduction: 10
+                deduction: 0
             )
         }
     }

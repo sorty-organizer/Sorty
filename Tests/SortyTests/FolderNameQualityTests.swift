@@ -7,6 +7,20 @@ import SortyModels
 /// depth-scaled mixed-type detection, small-batch unorganized thresholds,
 /// and folder-component sanitization flags.
 final class FolderNameQualityTests: XCTestCase {
+    func testProjectShapeWarningsDoNotRejectCoherentPlacements() {
+        let projectFiles = [file("proposal.pdf"), file("budget.xlsx"), file("mockup.png"), file("demo.mov")]
+        let invoices = (1...60).map { file("invoice-\($0).pdf") }
+        let plan = OrganizationPlan(suggestions: [
+            folder("Client Proposal", files: projectFiles),
+            folder("Invoices", files: invoices),
+            folder("New Research Project", files: [file("research.pdf")]),
+        ])
+        let assessment = PlanQualityEvaluator.assess(plan, existingFolderPaths: [])
+        XCTAssertEqual(assessment.score, 100)
+        XCTAssertTrue(assessment.uncertainFileIDs.isEmpty)
+        XCTAssertTrue(PlanQualityEvaluator.retryInstructions(for: assessment).isEmpty)
+    }
+
     func testFlagsExpandedVagueTokensCaseInsensitively() {
         // Each name is assessed alone so duplicate-name detection cannot
         // contaminate the result ("sorted" vs "unsorted" are near-duplicates).
