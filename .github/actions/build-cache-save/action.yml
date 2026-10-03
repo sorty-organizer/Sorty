@@ -7,6 +7,9 @@ inputs:
   build-key:
     required: true
     description: Immutable snapshot key from restore
+  build-hit:
+    required: true
+    description: Whether completed outputs matched exactly
   dependency-key:
     required: true
     description: Dependency key from restore
@@ -16,6 +19,9 @@ inputs:
   compilation-key:
     required: true
     description: Xcode compilation store key from restore
+  compilation-hit:
+    required: false
+    description: Whether completed compilation results matched exactly
   compile-outcome:
     required: true
     description: Whether compilation succeeded, to avoid freezing incomplete downloads
@@ -38,6 +44,7 @@ runs:
         key: ${{ inputs.dependency-key }}
 
     - name: Save incremental compiler outputs
+      if: inputs.build-hit != 'true' || inputs.compile-outcome != 'success'
       uses: actions/cache/save@v6
       with:
         path: |
@@ -53,11 +60,11 @@ runs:
           !.build/**/*.log
           !.build/.lock
           !.build/.sorty-cache/cold
-        key: ${{ inputs.build-key }}
+        key: ${{ inputs.compile-outcome == 'success' && inputs.build-key || format('{0}-partial-{1}-{2}', inputs.build-key, github.run_id, github.run_attempt) }}
 
     - name: Save Xcode compilation results
-      if: inputs.kind == 'xcode-release'
+      if: inputs.kind == 'xcode-release' && (inputs.compilation-hit != 'true' || inputs.compile-outcome != 'success')
       uses: actions/cache/save@v6
       with:
         path: .build/CompilationCache.noindex
-        key: ${{ inputs.compilation-key }}
+        key: ${{ inputs.compile-outcome == 'success' && inputs.compilation-key || format('{0}-partial-{1}-{2}', inputs.compilation-key, github.run_id, github.run_attempt) }}

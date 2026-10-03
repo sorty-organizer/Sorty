@@ -168,9 +168,11 @@ jobs:
         with:
           kind: spm-tests
           build-key: ${{ steps.build-cache.outputs.build-key }}
+          build-hit: ${{ steps.build-cache.outputs.build-hit }}
           dependency-key: ${{ steps.build-cache.outputs.dependency-key }}
           dependency-hit: ${{ steps.build-cache.outputs.dependency-hit }}
           compilation-key: ${{ steps.build-cache.outputs.compilation-key }}
+          compilation-hit: ${{ steps.build-cache.outputs.compilation-hit }}
           compile-outcome: ${{ steps.compile.outcome }}
 
       - name: Run Unit Tests
@@ -251,9 +253,11 @@ jobs:
         with:
           kind: xcode-release
           build-key: ${{ steps.build-cache.outputs.build-key }}
+          build-hit: ${{ steps.build-cache.outputs.build-hit }}
           dependency-key: ${{ steps.build-cache.outputs.dependency-key }}
           dependency-hit: ${{ steps.build-cache.outputs.dependency-hit }}
           compilation-key: ${{ steps.build-cache.outputs.compilation-key }}
+          compilation-hit: ${{ steps.build-cache.outputs.compilation-hit }}
           compile-outcome: ${{ steps.compile.outcome }}
 
       - name: Upload failed build diagnostics

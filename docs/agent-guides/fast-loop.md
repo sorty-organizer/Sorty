@@ -196,11 +196,12 @@ identify a hotspot. Moving code to another file alone does not prove faster buil
 
 Hosted caches separate dependency downloads, incremental outputs, and Xcode's
 compilation result store. Dependencies use manifest/lockfile keys and are saved
-only after successful compilation. Output snapshots include the toolchain,
-workspace path, commit, run ID, and retry attempt. Restore prefers the same
+only after successful compilation. Completed output snapshots include the toolchain, workspace path, and commit.
+Exact completed hits skip uploads. Failed compilation saves a separate partial
+snapshot with the run ID and retry attempt. Restore prefers the same
 commit, then the same dependencies, then the latest compatible toolchain.
-A retry can save repaired or more complete outputs without colliding with an
-immutable earlier snapshot. Existing v6 archives seed the new layers on the
+A retry can restore partial work and then save a completed snapshot, so failed
+builds never occupy the immutable completed key. Existing v6 archives seed the new layers on the
 first run, avoiding a forced cold rebuild.
 
 Swift CI and release unit tests share the `spm-tests` namespace; universal

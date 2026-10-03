@@ -85,6 +85,7 @@ jobs:
           SORTY_BUILD_DIR="$GITHUB_WORKSPACE/.build" SORTY_VERBOSE=true ./scripts/swift_retry.sh ci_tests swift test -debug-info-format none -Xswiftc -gline-tables-only -Xcc -gline-tables-only -Xswiftc -module-cache-path -Xswiftc "$GITHUB_WORKSPACE/.build/ModuleCache" -Xcc "-fmodules-cache-path=$GITHUB_WORKSPACE/.build/ModuleCache" --disable-index-store --disable-sandbox -j "$CORES" --list-tests | tee test_inventory.log
 
       - name: Build app via script
+        id: app
         if: ${{ !cancelled() && steps.compile.outcome == 'success' }}
         env:
           SORTY_BUILD_DIR: ${{ github.workspace }}/.build
@@ -107,10 +108,12 @@ jobs:
         with:
           kind: spm-tests
           build-key: ${{ steps.build-cache.outputs.build-key }}
+          build-hit: ${{ steps.build-cache.outputs.build-hit }}
           dependency-key: ${{ steps.build-cache.outputs.dependency-key }}
           dependency-hit: ${{ steps.build-cache.outputs.dependency-hit }}
           compilation-key: ${{ steps.build-cache.outputs.compilation-key }}
-          compile-outcome: ${{ steps.compile.outcome }}
+          compilation-hit: ${{ steps.build-cache.outputs.compilation-hit }}
+          compile-outcome: ${{ steps.app.outcome == 'failure' && 'failure' || steps.compile.outcome }}
 
       - name: Run tests (SPM)
         run: |

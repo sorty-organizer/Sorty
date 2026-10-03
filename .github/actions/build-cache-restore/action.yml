@@ -11,6 +11,9 @@ outputs:
   build-key:
     description: Cache build-key
     value: ${{ steps.keys.outputs.build }}
+  build-hit:
+    description: Whether a completed output snapshot matched exactly
+    value: ${{ steps.products.outputs.cache-hit }}
   dependency-key:
     description: Cache dependency-key
     value: ${{ steps.keys.outputs.dependencies }}
@@ -20,6 +23,9 @@ outputs:
   compilation-key:
     description: Cache compilation-key
     value: ${{ steps.keys.outputs.compilation }}
+  compilation-hit:
+    description: Whether a completed compilation store matched exactly
+    value: ${{ steps.compilation.outputs.cache-hit }}
 runs:
   using: composite
   steps:
@@ -38,8 +44,9 @@ runs:
         echo "dependency-hash=$DEPENDENCIES" >> "$GITHUB_OUTPUT"
         echo "prefix=$BASE" >> "$GITHUB_OUTPUT"
         echo "dependencies=$BASE-deps-$DEPENDENCIES" >> "$GITHUB_OUTPUT"
-        echo "build=$BASE-outputs-$DEPENDENCIES-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
-        echo "compilation=$BASE-cas-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+        # Test-only snapshots must not freeze the app+tests snapshot for a SHA.
+        echo "build=$BASE-outputs-$DEPENDENCIES-$GITHUB_SHA-$GITHUB_JOB" >> "$GITHUB_OUTPUT"
+        echo "compilation=$BASE-cas-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
     - name: Restore dependency downloads
       id: dependencies
@@ -73,6 +80,7 @@ runs:
           !.build/.sorty-cache/cold
         key: ${{ steps.keys.outputs.build }}
         restore-keys: |
+          ${{ steps.keys.outputs.prefix }}-outputs-${{ steps.keys.outputs.dependency-hash }}-${{ github.sha }}-${{ github.job }}-
           ${{ steps.keys.outputs.prefix }}-outputs-${{ steps.keys.outputs.dependency-hash }}-${{ github.sha }}-
           ${{ steps.keys.outputs.prefix }}-outputs-${{ steps.keys.outputs.dependency-hash }}-
           ${{ steps.keys.outputs.prefix }}-outputs-
@@ -95,6 +103,7 @@ runs:
           ${{ runner.os }}-${{ runner.arch }}-${{ inputs.kind }}-v6-${{ inputs.toolchain }}-
 
     - name: Restore Xcode compilation results
+      id: compilation
       if: inputs.kind == 'xcode-release'
       uses: actions/cache/restore@v6
       with:
