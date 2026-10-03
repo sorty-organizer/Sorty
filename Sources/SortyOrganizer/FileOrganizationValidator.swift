@@ -204,6 +204,68 @@ struct FileOrganizationValidator {
             try checkExists(url: url, displayPath: file.path)
         }
     }
+
+    /// Every scanned file must appear exactly once across suggestions and
+    /// unorganized files. Catches AI-dropped, double-placed, and hallucinated
+    /// mappings before quality scoring or exclusion stripping can hide them.
+    static func validateFileAccounting(
+        _ plan: OrganizationPlan,
+        expectedFiles: [FileItem]
+    ) throws {
+        var counts: [UUID: Int] = [:]
+        var namesByID: [UUID: String] = [:]
+        var checkedCount = 0
+        func record(_ file: FileItem) throws {
+            checkedCount += 1
+            if checkedCount.isMultiple(of: 64) {
+                try Task.checkCancellation()
+            }
+            counts[file.id, default: 0] += 1
+            namesByID[file.id] = file.displayName
+        }
+        func walk(_ suggestion: FolderSuggestion) throws {
+            for file in suggestion.files {
+                try record(file)
+            }
+            for subfolder in suggestion.subfolders {
+                try walk(subfolder)
+            }
+        }
+        for suggestion in plan.suggestions {
+            try walk(suggestion)
+        }
+        for file in plan.unorganizedFiles {
+            try record(file)
+        }
+
+        let duplicated = counts
+            .filter { $0.value > 1 }
+            .map { namesByID[$0.key] ?? $0.key.uuidString }
+            .sorted()
+        guard duplicated.isEmpty else {
+            throw ValidationError.duplicatedFiles(duplicated)
+        }
+
+        let expectedNames = Dictionary(
+            expectedFiles.map { ($0.id, $0.displayName) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let expectedIDs = Set(expectedNames.keys)
+        let plannedIDs = Set(counts.keys)
+        let missing = expectedIDs.subtracting(plannedIDs)
+            .map { expectedNames[$0] ?? $0.uuidString }
+            .sorted()
+        guard missing.isEmpty else {
+            throw ValidationError.missingFiles(missing)
+        }
+
+        let unexpected = plannedIDs.subtracting(expectedIDs)
+            .map { namesByID[$0] ?? $0.uuidString }
+            .sorted()
+        guard unexpected.isEmpty else {
+            throw ValidationError.unexpectedFiles(unexpected)
+        }
+    }
     
     private static func isAllowedStorageDestination(_ absolutePath: String, allowedRoots: Set<String>) -> Bool {
         for rootPath in allowedRoots where StorageLocationPathResolver.isPath(absolutePath, within: rootPath) {
@@ -221,6 +283,9 @@ package enum ValidationError: LocalizedError {
     case largeOperation(Int)
     case invalidStorageLocation(String)
     case destinationEscapesBaseDirectory(String)
+    case missingFiles([String])
+    case duplicatedFiles([String])
+    case unexpectedFiles([String])
     
     package var errorDescription: String? {
         switch self {
@@ -238,7 +303,17 @@ package enum ValidationError: LocalizedError {
             return "Invalid storage location: \(path). Sorty suggested a path that is not in your approved storage locations list."
         case .destinationEscapesBaseDirectory(let path):
             return "Destination folder resolves outside the selected directory: \(path)"
+        case .missingFiles(let names):
+            return "Plan is missing \(names.count) scanned file(s): \(Self.summarize(names)). Every scanned file must appear exactly once across folders and unorganized files."
+        case .duplicatedFiles(let names):
+            return "Plan places \(names.count) file(s) more than once: \(Self.summarize(names)). Each file must appear exactly once."
+        case .unexpectedFiles(let names):
+            return "Plan contains \(names.count) unexpected file(s) not in the scanned set: \(Self.summarize(names))."
         }
+    }
+
+    private static func summarize(_ names: [String], limit: Int = 5) -> String {
+        names.prefix(limit).joined(separator: ", ") + (names.count > limit ? "…" : "")
     }
 }
 
@@ -277,6 +352,7 @@ struct PlanQualityEvaluator {
         issues.append(contentsOf: vagueAndSingleFileIssues(in: folders))
         issues.append(contentsOf: mixedTypeIssues(in: folders))
         issues.append(contentsOf: nestingIssues(in: folders))
+        issues.append(contentsOf: megaFolderIssues(in: folders))
         issues.append(contentsOf: invalidFolderNameIssues(in: folders))
         issues.append(contentsOf: conventionIssues(in: folders, existingFolderPaths: existingFolderPaths))
         issues.append(contentsOf: explanationIssues(in: folders))
@@ -539,10 +615,39 @@ struct PlanQualityEvaluator {
     private static func nestingIssues(in folders: [FolderRecord]) -> [PlanQualityIssue] {
         folders.compactMap { folder in
             let emptyWrapper = folder.suggestion.files.isEmpty && folder.suggestion.subfolders.count == 1
+            let deepNesting = folder.depth > 3
             guard folder.depth > 2 || emptyWrapper else { return nil }
+            if deepNesting {
+                return PlanQualityIssue(
+                    kind: .unnecessaryNesting,
+                    message: "Folder \"\(folder.path)\" sits \(folder.depth) levels deep. Flatten this branch to at most 3 levels unless the existing structure requires it.",
+                    folderPaths: [folder.path],
+                    fileIDs: folder.files.map(\.id),
+                    deduction: 14
+                )
+            }
             return PlanQualityIssue(
                 kind: .unnecessaryNesting,
                 message: "Folder \"\(folder.path)\" adds a level without improving retrieval. Flatten this branch unless the existing structure requires it.",
+                folderPaths: [folder.path],
+                fileIDs: folder.files.map(\.id),
+                deduction: 10
+            )
+        }
+    }
+
+    /// Flat folders holding more than `megaFolderFileThreshold` files with no
+    /// subfolders are unretrievable buckets. Flagged for splitting on retry,
+    /// not quarantine: stranding 50+ files as unorganized is worse.
+    private static let megaFolderFileThreshold = 50
+
+    private static func megaFolderIssues(in folders: [FolderRecord]) -> [PlanQualityIssue] {
+        folders.compactMap { folder in
+            guard folder.suggestion.files.count > megaFolderFileThreshold,
+                  folder.suggestion.subfolders.isEmpty else { return nil }
+            return PlanQualityIssue(
+                kind: .oversizedFolder,
+                message: "Folder \"\(folder.path)\" holds \(folder.suggestion.files.count) files with no subfolders. Split it into focused subfolders by purpose, project, or date so files stay retrievable.",
                 folderPaths: [folder.path],
                 fileIDs: folder.files.map(\.id),
                 deduction: 10

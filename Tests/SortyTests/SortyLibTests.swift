@@ -646,7 +646,181 @@ final class PlanQualityEvaluatorTests: XCTestCase {
         XCTAssertEqual(reviewed.qualityAssessment?.didRetry, true)
     }
 
+    func testFlagsMegaFolderWithoutSubfolders() {
+        let files = (1...55).map { file("archive-\($0).pdf") }
+        let plan = OrganizationPlan(suggestions: [
+            FolderSuggestion(
+                folderName: "Project Archives",
+                files: files,
+                reasoning: "Shared project history"
+            )
+        ])
+
+        let assessment = PlanQualityEvaluator.assess(plan, existingFolderPaths: [])
+
+        let oversized = assessment.issues.filter { $0.kind == .oversizedFolder }
+        XCTAssertEqual(oversized.count, 1)
+        XCTAssertEqual(oversized.first?.deduction, 10)
+        XCTAssertEqual(oversized.first?.folderPaths, ["Project Archives"])
+        XCTAssertTrue(PlanQualityEvaluator.retryInstructions(for: assessment).contains("Split it"))
+        // Mega-folders need splitting, not quarantine: the files stay placed.
+        XCTAssertTrue(assessment.uncertainFileIDs.isDisjoint(with: Set(files.map(\.id))))
+    }
+
+    func testMegaFolderThresholdAllowsFiftyFiles() {
+        let files = (1...50).map { file("archive-\($0).pdf") }
+        let plan = OrganizationPlan(suggestions: [
+            FolderSuggestion(
+                folderName: "Project Archives",
+                files: files,
+                reasoning: "Shared project history"
+            )
+        ])
+
+        let assessment = PlanQualityEvaluator.assess(plan, existingFolderPaths: [])
+
+        XCTAssertFalse(assessment.issues.contains { $0.kind == .oversizedFolder })
+    }
+
+    func testFlagsNestingBeyondThreeLevelsWithoutDuplicatingIssues() {
+        let leafFiles = [file("a.pdf"), file("b.pdf")]
+        let plan = OrganizationPlan(suggestions: [
+            FolderSuggestion(
+                folderName: "Projects",
+                subfolders: [FolderSuggestion(
+                    folderName: "Invoices",
+                    subfolders: [FolderSuggestion(
+                        folderName: "Receipts",
+                        subfolders: [FolderSuggestion(
+                            folderName: "Scans",
+                            files: leafFiles,
+                            reasoning: "Deepest"
+                        )],
+                        reasoning: "Third"
+                    )],
+                    reasoning: "Second"
+                )],
+                reasoning: "Top"
+            )
+        ])
+
+        let assessment = PlanQualityEvaluator.assess(plan, existingFolderPaths: [])
+        let deep = assessment.issues.filter {
+            $0.kind == .unnecessaryNesting && $0.folderPaths == ["Projects/Invoices/Receipts/Scans"]
+        }
+
+        XCTAssertEqual(deep.count, 1)
+        XCTAssertEqual(deep.first?.deduction, 14)
+        XCTAssertTrue(deep.first?.message.contains("4 levels deep") == true)
+    }
+
     private func file(_ name: String) -> FileItem {
+        let url = URL(fileURLWithPath: "/tmp").appendingPathComponent(name)
+        return FileItem(
+            path: url.path,
+            name: url.deletingPathExtension().lastPathComponent,
+            extension: url.pathExtension
+        )
+    }
+}
+
+final class FileOrganizationValidatorAccountingTests: XCTestCase {
+    func testExactAccountingPasses() throws {
+        let organized = [validatorFile("a.pdf"), validatorFile("b.pdf")]
+        let leftover = validatorFile("c.pdf")
+        let plan = OrganizationPlan(
+            suggestions: [
+                FolderSuggestion(folderName: "Docs", files: organized, reasoning: "Docs")
+            ],
+            unorganizedFiles: [leftover]
+        )
+
+        XCTAssertNoThrow(
+            try FileOrganizationValidator.validateFileAccounting(
+                plan,
+                expectedFiles: organized + [leftover]
+            )
+        )
+    }
+
+    func testMissingFileThrows() {
+        let present = validatorFile("a.pdf")
+        let absent = validatorFile("dropped.pdf")
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Docs", files: [present], reasoning: "Docs")]
+        )
+
+        XCTAssertThrowsError(
+            try FileOrganizationValidator.validateFileAccounting(
+                plan,
+                expectedFiles: [present, absent]
+            )
+        ) { error in
+            guard case ValidationError.missingFiles(let names) = error else {
+                return XCTFail("Wrong error: \(error)")
+            }
+            XCTAssertTrue(names.joined(separator: " ").contains("dropped.pdf"))
+        }
+    }
+
+    func testDuplicatedFileThrows() {
+        let repeated = validatorFile("a.pdf")
+        let plan = OrganizationPlan(
+            suggestions: [
+                FolderSuggestion(folderName: "Docs", files: [repeated], reasoning: "Docs"),
+                FolderSuggestion(folderName: "More Docs", files: [repeated], reasoning: "Docs")
+            ]
+        )
+
+        XCTAssertThrowsError(
+            try FileOrganizationValidator.validateFileAccounting(
+                plan,
+                expectedFiles: [repeated]
+            )
+        ) { error in
+            guard case ValidationError.duplicatedFiles(let names) = error else {
+                return XCTFail("Wrong error: \(error)")
+            }
+            XCTAssertTrue(names.joined(separator: " ").contains("a.pdf"))
+        }
+    }
+
+    func testFileInFolderAndUnorganizedThrowsAsDuplicate() {
+        let repeated = validatorFile("a.pdf")
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Docs", files: [repeated], reasoning: "Docs")],
+            unorganizedFiles: [repeated]
+        )
+
+        XCTAssertThrowsError(
+            try FileOrganizationValidator.validateFileAccounting(plan, expectedFiles: [repeated])
+        ) { error in
+            guard case ValidationError.duplicatedFiles = error else {
+                return XCTFail("Wrong error: \(error)")
+            }
+        }
+    }
+
+    func testUnexpectedFileThrows() {
+        let expected = validatorFile("a.pdf")
+        let hallucinated = validatorFile("ghost.pdf")
+        let plan = OrganizationPlan(
+            suggestions: [
+                FolderSuggestion(folderName: "Docs", files: [expected, hallucinated], reasoning: "Docs")
+            ]
+        )
+
+        XCTAssertThrowsError(
+            try FileOrganizationValidator.validateFileAccounting(plan, expectedFiles: [expected])
+        ) { error in
+            guard case ValidationError.unexpectedFiles(let names) = error else {
+                return XCTFail("Wrong error: \(error)")
+            }
+            XCTAssertTrue(names.joined(separator: " ").contains("ghost.pdf"))
+        }
+    }
+
+    private func validatorFile(_ name: String) -> FileItem {
         let url = URL(fileURLWithPath: "/tmp").appendingPathComponent(name)
         return FileItem(
             path: url.path,

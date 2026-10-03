@@ -168,8 +168,9 @@ public struct PlanQualityAssessment: Codable, Hashable, Sendable {
     public var uncertainFileIDs: Set<UUID> {
         // Quarantine placements flagged for structural quality after a failed
         // retry, not just disguised `unorganized` buckets. Meta issues are
-        // excluded: excessiveUnorganized files are already unorganized, and
-        // missingExplanation is not placement uncertainty.
+        // excluded: excessiveUnorganized files are already unorganized,
+        // missingExplanation is not placement uncertainty, and oversizedFolder
+        // needs splitting rather than stranding 50+ files as unorganized.
         Set(issues
             .filter {
                 switch $0.kind {
@@ -181,7 +182,7 @@ public struct PlanQualityAssessment: Codable, Hashable, Sendable {
                     .unnecessaryNesting,
                     .existingConventionMismatch:
                     return true
-                case .excessiveUnorganizedFiles, .missingExplanation:
+                case .excessiveUnorganizedFiles, .missingExplanation, .oversizedFolder:
                     return false
                 }
             }
@@ -200,6 +201,7 @@ public struct PlanQualityIssue: Codable, Hashable, Sendable, Identifiable {
         case existingConventionMismatch
         case missingExplanation
         case invalidFolderName
+        case oversizedFolder
     }
 
     public let id: UUID
