@@ -1,6 +1,6 @@
 # Agent mode
 
-Agent mode covers local, reversible filesystem work when native Sorty is unavailable or the user wants Codex to do the work directly.
+Agent mode covers local, reversible filesystem work in an agent environment. Native Sorty is optional. Read the saved skill profile before planning, following [import-settings.md](import-settings.md).
 
 ## Plan format
 
@@ -48,7 +48,7 @@ Copy the matching `scan` item's `snapshot` object into the operation's `expected
 
 ## Workflow
 
-1. Run `scan` with explicit exclusion globs. The scanner skips hidden entries and treats packages as single items by default.
+1. Run `scan` with explicit exclusion globs. The scanner also enforces imported exclusions, skips hidden entries, and treats packages as single items by default.
 2. Use names, extensions, sizes, dates, current folders, and the user's instructions to create the plan. Follow [planning-quality.md](planning-quality.md). Ask before reading contents or extracting image/document data.
 3. Run `validate` after planning and again immediately before apply. Present moves, renames, unorganized items, warnings, and collisions.
 4. Apply only under the authorization rules in `SKILL.md`.

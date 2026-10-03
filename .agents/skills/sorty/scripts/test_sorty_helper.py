@@ -16,6 +16,9 @@ class SortyHelperTests(unittest.TestCase):
         self.base = Path(self.temporary.name)
         self.root = self.base / "root"
         self.state = self.base / "state"
+        profile_patch = patch("sorty_profile.PROFILE_PATH", self.state / "profile.json")
+        profile_patch.start()
+        self.addCleanup(profile_patch.stop)
         self.root.mkdir()
 
     def tearDown(self):

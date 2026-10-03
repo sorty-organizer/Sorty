@@ -1,9 +1,11 @@
-# Sorty skill for Codex
+# Sorty skill for agents
 
-The `$sorty` skill lets Codex handle file-organization requests with the same
-safety boundaries as Sorty. It uses the installed macOS app when a workflow
-depends on Sorty's interface or saved settings. For direct local work, it can
-build and apply a reversible filesystem plan.
+The Sorty skill lets an agent handle file-organization requests with Sorty's
+safety boundaries. It builds and applies reversible filesystem plans directly.
+Selected app preferences, exclusions, watched-folder configurations, and
+exported Learnings can move into a separate skill profile. Python 3 is the only
+helper dependency. The skill can run in Codex, Claude Code, or another agent
+with filesystem and terminal access.
 
 The tracked skill lives in [`.agents/skills/sorty`](../.agents/skills/sorty/).
 That directory is the source of truth for the skill and its helper.
@@ -18,6 +20,7 @@ Ask `$sorty` to:
 - scan for byte-identical duplicates;
 - preview, validate, and apply a proposed plan;
 - roll back moves and renames recorded by the skill;
+- import selected app settings through a local onboarding page;
 - open the relevant Sorty screen for exclusions, personas, Learnings, watched
   folders, storage locations, history, settings, or duplicate review.
 
@@ -42,6 +45,54 @@ where it points. Restart Codex if the skill does not appear after installation.
 
 Repository contributors can inspect the skill directly without creating the
 personal link.
+
+For Claude Code, copy the complete `sorty` directory into
+`~/.claude/skills/sorty`, following its
+[personal skill convention](https://code.claude.com/docs/en/skills#choose-where-skills-load).
+Other agents can load `SKILL.md` and run the bundled
+helpers. Copy the scripts, assets, and references together, not just the entrypoint.
+
+## Import your app settings
+
+From the installed skill directory, run:
+
+```bash
+python3 scripts/sorty_profile.py onboard
+```
+
+Open the printed local URL. Review the saved values and select individual
+preferences, exclusions, and folders. Nothing is selected by default. Click
+Import to save the selected settings. Cancelling leaves the skill profile
+unchanged. Reimport backs up the previous profile before replacing it.
+
+To include Learnings, export your profile from Sorty's Learnings page and run:
+
+```bash
+python3 scripts/sorty_profile.py onboard --learnings /path/to/export.learnings
+```
+
+Learnings are encrypted in the app. This flow uses its authenticated export
+and stores the selected instructions and examples as private local plaintext
+JSON. It does not import consent, credentials, bookmarks, or session history.
+
+On macOS, settings and watched folders are discovered for the current user.
+For another computer, pass `--defaults /path/to/sorty-preferences.plist` and
+`--support-dir /path/to/copied/Sorty`. Create the plist on the original Mac with
+`defaults export com.sorty.app /path/to/sorty-preferences.plist`. Imported paths
+may need remapping. Keep transferred app data private.
+
+The profile lives in `~/Library/Application Support/Sorty Skill/profile.json`
+on macOS and `~/.config/sorty-skill/profile.json` elsewhere. Both helpers honor
+`SORTY_SKILL_STATE_DIR`. The agent reads this profile before planning and uses
+preferences such as naming style and opening the folder after organization.
+Imported exclusions are enforced during scans and apply validation. Unsupported
+enabled exclusion types block agent work until resolved. Natural-language
+exceptions are evaluated by the agent before it builds a plan.
+
+Watched folders import as saved configurations. Importing does not create a
+background watcher or authorize scheduled work. See the
+[import reference](../.agents/skills/sorty/references/import-settings.md) for
+setting semantics, portable imports, and limitations.
 
 ## Use it
 
@@ -68,8 +119,9 @@ to a cloud model, or clears saved Sorty data.
 
 | Request | Execution path |
 | --- | --- |
-| Organize or rename local files | Native Sorty or agent fallback |
-| Find exact duplicates | Native Sorty or agent fallback |
+| Organize or rename local files | Agent by default, native Sorty when requested |
+| Find exact duplicates | Agent by default, native Sorty when requested |
+| Import saved preferences, exclusions, folders, or exported Learnings | Local onboarding and agent profile |
 | Review similar files visually | Native Sorty |
 | Edit an interactive preview | Native Sorty |
 | Change Finder tags | Native Sorty |

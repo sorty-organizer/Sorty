@@ -13,8 +13,11 @@ Use this map to route current Sorty behavior. Recheck `README.md`, `CHANGELOG.md
 | Exclusions and "only" matching | Native or agent | Non-matching items stay untouched |
 | Finder tags and label colors | Native | Agent mode preserves existing metadata only |
 | Personas | Native | Agent may follow temporary instructions without persisting a persona |
+| Imported Learnings | Agent | Selected exported instructions and examples guide future plans |
 | Passive Learnings | Native | Encryption, consent, and biometric controls stay app-owned |
-| Watched folders | Native | A skill is not a background FSEvents service |
+| Saved watched folders | Agent | Import paths, prompts, modes, and policy through onboarding |
+| Background watching | Native or separately configured automation | Import does not start a service or authorize runs |
+| Organization preferences | Agent | Select individual settings during onboarding; explicit requests override defaults |
 | Storage destinations | Native preferred | Agent mode accepts an explicit absolute destination |
 | History and rollback | Native or agent | Histories are separate; agent journals only its own work |
 | Finder extension and Services | Native | Route to Finder settings or the matching deeplink |

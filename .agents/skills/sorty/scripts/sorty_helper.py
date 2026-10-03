@@ -20,6 +20,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from sorty_profile import STATE_DIR, exclusion_checker
+
 
 PLAN_VERSION = 2
 MODES = {"organize", "organizeAndRename", "renameOnly"}
@@ -28,7 +30,7 @@ PACKAGE_EXTENSIONS = {
     ".photoslibrary", ".playground", ".rtfd", ".scptd", ".xcodeproj",
     ".xcworkspace",
 }
-DEFAULT_STATE_DIR = Path.home() / "Library" / "Application Support" / "Sorty Skill"
+DEFAULT_STATE_DIR = STATE_DIR
 
 
 class SortyError(Exception):
@@ -140,6 +142,10 @@ def scan(root: Path, exclusions: list[str], include_hidden: bool, expand_package
     reject_broad_root(root)
     if not root.is_dir():
         raise SortyError(f"source root is not a directory: {root}")
+    try:
+        imported_exclusion = exclusion_checker()
+    except ValueError as error:
+        raise SortyError(str(error)) from error
 
     items: list[dict[str, Any]] = []
     for current, directories, files in os.walk(root, topdown=True, followlinks=False):
@@ -149,7 +155,7 @@ def scan(root: Path, exclusions: list[str], include_hidden: bool, expand_package
             path = current_path / name
             relative = path.relative_to(root)
             relative_string = relative.as_posix()
-            if (not include_hidden and is_hidden(relative)) or matches_exclusion(relative_string, exclusions):
+            if (not include_hidden and is_hidden(relative)) or matches_exclusion(relative_string, exclusions) or imported_exclusion(path):
                 continue
             if not expand_packages and is_package(path):
                 info = path.lstat()
@@ -163,7 +169,7 @@ def scan(root: Path, exclusions: list[str], include_hidden: bool, expand_package
             path = current_path / name
             relative = path.relative_to(root)
             relative_string = relative.as_posix()
-            if (not include_hidden and is_hidden(relative)) or matches_exclusion(relative_string, exclusions):
+            if (not include_hidden and is_hidden(relative)) or matches_exclusion(relative_string, exclusions) or imported_exclusion(path):
                 continue
             info = path.lstat()
             kind = "symlink" if path.is_symlink() else "file"
@@ -283,6 +289,10 @@ def load_plan(path: Path) -> dict[str, Any]:
 
 
 def resolve_plan(plan: dict[str, Any]) -> tuple[Path, str, list[Operation], list[str]]:
+    try:
+        imported_exclusion = exclusion_checker()
+    except ValueError as error:
+        raise SortyError(str(error)) from error
     if plan.get("version") != PLAN_VERSION:
         raise SortyError(f"unsupported plan version: {plan.get('version')!r}")
     mode = plan.get("mode")
@@ -344,6 +354,15 @@ def resolve_plan(plan: dict[str, Any]) -> tuple[Path, str, list[Operation], list
             relative_source = source.relative_to(root).as_posix()
             if matches_exclusion(relative_source, exclusions):
                 errors.append(f"source matches an exclusion: {relative_source}")
+            # Check ancestors and descendants so a directory move cannot carry
+            # an imported protected item along with it.
+            protected = imported_exclusion(source) or any(
+                imported_exclusion(parent) for parent in source.parents if is_within(parent, root)
+            )
+            if source.is_dir() and not source.is_symlink():
+                protected = protected or any(imported_exclusion(child) for child in source.rglob("*"))
+            if protected:
+                errors.append(f"source contains or matches an imported exclusion: {relative_source}")
         if source == destination:
             errors.append(f"source and destination are identical: {source}")
         source_key = filesystem_key(source)

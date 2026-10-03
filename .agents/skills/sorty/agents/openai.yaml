@@ -1,6 +1,6 @@
 interface:
   display_name: "Sorty"
-  short_description: "Organize and restore files with Sorty"
+  short_description: "Organize files and import Sorty preferences"
   default_prompt: "Use $sorty to organize this folder safely."
 policy:
   allow_implicit_invocation: true
