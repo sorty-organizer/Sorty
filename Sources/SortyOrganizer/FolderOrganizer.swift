@@ -3399,8 +3399,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         var planAfterValidation = validatedPlanFromRetry ?? normalizedInputPlan
 
+        // Accounting runs before quality scoring so dropped or double-placed
+        // files fail closed instead of earning a stale quality score.
+        try FileOrganizationValidator.validateFileAccounting(planAfterValidation, expectedFiles: files)
+
+        var qualityExistingPaths: [String] = []
         if aiConfig?.mode != .renameOnly {
-            let existingFolderPaths = try await PlanQualityEvaluator.existingFolderPathsOffMain(at: directory)
+            qualityExistingPaths = try await PlanQualityEvaluator.existingFolderPathsOffMain(at: directory)
+            let existingFolderPaths = qualityExistingPaths
             let initialAssessment = try await PlanQualityEvaluator.assessOffMain(
                 planAfterValidation,
                 existingFolderPaths: existingFolderPaths
@@ -3441,6 +3447,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         try checkCancellation()
 
         var validatedPlan = planAfterValidation
+        let planBeforeExclusion = validatedPlan
         if let exclusionRules = exclusionRules {
             let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
             self.exclusionEnforcer = enforcer
@@ -3470,6 +3477,31 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     validatedPlan = validationResult.cleanedPlan ?? planAfterValidation
                 }
             }
+        }
+
+        // Exclusion runs after quality scoring, so a strip or exclusion retry
+        // leaves a stale score behind. Re-score the final plan and keep the
+        // pre-strip score in notes instead of reordering the whole pipeline.
+        if validatedPlan != planBeforeExclusion, aiConfig?.mode != .renameOnly {
+            let rescored = try await PlanQualityEvaluator.assessOffMain(
+                validatedPlan,
+                existingFolderPaths: qualityExistingPaths
+            )
+            var note = "Quality re-scored after exclusion handling"
+            if let preStripScore = planBeforeExclusion.qualityAssessment?.score {
+                note += ": \(preStripScore)/100 → \(rescored.score)/100"
+            } else {
+                note += ": \(rescored.score)/100"
+            }
+            note += "."
+            validatedPlan.notes = validatedPlan.notes.isEmpty ? note : validatedPlan.notes + "\n" + note
+            let carriedRetry = validatedPlan.qualityAssessment?.didRetry ?? false
+            validatedPlan.qualityAssessment = PlanQualityAssessment(
+                score: rescored.score,
+                issues: rescored.issues,
+                didRetry: carriedRetry
+            )
+            try FileOrganizationValidator.validateFileAccounting(validatedPlan, expectedFiles: files)
         }
 
         return normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: validatedPlan))
