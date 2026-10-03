@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AIProviderRow: View {
     @SortyHotReload private var hotReload
+    @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     let provider: AIProvider
     let selectedProvider: AIProvider
     let action: (AIProvider) -> Void
@@ -17,6 +18,10 @@ struct AIProviderRow: View {
     @State private var isHovered = false
 
     private var isOpenCodeCard: Bool { provider == .openCodeZen }
+    // Custom endpoints remain configurable so users can point them at localhost.
+    private var isBlockedByInternetPrivacy: Bool {
+        internetPrivacyModeEnabled && ![.appleFoundationModel, .ollama, .openAICompatible].contains(provider)
+    }
     private var isSelected: Bool {
         selectedProvider == provider || (isOpenCodeCard && selectedProvider == .openCodeGo)
     }
@@ -73,6 +78,7 @@ struct AIProviderRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .blur(radius: isBlockedByInternetPrivacy ? 2 : 0)
         }
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -89,10 +95,11 @@ struct AIProviderRow: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovered)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isSelected)
         .buttonStyle(.plain)
+        .disabled(isBlockedByInternetPrivacy)
         .minimumHitTarget()
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        .accessibilityHint(isOpenCodeCard ? "Selects OpenCode as the AI provider. Switch between the Zen and Go plans in the plan picker." : "Selects \(provider.displayName) as the AI provider")
-        .help(isOpenCodeCard ? "Use OpenCode (switch plans in the plan picker)" : "Use \(provider.displayName)")
+        .accessibilityHint(isBlockedByInternetPrivacy ? "Unavailable while Block Internet Connections is on" : (isOpenCodeCard ? "Selects OpenCode as the AI provider. Switch between the Zen and Go plans in the plan picker." : "Selects \(provider.displayName) as the AI provider"))
+        .help(isBlockedByInternetPrivacy ? "Unavailable while Block Internet Connections is on" : (isOpenCodeCard ? "Use OpenCode (switch plans in the plan picker)" : "Use \(provider.displayName)"))
     }
 }
 
