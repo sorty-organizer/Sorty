@@ -278,4 +278,201 @@ final class MisclassificationRegressionTests: XCTestCase {
         XCTAssertEqual(report.placementAcceptanceRate ?? -1, 0.5, accuracy: 0.0001)
         XCTAssertEqual(report.placementExpectationMatchRate ?? -1, 0.5, accuracy: 0.0001)
     }
+
+    // MARK: - Corpus goldens: batch coherence + calibration
+
+    /// Mirror-image vendor swap: Globex invoice filed under Acme. Together
+    /// with acme-into-globex this pins both directions of vendor confusion
+    /// as expectation mismatches.
+    func testGlobexFiledAsAcmeSurfacesAsExpectationMismatch() {
+        let corpus = [
+            OrganizationQualityCorpusCase(
+                id: "globex-into-acme",
+                description: "Globex invoice filed under the Acme vendor folder",
+                decisions: [
+                    OrganizationQualityDecision(
+                        sourcePath: "Inbox/globex-invoice-june.pdf",
+                        expectedDestination: "Finance/Invoices/Globex",
+                        observedDestination: "Finance/Invoices/Acme",
+                        placementOutcome: .rejected
+                    ),
+                    OrganizationQualityDecision(
+                        sourcePath: "Inbox/acme-invoice-june.pdf",
+                        expectedDestination: "Finance/Invoices/Acme",
+                        observedDestination: "Finance/Invoices/Acme",
+                        placementOutcome: .accepted
+                    ),
+                ]
+            ),
+        ]
+
+        let report = OrganizationQualityEvaluator.evaluate(corpus)
+
+        XCTAssertEqual(report.placementExpectationMatchRate ?? -1, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(report.placementAcceptanceRate ?? -1, 0.5, accuracy: 0.0001)
+    }
+
+    /// Topic confusion: a payment receipt filed as an invoice. Same folder
+    /// family, wrong topic — the corpus must record the mismatch even though
+    /// the structure looks tidy.
+    func testReceiptFiledAsInvoiceSurfacesAsExpectationMismatch() {
+        let corpus = [
+            OrganizationQualityCorpusCase(
+                id: "receipt-into-invoices",
+                description: "Payment receipt filed under Invoices instead of Receipts",
+                decisions: [
+                    OrganizationQualityDecision(
+                        sourcePath: "Inbox/acme-receipt-may.pdf",
+                        expectedDestination: "Finance/Receipts/Acme",
+                        observedDestination: "Finance/Invoices/Acme",
+                        placementOutcome: .edited
+                    ),
+                    OrganizationQualityDecision(
+                        sourcePath: "Inbox/acme-invoice-may.pdf",
+                        expectedDestination: "Finance/Invoices/Acme",
+                        observedDestination: "Finance/Invoices/Acme",
+                        placementOutcome: .accepted
+                    ),
+                ]
+            ),
+        ]
+
+        let report = OrganizationQualityEvaluator.evaluate(corpus)
+
+        XCTAssertEqual(report.placementExpectationMatchRate ?? -1, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(report.placementAcceptanceRate ?? -1, 0.5, accuracy: 0.0001)
+    }
+
+    /// Oversized single-category dump: six files swept into one Documents
+    /// folder when the expectations span invoices, statements, and photos.
+    /// None of the six placements match, so both match and acceptance rates
+    /// must read 0 rather than hiding behind one tidy folder.
+    func testOversizedSingleCategoryDumpSurfacesMismatches() {
+        let corpus = [
+            OrganizationQualityCorpusCase(
+                id: "everything-into-documents",
+                description: "Invoices, statements, and photos dumped into one Documents folder",
+                decisions: [
+                    OrganizationQualityDecision(
+                        sourcePath: "Inbox/acme-invoice-may.pdf",
+                        expectedDestination: "Finance/Invoices/Acme",
+                        observedDestination: "Documents",
+                        placementOutcome: .rejected
+                    ),
+                    OrganizationQualityDecision(
+                        sourcePath: "Inbox/globex-invoice-may.pdf",
+                        expectedDestination: "Finance/Invoices/Globex",
+                        observedDestination: "Documents",
+                        placementOutcome: .rejected
+                    ),
+                    OrganizationQualityDecision(
+                        sourcePath: "Inbox/bank_statement_may_2026.pdf",
+                        expectedDestination: "Finance/Statements",
+                        observedDestination: "Documents",
+                        placementOutcome: .rejected
+                    ),
+                    OrganizationQualityDecision(
+                        sourcePath: "Inbox/bank_statement_june_2026.pdf",
+                        expectedDestination: "Finance/Statements",
+                        observedDestination: "Documents",
+                        placementOutcome: .edited
+                    ),
+                    OrganizationQualityDecision(
+                        sourcePath: "Downloads/picnic-2026-06-14.jpg",
+                        expectedDestination: "Photos/Personal",
+                        observedDestination: "Documents",
+                        placementOutcome: .rejected
+                    ),
+                    OrganizationQualityDecision(
+                        sourcePath: "Downloads/Screenshot 2026-05-31.png",
+                        expectedDestination: "Media/Screenshots",
+                        observedDestination: "Documents",
+                        placementOutcome: .rejected
+                    ),
+                ]
+            ),
+        ]
+
+        let report = OrganizationQualityEvaluator.evaluate(corpus)
+
+        XCTAssertEqual(report.placementExpectationMatchRate ?? -1, 0, accuracy: 0.0001)
+        XCTAssertEqual(report.placementAcceptanceRate ?? -1, 0, accuracy: 0.0001)
+    }
+
+    /// Invented deep nesting: two files that belong in shallow project
+    /// folders get buried under an A/B/C/D-style chain. Path comparison is
+    /// exact, so both decisions mismatch.
+    func testInventedDeepNestingSurfacesMismatch() {
+        let corpus = [
+            OrganizationQualityCorpusCase(
+                id: "invented-deep-nesting",
+                description: "Two project files buried under an invented A/B/C/D chain",
+                decisions: [
+                    OrganizationQualityDecision(
+                        sourcePath: "Inbox/alpha-spec.pdf",
+                        expectedDestination: "Projects/Alpha",
+                        observedDestination: "Projects/Alpha/Docs/Drafts/Final",
+                        placementOutcome: .edited
+                    ),
+                    OrganizationQualityDecision(
+                        sourcePath: "Inbox/beta-plan.pdf",
+                        expectedDestination: "Projects/Beta",
+                        observedDestination: "Projects/Beta/Docs/Drafts/Final",
+                        placementOutcome: .rejected
+                    ),
+                ]
+            ),
+        ]
+
+        let report = OrganizationQualityEvaluator.evaluate(corpus)
+
+        XCTAssertEqual(report.placementExpectationMatchRate ?? -1, 0, accuracy: 0.0001)
+    }
+
+    /// Rename calibration golden: an evidence-backed high-confidence rename
+    /// that the user accepts must match expectations exactly, while a
+    /// rejected low-confidence rename lands in its calibration bin with a
+    /// 0 acceptance rate. Pins the confidence/acceptance contract end to end.
+    func testRenameCalibrationGoldensMatchExpectations() {
+        let corpus = [
+            OrganizationQualityCorpusCase(
+                id: "rename-calibration",
+                description: "Accepted high-confidence rename plus rejected low-confidence rename",
+                decisions: [
+                    OrganizationQualityDecision(
+                        sourcePath: "Inbox/IMG_1842.jpg",
+                        expectedDestination: "Photos/Trips",
+                        expectedRename: "Harbor Sunset.jpg",
+                        observedDestination: "Photos/Trips",
+                        placementOutcome: .accepted,
+                        observedRename: "Harbor Sunset.jpg",
+                        renameOutcome: .accepted,
+                        renameConfidence: 0.9
+                    ),
+                    OrganizationQualityDecision(
+                        sourcePath: "Inbox/scan0007.pdf",
+                        expectedDestination: "Finance/Invoices",
+                        mustKeepOriginalName: true,
+                        observedDestination: "Finance/Invoices",
+                        placementOutcome: .accepted,
+                        observedRename: "2026-05 Invoice.pdf",
+                        renameOutcome: .rejected,
+                        renameConfidence: 0.2,
+                        wasSurfacedForReview: true
+                    ),
+                ]
+            ),
+        ]
+
+        let report = OrganizationQualityEvaluator.evaluate(corpus)
+
+        XCTAssertEqual(report.placementExpectationMatchRate ?? -1, 1, accuracy: 0.0001)
+        XCTAssertEqual(report.renameExpectationMatchRate ?? -1, 1, accuracy: 0.0001)
+        XCTAssertEqual(report.protectedNamePreservationRate ?? -1, 0, accuracy: 0.0001)
+        XCTAssertEqual(report.calibrationBins.count, 2)
+        let lowBin = report.calibrationBins.first { $0.lowerBound < 0.3 }
+        XCTAssertEqual(lowBin?.acceptanceRate ?? -1, 0, accuracy: 0.0001)
+        let highBin = report.calibrationBins.first { $0.lowerBound >= 0.8 }
+        XCTAssertEqual(highBin?.acceptanceRate ?? -1, 1, accuracy: 0.0001)
+    }
 }

@@ -2230,6 +2230,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
         }
         var mergedPlan = await accumulator.result()
+        // Enforced cross-batch coherence: near-duplicate top-level folders
+        // from disjoint batches merge into one before validation.
+        mergedPlan = Self.mergingNearDuplicateTopLevelFolders(in: mergedPlan)
         let duration = Date().timeIntervalSince(analysisStart)
         let totalFileSize = await Task.detached(priority: .utility) {
             files.reduce(Int64.zero) { partial, file in
@@ -2807,6 +2810,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             Reuse these destination paths from earlier batches whenever they fit:
             \(taxonomy.map { "- \($0)" }.joined(separator: "\n"))
+            Reuse the exact spelling above — never create a near-duplicate folder (Invoice vs Invoices) for the same category.
             """
         }
 
@@ -2839,6 +2843,120 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if accumulatedPlan.learningToolCall == nil {
             accumulatedPlan.learningToolCall = incoming.learningToolCall
         }
+    }
+
+    /// Enforced cross-batch merge: collapses near-duplicate top-level folders
+    /// (case-folded match, edit distance <= 2, or substring containment with
+    /// a tiny length gap — e.g. Invoice/Invoices/INV0ICES) into one
+    /// destination after batches complete, before validation. Never drops
+    /// files: members union by file ID, and the merge is noted in plan notes.
+    nonisolated static func mergingNearDuplicateTopLevelFolders(in plan: OrganizationPlan) -> OrganizationPlan {
+        guard plan.suggestions.count > 1 else { return plan }
+        // Union-find over top-level indices, evaluated in order for determinism.
+        var parent = Array(plan.suggestions.indices)
+        func find(_ x: Int) -> Int {
+            var root = x
+            while parent[root] != root { root = parent[root] }
+            var node = x
+            while parent[node] != root {
+                let next = parent[node]
+                parent[node] = root
+                node = next
+            }
+            return root
+        }
+        let names = plan.suggestions.map(\.folderName)
+        for i in names.indices {
+            for j in names.indices where j > i {
+                guard nearDuplicateFolderNames(names[i], names[j]) else { continue }
+                let rootI = find(i)
+                let rootJ = find(j)
+                if rootI != rootJ {
+                    parent[max(rootI, rootJ)] = min(rootI, rootJ)
+                }
+            }
+        }
+        var groups: [Int: [Int]] = [:]
+        for i in names.indices {
+            groups[find(i), default: []].append(i)
+        }
+        guard groups.values.contains(where: { $0.count > 1 }) else { return plan }
+
+        var mergedSuggestions: [FolderSuggestion] = []
+        var mergeNotes: [String] = []
+        // Deterministic output order: groups ordered by smallest member index.
+        for group in groups.values.sorted(by: { $0.min() ?? 0 < $1.min() ?? 0 }) {
+            guard group.count > 1 else {
+                mergedSuggestions.append(plan.suggestions[group[0]])
+                continue
+            }
+            // Canonical destination: most files wins; ties break by smallest
+            // normalized key, then earliest index.
+            let ordered = group.sorted { a, b in
+                let countA = plan.suggestions[a].totalFileCount
+                let countB = plan.suggestions[b].totalFileCount
+                if countA != countB { return countA > countB }
+                let keyA = normalizedMergeKey(plan.suggestions[a].folderName)
+                let keyB = normalizedMergeKey(plan.suggestions[b].folderName)
+                if keyA != keyB { return keyA < keyB }
+                return a < b
+            }
+            var merged = plan.suggestions[ordered[0]]
+            for other in ordered.dropFirst() {
+                merged = mergeFolderSuggestion(plan.suggestions[other], into: merged)
+            }
+            mergedSuggestions.append(merged)
+            let absorbedNames = ordered.dropFirst()
+                .map { "\"\(plan.suggestions[$0].folderName)\"" }
+                .joined(separator: ", ")
+            mergeNotes.append("\"\(merged.folderName)\" absorbed \(absorbedNames)")
+        }
+        var mergedPlan = plan
+        mergedPlan.suggestions = mergedSuggestions
+        let mergeNote = "Merged near-duplicate folders: \(mergeNotes.joined(separator: "; "))."
+        mergedPlan.notes = [plan.notes, mergeNote]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return mergedPlan
+    }
+
+    nonisolated static func normalizedMergeKey(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// True when two top-level folder names target the same destination:
+    /// case-folded equality, small edit distance (typos/OCR like INV0ICES),
+    /// or substring containment with a tiny length gap (Invoice/Invoices).
+    nonisolated static func nearDuplicateFolderNames(_ lhs: String, _ rhs: String) -> Bool {
+        let a = normalizedMergeKey(lhs)
+        let b = normalizedMergeKey(rhs)
+        guard !a.isEmpty, !b.isEmpty, a != b else { return a == b && !a.isEmpty }
+        if a.contains(b) || b.contains(a), abs(a.count - b.count) <= 2 { return true }
+        return mergeEditDistance(a, b) <= 2
+    }
+
+    /// Bounded edit distance (callers only test `<= 2`); bails early when
+    /// the length gap alone exceeds the threshold.
+    nonisolated static func mergeEditDistance(_ lhs: String, _ rhs: String) -> Int {
+        guard lhs != rhs else { return 0 }
+        guard !lhs.isEmpty else { return rhs.count }
+        guard !rhs.isEmpty else { return lhs.count }
+        guard abs(lhs.count - rhs.count) <= 2 else { return 3 }
+        let left = Array(lhs)
+        let right = Array(rhs)
+        var previous = Array(0...right.count)
+        for leftIndex in left.indices {
+            var current = [leftIndex + 1]
+            for rightIndex in right.indices {
+                current.append(Swift.min(
+                    Swift.min(current[rightIndex] + 1, previous[rightIndex + 1] + 1),
+                    previous[rightIndex] + (left[leftIndex] == right[rightIndex] ? 0 : 1)
+                ))
+            }
+            previous = current
+        }
+        return previous[right.count]
     }
 
     nonisolated static func normalizingDestinationHierarchy(
@@ -3365,11 +3483,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
         let hierarchyNormalizedPlan = Self.normalizingDestinationHierarchy(in: plan)
-        let normalizedInputPlan = normalizeStorageDestinations(
+        let normalizedInputPlan = Self.mergingNearDuplicateTopLevelFolders(in: normalizeStorageDestinations(
             in: hierarchyNormalizedPlan,
             allowedLocations: allowedLocations,
             sourceDirectoryURL: directory
-        )
+        ))
 
         var validatedPlanFromRetry: OrganizationPlan? = nil
         do {
@@ -3439,6 +3557,19 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     in: planAfterValidation,
                     assessment: retryAssessment
                 )
+                // Targeted second retry: the quarantined subset alone, with
+                // full metadata, once, before accepting quarantine.
+                planAfterValidation = await retryQuarantinedSubsetOnce(
+                    plan: planAfterValidation,
+                    files: files,
+                    client: client,
+                    instructions: instructions,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature,
+                    imagePayload: imagePayload,
+                    directory: directory,
+                    allowedStorageLocations: allowedLocations
+                )
             } else {
                 planAfterValidation.qualityAssessment = initialAssessment
             }
@@ -3505,6 +3636,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         return normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: validatedPlan))
+            .calibratingRenameSelection()
     }
 
     private func applyRenameRuleConfiguration(
@@ -4071,6 +4203,188 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             return nil
         }
     }
+
+    /// Marker reason keepingCertainItems stamps on quarantined placements;
+    /// the targeted retry keys off this prefix to find exactly those files.
+    nonisolated static let quarantineRetryReasonPrefix =
+        "Sorty could not place this file confidently"
+
+    /// Files the quality gate quarantined (not pre-existing unorganized):
+    /// the targeted retry set.
+    nonisolated static func quarantinedRetryCandidates(in plan: OrganizationPlan) -> [FileItem] {
+        let quarantinedNames = Set(plan.unorganizedDetails
+            .filter { $0.reason.hasPrefix(quarantineRetryReasonPrefix) }
+            .map(\.filename))
+        guard !quarantinedNames.isEmpty else { return [] }
+        var seen: Set<UUID> = []
+        return plan.unorganizedFiles.filter {
+            quarantinedNames.contains($0.displayName) && seen.insert($0.id).inserted
+        }
+    }
+
+    /// Full-metadata prompt section for the quarantined subset: every
+    /// evidence field inline, independent of client-side prompt compaction.
+    nonisolated static func targetedRetryInstructions(base: String, files: [FileItem]) -> String {
+        let formatter = ISO8601DateFormatter()
+        let lines = files.enumerated().map { index, file in
+            var detail = "\(index + 1). \(file.displayName) [\(file.extension.isEmpty ? "no extension" : file.extension), \(file.size) bytes]"
+            var evidence: [String] = []
+            if let tags = file.finderTags, !tags.isEmpty {
+                evidence.append("finder_tags: \(tags.joined(separator: ", "))")
+            }
+            if let color = file.finderTagColorName {
+                evidence.append("finder_color: \(color)")
+            }
+            if let comment = file.finderComment, !comment.isEmpty {
+                evidence.append("comment: \(comment.prefix(200))")
+            }
+            if let title = file.contentMetadata?.documentTitle?
+                .trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+                evidence.append("title: \(title.prefix(120))")
+            }
+            let hint = file.contentMetadata?.textPreview
+                ?? file.contentMetadata?.ocrText
+                ?? file.ocrText
+            if let hint = hint?.trimmingCharacters(in: .whitespacesAndNewlines), !hint.isEmpty {
+                evidence.append("excerpt: \(hint.prefix(300))")
+            }
+            if let created = file.creationDate {
+                evidence.append("created: \(formatter.string(from: created))")
+            }
+            if let modified = file.modificationDate {
+                evidence.append("modified: \(formatter.string(from: modified))")
+            }
+            if !evidence.isEmpty {
+                detail += " — " + evidence.joined(separator: "; ")
+            }
+            return detail
+        }
+        return base + """
+
+        TARGETED RETRY — QUARANTINED FILES ONLY
+        - The previous plan could not place the \(files.count) file(s) below confidently, so they were set aside for review.
+        - Return a complete plan for ONLY these files; every evidence field is shown in full and nothing was compacted.
+        - Prefer a suitable existing folder, a meaningful shared folder, or a broad reusable category. Use `unorganized` only when none is defensible.
+        \(lines.joined(separator: "\n"))
+        """
+    }
+
+    /// File IDs assigned anywhere in a suggestion tree.
+    nonisolated static func assignedFileIDs(in suggestions: [FolderSuggestion]) -> Set<UUID> {
+        var ids: Set<UUID> = []
+        func walk(_ folder: FolderSuggestion) {
+            for file in folder.files { ids.insert(file.id) }
+            for subfolder in folder.subfolders { walk(subfolder) }
+        }
+        for suggestion in suggestions { walk(suggestion) }
+        return ids
+    }
+
+    /// Merges a targeted-retry plan back: rescued candidates join their
+    /// folders; the rest stay quarantined. Never drops files.
+    nonisolated static func mergingTargetedRetry(
+        _ retry: OrganizationPlan,
+        into quarantined: OrganizationPlan,
+        candidates: [FileItem]
+    ) -> OrganizationPlan {
+        let candidateIDs = Set(candidates.map(\.id))
+        let placedIDs = assignedFileIDs(in: retry.suggestions).intersection(candidateIDs)
+        guard !placedIDs.isEmpty else { return quarantined }
+
+        // Prune the retry tree to candidate files so a stray hallucinated
+        // placement cannot leak into the plan.
+        func pruned(_ folder: FolderSuggestion) -> FolderSuggestion? {
+            var updated = folder
+            updated.files = folder.files.filter { candidateIDs.contains($0.id) }
+            updated.fileRenameMappings = folder.fileRenameMappings.filter {
+                candidateIDs.contains($0.originalFile.id)
+            }
+            updated.fileTagMappings = folder.fileTagMappings.filter {
+                candidateIDs.contains($0.originalFile.id)
+            }
+            updated.subfolders = folder.subfolders.compactMap(pruned)
+            guard !updated.files.isEmpty || !updated.subfolders.isEmpty else { return nil }
+            return updated
+        }
+        let prunedSuggestions = retry.suggestions.compactMap(pruned)
+        let rescuedIDs = assignedFileIDs(in: prunedSuggestions)
+        guard !rescuedIDs.isEmpty else { return quarantined }
+
+        var updated = quarantined
+        mergeSuggestions(prunedSuggestions, into: &updated.suggestions)
+        updated.unorganizedFiles.removeAll { rescuedIDs.contains($0.id) }
+        let rescuedNames = Set(candidates
+            .filter { rescuedIDs.contains($0.id) }
+            .map(\.displayName))
+        updated.unorganizedDetails.removeAll { rescuedNames.contains($0.filename) }
+        updated.parseWarnings.append(contentsOf: retry.parseWarnings)
+        let retryNote = "Targeted retry placed \(rescuedIDs.count) of \(candidates.count) quarantined file(s) with full metadata."
+        updated.notes = [quarantined.notes, retryNote]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return updated
+    }
+
+    /// Targeted second retry: re-runs ONLY the quarantined subset once with
+    /// full metadata before accepting quarantine. Runs after
+    /// keepingCertainItems, never recurses (it calls analysis, not
+    /// validation), and keeps the quarantine on any failure.
+    private func retryQuarantinedSubsetOnce(
+        plan: OrganizationPlan,
+        files: [FileItem],
+        client: AIClientProtocol,
+        instructions: String,
+        personaPrompt: String?,
+        temperature: Double?,
+        imagePayload: [String: Data],
+        directory: URL,
+        allowedStorageLocations: [StorageLocation]
+    ) async -> OrganizationPlan {
+        let candidates = Self.quarantinedRetryCandidates(in: plan)
+        guard !candidates.isEmpty else { return plan }
+        OrganizerServices.log(
+            "Retrying \(candidates.count) quarantined file(s) with full metadata",
+            category: "FolderOrganizer"
+        )
+        restartPlanGenerationForRetry()
+        await waitForPlanRetryBackoff()
+        guard (try? checkCancellation()) != nil else { return plan }
+        do {
+            defer { stopTimeoutTimer() }
+            let retryPlan = try await analyzeInBoundedBatches(
+                files: candidates,
+                client: client,
+                imagePayload: imagePayload,
+                instructions: Self.targetedRetryInstructions(base: instructions, files: candidates),
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
+            let hierarchyNormalized = Self.normalizingDestinationHierarchy(in: retryPlan)
+            let storageNormalized = normalizeStorageDestinations(
+                in: hierarchyNormalized,
+                allowedLocations: allowedStorageLocations,
+                sourceDirectoryURL: directory
+            )
+            try await validator.validateOffMain(
+                storageNormalized,
+                at: directory,
+                allowedStorageLocations: allowedStorageLocations,
+                mode: aiConfig?.mode ?? .organize
+            )
+            OrganizerServices.log(
+                "Quarantined-subset retry returned \(storageNormalized.totalFiles) file(s)",
+                category: "FolderOrganizer"
+            )
+            return Self.mergingTargetedRetry(storageNormalized, into: plan, candidates: candidates)
+        } catch {
+            OrganizerServices.log(
+                "Quarantined-subset retry failed: \(error.localizedDescription)",
+                category: "FolderOrganizer"
+            )
+            return plan
+        }
+    }
     
     // MARK: - State Updates with Progress
 
@@ -4445,7 +4759,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 currentPlan = normalizeRenameSuggestions(
                     in: applyRenameRuleConfiguration(to: plan, config: operationConfig),
                     config: operationConfig
-                )
+                ).calibratingRenameSelection()
             }
 
             // Validate plan before auto-apply (with a targeted retry for common validation failures)

@@ -53,7 +53,8 @@ enum PreviewRowPresentation: Equatable {
         comment: String?,
         duplicateInfo: DuplicateInfo?,
         parentSuggestion: FolderSuggestion?,
-        isHighlighted: Bool
+        isHighlighted: Bool,
+        collisionSuggestion: String?
     )
     case unorganizedHeader(row: FlattenedRow, fileCount: Int)
     case unorganizedFile(
@@ -67,6 +68,23 @@ enum PreviewRowPresentation: Equatable {
 }
 
 // MARK: - Preview Plan Insights
+
+/// Files in one folder claiming the same destination filename
+/// (case-insensitive, post-rename). The first file keeps the name; every
+/// file after it carries a ready-to-accept uniquified suggestion.
+struct FilenameCollisionGroup: Equatable {
+    let folderID: UUID
+    let folderPath: String
+    let collidingName: String
+    /// Deterministic order: the head keeps `collidingName`.
+    let files: [FileItem]
+    /// Uniquified suggestion per file after the head, keyed by file ID.
+    let suggestedNames: [UUID: String]
+
+    /// Three-or-more-way conflicts block Apply until resolved; two-way
+    /// conflicts auto-rename safely on apply.
+    var isBlocking: Bool { files.count >= 3 }
+}
 
 /// Cheap, read-only derivations over an OrganizationPlan for preview UI.
 /// Pure logic (no FS access): the caller supplies existence checks separately.
@@ -90,7 +108,8 @@ enum PreviewPlanInsights {
     }
 
     /// Rename suggestions worth flagging (medium/low confidence only;
-    /// high-confidence and unknown-confidence renames stay quiet).
+    /// high-confidence and unknown-confidence renames stay quiet), sorted by
+    /// confidence ascending so the riskiest rename reviews first.
     static func flaggableRenames(in plan: OrganizationPlan) -> [(folderPath: String, mapping: FileRenameMapping)] {
         var result: [(folderPath: String, mapping: FileRenameMapping)] = []
         func visit(_ folder: FolderSuggestion, parentPath: String) {
@@ -101,24 +120,94 @@ enum PreviewPlanInsights {
             for sub in folder.subfolders { visit(sub, parentPath: path) }
         }
         for suggestion in plan.suggestions { visit(suggestion, parentPath: "") }
+        result.sort { ($0.mapping.renameConfidence ?? 1.0) < ($1.mapping.renameConfidence ?? 1.0) }
         return result
     }
 
     /// Destination filenames claimed by more than one file in the same folder
     /// (case-insensitive, post-rename). These auto-rename on apply.
     static func filenameCollisions(in plan: OrganizationPlan) -> [(folderPath: String, names: [String])] {
-        var collisions: [(folderPath: String, names: [String])] = []
+        collisionGroups(in: plan).map { (folderPath: $0.folderPath, names: [$0.collidingName]) }
+    }
+
+    /// Same-folder final-name collisions with the colliding files and a
+    /// ready-to-accept uniquified name per file after the first. Deterministic:
+    /// files sort by display name, so the same file always keeps the name.
+    static func collisionGroups(in plan: OrganizationPlan) -> [FilenameCollisionGroup] {
+        var groups: [FilenameCollisionGroup] = []
         func visit(_ folder: FolderSuggestion, parentPath: String) {
             let path = parentPath.isEmpty ? folder.folderName : "\(parentPath)/\(folder.folderName)"
-            let groups = Dictionary(grouping: folder.filesWithFinalNames, by: { $0.finalName.lowercased() })
-            let dupes = groups.values.filter { $0.count > 1 }.compactMap { $0.first?.finalName }.sorted()
-            if !dupes.isEmpty {
-                collisions.append((folderPath: path, names: dupes))
+            let finals = folder.filesWithFinalNames
+            let byName = Dictionary(grouping: finals, by: { $0.finalName.lowercased() })
+            for key in byName.keys.sorted() {
+                guard let entries = byName[key], entries.count > 1 else { continue }
+                let ordered = entries
+                    .sorted {
+                        ($0.file.displayName.lowercased(), $0.file.id.uuidString)
+                            < ($1.file.displayName.lowercased(), $1.file.id.uuidString)
+                    }
+                var taken = Set(finals.map { $0.finalName.lowercased() })
+                var suggested: [UUID: String] = [:]
+                for entry in ordered.dropFirst() {
+                    suggested[entry.file.id] = uniquifiedName(for: entry.finalName, takenLowercased: &taken)
+                }
+                groups.append(FilenameCollisionGroup(
+                    folderID: folder.id,
+                    folderPath: path,
+                    collidingName: ordered.first?.finalName ?? key,
+                    files: ordered.map(\.file),
+                    suggestedNames: suggested
+                ))
             }
             for sub in folder.subfolders { visit(sub, parentPath: path) }
         }
         for suggestion in plan.suggestions { visit(suggestion, parentPath: "") }
-        return collisions
+        return groups
+    }
+
+    /// Extension-preserving uniquified name (`name_1.ext`), matched
+    /// case-insensitively like the apply path. The winner is inserted into
+    /// `takenLowercased` so sequential calls never repeat a name.
+    static func uniquifiedName(for desired: String, takenLowercased: inout Set<String>) -> String {
+        let nsName = desired as NSString
+        let ext = nsName.pathExtension
+        let base = nsName.deletingPathExtension
+        var counter = 1
+        while true {
+            let candidate = ext.isEmpty ? "\(base)_\(counter)" : "\(base)_\(counter).\(ext)"
+            counter += 1
+            guard takenLowercased.contains(candidate.lowercased()) else {
+                takenLowercased.insert(candidate.lowercased())
+                return candidate
+            }
+            guard counter <= 10_000 else {
+                takenLowercased.insert(candidate.lowercased())
+                return candidate
+            }
+        }
+    }
+
+    /// Apply-confirmation lines for collision groups. Three-or-more-way
+    /// conflicts name names explicitly (Apply stays disabled until resolved);
+    /// two-way conflicts keep the short auto-rename summary.
+    static func collisionConfirmationLines(groups: [FilenameCollisionGroup]) -> [String] {
+        var lines: [String] = []
+        for group in groups.filter(\.isBlocking).prefix(2) {
+            let examples = group.suggestedNames.values.sorted().prefix(2).joined(separator: ", ")
+            lines.append(
+                "\"\(group.collidingName)\" is claimed by \(group.files.count) files in \(group.folderPath) — "
+                    + "accept the inline suggestions (e.g. \(examples)) before applying."
+            )
+        }
+        let twoWayFiles = groups.filter { !$0.isBlocking }.reduce(0) { $0 + $1.files.count }
+        if twoWayFiles > 0 {
+            var line = "\(twoWayFiles) files would land on the same name and auto-rename on apply."
+            if let sample = groups.first(where: { !$0.isBlocking }) {
+                line += " E.g. \(sample.collidingName) in \(sample.folderPath)."
+            }
+            lines.append(line)
+        }
+        return lines
     }
 
     /// Folders pointing at absolute storage locations (external drives etc.).
@@ -161,6 +250,20 @@ class PreviewStore: ObservableObject {
 
     /// Duplicate file mappings - maps file ID to its duplicate info
     @Published private(set) var duplicateMappings: [UUID: DuplicateInfo] = [:]
+
+    /// Same-folder final-name collisions with per-file uniquified suggestions.
+    /// Refreshed synchronously on every plan change so inline accept buttons
+    /// never offer a stale name.
+    @Published private(set) var collisionGroups: [FilenameCollisionGroup] = []
+    /// Uniquified suggestion per collided file after the group head.
+    @Published private(set) var collisionSuggestions: [UUID: String] = [:]
+
+    /// Existing on-disk folders for quality re-scores (convention-match
+    /// context). Cached from PreviewView; empty until the first scan lands.
+    private var existingFolderPathsForQuality: [String] = []
+    /// Debounced off-main quality re-score after user edits. Never blocks UI.
+    private var qualityRescoreTask: Task<Void, Never>?
+    private static let qualityRescoreDebounceNanoseconds: UInt64 = 350_000_000
     
     /// Count of user edits captured for learning this session (moves, rejections, renames)
     @Published private(set) var editsCapturedCount: Int = 0
@@ -200,6 +303,7 @@ class PreviewStore: ObservableObject {
         cachedMoveDestinations = Self.collectMoveDestinations(from: plan.suggestions)
         expandAllFolders()
         rebuildFlattenedRows()
+        refreshCollisionGroups()
         cachedPlanVersion = plan.version
         throttledTotalFileCount = plan.totalFiles
     }
@@ -214,6 +318,8 @@ class PreviewStore: ObservableObject {
 
         cachedMoveDestinations = Self.collectMoveDestinations(from: newPlan.suggestions)
         refreshExpandedFolders(for: newPlan)
+        refreshCollisionGroups()
+        qualityRescoreTask?.cancel()
         folderCountCache.removeAll()
         folderCountCacheValid = false
         updateThrottledFileCount()
@@ -533,7 +639,8 @@ class PreviewStore: ObservableObject {
                 comment: fileCommentMappings[file.id],
                 duplicateInfo: duplicateMappings[file.id],
                 parentSuggestion: folderSuggestion(for: parentFolderID),
-                isHighlighted: highlightedFileID == file.id
+                isHighlighted: highlightedFileID == file.id,
+                collisionSuggestion: collisionSuggestions[file.id]
             )
         case .unorganizedHeader:
             return .unorganizedHeader(row: row, fileCount: plan.unorganizedFiles.count)
@@ -971,11 +1078,100 @@ class PreviewStore: ObservableObject {
         )
         plan = finalPlan
         cachedMoveDestinations = Self.collectMoveDestinations(from: finalPlan.suggestions)
+        refreshCollisionGroups()
         folderCountCache.removeAll()
         folderCountCacheValid = false
         updateThrottledFileCount()
         rebuildFlattenedRows()
         cachedPlanVersion = finalPlan.version
+        // Quality re-score only — never a full AI organize. Debounced and
+        // off-main so rapid edits (drag-drop, typing a rename) never stall.
+        scheduleQualityRescore(for: finalPlan)
+    }
+
+    /// Caches on-disk folders for re-score convention context. Set once from
+    /// the preview host; empty until the scan lands.
+    func setExistingFolderPaths(_ paths: [String]) {
+        existingFolderPathsForQuality = paths
+    }
+
+    /// True when an unresolved 3+-way name conflict blocks Apply.
+    var hasBlockingCollisions: Bool {
+        collisionGroups.contains(where: \.isBlocking)
+    }
+
+    /// Applies the suggested uniquified name for one collided file.
+    /// Returns the applied name, or nil when the file has no suggestion.
+    @discardableResult
+    func acceptCollisionSuggestion(fileID: UUID) -> String? {
+        for group in collisionGroups {
+            guard let suggestion = group.suggestedNames[fileID] else { continue }
+            updateRename(fileID: fileID, folderID: group.folderID, newName: suggestion)
+            return suggestion
+        }
+        return nil
+    }
+
+    /// Applies every pending uniquified suggestion. Clears all collision
+    /// groups, including blocking ones, in one step.
+    func acceptAllCollisionSuggestions() {
+        let pending = collisionGroups.flatMap { group in
+            group.suggestedNames.map { (group.folderID, $0.key, $0.value) }
+        }
+        for (folderID, fileID, name) in pending {
+            updateRename(fileID: fileID, folderID: folderID, newName: name)
+        }
+    }
+
+    /// Debounced quality re-score for the edited plan. The detached assessor
+    /// runs off-main; a stale result (a newer edit already scheduled its own
+    /// re-score) is dropped instead of overwriting fresher state.
+    private func scheduleQualityRescore(for editedPlan: OrganizationPlan) {
+        qualityRescoreTask?.cancel()
+        let existingPaths = existingFolderPathsForQuality
+        qualityRescoreTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Self.qualityRescoreDebounceNanoseconds)
+            guard !Task.isCancelled else { return }
+            do {
+                let assessment = try await PlanQualityEvaluator.assessOffMain(
+                    editedPlan,
+                    existingFolderPaths: existingPaths
+                )
+                try Task.checkCancellation()
+                self?.applyRescoredAssessment(assessment, forPlanID: editedPlan.id, version: editedPlan.version)
+            } catch is CancellationError {
+                return
+            } catch {
+                // Keep the previous assessment: a failed re-score must never
+                // blank the Quality badge.
+            }
+        }
+    }
+
+    /// Writes a re-scored assessment without bumping the plan version, so row
+    /// identity and the Edited diff stay stable on quality-only refreshes.
+    private func applyRescoredAssessment(
+        _ assessment: PlanQualityAssessment,
+        forPlanID id: UUID,
+        version: Int
+    ) {
+        guard plan.id == id, plan.version == version else { return }
+        var updated = plan
+        updated.qualityAssessment = assessment
+        plan = updated
+    }
+
+    /// Recomputes collision groups and the per-file suggestion map.
+    private func refreshCollisionGroups() {
+        let groups = PreviewPlanInsights.collisionGroups(in: plan)
+        collisionGroups = groups
+        var suggestions: [UUID: String] = [:]
+        for group in groups {
+            for (fileID, name) in group.suggestedNames {
+                suggestions[fileID] = name
+            }
+        }
+        collisionSuggestions = suggestions
     }
     
     func moveFile(fileID: UUID, toFolderID: UUID) {
@@ -1172,7 +1368,8 @@ struct FlattenedRowView: View, @MainActor Equatable {
             let comment,
             let duplicateInfo,
             let parentSuggestion,
-            let isHighlighted
+            let isHighlighted,
+            let collisionSuggestion
         ):
             if case .file(let file, let parentFolderID) = row.type {
                 FlatFileRowView(
@@ -1185,6 +1382,7 @@ struct FlattenedRowView: View, @MainActor Equatable {
                     duplicateInfo: duplicateInfo,
                     parentSuggestion: parentSuggestion,
                     isHighlighted: isHighlighted,
+                    collisionSuggestion: collisionSuggestion,
                     store: store,
                     dragDropManager: dragDropManager,
                     onPlanChanged: onPlanChanged
@@ -1542,6 +1740,9 @@ struct FlatFileRowView: View {
     let duplicateInfo: DuplicateInfo?
     let parentSuggestion: FolderSuggestion?
     let isHighlighted: Bool
+    /// Uniquified name suggestion when this file collides with another file's
+    /// destination name in the same folder. Nil when the name is unique.
+    let collisionSuggestion: String?
     let store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
@@ -1625,6 +1826,16 @@ struct FlatFileRowView: View {
                 .help(mapping.renameReason ?? mapping.confidenceBand.displayName)
                 .accessibilityLabel("Rename confidence \(mapping.confidenceBand.displayName) for \(file.displayName)")
             }
+
+            // Same-folder destination collision: one-click accept applies the
+            // uniquified name; Apply auto-renames 2-way conflicts regardless.
+            if let collisionSuggestion {
+                CollisionSuggestionRow(
+                    suggestion: collisionSuggestion,
+                    onAccept: acceptCollisionSuggestion
+                )
+                .padding(.leading, CGFloat(depth * 16) + 36)
+            }
         }
     }
 
@@ -1652,6 +1863,13 @@ struct FlatFileRowView: View {
 
     private func rejectRename() {
         store.rejectRename(fileID: file.id, folderID: parentFolderID)
+        onPlanChanged()
+    }
+
+    /// One-click accept for the inline uniquified collision suggestion.
+    private func acceptCollisionSuggestion() {
+        HapticFeedbackManager.shared.success()
+        store.acceptCollisionSuggestion(fileID: file.id)
         onPlanChanged()
     }
 
@@ -1793,6 +2011,50 @@ struct FlatFileRowView: View {
     private func renameHelpText(_ mapping: FileRenameMapping) -> String {
         let reason = mapping.renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return reason.isEmpty ? "Sorty suggested rename" : reason
+    }
+}
+
+// MARK: - Collision Suggestion Row
+
+/// Inline uniquified-name suggestion for a file whose destination name
+/// collides with another file in the same folder.
+struct CollisionSuggestionRow: View {
+    @SortyHotReload private var hotReload
+    let suggestion: String
+    let onAccept: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            Text("Name taken — use")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(suggestion)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundStyle(.orange)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Button("Use name") {
+                onAccept()
+            }
+            .buttonStyle(.tintedPill(.orange, size: .small))
+            .accessibilityIdentifier("AcceptCollisionSuggestionButton")
+            .accessibilityLabel("Use suggested unique name \(suggestion)")
+            .accessibilityHint("Renames this file so it no longer collides")
+        }
+        .opacity(isHovered ? 1.0 : 0.92)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+        .help("Another file lands on this name. Accept \(suggestion) or Apply auto-renames on write.")
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 }
 

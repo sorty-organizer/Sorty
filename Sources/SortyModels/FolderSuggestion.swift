@@ -304,6 +304,26 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
         }
         fileRenameMappings[index].isSelected = isSelected
     }
+
+    /// Runtime rename calibration: non-high-confidence renames require
+    /// explicit user opt-in (nil selection becomes false so the preview
+    /// toggle renders OFF), and mappings sort by confidence ascending so
+    /// the riskiest suggestion reviews first. Explicit opt-ins survive.
+    public mutating func calibrateRenameSelection() {
+        for index in fileRenameMappings.indices {
+            if fileRenameMappings[index].hasRename,
+               fileRenameMappings[index].isSelected == nil,
+               fileRenameMappings[index].confidenceBand != .high {
+                fileRenameMappings[index].isSelected = false
+            }
+        }
+        fileRenameMappings.sort {
+            ($0.renameConfidence ?? 1.0) < ($1.renameConfidence ?? 1.0)
+        }
+        for index in subfolders.indices {
+            subfolders[index].calibrateRenameSelection()
+        }
+    }
 }
 
 /// Represents a file with its suggested tags
@@ -339,5 +359,17 @@ public extension FolderSuggestion {
             )
             fileTagMappings.append(mapping)
         }
+    }
+}
+
+public extension OrganizationPlan {
+    /// Calibrates rename opt-in across every folder; see
+    /// FolderSuggestion.calibrateRenameSelection.
+    func calibratingRenameSelection() -> OrganizationPlan {
+        var updated = self
+        for index in updated.suggestions.indices {
+            updated.suggestions[index].calibrateRenameSelection()
+        }
+        return updated
     }
 }
