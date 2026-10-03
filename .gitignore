@@ -73,3 +73,7 @@ QualityCorpus/reports/
 
 # Local Codex runner state.
 .agent-local/
+
+# App-imported skill preferences belong only to the installed skill.
+.agents/skills/sorty/references/imported-settings.json
+.agents/skills/sorty/references/.imported-settings*.json

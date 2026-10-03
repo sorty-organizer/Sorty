@@ -834,13 +834,15 @@ copy_resources_safely() {
             "${source_resources_dir}/" "${dest_dir}/"
     fi
 
-    # The tracked Codex skill is bundled as an experimental installable resource.
+    # Bundle the skill without any privately imported user settings.
     local sorty_skill_source="${PROJECT_DIR}/.agents/skills/sorty"
     if [ -f "${sorty_skill_source}/SKILL.md" ]; then
-        log_detail "Syncing Sorty Codex skill"
-        rsync -a --delete \
+        log_detail "Syncing Sorty skill"
+        rsync -a --delete --delete-excluded \
             --exclude ".DS_Store" \
             --exclude "__pycache__/" \
+            --exclude "imported-settings.json" \
+            --exclude ".imported-settings*.json" \
             "${sorty_skill_source}/" "${dest_dir}/sorty/"
     fi
     

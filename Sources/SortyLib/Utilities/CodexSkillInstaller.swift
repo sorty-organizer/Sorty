@@ -14,9 +14,124 @@ enum CodexSkillInstallState: Equatable, Sendable {
     case failed
 }
 
+struct SkillImportOption: Identifiable, Sendable {
+    enum Section: String, CaseIterable, Sendable {
+        case preferences = "Preferences"
+        case exclusions = "Exclusions"
+        case watchedFolders = "Watched folders"
+        case learnings = "Learnings"
+
+        var icon: String {
+            switch self {
+            case .preferences: "textformat"
+            case .exclusions: "line.3.horizontal.decrease.circle"
+            case .watchedFolders: "folder"
+            case .learnings: "brain"
+            }
+        }
+    }
+
+    let id: String
+    let selectionID: String
+    let section: Section
+    let title: String
+    let detail: String
+    let category: String
+    let key: String?
+    let value: Data
+
+    static func options(
+        config: AIConfig, openFolder: Bool, exclusions: [ExclusionRule],
+        exceptions: [NaturalLanguageException], folders: [WatchedFolder],
+        learnings: LearningsProfile?
+    ) throws -> [Self] {
+        var options: [Self] = []
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        func add<Value: Encodable>(
+            _ value: Value, section: Section, title: String, detail: String,
+            category: String, key: String? = nil, id: String, selectionID: String? = nil
+        ) throws {
+            options.append(Self(id: id, selectionID: selectionID ?? id, section: section,
+                                title: title, detail: detail, category: category, key: key,
+                                value: try encoder.encode(value)))
+        }
+        try add(openFolder, section: .preferences, title: "Open folder after organization",
+                detail: openFolder ? "On" : "Off", category: "preferences", key: "openFolderAfterOrganization", id: "openFolder")
+        try add(config.namingStyle, section: .preferences, title: "Naming style",
+                detail: config.namingStyle.displayName, category: "preferences", key: "namingStyle", id: "namingStyle")
+        try add(config.renameNamingOptions, section: .preferences, title: "Filename formatting",
+                detail: "\(config.renameNamingOptions.separator.displayName) · \(config.renameNamingOptions.caseStyle.displayName) · \(config.renameNamingOptions.outputLanguage)",
+                category: "preferences", key: "renameNamingOptions", id: "namingOptions")
+        if let instructions = config.customNamingInstructions, !instructions.isEmpty {
+            try add(instructions, section: .preferences, title: "Naming instructions", detail: instructions,
+                    category: "preferences", key: "customNamingInstructions", id: "namingInstructions")
+        }
+        if !config.renameRules.isEmpty {
+            try add(config.renameRules, section: .preferences, title: "Rename rules",
+                    detail: "\(config.renameRules.count) saved rules", category: "preferences", key: "renameRules", id: "renameRules")
+        }
+        for rule in exclusions {
+            try add(rule, section: .exclusions, title: rule.description ?? rule.type.friendlyName,
+                    detail: rule.interpretedMatchDescription + (rule.isEnabled ? "" : " · Disabled"),
+                    category: "exclusions", id: rule.id.uuidString,
+                    selectionID: rule.conditionGroupID.map { "group-\($0.uuidString)" })
+        }
+        for exception in exceptions {
+            try add(exception, section: .exclusions, title: exception.text,
+                    detail: exception.isEnabled ? "Exception" : "Disabled exception",
+                    category: "naturalLanguageExceptions", id: exception.id.uuidString)
+        }
+        for folder in folders {
+            // Paths and prompts are portable. Bookmarks and automatic-apply grants are not.
+            var value = ["id": folder.id.uuidString, "name": folder.name, "path": folder.path]
+            if let prompt = folder.customPrompt { value["customPrompt"] = prompt }
+            try add(value, section: .watchedFolders, title: folder.name, detail: folder.path,
+                    category: "watchedFolders", id: folder.id.uuidString)
+        }
+        if let learnings {
+            func addLearning<Value: Encodable>(_ value: [Value], key: String, title: String) throws {
+                guard !value.isEmpty else { return }
+                try add(value, section: .learnings, title: title, detail: "\(value.count) saved items",
+                        category: "learnings", key: key, id: key)
+            }
+            try addLearning(learnings.inferredRules, key: "inferredRules", title: "Learned rules")
+            try addLearning(learnings.guidingInstructionsHistory, key: "guidingInstructionsHistory", title: "Guiding instructions")
+            try addLearning(learnings.additionalInstructionsHistory, key: "additionalInstructionsHistory", title: "Your instructions")
+            try addLearning(learnings.corrections, key: "corrections", title: "Corrections")
+            try addLearning(learnings.rejections, key: "rejections", title: "Rejected changes")
+            try addLearning(learnings.positiveExamples, key: "positiveExamples", title: "Preferred examples")
+            try addLearning(learnings.learningExclusionPatterns, key: "learningExclusionPatterns", title: "Learning exclusions")
+        }
+        return options
+    }
+
+    static func profileData(options: [Self], selected: Set<String>) throws -> Data {
+        var preferences: [String: Any] = [:]
+        var learnings: [String: Any] = [:]
+        var lists: [String: [Any]] = ["exclusions": [], "naturalLanguageExceptions": [], "watchedFolders": []]
+        for option in options where selected.contains(option.selectionID) {
+            let value = try JSONSerialization.jsonObject(with: option.value, options: .fragmentsAllowed)
+            if let key = option.key {
+                if option.category == "preferences" { preferences[key] = value }
+                else { learnings[key] = value }
+            } else {
+                lists[option.category, default: []].append(value)
+            }
+        }
+        return try JSONSerialization.data(withJSONObject: [
+            "version": 1, "preferences": preferences, "learnings": learnings,
+            "exclusions": lists["exclusions"] ?? [],
+            "naturalLanguageExceptions": lists["naturalLanguageExceptions"] ?? [],
+            "watchedFolders": lists["watchedFolders"] ?? []
+        ], options: [.prettyPrinted, .sortedKeys])
+    }
+}
+
 @MainActor
 final class CodexSkillInstaller: ObservableObject {
     @Published private(set) var state: CodexSkillInstallState = .checking
+    @Published var selectedSkillsDirectory: URL?
 
     private let fileManager: FileManager
     private let environment: [String: String]
@@ -30,6 +145,9 @@ final class CodexSkillInstaller: ObservableObject {
     }
 
     var destinationURL: URL {
+        if let selectedSkillsDirectory {
+            return selectedSkillsDirectory.appendingPathComponent("sorty", isDirectory: true)
+        }
         let codexHome: URL
         if let configuredHome = environment["CODEX_HOME"]?.trimmingCharacters(in: .whitespacesAndNewlines),
            !configuredHome.isEmpty {
@@ -133,6 +251,41 @@ final class CodexSkillInstaller: ObservableObject {
         NSWorkspace.shared.open(skillsURL)
     }
 
+    func importSettings(options: [SkillImportOption], selected: Set<String>) async throws {
+        let data = try SkillImportOption.profileData(options: options, selected: selected)
+        let destination = destinationURL
+        try await Task.detached(priority: .userInitiated) {
+            try Self.writeImportedSettings(data, destination: destination)
+        }.value
+        HapticFeedbackManager.shared.success()
+    }
+
+    nonisolated static func writeImportedSettings(_ data: Data, destination: URL) throws {
+        let fileManager = FileManager.default
+        guard isValidSkill(at: destination) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        let references = destination.appendingPathComponent("references", isDirectory: true)
+        try fileManager.createDirectory(at: references, withIntermediateDirectories: true)
+        let profile = references.appendingPathComponent("imported-settings.json")
+        let backup = references.appendingPathComponent(".imported-settings-backup.json")
+        if fileManager.fileExists(atPath: profile.path) {
+            try Data(contentsOf: profile).write(to: backup, options: .atomic)
+            try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: backup.path)
+        }
+        let temporary = references.appendingPathComponent(".imported-settings-\(UUID().uuidString).json")
+        defer { try? fileManager.removeItem(at: temporary) }
+        guard fileManager.createFile(atPath: temporary.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        if fileManager.fileExists(atPath: profile.path) {
+            _ = try fileManager.replaceItemAt(profile, withItemAt: temporary)
+        } else {
+            try fileManager.moveItem(at: temporary, to: profile)
+        }
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: profile.path)
+    }
+
     nonisolated static func inspect(source: URL?, destination: URL) -> CodexSkillInstallState {
         guard let source, isValidSkill(at: source) else { return .unavailable }
         guard FileManager.default.fileExists(atPath: destination.path) else { return .available }
@@ -152,7 +305,7 @@ final class CodexSkillInstaller: ObservableObject {
         let temporary = skillsURL.appendingPathComponent(".sorty-install-\(UUID().uuidString)", isDirectory: true)
         do {
             try fileManager.createDirectory(at: skillsURL, withIntermediateDirectories: true)
-            try fileManager.copyItem(at: source, to: temporary)
+            try copySkill(source: source, destination: temporary)
             guard isValidSkill(at: temporary) else {
                 try? fileManager.removeItem(at: temporary)
                 return false
@@ -177,10 +330,17 @@ final class CodexSkillInstaller: ObservableObject {
         let temporary = skillsURL.appendingPathComponent(".sorty-install-\(operationID)", isDirectory: true)
         let backup = skillsURL.appendingPathComponent(".sorty-backup-\(operationID)", isDirectory: true)
         do {
-            try fileManager.copyItem(at: source, to: temporary)
+            try copySkill(source: source, destination: temporary)
             guard isValidSkill(at: temporary) else {
                 try? fileManager.removeItem(at: temporary)
                 return false
+            }
+            let importedSettings = "references/imported-settings.json"
+            let existingProfile = destination.appendingPathComponent(importedSettings)
+            if fileManager.fileExists(atPath: existingProfile.path) {
+                let newProfile = temporary.appendingPathComponent(importedSettings)
+                try fileManager.createDirectory(at: newProfile.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try fileManager.copyItem(at: existingProfile, to: newProfile)
             }
             try fileManager.moveItem(at: destination, to: backup)
             do {
@@ -229,6 +389,17 @@ final class CodexSkillInstaller: ObservableObject {
         )
     }
 
+    private nonisolated static func copySkill(source: URL, destination: URL) throws {
+        let fileManager = FileManager.default
+        try fileManager.copyItem(at: source, to: destination)
+        let references = destination.appendingPathComponent("references", isDirectory: true)
+        guard fileManager.fileExists(atPath: references.path) else { return }
+        for file in try fileManager.contentsOfDirectory(at: references, includingPropertiesForKeys: nil)
+        where file.lastPathComponent == "imported-settings.json" || file.lastPathComponent.hasPrefix(".imported-settings") {
+            try fileManager.removeItem(at: file)
+        }
+    }
+
     private nonisolated static func directoriesMatch(_ lhs: URL, _ rhs: URL) -> Bool {
         guard let leftFiles = relativeFiles(in: lhs), let rightFiles = relativeFiles(in: rhs), leftFiles == rightFiles else {
             return false
@@ -260,6 +431,7 @@ final class CodexSkillInstaller: ObservableObject {
             let relativePath = url.pathComponents
                 .suffix(enumerator.level)
                 .joined(separator: "/")
+            if relativePath == "references/imported-settings.json" { continue }
             files.insert(relativePath)
         }
         return files

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct CodexSkillInstallerCard: View {
@@ -7,10 +8,16 @@ struct CodexSkillInstallerCard: View {
     @State private var isConfirmingRemoval = false
     @State private var isConfirmingReplacement = false
     @State private var isHoveringShowExisting = false
+    @State private var importSheet: SkillSheet?
+
+    private enum SkillSheet: Int, Identifiable {
+        case setup
+        var id: Int { rawValue }
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "dollarsign")
+            Image(systemName: "folder.badge.gearshape")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.indigo)
                 .frame(width: 28, height: 28)
@@ -19,7 +26,7 @@ struct CodexSkillInstallerCard: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
-                    Text("Sorty for Codex")
+                    Text("Sorty skill")
                         .font(.subheadline.weight(.semibold))
                     Text("Experimental")
                         .font(.caption2.weight(.medium))
@@ -29,7 +36,7 @@ struct CodexSkillInstallerCard: View {
                         .background(.secondary.opacity(0.1), in: Capsule())
                 }
 
-                Text("Install Sorty as a Codex skill for organizing, renaming, duplicate review, and rollback from natural-language requests.")
+                Text("Bring your naming preferences, exclusions, watched folders, and Learnings into your agent.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -63,14 +70,17 @@ struct CodexSkillInstallerCard: View {
         .task {
             await installer.refresh()
         }
+        .sheet(item: $importSheet) { _ in
+            SkillImportSheet(installer: installer)
+        }
         .confirmationDialog(
-            "Remove Sorty from Codex?",
+            "Remove the Sorty skill?",
             isPresented: $isConfirmingRemoval
         ) {
             Button("Remove Skill", role: .destructive, action: remove)
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Codex will no longer discover the Sorty skill. You can install it again at any time.")
+            Text("This removes the installed skill and its imported settings. Your app data stays unchanged.")
         }
         .confirmationDialog(
             "Replace the existing Sorty skill?",
@@ -79,7 +89,7 @@ struct CodexSkillInstallerCard: View {
             Button("Replace Skill", role: .destructive, action: replace)
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This replaces the Sorty skill currently in your Codex skills folder with the version bundled in Sorty.")
+            Text("This updates the installed Sorty skill. Imported settings are preserved.")
         }
     }
 
@@ -96,11 +106,16 @@ struct CodexSkillInstallerCard: View {
                 .buttonStyle(.sortyProminent(size: .small))
                 .accessibilityIdentifier("experimental.codex-skill.install")
         case .installed:
-            Button("Remove Skill", role: .destructive) {
-                isConfirmingRemoval = true
+            VStack(spacing: 6) {
+                Button("Import Settings…", action: install)
+                    .buttonStyle(.sortyProminent(size: .small))
+                    .accessibilityIdentifier("experimental.skill.import-settings")
+                Button("Remove Skill", role: .destructive) {
+                    isConfirmingRemoval = true
+                }
+                .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
+                .accessibilityIdentifier("experimental.codex-skill.remove")
             }
-            .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
-            .accessibilityIdentifier("experimental.codex-skill.remove")
         case .conflict:
             VStack(alignment: .center, spacing: 6) {
                 Button("Replace Skill") {
@@ -153,12 +168,12 @@ struct CodexSkillInstallerCard: View {
 
     private var statusText: String {
         switch installer.state {
-        case .checking: "Checking Codex…"
+        case .checking: "Checking skill…"
         case .available: "Ready to install"
         case .installing: "Installing…"
         case .replacing: "Replacing existing skill…"
         case .removing: "Removing…"
-        case .installed: "Installed in Codex"
+        case .installed: "Skill installed"
         case .conflict: "Another Sorty skill is installed. Replace it or review it first."
         case .unavailable: "The bundled skill is unavailable in this build"
         case .failed: "Installation failed"
@@ -167,11 +182,11 @@ struct CodexSkillInstallerCard: View {
 
     private var progressLabel: String {
         switch installer.state {
-        case .checking: "Checking Codex skill"
-        case .installing: "Installing Codex skill"
-        case .replacing: "Replacing Codex skill"
-        case .removing: "Removing Codex skill"
-        default: "Updating Codex skill"
+        case .checking: "Checking skill"
+        case .installing: "Installing skill"
+        case .replacing: "Replacing skill"
+        case .removing: "Removing skill"
+        default: "Updating skill"
         }
     }
 
@@ -192,21 +207,14 @@ struct CodexSkillInstallerCard: View {
     }
 
     private func install() {
-        Task {
-            await installer.install()
-            let announcement: String
-            if case .installed = installer.state {
-                announcement = "Sorty skill installed in Codex"
-            } else {
-                announcement = statusText
-            }
-            AccessibilityNotification.Announcement(announcement).post()
-        }
+        HapticFeedbackManager.shared.tap()
+        importSheet = .setup
     }
 
     private func replace() {
         Task {
             await installer.replace()
+            if case .installed = installer.state { importSheet = .setup }
             AccessibilityNotification.Announcement(statusText).post()
         }
     }
@@ -215,6 +223,223 @@ struct CodexSkillInstallerCard: View {
         Task {
             await installer.remove()
             AccessibilityNotification.Announcement(statusText).post()
+        }
+    }
+}
+
+private struct SkillImportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var settings: SettingsViewModel
+    @EnvironmentObject private var exclusions: ExclusionRulesManager
+    @EnvironmentObject private var watchedFolders: WatchedFoldersManager
+    @EnvironmentObject private var learnings: LearningsManager
+    @EnvironmentObject private var automation: AutomationManager
+    @ObservedObject var installer: CodexSkillInstaller
+    @State private var options: [SkillImportOption] = []
+    @State private var selected: Set<String> = []
+    @State private var isLoading = true
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Import into your skill")
+                        .font(.title2.weight(.semibold))
+                    Spacer()
+                    Button(allSelected ? "Deselect All" : "Select All") {
+                        Task {
+                            if allSelected { selected.removeAll() }
+                            else {
+                                if learnings.isLocked || learnings.currentProfile == nil { await unlockLearnings() }
+                                selected = Set(options.map(\.selectionID))
+                            }
+                            HapticFeedbackManager.shared.selection()
+                        }
+                    }
+                    .buttonStyle(.sortyBordered(size: .small))
+                    .accessibilityIdentifier("skill-import.select-all")
+                    .disabled(isLoading || isSaving)
+                }
+                Text("Choose what to bring from Sorty. You can tell your agent what to do for each task.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(24)
+
+            ScrollView {
+                VStack(spacing: 12) {
+                    SettingsCard(title: "Skill location", icon: "folder", color: .indigo) {
+                        HStack {
+                            Text(installer.destinationURL.path)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .lineLimit(2)
+                            Spacer()
+                            Button("Choose…", action: chooseLocation)
+                                .buttonStyle(.sortyBordered(size: .small))
+                                .accessibilityIdentifier("skill-import.choose-location")
+                        }
+                    }
+                    ForEach(SkillImportOption.Section.allCases, id: \.self) { section in
+                        importSection(section)
+                    }
+                    Text("Selected Learnings are stored as readable files in the skill. Your agent can use them in future requests. Watched folders are saved without starting background automation.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle")
+                            .font(.callout)
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("skill-import.error")
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
+            }
+            .disabled(isLoading || isSaving)
+            Divider()
+            HStack {
+                if isLoading || isSaving {
+                    ProgressView().controlSize(.small)
+                    Text(isSaving ? "Importing…" : "Loading settings…").font(.caption)
+                } else {
+                    Text("\(options.filter { selected.contains($0.selectionID) }.count) selected")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(.sortyBordered(size: .small))
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(isSaving)
+                Button("Import Selected", action: importSelected)
+                    .buttonStyle(.sortyProminent(size: .small))
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(selected.isEmpty || isLoading || isSaving)
+                    .accessibilityIdentifier("skill-import.confirm")
+            }
+            .padding(20)
+        }
+        .frame(width: 620, height: 650)
+        .interactiveDismissDisabled(isSaving)
+        .task {
+            await settings.loadPersistedState()
+            await exclusions.loadPersistedState()
+            await watchedFolders.loadPersistedState()
+            refreshOptions()
+            isLoading = false
+        }
+    }
+
+    private var allSelected: Bool {
+        !options.isEmpty && options.allSatisfy { selected.contains($0.selectionID) }
+    }
+
+    private func importSection(_ section: SkillImportOption.Section) -> some View {
+        let rows = options.filter { $0.section == section }
+        let identifiers = Set(rows.map(\.selectionID))
+        let sectionSelected = !identifiers.isEmpty && identifiers.isSubset(of: selected)
+        return SettingsCard(title: section.rawValue, icon: section.icon, color: .indigo, headerAccessory: {
+            if !rows.isEmpty {
+                Button(sectionSelected ? "Deselect All" : "Select All") {
+                    if sectionSelected { selected.subtract(identifiers) }
+                    else { selected.formUnion(identifiers) }
+                    HapticFeedbackManager.shared.selection()
+                }
+                .buttonStyle(.sortyBordered(size: .small))
+                .accessibilityIdentifier("skill-import.select-all.\(section.rawValue)")
+            }
+        }) {
+            if rows.isEmpty {
+                if section == .learnings && (learnings.isLocked || learnings.currentProfile == nil) {
+                    Button("Include Learnings") { Task { await unlockLearnings() } }
+                        .buttonStyle(.sortyBordered(size: .small))
+                        .accessibilityIdentifier("skill-import.unlock-learnings")
+                } else {
+                    Text("Nothing saved yet.").font(.caption).foregroundStyle(.secondary)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(rows) { option in
+                        Toggle(isOn: Binding(
+                            get: { selected.contains(option.selectionID) },
+                            set: { value in
+                                if value { selected.insert(option.selectionID) }
+                                else { selected.remove(option.selectionID) }
+                                HapticFeedbackManager.shared.selection()
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(option.title).font(.subheadline)
+                                Text(option.detail).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                        .accessibilityIdentifier("skill-import.option.\(option.id)")
+                    }
+                }
+            }
+        }
+    }
+
+    private func refreshOptions() {
+        do {
+            options = try SkillImportOption.options(
+                config: settings.config, openFolder: automation.autoSelectOrganizedFolders,
+                exclusions: exclusions.rules, exceptions: exclusions.naturalLanguageExceptions,
+                folders: watchedFolders.folders, learnings: learnings.isLocked ? nil : learnings.currentProfile
+            )
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    private func unlockLearnings() async {
+        isLoading = true
+        defer { isLoading = false }
+        guard await SecurityManager.shared.authenticateForSensitiveAction(reason: "Authenticate to import your Learnings into the skill.") else { return }
+        await learnings.unlock()
+        refreshOptions()
+        if let error = learnings.error { errorMessage = error }
+    }
+
+    private func chooseLocation() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = installer.destinationURL.deletingLastPathComponent()
+        panel.message = "Choose the folder where your agent loads skills. Sorty creates a sorty folder inside it."
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let directory = panel.url else { return }
+        installer.selectedSkillsDirectory = directory
+        Task { await installer.refresh(trackUsage: false) }
+    }
+
+    private func importSelected() {
+        isSaving = true
+        errorMessage = nil
+        Task {
+            defer { isSaving = false }
+            if options.contains(where: { $0.section == .learnings && selected.contains($0.selectionID) }) {
+                guard await SecurityManager.shared.authenticateForSensitiveAction(reason: "Authenticate to import your Learnings into the skill.") else { return }
+            }
+            if installer.state == .available || installer.state == .failed {
+                await installer.install()
+            }
+            guard case .installed = installer.state else {
+                errorMessage = "This location has a different skill. Cancel and update it first, or choose another location."
+                return
+            }
+            do {
+                try await installer.importSettings(options: options, selected: selected)
+                AccessibilityNotification.Announcement("Settings imported into your skill").post()
+                dismiss()
+            } catch {
+                errorMessage = error.localizedDescription
+                HapticFeedbackManager.shared.error()
+            }
         }
     }
 }

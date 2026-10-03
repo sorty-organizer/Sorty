@@ -478,7 +478,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .experimental:
             return [
-                feature("Experimental Features", "Install the experimental Sorty skill for Codex and see other available labs.", keywords: ["experimental", "labs", "beta", "feature flags", "codex", "skill", "install"], target: .experimentalEmptyState)
+                feature("Experimental Features", "Install the Sorty skill and import your preferences, exclusions, watched folders, and Learnings.", keywords: ["experimental", "labs", "beta", "feature flags", "skill", "install", "import"], target: .experimentalEmptyState)
             ]
         }
     }

@@ -36,6 +36,12 @@ final class UtilityTests: XCTestCase {
             return XCTFail("Expected the copied skill to be recognized as installed")
         }
 
+        let importedSettings = Data("{\"version\":1,\"preferences\":{\"openFolderAfterOrganization\":true}}".utf8)
+        try CodexSkillInstaller.writeImportedSettings(importedSettings, destination: destination)
+        guard case .installed = CodexSkillInstaller.inspect(source: source, destination: destination) else {
+            return XCTFail("Importing personal settings must not mark the skill as conflicting")
+        }
+
         try "different".write(
             to: destination.appendingPathComponent("SKILL.md"),
             atomically: true,
@@ -49,10 +55,34 @@ final class UtilityTests: XCTestCase {
         )
 
         XCTAssertTrue(CodexSkillInstaller.replace(source: source, destination: destination))
+        let profileURL = destination.appendingPathComponent("references/imported-settings.json")
+        XCTAssertEqual(try Data(contentsOf: profileURL), importedSettings)
+        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: profileURL.path)[.posixPermissions] as? Int, 0o600)
         guard case .installed = CodexSkillInstaller.inspect(source: source, destination: destination) else {
             return XCTFail("Expected the conflicting skill to be replaced")
         }
         XCTAssertTrue(CodexSkillInstaller.remove(destination: destination))
         XCTAssertEqual(CodexSkillInstaller.inspect(source: source, destination: destination), .available)
+    }
+
+    func testSkillImportExportsOnlySelectedPersistentPreferences() throws {
+        var config = AIConfig.default
+        config.apiKey = "provider-secret"
+        config.customNamingInstructions = "Use short project names"
+        let folder = WatchedFolder(path: "/example/Inbox", bookmarkData: Data("private-bookmark".utf8))
+        let options = try SkillImportOption.options(
+            config: config, openFolder: true, exclusions: [], exceptions: [], folders: [folder], learnings: nil
+        )
+        let data = try SkillImportOption.profileData(options: options, selected: ["namingStyle", folder.id.uuidString])
+        let profile = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let preferences = try XCTUnwrap(profile["preferences"] as? [String: Any])
+        XCTAssertEqual(Set(preferences.keys), ["namingStyle"])
+        let importedFolder = try XCTUnwrap((profile["watchedFolders"] as? [[String: Any]])?.first)
+        XCTAssertEqual(importedFolder["path"] as? String, "/example/Inbox")
+        XCTAssertNil(importedFolder["bookmarkData"])
+        XCTAssertNil(importedFolder["autoOrganize"])
+        XCTAssertNil(importedFolder["organizationMode"])
+        XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("provider-secret"))
+        XCTAssertFalse(options.contains { ["mode", "enableDeepScan", "enableSmartRename", "enableVision"].contains($0.key ?? "") })
     }
 }

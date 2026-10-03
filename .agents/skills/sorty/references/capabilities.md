@@ -15,14 +15,14 @@ Use this map to route current Sorty behavior. Recheck `README.md`, `CHANGELOG.md
 | Personas | Native | Agent may follow temporary instructions without persisting a persona |
 | Imported Learnings | Agent | Selected exported instructions and examples guide future plans |
 | Passive Learnings | Native | Encryption, consent, and biometric controls stay app-owned |
-| Saved watched folders | Agent | Import paths, prompts, modes, and policy through onboarding |
+| Saved watched folders | Agent | Import paths and prompts from the app's skill settings |
 | Background watching | Native or separately configured automation | Import does not start a service or authorize runs |
-| Organization preferences | Agent | Select individual settings during onboarding; explicit requests override defaults |
+| Naming and completion preferences | Agent | Select in the app; task instructions determine what to do |
 | Storage destinations | Native preferred | Agent mode accepts an explicit absolute destination |
 | History and rollback | Native or agent | Histories are separate; agent journals only its own work |
 | Finder extension and Services | Native | Route to Finder settings or the matching deeplink |
 | Menu bar, shortcuts, deeplinks, widgets | Native | The skill may open routes but does not recreate UI surfaces |
-| AI providers and local models | Native | Agent mode uses the active Codex model |
+| AI providers and local models | Native | Agent mode uses the active agent's model |
 | Privacy, Keychain, permissions, diagnostics | Native | Never imitate security state |
 | HUD and native notifications | Native | Do not substitute an inline or textual fake |
 | Updates and release management | Native | Sparkle remains app-owned |
