@@ -5,13 +5,17 @@ The Sorty skill organizes and renames files through your agent using preferences
 ## Set up in the app
 
 1. Open Settings > Experimental > Sorty skill.
-2. Click Install Skill, or Import Settings if it is already installed.
-3. Choose the skill location and select what to bring over. Use Select All for a section or the entire list.
-4. Click Import Selected.
+2. Click Set Up Skill, or Import Settings if it is already installed. Review Setup opens the same flow when another skill is present.
+3. Read the introduction, then choose the folder where your agent loads skills. The default is Codex's skills folder.
+4. Choose what to share under Preferences, Exclusions, Watched folders, and Learnings. Select an entire section, the full list, or individual items. Unlock Learnings to review them before selecting.
+5. Review the destination and selected settings, then click Install and Import, or Import Settings for an existing installation. Confirm replacement if another skill occupies the location.
+6. The completion screen gives you a sample request to copy into a new agent chat.
 
-The import sheet uses the report dialog's rounded header and glass background, with onboarding reveal animation and sound. Background motion settles after the entrance and follows accessibility settings. A completion sound and HUD confirm the import.
+Setup opens in its own resizable window with native Liquid Glass on macOS 26. It reuses the onboarding's full-screen backdrop, edge glow, and full-window color field. Each step explains the choice before presenting its controls. The background changes as you advance and stays still between steps. Reduce Motion disables transitions. Reduce Transparency uses a solid background and hides the screen effects. Screen effects also hide when the setup window is inactive. The window stays open after import to explain the next action, and cannot close while an import is in progress.
 
-The app's normal cards and checkboxes let you select:
+Choose at least one setting to import. Reimporting replaces the previous imported selection, so include every preference you want the agent to keep using.
+
+The preferences step uses category navigation and native checkboxes to select:
 
 - naming style, filename formatting, naming instructions, and rename rules;
 - whether to open the folder after organization;

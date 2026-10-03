@@ -2064,9 +2064,9 @@ private struct OnboardingScreenEdgeGlow: View {
     }
 }
 
-/// Places a visual-effect surface behind the onboarding window, leaving the
-/// Sorty window clear while softening the rest of the current screen.
-private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
+/// Shares the onboarding screen backdrop with guided skill setup, leaving the
+/// host window clear while softening the rest of its screen.
+struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
     @SortyHotReload private var hotReload
     let isVisible: Bool
 
@@ -2286,8 +2286,8 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
                 backdropPanel.animator().alphaValue = 0
             }
 
-            let dismissal = DispatchWorkItem { [weak self, weak backdropPanel] in
-                guard let self, self.backdropPanel === backdropPanel else { return }
+            let dismissal = DispatchWorkItem { [weak backdropPanel] in
+                guard self.backdropPanel === backdropPanel else { return }
                 backdropPanel?.orderOut(nil)
                 backdropPanel?.close()
                 self.backdropPanel = nil
@@ -2330,7 +2330,7 @@ private struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
     }
 }
 
-private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
+struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
     @SortyHotReload private var hotReload
     let isVisible: Bool
 
@@ -2564,8 +2564,8 @@ private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                 glowPanel.animator().alphaValue = 0
             }
 
-            let dismissal = DispatchWorkItem { [weak self, weak glowPanel] in
-                guard let self, self.glowPanel === glowPanel else { return }
+            let dismissal = DispatchWorkItem { [weak glowPanel] in
+                guard self.glowPanel === glowPanel else { return }
                 glowPanel?.orderOut(nil)
                 glowPanel?.close()
                 self.glowPanel = nil
