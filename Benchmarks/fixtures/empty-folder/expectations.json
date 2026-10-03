@@ -1,0 +1,17 @@
+{
+  "notes": "Degenerate floor: a good result creates no folders, renames nothing, and reports every file (none) exactly once. Any folder or rename here is pure invention.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 6,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Documents", "Files", "Unorganized"],
+  "shouldGroupTogether": [],
+  "shouldNotGroupTogether": [],
+  "rename": {
+    "mustKeepUnrenamed": [],
+    "mayRenameWithEvidence": [],
+    "neverRename": [],
+    "renameOnlyWhenEvidence": true
+  },
+  "preferredSignals": [],
+  "liveInsightMustMentionAny": ["empty", "nothing"]
+}

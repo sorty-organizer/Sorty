@@ -1,0 +1,8 @@
+{
+  "id": "empty-folder",
+  "title": "Empty folder degenerate case",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 6, "maxDepth": 3 },
+  "customInstructions": "There is nothing to organize. Return no folders and rename nothing.",
+  "files": []
+}

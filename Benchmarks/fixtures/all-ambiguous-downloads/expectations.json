@@ -1,0 +1,17 @@
+{
+  "notes": "Restraint probe: the only good result leaves every file unorganized and renames nothing. KNOWN SCORER GAP: sorty_eval.py penalizes single-bucket outputs via useful_separation even when unorganized is correct, so a perfect run still scores low on organizationQuality here. That penalty is scorer structure, not model truth; judge this fixture by renameNecessity/fileCoverage and manual review.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 6,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Documents", "Files", "Stuff", "Unknown"],
+  "shouldGroupTogether": [],
+  "shouldNotGroupTogether": [],
+  "rename": {
+    "mustKeepUnrenamed": ["download-001.bin", "download-002.bin", "download-003.bin", "download-004.bin", "data.part"],
+    "mayRenameWithEvidence": [],
+    "neverRename": ["download-001.bin", "download-002.bin", "download-003.bin", "download-004.bin", "data.part"],
+    "renameOnlyWhenEvidence": true
+  },
+  "preferredSignals": [],
+  "liveInsightMustMentionAny": ["uncertain", "ambiguous", "review", "unorganized", "signal"]
+}

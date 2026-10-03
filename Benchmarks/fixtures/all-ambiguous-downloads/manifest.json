@@ -1,0 +1,14 @@
+{
+  "id": "all-ambiguous-downloads",
+  "title": "All ambiguous binaries",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 6, "maxDepth": 3 },
+  "customInstructions": "These downloads carry no usable signal. Do not invent categories or renames; leave unplaceable files unorganized and surface them for review.",
+  "files": [
+    { "filename": "download-001.bin", "path": "/Users/test/Downloads/download-001.bin", "size": 412020, "modified": "2026-06-01T08:00:00Z", "contentSummary": "Opaque binary payload, no identifying headers." },
+    { "filename": "download-002.bin", "path": "/Users/test/Downloads/download-002.bin", "size": 88112, "modified": "2026-06-01T08:05:00Z", "contentSummary": "Opaque binary payload, no identifying headers." },
+    { "filename": "download-003.bin", "path": "/Users/test/Downloads/download-003.bin", "size": 1200412, "modified": "2026-06-02T19:44:00Z", "contentSummary": "Opaque binary payload, no identifying headers." },
+    { "filename": "download-004.bin", "path": "/Users/test/Downloads/download-004.bin", "size": 44112, "modified": "2026-06-03T11:12:00Z", "contentSummary": "Opaque binary payload, no identifying headers." },
+    { "filename": "data.part", "path": "/Users/test/Downloads/data.part", "size": 99203110, "modified": "2026-06-03T11:13:00Z", "contentSummary": "Partial transfer fragment, source unknown." }
+  ]
+}

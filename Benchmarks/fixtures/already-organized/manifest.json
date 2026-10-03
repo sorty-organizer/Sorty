@@ -1,0 +1,14 @@
+{
+  "id": "already-organized",
+  "title": "Already organized project",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 4, "maxDepth": 3 },
+  "customInstructions": "Files are already in their correct project folders with meaningful names. Leave the structure and names alone.",
+  "files": [
+    { "filename": "2026-05-01 Acme Invoice.pdf", "path": "/Users/test/Finance/Invoices/2026-05-01 Acme Invoice.pdf", "size": 48210, "modified": "2026-05-01T10:00:00Z", "contentSummary": "May 2026 Acme invoice." },
+    { "filename": "2026-06-01 Acme Invoice.pdf", "path": "/Users/test/Finance/Invoices/2026-06-01 Acme Invoice.pdf", "size": 49112, "modified": "2026-06-01T10:00:00Z", "contentSummary": "June 2026 Acme invoice." },
+    { "filename": "May 2026 Bank Statement.pdf", "path": "/Users/test/Finance/Statements/May 2026 Bank Statement.pdf", "size": 692000, "modified": "2026-06-02T10:02:00Z", "contentSummary": "May 2026 bank statement." },
+    { "filename": "clip-a.mov", "path": "/Users/test/Campaign/Media/clip-a.mov", "size": 48200120, "modified": "2026-05-20T14:00:00Z", "contentSummary": "Source footage for the campaign cut." },
+    { "filename": "hero.psd", "path": "/Users/test/Campaign/Design/hero.psd", "size": 89200120, "modified": "2026-05-21T09:30:00Z", "contentSummary": "Campaign hero design source." }
+  ]
+}

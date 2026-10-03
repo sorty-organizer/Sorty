@@ -1,0 +1,22 @@
+{
+  "notes": "Idempotency probe: a good result keeps every file exactly where it is, with names unchanged. Any regrouping or rename of an already-correct tree is churn, not value.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 4,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Documents", "Unorganized"],
+  "shouldGroupTogether": [
+    ["2026-05-01 Acme Invoice.pdf", "2026-06-01 Acme Invoice.pdf"]
+  ],
+  "shouldNotGroupTogether": [
+    ["2026-05-01 Acme Invoice.pdf", "May 2026 Bank Statement.pdf"],
+    ["clip-a.mov", "hero.psd"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["2026-05-01 Acme Invoice.pdf", "2026-06-01 Acme Invoice.pdf", "May 2026 Bank Statement.pdf", "clip-a.mov", "hero.psd"],
+    "mayRenameWithEvidence": [],
+    "neverRename": ["May 2026 Bank Statement.pdf", "hero.psd"],
+    "renameOnlyWhenEvidence": true
+  },
+  "preferredSignals": ["parentFolder", "dates"],
+  "liveInsightMustMentionAny": ["already", "organized", "unchanged", "correct"]
+}
