@@ -50,12 +50,15 @@ public struct ContentView: View {
                 mainContent
                 .transition(.opacity)
             }
-
+        }
+        .overlay {
             WindowLinkHoverPillOverlay(hoverState: windowLinkHoverState)
-
+        }
+        .overlay {
             // Shared HUD notifications must remain visible during onboarding.
             HUDNotificationOverlay()
-
+        }
+        .overlay {
             AnalyticsConsentOverlay(
                 hasCompletedOnboarding: appState.hasCompletedOnboarding,
                 onGranted: { captureMainScreen(appState.currentView, source: "consent") }
@@ -91,6 +94,15 @@ public struct ContentView: View {
     }
 
     private var mainContent: some View {
+        GeometryReader { viewport in
+            navigationContent
+                .frame(width: viewport.size.width, height: viewport.size.height)
+        }
+    }
+
+    // Bound navigation to the window proposal so a page's ideal size cannot
+    // push sidebar rows and workflow controls outside the visible window.
+    private var navigationContent: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar
             List(selection: Binding(
@@ -160,7 +172,6 @@ public struct ContentView: View {
         .navigationSplitViewStyle(.balanced)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Main Navigation")
-        .frame(minWidth: 1000, minHeight: 700)
         .onAppear {
             columnVisibility = appState.showingSidebar ? .all : .detailOnly
             captureMainScreen(appState.currentView)

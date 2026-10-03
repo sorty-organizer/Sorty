@@ -1143,7 +1143,7 @@ class PreviewStore: ObservableObject {
                 return
             } catch {
                 // Keep the previous assessment: a failed re-score must never
-                // blank the Quality badge.
+                // clear the existing quality assessment.
             }
         }
     }

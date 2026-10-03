@@ -15,8 +15,15 @@ When changing these paths, keep progress tied to measured work, avoid per-file m
 Preview notices use compact neutral cards with a title, explanation, and native
 bordered action. Orange marks warnings without tinting the entire card. Duplicate
 filenames show an inline suggested name with a small Use suggestion button;
-Resolve all accepts every pending suggestion. Incomplete-plan warnings and
-blocking collision checks remain visible before Apply.
+Resolve all accepts every pending suggestion. Blocking collision checks remain
+visible before Apply. The header omits structural quality scores and aggregate
+rename-confidence badges. Partial-plan details appear in the Apply confirmation
+rather than a separate banner. Individual rename confidence remains available
+on each file.
+
+Main navigation takes its dimensions from the window viewport, including windows
+smaller than the former 1,000 by 700 point minimum. HUD, link-hover, and consent
+views are overlays so they do not change the sidebar or page size.
 
 The final plan receives a bounded semantic review of up to 40 questionable
 placements, sampled across destinations. One subset repair may follow. See

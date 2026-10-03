@@ -37,7 +37,7 @@ struct PreviewView: View {
     @State private var memoizedCurrentDiff: OrganizationPlanDiff.Source?
     @State private var memoizedPreviousDiff: OrganizationPlanDiff.Source?
     @State private var memoizedNextDiff: OrganizationPlanDiff.Source?
-    // Quality/confidence derivations for the displayed plan. Refreshed in
+    // Preview derivations for the displayed plan. Refreshed in
     // refreshDerivedPlanStats alongside the rename count.
     @State private var memoizedLowConfidenceCount: Int
     @State private var memoizedHiddenFileCount: Int
@@ -101,14 +101,11 @@ struct PreviewView: View {
         return .none
     }
 
-    /// True when the apply button and confirmation should warn: quality
-    /// below passing, flagged renames, collisions, an incomplete parse, or a
-    /// stale history version being applied.
+    /// Warn about incomplete plans, conflicts, uncertain renames, or older previews.
     private var applyWarningActive: Bool {
         isViewingHistory
             || displayedPlan.isPartial
             || displayedPlan.needsReview
-            || (displayedPlan.qualityAssessment.map { !$0.passes } ?? false)
             || memoizedLowConfidenceCount > 0
             || !memoizedCollisionGroups.isEmpty
     }
@@ -175,9 +172,7 @@ struct PreviewView: View {
                             }
                         }
                     }
-                },
-                qualityAssessment: displayedPlan.qualityAssessment,
-                lowConfidenceRenameCount: memoizedLowConfidenceCount
+                }
             )
             if settingsViewModel.config.showStatsForNerds {
                 PreviewStatsView(stats: displayedPlan.generationStats, showStatsForNerds: true, estimatedTimeRemaining: nil, currentFile: currentFileProgress(for: displayedPlan.totalFiles), totalFiles: displayedPlan.totalFiles, stage: organizer.organizationStage)
@@ -248,8 +243,8 @@ struct PreviewView: View {
             await loadExistingFolderPathsForRescore()
         }
         .onChange(of: previewStore.plan.qualityAssessment) { _, _ in
-            // Debounced off-main re-score landed: sync the edited plan so the
-            // Quality badge updates. User edits already sync via onPlanChanged,
+            // Sync the displayed plan when the debounced off-main re-score lands.
+            // User edits already sync via onPlanChanged,
             // so this only fires for quality-only refreshes.
             guard viewingHistoryIndex == nil else { return }
             editablePlan = previewStore.plan
@@ -355,24 +350,11 @@ struct PreviewView: View {
         memoizedNextDiff = diff(from: displayedVersionIndex, to: displayedVersionIndex + 1)
     }
     
-    /// Inline warnings above the file tree: an incomplete parse, a stale
-    /// history version, or a truncated preview must never look complete.
+    /// Explain older previews, hidden rows, and filename conflicts above the tree.
     @ViewBuilder
     private var previewNotices: some View {
-        if displayedPlan.isPartial || displayedPlan.needsReview || isViewingHistory || memoizedHiddenFileCount > 0 || !memoizedCollisionGroups.isEmpty {
+        if isViewingHistory || memoizedHiddenFileCount > 0 || !memoizedCollisionGroups.isEmpty {
             VStack(spacing: 8) {
-                if displayedPlan.isPartial || displayedPlan.needsReview {
-                    noticeRow(
-                        icon: "exclamationmark.triangle.fill",
-                        color: .orange,
-                        title: "Review incomplete plan",
-                        text: partialNoticeText,
-                        accessibilityID: "PartialPlanNotice",
-                        actionTitle: "Regenerate",
-                        actionID: "PartialPlanRegenerateButton",
-                        action: regeneratePreview
-                    )
-                }
                 if isViewingHistory {
                     noticeRow(
                         icon: "clock.arrow.circlepath",
@@ -416,14 +398,6 @@ struct PreviewView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-    }
-
-    private var partialNoticeText: String {
-        let count = displayedPlan.parseWarnings.count
-        if count > 0 {
-            return "\(count) parse warning\(count == 1 ? "" : "s"). Regenerate the plan or review the files before applying."
-        }
-        return "Some files may be missing from this plan. Regenerate or review the files before applying."
     }
 
     /// Collision notice: blocking 3+-way conflicts name the file and pause
@@ -567,9 +541,6 @@ struct PreviewView: View {
             extras.append(warningCount > 0
                 ? "This plan is incomplete (\(warningCount) parse warnings) — review it before applying."
                 : "This plan is incomplete — review it before applying.")
-        }
-        if let quality = planToApply.qualityAssessment, !quality.passes {
-            extras.append("Quality score is \(quality.score)/100 (below passing \(PlanQualityAssessment.passingScore)) with \(quality.issues.count) issues — see the Quality badge.")
         }
         if mode != .renameOnly {
             let split = folderCreationSplit(for: planToApply)

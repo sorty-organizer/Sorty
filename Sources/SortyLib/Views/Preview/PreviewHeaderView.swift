@@ -23,12 +23,9 @@ struct PreviewHeaderView: View {
     var nextDiffSource: OrganizationPlanDiff.Source? = nil
     var onPreviousVersion: (() -> Void)? = nil
     var onNextVersion: (() -> Void)? = nil
-    var qualityAssessment: PlanQualityAssessment? = nil
-    var lowConfidenceRenameCount: Int = 0
 
     @State private var showNotesPopover = false
     @State private var showDropHelpPopover = false
-    @State private var showQualityPopover = false
     @State private var activeDiff: OrganizationPlanDiff?
 
     var body: some View {
@@ -228,53 +225,6 @@ struct PreviewHeaderView: View {
                 .padding(.vertical, 2)
                 .systemLiquidGlassBackground(cornerRadius: 4, interactive: false)
             }
-
-            if let qualityAssessment {
-                Button {
-                    HapticFeedbackManager.shared.selection()
-                    showQualityPopover.toggle()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: qualityAssessment.passes ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                        Text("Quality \(qualityAssessment.score)")
-                            .numericTextTransition(animationValue: qualityAssessment.score)
-                        if !qualityAssessment.issues.isEmpty {
-                            Text("• \(qualityAssessment.issues.count)")
-                        }
-                    }
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(qualityColor(for: qualityAssessment.score))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .systemLiquidGlassBackground(cornerRadius: 4, interactive: false)
-                }
-                .buttonStyle(.plain)
-                .help(qualityHelp(for: qualityAssessment))
-                .accessibilityIdentifier("PlanQualityBadge")
-                .accessibilityLabel("Plan quality score \(qualityAssessment.score) of 100 with \(qualityAssessment.issues.count) issues")
-                .accessibilityHint("Show plan quality issues")
-                .popover(isPresented: $showQualityPopover, arrowEdge: .bottom) {
-                    PlanQualityPopoverContent(assessment: qualityAssessment)
-                        .systemLiquidGlassPopover(cornerRadius: 12)
-                }
-            }
-
-            if lowConfidenceRenameCount > 0 {
-                HStack(spacing: 4) {
-                    Image(systemName: "eye.fill")
-                    Text("\(lowConfidenceRenameCount) uncertain")
-                        .numericTextTransition(animationValue: lowConfidenceRenameCount)
-                }
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.orange)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .systemLiquidGlassBackground(cornerRadius: 4, interactive: false)
-                .help("\(lowConfidenceRenameCount) rename suggestions have medium or low AI confidence. They are flagged inline on each file — review them before applying.")
-                .accessibilityLabel("\(lowConfidenceRenameCount) uncertain rename suggestions")
-            }
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
@@ -289,70 +239,6 @@ struct PreviewHeaderView: View {
         guard let source else { return }
         HapticFeedbackManager.shared.selection()
         activeDiff = source.makeDiff()
-    }
-
-    private func qualityColor(for score: Int) -> Color {
-        if score >= PlanQualityAssessment.passingScore { return .green }
-        if score >= 50 { return .orange }
-        return .red
-    }
-
-    private func qualityHelp(for assessment: PlanQualityAssessment) -> String {
-        if assessment.issues.isEmpty {
-            return "Plan quality score \(assessment.score) of 100. No issues found."
-        }
-        return "Plan quality score \(assessment.score) of 100 with \(assessment.issues.count) issues. \(assessment.passes ? "Passing." : "Below passing (\(PlanQualityAssessment.passingScore)).") Review before applying."
-    }
-}
-
-private struct PlanQualityPopoverContent: View {
-    @SortyHotReload private var hotReload
-    let assessment: PlanQualityAssessment
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: assessment.passes ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(assessment.passes ? .green : .orange)
-
-                Text("Plan Quality — \(assessment.score)/100")
-                    .font(.caption)
-                    .fontWeight(.medium)
-
-                Spacer()
-
-                Text(assessment.passes ? "Passing" : "Needs review")
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(assessment.passes ? .green : .orange)
-            }
-
-            Divider().opacity(0.4)
-
-            if assessment.issues.isEmpty {
-                Text("No quality issues found. This plan is safe to apply.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(assessment.issues) { issue in
-                    HStack(alignment: .top, spacing: 6) {
-                        Text("−\(issue.deduction)")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.orange)
-                            .monospacedDigit()
-                            .frame(minWidth: 28, alignment: .trailing)
-                        Text(issue.message)
-                            .font(.caption)
-                            .foregroundStyle(.primary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
-        .padding(12)
-        .frame(minWidth: 260, maxWidth: 360)
     }
 }
 
