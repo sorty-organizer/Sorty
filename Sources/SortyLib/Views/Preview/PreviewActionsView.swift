@@ -16,6 +16,10 @@ struct PreviewActionsView: View {
     let shouldDisableButtons: Bool
     let editsCapturedCount: Int
     let mode: OrganizationMode
+    /// True when the plan has quality/confidence/staleness concerns worth a
+    /// second look. Only adds a warning glyph + help — details live in the
+    /// apply confirmation message.
+    var showsApplyWarning: Bool = false
     
     let onCancel: () -> Void
     let onReset: () -> Void
@@ -244,8 +248,9 @@ struct PreviewActionsView: View {
             onApply()
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
+                Image(systemName: showsApplyWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                     .font(.system(size: 12))
+                    .foregroundStyle(showsApplyWarning ? .orange : .primary)
                 Text("Apply")
                 Text("↩")
                     .font(.caption2)
@@ -255,10 +260,18 @@ struct PreviewActionsView: View {
         .buttonStyle(.sortyPrimary)
         .keyboardShortcut(.defaultAction)
         .disabled(shouldDisableButtons)
-        .help(mode == .renameOnly ? "Apply suggested file names in place" : "Apply file moves and create the planned folder structure")
+        .help(applyHelpText)
         .accessibilityIdentifier("ApplyOrganizationButton")
         .accessibilityLabel("Apply this \(mode.gerund) plan to your files")
         .accessibilityHint(mode == .renameOnly ? "This action renames files and can be undone from history" : "This action moves files and is not easily undone")
+    }
+
+    private var applyHelpText: String {
+        let base = mode == .renameOnly
+            ? "Apply suggested file names in place"
+            : "Apply file moves and create the planned folder structure"
+        guard showsApplyWarning else { return base }
+        return base + ". This plan has quality, confidence, or staleness warnings — the confirmation dialog lists them."
     }
 }
 

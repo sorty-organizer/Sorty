@@ -37,6 +37,13 @@ struct PreviewView: View {
     @State private var memoizedCurrentDiff: OrganizationPlanDiff.Source?
     @State private var memoizedPreviousDiff: OrganizationPlanDiff.Source?
     @State private var memoizedNextDiff: OrganizationPlanDiff.Source?
+    // Quality/confidence derivations for the displayed plan. Refreshed in
+    // refreshDerivedPlanStats alongside the rename count.
+    @State private var memoizedLowConfidenceCount: Int
+    @State private var memoizedHiddenFileCount: Int
+    @State private var memoizedCollisionCount: Int
+    @State private var memoizedCollisionSample: String?
+    @State private var memoizedStorageDestinationCount: Int
 
     private var displayedPlan: OrganizationPlan {
         Self.planForApply(
@@ -89,8 +96,22 @@ struct PreviewView: View {
     private var mode: OrganizationMode { settingsViewModel.config.mode }
     private var emptyStateType: PreviewListView.EmptyStateType {
         if displayedPlan.totalFiles == 0 { return .emptyDirectory }
-        if displayedPlan.suggestions.isEmpty && !displayedPlan.unorganizedFiles.isEmpty { return .allUnorganized(displayedPlan.unorganizedFiles.count) }
+        if displayedPlan.suggestions.isEmpty && !displayedPlan.unorganizedFiles.isEmpty {
+            return .allUnorganized(count: displayedPlan.unorganizedFiles.count, reasons: displayedPlan.unorganizedDetails)
+        }
         return .none
+    }
+
+    /// True when the apply button and confirmation should warn: quality
+    /// below passing, flagged renames, collisions, an incomplete parse, or a
+    /// stale history version being applied.
+    private var applyWarningActive: Bool {
+        isViewingHistory
+            || displayedPlan.isPartial
+            || displayedPlan.needsReview
+            || (displayedPlan.qualityAssessment.map { !$0.passes } ?? false)
+            || memoizedLowConfidenceCount > 0
+            || memoizedCollisionCount > 0
     }
     
     init(
@@ -105,6 +126,14 @@ struct PreviewView: View {
         _previewStore = StateObject(wrappedValue: PreviewStore(plan: plan))
         _editablePlan = State(initialValue: plan)
         _memoizedRenameCount = State(initialValue: plan.suggestions.reduce(0) { $0 + $1.renameCount })
+        _memoizedLowConfidenceCount = State(initialValue: PreviewPlanInsights.flaggableRenames(in: plan).count)
+        _memoizedHiddenFileCount = State(initialValue: PreviewPlanInsights.hiddenFileCount(in: plan))
+        let initialCollisions = PreviewPlanInsights.filenameCollisions(in: plan)
+        _memoizedCollisionCount = State(initialValue: initialCollisions.reduce(0) { $0 + $1.names.count })
+        _memoizedCollisionSample = State(initialValue: initialCollisions.first.map {
+            "\($0.names.prefix(2).joined(separator: ", ")) in \($0.folderPath)"
+        })
+        _memoizedStorageDestinationCount = State(initialValue: PreviewPlanInsights.storageDestinationCount(in: plan))
     }
     
     var body: some View {
@@ -142,12 +171,15 @@ struct PreviewView: View {
                             }
                         }
                     }
-                }
+                },
+                qualityAssessment: displayedPlan.qualityAssessment,
+                lowConfidenceRenameCount: memoizedLowConfidenceCount
             )
             if settingsViewModel.config.showStatsForNerds {
                 PreviewStatsView(stats: displayedPlan.generationStats, showStatsForNerds: true, estimatedTimeRemaining: nil, currentFile: currentFileProgress(for: displayedPlan.totalFiles), totalFiles: displayedPlan.totalFiles, stage: organizer.organizationStage)
             }
             Divider()
+            previewNotices
             PreviewListView(
                 store: previewStore,
                 dragDropManager: dragDropManager,
@@ -288,6 +320,14 @@ struct PreviewView: View {
     private func refreshDerivedPlanStats() {
         let shown = displayedPlan
         memoizedRenameCount = shown.suggestions.reduce(0) { $0 + $1.renameCount }
+        memoizedLowConfidenceCount = PreviewPlanInsights.flaggableRenames(in: shown).count
+        memoizedHiddenFileCount = PreviewPlanInsights.hiddenFileCount(in: shown)
+        let collisions = PreviewPlanInsights.filenameCollisions(in: shown)
+        memoizedCollisionCount = collisions.reduce(0) { $0 + $1.names.count }
+        memoizedCollisionSample = collisions.first.map {
+            "\($0.names.prefix(2).joined(separator: ", ")) in \($0.folderPath)"
+        }
+        memoizedStorageDestinationCount = PreviewPlanInsights.storageDestinationCount(in: shown)
         if viewingHistoryIndex == nil, hasEdits {
             memoizedCurrentDiff = OrganizationPlanDiff.Source(
                 oldPlan: plan,
@@ -306,6 +346,91 @@ struct PreviewView: View {
         memoizedNextDiff = diff(from: displayedVersionIndex, to: displayedVersionIndex + 1)
     }
     
+    /// Inline warnings above the file tree: an incomplete parse, a stale
+    /// history version, or a truncated preview must never look complete.
+    @ViewBuilder
+    private var previewNotices: some View {
+        if displayedPlan.isPartial || displayedPlan.needsReview || isViewingHistory || memoizedHiddenFileCount > 0 {
+            VStack(spacing: 0) {
+                if displayedPlan.isPartial || displayedPlan.needsReview {
+                    noticeRow(
+                        icon: "exclamationmark.triangle.fill",
+                        color: .orange,
+                        text: partialNoticeText,
+                        accessibilityID: "PartialPlanNotice",
+                        actionTitle: "Regenerate",
+                        actionID: "PartialPlanRegenerateButton",
+                        action: regeneratePreview
+                    )
+                }
+                if isViewingHistory {
+                    noticeRow(
+                        icon: "clock.arrow.circlepath",
+                        color: .blue,
+                        text: "Viewing older preview v\(displayedPlan.version) of \(totalVersions) — Apply uses this version and discards current edits.",
+                        accessibilityID: "StaleHistoryNotice",
+                        actionTitle: "Return to latest",
+                        actionID: "ReturnToLatestButton",
+                        action: {
+                            HapticFeedbackManager.shared.selection()
+                            viewingHistoryIndex = nil
+                        }
+                    )
+                }
+                if memoizedHiddenFileCount > 0 {
+                    noticeRow(
+                        icon: "eye.slash.fill",
+                        color: .secondary,
+                        text: "Preview hides \(memoizedHiddenFileCount) files for performance — Apply includes all \(displayedPlan.totalFiles) files.",
+                        accessibilityID: "TruncatedPreviewNotice",
+                        actionTitle: nil,
+                        actionID: nil,
+                        action: nil
+                    )
+                }
+            }
+        }
+    }
+
+    private var partialNoticeText: String {
+        let count = displayedPlan.parseWarnings.count
+        if count > 0 {
+            return "This plan is incomplete (\(count) parse warning\(count == 1 ? "" : "s")) — regenerate or review carefully before applying."
+        }
+        return "This plan is incomplete — regenerate or review carefully before applying."
+    }
+
+    private func noticeRow(
+        icon: String,
+        color: Color,
+        text: String,
+        accessibilityID: String,
+        actionTitle: String?,
+        actionID: String?,
+        action: (() -> Void)?
+    ) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(color)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Spacer()
+            if let actionTitle, let action {
+                Button(actionTitle) { action() }
+                    .buttonStyle(.tintedPill(color, size: .small))
+                    .accessibilityIdentifier(actionID ?? "")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.08))
+        .accessibilityIdentifier(accessibilityID)
+    }
+
     @ViewBuilder
     private var bottomToolbar: some View {
         VStack(spacing: 0) {
@@ -333,6 +458,7 @@ struct PreviewView: View {
                     shouldDisableButtons: shouldDisableButtons,
                     editsCapturedCount: previewStore.editsCapturedCount,
                     mode: mode,
+                    showsApplyWarning: applyWarningActive,
                     onCancel: { recordCancelledOrganization(); cancelToStart() },
                     onReset: { HapticFeedbackManager.shared.tap(); editablePlan = plan; previewStore.updatePlan(plan); previewStore.resetEditsCaptured(); hasEdits = false },
                     onRegenerate: regeneratePreview,
@@ -348,14 +474,71 @@ struct PreviewView: View {
     }
 
     private var applyConfirmationMessage: String {
+        let planToApply = displayedPlan
+        let base: String
         switch mode {
         case .renameOnly:
-            return "\(renameCount) suggested name changes will be applied in place. \(displayedPlan.unorganizedFiles.count) files will be left unchanged."
+            base = "\(renameCount) suggested name changes will be applied in place. \(planToApply.unorganizedFiles.count) files will be left unchanged."
         case .organizeAndRename:
-            return "\(displayedPlan.totalFiles) files will be organized, with \(renameCount) name changes. \(displayedPlan.unorganizedFiles.count) files will remain in place."
+            base = "\(planToApply.totalFiles) files will be organized, with \(renameCount) name changes. \(planToApply.unorganizedFiles.count) files will remain in place."
         case .organize:
-            return "\(displayedPlan.totalFiles) files will be organized. \(displayedPlan.unorganizedFiles.count) files will remain in place."
+            base = "\(planToApply.totalFiles) files will be organized. \(planToApply.unorganizedFiles.count) files will remain in place."
         }
+
+        var extras: [String] = []
+        if isViewingHistory {
+            extras.append("You are viewing older preview v\(planToApply.version) of \(totalVersions) — applying it discards your current edits.")
+        }
+        if planToApply.isPartial || planToApply.needsReview {
+            let warningCount = planToApply.parseWarnings.count
+            extras.append(warningCount > 0
+                ? "This plan is incomplete (\(warningCount) parse warnings) — review it before applying."
+                : "This plan is incomplete — review it before applying.")
+        }
+        if let quality = planToApply.qualityAssessment, !quality.passes {
+            extras.append("Quality score is \(quality.score)/100 (below passing \(PlanQualityAssessment.passingScore)) with \(quality.issues.count) issues — see the Quality badge.")
+        }
+        if mode != .renameOnly {
+            let split = folderCreationSplit(for: planToApply)
+            if split.new > 0 || split.existing > 0 {
+                extras.append("\(split.new) new top-level folders will be created (\(split.existing) already exist).")
+            }
+            if memoizedStorageDestinationCount > 0 {
+                extras.append("\(memoizedStorageDestinationCount) folders target external storage locations.")
+            }
+        }
+        if memoizedCollisionCount > 0 {
+            var collision = "\(memoizedCollisionCount) files would land on the same name and auto-rename on apply."
+            if let sample = memoizedCollisionSample {
+                collision += " E.g. \(sample)."
+            }
+            extras.append(collision)
+        }
+        if memoizedLowConfidenceCount > 0 {
+            extras.append("\(memoizedLowConfidenceCount) renames have medium or low confidence and are flagged inline.")
+        }
+        if memoizedHiddenFileCount > 0 {
+            extras.append("The preview hides \(memoizedHiddenFileCount) files for performance; apply includes all \(planToApply.totalFiles) files.")
+        }
+        return ([base] + extras).joined(separator: " ")
+    }
+
+    /// New-vs-existing split for top-level relative folders, checked against
+    /// the live filesystem at confirmation time. Cheap: a handful of stat
+    /// calls, only when the confirmation message is built.
+    private func folderCreationSplit(for planToApply: OrganizationPlan) -> (new: Int, existing: Int) {
+        let fileManager = FileManager.default
+        var new = 0
+        var existing = 0
+        for suggestion in planToApply.suggestions where !suggestion.folderName.hasPrefix("/") {
+            let url = baseURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+            if fileManager.fileExists(atPath: url.path) {
+                existing += 1
+            } else {
+                new += 1
+            }
+        }
+        return (new, existing)
     }
     
     private func regeneratePreview() {

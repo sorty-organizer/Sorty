@@ -60,9 +60,82 @@ enum PreviewRowPresentation: Equatable {
         row: FlattenedRow,
         duplicateInfo: DuplicateInfo?,
         isHighlighted: Bool,
-        moveDestinations: [PreviewMoveDestination]
+        moveDestinations: [PreviewMoveDestination],
+        reason: String?
     )
     case remaining(row: FlattenedRow, count: Int)
+}
+
+// MARK: - Preview Plan Insights
+
+/// Cheap, read-only derivations over an OrganizationPlan for preview UI.
+/// Pure logic (no FS access): the caller supplies existence checks separately.
+enum PreviewPlanInsights {
+    /// Must match PreviewStore.renderedFilesPerSectionLimit (which is
+    /// MainActor-isolated and can't be referenced from this nonisolated enum).
+    static let perSectionFileLimit = 500
+
+    /// Files hidden by the per-section render cap. Apply still includes them,
+    /// so the preview must say so explicitly instead of applying blind.
+    static func hiddenFileCount(in plan: OrganizationPlan) -> Int {
+        let limit = Self.perSectionFileLimit
+        var hidden = 0
+        func visit(_ folder: FolderSuggestion) {
+            hidden += max(0, folder.files.count - limit)
+            for sub in folder.subfolders { visit(sub) }
+        }
+        for suggestion in plan.suggestions { visit(suggestion) }
+        hidden += max(0, plan.unorganizedFiles.count - limit)
+        return hidden
+    }
+
+    /// Rename suggestions worth flagging (medium/low confidence only;
+    /// high-confidence and unknown-confidence renames stay quiet).
+    static func flaggableRenames(in plan: OrganizationPlan) -> [(folderPath: String, mapping: FileRenameMapping)] {
+        var result: [(folderPath: String, mapping: FileRenameMapping)] = []
+        func visit(_ folder: FolderSuggestion, parentPath: String) {
+            let path = parentPath.isEmpty ? folder.folderName : "\(parentPath)/\(folder.folderName)"
+            for mapping in folder.fileRenameMappings where mapping.hasRename && mapping.confidenceBand != .high {
+                result.append((folderPath: path, mapping: mapping))
+            }
+            for sub in folder.subfolders { visit(sub, parentPath: path) }
+        }
+        for suggestion in plan.suggestions { visit(suggestion, parentPath: "") }
+        return result
+    }
+
+    /// Destination filenames claimed by more than one file in the same folder
+    /// (case-insensitive, post-rename). These auto-rename on apply.
+    static func filenameCollisions(in plan: OrganizationPlan) -> [(folderPath: String, names: [String])] {
+        var collisions: [(folderPath: String, names: [String])] = []
+        func visit(_ folder: FolderSuggestion, parentPath: String) {
+            let path = parentPath.isEmpty ? folder.folderName : "\(parentPath)/\(folder.folderName)"
+            let groups = Dictionary(grouping: folder.filesWithFinalNames, by: { $0.finalName.lowercased() })
+            let dupes = groups.values.filter { $0.count > 1 }.compactMap { $0.first?.finalName }.sorted()
+            if !dupes.isEmpty {
+                collisions.append((folderPath: path, names: dupes))
+            }
+            for sub in folder.subfolders { visit(sub, parentPath: path) }
+        }
+        for suggestion in plan.suggestions { visit(suggestion, parentPath: "") }
+        return collisions
+    }
+
+    /// Folders pointing at absolute storage locations (external drives etc.).
+    static func storageDestinationCount(in plan: OrganizationPlan) -> Int {
+        var count = 0
+        func visit(_ folder: FolderSuggestion) {
+            if folder.folderName.hasPrefix("/") { count += 1 }
+            for sub in folder.subfolders { visit(sub) }
+        }
+        for suggestion in plan.suggestions { visit(suggestion) }
+        return count
+    }
+
+    /// Reason recorded for an unorganized file, matched by display name.
+    static func unorganizedReason(for file: FileItem, in plan: OrganizationPlan) -> String? {
+        plan.unorganizedDetails.first { $0.filename == file.displayName }?.reason
+    }
 }
 
 // MARK: - Preview Store
@@ -70,7 +143,7 @@ enum PreviewRowPresentation: Equatable {
 @MainActor
 class PreviewStore: ObservableObject {
     private static let automaticExpansionFileLimit = 2_000
-    private static let renderedFilesPerSectionLimit = 500
+    static let renderedFilesPerSectionLimit = 500
     static let unorganizedSectionID = "unorganized-header"
 
     @Published private(set) var flattenedRows: [FlattenedRow] = []
@@ -469,7 +542,8 @@ class PreviewStore: ObservableObject {
                 row: row,
                 duplicateInfo: duplicateMappings[file.id],
                 isHighlighted: highlightedFileID == file.id,
-                moveDestinations: moveDestinations
+                moveDestinations: moveDestinations,
+                reason: PreviewPlanInsights.unorganizedReason(for: file, in: plan)
             )
         case .remainingFiles(let count):
             return .remaining(row: row, count: count)
@@ -885,7 +959,15 @@ class PreviewStore: ObservableObject {
             notes: updatedPlan.notes,
             timestamp: Date(),
             version: updatedPlan.version + 1,
-            generationStats: updatedPlan.generationStats
+            generationStats: updatedPlan.generationStats,
+            // Manual edits must not silently drop the plan's quality signals:
+            // the assessment can't be re-derived from SortyLib (the evaluator
+            // lives in SortyOrganizer), so the latest values carry forward.
+            qualityAssessment: updatedPlan.qualityAssessment,
+            learningToolCall: updatedPlan.learningToolCall,
+            isPartial: updatedPlan.isPartial,
+            needsReview: updatedPlan.needsReview,
+            parseWarnings: updatedPlan.parseWarnings
         )
         plan = finalPlan
         cachedMoveDestinations = Self.collectMoveDestinations(from: finalPlan.suggestions)
@@ -1116,7 +1198,7 @@ struct FlattenedRowView: View, @MainActor Equatable {
                 dragDropManager: dragDropManager,
                 onPlanChanged: onPlanChanged
             )
-        case .unorganizedFile(let row, let duplicateInfo, let isHighlighted, let moveDestinations):
+        case .unorganizedFile(let row, let duplicateInfo, let isHighlighted, let moveDestinations, let reason):
             if case .unorganizedFile(let file) = row.type {
                 FlatUnorganizedFileRowView(
                     file: file,
@@ -1125,6 +1207,7 @@ struct FlattenedRowView: View, @MainActor Equatable {
                     duplicateInfo: duplicateInfo,
                     isHighlighted: isHighlighted,
                     moveDestinations: moveDestinations,
+                    reason: reason,
                     onPlanChanged: onPlanChanged
                 )
             }
@@ -1132,10 +1215,10 @@ struct FlattenedRowView: View, @MainActor Equatable {
             HStack(spacing: 8) {
                 Image(systemName: "ellipsis")
                     .foregroundStyle(.secondary)
-                Text("\(count.formatted()) more files hidden to keep the preview responsive. Apply still includes them.")
+                Text("\(count.formatted()) more files in this section are hidden for performance — Apply moves every one of them, including files you can't see here.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
             .padding(.leading, CGFloat(row.depth) * 20 + 12)
             .padding(.vertical, 7)
@@ -1192,6 +1275,14 @@ struct FlatFolderRowView: View {
 
     private var isStorageDestination: Bool {
         suggestion.folderName.hasPrefix("/")
+    }
+
+    /// Folder-level placement confidence. Only medium/low surface a pill so
+    /// confident folders stay visually quiet.
+    private var confidenceBand: RenameConfidenceBand? {
+        guard let score = suggestion.confidenceScore,
+              score < FileRenameMapping.highConfidenceThreshold else { return nil }
+        return score < FileRenameMapping.lowConfidenceThreshold ? .low : .medium
     }
 
     private var matchedStorageLocation: StorageLocation? {
@@ -1261,6 +1352,22 @@ struct FlatFolderRowView: View {
                 if let comment = folderComment, !comment.isEmpty {
                     CommentBubbleButton(comment: comment)
                 }
+
+                if let band = confidenceBand {
+                    HStack(spacing: 3) {
+                        Image(systemName: band == .low ? "exclamationmark.triangle.fill" : "eye.fill")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text("\(band.displayName) (\(Int(((suggestion.confidenceScore ?? 0) * 100).rounded()))%)")
+                            .font(.caption2)
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(band == .low ? .orange : .secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .systemLiquidGlassBackground(cornerRadius: 4, interactive: false)
+                    .help("AI placement confidence for this folder is \(band.displayName.lowercased()). Review its files before applying.")
+                    .accessibilityLabel("Folder placement confidence: \(band.displayName)")
+                }
                 
                 Spacer()
                 
@@ -1323,6 +1430,17 @@ struct FlatFolderRowView: View {
                 }
             } message: {
                 Text(storageLocationPickerErrorMessage ?? "Please try selecting the folder again.")
+            }
+
+            // Reasoning stays discoverable for folders Sorty is unsure about:
+            // the pill above flags them, this line says why.
+            if confidenceBand != nil, !suggestion.reasoning.isEmpty {
+                Text(suggestion.reasoning)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .padding(.leading, CGFloat(depth * 16) + 28)
+                    .textSelection(.enabled)
             }
         }
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
@@ -1466,21 +1584,56 @@ struct FlatFileRowView: View {
     }
 
     var body: some View {
-        FlatFileRowSurface(
-            content: rowContent,
-            depth: depth,
-            isHighlighted: isHighlighted,
-            isEditingName: isEditingName,
-            isDragging: $isDragging,
-            hasRename: renameMapping?.hasRename == true,
-            onOpen: openFile,
-            onReveal: revealInFinder,
-            onRegenerate: regenerateSuggestedName,
-            onRejectRename: rejectRename,
-            onRevertOrganization: revertOrganization,
-            onBeginDrag: beginDrag,
-            onDisappear: resetInteractionState
-        )
+        VStack(alignment: .leading, spacing: 2) {
+            FlatFileRowSurface(
+                content: rowContent,
+                depth: depth,
+                isHighlighted: isHighlighted,
+                isEditingName: isEditingName,
+                isDragging: $isDragging,
+                hasRename: renameMapping?.hasRename == true,
+                onOpen: openFile,
+                onReveal: revealInFinder,
+                onRegenerate: regenerateSuggestedName,
+                onRejectRename: rejectRename,
+                onRevertOrganization: revertOrganization,
+                onBeginDrag: beginDrag,
+                onDisappear: resetInteractionState
+            )
+
+            // Medium/low rename confidence surfaces here with the reason
+            // inline: previously both lived only in tooltips.
+            if let mapping = lowConfidenceMapping {
+                HStack(spacing: 4) {
+                    Image(systemName: mapping.confidenceBand == .low ? "exclamationmark.triangle.fill" : "eye.fill")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text(mapping.confidenceBand.displayName)
+                        .fontWeight(.semibold)
+                    if let confidence = mapping.renameConfidence {
+                        Text("(\(Int((confidence * 100).rounded()))%)")
+                    }
+                    if let reason = mapping.renameReason?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !reason.isEmpty {
+                        Text("— \(reason)")
+                            .truncationMode(.tail)
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(mapping.confidenceBand == .low ? .orange : .secondary)
+                .lineLimit(1)
+                .padding(.leading, CGFloat(depth * 16) + 36)
+                .help(mapping.renameReason ?? mapping.confidenceBand.displayName)
+                .accessibilityLabel("Rename confidence \(mapping.confidenceBand.displayName) for \(file.displayName)")
+            }
+        }
+    }
+
+    /// Rename worth flagging: medium/low confidence only, so confident
+    /// renames (and renames without a score) stay visually quiet.
+    private var lowConfidenceMapping: FileRenameMapping? {
+        guard let renameMapping, renameMapping.hasRename,
+              renameMapping.confidenceBand != .high else { return nil }
+        return renameMapping
     }
     
     private func startEditing(initialValue: String) {
@@ -1724,13 +1877,22 @@ struct FlatUnorganizedFileRowView: View {
     let duplicateInfo: DuplicateInfo?
     let isHighlighted: Bool
     let moveDestinations: [PreviewMoveDestination]
+    let reason: String?
     let onPlanChanged: () -> Void
     @State private var isDragging = false
 
     var body: some View {
         HStack {
             FileThumbnailView(url: URL(fileURLWithPath: file.path), size: CGSize(width: 20, height: 20))
-            Text(file.displayName)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(file.displayName)
+                if let reason, !reason.isEmpty {
+                    Text(reason)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
             Spacer()
 
             if let dupInfo = duplicateInfo {
