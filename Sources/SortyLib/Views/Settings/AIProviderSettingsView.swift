@@ -1417,7 +1417,7 @@ struct OpenCodeCredentialLinkView: View {
 }
 
 /// Matches the native capsule selector used by History filters.
-private struct ProviderAuthenticationControl: NSViewRepresentable {
+struct ProviderAuthenticationControl: NSViewRepresentable {
     let methods: [ProviderAuthMethod]
     @Binding var selection: ProviderAuthMethod
 

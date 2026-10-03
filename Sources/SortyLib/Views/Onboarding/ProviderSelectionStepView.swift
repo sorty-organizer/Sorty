@@ -350,13 +350,11 @@ public struct ProviderSelectionStepView: View {
             if settingsViewModel.config.provider.typicallyRequiresAPIKey {
                 VStack(alignment: .leading, spacing: 8) {
                     if supportsSubscriptionAuthUI {
-                        Picker("Authentication", selection: selectedAuthMethod) {
-                            ForEach(settingsViewModel.config.provider.supportedAuthMethods, id: \.self) { method in
-                                Text(method.displayName).tag(method)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .tint(.primary)
+                        ProviderAuthenticationControl(
+                            methods: settingsViewModel.config.provider.supportedAuthMethods,
+                            selection: selectedAuthMethod
+                        )
+                        .frame(maxWidth: .infinity)
 
                         switch settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) {
                         case .apiKey:
@@ -1198,6 +1196,7 @@ struct PrivacyFeatureRow: View {
 
 struct OnboardingProviderRow: View {
     @SortyHotReload private var hotReload
+    @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     let provider: AIProvider
     let selectedProvider: AIProvider
     let action: (AIProvider) -> Void
@@ -1206,6 +1205,13 @@ struct OnboardingProviderRow: View {
     @State private var isHovering = false
 
     private var isOpenCodeCard: Bool { provider == .openCodeZen }
+    // Custom endpoints remain configurable for localhost workflows.
+    private var isBlockedByInternetPrivacy: Bool {
+        internetPrivacyModeEnabled && ![.appleFoundationModel, .ollama, .openAICompatible].contains(provider)
+    }
+    private var internetPrivacyExplanation: String {
+        "\(provider.selectorTitle) requires an internet connection. Turn off Block Internet Connections in Advanced Settings to use it."
+    }
     private var isSelected: Bool {
         selectedProvider == provider || (isOpenCodeCard && selectedProvider == .openCodeGo)
     }
@@ -1277,7 +1283,9 @@ struct OnboardingProviderRow: View {
             }
             .padding(.vertical, 8)
             .padding(.horizontal, 10)
-            .frame(minHeight: 46, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+            .blur(radius: isBlockedByInternetPrivacy ? 2 : 0)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background(
@@ -1297,14 +1305,25 @@ struct OnboardingProviderRow: View {
         )
         .contentShape(Rectangle())
         .opacity(provider.isAvailable ? 1.0 : 0.6)
+        .disabled(isBlockedByInternetPrivacy || !provider.isAvailable)
         .onHover { hovering in
             if provider.isAvailable { isHovering = hovering }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isSelected)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovering)
         .accessibilityIdentifier("OnboardingProvider_\(provider.rawValue)")
-        .accessibilityHint(isOpenCodeCard ? "Selects OpenCode. Switch between the Zen and Go plans in the plan picker." : "Selects \(provider.displayName).")
-        .help(isOpenCodeCard ? "Use OpenCode (switch plans in the plan picker)" : "Use \(provider.displayName)")
+        .accessibilityHint(isBlockedByInternetPrivacy ? internetPrivacyExplanation : (isOpenCodeCard ? "Selects OpenCode. Switch between the Zen and Go plans in the plan picker." : "Selects \(provider.displayName)."))
+        .help(isBlockedByInternetPrivacy ? internetPrivacyExplanation : (isOpenCodeCard ? "Use OpenCode (switch plans in the plan picker)" : "Use \(provider.displayName)"))
+        .overlay {
+            if isBlockedByInternetPrivacy {
+                // Keep the tooltip reachable above the disabled button.
+                Rectangle()
+                    .fill(.clear)
+                    .contentShape(Rectangle())
+                    .help(internetPrivacyExplanation)
+                    .accessibilityHidden(true)
+            }
+        }
     }
 }
 

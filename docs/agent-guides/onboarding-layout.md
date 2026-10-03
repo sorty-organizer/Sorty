@@ -199,6 +199,12 @@ stale model lists. OpenCode uses one provider card; its Zen/Go selector sits in
 the configuration panel. Both plans use the API key and model picker flow, with
 separate Keychain slots.
 
+Provider cards use the full rectangle as their click target. Block Internet
+Connections blurs and disables cloud providers, with a hover explanation and
+an accessibility hint. Apple, Ollama, and Compatible API remain selectable for
+local workflows. Onboarding and Settings share `ProviderAuthenticationControl`,
+which uses the native capsule and tabs treatment from History filters.
+
 Model picker callbacks include the selected OpenAI authentication method. Apply
 it alongside the model in settings, retries, history, learnings, and automation;
 other providers leave authentication unchanged. API and subscription catalog
