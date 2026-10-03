@@ -243,8 +243,25 @@ package enum ValidationError: LocalizedError {
 }
 
 struct PlanQualityEvaluator {
+    /// Always-vague names, matched against the normalized (lowercased,
+    /// de-pluralized, punctuation-split) folder name. `normalizedName` turns
+    /// "Files" into "file", "Docs" into "doc", "Misc-Files" into "misc file",
+    /// and "Archive-Dump" into "archive dump", so the set holds normalized
+    /// forms. Numbered variants like "stuff2" are intentionally absent: a
+    /// trailing number can distinguish a real category.
     private static let vagueNames: Set<String> = [
-        "general", "misc", "miscellaneous", "other", "others", "stuff", "unknown", "untitled"
+        "general", "misc", "miscellaneous", "other", "others", "stuff", "unknown", "untitled",
+        "thing", "file",
+        "sorted", "organized", "unsorted",
+        "folder", "new folder",
+        "misc file", "archive dump",
+    ]
+
+    /// Catch-all tokens that stay legitimate as a top-level mirror of a system
+    /// or project folder (e.g. Documents). Nested inside another topic they
+    /// are vague buckets, so they only count when `depth > 1`.
+    private static let contextVagueNames: Set<String> = [
+        "doc", "document", "data",
     ]
 
     static func assess(
@@ -260,6 +277,7 @@ struct PlanQualityEvaluator {
         issues.append(contentsOf: vagueAndSingleFileIssues(in: folders))
         issues.append(contentsOf: mixedTypeIssues(in: folders))
         issues.append(contentsOf: nestingIssues(in: folders))
+        issues.append(contentsOf: invalidFolderNameIssues(in: folders))
         issues.append(contentsOf: conventionIssues(in: folders, existingFolderPaths: existingFolderPaths))
         issues.append(contentsOf: explanationIssues(in: folders))
 
@@ -310,7 +328,17 @@ struct PlanQualityEvaluator {
     private static func excessiveUnorganizedIssues(in plan: OrganizationPlan) -> [PlanQualityIssue] {
         let total = plan.totalFiles
         let count = plan.unorganizedFiles.count
-        guard total > 0, count >= 5, Double(count) / Double(total) >= 0.20 else { return [] }
+        guard total > 0 else { return [] }
+        // Small batches strand fewer files, so three leftovers (or a 30%+
+        // share) already signal a weak pass. Larger batches keep the 5-file /
+        // 20% bar.
+        let excessive: Bool
+        if total < 10 {
+            excessive = count >= 3 || Double(count) / Double(total) >= 0.30
+        } else {
+            excessive = count >= 5 && Double(count) / Double(total) >= 0.20
+        }
+        guard excessive else { return [] }
 
         return [
             PlanQualityIssue(
@@ -468,7 +496,12 @@ struct PlanQualityEvaluator {
 
     private static func vagueAndSingleFileIssues(in folders: [FolderRecord]) -> [PlanQualityIssue] {
         folders.compactMap { folder in
-            let vague = vagueNames.contains(normalizedName(folder.suggestion.folderName))
+            let normalized = normalizedName(folder.suggestion.folderName)
+            let alwaysVague = vagueNames.contains(normalized)
+            // Documents/Data-style names mirror a legitimate top-level
+            // location; nested they are catch-all buckets.
+            let contextVague = folder.depth > 1 && contextVagueNames.contains(normalized)
+            let vague = alwaysVague || contextVague
             let singleFile = folder.files.count == 1 && folder.suggestion.subfolders.isEmpty
             guard vague || singleFile else { return nil }
             let problem = vague && singleFile ? "a vague name and only one file" : vague ? "a vague name" : "only one file"
@@ -484,12 +517,18 @@ struct PlanQualityEvaluator {
 
     private static func mixedTypeIssues(in folders: [FolderRecord]) -> [PlanQualityIssue] {
         folders.compactMap { folder in
-            guard folder.depth == 1, folder.files.count >= 4 else { return nil }
-            let families = Set(folder.files.map { typeFamily(for: $0.extension) })
+            // Only loose files placed directly in the folder count: a
+            // container whose subfolders already separate purposes is not
+            // mixed, even though its recursive file roll-up looks diverse.
+            let directFiles = folder.suggestion.files
+            let minimumCount = folder.depth <= 1 ? 4 : 5
+            guard directFiles.count >= minimumCount else { return nil }
+            let families = Set(directFiles.map { typeFamily(for: $0.extension) })
             guard families.count >= 3 else { return nil }
+            let scope = folder.depth <= 1 ? "Top-level folder" : "Folder"
             return PlanQualityIssue(
                 kind: .mixedFileTypes,
-                message: "Top-level folder \"\(folder.path)\" mixes incompatible file types: \(families.sorted().joined(separator: ", ")). Split it by purpose or leave ambiguous files unchanged.",
+                message: "\(scope) \"\(folder.path)\" mixes incompatible file types: \(families.sorted().joined(separator: ", ")). Split it by purpose or leave ambiguous files unchanged.",
                 folderPaths: [folder.path],
                 fileIDs: folder.files.map(\.id),
                 deduction: 14
@@ -507,6 +546,21 @@ struct PlanQualityEvaluator {
                 folderPaths: [folder.path],
                 fileIDs: folder.files.map(\.id),
                 deduction: 10
+            )
+        }
+    }
+
+    private static func invalidFolderNameIssues(in folders: [FolderRecord]) -> [PlanQualityIssue] {
+        folders.compactMap { folder in
+            let problems = FilenameNormalizer.invalidFolderNameComponents(in: folder.suggestion.folderName)
+            guard !problems.isEmpty else { return nil }
+            let details = problems.map { "\"\($0.component)\": \($0.reason)" }.joined(separator: "; ")
+            return PlanQualityIssue(
+                kind: .invalidFolderName,
+                message: "Folder \"\(folder.path)\" has an unusable name (\(details)). Use a plain descriptive name without leading/trailing spaces or dots, \":\", control characters, or empty \"//\" components.",
+                folderPaths: [folder.path],
+                fileIDs: folder.files.map(\.id),
+                deduction: 18
             )
         }
     }
