@@ -137,6 +137,14 @@ These figures cover those cache trees, not the whole cache, which other builds
 can change concurrently. Force maintenance with `make cache-prune`, or run
 `python3 scripts/cold_build_cache.py compact "$SORTY_BUILD_DIR" debug` directly.
 
+The October 3 per-file fingerprint benchmark changed a small file beside an
+unchanged 128 MiB resource. The median of three runs fell from 0.628 seconds
+with group hashing to 0.064 seconds with per-file hashing, with identical
+fingerprints. This measures input hashing, not compilation. Transparent
+compression saved 162 MiB from the real Debug test bundle while keeping it
+readable. Seven focused cache tests pass, including same-size edits with a
+preserved mtime and native compression metadata checks.
+
 String catalogs use a separate content cache of native `xcstringstool` output.
 Its key includes the entire catalog, table name, compiler recipe, and toolchain.
 Each hit verifies all generated files before copying them, preserving every
@@ -242,6 +250,20 @@ outputs have been replaced by later edits. Xcode keeps the store between runs
 and limits it to 4 GB. Compiler cache remarks remain in the full build log.
 Local `make now` uses SwiftPM and scheduled compression.
 See [Apple's compilation cache settings](https://developer.apple.com/documentation/xcode/build-settings-reference).
+
+The October 3 [cache-layer validation](https://github.com/sorty-organizer/Sorty/actions/runs/37107555585)
+passed the universal build and packaging. Removing duplicated dependency and
+compilation-result trees reduced the compressed output snapshot from 1,937 MiB
+to 1,187 MiB. A same-commit rerun restored all layers in 13 seconds, built the
+universal app in 23 seconds, and skipped archive uploads on complete hits.
+The earlier split took 17 seconds to restore, 25 seconds to build, and 11 seconds
+to upload another snapshot. The source code was unchanged across those cache
+changes; step timings can still vary with the runner. An independent fixture
+used the actual Actions cache path resolver and tar to verify that compiler
+archives omit dependencies, compilation results, logs, locks, and cold archives.
+The [Swift CI check](https://github.com/sorty-organizer/Sorty/actions/runs/37107553259)
+passed the seven cache tests, test compilation, app build, and cache save.
+Existing application test failures still keep both full workflows red.
 
 The October 3 [optimized compiler benchmark](https://github.com/sorty-organizer/Sorty/actions/runs/37045348328)
 compiled the real arm64 SortyLib release command in 117.48 seconds with replay
