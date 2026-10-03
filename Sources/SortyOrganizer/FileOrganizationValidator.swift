@@ -317,7 +317,9 @@ package enum ValidationError: LocalizedError {
     }
 }
 
-struct PlanQualityEvaluator {
+/// Structural quality gate for organization plans. Public so the preview
+/// can re-score edited plans off-main without re-running AI organize.
+public struct PlanQualityEvaluator {
     /// Always-vague names, matched against the normalized (lowercased,
     /// de-pluralized, punctuation-split) folder name. `normalizedName` turns
     /// "Files" into "file", "Docs" into "doc", "Misc-Files" into "misc file",
@@ -339,7 +341,7 @@ struct PlanQualityEvaluator {
         "doc", "document", "data",
     ]
 
-    static func assess(
+    public static func assess(
         _ plan: OrganizationPlan,
         existingFolderPaths: [String]
     ) -> PlanQualityAssessment {
@@ -361,7 +363,7 @@ struct PlanQualityEvaluator {
         return PlanQualityAssessment(score: score, issues: issues)
     }
 
-    static func assessOffMain(
+    public static func assessOffMain(
         _ plan: OrganizationPlan,
         existingFolderPaths: [String]
     ) async throws -> PlanQualityAssessment {
@@ -381,7 +383,7 @@ struct PlanQualityEvaluator {
         }
     }
 
-    static func existingFolderPathsOffMain(
+    public static func existingFolderPathsOffMain(
         at directory: URL,
         maxDepth: Int = 2
     ) async throws -> [String] {
@@ -441,7 +443,7 @@ struct PlanQualityEvaluator {
         }
     }
 
-    static func keepingCertainItems(
+    public static func keepingCertainItems(
         in plan: OrganizationPlan,
         assessment: PlanQualityAssessment
     ) -> OrganizationPlan {
@@ -479,7 +481,7 @@ struct PlanQualityEvaluator {
         return reviewed
     }
 
-    static func existingFolderPaths(at directory: URL, maxDepth: Int = 2) -> [String] {
+    public static func existingFolderPaths(at directory: URL, maxDepth: Int = 2) -> [String] {
         var paths: [String] = []
         func scan(_ url: URL, depth: Int, prefix: String) {
             guard depth <= maxDepth else { return }
@@ -499,7 +501,7 @@ struct PlanQualityEvaluator {
         return paths
     }
 
-    static func retryInstructions(for assessment: PlanQualityAssessment) -> String {
+    public static func retryInstructions(for assessment: PlanQualityAssessment) -> String {
         assessment.issues.enumerated().map { index, issue in
             "\(index + 1). \(issue.message)"
         }.joined(separator: "\n")

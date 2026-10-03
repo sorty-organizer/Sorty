@@ -20,6 +20,9 @@ struct PreviewActionsView: View {
     /// second look. Only adds a warning glyph + help — details live in the
     /// apply confirmation message.
     var showsApplyWarning: Bool = false
+    /// Non-nil when Apply must stay disabled: names an unresolved 3+-way
+    /// filename conflict. Two-way conflicts never block.
+    var applyBlockedReason: String? = nil
     
     let onCancel: () -> Void
     let onReset: () -> Void
@@ -259,8 +262,8 @@ struct PreviewActionsView: View {
         }
         .buttonStyle(.sortyPrimary)
         .keyboardShortcut(.defaultAction)
-        .disabled(shouldDisableButtons)
-        .help(applyHelpText)
+        .disabled(shouldDisableButtons || applyBlockedReason != nil)
+        .help(applyBlockedReason ?? applyHelpText)
         .accessibilityIdentifier("ApplyOrganizationButton")
         .accessibilityLabel("Apply this \(mode.gerund) plan to your files")
         .accessibilityHint(mode == .renameOnly ? "This action renames files and can be undone from history" : "This action moves files and is not easily undone")

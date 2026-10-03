@@ -41,8 +41,7 @@ struct PreviewView: View {
     // refreshDerivedPlanStats alongside the rename count.
     @State private var memoizedLowConfidenceCount: Int
     @State private var memoizedHiddenFileCount: Int
-    @State private var memoizedCollisionCount: Int
-    @State private var memoizedCollisionSample: String?
+    @State private var memoizedCollisionGroups: [FilenameCollisionGroup]
     @State private var memoizedStorageDestinationCount: Int
 
     private var displayedPlan: OrganizationPlan {
@@ -111,7 +110,16 @@ struct PreviewView: View {
             || displayedPlan.needsReview
             || (displayedPlan.qualityAssessment.map { !$0.passes } ?? false)
             || memoizedLowConfidenceCount > 0
-            || memoizedCollisionCount > 0
+            || !memoizedCollisionGroups.isEmpty
+    }
+
+    /// Unresolved 3+-way name conflicts block Apply until each file has a
+    /// unique name. Two-way conflicts auto-rename safely and never block.
+    private var applyBlockedReason: String? {
+        guard !isViewingHistory else { return nil }
+        guard let blocking = memoizedCollisionGroups.first(where: \.isBlocking) else { return nil }
+        return "\"\(blocking.collidingName)\" is claimed by \(blocking.files.count) files in "
+            + "\(blocking.folderPath) — accept an inline suggestion for each file before applying."
     }
     
     init(
@@ -128,11 +136,7 @@ struct PreviewView: View {
         _memoizedRenameCount = State(initialValue: plan.suggestions.reduce(0) { $0 + $1.renameCount })
         _memoizedLowConfidenceCount = State(initialValue: PreviewPlanInsights.flaggableRenames(in: plan).count)
         _memoizedHiddenFileCount = State(initialValue: PreviewPlanInsights.hiddenFileCount(in: plan))
-        let initialCollisions = PreviewPlanInsights.filenameCollisions(in: plan)
-        _memoizedCollisionCount = State(initialValue: initialCollisions.reduce(0) { $0 + $1.names.count })
-        _memoizedCollisionSample = State(initialValue: initialCollisions.first.map {
-            "\($0.names.prefix(2).joined(separator: ", ")) in \($0.folderPath)"
-        })
+        _memoizedCollisionGroups = State(initialValue: PreviewPlanInsights.collisionGroups(in: plan))
         _memoizedStorageDestinationCount = State(initialValue: PreviewPlanInsights.storageDestinationCount(in: plan))
     }
     
@@ -241,6 +245,15 @@ struct PreviewView: View {
         }
         .task {
             await learningsManager.loadProfileIfNeededForCollectionAsync()
+            await loadExistingFolderPathsForRescore()
+        }
+        .onChange(of: previewStore.plan.qualityAssessment) { _, _ in
+            // Debounced off-main re-score landed: sync the edited plan so the
+            // Quality badge updates. User edits already sync via onPlanChanged,
+            // so this only fires for quality-only refreshes.
+            guard viewingHistoryIndex == nil else { return }
+            editablePlan = previewStore.plan
+            refreshDerivedPlanStats()
         }
         .onChange(of: plan) { _, newPlan in
             viewingHistoryIndex = nil
@@ -322,11 +335,7 @@ struct PreviewView: View {
         memoizedRenameCount = shown.suggestions.reduce(0) { $0 + $1.renameCount }
         memoizedLowConfidenceCount = PreviewPlanInsights.flaggableRenames(in: shown).count
         memoizedHiddenFileCount = PreviewPlanInsights.hiddenFileCount(in: shown)
-        let collisions = PreviewPlanInsights.filenameCollisions(in: shown)
-        memoizedCollisionCount = collisions.reduce(0) { $0 + $1.names.count }
-        memoizedCollisionSample = collisions.first.map {
-            "\($0.names.prefix(2).joined(separator: ", ")) in \($0.folderPath)"
-        }
+        memoizedCollisionGroups = PreviewPlanInsights.collisionGroups(in: shown)
         memoizedStorageDestinationCount = PreviewPlanInsights.storageDestinationCount(in: shown)
         if viewingHistoryIndex == nil, hasEdits {
             memoizedCurrentDiff = OrganizationPlanDiff.Source(
@@ -350,7 +359,7 @@ struct PreviewView: View {
     /// history version, or a truncated preview must never look complete.
     @ViewBuilder
     private var previewNotices: some View {
-        if displayedPlan.isPartial || displayedPlan.needsReview || isViewingHistory || memoizedHiddenFileCount > 0 {
+        if displayedPlan.isPartial || displayedPlan.needsReview || isViewingHistory || memoizedHiddenFileCount > 0 || !memoizedCollisionGroups.isEmpty {
             VStack(spacing: 0) {
                 if displayedPlan.isPartial || displayedPlan.needsReview {
                     noticeRow(
@@ -377,6 +386,17 @@ struct PreviewView: View {
                         }
                     )
                 }
+                if !memoizedCollisionGroups.isEmpty {
+                    noticeRow(
+                        icon: "exclamationmark.triangle.fill",
+                        color: .orange,
+                        text: collisionNoticeText,
+                        accessibilityID: "FilenameCollisionNotice",
+                        actionTitle: "Fix all",
+                        actionID: "FixAllCollisionsButton",
+                        action: fixAllCollisions
+                    )
+                }
                 if memoizedHiddenFileCount > 0 {
                     noticeRow(
                         icon: "eye.slash.fill",
@@ -398,6 +418,29 @@ struct PreviewView: View {
             return "This plan is incomplete (\(count) parse warning\(count == 1 ? "" : "s")) — regenerate or review carefully before applying."
         }
         return "This plan is incomplete — regenerate or review carefully before applying."
+    }
+
+    /// Collision notice: blocking 3+-way conflicts name the file and pause
+    /// Apply; two-way conflicts auto-rename with inline suggestions.
+    private var collisionNoticeText: String {
+        let blocking = memoizedCollisionGroups.filter(\.isBlocking)
+        if let first = blocking.first {
+            return "\"\(first.collidingName)\" is claimed by \(first.files.count) files in "
+                + "\(first.folderPath) — Apply is paused until each file has a unique name. "
+                + "Accept a suggestion inline or Fix all."
+        }
+        let files = memoizedCollisionGroups.reduce(0) { $0 + $1.files.count }
+        return "\(files) files would land on the same name and auto-rename on apply. "
+            + "Accept a suggestion inline to pick the name, or Fix all."
+    }
+
+    /// Applies every pending uniquified suggestion, then re-syncs the plan.
+    private func fixAllCollisions() {
+        HapticFeedbackManager.shared.success()
+        previewStore.acceptAllCollisionSuggestions()
+        hasEdits = true
+        editablePlan = previewStore.plan
+        refreshDerivedPlanStats()
     }
 
     private func noticeRow(
@@ -459,6 +502,7 @@ struct PreviewView: View {
                     editsCapturedCount: previewStore.editsCapturedCount,
                     mode: mode,
                     showsApplyWarning: applyWarningActive,
+                    applyBlockedReason: applyBlockedReason,
                     onCancel: { recordCancelledOrganization(); cancelToStart() },
                     onReset: { HapticFeedbackManager.shared.tap(); editablePlan = plan; previewStore.updatePlan(plan); previewStore.resetEditsCaptured(); hasEdits = false },
                     onRegenerate: regeneratePreview,
@@ -471,6 +515,18 @@ struct PreviewView: View {
     
     private func handleInstructionsChanged(_ newValue: String) {
         if !newValue.isEmpty && learningsManager.consentManager.canCollectData { NotificationCenter.default.post(name: .steeringPromptProvided, object: nil, userInfo: ["prompt": newValue, "folderPath": baseURL.path]) }
+    }
+
+    /// Caches on-disk folders for edit re-scores (convention-match context).
+    /// Runs once off-main; until it lands, re-scores fall back to no context.
+    private func loadExistingFolderPathsForRescore() async {
+        do {
+            let paths = try await PlanQualityEvaluator.existingFolderPathsOffMain(at: baseURL)
+            previewStore.setExistingFolderPaths(paths)
+        } catch {
+            // Re-scores fall back to no convention context.
+            return
+        }
     }
 
     private var applyConfirmationMessage: String {
@@ -507,13 +563,7 @@ struct PreviewView: View {
                 extras.append("\(memoizedStorageDestinationCount) folders target external storage locations.")
             }
         }
-        if memoizedCollisionCount > 0 {
-            var collision = "\(memoizedCollisionCount) files would land on the same name and auto-rename on apply."
-            if let sample = memoizedCollisionSample {
-                collision += " E.g. \(sample)."
-            }
-            extras.append(collision)
-        }
+        extras.append(contentsOf: PreviewPlanInsights.collisionConfirmationLines(groups: memoizedCollisionGroups))
         if memoizedLowConfidenceCount > 0 {
             extras.append("\(memoizedLowConfidenceCount) renames have medium or low confidence and are flagged inline.")
         }
