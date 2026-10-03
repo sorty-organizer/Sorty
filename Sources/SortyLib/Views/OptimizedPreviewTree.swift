@@ -2022,39 +2022,38 @@ struct CollisionSuggestionRow: View {
     @SortyHotReload private var hotReload
     let suggestion: String
     let onAccept: () -> Void
-    @State private var isHovered = false
-
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.orange)
                 .accessibilityHidden(true)
-            Text("Name taken — use")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(suggestion)
-                .font(.caption2)
-                .fontWeight(.medium)
-                .foregroundStyle(.orange)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Button("Use name") {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Suggested unique name")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(suggestion)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .layoutPriority(1)
+            Button("Use suggestion") {
                 onAccept()
             }
-            .buttonStyle(.tintedPill(.orange, size: .small))
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+            .fixedSize()
             .accessibilityIdentifier("AcceptCollisionSuggestionButton")
             .accessibilityLabel("Use suggested unique name \(suggestion)")
             .accessibilityHint("Renames this file so it no longer collides")
         }
-        .opacity(isHovered ? 1.0 : 0.92)
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
-            }
-        }
-        .help("Another file lands on this name. Accept \(suggestion) or Apply auto-renames on write.")
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 7))
+        .help("Another file has the same destination name. Use \(suggestion) to give this file a unique name.")
+        .transition(.opacity)
     }
 }
 

@@ -360,11 +360,12 @@ struct PreviewView: View {
     @ViewBuilder
     private var previewNotices: some View {
         if displayedPlan.isPartial || displayedPlan.needsReview || isViewingHistory || memoizedHiddenFileCount > 0 || !memoizedCollisionGroups.isEmpty {
-            VStack(spacing: 0) {
+            VStack(spacing: 8) {
                 if displayedPlan.isPartial || displayedPlan.needsReview {
                     noticeRow(
                         icon: "exclamationmark.triangle.fill",
                         color: .orange,
+                        title: "Review incomplete plan",
                         text: partialNoticeText,
                         accessibilityID: "PartialPlanNotice",
                         actionTitle: "Regenerate",
@@ -376,6 +377,7 @@ struct PreviewView: View {
                     noticeRow(
                         icon: "clock.arrow.circlepath",
                         color: .blue,
+                        title: "Earlier preview",
                         text: "Viewing older preview v\(displayedPlan.version) of \(totalVersions) — Apply uses this version and discards current edits.",
                         accessibilityID: "StaleHistoryNotice",
                         actionTitle: "Return to latest",
@@ -390,9 +392,10 @@ struct PreviewView: View {
                     noticeRow(
                         icon: "exclamationmark.triangle.fill",
                         color: .orange,
+                        title: "Duplicate filenames",
                         text: collisionNoticeText,
                         accessibilityID: "FilenameCollisionNotice",
-                        actionTitle: "Fix all",
+                        actionTitle: "Resolve all",
                         actionID: "FixAllCollisionsButton",
                         action: fixAllCollisions
                     )
@@ -401,6 +404,7 @@ struct PreviewView: View {
                     noticeRow(
                         icon: "eye.slash.fill",
                         color: .secondary,
+                        title: "Showing a limited preview",
                         text: "Preview hides \(memoizedHiddenFileCount) files for performance — Apply includes all \(displayedPlan.totalFiles) files.",
                         accessibilityID: "TruncatedPreviewNotice",
                         actionTitle: nil,
@@ -409,15 +413,17 @@ struct PreviewView: View {
                     )
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
     }
 
     private var partialNoticeText: String {
         let count = displayedPlan.parseWarnings.count
         if count > 0 {
-            return "This plan is incomplete (\(count) parse warning\(count == 1 ? "" : "s")) — regenerate or review carefully before applying."
+            return "\(count) parse warning\(count == 1 ? "" : "s"). Regenerate the plan or review the files before applying."
         }
-        return "This plan is incomplete — regenerate or review carefully before applying."
+        return "Some files may be missing from this plan. Regenerate or review the files before applying."
     }
 
     /// Collision notice: blocking 3+-way conflicts name the file and pause
@@ -426,12 +432,10 @@ struct PreviewView: View {
         let blocking = memoizedCollisionGroups.filter(\.isBlocking)
         if let first = blocking.first {
             return "\"\(first.collidingName)\" is claimed by \(first.files.count) files in "
-                + "\(first.folderPath) — Apply is paused until each file has a unique name. "
-                + "Accept a suggestion inline or Fix all."
+                + "\(first.folderPath). Give each file a unique name to enable Apply."
         }
         let files = memoizedCollisionGroups.reduce(0) { $0 + $1.files.count }
-        return "\(files) files would land on the same name and auto-rename on apply. "
-            + "Accept a suggestion inline to pick the name, or Fix all."
+        return "\(files) files share destination names. Choose the suggested names below or resolve them all. Apply will otherwise rename them automatically."
     }
 
     /// Applies every pending uniquified suggestion, then re-syncs the plan.
@@ -446,31 +450,44 @@ struct PreviewView: View {
     private func noticeRow(
         icon: String,
         color: Color,
+        title: String,
         text: String,
         accessibilityID: String,
         actionTitle: String?,
         actionID: String?,
         action: (() -> Void)?
     ) -> some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .center, spacing: 12) {
             Image(systemName: icon)
-                .font(.caption)
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(color)
+                .frame(width: 28, height: 28)
+                .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: 7))
                 .accessibilityHidden(true)
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            Spacer()
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+                Text(text)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             if let actionTitle, let action {
                 Button(actionTitle) { action() }
-                    .buttonStyle(.tintedPill(color, size: .small))
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .fixedSize()
                     .accessibilityIdentifier(actionID ?? "")
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .background(color.opacity(0.08))
+        .padding(12)
+        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        }
         .accessibilityIdentifier(accessibilityID)
     }
 

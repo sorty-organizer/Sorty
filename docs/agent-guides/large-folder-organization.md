@@ -12,6 +12,12 @@ Streaming AI text is capped at 256,000 retained characters and 48,000 UI-present
 
 When changing these paths, keep progress tied to measured work, avoid per-file main-actor publications, and never trade away complete apply coverage for a smaller preview.
 
+Preview notices use compact neutral cards with a title, explanation, and native
+bordered action. Orange marks warnings without tinting the entire card. Duplicate
+filenames show an inline suggested name with a small Use suggestion button;
+Resolve all accepts every pending suggestion. Incomplete-plan warnings and
+blocking collision checks remain visible before Apply.
+
 The final plan receives a bounded semantic review of up to 40 questionable
 placements, sampled across destinations. One subset repair may follow. See
 [Organization quality](organization-quality.md) for evidence handling and failure
