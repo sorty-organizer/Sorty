@@ -192,16 +192,29 @@ Use `make build-profile` for a separate profiling cache, or
 large SwiftUI expressions into views with explicit inputs when diagnostics
 identify a hotspot. Moving code to another file alone does not prove faster builds.
 
-Hosted caches use per-commit keys with compatible toolchain/manifest restore
-prefixes. Swift CI and release unit tests share the same cache namespace and
-paths; universal Xcode builds retain a separate cache. Restore/save actions keep
-the existing cache schema and save completed compiler work after a build attempt, even if compilation,
-runtime tests, or later packaging checks fail. The next run always invokes the
-compiler to finish incomplete work before executing tests or packaging. Cache hits never skip test execution.
+Hosted caches separate dependency downloads, incremental outputs, and Xcode's
+compilation result store. Dependencies use manifest/lockfile keys and are saved
+only after successful compilation. Output snapshots include the toolchain,
+workspace path, commit, run ID, and retry attempt. Restore prefers the same
+commit, then the same dependencies, then the latest compatible toolchain.
+A retry can save repaired or more complete outputs without colliding with an
+immutable earlier snapshot. Existing v6 archives seed the new layers on the
+first run, avoiding a forced cold rebuild.
+
+Swift CI and release unit tests share the `spm-tests` namespace; universal
+Xcode builds use `xcode-release`. The two composite actions own identical
+restore/save paths for each layer. Dependencies and compilation results are
+excluded from output snapshots, so subsequent source edits upload compiler
+outputs without duplicating downloads or the compilation store. Cache snapshots
+save before test execution. Cache hits never skip compilation or tests.
 Hosted builds disable local disk-budget pruning and reset only host-specific
-maintenance stamps after restoration, preserving compiled products and source
-timestamps. Explicit cache saves happen before later release validation and
-publication. See the [cache action documentation](https://github.com/actions/cache#using-a-combination-of-restore-and-save-actions).
+maintenance stamps after restoration.
+
+Tag caches cannot be restored by a different release tag. Run release validation
+on `main` before tagging to populate caches in the default branch scope, which
+later tags can restore. Manual validation also checks packaging without publishing.
+See [GitHub's cache scope rules](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache).
+
 [ci_source_cache.py](../../scripts/ci_source_cache.py) restores source
 timestamps only when contents match, preserving Swift's incremental inputs.
 It also restores directory timestamps when every child is tracked and its
@@ -217,11 +230,11 @@ Both test workflows use the compact symbol profile and the poison-cache recovery
 wrapper. Universal releases retain full dSYMs and optimization settings.
 
 Universal CI also enables Xcode's native compilation cache under
-`.build/CompilationCache.noindex`, included in the existing release cache upload.
+`.build/CompilationCache.noindex`, saved as its own cache layer.
 It can replay compiled results for previously seen inputs after ordinary build
 outputs have been replaced by later edits. Xcode keeps the store between runs
 and limits it to 4 GB. Compiler cache remarks remain in the full build log.
-Local `make now` keeps its existing SwiftPM compiler and disk policy.
+Local `make now` uses SwiftPM and scheduled compression.
 See [Apple's compilation cache settings](https://developer.apple.com/documentation/xcode/build-settings-reference).
 
 The October 3 [optimized compiler benchmark](https://github.com/sorty-organizer/Sorty/actions/runs/37045348328)

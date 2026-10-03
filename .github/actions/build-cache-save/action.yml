@@ -1,0 +1,63 @@
+name: Save compiler caches
+description: Save completed compiler work before tests or packaging can fail
+inputs:
+  kind:
+    required: true
+    description: spm-tests or xcode-release
+  build-key:
+    required: true
+    description: Immutable snapshot key from restore
+  dependency-key:
+    required: true
+    description: Dependency key from restore
+  dependency-hit:
+    required: true
+    description: Whether dependency downloads matched exactly
+  compilation-key:
+    required: true
+    description: Xcode compilation store key from restore
+  compile-outcome:
+    required: true
+    description: Whether compilation succeeded, to avoid freezing incomplete downloads
+runs:
+  using: composite
+  steps:
+    - name: Save source timestamps
+      shell: bash
+      run: python3 scripts/ci_source_cache.py save
+
+    - name: Save dependency downloads
+      if: inputs.dependency-hit != 'true' && inputs.compile-outcome == 'success'
+      uses: actions/cache/save@v6
+      with:
+        path: |
+          .build/checkouts
+          .build/repositories
+          .build/artifacts
+          .build/DerivedData/SourcePackages
+        key: ${{ inputs.dependency-key }}
+
+    - name: Save incremental compiler outputs
+      uses: actions/cache/save@v6
+      with:
+        path: |
+          .build
+          !.build/checkouts
+          !.build/repositories
+          !.build/artifacts
+          !.build/DerivedData/SourcePackages
+          !.build/CompilationCache.noindex
+          !.build/**/index
+          !.build/**/Index.noindex
+          !.build/logs
+          !.build/**/*.log
+          !.build/.lock
+          !.build/.sorty-cache/cold
+        key: ${{ inputs.build-key }}
+
+    - name: Save Xcode compilation results
+      if: inputs.kind == 'xcode-release'
+      uses: actions/cache/save@v6
+      with:
+        path: .build/CompilationCache.noindex
+        key: ${{ inputs.compilation-key }}

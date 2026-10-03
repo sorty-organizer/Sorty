@@ -141,29 +141,12 @@ jobs:
           TOOLCHAIN_KEY=$({ xcodebuild -version; swift --version; xcrun --sdk macosx --show-sdk-version; } | shasum -a 256 | awk '{print $1}')
           echo "key=${TOOLCHAIN_KEY}" >> "$GITHUB_OUTPUT"
 
-      - name: Restore build cache
+      - name: Restore compiler caches
         id: build-cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/build-cache-restore
         with:
-          path: |
-            .build
-            !.build/**/index
-            !.build/**/Index.noindex
-            !.build/logs
-            !.build/**/*.log
-          key: ${{ runner.os }}-${{ runner.arch }}-spm-tests-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-compact-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-spm-tests-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-compact-
-            ${{ runner.os }}-${{ runner.arch }}-spm-tests-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
-            ${{ runner.os }}-${{ runner.arch }}-spm-tests-v6-${{ steps.toolchain.outputs.key }}-
-
-      - name: Restore unchanged source timestamps
-        run: |
-          python3 scripts/ci_source_cache.py restore
-          # Maintenance fingerprints contain absolute paths from the old host.
-          # The compiler validates restored outputs; initialize local state anew.
-          rm -f .build/.sorty-cache/state .build/.sorty-cache/toolchain-fingerprint \
-            .build/.sorty-cache/last-prune .build/.sorty-cache/last-size
+          kind: spm-tests
+          toolchain: ${{ steps.toolchain.outputs.key }}
 
       - name: Configure test Keychain
         run: |
@@ -179,6 +162,17 @@ jobs:
           CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
           SORTY_BUILD_DIR="$GITHUB_WORKSPACE/.build" SORTY_VERBOSE=true ./scripts/swift_retry.sh ci_tests swift test -debug-info-format none -Xswiftc -gline-tables-only -Xcc -gline-tables-only -Xswiftc -module-cache-path -Xswiftc "$GITHUB_WORKSPACE/.build/ModuleCache" -Xcc "-fmodules-cache-path=$GITHUB_WORKSPACE/.build/ModuleCache" --disable-index-store --disable-sandbox -j "$CORES" --list-tests | tee release_test_inventory.log
 
+      - name: Save compiler caches
+        if: ${{ !cancelled() && (steps.compile.outcome == 'success' || steps.compile.outcome == 'failure') }}
+        uses: ./.github/actions/build-cache-save
+        with:
+          kind: spm-tests
+          build-key: ${{ steps.build-cache.outputs.build-key }}
+          dependency-key: ${{ steps.build-cache.outputs.dependency-key }}
+          dependency-hit: ${{ steps.build-cache.outputs.dependency-hit }}
+          compilation-key: ${{ steps.build-cache.outputs.compilation-key }}
+          compile-outcome: ${{ steps.compile.outcome }}
+
       - name: Run Unit Tests
         run: |
           set -o pipefail
@@ -186,23 +180,6 @@ jobs:
           SORTY_BUILD_DIR="$GITHUB_WORKSPACE/.build" SORTY_VERBOSE=true ./scripts/swift_retry.sh ci_tests swift test -debug-info-format none -Xswiftc -gline-tables-only -Xcc -gline-tables-only -Xswiftc -module-cache-path -Xswiftc "$GITHUB_WORKSPACE/.build/ModuleCache" -Xcc "-fmodules-cache-path=$GITHUB_WORKSPACE/.build/ModuleCache" --disable-index-store --disable-sandbox --no-parallel --skip-build 2>&1 \
             | tee release_test.log \
             | tail -100
-
-      - name: Save source timestamps with build cache
-        id: source-cache
-        if: ${{ !cancelled() && (steps.compile.outcome == 'success' || steps.compile.outcome == 'failure') }}
-        run: python3 scripts/ci_source_cache.py save
-
-      - name: Save reusable build cache
-        if: ${{ !cancelled() && steps.source-cache.outcome == 'success' && steps.build-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v6
-        with:
-          path: |
-            .build
-            !.build/**/index
-            !.build/**/Index.noindex
-            !.build/logs
-            !.build/**/*.log
-          key: ${{ steps.build-cache.outputs.cache-primary-key }}
 
       - name: Upload release test inventory
         uses: actions/upload-artifact@v7
@@ -237,28 +214,12 @@ jobs:
           TOOLCHAIN_KEY=$({ xcodebuild -version; swift --version; xcrun --sdk macosx --show-sdk-version; } | shasum -a 256 | awk '{print $1}')
           echo "key=${TOOLCHAIN_KEY}" >> "$GITHUB_OUTPUT"
 
-      - name: Restore build cache
+      - name: Restore compiler caches
         id: build-cache
-        uses: actions/cache/restore@v6
+        uses: ./.github/actions/build-cache-restore
         with:
-          path: |
-            .build
-            !.build/**/index
-            !.build/**/Index.noindex
-            !.build/logs
-            !.build/**/*.log
-          key: ${{ runner.os }}-${{ runner.arch }}-xcode-release-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-xcode-release-v6-${{ steps.toolchain.outputs.key }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
-            ${{ runner.os }}-${{ runner.arch }}-xcode-release-v6-${{ steps.toolchain.outputs.key }}-
-
-      - name: Restore unchanged source timestamps
-        run: |
-          python3 scripts/ci_source_cache.py restore
-          # Maintenance fingerprints contain absolute paths from the old host.
-          # The compiler validates restored outputs; initialize local state anew.
-          rm -f .build/.sorty-cache/state .build/.sorty-cache/toolchain-fingerprint \
-            .build/.sorty-cache/last-prune .build/.sorty-cache/last-size
+          kind: xcode-release
+          toolchain: ${{ steps.toolchain.outputs.key }}
 
       - name: Build universal app
         id: compile
@@ -284,22 +245,16 @@ jobs:
           test ! -e "releases/Sorty.app/Contents/Resources/AppIcon.icns"
           test -z "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' releases/Sorty.app/Contents/Info.plist 2>/dev/null || true)"
 
-      - name: Save source timestamps with build cache
-        id: source-cache
+      - name: Save compiler caches
         if: ${{ !cancelled() && (steps.compile.outcome == 'success' || steps.compile.outcome == 'failure') }}
-        run: python3 scripts/ci_source_cache.py save
-
-      - name: Save reusable build cache
-        if: ${{ !cancelled() && steps.source-cache.outcome == 'success' && steps.build-cache.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v6
+        uses: ./.github/actions/build-cache-save
         with:
-          path: |
-            .build
-            !.build/**/index
-            !.build/**/Index.noindex
-            !.build/logs
-            !.build/**/*.log
-          key: ${{ steps.build-cache.outputs.cache-primary-key }}
+          kind: xcode-release
+          build-key: ${{ steps.build-cache.outputs.build-key }}
+          dependency-key: ${{ steps.build-cache.outputs.dependency-key }}
+          dependency-hit: ${{ steps.build-cache.outputs.dependency-hit }}
+          compilation-key: ${{ steps.build-cache.outputs.compilation-key }}
+          compile-outcome: ${{ steps.compile.outcome }}
 
       - name: Upload failed build diagnostics
         if: failure()

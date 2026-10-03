@@ -1,0 +1,111 @@
+name: Restore compiler caches
+description: Restore dependencies, incremental outputs, and Xcode compilation results separately
+inputs:
+  kind:
+    description: spm-tests or xcode-release
+    required: true
+  toolchain:
+    description: Xcode, Swift, and SDK fingerprint
+    required: true
+outputs:
+  build-key:
+    description: Cache build-key
+    value: ${{ steps.keys.outputs.build }}
+  dependency-key:
+    description: Cache dependency-key
+    value: ${{ steps.keys.outputs.dependencies }}
+  dependency-hit:
+    description: Cache dependency-hit
+    value: ${{ steps.dependencies.outputs.cache-hit }}
+  compilation-key:
+    description: Cache compilation-key
+    value: ${{ steps.keys.outputs.compilation }}
+runs:
+  using: composite
+  steps:
+    - name: Compute layer keys
+      id: keys
+      shell: bash
+      env:
+        KIND: ${{ inputs.kind }}
+        TOOLCHAIN: ${{ inputs.toolchain }}
+        DEPENDENCIES: ${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift', 'Sorty.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+      run: |
+        case "$KIND" in spm-tests|xcode-release) ;; *) exit 1 ;; esac
+        # Absolute paths are part of compiler commands and incremental databases.
+        WORKSPACE_KEY=$(printf '%s' "$GITHUB_WORKSPACE" | shasum -a 256 | cut -c1-16)
+        BASE="$RUNNER_OS-$RUNNER_ARCH-$KIND-v7-$TOOLCHAIN-$WORKSPACE_KEY"
+        echo "dependency-hash=$DEPENDENCIES" >> "$GITHUB_OUTPUT"
+        echo "prefix=$BASE" >> "$GITHUB_OUTPUT"
+        echo "dependencies=$BASE-deps-$DEPENDENCIES" >> "$GITHUB_OUTPUT"
+        echo "build=$BASE-outputs-$DEPENDENCIES-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+        echo "compilation=$BASE-cas-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+
+    - name: Restore dependency downloads
+      id: dependencies
+      uses: actions/cache/restore@v6
+      with:
+        path: |
+          .build/checkouts
+          .build/repositories
+          .build/artifacts
+          .build/DerivedData/SourcePackages
+        key: ${{ steps.keys.outputs.dependencies }}
+        restore-keys: |
+          ${{ steps.keys.outputs.prefix }}-deps-
+
+    - name: Restore incremental compiler outputs
+      id: products
+      uses: actions/cache/restore@v6
+      with:
+        path: |
+          .build
+          !.build/checkouts
+          !.build/repositories
+          !.build/artifacts
+          !.build/DerivedData/SourcePackages
+          !.build/CompilationCache.noindex
+          !.build/**/index
+          !.build/**/Index.noindex
+          !.build/logs
+          !.build/**/*.log
+          !.build/.lock
+          !.build/.sorty-cache/cold
+        key: ${{ steps.keys.outputs.build }}
+        restore-keys: |
+          ${{ steps.keys.outputs.prefix }}-outputs-${{ steps.keys.outputs.dependency-hash }}-${{ github.sha }}-
+          ${{ steps.keys.outputs.prefix }}-outputs-${{ steps.keys.outputs.dependency-hash }}-
+          ${{ steps.keys.outputs.prefix }}-outputs-
+
+    # Migrate existing v6 snapshots once rather than forcing a cold compile.
+    # These paths must match the old cache action's path/version exactly.
+    - name: Seed new layers from the previous cache
+      if: steps.products.outputs.cache-matched-key == '' && steps.dependencies.outputs.cache-matched-key == ''
+      uses: actions/cache/restore@v6
+      with:
+        path: |
+          .build
+          !.build/**/index
+          !.build/**/Index.noindex
+          !.build/logs
+          !.build/**/*.log
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.kind }}-v6-${{ inputs.toolchain }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-${{ inputs.kind }}-v6-${{ inputs.toolchain }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}-
+          ${{ runner.os }}-${{ runner.arch }}-${{ inputs.kind }}-v6-${{ inputs.toolchain }}-
+
+    - name: Restore Xcode compilation results
+      if: inputs.kind == 'xcode-release'
+      uses: actions/cache/restore@v6
+      with:
+        path: .build/CompilationCache.noindex
+        key: ${{ steps.keys.outputs.compilation }}
+        restore-keys: |
+          ${{ steps.keys.outputs.prefix }}-cas-
+
+    - name: Restore unchanged source timestamps
+      shell: bash
+      run: |
+        python3 scripts/ci_source_cache.py restore
+        rm -f .build/.sorty-cache/state .build/.sorty-cache/toolchain-fingerprint \
+          .build/.sorty-cache/last-prune .build/.sorty-cache/last-size
