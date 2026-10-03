@@ -19,7 +19,7 @@ Flags are defined in `Sources/SortyModels/FeatureFlags.swift`. Terminal keys use
 |------|-----|---------|-------------|
 | Finder Integration | `finderIntegrationEnabled` | `true` | Legacy preference for Finder Integration. Finder Integration is a core app feature; the key remains for migration and older installs, and new installs default to enabled. |
 | Privacy Mode | `privacyModeEnabled` | `true` | Blurs sensitive handles until hover; hides API keys with manual reveal |
-| Internet Privacy Mode | `internetPrivacyModeEnabled` | `false` | Allows only localhost network requests; blurs and disables cloud provider cards. Apple, Ollama, and Compatible API stay selectable for local workflows. Custom endpoints must use localhost. |
+| Internet Privacy Mode | `internetPrivacyModeEnabled` | `false` | Allows only localhost network requests; blurs and disables cloud provider cards, with a hover explanation. Apple, Ollama, and Compatible API stay selectable for local workflows. Custom endpoints must use localhost. Available provider cards respond to clicks across the full rectangle. |
 | Sensitive Action Authentication | `sensitiveActionAuthenticationEnabled` | `false` | Requires authentication for sensitive actions such as deleting usage data, changing network privacy mode, and revealing secrets |
 | Subscription Auth | `subscriptionAuthEnabled` | `true` | Makes subscription-based auth methods available for supported AI providers |
 | Support the Developer | `supportDeveloperEnabled` | `true` | In-app links and buttons for supporting the developer; uses the sandbox-container commands below |

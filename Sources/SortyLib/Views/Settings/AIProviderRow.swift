@@ -22,6 +22,9 @@ struct AIProviderRow: View {
     private var isBlockedByInternetPrivacy: Bool {
         internetPrivacyModeEnabled && ![.appleFoundationModel, .ollama, .openAICompatible].contains(provider)
     }
+    private var internetPrivacyExplanation: String {
+        "\(provider.selectorTitle) requires an internet connection. Turn off Block Internet Connections in Advanced Settings to use it."
+    }
     private var isSelected: Bool {
         selectedProvider == provider || (isOpenCodeCard && selectedProvider == .openCodeGo)
     }
@@ -79,6 +82,7 @@ struct AIProviderRow: View {
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
             .blur(radius: isBlockedByInternetPrivacy ? 2 : 0)
+            .contentShape(Rectangle())
         }
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -98,8 +102,18 @@ struct AIProviderRow: View {
         .disabled(isBlockedByInternetPrivacy)
         .minimumHitTarget()
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
-        .accessibilityHint(isBlockedByInternetPrivacy ? "Unavailable while Block Internet Connections is on" : (isOpenCodeCard ? "Selects OpenCode as the AI provider. Switch between the Zen and Go plans in the plan picker." : "Selects \(provider.displayName) as the AI provider"))
-        .help(isBlockedByInternetPrivacy ? "Unavailable while Block Internet Connections is on" : (isOpenCodeCard ? "Use OpenCode (switch plans in the plan picker)" : "Use \(provider.displayName)"))
+        .accessibilityHint(isBlockedByInternetPrivacy ? internetPrivacyExplanation : (isOpenCodeCard ? "Selects OpenCode as the AI provider. Switch between the Zen and Go plans in the plan picker." : "Selects \(provider.displayName) as the AI provider"))
+        .help(isBlockedByInternetPrivacy ? internetPrivacyExplanation : (isOpenCodeCard ? "Use OpenCode (switch plans in the plan picker)" : "Use \(provider.displayName)"))
+        .overlay {
+            if isBlockedByInternetPrivacy {
+                // Keep the tooltip reachable above the disabled button.
+                Rectangle()
+                    .fill(.clear)
+                    .contentShape(Rectangle())
+                    .help(internetPrivacyExplanation)
+                    .accessibilityHidden(true)
+            }
+        }
     }
 }
 
