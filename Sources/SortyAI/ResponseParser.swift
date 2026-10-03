@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import os
 
 struct ResponseParser {
     // MARK: - Response Models
@@ -15,15 +16,12 @@ struct ResponseParser {
         let files: [FileItem]
         private let exactNames: [String: FileItem]
         private let foldedNames: [String: FileItem]
-        private let extensions: [String: FileItem]
         private let relativePaths: [String: FileItem]
 
         init(files: [FileItem]) {
             self.files = files
             var exactNames: [String: FileItem] = [:]
             var foldedNames: [String: FileItem] = [:]
-            var extensions: [String: FileItem] = [:]
-            var ambiguousExtensions: Set<String> = []
             var relativePaths: [String: FileItem] = [:]
             exactNames.reserveCapacity(files.count * 2)
             foldedNames.reserveCapacity(files.count * 2)
@@ -57,20 +55,10 @@ struct ResponseParser {
                         relativePaths[lastComponent] = file
                     }
                 }
-
-                let extensionKey = file.extension.lowercased()
-                if !extensionKey.isEmpty {
-                    if extensions[extensionKey] == nil {
-                        extensions[extensionKey] = file
-                    } else {
-                        ambiguousExtensions.insert(extensionKey)
-                    }
-                }
             }
 
             self.exactNames = exactNames
             self.foldedNames = foldedNames
-            self.extensions = extensions.filter { !ambiguousExtensions.contains($0.key) }
             self.relativePaths = relativePaths
         }
 
@@ -88,24 +76,24 @@ struct ResponseParser {
                     return folded
                 }
             }
-            for candidate in candidates where candidate.count <= 5 && !candidate.contains(".") {
-                if let extensionMatch = extensions[candidate.lowercased()] {
-                    return extensionMatch
-                }
-            }
             // Relative-path hits cover qualified references exactly, so the
-            // O(files) scans below only run when the dictionaries missed.
+            // O(files) scan below only runs when the dictionaries missed.
             for candidate in candidates {
                 if let relativeHit = relativePaths[candidate.lowercased()] {
                     return relativeHit
                 }
             }
 
-            // Suffix/path match comes before any fuzzy logic, so qualified
-            // paths bind to their exact file instead of a substring sibling.
+            // Suffix/path match is the only fallback: qualified paths bind to
+            // their exact file instead of a substring sibling.
             // Example: "docs/report.pdf" must prefer docs/report.pdf over report.pdf.
             // It only adds value for path-qualified candidates; bare names are
-            // already covered by the dictionaries above.
+            // already covered by the dictionaries above. Bare extension tokens
+            // ("pdf") and bidirectional substring `contains` are deliberately
+            // NOT resolved: a hallucinated `report.pdf` must not silently bind
+            // `report_final.pdf`. Unmatched names stay unresolved so the
+            // unmapped -> unorganized + partial/needsReview + parseWarnings
+            // path handles them visibly.
             let loweredCandidates = candidates.map { $0.lowercased() }
             let hasPathCandidate = loweredCandidates.contains { $0.contains("/") }
             if hasPathCandidate {
@@ -128,6 +116,9 @@ struct ResponseParser {
                     }
                 }
                 if suffixMatchCount == 1, let unique = suffixMatch {
+                    Logger(subsystem: "com.sorty.app", category: "ResponseParser").debug(
+                        "FileLookup suffix fallback '\(filename, privacy: .public)' -> '\(unique.displayName, privacy: .public)'"
+                    )
                     return unique
                 }
                 if suffixMatchCount > 1 {
@@ -137,32 +128,6 @@ struct ResponseParser {
                 }
             }
 
-            // Last-resort substring match requires a unique hit. Returning the
-            // first of several "contains" hits misbinds siblings such as
-            // report.pdf vs report_final.pdf, so ambiguity resolves to nil.
-            // Counts stop at two: any second hit already proves ambiguity.
-            var substringMatch: FileItem?
-            var substringMatchCount = 0
-            outer: for candidate in candidates where candidate.count > 3 {
-                let lowered = candidate.lowercased()
-                for file in files {
-                    let displayLower = file.displayName.lowercased()
-                    let nameLower = file.name.lowercased()
-                    if displayLower.contains(lowered) || lowered.contains(displayLower)
-                        || nameLower.contains(lowered) || lowered.contains(nameLower) {
-                        if substringMatch?.id != file.id {
-                            substringMatchCount += 1
-                            substringMatch = file
-                            if substringMatchCount > 1 {
-                                break outer
-                            }
-                        }
-                    }
-                }
-            }
-            if substringMatchCount == 1, let unique = substringMatch {
-                return unique
-            }
             return nil
         }
     }

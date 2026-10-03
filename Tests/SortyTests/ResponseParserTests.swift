@@ -881,4 +881,84 @@ class ResponseParserTests: XCTestCase {
         XCTAssertTrue(plan.isPartial)
         XCTAssertTrue(plan.parseWarnings.contains { $0.contains("duplicate") })
     }
+
+    func testHallucinatedNearMissDoesNotBindToSibling() throws {
+        let files = [
+            FileItem(path: "/path/report_final.pdf", name: "report_final", extension: "pdf", size: 100, isDirectory: false),
+            FileItem(path: "/path/notes.txt", name: "notes", extension: "txt", size: 50, isDirectory: false)
+        ]
+        let json = """
+        {"folders":[{"name":"Docs","files":["report.pdf","notes.txt"]}]}
+        """
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+
+        // Hallucinated report.pdf must not silently bind report_final.pdf.
+        XCTAssertEqual(plan.suggestions.first?.files.map(\.displayName), ["notes.txt"])
+        XCTAssertTrue(plan.unorganizedFiles.contains(where: { $0.displayName == "report_final.pdf" }))
+        XCTAssertTrue(plan.isPartial)
+        XCTAssertTrue(plan.needsReview)
+        XCTAssertTrue(plan.parseWarnings.contains { $0.contains("report.pdf") })
+    }
+
+    func testUnrelatedRawFilenameDoesNotBind() throws {
+        let files = [
+            FileItem(path: "/path/DSC_0440.CR3", name: "DSC_0440", extension: "CR3", size: 100, isDirectory: false),
+            FileItem(path: "/path/notes.txt", name: "notes", extension: "txt", size: 50, isDirectory: false)
+        ]
+        let json = """
+        {"folders":[{"name":"Photos","files":["IMG_0012.HEIC","notes.txt"]}]}
+        """
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+
+        XCTAssertEqual(plan.suggestions.first?.files.map(\.displayName), ["notes.txt"])
+        XCTAssertTrue(plan.unorganizedFiles.contains(where: { $0.displayName == "DSC_0440.CR3" }))
+        XCTAssertTrue(plan.isPartial)
+        XCTAssertTrue(plan.parseWarnings.contains { $0.contains("IMG_0012.HEIC") })
+    }
+
+    func testBareExtensionTokenDoesNotBindUniqueFile() {
+        let files = [
+            FileItem(path: "/path/report.pdf", name: "report", extension: "pdf", size: 100, isDirectory: false)
+        ]
+        let json = """
+        {"folders":[{"name":"Docs","files":["pdf"]}]}
+        """
+
+        XCTAssertThrowsError(try ResponseParser.parseResponse(json, originalFiles: files)) { error in
+            guard case ParserError.missingRequiredFields = error else {
+                return XCTFail("Expected missingRequiredFields, got \(error)")
+            }
+        }
+    }
+
+    func testExactFoldedAndRelativePathStillBind() throws {
+        let exactFile = FileItem(path: "/path/report.pdf", name: "report", extension: "pdf", size: 100, isDirectory: false)
+        let exactPlan = try ResponseParser.parseResponse(
+            #"{"folders":[{"name":"Docs","files":["report.pdf"]}]}"#,
+            originalFiles: [exactFile]
+        )
+        XCTAssertEqual(exactPlan.suggestions.first?.files, [exactFile])
+
+        let foldedPlan = try ResponseParser.parseResponse(
+            #"{"folders":[{"name":"Docs","files":["REPORT.PDF"]}]}"#,
+            originalFiles: [exactFile]
+        )
+        XCTAssertEqual(foldedPlan.suggestions.first?.files, [exactFile])
+
+        let nestedFile = FileItem(
+            path: "/base/docs/report.pdf",
+            relativePath: "docs/report.pdf",
+            name: "report",
+            extension: "pdf",
+            size: 100,
+            isDirectory: false
+        )
+        let relativePlan = try ResponseParser.parseResponse(
+            #"{"folders":[{"name":"Docs","files":["docs/report.pdf"]}]}"#,
+            originalFiles: [nestedFile]
+        )
+        XCTAssertEqual(relativePlan.suggestions.first?.files, [nestedFile])
+    }
 }
