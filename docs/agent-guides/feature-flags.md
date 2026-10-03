@@ -72,3 +72,5 @@ Open Settings -> Finder Integration. Sorty prepares its Finder actions and check
 extension registration automatically. Use **Open macOS Extensions** when shown to
 enable the extension. An extension disabled in macOS stays disabled until you
 change it there. Normal setup does not need Terminal commands.
+
+The OpenAI authentication selector uses the same native capsule and tabs treatment as History filters, with API Key and Codex CLI options.
