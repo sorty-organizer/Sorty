@@ -2831,6 +2831,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         mergeSuggestions(incoming.suggestions, into: &accumulatedPlan.suggestions)
         accumulatedPlan.unorganizedFiles.append(contentsOf: incoming.unorganizedFiles)
         accumulatedPlan.unorganizedDetails.append(contentsOf: incoming.unorganizedDetails)
+        // Cross-batch warnings must survive the merge; otherwise a dropped
+        // duplicate claim in batch 2 looks clean in preview.
+        accumulatedPlan.parseWarnings.append(contentsOf: incoming.parseWarnings)
+        accumulatedPlan.isPartial = accumulatedPlan.isPartial || incoming.isPartial
+        accumulatedPlan.needsReview = accumulatedPlan.needsReview || incoming.needsReview
         if accumulatedPlan.learningToolCall == nil {
             accumulatedPlan.learningToolCall = incoming.learningToolCall
         }
@@ -2946,17 +2951,27 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         ).values.sorted { $0.originalFile.id.uuidString < $1.originalFile.id.uuidString }
         merged.tags = Array(Set(existing.tags).union(incoming.tags)).sorted()
         merged.semanticTags = Array(Set(existing.semanticTags).union(incoming.semanticTags)).sorted()
-        if merged.description.isEmpty {
+        // Prefer the richer evidence and higher confidence when two batches
+        // claim the same destination; first-wins kept files but dropped the
+        // better rationale. Rename/tag dicts stay first-wins: file IDs are
+        // disjoint across batches, so a collision there is a hallucinated
+        // duplicate and stability matters more than freshness.
+        if incoming.description.count > merged.description.count {
             merged.description = incoming.description
         }
-        if merged.reasoning.isEmpty {
+        if incoming.reasoning.count > merged.reasoning.count {
             merged.reasoning = incoming.reasoning
         }
         if merged.comment == nil {
             merged.comment = incoming.comment
         }
-        if merged.confidenceScore == nil {
-            merged.confidenceScore = incoming.confidenceScore
+        switch (merged.confidenceScore, incoming.confidenceScore) {
+        case let (existingScore?, incomingScore?):
+            merged.confidenceScore = max(existingScore, incomingScore)
+        case (nil, let incomingScore?):
+            merged.confidenceScore = incomingScore
+        default:
+            break
         }
         if merged.ruleId == nil {
             merged.ruleId = incoming.ruleId
