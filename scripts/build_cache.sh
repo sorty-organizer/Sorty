@@ -685,6 +685,11 @@ prune_oversized_build_cache() {
     # Lossless APFS compression leaves SDK/vendor files directly readable.
     # Run with scheduled maintenance, under the SwiftPM scratch lock.
     python3 "${PROJECT_DIR}/scripts/cold_build_cache.py" compact "${BUILD_DIR}" "${BUILD_CONFIG:-debug}"
+    if [ "${BUILD_METHOD:-spm}" = "spm" ]; then
+        local inactive_config=release
+        [ "${BUILD_CONFIG:-debug}" = "release" ] && inactive_config=debug
+        python3 "${PROJECT_DIR}/scripts/cold_build_cache.py" pack "${BUILD_DIR}" "${inactive_config}"
+    fi
     prune_stale_build_cache_paths "${stale_days}"
 
     local initial_size_mb

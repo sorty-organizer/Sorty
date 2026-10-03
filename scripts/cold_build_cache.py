@@ -137,9 +137,11 @@ def selection(names):
 
 
 def compact(root, folder):
-    # SDK modules and vendor artifacts stay directly readable by the compiler.
-    # Leave active objects alone and preserve every platform/vendor signature.
-    for tree in (root / "ModuleCache", root / "artifacts"):
+    # Test executables stay readable too: archiving them after each app build
+    # forces SwiftPM to relink them on the next bare `swift test` invocation.
+    debug = (root / "debug").resolve()
+    bundles = sorted(debug.glob("*.xctest")) if debug.is_relative_to(root) else []
+    for tree in (root / "ModuleCache", root / "artifacts", *bundles):
         if not tree.is_dir() or tree.is_symlink():
             continue
         sources = [path for path in tree.rglob("*")

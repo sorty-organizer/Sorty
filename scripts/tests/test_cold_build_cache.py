@@ -25,6 +25,11 @@ class ColdCacheTests(unittest.TestCase):
             expected = b"SDK compiler input\n" * 100000
             sdk.write_bytes(expected)
             os.utime(sdk, ns=(1234567890123456, 1234567890123456))
+            test_binary = root / "debug" / "SortyPackageTests.xctest" / "Contents" / "MacOS" / "tests"
+            test_binary.parent.mkdir(parents=True)
+            test_binary.write_bytes(expected)
+            test_binary.chmod(0o755)
+            os.utime(test_binary, ns=(1234567890123456, 1234567890123456))
             source = root / "main.c"
             source.write_text("const char payload[1048576] = {1}; int main(void) { return payload[0] - 1; }\n")
             binary = root / "artifacts" / "vendor"
@@ -33,7 +38,8 @@ class ColdCacheTests(unittest.TestCase):
             subprocess.run(["codesign", "--force", "--sign", "-", str(binary)], check=True, capture_output=True)
             subprocess.run(["/usr/bin/xattr", "-w", "com.sorty.cache-test", "vendor metadata", str(binary)], check=True)
             signed = binary.read_bytes()
-            directory_times = {path: path.stat().st_mtime_ns for path in (sdk.parent, binary.parent)}
+            directory_times = {path: path.stat().st_mtime_ns for path in
+                               (sdk.parent, binary.parent, test_binary.parent, test_binary.parents[2])}
             cache.sync(root, "compact", "debug")
             for path, mtime in directory_times.items():
                 self.assertEqual(path.stat().st_mtime_ns, mtime)
@@ -41,6 +47,10 @@ class ColdCacheTests(unittest.TestCase):
             self.assertEqual(sdk.stat().st_mtime_ns, 1234567890123456)
             self.assertTrue(sdk.stat().st_flags & stat.UF_COMPRESSED)
             self.assertLess(sdk.stat().st_blocks * 512, sdk.stat().st_size / 2)
+            self.assertEqual(test_binary.read_bytes(), expected)
+            self.assertEqual(test_binary.stat().st_mtime_ns, 1234567890123456)
+            self.assertEqual(test_binary.stat().st_mode & 0o777, 0o755)
+            self.assertTrue(test_binary.stat().st_flags & stat.UF_COMPRESSED)
             self.assertEqual(binary.read_bytes(), signed)
             self.assertEqual(subprocess.check_output(["/usr/bin/xattr", "-p", "com.sorty.cache-test", str(binary)]).strip(), b"vendor metadata")
             subprocess.run(["codesign", "--verify", "--strict", str(binary)], check=True)

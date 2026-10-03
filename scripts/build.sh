@@ -1748,14 +1748,8 @@ else
     fi
     BIN_PATH="${BUILD_DIR}/${BUILD_CONFIG}"
     finish_swiftpm_cache_migration "${BUILD_CONFIG}" "${BUILD_FLAGS_ARRAY[@]}"
-    if [ "${BUILD_CONFIG}" = "debug" ]; then
-        python3 "${SCRIPT_DIR}/cold_build_cache.py" pack "${BUILD_DIR}" release
-        if [ "${SKIP_TESTS}" = "true" ]; then
-            python3 "${SCRIPT_DIR}/cold_build_cache.py" pack "${BUILD_DIR}" debug --tests
-        fi
-    else
-        python3 "${SCRIPT_DIR}/cold_build_cache.py" pack "${BUILD_DIR}" debug
-    fi
+    # Scheduled maintenance handles compression. Keep test bundles readable so
+    # switching between app builds and tests does not repack/relink them.
     BUILD_DURATION=$(get_step_duration "build")
     complete_inline_step 2 $TOTAL_STEPS "Compiling Project" "Compilation successful (${BUILD_DURATION})"
     ACTIVE_BUILD_STEP_NUM=""

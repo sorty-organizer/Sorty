@@ -102,11 +102,11 @@ and dependencies remain protected, so the size budget is a soft limit. See [buil
 | `BUILD_CACHE_TARGET_SIZE_MB` | `3072` |
 | `BUILD_CACHE_STALE_DAYS` | `30` |
 
-After successful local builds, inactive configurations and unused `.xctest`
-bundles move into LZFSE-compressed Apple Archives under `.sorty-cache/cold`.
+During scheduled local maintenance, inactive configurations move into
+LZFSE-compressed Apple Archives under `.sorty-cache/cold`.
 The active configuration, compiler objects, package checkouts, and dependencies
 stay expanded. `make now` restores Debug if needed; `make daily` restores Release;
-Make test commands restore the test bundle before SwiftPM checks it. Packing and
+Make test commands restore legacy archived test bundles before SwiftPM checks them. Packing and
 restoration preserve nanosecond timestamps, permissions, symlinks, and contents.
 Archives carry SHA-256 digests and are verified before originals are removed and
 before restored files are published. A SwiftPM scratch lock prevents packing
@@ -114,7 +114,9 @@ during compilation. A damaged archive stays available for inspection while the
 compiler rebuilds missing outputs.
 
 Scheduled local maintenance also applies transparent LZFSE filesystem compression
-to SDK modules and downloaded dependency files of at least 1 MiB. Files stay at
+to SDK modules, downloaded dependency files, and Debug test bundles with files
+of at least 1 MiB. Test bundles remain readable between app builds and tests,
+avoiding repeated packing, extraction, or relinking. Files stay at
 their original paths and remain directly readable, including through memory
 mapping. Compiler objects stay expanded. Compression runs under the SwiftPM
 scratch lock, verifies SHA-256, permissions, timestamps, and metadata before
@@ -160,9 +162,9 @@ Set `SORTY_COLD_BUILD_CACHE=false` to disable compression, packing, and restorat
 `swift build -c release` can rebuild an archived configuration; use `make daily`
 to restore it first, or call
 `python3 scripts/cold_build_cache.py restore "$SORTY_BUILD_DIR" release`.
-Packing runs once per newly built inactive output. It adds compression time to
-that build, and profile switching adds extraction time; repeated Debug builds
-leave the cold outputs alone. Hosted CI keeps everything expanded.
+Packing runs only when maintenance is due. Profile switching adds extraction
+time; builds between maintenance passes do not pack outputs. Hosted CI keeps
+everything expanded.
 
 October's local snapshot fell from 2,723 MB to 1,952 MB. Release outputs compressed
 from 730 MiB to 250 MiB, and the test bundle from 206 MiB to 43 MiB. Concurrent
