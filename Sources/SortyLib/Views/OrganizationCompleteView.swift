@@ -21,6 +21,7 @@ struct OrganizationCompleteView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
+    @EnvironmentObject var learningsManager: LearningsManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     @State private var iconAppeared = false
@@ -46,6 +47,8 @@ struct OrganizationCompleteView: View {
     @State private var keepsFailureCardPinned = false
     
     @State private var shouldShowFinalCounts = false
+    @State private var feedbackDraft = SessionFeedbackDraft()
+    @State private var feedbackSubmitted = false
 
     private enum UndoPresentationState: Equatable {
         case idle
@@ -334,7 +337,17 @@ struct OrganizationCompleteView: View {
                     )
                     .opacity(summaryAppeared ? 1 : 0)
                     .offset(y: summaryAppeared ? 0 : 30)
-                    
+
+                    completionFeedbackCard
+                        .frame(maxWidth: 560)
+                        .opacity(summaryAppeared ? 1 : 0)
+                        .offset(y: summaryAppeared ? 0 : 20)
+
+                    if let observer = organizer.learningsObserver {
+                        InlineLearningMomentCard(observer: observer)
+                            .frame(maxWidth: 560)
+                    }
+
                     if shouldShowStorageSuggestion {
                         CompletionFeatureSuggestionCard(
                             icon: "externaldrive.fill",
@@ -648,6 +661,151 @@ struct OrganizationCompleteView: View {
             return failureMessage ?? "Sorty could not complete that action. Please review history for details."
         }
     }
+
+    // Post-apply feedback: history entry backing this run, if already stored.
+    private var feedbackHistoryEntryID: String? {
+        organizer.history.entries.first(where: { $0.directoryPath == directoryURL.path })?.id.uuidString
+    }
+
+    private var isFeedbackStoragePaused: Bool { learningsManager.sessionLearningPaused }
+
+    private var canStoreFeedback: Bool { learningsManager.consentManager.canCollectData }
+
+    // "Was this helpful?" card with optional reason and Undo/History actions on 👎.
+    @ViewBuilder
+    private var completionFeedbackCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("Was this helpful?")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Button {
+                    HapticFeedbackManager.shared.success()
+                    feedbackDraft.outcome = .useful
+                } label: {
+                    Image(systemName: feedbackDraft.outcome == .useful ? "hand.thumbsup.fill" : "hand.thumbsup")
+                        .font(.body)
+                        .foregroundStyle(feedbackDraft.outcome == .useful ? .green : .secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("CompleteFeedbackUsefulButton")
+                .accessibilityLabel("Mark as helpful")
+                .disabled(feedbackSubmitted)
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    feedbackDraft.outcome = .notUseful
+                } label: {
+                    Image(systemName: feedbackDraft.outcome == .notUseful ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                        .font(.body)
+                        .foregroundStyle(feedbackDraft.outcome == .notUseful ? .orange : .secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("CompleteFeedbackNotUsefulButton")
+                .accessibilityLabel("Mark as not helpful")
+                .disabled(feedbackSubmitted)
+            }
+
+            if feedbackSubmitted {
+                Label("Thanks — feedback recorded.", systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("CompleteFeedbackConfirmation")
+            } else if feedbackDraft.outcome != nil {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 6)], spacing: 6) {
+                    ForEach(LearningsManager.sessionFeedbackReasonPresets, id: \.self) { chip in
+                        Button {
+                            HapticFeedbackManager.shared.selection()
+                            feedbackDraft.selectedChip = (feedbackDraft.selectedChip == chip) ? nil : chip
+                        } label: {
+                            Text(chip)
+                                .font(.caption)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule().fill(feedbackDraft.selectedChip == chip ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.1))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("CompleteFeedbackChip-\(chip)")
+                    }
+                }
+                TextField("Tell us what went wrong (optional)", text: $feedbackDraft.freeText)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.callout)
+                    .accessibilityIdentifier("CompleteFeedbackReasonTextField")
+
+                if isFeedbackStoragePaused {
+                    Text("Learning is paused — feedback won't be stored.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("CompleteFeedbackPausedNotice")
+                } else if !canStoreFeedback {
+                    Text("Enable Learning to save feedback for future runs.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    submitCompletionFeedback()
+                } label: {
+                    Text("Send feedback")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.sortyBordered(size: .small))
+                .disabled(!feedbackDraft.canSubmit)
+                .accessibilityIdentifier("CompleteFeedbackSubmitButton")
+
+                if feedbackDraft.outcome == .notUseful {
+                    Divider().opacity(0.4)
+                    Text("Not quite right? Undo, or fix individual files in History — undone files teach Sorty.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            undoLastOrganization()
+                        } label: {
+                            Label("Undo", systemImage: "arrow.uturn.backward")
+                        }
+                        .buttonStyle(.sortyBordered(size: .small))
+                        .disabled(undoState.isBusy || !canUndo)
+                        .accessibilityIdentifier("CompleteFeedbackUndoButton")
+                        Button {
+                            HapticFeedbackManager.shared.selection()
+                            appState.openRelatedView(.history)
+                        } label: {
+                            Label("Fix files in History", systemImage: "clock.arrow.circlepath")
+                        }
+                        .buttonStyle(.sortyBordered(size: .small))
+                        .accessibilityIdentifier("CompleteFeedbackHistoryButton")
+                    }
+                }
+            } else if isFeedbackStoragePaused {
+                Text("Learning is paused — feedback won't be stored.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("CompleteFeedbackPausedNotice")
+            }
+        }
+        .padding(14)
+        .systemLiquidGlassBackground(cornerRadius: 14)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Rate this organization")
+    }
+
+    private func submitCompletionFeedback() {
+        guard let outcome = feedbackDraft.outcome, feedbackDraft.canSubmit else { return }
+        learningsManager.recordSessionOutcomeFeedback(
+            sessionId: feedbackHistoryEntryID ?? directoryURL.path,
+            outcome: outcome,
+            folderPath: directoryURL.path,
+            reason: feedbackDraft.resolvedReason
+        )
+        HapticFeedbackManager.shared.success()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            feedbackSubmitted = true
+        }
+    }
     
     /// Restores the failed undo/redo card when this view is mounted again while
     /// the organizer still carries the failure (for example after visiting
@@ -853,6 +1011,94 @@ struct OrganizationCompleteView: View {
             return String(format: "%.0f minutes", minutes)
         } else {
             return String(format: "%.0f seconds", seconds)
+        }
+    }
+}
+
+// One follow-up question for uncertain placements. Dismissible, max once
+// per session (enforced by the observer's consume path).
+private struct InlineLearningMomentCard: View {
+    @SortyHotReload private var hotReload
+    @ObservedObject var observer: ContinuousLearningObserver
+    @EnvironmentObject var learningsManager: LearningsManager
+
+    @State private var moment: InlineLearningMoment?
+
+    var body: some View {
+        Group {
+            if let moment {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "questionmark.bubble.fill")
+                            .foregroundStyle(.teal)
+                        Text("Quick question")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            observer.dismissPendingLearningMoment()
+                            self.moment = nil
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("InlineMomentDismissButton")
+                        .accessibilityLabel("Dismiss question")
+                    }
+                    Text(moment.prompt)
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 6)], spacing: 6) {
+                        ForEach(moment.options, id: \.self) { option in
+                            Button {
+                                HapticFeedbackManager.shared.selection()
+                                answer(option, for: moment)
+                            } label: {
+                                Text(option)
+                                    .font(.caption)
+                                    .lineLimit(2)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .frame(maxWidth: .infinity)
+                                    .background(Capsule().fill(Color.secondary.opacity(0.1)))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("InlineMomentOption-\(option)")
+                        }
+                    }
+                }
+                .padding(14)
+                .systemLiquidGlassBackground(cornerRadius: 14)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("InlineMomentCard")
+                .accessibilityLabel("Follow-up question: \(moment.prompt)")
+            }
+        }
+        .onAppear { presentIfAvailable() }
+        .onReceive(observer.$pendingLearningMoment) { _ in presentIfAvailable() }
+    }
+
+    private func presentIfAvailable() {
+        guard moment == nil else { return }
+        guard observer.pendingLearningMoment != nil else { return }
+        moment = observer.consumePendingLearningMoment()
+        if moment != nil {
+            HapticFeedbackManager.shared.selection()
+        }
+    }
+
+    private func answer(_ option: String, for moment: InlineLearningMoment) {
+        let answer = InlineLearningMomentAnswer(
+            momentId: moment.id,
+            sessionId: moment.sessionId,
+            selectedOption: option
+        )
+        Task { await learningsManager.recordInlineLearningMomentAnswer(answer) }
+        HapticFeedbackManager.shared.success()
+        withAnimation(.easeOut(duration: 0.2)) {
+            self.moment = nil
         }
     }
 }

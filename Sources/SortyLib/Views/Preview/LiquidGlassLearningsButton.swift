@@ -51,6 +51,7 @@ struct LiquidGlassLearningsButton: View {
 
         if resolvedAttribution.hasContent {
             Button {
+                HapticFeedbackManager.shared.selection()
                 showPopover.toggle()
             } label: {
                 Image(systemName: "brain.head.profile")
@@ -58,8 +59,9 @@ struct LiquidGlassLearningsButton: View {
                     .foregroundStyle(showPopover ? .teal : .secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("FileLearningsButton")
-            .help("View learnings used for this file")
+            .accessibilityIdentifier("WhyPlacedButton")
+            .accessibilityLabel("Why placed here")
+            .help("Why placed here — view learnings used for this file")
             .popover(isPresented: $showPopover, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
@@ -67,7 +69,7 @@ struct LiquidGlassLearningsButton: View {
                             .font(.caption)
                             .foregroundStyle(.teal)
 
-                        Text("Learnings Used")
+                        Text("Why placed here")
                             .font(.caption)
                             .fontWeight(.medium)
                             .foregroundStyle(.primary)
@@ -86,6 +88,24 @@ struct LiquidGlassLearningsButton: View {
                         ForEach(rows.indices, id: \.self) { index in
                             insightRow(rows[index])
                         }
+                    }
+
+                    if let rule = resolvedAttribution.rule {
+                        Divider().opacity(0.4)
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            showPopover = false
+                            Task { await learningsManager?.setRuleEnabled(ruleId: rule.id, enabled: false) }
+                            HapticFeedbackManager.shared.success()
+                        } label: {
+                            Label("Disable this pattern", systemImage: "eye.slash")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("DisablePatternButton")
+                        .accessibilityLabel("Disable this pattern")
+                        .help("Stop applying this learned pattern")
                     }
 
                 }

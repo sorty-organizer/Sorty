@@ -74,13 +74,15 @@ struct HistoryDetailSheet: View {
                         onTryDifferentModel: showDifferentModelPicker
                     )
 
-                    if learningsManager.summary.canProvideFeedback,
-                       currentEntry.status == .completed,
-                       !currentEntry.isUndone {
+                    if currentEntry.status == .completed,
+                       !currentEntry.isUndone,
+                       learningsManager.summary.state != .noConsent,
+                       learningsManager.summary.state != .locked {
                         QuickFeedbackButtons(
                             feedbackGiven: $feedbackGiven,
                             showConfirmation: $showFeedbackConfirmation,
-                            onFeedback: recordFeedback
+                            onFeedback: recordFeedback,
+                            isPaused: learningsManager.summary.state == .paused
                         )
                     }
 
@@ -242,11 +244,12 @@ struct HistoryDetailSheet: View {
         return message
     }
 
-    private func recordFeedback(_ outcome: LearningsManager.SessionOutcome) {
+    private func recordFeedback(_ outcome: LearningsManager.SessionOutcome, reason: String? = nil) {
         learningsManager.recordSessionOutcomeFeedback(
             sessionId: entry.id.uuidString,
             outcome: outcome,
-            folderPath: entry.directoryPath
+            folderPath: entry.directoryPath,
+            reason: reason
         )
         DebugLogger.log("Session feedback recorded: \(outcome.rawValue) for session \(entry.id.uuidString)")
     }
@@ -592,7 +595,7 @@ struct HistoryDetailSheet: View {
     private func handleUndoSingleOperation(_ operation: FileSystemManager.FileOperation) {
         HapticFeedbackManager.shared.tap()
         undoingOperationID = operation.id
-        Task {
+        Task { @MainActor in
             do {
                 let result = try await organizer.undoSingleOperation(from: currentEntry, operation: operation)
                 if result.hasIssues {
@@ -601,6 +604,8 @@ struct HistoryDetailSheet: View {
                 } else {
                     HapticFeedbackManager.shared.success()
                     undoneOperationIDs.insert(operation.id)
+                    // Per-file undo teaches Sorty: remember the reverted placement.
+                    learningsManager.recordRejection(originalPath: operation.sourcePath)
                 }
             } catch {
                 HapticFeedbackManager.shared.error()

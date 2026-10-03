@@ -628,101 +628,168 @@ struct LoadMoreHistoryRow: View {
 
 // MARK: - Quick Feedback Buttons
 
-/// Compact feedback buttons for session outcome (useful / not useful)
+/// Compact feedback buttons for session outcome (useful / not useful).
+/// notUseful expands a reason form (preset chips + free text) so the reason
+/// persists and links to corrections instead of only appending an event.
 struct QuickFeedbackButtons: View {
     @SortyHotReload private var hotReload
     @Binding var feedbackGiven: LearningsManager.SessionOutcome?
     @Binding var showConfirmation: Bool
-    let onFeedback: (LearningsManager.SessionOutcome) -> Void
+    let onFeedback: (LearningsManager.SessionOutcome, String?) -> Void
+    var isPaused: Bool = false
 
     @State private var usefulHovered = false
     @State private var notUsefulHovered = false
+    @State private var draft = SessionFeedbackDraft()
+    @State private var showingReasonForm = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            if feedbackGiven == nil {
-                Text("Helpful?")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-
-                // Thumbs up
-                Button {
-                    HapticFeedbackManager.shared.success()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        feedbackGiven = .useful
-                        showConfirmation = true
-                    }
-                    onFeedback(.useful)
-
-                    // Auto-hide confirmation
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            showConfirmation = false
-                        }
-                    }
-                } label: {
-                    Image(systemName: "hand.thumbsup")
-                        .font(.caption)
-                        .foregroundStyle(usefulHovered ? .green : .secondary)
-                }
-                .buttonStyle(.plain)
-                .scaleEffect(usefulHovered ? 1.15 : 1.0)
-                .animation(.spring(response: 0.2, dampingFraction: 0.6), value: usefulHovered)
-                .onHover { hovering in
-                    usefulHovered = hovering
-                }
-                .accessibilityLabel("Mark as helpful")
-                .accessibilityIdentifier("FeedbackUsefulButton")
-
-                // Thumbs down
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        feedbackGiven = .notUseful
-                        showConfirmation = true
-                    }
-                    onFeedback(.notUseful)
-
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            showConfirmation = false
-                        }
-                    }
-                } label: {
-                    Image(systemName: "hand.thumbsdown")
-                        .font(.caption)
-                        .foregroundStyle(notUsefulHovered ? .orange : .secondary)
-                }
-                .buttonStyle(.plain)
-                .scaleEffect(notUsefulHovered ? 1.15 : 1.0)
-                .animation(.spring(response: 0.2, dampingFraction: 0.6), value: notUsefulHovered)
-                .onHover { hovering in
-                    notUsefulHovered = hovering
-                }
-                .accessibilityLabel("Mark as not helpful")
-                .accessibilityIdentifier("FeedbackNotUsefulButton")
-            } else {
-                // Feedback confirmation
-                HStack(spacing: 4) {
-                    Image(systemName: feedbackGiven == .useful ? "checkmark.circle.fill" : "xmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(feedbackGiven == .useful ? .green : .orange)
-                        .symbolReplaceTransition(animationValue: feedbackGiven)
-
-                    Text(feedbackGiven == .useful ? "Thanks!" : "Noted")
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                if feedbackGiven == nil, !showingReasonForm {
+                    Text("Helpful?")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .numericTextTransition(animationValue: feedbackGiven)
+                        .foregroundStyle(.tertiary)
+
+                    // Thumbs up
+                    Button {
+                        HapticFeedbackManager.shared.success()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            feedbackGiven = .useful
+                            showConfirmation = true
+                        }
+                        onFeedback(.useful, nil)
+
+                        // Auto-hide confirmation
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                showConfirmation = false
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "hand.thumbsup")
+                            .font(.caption)
+                            .foregroundStyle(usefulHovered ? .green : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .scaleEffect(usefulHovered ? 1.15 : 1.0)
+                    .animation(.spring(response: 0.2, dampingFraction: 0.6), value: usefulHovered)
+                    .onHover { hovering in
+                        usefulHovered = hovering
+                    }
+                    .accessibilityLabel("Mark as helpful")
+                    .accessibilityIdentifier("FeedbackUsefulButton")
+
+                    // Thumbs down
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            showingReasonForm = true
+                            draft.outcome = .notUseful
+                        }
+                    } label: {
+                        Image(systemName: "hand.thumbsdown")
+                            .font(.caption)
+                            .foregroundStyle(notUsefulHovered ? .orange : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .scaleEffect(notUsefulHovered ? 1.15 : 1.0)
+                    .animation(.spring(response: 0.2, dampingFraction: 0.6), value: notUsefulHovered)
+                    .onHover { hovering in
+                        notUsefulHovered = hovering
+                    }
+                    .accessibilityLabel("Mark as not helpful")
+                    .accessibilityIdentifier("FeedbackNotUsefulButton")
+                } else if showingReasonForm, feedbackGiven == nil {
+                    reasonForm
+                } else {
+                    // Feedback confirmation
+                    HStack(spacing: 4) {
+                        Image(systemName: feedbackGiven == .useful ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(feedbackGiven == .useful ? .green : .orange)
+                            .symbolReplaceTransition(animationValue: feedbackGiven)
+
+                        Text(feedbackGiven == .useful ? "Thanks!" : "Noted")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .numericTextTransition(animationValue: feedbackGiven)
+                    }
+                    .transition(.scale.combined(with: .opacity))
                 }
-                .transition(.scale.combined(with: .opacity))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.secondary.opacity(0.08))
+            .clipShape(Capsule())
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(feedbackGiven == nil ? "Rate this organization" : "Feedback recorded")
+
+            if isPaused, feedbackGiven == nil {
+                Text("Learning is paused — feedback won't be stored.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("FeedbackPausedNotice")
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(Capsule())
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(feedbackGiven == nil ? "Rate this organization" : "Feedback recorded")
+    }
+
+    // Reason chips + free text for not-useful feedback.
+    private var reasonForm: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("What went wrong?")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 6)], spacing: 6) {
+                ForEach(LearningsManager.sessionFeedbackReasonPresets, id: \.self) { chip in
+                    Button {
+                        HapticFeedbackManager.shared.selection()
+                        draft.selectedChip = (draft.selectedChip == chip) ? nil : chip
+                    } label: {
+                        Text(chip)
+                            .font(.caption2)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule().fill(draft.selectedChip == chip ? Color.orange.opacity(0.2) : Color.secondary.opacity(0.1))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("FeedbackReasonChip-\(chip)")
+                }
+            }
+            TextField("Optional detail", text: $draft.freeText)
+                .textFieldStyle(.roundedBorder)
+                .font(.caption)
+                .accessibilityIdentifier("FeedbackReasonTextField")
+            HStack(spacing: 8) {
+                Button("Save") {
+                    HapticFeedbackManager.shared.tap()
+                    let reason = draft.resolvedReason
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        feedbackGiven = .notUseful
+                        showingReasonForm = false
+                        showConfirmation = true
+                    }
+                    onFeedback(.notUseful, reason)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation(.easeOut(duration: 0.2)) { showConfirmation = false }
+                    }
+                }
+                .buttonStyle(.sortyBordered(size: .small))
+                .disabled(!draft.canSubmit)
+                .accessibilityIdentifier("FeedbackReasonSaveButton")
+                Button("Cancel", role: .cancel) {
+                    HapticFeedbackManager.shared.tap()
+                    draft = SessionFeedbackDraft()
+                    showingReasonForm = false
+                }
+                .buttonStyle(.plain)
+                .font(.caption2)
+                .accessibilityIdentifier("FeedbackReasonCancelButton")
+            }
+        }
+        .padding(8)
     }
 }
 

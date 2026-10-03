@@ -743,6 +743,13 @@ struct HistoryFileOperationsSection: View {
                         .numericTextTransition(animationValue: operations.count)
                 }
 
+                // Discoverability: per-file undo doubles as "fix and remember".
+                Text("Spotted misplacements? Undo any file below — Sorty remembers it for next time.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("PerFileUndoHint")
+
                 LazyVStack(spacing: 6) {
                     ForEach(operations, id: \.id) { operation in
                         OperationRowView(

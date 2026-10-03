@@ -55,6 +55,9 @@ public class ContinuousLearningObserver: ObservableObject {
     
     /// Published pending learning moment for the UI to pick up
     @Published public var pendingLearningMoment: InlineLearningMoment?
+
+    /// Session IDs that already showed a moment (max once per session).
+    private var presentedLearningMomentSessionIDs: Set<String> = []
     
     /// Recent sessions for correlation (last 24 hours)
     private var recentSessions: [OrganizationSession] = []
@@ -952,18 +955,49 @@ public class ContinuousLearningObserver: ObservableObject {
         }
 
         persistSessionUpdate(session)
-        
-        // Generate an inline learning moment for accepted sessions
-        if session.reaction == .accepted {
-            let proposedFolders = session.folderPatterns.map(\.folderName)
-            if let moment = learningsManager.generateInlineLearningMoment(from: session, proposedFolders: proposedFolders) {
-                pendingLearningMoment = moment
+
+        // Generate an inline learning moment for accepted sessions.
+        // Keep the first pending moment and enforce max once per session.
+        if session.reaction == .accepted, pendingLearningMoment == nil {
+            if let sessionId = session.id as String?,
+               !sessionId.isEmpty, presentedLearningMomentSessionIDs.contains(sessionId) {
+                // Already asked for this session; do not re-prompt.
+            } else {
+                let proposedFolders = session.folderPatterns.map(\.folderName)
+                if let moment = learningsManager.generateInlineLearningMoment(from: session, proposedFolders: proposedFolders),
+                   InlineLearningMomentPolicy.shouldPresent(
+                       moment: moment,
+                       presentedSessionIDs: presentedLearningMomentSessionIDs,
+                       alreadyPresenting: false
+                   ) {
+                    pendingLearningMoment = moment
+                }
             }
         }
-        
+
         if currentSession?.id == session.id {
             currentSession = nil
         }
+    }
+
+    /// Claim the pending moment for presentation (max once per session).
+    /// Returns nil when nothing is pending or the session already saw one.
+    public func consumePendingLearningMoment() -> InlineLearningMoment? {
+        guard let moment = pendingLearningMoment else { return nil }
+        pendingLearningMoment = nil
+        if let sessionId = moment.sessionId, !sessionId.isEmpty {
+            guard !presentedLearningMomentSessionIDs.contains(sessionId) else { return nil }
+            presentedLearningMomentSessionIDs.insert(sessionId)
+        }
+        return moment
+    }
+
+    /// Dismiss without presenting; still counts as shown for this session.
+    public func dismissPendingLearningMoment() {
+        if let sessionId = pendingLearningMoment?.sessionId, !sessionId.isEmpty {
+            presentedLearningMomentSessionIDs.insert(sessionId)
+        }
+        pendingLearningMoment = nil
     }
 
     // MARK: - Related Files Detection

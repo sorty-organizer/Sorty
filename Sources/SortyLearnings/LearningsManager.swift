@@ -1389,14 +1389,32 @@ public class LearningsManager: ObservableObject {
         case useful
         case notUseful
     }
-    
-    /// Record quick outcome feedback for a session from history view
-    public func recordSessionOutcomeFeedback(sessionId: String, outcome: SessionOutcome, folderPath: String? = nil) {
+
+    /// Preset reasons offered for not-useful feedback (free text always allowed).
+    public static let sessionFeedbackReasonPresets: [String] = [
+        "Wrong folders",
+        "Too many folders",
+        "Files split up",
+        "Bad names",
+    ]
+
+    /// Record quick outcome feedback for a session from history view.
+    /// `reason` persists in the session event metadata; a not-useful reason
+    /// also links to corrections as a steering prompt for future runs.
+    public func recordSessionOutcomeFeedback(
+        sessionId: String,
+        outcome: SessionOutcome,
+        folderPath: String? = nil,
+        reason: String? = nil
+    ) {
         guard consentManager.canCollectData else { return }
         guard !sessionLearningPaused else { return }
         if let folderPath, isPathExcludedFromLearning(folderPath) { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
+
+        let trimmedReason = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedReason = (trimmedReason?.isEmpty == false) ? String(trimmedReason!.prefix(500)) : nil
 
         let resolvedSessionID: String
         if profile.sessions.contains(where: { $0.id == sessionId }) {
@@ -1406,8 +1424,12 @@ public class LearningsManager: ObservableObject {
         } else {
             resolvedSessionID = sessionId
         }
-        
+
         mutateSession(in: &profile, sessionId: resolvedSessionID, folderPath: folderPath, createIfMissing: false) { session in
+            var metadata: [String: String]? {
+                guard let resolvedReason else { return ["outcome": outcome.rawValue] }
+                return ["outcome": outcome.rawValue, "reason": resolvedReason]
+            }
             switch outcome {
             case .useful:
                 // Mark as accepted if not already corrected/reverted
@@ -1418,20 +1440,41 @@ public class LearningsManager: ObservableObject {
                     OrganizationSessionEvent(
                         timestamp: Date(),
                         kind: .feedback,
-                        summary: "User marked session as useful"
+                        summary: resolvedReason.map { "Useful: \($0)" } ?? "User marked session as useful",
+                        metadata: metadata
                     )
                 )
+                if let resolvedReason {
+                    session.steeringPrompts.append("Useful because: \(resolvedReason)")
+                }
             case .notUseful:
                 session.events.append(
                     OrganizationSessionEvent(
                         timestamp: Date(),
                         kind: .feedback,
-                        summary: "User marked session as not useful"
+                        summary: resolvedReason.map { "Not useful: \($0)" } ?? "User marked session as not useful",
+                        metadata: metadata
                     )
                 )
+                if let resolvedReason {
+                    session.steeringPrompts.append("Not useful: \(resolvedReason)")
+                }
             }
         }
-        
+
+        // Link not-useful reasons to corrections: a steering prompt carries the
+        // reason into prompt context and the Learnings dashboard.
+        if outcome == .notUseful, let resolvedReason {
+            let prompt = SteeringPrompt(
+                prompt: "Not useful: \(resolvedReason)",
+                folderPath: folderPath,
+                sessionId: resolvedSessionID
+            )
+            if !profile.steeringPrompts.contains(where: { $0.prompt == prompt.prompt && $0.sessionId == prompt.sessionId }) {
+                profile.steeringPrompts.append(prompt)
+            }
+        }
+
         currentProfile = profile
         debouncedSave()
     }
