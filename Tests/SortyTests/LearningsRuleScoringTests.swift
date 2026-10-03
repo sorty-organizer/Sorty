@@ -250,3 +250,75 @@ final class LearningsRuleScoringTests: XCTestCase {
         XCTAssertFalse(manager.currentProfile?.inferredRules.contains { $0.id.hasPrefix("local-avoid-") } ?? true)
     }
 }
+
+extension LearningsRuleScoringTests {
+
+    func testRuleRelevanceBoostRewardsExtensionAndKeywordOverlap() {
+        let invoiceRule = InferredRule(
+            pattern: "Invoice.*\\.pdf$",
+            template: "Finance/{year}/Invoices/{filename}",
+            priority: 10,
+            explanation: "Organize invoices by year"
+        )
+        let photoRule = InferredRule(
+            pattern: ".*\\.jpg$",
+            template: "Photos/{filename}",
+            priority: 10,
+            explanation: "Photos to Photos folder"
+        )
+
+        XCTAssertGreaterThan(
+            LearningsManager.ruleRelevanceBoost(invoiceRule, fileNames: ["Invoice_2024_01.pdf"]),
+            LearningsManager.ruleRelevanceBoost(photoRule, fileNames: ["Invoice_2024_01.pdf"])
+        )
+        XCTAssertEqual(
+            LearningsManager.ruleRelevanceBoost(photoRule, fileNames: ["IMG_001.jpg"]),
+            0.05,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            LearningsManager.ruleRelevanceBoost(invoiceRule, fileNames: ["IMG_001.jpg"]),
+            0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(LearningsManager.ruleRelevanceBoost(invoiceRule, fileNames: []), 0)
+    }
+
+    func testRuleRelevanceBoostIgnoresSubstringFalsePositives() {
+        // "mov" must not match via the word "moved" in the explanation.
+        let unrelated = InferredRule(
+            pattern: ".*",
+            template: "{category}/{filename}",
+            priority: 10,
+            explanation: "User moved file after organization"
+        )
+        XCTAssertEqual(LearningsManager.ruleRelevanceBoost(unrelated, fileNames: ["clip.mov"]), 0)
+    }
+
+    @MainActor
+    func testGetActiveRulesOrderingIsStableForIdenticalScores() {
+        let suiteName = "LearningsRuleScoringTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let manager = LearningsManager(userDefaults: defaults)
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = ["c-rule", "a-rule", "b-rule"].map { id in
+            InferredRule(
+                id: id,
+                pattern: ".*\\.txt$",
+                template: "Text/{filename}",
+                priority: 50,
+                explanation: "Text rule \(id)",
+                status: .active
+            )
+        }
+        manager.currentProfile = profile
+
+        let first = manager.getActiveRules().map(\.id)
+        let second = manager.getActiveRules().map(\.id)
+        XCTAssertEqual(first, ["a-rule", "b-rule", "c-rule"])
+        XCTAssertEqual(first, second)
+    }
+}

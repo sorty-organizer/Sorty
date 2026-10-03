@@ -341,9 +341,34 @@ final class LearningsManagerTests: XCTestCase {
 
         let context = manager.generatePromptContext()
 
+        // learningStrength floors at the top 5 instead of silently dropping to
+        // a single rule at the minimum setting.
+        for index in 1...5 {
+            XCTAssertTrue(context.contains("[rule_id: rule-\(index)]"), "Expected rule-\(index) to survive the strength floor")
+        }
+        XCTAssertFalse(context.contains("Learned rule 0"), "Weakest rule should still be cut")
         XCTAssertTrue(context.contains("[rule_id: rule-5]"))
-        XCTAssertTrue(context.contains("Learned rule 5"))
-        XCTAssertFalse(context.contains("Learned rule 4"))
+    }
+
+    func testLearningStrengthFloorKeepsTopFiveAtMinimumSetting() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = (0..<8).map { index in
+            InferredRule(
+                id: "floor-rule-\(index)",
+                pattern: ".*\\.ext\(index)$",
+                template: "Folder\(index)/{filename}",
+                priority: index * 10,
+                explanation: "Floor rule \(index)",
+                status: .active
+            )
+        }
+        manager.currentProfile = profile
+        manager.learningStrength = 0
+
+        let active = manager.getActiveRules()
+        XCTAssertEqual(active.count, 5, "Minimum strength must keep the top 5, not collapse to 1")
+        XCTAssertEqual(active.first?.id, "floor-rule-7")
     }
     
     
@@ -1567,5 +1592,239 @@ final class LearningExclusionMonitorTests: XCTestCase {
                 )
             )
         }
+    }
+}
+
+// MARK: - Prompt Relevance & Scoping Tests
+
+/// Covers the learnings-granularity fixes: standardized-URL folder containment,
+/// relevance re-ranking by current batch, pending-approval candidate surfacing,
+/// and persona robustness when the caller passes nil.
+@MainActor
+final class LearningsPromptRelevanceTests: XCTestCase {
+
+    var manager: LearningsManager!
+    private var testDefaults: UserDefaults!
+    private var testDefaultsSuiteName: String!
+
+    override func setUp() async throws {
+        testDefaultsSuiteName = "LearningsPromptRelevanceTests.\(UUID().uuidString)"
+        testDefaults = UserDefaults(suiteName: testDefaultsSuiteName)
+        testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        manager = LearningsManager(userDefaults: testDefaults)
+        manager.currentProfile = LearningsProfile()
+        await manager.grantConsent()
+    }
+
+    override func tearDown() async throws {
+        manager = nil
+        testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        testDefaults = nil
+        testDefaultsSuiteName = nil
+    }
+
+    // MARK: - URL containment
+
+    func testFoldersOverlapRejectsSiblingPrefixMatches() {
+        XCTAssertFalse(LearningsManager.foldersOverlap("/Users/test/WorkBackup", "/Users/test/Work"))
+        XCTAssertFalse(LearningsManager.isPath("/Users/test/WorkBackup", withinOrEqualTo: "/Users/test/Work"))
+    }
+
+    func testFoldersOverlapAcceptsNestingAndNormalizesPaths() {
+        XCTAssertTrue(LearningsManager.foldersOverlap("/Users/test/Work/Sub", "/Users/test/Work"))
+        XCTAssertTrue(LearningsManager.foldersOverlap("/Users/test/Work", "/Users/test/Work/Sub"))
+        XCTAssertTrue(LearningsManager.isPath("/Users/test/Work/", withinOrEqualTo: "/Users/test/./Work"))
+        XCTAssertTrue(LearningsManager.isPath("/Users/test/Work/Sub/../Sub", withinOrEqualTo: "/Users/test/Work"))
+        XCTAssertTrue(LearningsManager.foldersOverlap("/Users/test/Work", "/Users/test/Work"))
+    }
+
+    func testSessionScopingIgnoresSiblingPrefixFolders() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.sessions = [
+            OrganizationSession(
+                folderPath: "/Users/test/Work/Sub",
+                folderPatterns: [
+                    OrganizationSessionFolderPattern(
+                        relativePath: "Invoices",
+                        folderName: "Invoices",
+                        fileCount: 4,
+                        fileExtensions: ["pdf"]
+                    )
+                ],
+                reaction: .accepted
+            ),
+            OrganizationSession(
+                folderPath: "/Users/test/WorkBackup",
+                folderPatterns: [
+                    OrganizationSessionFolderPattern(
+                        relativePath: "BackupDumps",
+                        folderName: "BackupDumps",
+                        fileCount: 4,
+                        fileExtensions: ["bak"]
+                    )
+                ],
+                reaction: .accepted
+            ),
+        ]
+        manager.currentProfile = profile
+
+        let context = manager.generatePromptContext(forFolder: "/Users/test/Work")
+
+        XCTAssertTrue(context.contains("Invoices"), "Nested session should be in scope")
+        XCTAssertFalse(context.contains("BackupDumps"), "Sibling-prefix folder must not match")
+    }
+
+    func testFolderScopedRuleIgnoresSiblingPrefixFolders() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = [
+            InferredRule(
+                pattern: ".*\\.bak$",
+                template: "BackupDumps/{filename}",
+                priority: 90,
+                explanation: "Backup dumps rule",
+                scope: .folder("/Users/test/WorkBackup"),
+                status: .active
+            ),
+        ]
+        manager.currentProfile = profile
+
+        XCTAssertTrue(manager.getActiveRules(forFolder: "/Users/test/WorkBackup").count == 1)
+        XCTAssertTrue(manager.getActiveRules(forFolder: "/Users/test/Work").isEmpty)
+        XCTAssertTrue(manager.getActiveRules(forFolder: "/Users/test/WorkBackup/Deep").count == 1)
+    }
+
+    // MARK: - Relevance ranking
+
+    func testRelevanceBoostPrefersRulesMatchingCurrentBatch() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = [
+            InferredRule(
+                id: "a-jpg-rule",
+                pattern: ".*\\.jpg$",
+                template: "Photos/{filename}",
+                priority: 50,
+                explanation: "Photos to Photos folder",
+                status: .active
+            ),
+            InferredRule(
+                id: "z-pdf-rule",
+                pattern: ".*\\.pdf$",
+                template: "Documents/{filename}",
+                priority: 50,
+                explanation: "PDF documents to Documents",
+                status: .active
+            ),
+        ]
+        manager.currentProfile = profile
+
+        // Equal confidence + priority: without files, id order wins (stable tiebreak).
+        let unranked = manager.getActiveRules()
+        XCTAssertEqual(unranked.first?.id, "a-jpg-rule")
+
+        // With a PDF batch, the PDF rule outranks despite a larger id.
+        let ranked = manager.getActiveRules(fileNames: ["invoice_2024.pdf", "receipt.pdf"])
+        XCTAssertEqual(ranked.first?.id, "z-pdf-rule")
+    }
+
+    func testPromptContextSurfacesRelevantRuleForCurrentBatch() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = (0..<8).map { index in
+            InferredRule(
+                id: "ctx-rule-\(index)",
+                pattern: ".*\\.misc\(index)$",
+                template: "Misc\(index)/{filename}",
+                priority: 20,
+                explanation: "Miscellaneous bucket \(index)",
+                status: .active
+            )
+        } + [
+            InferredRule(
+                id: "ctx-invoice-rule",
+                pattern: "Invoice.*\\.pdf$",
+                template: "Finance/{year}/Invoices/{filename}",
+                priority: 10,
+                explanation: "Organize invoices by year",
+                status: .active
+            ),
+        ]
+        manager.currentProfile = profile
+        manager.learningStrength = 0
+
+        // Strength floor admits only 5 of 9; the invoice rule must win a slot
+        // via batch relevance despite its lower priority.
+        let context = manager.generatePromptContext(fileNames: ["Invoice_2024_01.pdf"])
+        XCTAssertTrue(context.contains("Organize invoices by year"))
+    }
+
+    // MARK: - Pending-approval surfacing
+
+    func testPendingApprovalRulesSurfacedAsCandidatesNotHidden() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = [
+            InferredRule(
+                pattern: ".*\\.txt$",
+                template: "Text/{filename}",
+                priority: 60,
+                explanation: "Text files rule",
+                scope: .global,
+                status: .active
+            ),
+            InferredRule(
+                pattern: ".*\\.csv$",
+                template: "Data/{filename}",
+                priority: 50,
+                explanation: "CSV files rule",
+                scope: .global,
+                status: .pendingApproval
+            ),
+        ]
+        manager.currentProfile = profile
+
+        // Still gated from application...
+        XCTAssertFalse(manager.getActiveRules().contains(where: { $0.explanation == "CSV files rule" }))
+
+        // ...but visible to the model as an explicitly-flagged candidate.
+        let context = manager.generatePromptContext()
+        XCTAssertTrue(context.contains("awaiting approval"))
+        XCTAssertTrue(context.contains("CSV files rule"))
+    }
+
+    // MARK: - Persona robustness
+
+    func testPersonaRulesExcludedWhenPersonaIdNilAndIncludedWhenProvided() {
+        let personaId = UUID()
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = [
+            InferredRule(
+                pattern: ".*\\.pdf$",
+                template: "WorkDocs/{filename}",
+                priority: 80,
+                explanation: "Persona work docs rule",
+                scope: .activePersona(personaId),
+                status: .active
+            ),
+            InferredRule(
+                pattern: ".*\\.txt$",
+                template: "Text/{filename}",
+                priority: 60,
+                explanation: "Global text rule",
+                scope: .global,
+                status: .active
+            ),
+        ]
+        manager.currentProfile = profile
+
+        let nilContext = manager.generatePromptContext(forFolder: "/Users/test/Work")
+        XCTAssertTrue(nilContext.contains("Global text rule"))
+        XCTAssertFalse(nilContext.contains("Persona work docs rule"))
+
+        let personaContext = manager.generatePromptContext(forFolder: "/Users/test/Work", personaId: personaId)
+        XCTAssertTrue(personaContext.contains("Persona work docs rule"))
     }
 }

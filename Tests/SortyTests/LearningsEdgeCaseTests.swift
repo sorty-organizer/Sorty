@@ -154,9 +154,11 @@ final class LearningsEdgeCaseTests: XCTestCase {
         
         let activeRules = manager.getActiveRules()
         
-        // With strength 0.0: Int(0.0 * 10) + 1 = 1
-        XCTAssertEqual(activeRules.count, 1,
-                       "Learning strength 0.0 should return only 1 rule (the +1 minimum)")
+        // With strength 0.0 the admission floor keeps the top 5 instead of
+        // collapsing to the old `Int(count * strength) + 1 = 1` single rule.
+        XCTAssertEqual(activeRules.count, 5,
+                       "Learning strength 0.0 should keep the top 5 rules")
+        XCTAssertEqual(activeRules.first?.priority, 90)
     }
     
     func testLearningStrengthOneReturnsAllRules() {

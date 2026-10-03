@@ -2244,7 +2244,23 @@ public class LearningsManager: ObservableObject {
     /// This is the bridge between learned data and the AI organization engine.
     /// The context is intentionally short and session-centric so the model gets
     /// recent, attributable signals instead of a long undifferentiated dump.
-    public func generatePromptContext(forFolder folderPath: String? = nil) -> String {
+    ///
+    /// - Parameters:
+    ///   - folderPath: Scope sessions, patterns, and folder rules to this folder
+    ///     using standardized-URL containment (see ``foldersOverlap``).
+    ///   - personaId: When non-nil, persona-scoped rules for this persona are
+    ///     included. NOTE: the current FolderOrganizer call path passes nil,
+    ///     so persona-scoped rules are excluded there and only global +
+    ///     folder-scoped rules surface. Pass the active persona id to include
+    ///     persona rules.
+    ///   - fileNames: Names/paths of the files about to be organized. Used to
+    ///     re-rank (never to exclude) rules by extension/keyword overlap with
+    ///     the current batch.
+    public func generatePromptContext(
+        forFolder folderPath: String? = nil,
+        personaId: UUID? = nil,
+        fileNames: [String]? = nil
+    ) -> String {
         guard let profile = currentProfile, (profile.consentGranted || consentManager.hasConsented) else {
             return ""
         }
@@ -2267,7 +2283,7 @@ public class LearningsManager: ObservableObject {
         let scopedSessions = Array(filteredProfile.sessions
             .filter { session in
                 guard let folderPath else { return true }
-                return session.folderPath.hasPrefix(folderPath) || folderPath.hasPrefix(session.folderPath)
+                return Self.foldersOverlap(session.folderPath, folderPath)
             }
             .sorted(by: { ($0.completedAt ?? $0.timestamp) > ($1.completedAt ?? $1.timestamp) })
             .prefix(20))
@@ -2276,7 +2292,13 @@ public class LearningsManager: ObservableObject {
         // analysis plus validation/quality retries) share one computation. The
         // rule fingerprint, not just the count, is part of the key: elapsed
         // cooldowns normalize rules to active without changing the count.
-        let contextFingerprint = "\(filteredProfile.sessions.count)|\(Self.rulesFingerprint(filteredProfile.inferredRules))|\(filteredProfile.additionalInstructionsHistory.count)|\(filteredProfile.guidingInstructionsHistory.count)|\(filteredProfile.positiveExamples.count)|\(filteredProfile.renameFeedbackHistory.count)|\(folderPath ?? "")"
+        let fileNamesKey: String
+        if let fileNames, !fileNames.isEmpty {
+            fileNamesKey = "\(fileNames.count)|\(fileNames.sorted().joined(separator: "\n").hashValue)"
+        } else {
+            fileNamesKey = "0|0"
+        }
+        let contextFingerprint = "\(filteredProfile.sessions.count)|\(Self.rulesFingerprint(filteredProfile.inferredRules))|\(filteredProfile.additionalInstructionsHistory.count)|\(filteredProfile.guidingInstructionsHistory.count)|\(filteredProfile.positiveExamples.count)|\(filteredProfile.renameFeedbackHistory.count)|\(folderPath ?? "")|\(personaId?.uuidString ?? "-")|\(fileNamesKey)"
         if promptContextCacheKey == contextFingerprint, let cached = promptContextCacheValue {
             return cached
         }
@@ -2285,27 +2307,47 @@ public class LearningsManager: ObservableObject {
 
         let recentInstructions = (filteredProfile.additionalInstructionsHistory + filteredProfile.guidingInstructionsHistory)
             .sorted(by: { $0.timestamp > $1.timestamp })
-            .prefix(4)
+            .prefix(6)
             .map { "Recent instruction (\(promptDateString($0.timestamp))): \($0.instruction)" }
         hardRules.append(contentsOf: recentInstructions)
 
-        // activeRules(from:) already ranks by effective confidence (outcomes + support + recency).
+        // activeRules(from:) ranks by effective confidence (outcomes + support
+        // + recency), boosted by relevance to the current batch when fileNames
+        // are provided, and applies the learningStrength admission floor.
         let promptRuleDate = Date()
-        let activeRules = activeRules(
+        let activeRuleLines = activeRules(
             from: filteredProfile,
             folderPath: folderPath,
-            personaId: nil
+            personaId: personaId,
+            fileNames: fileNames
         )
-            .prefix(4)
+            .prefix(8)
             .map { rule in
                 let confidence = Int(rule.effectiveConfidence(at: promptRuleDate) * 100)
                 let label = rule.isAvoidRule ? "Avoid rule" : "Learned rule"
                 return "\(label) [rule_id: \(rule.id)] (confidence \(confidence)%): \(rule.explanation)"
             }
-        hardRules.append(contentsOf: activeRules)
-        hardRules = Array(hardRules.orderedDeduplicated().prefix(5))
+        hardRules.append(contentsOf: activeRuleLines)
+        // Pending-approval (mostly LLM-induced, confidence < 0.8) rules are
+        // ineligible for application, but hiding them made most LLM rules
+        // invisible until manual approval. Surface the strongest few as
+        // explicitly-flagged candidates so the model can still weigh them.
+        let pendingCandidates = rankedRules(
+            filteredProfile.inferredRules
+                .filter { $0.status == .pendingApproval && $0.isEnabled }
+                .filter { ruleMatchesScope(rule: $0, folderPath: folderPath, personaId: personaId) },
+            at: promptRuleDate,
+            fileNames: fileNames
+        )
+            .prefix(3)
+            .map { entry in
+                let confidence = Int(entry.rule.effectiveConfidence(at: promptRuleDate) * 100)
+                return "Candidate rule (awaiting approval, confidence \(confidence)%): \(entry.rule.explanation)"
+            }
+        hardRules.append(contentsOf: pendingCandidates)
+        hardRules = Array(hardRules.orderedDeduplicated().prefix(10))
 
-        let recentContext = scopedSessions.prefix(5).map(summarizePromptSession)
+        let recentContext = scopedSessions.prefix(8).map(summarizePromptSession)
         let learnedPatterns = buildPromptPatterns(from: filteredProfile, sessions: Array(scopedSessions.prefix(12)), folderPath: folderPath)
 
         let sections: [(String, [String])] = [
@@ -2327,7 +2369,7 @@ public class LearningsManager: ObservableObject {
         for (title, items) in sections where !items.isEmpty {
             output.append("")
             output.append("## \(title)")
-            output.append(contentsOf: items.prefix(5).map { "- \($0)" })
+            output.append(contentsOf: items.prefix(8).map { "- \($0)" })
         }
 
         guard output.count > 2 else { return "" }
@@ -2359,10 +2401,12 @@ public class LearningsManager: ObservableObject {
             }
             return "\(date): Accepted run in \(folderName). \(movedCount) files needed no corrections."
         case .corrected:
-            let changeSummary = session.userCorrections.prefix(2).map { change in
+            let changeSummary = session.userCorrections.prefix(3).map { change in
                 let from = URL(fileURLWithPath: change.originalPath).deletingLastPathComponent().lastPathComponent
                 let to = URL(fileURLWithPath: change.newPath).deletingLastPathComponent().lastPathComponent
-                return "\(from) -> \(to)"
+                let ext = URL(fileURLWithPath: change.originalPath).pathExtension.lowercased()
+                let typeLabel = ext.isEmpty ? "" : " [.\(ext) files]"
+                return "\(from) -> \(to)\(typeLabel)"
             }.joined(separator: ", ")
             return "\(date): Corrected run in \(folderName). User changed \(session.userCorrections.count) placements\(changeSummary.isEmpty ? "." : ": \(changeSummary).")"
         case .reverted:
@@ -2428,7 +2472,7 @@ public class LearningsManager: ObservableObject {
         let positiveExamples = profile.positiveExamples
             .filter { example in
                 guard let folderPath else { return true }
-                return example.dstPath.hasPrefix(folderPath)
+                return Self.isPath(example.dstPath, withinOrEqualTo: folderPath)
             }
             .sorted(by: { $0.timestamp > $1.timestamp })
             .prefix(4)
@@ -2446,7 +2490,7 @@ public class LearningsManager: ObservableObject {
         let scopedRenameFeedback = profile.renameFeedbackHistory.filter { event in
             guard let folderPath else { return true }
             guard let eventFolder = event.folderPath else { return false }
-            return eventFolder.hasPrefix(folderPath) || folderPath.hasPrefix(eventFolder)
+            return Self.foldersOverlap(eventFolder, folderPath)
         }
         let renameGroups = Dictionary(grouping: scopedRenameFeedback) { event in
             let folder = event.folderPath ?? ""
@@ -2485,7 +2529,7 @@ public class LearningsManager: ObservableObject {
         }
         patterns.insert(contentsOf: protectedBundleRules.sorted { $0.0 > $1.0 }.prefix(2).map { $0.1 }, at: 0)
 
-        return Array(patterns.orderedDeduplicated().prefix(8))
+        return Array(patterns.orderedDeduplicated().prefix(12))
     }
 
     private struct RenameConventionPattern {
@@ -2621,38 +2665,88 @@ public class LearningsManager: ObservableObject {
         }
     }
     
-    /// Get active rules filtered by learning strength and optionally by scope
-    public func getActiveRules(forFolder folderPath: String? = nil, forPersona personaId: UUID? = nil) -> [InferredRule] {
+    /// Get active rules filtered by learning strength and optionally by scope.
+    /// - Parameter fileNames: When provided, rules are re-ranked by
+    ///   extension/keyword overlap with these files (ordering only; no rule is
+    ///   excluded for lack of overlap).
+    public func getActiveRules(forFolder folderPath: String? = nil, forPersona personaId: UUID? = nil, fileNames: [String]? = nil) -> [InferredRule] {
         guard let profile = currentProfile else { return [] }
 
-        return activeRules(from: profile, folderPath: folderPath, personaId: personaId)
+        return activeRules(from: profile, folderPath: folderPath, personaId: personaId, fileNames: fileNames)
     }
 
     private func activeRules(
         from profile: LearningsProfile,
         folderPath: String?,
-        personaId: UUID?
+        personaId: UUID?,
+        fileNames: [String]? = nil
     ) -> [InferredRule] {
         let now = Date()
-        let eligibleRules = Self.effectiveRules(profile.inferredRules, at: now)
-            .filter { $0.isEligible(at: now) }
-            .filter { ruleMatchesScope(rule: $0, folderPath: folderPath, personaId: personaId) }
-            .sorted {
-                let lhs = $0.effectiveConfidence(at: now)
-                let rhs = $1.effectiveConfidence(at: now)
-                if lhs == rhs { return $0.priority > $1.priority }
-                return lhs > rhs
-            }
+        let eligibleRules = rankedRules(
+            Self.effectiveRules(profile.inferredRules, at: now)
+                .filter { $0.isEligible(at: now) }
+                .filter { ruleMatchesScope(rule: $0, folderPath: folderPath, personaId: personaId) },
+            at: now,
+            fileNames: fileNames
+        ).map { $0.rule }
 
         guard !eligibleRules.isEmpty else { return [] }
 
-        // Keep one strongest rule at the minimum setting so Learnings remains useful,
-        // then progressively admit more rules as the user increases the strength.
-        let maxRules = min(
-            eligibleRules.count,
-            Int(Double(eligibleRules.count) * learningStrength) + 1
-        )
+        // learningStrength admits progressively more rules, but never silently
+        // drops to one or two: at least the top 5 (when that many exist)
+        // always survive so Learnings stays useful at the minimum setting.
+        let strengthAdmitted = Int(Double(eligibleRules.count) * learningStrength) + 1
+        let maxRules = min(eligibleRules.count, max(min(eligibleRules.count, 5), strengthAdmitted))
         return Array(eligibleRules.prefix(maxRules))
+    }
+
+    /// Orders rules by effective confidence plus current-batch relevance.
+    /// Ties break on priority, then id, so ordering is stable across runs.
+    private func rankedRules(
+        _ rules: [InferredRule],
+        at now: Date,
+        fileNames: [String]?
+    ) -> [(rule: InferredRule, score: Double)] {
+        let names = fileNames ?? []
+        return rules.map { rule in
+            (rule, rule.effectiveConfidence(at: now) + Self.ruleRelevanceBoost(rule, fileNames: names))
+        }.sorted {
+            if $0.score != $1.score { return $0.score > $1.score }
+            if $0.rule.priority != $1.rule.priority { return $0.rule.priority > $1.rule.priority }
+            return $0.rule.id < $1.rule.id
+        }
+    }
+
+    /// Relevance of a rule to the files currently being organized, from
+    /// extension/keyword overlap with the batch. Ordering-only: a rule with no
+    /// overlap is never excluded by this, it just sorts lower.
+    nonisolated static func ruleRelevanceBoost(_ rule: InferredRule, fileNames: [String]) -> Double {
+        guard !fileNames.isEmpty else { return 0 }
+        let haystack = (rule.pattern + " " + rule.template + " " + rule.explanation).lowercased()
+        let ruleWords = Set(haystack.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init))
+        var boost = 0.0
+        let extensions = Set(fileNames.map {
+            URL(fileURLWithPath: $0).pathExtension.lowercased()
+        }.filter { !$0.isEmpty })
+        for ext in extensions {
+            // ".ext" substring (matches regex `\.ext` in patterns) or a whole
+            // word hit; avoids "mov" matching the word "moved".
+            if haystack.contains("." + ext) || ruleWords.contains(ext) {
+                boost += 0.05
+            }
+        }
+        // Keyword overlap between filename stems and rule text catches
+        // non-extension signals ("invoice_2024.pdf" vs "Organize invoices").
+        var keywordHits = 0
+        for name in fileNames {
+            let stem = URL(fileURLWithPath: name).deletingPathExtension().lastPathComponent.lowercased()
+            let words = stem.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init).filter { $0.count > 3 }
+            for word in words where ruleWords.contains(word) || ruleWords.contains(String(word.dropLast())) {
+                keywordHits += 1
+            }
+        }
+        boost += min(Double(keywordHits) * 0.02, 0.1)
+        return min(boost, 0.25)
     }
     
     // MARK: - Rule Suggestion Inbox
@@ -3540,6 +3634,22 @@ public class LearningsManager: ObservableObject {
         await saveProfile()
     }
 
+    /// True when `path` equals `ancestor` or lives inside it, compared on
+    /// standardized URL path components. Component-boundary aware:
+    /// `/Users/test/WorkBackup` is NOT inside `/Users/test/Work`.
+    nonisolated static func isPath(_ path: String, withinOrEqualTo ancestor: String) -> Bool {
+        let childComponents = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
+        let parentComponents = URL(fileURLWithPath: ancestor).standardizedFileURL.pathComponents
+        guard parentComponents.count <= childComponents.count else { return false }
+        return Array(childComponents.prefix(parentComponents.count)) == parentComponents
+    }
+
+    /// Bidirectional folder overlap: session data applies when either side
+    /// contains the other (a run in a subfolder informs the parent and vice versa).
+    nonisolated static func foldersOverlap(_ lhs: String, _ rhs: String) -> Bool {
+        isPath(lhs, withinOrEqualTo: rhs) || isPath(rhs, withinOrEqualTo: lhs)
+    }
+
     private func ruleMatchesScope(rule: InferredRule, folderPath: String?, personaId: UUID?) -> Bool {
         if folderPath == nil && personaId == nil {
             return true
@@ -3550,7 +3660,7 @@ public class LearningsManager: ObservableObject {
             return true
         case .folder(let rulePath):
             guard let folderPath else { return false }
-            return folderPath.hasPrefix(rulePath) || rulePath == folderPath
+            return Self.isPath(folderPath, withinOrEqualTo: rulePath)
         case .activePersona(let rulePersonaId):
             guard let personaId else { return false }
             return rulePersonaId == personaId
