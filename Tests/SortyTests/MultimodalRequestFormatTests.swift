@@ -82,7 +82,7 @@ final class MultimodalRequestFormatTests: XCTestCase {
         XCTAssertEqual(request.url?.absoluteString, "https://opencode.ai/zen/v1/responses")
         let body = try request.jsonBody()
         XCTAssertNil(body["messages"])
-        XCTAssertEqual(body["temperature"] as? Double, AIConfig.organizationTemperature)
+        XCTAssertEqual(body["temperature"] as? Double, AIConfig.generationTemperature)
         XCTAssertEqual((body["input"] as? [[String: Any]])?.count, 2)
         XCTAssertEqual(body["store"] as? Bool, false)
     }

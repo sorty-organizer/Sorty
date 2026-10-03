@@ -720,4 +720,171 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(truncated.contains("Return folder_assignments with file_ids"))
         XCTAssertTrue(truncated.contains("remaining files omitted"))
     }
+
+    // MARK: - Determinism (temperature)
+
+    func testOrganizationTemperatureDefaultIsLowForDeterminism() {
+        XCTAssertEqual(AIConfig.organizationTemperature, 0.2, accuracy: 0.0001)
+        XCTAssertGreaterThanOrEqual(AIConfig.organizationTemperature, 0.1)
+        XCTAssertLessThanOrEqual(AIConfig.organizationTemperature, 0.2)
+        // Creative helpers (persona/naming via generateText) keep 0.7.
+        XCTAssertEqual(AIConfig.generationTemperature, 0.7, accuracy: 0.0001)
+    }
+
+    func testAIConfigInitStoresTemperature() {
+        XCTAssertEqual(AIConfig().temperature, AIConfig.organizationTemperature, accuracy: 0.0001)
+        XCTAssertEqual(AIConfig(temperature: 0.5).temperature, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(AIConfig(temperature: 99).temperature, 2, accuracy: 0.0001)
+        XCTAssertEqual(AIConfig(temperature: -1).temperature, 0, accuracy: 0.0001)
+    }
+
+    func testAIConfigTemperatureRoundTripsThroughCodable() throws {
+        let original = AIConfig(temperature: 0.35)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(AIConfig.self, from: data)
+
+        XCTAssertEqual(decoded.temperature, 0.35, accuracy: 0.0001)
+    }
+
+    // MARK: - Generic-bucket discouragement
+
+    func testEveryPromptDiscouragesGenericOnlyPlans() {
+        let files = [FileItem(path: "/tmp/report.pdf", name: "report", extension: "pdf")]
+
+        let fullSystem = PromptBuilder.buildSystemPrompt(
+            personaInfo: "",
+            mode: .organize,
+            enableTagging: true
+        )
+        XCTAssertTrue(fullSystem.contains("generic-only"))
+        XCTAssertTrue(fullSystem.contains("subject, project, source, date pattern"))
+
+        let userPrompt = PromptBuilder.buildOrganizationPrompt(files: files)
+        XCTAssertTrue(userPrompt.contains("generic-only"))
+
+        let config = AIConfig(mode: .organize)
+        for level in [
+            PromptBuilder.CompactionLevel.standard,
+            .ultra,
+            .summary,
+            .micro
+        ] {
+            let pair = PromptBuilder.promptPair(for: level, config: config, files: files)
+            XCTAssertTrue(
+                (pair.system + "\n" + pair.user).contains("generic-only"),
+                "Missing generic-only discouragement in \(level)"
+            )
+        }
+    }
+
+    // MARK: - Disambiguator preservation
+
+    func testFullMetadataListsDisambiguatorsBeforeDates() {
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let file = FileItem(
+            path: "/tmp/invoice.pdf",
+            name: "invoice",
+            extension: "pdf",
+            size: 4_096,
+            creationDate: date,
+            modificationDate: date,
+            lastAccessDate: date,
+            contentMetadata: ContentMetadata(
+                textPreview: "Acme invoice total due",
+                documentTitle: "Acme Invoice",
+                ocrText: "Acme OCR cue"
+            ),
+            finderComment: "Accounts payable",
+            finderTags: ["Work"]
+        )
+
+        let prompt = PromptBuilder.buildOrganizationPrompt(
+            files: [file],
+            includeContentMetadata: true
+        )
+
+        let tagsIndex = try? XCTUnwrap(prompt.range(of: "[finder_tags]")?.lowerBound)
+        let titleIndex = try? XCTUnwrap(prompt.range(of: "Title: Acme Invoice")?.lowerBound)
+        let createdIndex = try? XCTUnwrap(prompt.range(of: "created:")?.lowerBound)
+        XCTAssertNotNil(tagsIndex)
+        XCTAssertNotNil(titleIndex)
+        XCTAssertNotNil(createdIndex)
+        if let tagsIndex, let titleIndex, let createdIndex {
+            XCTAssertLessThan(tagsIndex, createdIndex, "Finder tags must precede dates")
+            XCTAssertLessThan(titleIndex, createdIndex, "Document title must precede dates")
+        }
+        XCTAssertTrue(prompt.contains("Acme invoice total due"))
+    }
+
+    func testAdaptiveFullMetadataCapKeepsSmallRunsComplete() {
+        XCTAssertEqual(PromptBuilder.maxFullMetadataFiles(for: 50), 50)
+        XCTAssertEqual(PromptBuilder.maxFullMetadataFiles(for: 100), 100)
+        XCTAssertEqual(PromptBuilder.maxFullMetadataFiles(for: 199), 160)
+        XCTAssertEqual(PromptBuilder.maxFullMetadataFiles(for: 200), 80)
+        XCTAssertEqual(PromptBuilder.maxFullMetadataFiles(for: 500), 80)
+
+        let files = (0..<100).map { index in
+            FileItem(
+                path: "/tmp/adaptive/file-\(String(format: "%03d", index)).txt",
+                name: "file-\(String(format: "%03d", index))",
+                extension: "txt",
+                size: 128
+            )
+        }
+        let prompt = PromptBuilder.buildOrganizationPrompt(files: files)
+
+        XCTAssertFalse(prompt.contains("essential evidence"), "100-file run must keep full metadata for every file")
+    }
+
+    func testBudgetDegradationKeepsEssentialEvidence() {
+        let files = (0..<250).map { index in
+            FileItem(
+                path: "/tmp/degbudget/file-\(String(format: "%03d", index)).txt",
+                name: "file-\(String(format: "%03d", index))",
+                extension: "txt",
+                size: 128,
+                contentMetadata: ContentMetadata(
+                    textPreview: "cue \(index)",
+                    documentTitle: "Deg Title \(index)"
+                ),
+                finderTags: ["DegTag\(index)"]
+            )
+        }
+        let prompt = PromptBuilder.buildOrganizationPrompt(files: files)
+
+        XCTAssertTrue(prompt.contains("essential evidence"))
+        XCTAssertTrue(prompt.contains("full metadata is shown for the first 80 files"))
+        // A file past the full-metadata cap keeps tags/title/hint while dates/sizes drop.
+        XCTAssertTrue(prompt.contains("DegTag249"))
+        XCTAssertTrue(prompt.contains("Deg Title 249"))
+        XCTAssertFalse(prompt.contains("list path only"))
+    }
+
+    func testCompactLinesOrderDisambiguatorsBeforeDates() {
+        let file = FileItem(
+            path: "/tmp/Tax Return.pdf",
+            name: "Tax Return",
+            extension: "pdf",
+            size: 4_096,
+            modificationDate: Date(timeIntervalSince1970: 1_710_000_000),
+            contentMetadata: ContentMetadata(
+                textPreview: "Vendor appears in the extracted invoice text.",
+                documentTitle: "May 2026 Invoice"
+            ),
+            finderTags: ["Taxes"]
+        )
+
+        let prompt = PromptBuilder.buildCompactPrompt(files: [file])
+
+        let tagsIndex = try? XCTUnwrap(prompt.range(of: "finder_tags:")?.lowerBound)
+        let titleIndex = try? XCTUnwrap(prompt.range(of: "title:May 2026 Invoice")?.lowerBound)
+        let modifiedIndex = try? XCTUnwrap(prompt.range(of: "modified:")?.lowerBound)
+        XCTAssertNotNil(tagsIndex)
+        XCTAssertNotNil(titleIndex)
+        XCTAssertNotNil(modifiedIndex)
+        if let tagsIndex, let titleIndex, let modifiedIndex {
+            XCTAssertLessThan(tagsIndex, modifiedIndex, "Compact finder tags must precede dates")
+            XCTAssertLessThan(titleIndex, modifiedIndex, "Compact title must precede dates")
+        }
+    }
 }

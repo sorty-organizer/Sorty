@@ -152,6 +152,13 @@ package struct PromptBuilder {
     package static let mainPromptTokenBudget = 12_000
     package static let mainPromptMaxFullMetadataFiles = 80
 
+    /// Adaptive full-metadata cap: runs under 200 files keep full metadata
+    /// for every file (up to 160) so dates/tags/OCR survive; larger runs
+    /// fall back to the fixed cap and essential-evidence lines beyond it.
+    package static func maxFullMetadataFiles(for fileCount: Int) -> Int {
+        fileCount < 200 ? min(160, fileCount) : mainPromptMaxFullMetadataFiles
+    }
+
     /// Shared ISO8601 formatters. Creating a formatter costs milliseconds, and
     /// the prompt path formats dates per file. A configured
     /// ISO8601DateFormatter holds no mutable per-call state, so one static
@@ -230,6 +237,7 @@ package struct PromptBuilder {
             Use `unorganized` only when all four options fail. Uncertainty alone is not a reason to leave a file unorganized, and a single file may have its own folder when it clearly represents a standalone project or reusable category.
             Never create a folder named "Unorganized", "Unorganized Files", or an equivalent fallback name. Genuinely unplaceable files belong only in the `unorganized` field and must remain in place.
             Return a no-op plan only when the files are already sensibly organized, no move would materially improve the structure, or moving them would violate user instructions, exclusions, or filesystem safety. Never use a no-op to avoid making a reasonable organization decision.
+            Do not settle for generic-only folders such as Documents, Media, Archives, Reference, or Screenshots without supporting evidence; prefer specific project, subject, source, or date-based folders when the file evidence supports them.
 
             """
         }
@@ -365,9 +373,10 @@ package struct PromptBuilder {
         prompt.reserveCapacity(65_536)
 
         // Enforce the main-path token budget incrementally: full per-file
-        // metadata for the first N files, path-only lines afterwards. This
+        // metadata for the first N files, essential evidence afterwards. This
         // keeps the JSON contract tail intact while bounding prompt growth.
-        var fullMetadataRemaining = Self.mainPromptMaxFullMetadataFiles
+        let maxFullMetadata = Self.maxFullMetadataFiles(for: files.count)
+        var fullMetadataRemaining = maxFullMetadata
         var emittedMinimalLines = 0
         // Incremental budget tracking: String.count walks every grapheme
         // cluster, so re-measuring the whole prompt per file is quadratic.
@@ -409,7 +418,7 @@ package struct PromptBuilder {
                 let useMinimalLine = fullMetadataRemaining <= 0 || overMainBudget
                 if useMinimalLine {
                     emittedMinimalLines += 1
-                    let minimalLine = "  - \(promptPath)\n"
+                    let minimalLine = "  - \(promptPath)\(Self.essentialEvidenceSuffix(for: file))\n"
                     prompt += minimalLine
                     estimatedChars += minimalLine.utf8.count
                     filesSinceBudgetCheck += 1
@@ -417,8 +426,34 @@ package struct PromptBuilder {
                 }
                 fullMetadataRemaining -= 1
                 var fileDesc = "  - \(promptPath)"
-                
+
                 fileDesc += " [\(file.isDirectory ? "directory" : "file"), \(file.size) bytes / \(file.formattedSize)]"
+
+                // Disambiguators first: Finder tags/color, comments, and content
+                // evidence lead so they survive any downstream truncation before
+                // dates, sizes, and hashes are ever dropped.
+                if let tags = file.finderTags, !tags.isEmpty {
+                    fileDesc += "\n    [finder_tags] \(tags.joined(separator: ", "))"
+                }
+
+                if let color = file.finderTagColorName {
+                    fileDesc += "\n    [finder_color] \(color)"
+                }
+
+                if let comment = file.finderComment, !comment.isEmpty {
+                    fileDesc += "\n    [Finder Comment] \(truncateForPrompt(comment, maxLength: 200))"
+                }
+
+                // Include content metadata if available and requested
+                if includeContentMetadata, let metadata = file.contentMetadata, !metadata.isEmpty {
+                    let summary = contentMetadataDescription(metadata)
+                    if !summary.isEmpty {
+                        let label = mode == .renameOnly || mode == .organizeAndRename
+                            ? "Rename Context"
+                            : "Content Analysis"
+                        fileDesc += "\n    [\(label)] \(summary)"
+                    }
+                }
 
                 if let created = file.creationDate {
                     fileDesc += ", created: \(Self.internetDateString(from: created))"
@@ -437,29 +472,6 @@ package struct PromptBuilder {
                 }
                 if let hash = file.sha256Hash, !hash.isEmpty {
                     fileDesc += ", SHA-256: \(hash)"
-                }
-
-                if let tags = file.finderTags, !tags.isEmpty {
-                    fileDesc += "\n    [finder_tags] \(tags.joined(separator: ", "))"
-                }
-
-                if let color = file.finderTagColorName {
-                    fileDesc += "\n    [finder_color] \(color)"
-                }
-
-                if let comment = file.finderComment, !comment.isEmpty {
-                    fileDesc += "\n    [Finder Comment] \(truncateForPrompt(comment, maxLength: 200))"
-                }
-                
-                // Include content metadata if available and requested
-                if includeContentMetadata, let metadata = file.contentMetadata, !metadata.isEmpty {
-                    let summary = contentMetadataDescription(metadata)
-                    if !summary.isEmpty {
-                        let label = mode == .renameOnly || mode == .organizeAndRename
-                            ? "Rename Context"
-                            : "Content Analysis"
-                        fileDesc += "\n    [\(label)] \(summary)"
-                    }
                 }
                 
                 prompt += "\(fileDesc)\n"
@@ -494,7 +506,7 @@ package struct PromptBuilder {
         }
 
         if emittedMinimalLines > 0 {
-            prompt += "\n\nNote: \(emittedMinimalLines) file(s) list path only to stay within the \(mainPromptTokenBudget)-token prompt budget; full metadata is shown for the first \(mainPromptMaxFullMetadataFiles) files."
+            prompt += "\n\nNote: \(emittedMinimalLines) file(s) show path plus essential evidence (Finder tags/color, document title, text/OCR excerpt) to stay within the \(mainPromptTokenBudget)-token prompt budget; full metadata is shown for the first \(maxFullMetadata) files."
         }
 
         return enforceMainPromptBudget(prompt)
@@ -694,8 +706,25 @@ package struct PromptBuilder {
         let clippedPath = truncateForPrompt(relativePath, maxLength: maxPathLength)
         var line = "\(id)|name:\(clippedName)|path:\(clippedPath)|ext:\(ext)"
         
-        // Append Finder metadata compactly when present
-        var extras = ["bytes:\(file.size)"]
+        // Append Finder metadata compactly when present. Disambiguators lead
+        // so they survive any downstream truncation before dates/sizes.
+        var extras: [String] = []
+        if let tags = file.finderTags, !tags.isEmpty {
+            extras.append("finder_tags:\(tags.joined(separator: ","))")
+        }
+        if let color = file.finderTagColorName {
+            extras.append("finder_color:\(color)")
+        }
+        if let title = file.contentMetadata?.documentTitle, !title.isEmpty {
+            extras.append("title:\(truncateForPrompt(title, maxLength: maxTitleLength))")
+        }
+        if let hint = compactEvidenceHint(for: file), !hint.isEmpty {
+            extras.append("hint:\(truncateForPrompt(hint, maxLength: maxHintLength))")
+        }
+        if let comment = file.finderComment, !comment.isEmpty {
+            extras.append("comment:\(String(comment.prefix(40)))")
+        }
+        extras.append("bytes:\(file.size)")
         if let created = file.creationDate {
             extras.append("created:\(Self.fullDateString(from: created))")
         }
@@ -710,21 +739,6 @@ package struct PromptBuilder {
         }
         if let cloudStatus = file.cloudStatus {
             extras.append("cloud:\(cloudStatus.rawValue)")
-        }
-        if let tags = file.finderTags, !tags.isEmpty {
-            extras.append("finder_tags:\(tags.joined(separator: ","))")
-        }
-        if let color = file.finderTagColorName {
-            extras.append("finder_color:\(color)")
-        }
-        if let comment = file.finderComment, !comment.isEmpty {
-            extras.append("comment:\(String(comment.prefix(40)))")
-        }
-        if let title = file.contentMetadata?.documentTitle, !title.isEmpty {
-            extras.append("title:\(truncateForPrompt(title, maxLength: maxTitleLength))")
-        }
-        if let hint = compactEvidenceHint(for: file), !hint.isEmpty {
-            extras.append("hint:\(truncateForPrompt(hint, maxLength: maxHintLength))")
         }
         if !extras.isEmpty {
             line += "|\(extras.joined(separator: "|"))"
@@ -762,6 +776,28 @@ package struct PromptBuilder {
         ]
         return candidates.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first(where: { !$0.isEmpty })
+    }
+
+    /// Evidence that survives prompt-budget degradation. Budget-short file
+    /// lines keep Finder tags/color, the document title, and the head of
+    /// text/OCR evidence; dates, sizes, and hashes are dropped first.
+    private static func essentialEvidenceSuffix(for file: FileItem) -> String {
+        var parts: [String] = []
+        if let tags = file.finderTags, !tags.isEmpty {
+            parts.append("finder_tags:\(tags.joined(separator: ","))")
+        }
+        if let color = file.finderTagColorName {
+            parts.append("finder_color:\(color)")
+        }
+        if let title = file.contentMetadata?.documentTitle?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+            parts.append("title:\(truncateForPrompt(title, maxLength: 120))")
+        }
+        if let hint = compactEvidenceHint(for: file), !hint.isEmpty {
+            parts.append("hint:\(truncateForPrompt(hint, maxLength: 200))")
+        }
+        guard !parts.isEmpty else { return "" }
+        return " | " + parts.joined(separator: " | ")
     }
 
     private static func compactNamingPolicy(config: AIConfig) -> String {
@@ -839,6 +875,7 @@ package struct PromptBuilder {
         base += " Choose folder count and depth from direct user instructions, the active persona, learnings, reference/example folders, the existing structure, and file relationships, in that priority order. Explicit user hierarchy preferences are binding; do not apply a preset folder-count limit. Use file_ids from the user list. Include every file exactly once. Before using unorganized, try a suitable existing folder, a meaningful shared folder, a broad reusable category, then a justified standalone project or category folder. Use unorganized only when all four fail; uncertainty alone is not enough. Never create an Unorganized or Unorganized Files folder; genuinely unplaceable files belong only in the unorganized field."
         base += " Existing finder_tags are tag names and finder_color is the visible Finder label color. Color instructions match finder_color. If the user says only, change matching items only and leave nonmatches unchanged; a tagged folder makes its listed descendants match."
         base += " For every folder, add one concise reasoning sentence naming the exact shared subject, project, source, date pattern, or compatible file roles. Never say only that files belong together."
+        base += " Do not settle for generic-only folders such as Documents, Media, Archives, Reference, or Screenshots without supporting evidence; prefer specific project, subject, source, or date-based folders when the file evidence supports them."
         base += " learning_action is a rare tool call and defaults to null. Use exclude_current_run_from_learning only when direct instructions or the active persona clearly request no learning from this specific run. Never infer it from sensitive, unusual, temporary, uncertain, or conflicting files, or ordinary instructions such as do not rename. Ambiguity means null; prefer learning."
         base += " Return exactly one JSON object. Start with '{' immediately and output no markdown, prose, progress lines, or reasoning outside JSON."
         return base
@@ -857,7 +894,7 @@ package struct PromptBuilder {
         case .summary:
             limits = (40, 48, 40, 72, 8)
         case .micro:
-            limits = (32, 40, 32, 56, 6)
+            limits = (32, 40, 48, 96, 6)
         case .standard:
             preconditionFailure("Standard prompts use the full compact builder")
         }
@@ -932,6 +969,7 @@ package struct PromptBuilder {
         - Every folder must include one concise reasoning sentence naming the exact shared subject, project, source, date pattern, or compatible file roles.
         - Never use vague folder reasoning such as "these files belong together".
         - Group by type: Documents, Media, Code, Archives
+        - Do not settle for generic-only folders such as Documents, Media, Archives, Reference, or Screenshots without supporting evidence; prefer specific project, subject, source, or date-based folders when the file evidence supports them.
         - Existing finder_tags are tag names; finder_color is the visible Finder label color. Match color instructions against finder_color. If the user says "only", change matching items only and leave nonmatches unchanged. A tagged folder makes its listed descendants match.
         - If learnings_context is provided with rule_id attributes, include "rule_id" on folders influenced by those rules.
         - `learning_action` is a rare tool call. Default it to null. Set it to {"name":"exclude_current_run_from_learning","reason":"brief explicit request","source":"direct_instructions"} only when the user clearly asks Sorty not to learn from this specific run. A persona may use source "persona". Never call it because files are sensitive-looking, unusual, temporary, uncertain, or conflict with learned preferences. Ambiguity means null.

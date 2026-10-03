@@ -715,7 +715,12 @@ public enum OpenCodeAuthSource: String, Codable, Sendable {
 }
 
 public struct AIConfig: Codable, Sendable, Equatable {
-    public static let organizationTemperature = 0.7
+    /// Default sampling temperature for organization runs. Low so the same
+    /// folder regenerates the same names/structure instead of drifting.
+    public static let organizationTemperature = 0.2
+    /// Creative helpers (persona/naming generation via `generateText`) keep a
+    /// higher temperature; they benefit from varied phrasing.
+    public static let generationTemperature = 0.7
 
     /// Battery guard: a single organize batch must never hold the radio for
     /// the legacy 600s resource timeout. Per-batch resource timeout is capped
@@ -750,6 +755,9 @@ public struct AIConfig: Codable, Sendable, Equatable {
         openCodeAuthSource(for: provider) == .connected
     }
     public var model: String
+    /// Organize-path sampling temperature. Per-run overrides passed to
+    /// `analyze(temperature:)` win; otherwise clients use this value.
+    public var temperature: Double
     
     // Advanced Settings
     public var requestTimeout: TimeInterval
@@ -799,7 +807,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         apiURL: String? = nil,
         apiKey: String? = nil,
         model: String = AIProvider.openAICompatible.defaultModel,
-        temperature _: Double = AIConfig.organizationTemperature,
+        temperature: Double = AIConfig.organizationTemperature,
         requestTimeout: TimeInterval = 120,
         resourceTimeout: TimeInterval = 600,
         systemPromptOverride: String? = nil,
@@ -838,6 +846,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.apiURL = apiURL
         self.apiKey = apiKey
         self.model = model
+        self.temperature = Self.clampedTemperature(temperature)
         // Clamp request/resource timeouts into the ranges consumers honor so a
         // programmatic 0/negative value can never reach URLSession.
         self.requestTimeout = min(max(requestTimeout, Self.minRequestTimeout), Self.maxRequestTimeout)
@@ -939,7 +948,10 @@ public struct AIConfig: Codable, Sendable, Equatable {
         openCodeAuthSources = try container.decodeIfPresent([String: OpenCodeAuthSource].self, forKey: .openCodeAuthSources) ?? [:]
         let decodedModel = try container.decodeIfPresent(String.self, forKey: .model)
         model = hadCopilotProvider ? (fallbackProvider == nil ? "" : automationModelChoice) : decodedModel ?? provider.defaultModel
-        _ = try container.decodeIfPresent(Double.self, forKey: .temperature)
+        temperature = Self.clampedTemperature(
+            try container.decodeIfPresent(Double.self, forKey: .temperature)
+                ?? Self.organizationTemperature
+        )
         let decodedRequestTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .requestTimeout) ?? 120
         requestTimeout = min(
             max(decodedRequestTimeout.isFinite ? decodedRequestTimeout : 120, Self.minRequestTimeout),
@@ -1005,7 +1017,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         try container.encodeIfPresent(apiKey, forKey: .apiKey)
         try container.encode(openCodeAuthSources, forKey: .openCodeAuthSources)
         try container.encode(model, forKey: .model)
-        try container.encode(Self.organizationTemperature, forKey: .temperature)
+        try container.encode(temperature, forKey: .temperature)
         try container.encode(requestTimeout, forKey: .requestTimeout)
         try container.encode(resourceTimeout, forKey: .resourceTimeout)
         try container.encodeIfPresent(systemPromptOverride, forKey: .systemPromptOverride)
@@ -1148,6 +1160,14 @@ public extension AIConfig {
     /// before the first batch and check `Date() > deadline` per batch/retry.
     func organizeDeadlineDate(from start: Date = Date()) -> Date {
         start.addingTimeInterval(Self.globalOrganizeDeadline)
+    }
+
+    /// Keeps a programmatically supplied temperature inside the range
+    /// providers accept, so a stored or passed 0/negative/NaN value can
+    /// never reach the API as-is.
+    private static func clampedTemperature(_ value: Double) -> Double {
+        guard value.isFinite else { return organizationTemperature }
+        return min(max(value, 0), 2)
     }
 
     public var duplicateHandlingMode: DuplicateHandlingMode {

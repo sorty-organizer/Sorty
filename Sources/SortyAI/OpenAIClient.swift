@@ -204,7 +204,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     }
     
     private func resolvedTemperature(_ override: Double?) -> Double {
-        override ?? AIConfig.organizationTemperature
+        override ?? config.temperature
     }
 
     private func resolvedMaxTokens() -> Int {
@@ -400,7 +400,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 ["role": "system", "content": systemPrompt ?? "You are a helpful assistant."],
                 ["role": "user", "content": prompt]
             ],
-            "temperature": AIConfig.organizationTemperature
+            "temperature": AIConfig.generationTemperature
         ]
         
         requestBody["max_tokens"] = config.maxTokens ?? config.provider.defaultOrganizeMaxTokens
