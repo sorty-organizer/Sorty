@@ -568,7 +568,7 @@ struct SkillSetupView: View {
     }
 
     private var exampleRequest: String {
-        "Use Sorty to preview how you'd organize my Downloads folder with my imported preferences."
+        "Use the Sorty skill to preview how you'd organize my Downloads folder with my preferences."
     }
 
     private func changeStep(_ next: Step) {
