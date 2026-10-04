@@ -45,32 +45,32 @@ export const metadata: Metadata = {
 
 const RELEASES = [
   {
-    version: 'Sorty 1.2.2',
-    status: 'Released',
-    date: 'September 29, 2026',
-    title: 'More provider choices and safer organizing',
+    version: 'Sorty 1.3.0',
+    status: 'Unreleased',
+    date: 'October 5, 2026',
+    title: 'Meet the Sorty skill',
     summary:
-      'OpenCode Zen and OpenCode Go join the AI provider choices. Refreshed menu bar icons show Sorty’s activity, alongside safer file operations and optional in-app bug reports.',
+      'Organize files through a conversation in your agent. Import selected Sorty preferences and Learnings, or continue with the native app. This release also adds OpenCode providers, icon styles, and a DMG installer.',
     highlights: [
       {
         icon: Sparkles,
-        title: 'OpenCode Zen and Go',
-        body: 'Choose either OpenCode provider in Sorty settings.',
+        title: 'Sorty in your agent',
+        body: 'Set up the skill for Codex, Claude Code, OpenCode, Pi, or a custom folder. Organize, rename, find exact duplicates, and restore recorded moves without keeping the app installed.',
       },
       {
         icon: ShieldCheck,
-        title: 'Safer file operations',
-        body: 'Organization and undo now reject missing or replaced files and ambiguous paths.',
+        title: 'Choose what to import',
+        body: 'Share selected preferences, exclusions, saved folders, and Learnings. Credentials, bookmarks, consent, and app history stay in the app.',
       },
       {
         icon: FolderGit2,
-        title: 'Independent AI batches',
-        body: 'Concurrent batches keep their model streams separate.',
+        title: 'Keep the app when you need it',
+        body: 'Continue with App keeps native Finder integration and background watching available. New icon styles and a drag-to-install DMG join this release.',
       },
       {
         icon: ShieldCheck,
-        title: 'Optional bug reports',
-        body: 'Share a report with Sentry from the app and label the area involved.',
+        title: 'File operation fixes',
+        body: 'Organization and undo guard missing or replaced files. Cross-volume copies preserve edited sources, and concurrent AI batches keep their streams separate.',
       },
     ],
   },

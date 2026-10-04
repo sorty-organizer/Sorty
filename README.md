@@ -37,13 +37,14 @@ A native macOS SwiftUI app that uses AI to organize files into relevant, semanti
 
 ## Quick Start
 
-### Use Sorty from Codex
+### Use Sorty from your agent
 
-This repository includes a `$sorty` skill for Codex. Ask it to organize, rename,
-scan for exact duplicates, preview a plan, or roll back work. The skill opens the
-Sorty app for native features such as Finder integration, watched folders,
-personas, Learnings, provider settings, and interactive previews. See the
-[Sorty skill guide](docs/sorty-skill.md) for setup, examples, and safety rules.
+Install the Sorty skill from onboarding or Settings > Features > Sorty Skill.
+Choose Codex, Claude Code, OpenCode, Pi, or a custom agent folder, then select
+which preferences and Learnings to import. Ask your agent to organize, rename,
+find exact duplicates, or restore recorded moves. These workflows run without
+the app; Finder integration and background watching still need the native app.
+See the [Sorty skill guide](docs/sorty-skill.md) for setup and safety rules.
 
 ### Prerequisites
 - macOS 15.0 or later

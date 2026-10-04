@@ -231,7 +231,7 @@ To check the release path without publishing, dispatch it on `main` with the
 current version from `Info.plist` and `validate_only=true`:
 
 ```bash
-gh workflow run release.yml --ref main -f version=1.2.1 -f validate_only=true
+gh workflow run release.yml --ref main -f version=1.3.0 -f validate_only=true
 ```
 
 This runs tests, builds both architectures, verifies the signed ZIP, launches the

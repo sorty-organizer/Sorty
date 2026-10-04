@@ -14,8 +14,8 @@ The preview draws from the full-resolution PNG with high interpolation
 at the display's backing scale rather than relying on segmented-control downsampling.
 The white PNGs use glossy pearl-white glass, silver-gray highlights, and a dark
 face panel with white eyes and smile. They reuse the seven image-generated
-glass variants from the icon review, exported at 512 pixels. The 1.2.2 What's
-New comparison includes a White column for reviewing this set in the candidate.
+glass variants from the icon review, exported at 512 pixels. The 1.3.0 What's
+New tour compares the old and refreshed colorful activity icons.
 Apple Native Finder actions use distinct SF Symbols at 16 points: `folder.fill`
 for Organize, `eye` for Watch, and `minus.circle.fill` for Exclude. Quick Actions
 use the same symbols. The shared robot silhouette obscured the different props

@@ -122,16 +122,16 @@ public struct WhatsNewTourView: View {
         [
             WhatsNewPage(
                 imageName: "AppIcon-Release.png",
-                title: "Sorty 1.2.2",
-                description: "OpenCode Zen and Go, safer organization, and clearer support."
+                title: "Sorty 1.3.0",
+                description: "Meet the Sorty skill. Bring your preferences to your agent."
             ),
             WhatsNewPage(
                 title: "A clearer menu bar",
                 description: "The old and new icons for all seven Sorty activities."
             ),
             WhatsNewPage(
-                title: "Sorty 1.2.2",
-                description: "New providers, clearer menu bar status, safer file operations, and easier bug reports."
+                title: "Sorty 1.3.0",
+                description: "Organize through conversation, or continue with the native app."
             ),
         ]
     }
@@ -233,12 +233,12 @@ public struct WhatsNewTourView: View {
     private var releaseSummary: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Sorty 1.2.2")
+                Text("Sorty 1.3.0")
                     .font(.system(.title, design: .rounded, weight: .bold))
                     .foregroundStyle(.primary)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("OpenCode Zen and Go, safer file operations, and an optional in-app bug report form.")
+                Text("The Sorty skill brings file organizing to your agent, with selective preference import and reversible plans.")
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -253,8 +253,9 @@ public struct WhatsNewTourView: View {
                         symbol: "sparkles",
                         color: SortyDesignSystem.Colors.resolvedAccent,
                         items: [
-                            "OpenCode Zen and OpenCode Go providers",
-                            "Optional Sentry bug reports with an area label"
+                            "Sorty skill for Codex, Claude Code, OpenCode, and Pi",
+                            "Selective preference and Learnings import",
+                            "OpenCode Zen and Go, DMG installer, and optional bug reports"
                         ]
                     )
                     releaseSection(
@@ -262,9 +263,9 @@ public struct WhatsNewTourView: View {
                         symbol: "arrow.up.right.circle.fill",
                         color: .green,
                         items: [
-                            "Refreshed menu bar icons for all seven activities",
-                            "Settings and learnings reads avoid blocking the main actor",
-                            "Smaller modules for file, model, AI, and organizer code"
+                            "Skill-first onboarding with Continue with App",
+                            "Menu bar and Finder icon styles",
+                            "Clearer privacy controls and preview notices"
                         ]
                     )
                     releaseSection(
@@ -274,7 +275,8 @@ public struct WhatsNewTourView: View {
                         items: [
                             "Missing and replaced files stop unsafe operations",
                             "Concurrent AI batches keep their streams separate",
-                            "Finder automation and widget integration",
+                            "Cross-volume copies preserve edited sources",
+                            "Finder, widgets, and skill setup recovery",
                             "Internal telemetry stays separate from user reports"
                         ]
                     )
@@ -401,7 +403,7 @@ public struct WhatsNewTourView: View {
         page.imageNames.count > 1 ? workflowImageIndex : 0
     }
 
-    // The 1.2.2 comparison is temporary. Remove this page and the Old PNGs
+    // The 1.3.0 comparison is temporary. Remove this page and the Old PNGs
     // after the release is confirmed; later tours should show current artwork.
     private var menuIconComparison: some View {
         let activities: [(name: String, resource: String)] = [

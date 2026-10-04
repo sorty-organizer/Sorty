@@ -6,7 +6,7 @@ The first slide introduces the idea that Sorty can be a skill. The following sli
 
 ## Set up in the app
 
-1. Open Settings > Experimental > Sorty skill.
+1. Open Settings > Features > Sorty Skill.
 2. Click Set Up Skill, or Import Settings if it is already installed. Review Setup opens the same flow when another skill is present.
 3. Read the introduction, then choose an agent from the row of glass icon tiles. Codex, Claude Code, OpenCode, and Pi use their logos or mark; Other uses a folder icon and opens the folder picker. A checkmark marks the selection, and "Settings found" indicates an existing configuration directory. The installation path updates with your choice. The setup window opens at 780 × 620 points and can be resized. The welcome text stays visible without scrolling; longer configuration steps scroll above navigation. Hovering over Get Started changes the introduction's folder icon to the Sorty app icon.
 4. Choose what to share under Preferences, Exclusions, Watched folders, and Learnings. Each category starts with a selection count and Select all action. Click anywhere across the Choose individual settings row to expand or collapse the compact checklist; categories with more than eight items also offer search by name or detail. The checklist is bounded by the space between the heading and navigation, so expanding it keeps the window size and navigation in place. Short checklists open at their content height. Longer checklists show a scrollbar and a Scroll for more cue while items remain below the viewport; the cue disappears at the bottom. The category column and selection summary stay visible while the checklist scrolls. Select all applies to the entire category, including items hidden by search. The sidebar also lets you select or deselect every category at once. Unlock Learnings to review them before selecting.
@@ -15,7 +15,7 @@ The first slide introduces the idea that Sorty can be a skill. The following sli
 
 Setup opens in its own resizable window with native Liquid Glass on macOS 26. It reuses the onboarding's full-screen backdrop, edge glow, and full-window color field. Each step explains the choice before presenting its controls. The background changes as you advance and stays still between steps. Reduce Motion disables transitions. Reduce Transparency uses a solid background and hides the screen effects. Screen effects also hide when the setup window is inactive. The window stays open after import to explain the next action, and cannot close while an import is in progress.
 
-Choose at least one setting to import. Reimporting replaces the previous imported selection, so include every preference you want the agent to keep using.
+You can install the skill without importing settings. Reimporting replaces the previous imported selection, so include every preference you want the agent to keep using.
 
 Changing headings and action labels use text transitions, selection counts use numeric transitions, and step icons use symbol replacement. Reduce Motion disables these animations.
 
@@ -74,7 +74,7 @@ The preferences step uses category navigation and native checkboxes to select:
 - watched-folder paths and their custom prompts;
 - learned rules, instructions, corrections, and preferred examples.
 
-Choose **Import nothing** to clear all selections and continue without copying app settings. Review then offers **Install Skill**, or **Finish Setup** if it is already installed. Existing imported settings stay in place.
+Deselect every category to continue without copying app settings. Review then offers **Install Skill**, or **Finish Setup** if it is already installed. Existing imported settings stay in place.
 
 Organization mode, content analysis, and whether to rename are task instructions. Tell your agent what you want when you ask it to organize a folder.
 
