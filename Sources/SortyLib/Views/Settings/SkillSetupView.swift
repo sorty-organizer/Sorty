@@ -121,6 +121,7 @@ struct SkillSetupView: View {
     @State private var isLoading = true
     @State private var hasLoadedOptions = false
     @State private var isSaving = false
+    @State private var importProgressDeadline: ContinuousClock.Instant?
     @State private var hasReachedReviewBottom = false
     @State private var errorMessage: String?
     @State private var isConfirmingReplacement = false
@@ -271,7 +272,7 @@ struct SkillSetupView: View {
                 .padding(.bottom, 20)
 
                 Group {
-                    if isSaving {
+                    if importProgressDeadline != nil {
                         importProgress
                     } else if step == .location {
                         ScrollView { stepContent }
@@ -322,6 +323,15 @@ struct SkillSetupView: View {
         .task(id: needsImportOptions) {
             guard needsImportOptions, !hasLoadedOptions else { return }
             await loadOptions()
+        }
+        .task(id: isSaving) {
+            guard isSaving else { return }
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch { return }
+            guard !Task.isCancelled, isSaving else { return }
+            // Skip progress for fast imports; give it time to read once it appears.
+            importProgressDeadline = ContinuousClock.now.advanced(by: .milliseconds(1500))
         }
         .task {
             for resource in ["SkillAgentCodex", "SkillAgentClaudeCode", "SkillAgentOpenCodeDark", "SkillAgentOpenCodeLight", "SkillAgentPi"] {
@@ -1062,14 +1072,14 @@ struct SkillSetupView: View {
                     .accessibilityIdentifier(step == .review ? "skill-import.confirm" : "skill-import.continue")
             }
             .overlay(alignment: .center) {
-                if isWaitingForOptions || isSaving {
+                if isWaitingForOptions || importProgressDeadline != nil {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
                         Text(isSaving ? "Importing…" : "Loading settings…")
                     }
                     .accessibilityElement(children: .combine)
                     .allowsHitTesting(false)
-                } else if step == .review && !hasReachedReviewBottom {
+                } else if !isSaving && step == .review && !hasReachedReviewBottom {
                     Text("Scroll to the bottom to enable import")
                         .font(supportingFont)
                         .foregroundStyle(.secondary)
@@ -1227,17 +1237,18 @@ struct SkillSetupView: View {
         isSaving = true
         onSavingChanged(true)
         errorMessage = nil
-        Task {
+        Task { @MainActor in
             defer {
                 if isSaving {
                     var transaction = Transaction()
                     transaction.disablesAnimations = true
-                    withTransaction(transaction) { isSaving = false }
+                    withTransaction(transaction) {
+                        isSaving = false
+                        importProgressDeadline = nil
+                    }
                 }
                 onSavingChanged(false)
             }
-            // Keep the setup shell visible while the content shows import progress.
-            await Task.yield()
             if selectedOptions.contains(where: { $0.section == .learnings }) {
                 guard await SecurityManager.shared.authenticateForSensitiveAction(reason: "Authenticate to import your Learnings into the skill.") else { return }
             }
@@ -1257,6 +1268,9 @@ struct SkillSetupView: View {
                 } else {
                     HapticFeedbackManager.shared.success()
                 }
+                if let importProgressDeadline {
+                    try await ContinuousClock().sleep(until: importProgressDeadline)
+                }
                 AccessibilityNotification.Announcement("Your Sorty skill is ready").post()
                 if !isOnboarding, let sound = NSSound(named: "Glass") {
                     sound.volume = 0.20
@@ -1266,7 +1280,10 @@ struct SkillSetupView: View {
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                     step = .complete
                     isSaving = false
+                    importProgressDeadline = nil
                 }
+            } catch is CancellationError {
+                return
             } catch {
                 errorMessage = error.localizedDescription
                 HapticFeedbackManager.shared.error()
