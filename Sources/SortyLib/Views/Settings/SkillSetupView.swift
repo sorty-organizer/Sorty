@@ -355,8 +355,11 @@ struct SkillSetupView: View {
         case .complete:
             VStack(spacing: 16) {
                 Image(systemName: "checkmark.seal.fill")
-                    .font(.largeTitle)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 72, height: 72)
                     .foregroundStyle(.green)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Try a first request").font(.headline)
@@ -379,8 +382,9 @@ struct SkillSetupView: View {
                     .font(.callout).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
-            .frame(maxWidth: 600)
+            .frame(maxWidth: 600, maxHeight: .infinity)
             .padding(.vertical, 8)
         }
     }
