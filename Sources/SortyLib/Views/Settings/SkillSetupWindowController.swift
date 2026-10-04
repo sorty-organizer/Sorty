@@ -35,8 +35,9 @@ final class SkillSetupWindowController: NSObject, ObservableObject, NSWindowDele
         .environmentObject(learnings)
         .environmentObject(automation)
 
+        let contentSize = NSSize(width: 780, height: 620)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 820, height: 700),
+            contentRect: NSRect(origin: .zero, size: contentSize),
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false
         )
@@ -44,12 +45,16 @@ final class SkillSetupWindowController: NSObject, ObservableObject, NSWindowDele
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
-        window.contentMinSize = NSSize(width: 760, height: 620)
+        window.contentMinSize = NSSize(width: 760, height: 580)
         if #available(macOS 26.0, *) {
             window.backgroundColor = .clear
             window.isOpaque = false
         }
-        window.contentView = NSHostingView(rootView: view)
+        let hostingView = NSHostingView(rootView: view)
+        // AppKit controls the window size; longer setup steps scroll within it.
+        hostingView.sizingOptions = []
+        window.contentView = hostingView
+        window.setContentSize(contentSize)
         window.delegate = self
         window.center()
         windowController = NSWindowController(window: window)
