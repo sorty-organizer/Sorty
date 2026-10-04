@@ -2,6 +2,11 @@
 
 ## Skill setup
 
+Keep the welcome step outside a scroll view. Its heading, introduction, icon,
+and three explanations share the available height above navigation. Use compact
+spacing and a 64-point icon so the full text fits at the setup window's minimum
+content size of 760 by 580 points. Keep body text wrapping at its normal size.
+
 Skill setup keeps its content mounted during import and hides it from pointer
 input and accessibility while a full-window progress view is visible above it.
 Hide the separate screen backdrop blur panel during import so it cannot obscure

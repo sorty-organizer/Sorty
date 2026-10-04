@@ -68,8 +68,8 @@ struct SkillSetupView: View {
 
             VStack(spacing: 0) {
                 progressRail
-                    .padding(.top, step == .complete ? 36 : 48)
-                    .padding(.bottom, step == .preferences || step == .complete ? 16 : 28)
+                    .padding(.top, step == .welcome ? 28 : step == .complete ? 36 : 48)
+                    .padding(.bottom, step == .welcome || step == .preferences || step == .complete ? 16 : 28)
                 VStack(spacing: 8) {
                     Text(step.title)
                         .contentTransition(reduceMotion ? .identity : .numericText())
@@ -86,13 +86,13 @@ struct SkillSetupView: View {
                         .frame(maxWidth: 590)
                 }
                 .padding(.horizontal, 40)
-                .padding(.bottom, step == .preferences || step == .complete ? 16 : 24)
+                .padding(.bottom, step == .welcome || step == .preferences || step == .complete ? 16 : 24)
 
                 Group {
-                    if step == .preferences || step == .review || step == .complete {
-                        stepContent
-                    } else {
+                    if step == .location {
                         ScrollView { stepContent }
+                    } else {
+                        stepContent
                     }
                 }
                         .padding(.horizontal, 40)
@@ -222,7 +222,7 @@ struct SkillSetupView: View {
     private var stepContent: some View {
         switch step {
         case .welcome:
-            VStack(spacing: 28) {
+            VStack(spacing: 16) {
                 ZStack {
                     Image(systemName: "folder.badge.gearshape")
                         .font(.largeTitle)
@@ -231,21 +231,20 @@ struct SkillSetupView: View {
                     Image(nsImage: NSApp.applicationIconImage)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 56, height: 56)
+                        .frame(width: 44, height: 44)
                         .opacity(isGetStartedHovered ? 1 : 0)
                 }
-                .frame(width: 82, height: 82)
+                .frame(width: 64, height: 64)
                 .systemLiquidGlassBackground(cornerRadius: 24, interactive: false)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isGetStartedHovered)
                 .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 16) {
                     explanation("Make it familiar", icon: "textformat", detail: "Bring over your naming style, exclusions, saved folders, and Learnings. You choose exactly what to share.")
                     explanation("Work from a clear plan", icon: "list.bullet.rectangle", detail: "Ask for a preview, organize files, or review exact duplicates. The skill records its moves so it can restore them.")
                     explanation("Keep control of each task", icon: "text.bubble", detail: "Tell your agent which folder to use, whether to rename, and how to organize it. Saved folders don't start background automation.")
                 }
-                .frame(maxWidth: 570)
+                .frame(maxWidth: 620)
             }
-            .padding(.vertical, 12)
         case .location:
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 14) {
