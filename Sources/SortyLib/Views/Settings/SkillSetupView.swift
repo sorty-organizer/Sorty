@@ -17,6 +17,8 @@ struct SkillSetupView: View {
 
     @State private var step: Step = .welcome
     @State private var activeSection: SkillImportOption.Section = .preferences
+    @State private var expandedSections: Set<SkillImportOption.Section> = []
+    @State private var optionSearch = ""
     @State private var options: [SkillImportOption] = []
     @State private var selected: Set<String> = []
     @State private var isLoading = true
@@ -296,6 +298,7 @@ struct SkillSetupView: View {
                             HapticFeedbackManager.shared.selection()
                             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
                                 activeSection = section
+                                optionSearch = ""
                             }
                         } label: {
                             HStack(spacing: 10) {
@@ -323,10 +326,8 @@ struct SkillSetupView: View {
                         .accessibilityIdentifier("skill-import.select-all")
                 }
                 .frame(width: 190)
-                ScrollView {
-                    importSection(activeSection)
-                }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                importSection(activeSection)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         case .review:
             VStack(alignment: .leading, spacing: 16) {
@@ -531,6 +532,11 @@ struct SkillSetupView: View {
         let rows = options.filter { $0.section == section }
         let identifiers = Set(rows.map(\.selectionID))
         let sectionSelected = !identifiers.isEmpty && identifiers.isSubset(of: selected)
+        let selectedCount = identifiers.intersection(selected).count
+        let query = optionSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        let visibleRows = query.isEmpty ? rows : rows.filter {
+            $0.title.localizedStandardContains(query) || $0.detail.localizedStandardContains(query)
+        }
         return VStack(alignment: .leading, spacing: 12) {
             Text(section.rawValue).font(.headline)
                 .contentTransition(reduceMotion ? .identity : .numericText())
@@ -551,39 +557,85 @@ struct SkillSetupView: View {
                         .font(.callout).foregroundStyle(.secondary)
                 }
             } else {
-                Button(sectionSelected ? "Deselect Section" : "Select Section") {
-                    if sectionSelected { selected.subtract(identifiers) }
-                    else { selected.formUnion(identifiers) }
-                    HapticFeedbackManager.shared.selection()
+                HStack {
+                    Text("\(selectedCount) of \(identifiers.count) selected")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedCount)))
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedCount)
+                    Spacer()
+                    Button(sectionSelected ? "Deselect all" : "Select all") {
+                        if sectionSelected { selected.subtract(identifiers) }
+                        else { selected.formUnion(identifiers) }
+                        HapticFeedbackManager.shared.selection()
+                    }
+                    .buttonStyle(.sortyBordered(size: .small))
+                    .accessibilityHint("Applies to all settings in \(section.rawValue), including hidden search results.")
+                    .accessibilityIdentifier("skill-import.select-all.\(section.rawValue)")
                 }
-                .buttonStyle(.sortyBordered(size: .small))
-                .contentTransition(reduceMotion ? .identity : .numericText())
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: sectionSelected)
-                .accessibilityIdentifier("skill-import.select-all.\(section.rawValue)")
-                ForEach(rows) { option in
-                    Toggle(isOn: Binding(
-                        get: { selected.contains(option.selectionID) },
-                        set: { value in
-                            if value { selected.insert(option.selectionID) }
-                            else { selected.remove(option.selectionID) }
-                            HapticFeedbackManager.shared.selection()
+                Divider()
+                DisclosureGroup(isExpanded: Binding(
+                    get: { expandedSections.contains(section) },
+                    set: { value in
+                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                            if value { expandedSections.insert(section) }
+                            else { expandedSections.remove(section) }
                         }
-                    )) {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(option.title).font(.body)
-                            Text(option.detail).font(.callout).foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                        HapticFeedbackManager.shared.selection()
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if rows.count > 8 {
+                            TextField("Search settings", text: $optionSearch)
+                                .textFieldStyle(.roundedBorder)
+                                .accessibilityIdentifier("skill-import.search.\(section.rawValue)")
+                        }
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 6) {
+                                if visibleRows.isEmpty {
+                                    Text("No matching settings")
+                                        .font(.callout)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.vertical, 8)
+                                }
+                                ForEach(visibleRows) { option in
+                                    importOption(option)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
-                    .toggleStyle(.checkbox)
-                    .padding(.vertical, 4)
-                    .accessibilityIdentifier("skill-import.option.\(option.id)")
+                    .padding(.top, 10)
+                } label: {
+                    Text("Choose individual settings")
+                        .font(.callout.weight(.medium))
                 }
+                .accessibilityIdentifier("skill-import.expand.\(section.rawValue)")
             }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
+    }
+
+    private func importOption(_ option: SkillImportOption) -> some View {
+        Toggle(isOn: Binding(
+            get: { selected.contains(option.selectionID) },
+            set: { value in
+                if value { selected.insert(option.selectionID) }
+                else { selected.remove(option.selectionID) }
+                HapticFeedbackManager.shared.selection()
+            }
+        )) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(option.title).font(.callout)
+                Text(option.detail).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .toggleStyle(.checkbox)
+        .padding(.vertical, 2)
+        .accessibilityIdentifier("skill-import.option.\(option.id)")
     }
 
     private func sectionExplanation(_ section: SkillImportOption.Section) -> String {
