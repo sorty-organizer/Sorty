@@ -88,6 +88,9 @@ final class UtilityTests: XCTestCase {
 
         let importedSettings = Data("{\"version\":1,\"preferences\":{\"openFolderAfterOrganization\":true}}".utf8)
         try CodexSkillInstaller.writeImportedSettings(importedSettings, destination: destination)
+        let overridesURL = destination.appendingPathComponent("references/agent-preferences.json")
+        let overrides = Data("{\"version\":1,\"preferences\":{\"separator\":\"underscore\"}}".utf8)
+        try overrides.write(to: overridesURL)
         guard case .installed = CodexSkillInstaller.inspect(source: source, destination: destination) else {
             return XCTFail("Importing personal settings must not mark the skill as conflicting")
         }
@@ -107,6 +110,7 @@ final class UtilityTests: XCTestCase {
         XCTAssertTrue(CodexSkillInstaller.replace(source: source, destination: destination))
         let profileURL = destination.appendingPathComponent("references/imported-settings.json")
         XCTAssertEqual(try Data(contentsOf: profileURL), importedSettings)
+        XCTAssertEqual(try Data(contentsOf: overridesURL), overrides)
         XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: profileURL.path)[.posixPermissions] as? Int, 0o600)
         guard case .installed = CodexSkillInstaller.inspect(source: source, destination: destination) else {
             return XCTFail("Expected the conflicting skill to be replaced")

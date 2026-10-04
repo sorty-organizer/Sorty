@@ -372,12 +372,13 @@ final class CodexSkillInstaller: ObservableObject {
                 try? fileManager.removeItem(at: temporary)
                 return false
             }
-            let importedSettings = "references/imported-settings.json"
-            let existingProfile = destination.appendingPathComponent(importedSettings)
-            if fileManager.fileExists(atPath: existingProfile.path) {
-                let newProfile = temporary.appendingPathComponent(importedSettings)
-                try fileManager.createDirectory(at: newProfile.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try fileManager.copyItem(at: existingProfile, to: newProfile)
+            for importedSettings in ["references/imported-settings.json", "references/agent-preferences.json"] {
+                let existingProfile = destination.appendingPathComponent(importedSettings)
+                if fileManager.fileExists(atPath: existingProfile.path) {
+                    let newProfile = temporary.appendingPathComponent(importedSettings)
+                    try fileManager.createDirectory(at: newProfile.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try fileManager.copyItem(at: existingProfile, to: newProfile)
+                }
             }
             try fileManager.moveItem(at: destination, to: backup)
             do {
@@ -432,7 +433,7 @@ final class CodexSkillInstaller: ObservableObject {
         let references = destination.appendingPathComponent("references", isDirectory: true)
         guard fileManager.fileExists(atPath: references.path) else { return }
         for file in try fileManager.contentsOfDirectory(at: references, includingPropertiesForKeys: nil)
-        where file.lastPathComponent == "imported-settings.json" || file.lastPathComponent.hasPrefix(".imported-settings") {
+        where ["imported-settings.json", "agent-preferences.json"].contains(file.lastPathComponent) || file.lastPathComponent.hasPrefix(".agent-preferences") || file.lastPathComponent.hasPrefix(".imported-settings") {
             try fileManager.removeItem(at: file)
         }
     }
@@ -468,7 +469,7 @@ final class CodexSkillInstaller: ObservableObject {
             let relativePath = url.pathComponents
                 .suffix(enumerator.level)
                 .joined(separator: "/")
-            if relativePath == "references/imported-settings.json" { continue }
+            if ["references/imported-settings.json", "references/agent-preferences.json"].contains(relativePath) { continue }
             files.insert(relativePath)
         }
         return files

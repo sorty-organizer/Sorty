@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import sorty_profile
 import sorty_helper
 
 
@@ -50,6 +51,28 @@ class SortyHelperTests(unittest.TestCase):
         path = self.base / f"plan-{len(list(self.base.glob('plan-*')))}.json"
         path.write_text(json.dumps(plan), encoding="utf-8")
         return path
+
+    def test_agent_preferences_survive_reimport_and_unset_restores_default(self):
+        self.state.mkdir()
+        profile = self.state / "profile.json"
+        profile.write_text(json.dumps({"version": 1, "preferences": {
+            "renameNamingOptions": {"separator": "spaces", "caseStyle": "natural"}
+        }, "exclusions": [{"type": "Hidden Files"}]}))
+        sorty_profile.update_preference("separator", "underscore")
+        effective = sorty_profile.load_profile()
+        self.assertEqual(effective["preferences"]["renameNamingOptions"],
+                         {"separator": "underscore", "caseStyle": "natural"})
+        self.assertEqual(effective["exclusions"], [{"type": "Hidden Files"}])
+        profile.write_text(json.dumps({"version": 1, "preferences": {
+            "renameNamingOptions": {"separator": "hyphen"}
+        }}))
+        self.assertEqual(sorty_profile.load_profile()["preferences"]["renameNamingOptions"]["separator"], "underscore")
+        previous = sorty_profile.overrides_path().read_bytes()
+        with self.assertRaises(ValueError):
+            sorty_profile.update_preference("separator", "invalid")
+        self.assertEqual(sorty_profile.overrides_path().read_bytes(), previous)
+        sorty_profile.update_preference("separator")
+        self.assertEqual(sorty_profile.load_profile()["preferences"]["renameNamingOptions"]["separator"], "hyphen")
 
     def test_scan_skips_hidden_excluded_and_package_contents(self):
         (self.root / "visible.txt").write_text("visible", encoding="utf-8")
