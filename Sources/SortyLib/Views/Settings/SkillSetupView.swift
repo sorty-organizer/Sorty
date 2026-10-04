@@ -480,11 +480,8 @@ struct SkillSetupView: View {
             VStack(spacing: 24) {
                 ZStack {
                     Image(systemName: "folder.badge.gearshape")
-                        .resizable()
-                        .scaledToFit()
+                        .font(.system(size: 40, weight: .regular))
                         .frame(width: 48, height: 48)
-                        // Compensate for the folder badge symbol's uneven optical margins.
-                        .offset(x: 2, y: -1)
                         .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         .opacity(isGetStartedHovered ? 0 : 1)
                     Image(nsImage: NSApp.applicationIconImage)
