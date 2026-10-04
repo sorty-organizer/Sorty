@@ -1091,7 +1091,7 @@ struct SkillSetupView: View {
                     .buttonStyle(.sortyPrimary(size: .large))
                     .onboardingBeamBorder(
                         active: !reduceMotion && canAdvanceFromNavigation
-                            && (step == .welcome || isPrimaryActionHovered)
+                            && (step == .welcome || step == .rethink || isPrimaryActionHovered)
                     )
                     .modifier(introductionReveal(at: 5))
                     .onHover {
