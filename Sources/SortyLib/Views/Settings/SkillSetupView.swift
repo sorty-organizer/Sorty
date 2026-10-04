@@ -413,13 +413,13 @@ struct SkillSetupView: View {
             guard installer.selectedAgent != agent else { return }
             installer.selectedSkillsDirectory = installer.skillsDirectory(for: agent)
             errorMessage = nil
-            Task { await installer.refresh(trackUsage: false) }
+            Task { await installer.refresh(trackUsage: false, showsCheckingState: false) }
         } label: {
             VStack(spacing: 8) {
                 agentLocationIcon(agent)
                     .frame(width: agentIconSize, height: agentIconSize, alignment: .center)
                     .frame(width: 64, height: 64)
-                    .systemLiquidGlassBackground(cornerRadius: 18, interactive: true)
+                    .systemLiquidGlassBackground(cornerRadius: 18, interactive: false)
                     .overlay {
                         if isSelected {
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -435,6 +435,7 @@ struct SkillSetupView: View {
                         }
                     }
                     .scaleEffect(!reduceMotion && hoveredAgentLocation == name ? 1.04 : 1)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: hoveredAgentLocation)
                     .accessibilityHidden(true)
                 Text(name)
                     .font(.callout.weight(isSelected ? .semibold : .regular))
@@ -447,7 +448,6 @@ struct SkillSetupView: View {
         }
         .buttonStyle(.plain)
         .onHover { hoveredAgentLocation = $0 ? name : nil }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: hoveredAgentLocation)
         .accessibilityLabel(name)
         .accessibilityHint(agent == nil ? "Choose a custom skills folder" : isDetected ? "Settings folder found. Use this agent's skills folder." : "Use this agent's standard skills folder.")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -731,7 +731,7 @@ struct SkillSetupView: View {
         guard panel.runModal() == .OK, let directory = panel.url else { return }
         installer.selectedSkillsDirectory = directory
         errorMessage = nil
-        Task { await installer.refresh(trackUsage: false) }
+        Task { await installer.refresh(trackUsage: false, showsCheckingState: false) }
     }
 
     private func importSelected() {

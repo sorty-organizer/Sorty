@@ -190,8 +190,8 @@ final class CodexSkillInstaller: ObservableObject {
         agent.skillsDirectory(home: fileManager.homeDirectoryForCurrentUser, environment: environment)
     }
 
-    func refresh(trackUsage: Bool = true) async {
-        state = .checking
+    func refresh(trackUsage: Bool = true, showsCheckingState: Bool = true) async {
+        if showsCheckingState { state = .checking }
         let source = Self.bundledSkillURL()
         let destination = destinationURL
         let directories = SkillAgent.allCases.map { ($0, skillsDirectory(for: $0).deletingLastPathComponent()) }
@@ -204,8 +204,8 @@ final class CodexSkillInstaller: ObservableObject {
             return (Self.inspect(source: source, destination: destination), detected)
         }.value
         guard destinationURL == destination else { return }
-        detectedAgents = result.1
-        state = result.0
+        if detectedAgents != result.1 { detectedAgents = result.1 }
+        if state != result.0 { state = result.0 }
         if trackUsage {
             captureStatus(result.0)
         }

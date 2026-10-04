@@ -6,6 +6,10 @@ Agent tiles use the immediate tap haptic. Selecting the current agent leaves
 its location unchanged. Backdrop and edge-glow presenters attach only when the
 host window changes; window notifications handle geometry and activation.
 Ordinary selection and hover updates must not re-order the screen panels.
+Destination changes refresh installer status without publishing a transient
+checking state, disabling the tile row, or replacing the Settings card behind
+setup with a spinner. Keep tile glass noninteractive; the button owns input
+and haptics, and the icon's local scale supplies hover feedback.
 
 Keep the welcome step outside a scroll view. Its heading, introduction, icon,
 and three explanations share the available height above navigation. Use compact
