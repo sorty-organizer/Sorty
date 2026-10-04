@@ -1,5 +1,4 @@
 import AppKit
-@preconcurrency import AVFoundation
 import SwiftUI
 
 /// Presents the existing skill importer before the original app onboarding.
@@ -8,8 +7,6 @@ struct SkillOnboardingView: View {
     @StateObject private var installer = CodexSkillInstaller()
     @State private var isCheckingSkill = false
     @State private var errorMessage: String?
-    @State private var audioPlayer: AVAudioPlayer?
-    @State private var isSoundEnabled = true
 
     var body: some View {
         SkillSetupView(
@@ -37,26 +34,6 @@ struct SkillOnboardingView: View {
                 .accessibilityHidden(true)
         }
         .accessibilityIdentifier("SkillOnboardingView")
-        .overlay(alignment: .topTrailing) {
-            Toggle("Onboarding sound", isOn: $isSoundEnabled)
-                .toggleStyle(.checkbox)
-                .font(.title3)
-                .fixedSize()
-                .padding(.top, 16)
-                .padding(.trailing, 24)
-                .accessibilityIdentifier("skill-onboarding.sound")
-        }
-        .task {
-            await playIntroSound()
-        }
-        .onChange(of: isSoundEnabled) { _, isEnabled in
-            audioPlayer?.volume = isEnabled ? 0.25 : 0
-            HapticFeedbackManager.shared.selection()
-        }
-        .onDisappear {
-            audioPlayer?.stop()
-            audioPlayer = nil
-        }
         .alert("Your Skill Needs Attention", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -79,25 +56,6 @@ struct SkillOnboardingView: View {
         }
     }
 
-    /// Reads the lossless cue after the view mounts and plays it once across the skill steps.
-    private func playIntroSound() async {
-        guard audioPlayer == nil,
-              let soundURL = Bundle.main.url(forResource: "SkillOnboardingSound", withExtension: "m4a")
-                ?? SortyResources.urlForCopiedResource(named: "SkillOnboardingSound.m4a")
-        else { return }
-
-        let data = await Task.detached(priority: .utility) {
-            try? Data(contentsOf: soundURL, options: .mappedIfSafe)
-        }.value
-        guard !Task.isCancelled, audioPlayer == nil, let data,
-              let player = try? AVAudioPlayer(data: data) else { return }
-        player.numberOfLoops = 0
-        player.volume = isSoundEnabled ? 0.25 : 0
-        player.prepareToPlay()
-        audioPlayer = player
-        player.play()
-    }
-
     private func useSkill() {
         guard !isCheckingSkill else { return }
         HapticFeedbackManager.shared.tap()
@@ -108,8 +66,6 @@ struct SkillOnboardingView: View {
 struct SkillSetupView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.controlActiveState) private var controlActiveState
-    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var settings: SettingsViewModel
     @EnvironmentObject private var exclusions: ExclusionRulesManager
     @EnvironmentObject private var watchedFolders: WatchedFoldersManager
@@ -121,6 +77,7 @@ struct SkillSetupView: View {
     let isOnboarding: Bool
     let onUseSkill: () -> Void
 
+    @State private var introductionStage = 0
     @State private var step: Step = .welcome
     @State private var activeSection: SkillImportOption.Section = .preferences
     @State private var expandedSections: Set<SkillImportOption.Section> = []
@@ -163,11 +120,12 @@ struct SkillSetupView: View {
     private var headingFont: Font { .system(size: headingSize, weight: .semibold, design: .default) }
 
     private enum Step: Int, CaseIterable {
-        case rethink, welcome, location, preferences, review, complete
+        case rethink, about, welcome, location, preferences, review, complete
 
         var title: String {
             switch self {
             case .rethink: "Sorty can be a skill"
+            case .about: "Meet the Sorty skill"
             case .welcome: "Use Sorty in your agent"
             case .location: "Choose a skills folder"
             case .preferences: "Choose what to share"
@@ -178,7 +136,8 @@ struct SkillSetupView: View {
 
         var explanation: String {
             switch self {
-            case .rethink: "Since the last update, we've rethought how Sorty works. We realized its file organization tools can live in a skill for your agent."
+            case .rethink: "Since the last update, we've thought about how Sorty works."
+            case .about: "The same file organization tools, ready for a conversation with your agent."
             case .welcome: "The Sorty skill lets your agent organize files using your saved preferences."
             case .location: "Pick where your agent loads skills, or choose a custom folder."
             case .preferences: "Choose settings to copy into the skill, or import nothing."
@@ -190,6 +149,7 @@ struct SkillSetupView: View {
         var railTitle: String {
             switch self {
             case .rethink: "Update"
+            case .about: "Skill"
             case .welcome: "About"
             case .location: "Location"
             case .preferences: "Preferences"
@@ -200,7 +160,7 @@ struct SkillSetupView: View {
     }
 
     private var setupSteps: [Step] {
-        isOnboarding ? [.rethink, .welcome, .location, .preferences, .review]
+        isOnboarding ? [.rethink, .about, .welcome, .location, .preferences, .review]
             : [.welcome, .location, .preferences, .review]
     }
 
@@ -213,7 +173,7 @@ struct SkillSetupView: View {
                 Color(NSColor.windowBackgroundColor).ignoresSafeArea()
             } else {
                 OnboardingBottomGradient(
-                    progress: Double(step.rawValue - (isOnboarding ? 0 : 1)) / Double(isOnboarding ? 5 : 4),
+                    progress: Double(step.rawValue - (isOnboarding ? 0 : 2)) / Double(isOnboarding ? 6 : 4),
                     showsBaseColor: false
                 )
                 .ignoresSafeArea()
@@ -226,20 +186,38 @@ struct SkillSetupView: View {
                     .padding(.top, 48)
                     .padding(.bottom, 24)
                 VStack(spacing: 12) {
-                    Text(step.title)
-                        .contentTransition(reduceMotion ? .identity : .numericText())
-                        .font(.system(size: titleSize, weight: .semibold, design: .default))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .multilineTextAlignment(.center)
-                        .accessibilityAddTraits(.isHeader)
-                        .accessibilityFocused($isHeadingFocused)
-                    Text(step.explanation)
-                        .contentTransition(reduceMotion ? .identity : .numericText())
-                        .font(readingFont)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 680)
+                    if step == .rethink {
+                        Text(step.explanation)
+                            .font(readingFont)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .modifier(introductionReveal(at: 1))
+                        Text("We realized Sorty can be a skill.")
+                            .font(.system(size: titleSize, weight: .semibold))
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityFocused($isHeadingFocused)
+                            .modifier(introductionReveal(at: 2))
+                    } else {
+                        Text(step.title)
+                            .contentTransition(reduceMotion ? .identity : .numericText())
+                            .font(.system(size: titleSize, weight: .semibold, design: .default))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.center)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityFocused($isHeadingFocused)
+                            .modifier(introductionReveal(at: 1))
+                        Text(step.explanation)
+                            .contentTransition(reduceMotion ? .identity : .numericText())
+                            .font(readingFont)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: 680)
+                            .modifier(introductionReveal(at: 2))
+                    }
                 }
                 .padding(.horizontal, 40)
                 .padding(.bottom, 20)
@@ -247,7 +225,7 @@ struct SkillSetupView: View {
                 Group {
                     if step == .location {
                         ScrollView { stepContent }
-                    } else if step == .rethink || step == .welcome || step == .complete {
+                    } else if step == .rethink || step == .about || step == .welcome || step == .complete {
                         SkillImportChecklist { stepContent }
                     } else {
                         stepContent
@@ -276,6 +254,7 @@ struct SkillSetupView: View {
                     .padding(.vertical, 24)
             }
             .opacity(isSaving ? 0 : 1)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isSaving)
             .allowsHitTesting(!isSaving)
             .accessibilityHidden(isSaving)
 
@@ -285,30 +264,17 @@ struct SkillSetupView: View {
             }
         }
         .font(readingFont)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isSaving)
-        .background {
-            OnboardingScreenBackdropBlurPresenter(
-                isVisible: !isSaving && !reduceTransparency && controlActiveState != .inactive
-            )
-            .frame(width: 0, height: 0)
-            .accessibilityHidden(true)
-        }
-        .overlay(alignment: .topLeading) {
-            OnboardingScreenEdgeGlowPresenter(
-                isVisible: !reduceTransparency && controlActiveState != .inactive
-            )
-            .frame(width: 1, height: 1)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
         .accessibilityIdentifier("skill-import.window")
         .task {
             if isOnboarding { await installer.refresh(trackUsage: false) }
             await loadOptions()
-            isHeadingFocused = true
+            if !isIntroduction { isHeadingFocused = true }
+        }
+        .task(id: [step.rawValue, reduceMotion ? 1 : 0]) {
+            await revealIntroduction()
         }
         .onChange(of: step) { _, _ in
-            isHeadingFocused = true
+            if !isIntroduction { isHeadingFocused = true }
             isGetStartedHovered = false
         }
         .onChange(of: errorMessage) { _, message in
@@ -319,6 +285,41 @@ struct SkillSetupView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This replaces the skill at the chosen location, then imports your selection. Existing imported settings are backed up before the new import.")
+        }
+    }
+
+    private var isIntroduction: Bool {
+        step == .rethink || step == .about || step == .welcome
+    }
+
+    private func introductionReveal(at stage: Int) -> SkillIntroductionReveal {
+        SkillIntroductionReveal(
+            isVisible: !isIntroduction || introductionStage >= stage,
+            reduceMotion: reduceMotion
+        )
+    }
+
+    /// Reveal in place so each line stays visible and the layout never shifts.
+    private func revealIntroduction() async {
+        guard isIntroduction else { return }
+        if reduceMotion {
+            introductionStage = 5
+            isHeadingFocused = true
+            return
+        }
+        do {
+            introductionStage = 1
+            try await Task.sleep(for: .seconds(step == .rethink ? 2 : 0.7))
+            introductionStage = 2
+            isHeadingFocused = true
+            try await Task.sleep(for: .seconds(step == .rethink ? 1.5 : 0.7))
+            introductionStage = 3
+            try await Task.sleep(for: .seconds(0.6))
+            introductionStage = 4
+            try await Task.sleep(for: .seconds(0.6))
+            introductionStage = 5
+        } catch {
+            // SwiftUI cancels the sequence when the user leaves this page.
         }
     }
 
@@ -391,11 +392,17 @@ struct SkillSetupView: View {
                     .scaledToFit()
                     .frame(width: 88, height: 88)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 20) {
-                    explanation("The same files, your agent", icon: "folder.badge.gearshape", detail: "Organize folders, rename files, find exact duplicates, and review changes in a conversation.")
-                    explanation("Bring your preferences", icon: "checklist", detail: "Copy your naming rules, exclusions, saved folders, and Learnings into the skill. You choose what to share.")
-                    explanation("Choose how to continue", icon: "arrow.triangle.branch", detail: "We'll help you set up the skill. Then you can delete Sorty or continue with the app.")
-                }
+                    .modifier(introductionReveal(at: 3))
+            }
+            .frame(maxWidth: 680)
+        case .about:
+            VStack(alignment: .leading, spacing: 20) {
+                explanation("The same files, your agent", icon: "folder.badge.gearshape", detail: "Organize folders, rename files, find exact duplicates, and review changes in a conversation.")
+                    .modifier(introductionReveal(at: 3))
+                explanation("Bring your preferences", icon: "checklist", detail: "Copy your naming rules, exclusions, saved folders, and Learnings into the skill. You choose what to share.")
+                    .modifier(introductionReveal(at: 4))
+                explanation("Choose how to continue", icon: "arrow.triangle.branch", detail: "We'll help you set up the skill. Then you can delete Sorty or continue with the app.")
+                    .modifier(introductionReveal(at: 5))
             }
             .frame(maxWidth: 680)
         case .welcome:
@@ -420,6 +427,7 @@ struct SkillSetupView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isGetStartedHovered)
                 .accessibilityHidden(true)
+                .modifier(introductionReveal(at: 3))
                 VStack(alignment: .leading, spacing: 24) {
                     explanation("Your preferences", icon: "textformat", detail: "Naming style, exclusions, saved folders, and Learnings you select.")
                     explanation("Preview first", icon: "list.bullet.rectangle", detail: "Ask for a preview before moving files. Every move can be restored.")
@@ -429,6 +437,7 @@ struct SkillSetupView: View {
                     }
                 }
                 .frame(maxWidth: 680)
+                .modifier(introductionReveal(at: 4))
             }
         case .location:
             VStack(alignment: .leading, spacing: 24) {
@@ -918,6 +927,7 @@ struct SkillSetupView: View {
                     .contentTransition(reduceMotion ? .identity : .numericText())
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: primaryTitle)
                     .buttonStyle(.sortyProminent(size: .large))
+                    .modifier(introductionReveal(at: step == .rethink ? 3 : 5))
                     .onHover { isGetStartedHovered = step == .welcome && $0 }
                     .keyboardShortcut(.defaultAction)
                     .disabled(
@@ -933,6 +943,7 @@ struct SkillSetupView: View {
     private var primaryTitle: String {
         switch step {
         case .rethink: "Meet the Skill"
+        case .about: "Continue"
         case .welcome: "Get Started"
         case .location, .preferences: "Continue"
         case .review:
@@ -971,12 +982,16 @@ struct SkillSetupView: View {
     private func changeStep(_ next: Step) {
         HapticFeedbackManager.shared.selection()
         if next == .review { hasReachedReviewBottom = false }
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { step = next }
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+            introductionStage = 0
+            step = next
+        }
     }
 
     private func advance() {
         switch step {
-        case .rethink: changeStep(.welcome)
+        case .rethink: changeStep(.about)
+        case .about: changeStep(.welcome)
         case .welcome: changeStep(.location)
         case .location: changeStep(.preferences)
         case .preferences: changeStep(.review)
@@ -1074,11 +1089,16 @@ struct SkillSetupView: View {
                     HapticFeedbackManager.shared.success()
                 }
                 AccessibilityNotification.Announcement("Your Sorty skill is ready").post()
-                if let sound = NSSound(named: "Glass") {
+                if !isOnboarding, let sound = NSSound(named: "Glass") {
                     sound.volume = 0.20
                     sound.play()
                 }
-                changeStep(.complete)
+                // Resolve the finished page while the setup content is hidden.
+                // Only its reveal fades; layout and glass never transition together.
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { step = .complete }
+                await Task.yield()
             } catch {
                 errorMessage = error.localizedDescription
                 HapticFeedbackManager.shared.error()
@@ -1122,5 +1142,18 @@ private struct SkillImportChecklist<Content: View>: View {
                     .accessibilityIdentifier("skill-import.scroll-hint")
             }
         }
+    }
+}
+
+private struct SkillIntroductionReveal: ViewModifier {
+    let isVisible: Bool
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: isVisible)
+            .allowsHitTesting(isVisible)
+            .accessibilityHidden(!isVisible)
     }
 }

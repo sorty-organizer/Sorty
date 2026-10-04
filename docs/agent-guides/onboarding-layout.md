@@ -21,8 +21,10 @@ points, with body text wrapping at its normal size.
 
 Skill setup keeps its content mounted during import and hides it from pointer
 input and accessibility while a full-window progress view is visible above it.
-Hide the separate screen backdrop blur panel during import so it cannot obscure
-the progress view. The completion tick uses the shared one-shot milestone sliver
+Keep skill setup free of monitor-wide backdrop blur and edge-glow panels.
+On import completion, resolve the finished page without animation while setup
+content is hidden, then fade that content in. Keep the saving animation scoped
+to content opacity so it cannot animate the page layout or glass background. The completion tick uses the shared one-shot milestone sliver
 at its fixed 72-point size, with motion disabled under Reduce Motion.
 Use `CopyButtonWithAnimation` inside a Sorty bordered button for the example
 request, using primary text and icon color. Copy and checkmark symbols share a fixed square and crossfade in place,
@@ -34,6 +36,15 @@ copied state, haptics, and cancellable reset timing. Each view supplies its own
 entrance and reset animations. A failed clipboard write does not show success,
 and another copy cancels the previous reset. Keep one-off copy actions without
 temporary feedback simple; they do not need a feedback object.
+
+The skill onboarding introduction reveals the update sentence, pauses for two
+seconds, then reveals the skill headline and, after another pause, the app icon.
+Keep those elements mounted and reveal them with opacity so earlier text stays
+visible and the layout stays still. Meet the Skill opens a separate feature page
+before Use Sorty in your agent. Intro pages reveal their heading, explanation,
+and features in sequence. Cancel each reveal task when its page changes and
+show everything immediately with Reduce Motion. Hidden content must also be
+hidden from accessibility and pointer input.
 
 ## Onboarding window
 
