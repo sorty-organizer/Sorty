@@ -214,6 +214,51 @@ final class SortyUninstallerTests: XCTestCase {
         XCTAssertFalse(fileManager.fileExists(atPath: removableFile.path))
     }
 
+    func testCleanupRetainsProtectedApplicationScriptScaffolding() throws {
+        let fileManager = FileManager.default
+        let home = makeTemporaryHome(fileManager: fileManager).resolvingSymlinksInPath()
+        let scripts = home.appendingPathComponent("Library/Application Scripts/group.com.sorty.app")
+        let container = home.appendingPathComponent("Library/Group Containers/group.com.sorty.app")
+        let link = container.appendingPathComponent("Library/Application Scripts/group.com.sorty.app")
+        try fileManager.createDirectory(at: scripts, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fileManager.createSymbolicLink(at: link, withDestinationURL: scripts)
+        let directLink = scripts.deletingLastPathComponent().appendingPathComponent("com.sorty.app")
+        try fileManager.createSymbolicLink(at: directLink, withDestinationURL: scripts)
+        let savedFile = scripts.appendingPathComponent("saved.scpt")
+        try Data("saved script".utf8).write(to: savedFile)
+        let snapshot = container.appendingPathComponent("overview-snapshot.json")
+        try Data("saved snapshot".utf8).write(to: snapshot)
+
+        for path in [scripts, link, directLink] {
+            let chmod = Process()
+            chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+            chmod.arguments = ["-h", "+a", "everyone deny delete", path.path]
+            try chmod.run()
+            chmod.waitUntilExit()
+            XCTAssertEqual(chmod.terminationStatus, 0)
+        }
+        defer {
+            for path in [link, directLink, scripts] {
+                let chmod = Process()
+                chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+                chmod.arguments = ["-h", "-N", path.path]
+                try? chmod.run()
+                chmod.waitUntilExit()
+            }
+        }
+
+        let result = SortyUninstaller.removeFilesystemState(homeDirectory: home, fileManager: fileManager)
+
+        XCTAssertTrue(result.failed.isEmpty, "\(result.failed)")
+        XCTAssertTrue(fileManager.fileExists(atPath: scripts.path))
+        for path in [link, directLink] {
+            XCTAssertEqual(try fileManager.destinationOfSymbolicLink(atPath: path.path), scripts.path)
+        }
+        XCTAssertFalse(fileManager.fileExists(atPath: savedFile.path))
+        XCTAssertFalse(fileManager.fileExists(atPath: snapshot.path))
+    }
+
     func testCleanupPathCandidatesIncludeMatchingByHostAndDiagnosticFiles() throws {
         let fileManager = FileManager.default
         let home = makeTemporaryHome(fileManager: fileManager)

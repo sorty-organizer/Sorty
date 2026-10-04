@@ -143,17 +143,38 @@ public enum SortyUninstaller {
             fileManager: fileManager
         )
 
-        // Schedule post-quit removal before any destructive step. Aborting here
-        // (helper failed to start) must leave Keychain, TCC, and login items
-        // untouched so the app can be retried safely.
-        // Container directories and metadata can be protected by macOS ACLs.
-        // Retry only files and symlinks after quitting, never directory removal.
+        // Check protected data before clearing credentials or registrations. A
+        // denied container read must leave the installed app usable for a retry.
+        var accessFailures: [String: String] = [:]
         let finalRemovalTargets = safeUniqueURLs(removalPaths.flatMap { url -> [URL] in
-            guard isManagedContainer(url),
-                  (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true
-            else { return [url] }
-            return (try? containerContents(at: url, fileManager: fileManager)) ?? []
+            guard pathExistsOrIsSymbolicLink(url, fileManager: fileManager) else { return [] }
+            do {
+                let isSymbolicLink = try url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true
+                if isSymbolicLink && isApplicationScriptsLocation(url) { return [] }
+                let targets: [URL]
+                if retainsDirectoryDuringCleanup(url), !isSymbolicLink {
+                    targets = try containerContents(at: url, fileManager: fileManager)
+                } else {
+                    targets = [url]
+                }
+                for target in targets where !fileManager.isDeletableFile(atPath: target.path) {
+                    accessFailures[target.path] = "macOS denied permission to remove this saved file."
+                }
+                return targets
+            } catch {
+                accessFailures[url.path] = error.localizedDescription
+                return []
+            }
         } + applicationURLs)
+        guard accessFailures.isEmpty else {
+            return emptyReport(
+                blockingFailureDescriptions: ["saved app data"],
+                failedPaths: accessFailures
+            )
+        }
+
+        // Start the post-quit helper before any destructive step. It waits for
+        // the ready marker, so a failed cleanup leaves the application installed.
         let removalReadyURL = temporaryDirectory
             .appendingPathComponent("sorty-uninstall-ready-\(UUID().uuidString)")
         let didStartRemovalHelper = schedulePostTerminationRemoval(
@@ -631,8 +652,9 @@ public enum SortyUninstaller {
             }
 
             do {
-                if isManagedContainer(url),
-                   (try url.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink != true {
+                let isSymbolicLink = try url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true
+                if isSymbolicLink && isApplicationScriptsLocation(url) { continue }
+                if retainsDirectoryDuringCleanup(url), !isSymbolicLink {
                     for item in try containerContents(at: url, fileManager: fileManager) {
                         do {
                             try fileManager.removeItem(at: item)
@@ -653,8 +675,13 @@ public enum SortyUninstaller {
         return (removed, missing, failed)
     }
 
-    private static func isManagedContainer(_ url: URL) -> Bool {
-        ["Containers", "Group Containers"].contains(url.deletingLastPathComponent().lastPathComponent)
+    private static func retainsDirectoryDuringCleanup(_ url: URL) -> Bool {
+        ["Containers", "Group Containers", "Application Scripts"].contains(url.deletingLastPathComponent().lastPathComponent)
+    }
+
+    private static func isApplicationScriptsLocation(_ url: URL) -> Bool {
+        url.deletingLastPathComponent().lastPathComponent == "Application Scripts"
+            && (knownComponentBundleIdentifiers + [appGroupIdentifier]).contains(url.lastPathComponent)
     }
 
     private static func containerContents(at url: URL, fileManager: FileManager) throws -> [URL] {
@@ -664,8 +691,14 @@ public enum SortyUninstaller {
         let keys: Set<URLResourceKey> = [.isDirectoryKey, .isSymbolicLinkKey]
         return try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: Array(keys))
             .filter { $0.lastPathComponent != ".com.apple.containermanagerd.metadata.plist" }
-            .flatMap { item in
+            .flatMap { item -> [URL] in
                 let values = try item.resourceValues(forKeys: keys)
+                // macOS installs protected links to the Application Scripts
+                // directory. Its files are cleaned through the direct candidate.
+                if values.isSymbolicLink == true,
+                   isApplicationScriptsLocation(item) {
+                    return []
+                }
                 if values.isDirectory == true && values.isSymbolicLink != true {
                     return try containerContents(at: item, fileManager: fileManager)
                 }
@@ -877,12 +910,15 @@ public enum SortyUninstaller {
             || (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true
     }
 
-    private static func emptyReport() -> SortyUninstallReport {
+    private static func emptyReport(
+        blockingFailureDescriptions: [String] = ["application bundle"],
+        failedPaths: [String: String] = [:]
+    ) -> SortyUninstallReport {
         SortyUninstallReport(
             removedPaths: [],
             missingPaths: [],
-            failedPaths: [:],
-            blockingFailureDescriptions: ["application bundle"],
+            failedPaths: failedPaths,
+            blockingFailureDescriptions: blockingFailureDescriptions,
             applicationPathsScheduledForRemoval: [],
             removedQuickActionCount: 0,
             didScheduleApplicationRemoval: false,
