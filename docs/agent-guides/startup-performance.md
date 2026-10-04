@@ -55,7 +55,7 @@ The loaders are idempotent. A second caller awaits the existing task. Bookmark r
 ## Threading rules
 
 Help > Restart Onboarding opens the skill introduction first. Continue with App
-then opens the original timed welcome reveal, audio cue, and orbit entrance.
+then opens the main app and records onboarding completion, including on fresh installs.
 The skill introduction also appears once for users upgrading from app-only setup.
 Its installer is lightweight; agent detection and preference hydration start in
 view tasks, after the interface mounts. Restarting preserves the current window position and

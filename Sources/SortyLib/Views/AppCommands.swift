@@ -1035,12 +1035,11 @@ public class AppState: ObservableObject {
         userDefaults.set(currentVersion, forKey: Self.completedOnboardingVersionKey)
     }
 
-    /// Resumes the original app setup after the skill introduction, including after an update.
+    /// Opens the app after the skill introduction and remembers the user's choice.
     public func continueWithAppAfterSkillIntroduction() {
         HapticFeedbackManager.shared.selection()
-        isRestartingOnboarding = true
-        hasCompletedOnboarding = false
-        hasCompletedSkillIntroduction = true
+        isRestartingOnboarding = false
+        recordOnboardingCompletion()
     }
 
     public var hasResults: Bool {

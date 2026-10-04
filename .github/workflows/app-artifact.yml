@@ -1,0 +1,55 @@
+name: Downloadable app
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-app:
+    runs-on: blacksmith-6vcpu-macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.3'
+
+      - name: Build optimized universal app
+        env:
+          SORTY_BUILD_DIR: ${{ github.workspace }}/.build
+          BUILD_METHOD: xcodebuild
+          BUILD_CONFIG: release
+          BUILD_ARCHS: arm64 x86_64
+          APP_ICON_VARIANT: release
+          SKIP_TESTS: 'true'
+          SKIP_GIT_INJECT: 'true'
+          SORTY_HOT_RELOAD: 'false'
+          ENABLE_ADHOC_SIGNING: 'true'
+          ENABLE_SPARKLE_SIGNING: 'false'
+          SIGNING_IDENTITY: '-'
+        run: ./scripts/build.sh
+
+      - name: Package app
+        env:
+          ZIP_NAME_OVERRIDE: Sorty-onboarding-fix.zip
+        run: ./scripts/package.sh
+
+      - name: Upload downloadable app
+        uses: actions/upload-artifact@v7
+        with:
+          name: Sorty-onboarding-fix
+          path: releases/Sorty-onboarding-fix.zip
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload failed build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-build-diagnostics
+          path: .build/logs/
+          retention-days: 7

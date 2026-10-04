@@ -114,7 +114,7 @@ class AppStateTests: XCTestCase {
         XCTAssertEqual(userDefaults.string(forKey: versionKey), "nightly")
     }
 
-    func testSkillIntroductionAppearsAfterUpdateAndResumesAppSetup() {
+    func testSkillIntroductionAppearsAfterUpdateAndReturnsToApp() {
         testDefaults.set(true, forKey: "hasCompletedOnboarding")
         testDefaults.set("1.2.0", forKey: "completedOnboardingVersion")
 
@@ -124,11 +124,12 @@ class AppStateTests: XCTestCase {
         XCTAssertTrue(testDefaults.bool(forKey: "hasCompletedOnboarding"), "Presenting the introduction must not overwrite previous setup before the user chooses.")
 
         updatedState.continueWithAppAfterSkillIntroduction()
-        let interruptedSetup = AppState(userDefaults: testDefaults, currentVersion: "1.3.0")
-        XCTAssertTrue(interruptedSetup.hasCompletedSkillIntroduction)
-        XCTAssertFalse(interruptedSetup.hasCompletedOnboarding, "Choosing the app must still require the original onboarding.")
+        XCTAssertTrue(updatedState.hasCompletedOnboarding, "Continue with App must open the main app immediately.")
+        XCTAssertFalse(updatedState.isRestartingOnboarding)
+        let resumedApp = AppState(userDefaults: testDefaults, currentVersion: "1.3.0")
+        XCTAssertTrue(resumedApp.hasCompletedSkillIntroduction)
+        XCTAssertTrue(resumedApp.hasCompletedOnboarding, "The app choice must persist across launches.")
 
-        interruptedSetup.recordOnboardingCompletion()
         let nextLaunch = AppState(userDefaults: testDefaults, currentVersion: "1.4.0")
         XCTAssertTrue(nextLaunch.hasCompletedSkillIntroduction)
         XCTAssertTrue(nextLaunch.hasCompletedOnboarding)

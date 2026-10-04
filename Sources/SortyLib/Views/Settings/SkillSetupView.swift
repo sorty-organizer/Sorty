@@ -116,6 +116,7 @@ struct SkillSetupView: View {
     @State private var options: [SkillImportOption] = []
     @State private var selected: Set<String> = []
     @State private var isLoading = true
+    @State private var hasLoadedOptions = false
     @State private var isSaving = false
     @State private var hasReachedReviewBottom = false
     @State private var errorMessage: String?
@@ -124,6 +125,7 @@ struct SkillSetupView: View {
     @State private var hoveredAgentLocation: String?
     @State private var customFolderIcon: NSImage?
     @State private var skillIcon: NSImage?
+    @State private var agentIcons: [String: NSImage] = [:]
     @ScaledMetric(relativeTo: .largeTitle) private var agentIconSize: CGFloat = 36
     @ScaledMetric(relativeTo: .largeTitle) private var titleSize: CGFloat = 32
     @ScaledMetric(relativeTo: .headline) private var headingSize: CGFloat = 18
@@ -281,7 +283,7 @@ struct SkillSetupView: View {
                 .frame(maxWidth: 880)
                 .frame(maxWidth: .infinity)
                 .frame(maxHeight: .infinity)
-                .disabled(isLoading || isSaving)
+                .disabled(isWaitingForOptions || isSaving)
 
                 if let errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -312,8 +314,18 @@ struct SkillSetupView: View {
         .accessibilityIdentifier("skill-import.window")
         .task {
             if isOnboarding { await installer.refresh(trackUsage: false) }
-            await loadOptions()
             if !isIntroduction { isHeadingFocused = true }
+        }
+        .task(id: needsImportOptions) {
+            guard needsImportOptions, !hasLoadedOptions else { return }
+            await loadOptions()
+        }
+        .task {
+            for resource in ["SkillAgentCodex", "SkillAgentClaudeCode", "SkillAgentOpenCodeDark", "SkillAgentOpenCodeLight", "SkillAgentPi"] {
+                let image = await SortyResources.imageAsync(named: "AgentIcons/\(resource)", withExtension: "pdf")
+                guard !Task.isCancelled else { return }
+                agentIcons[resource] = image
+            }
         }
         .task(id: [step.rawValue, reduceMotion ? 1 : 0]) {
             await revealIntroduction()
@@ -340,6 +352,14 @@ struct SkillSetupView: View {
 
     private var isIntroduction: Bool {
         step == .rethink || step == .about || step == .welcome
+    }
+
+    private var needsImportOptions: Bool {
+        step == .preferences || step == .review
+    }
+
+    private var isWaitingForOptions: Bool {
+        needsImportOptions && (isLoading || !hasLoadedOptions)
     }
 
     private var underlinedSkillPhrase: some View {
@@ -414,7 +434,6 @@ struct SkillSetupView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 160, height: 160)
-                .blur(radius: introductionStage >= 4 && !reduceMotion && !reduceTransparency ? 4 : 0)
                 .opacity(introductionStage >= 4 ? 0.55 : 1)
                 .offset(x: introductionStage >= 4 ? -120 : 0)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: introductionStage >= 4)
@@ -782,7 +801,7 @@ struct SkillSetupView: View {
             case .pi: "SkillAgentPi"
             }
             // Vector PDFs preserve the SVG paths without AppKit's SVG sizing differences.
-            if let image = SortyResources.image(named: "AgentIcons/\(resource)", withExtension: "pdf") {
+            if let image = agentIcons[resource] {
                 Image(nsImage: image)
                     .renderingMode(agent == .codex || agent == .pi ? .template : .original)
                     .resizable()
@@ -1012,7 +1031,7 @@ struct SkillSetupView: View {
                 if step != setupSteps.first && step != .complete {
                     Button("Back") { changeStep(Step(rawValue: step.rawValue - 1) ?? .welcome) }
                         .buttonStyle(.sortyBordered(size: .large))
-                        .disabled(isLoading || isSaving)
+                        .disabled(isWaitingForOptions || isSaving)
                         .accessibilityIdentifier("skill-import.back")
                 }
                 Button(primaryTitle, action: advance)
@@ -1023,14 +1042,14 @@ struct SkillSetupView: View {
                     .onHover { isGetStartedHovered = step == .welcome && $0 }
                     .keyboardShortcut(.defaultAction)
                     .disabled(
-                        isLoading || isSaving
+                        isWaitingForOptions || isSaving
                             || ([Step.location, .preferences, .review].contains(step) && !canUseLocation)
                             || (step == .review && !hasReachedReviewBottom)
                     )
                     .accessibilityIdentifier(step == .review ? "skill-import.confirm" : "skill-import.continue")
             }
             .overlay(alignment: .center) {
-                if isLoading || isSaving {
+                if isWaitingForOptions || isSaving {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
                         Text(isSaving ? "Importing…" : "Loading settings…")
@@ -1122,10 +1141,13 @@ struct SkillSetupView: View {
     }
 
     private func loadOptions() async {
-        await settings.loadPersistedState()
-        await exclusions.loadPersistedState()
-        await watchedFolders.loadPersistedState()
+        async let settingsLoad: Void = settings.loadPersistedState()
+        async let exclusionsLoad: Void = exclusions.loadPersistedState()
+        async let foldersLoad: Void = watchedFolders.loadPersistedState()
+        _ = await (settingsLoad, exclusionsLoad, foldersLoad)
+        guard !Task.isCancelled else { return }
         refreshOptions()
+        hasLoadedOptions = true
         isLoading = false
     }
 
