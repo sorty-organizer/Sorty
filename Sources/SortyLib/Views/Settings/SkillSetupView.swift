@@ -1105,12 +1105,13 @@ struct SkillSetupView: View {
                 Button(primaryTitle, action: advance)
                     .contentTransition(reduceMotion ? .identity : .numericText())
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: primaryTitle)
-                    .buttonStyle(.sortyPrimary(size: .large))
+                    .buttonStyle(.sortyPrimary(isSecondary: !canAdvanceFromNavigation, size: .large))
+                    .opacity(canAdvanceFromNavigation ? 1 : 0.6)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: canAdvanceFromNavigation)
                     .onboardingBeamBorder(
                         active: !reduceMotion && canAdvanceFromNavigation
                             && (step == .welcome || step == .rethink || isPrimaryActionHovered)
                     )
-                    .modifier(introductionReveal(at: finalIntroductionStage))
                     .onHover {
                         isPrimaryActionHovered = $0
                         isGetStartedHovered = step == .welcome && $0
