@@ -79,6 +79,7 @@ class AppStateTests: XCTestCase {
         // Simulate an in-app update scenario for a user who completed onboarding.
         userDefaults.set("0.9.0", forKey: versionKey)
         userDefaults.set(true, forKey: onboardingKey)
+        userDefaults.set(true, forKey: "hasCompletedSkillIntroduction")
         
         let state = AppState(userDefaults: userDefaults, currentVersion: "1.2.0")
 
