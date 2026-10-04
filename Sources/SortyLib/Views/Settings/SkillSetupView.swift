@@ -980,13 +980,6 @@ struct SkillSetupView: View {
                         .accessibilityIdentifier(isOnboarding ? "skill-onboarding.continue-app" : "skill-import.cancel")
                 }
                 Spacer()
-                if step == .preferences && !isLoading && !isSaving && !selected.isEmpty {
-                    Text("\(selectedOptions.count) selected")
-                        .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedOptions.count)))
-                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedOptions.count)
-                        .font(supportingFont)
-                        .foregroundStyle(.secondary)
-                }
                 if step != setupSteps.first && step != .complete {
                     Button("Back") { changeStep(Step(rawValue: step.rawValue - 1) ?? .welcome) }
                         .buttonStyle(.sortyBordered(size: .large))
@@ -1006,6 +999,16 @@ struct SkillSetupView: View {
                             || (step == .review && !hasReachedReviewBottom)
                     )
                     .accessibilityIdentifier(step == .review ? "skill-import.confirm" : "skill-import.continue")
+            }
+            .overlay(alignment: .center) {
+                if step == .preferences && !isLoading && !isSaving && !selected.isEmpty {
+                    Text("\(selectedOptions.count) selected")
+                        .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedOptions.count)))
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedOptions.count)
+                        .font(supportingFont)
+                        .foregroundStyle(.secondary)
+                        .allowsHitTesting(false)
+                }
             }
         }
     }
