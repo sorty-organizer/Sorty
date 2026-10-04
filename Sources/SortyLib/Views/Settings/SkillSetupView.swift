@@ -434,6 +434,7 @@ struct SkillSetupView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 160, height: 160)
+                .blur(radius: introductionStage >= 4 && !reduceMotion && !reduceTransparency ? 4 : 0)
                 .opacity(introductionStage >= 4 ? 0.55 : 1)
                 .offset(x: introductionStage >= 4 ? -120 : 0)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: introductionStage >= 4)
