@@ -136,7 +136,7 @@ struct SkillSetupView: View {
 
         var title: String {
             switch self {
-            case .rethink: "The skill can replace Sorty"
+            case .rethink: "Sorty can be a skill"
             case .about: "Sorty, through conversation"
             case .welcome: "Use Sorty in your agent"
             case .location: "Choose a skills folder"
@@ -148,7 +148,7 @@ struct SkillSetupView: View {
 
         var explanation: String {
             switch self {
-            case .rethink: "We rethought Sorty. Its core file workflows can live in your agent."
+            case .rethink: "Since the last update, we've thought a lot about how Sorty works."
             case .about: "The skill is our next step for Sorty: replacing the app's core workflow with a conversation."
             case .welcome: "Set up the skill to organize files directly in your agent, with the preferences you already use."
             case .location: "Pick where your agent loads skills, or choose a custom folder."
@@ -225,7 +225,7 @@ struct SkillSetupView: View {
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityElement(children: .ignore)
-                            .accessibilityLabel("We realized the skill can replace Sorty.")
+                            .accessibilityLabel("We realized Sorty can be a skill.")
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityFocused($isHeadingFocused)
                             .modifier(introductionReveal(at: 2))
@@ -365,7 +365,7 @@ struct SkillSetupView: View {
 
     private var underlinedSkillPhrase: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text("the skill can replace Sorty")
+            Text("Sorty can be a skill")
                 .overlay(alignment: .bottom) {
                     GeometryReader { geometry in
                         Path { path in
