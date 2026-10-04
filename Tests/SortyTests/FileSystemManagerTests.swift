@@ -507,6 +507,44 @@ class FileSystemManagerTests: XCTestCase {
     }
 
     @MainActor
+    func testCrossVolumeDirectoryMoveKeepsEditedChildren() async throws {
+        for childName in ["older.txt", ".hidden.txt", "Bundle.app/Contents/data.txt"] {
+            let source = tempDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            let child = source.appendingPathComponent(childName)
+            try FileManager.default.createDirectory(at: child.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("before".utf8).write(to: child)
+            let oldDate = Date(timeIntervalSince1970: 1_700_000_000)
+            try FileManager.default.setAttributes([.modificationDate: oldDate], ofItemAtPath: child.path)
+            // A newer sibling masks this child's edit in a latest-mtime aggregate.
+            try Data("newer".utf8).write(to: source.appendingPathComponent("newer.txt"))
+            await fileSystemManager.setCrossVolumeDetectorForTesting { _, _ in true }
+            await fileSystemManager.setCrossVolumeProgressHandler { _, progress in
+                guard progress == 1 else { return }
+                do {
+                    try Data("edited".utf8).write(to: child)
+                    try FileManager.default.setAttributes(
+                        [.modificationDate: oldDate.addingTimeInterval(60)],
+                        ofItemAtPath: child.path
+                    )
+                } catch {
+                    XCTFail("Could not edit directory child during copy: \(error)")
+                }
+            }
+            let file = FileItem(path: source.path, name: source.lastPathComponent, extension: "", isDirectory: true)
+            let archive = tempDirectory.appendingPathComponent("Archive-\(source.lastPathComponent)")
+            let plan = OrganizationPlan(suggestions: [FolderSuggestion(folderName: archive.lastPathComponent, files: [file])])
+            do {
+                _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: false)
+                XCTFail("An edited child must fail verification before its directory is deleted: \(childName)")
+            } catch FileSystemError.partialApplyFailure(let operations, _) {
+                XCTAssertTrue(operations.allSatisfy { $0.type == .createFolder })
+            }
+            XCTAssertEqual(try Data(contentsOf: child), Data("edited".utf8))
+            XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: archive.path), [])
+        }
+    }
+
+    @MainActor
     func testReverseOperationsReportsEarlierSuccessWhenLaterRestoreFails() async throws {
         let restoredSource = tempDirectory.appendingPathComponent("restored.txt")
         let successfulDestination = tempDirectory.appendingPathComponent("successful-destination.txt")

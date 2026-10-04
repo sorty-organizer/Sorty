@@ -69,3 +69,32 @@ reasoning-delivery contract. The retained native CI cases are
 The executable owner is `.github/workflows/macos-ui.yml`; use its existing
 `xcodebuild build-for-testing` and `test-without-building` commands for later UI
 validation. No local UI run is claimed for this minor deletion-only batch.
+
+## Finder repair cleanup evidence
+
+The manual Finder repair action was removed in `eb7bf264`. A tracked caller
+search confirms `repairFinderSyncExtensionRegistrationAsync` has no caller.
+Settings and deferred startup call `prepareFinderIntegrationAsync`; support
+reports call `getFinderSyncDiagnosticsAsync`. The obsolete pipeline stages app
+copies and re-signs or terminates the app, while the active maintenance path
+registers extensions without those actions.
+
+The live diagnostics path still executes `codesign --entitlements`, but
+`missingFinderIntegrationAppEntitlements` unconditionally returns an empty list.
+Removing that probe and its parser does not change any diagnostics result.
+Retain stored staged-app identity validation for uninstall, registration parsing,
+heartbeat/process evidence, disabled-extension handling, and the active
+registration-maintenance path. Keep `SortyAppRepair.entitlements`: build.sh still
+uses it to validate ad-hoc signing independently of runtime repair.
+
+| Exact test and location before cleanup | Actual signal, callers, and remaining proof | History, deletion, and risk |
+| --- | --- | --- |
+| `FinderIntegrationStatusTests.testParseEntitlementsPlistWithValidXML`, `FinderIntegrationStatusTests.swift:300` | Foundation plist decoding through a wrapper used only by the obsolete codesign probe. No remaining production caller after probe removal. | Added before the Core extraction (`9c2932e7`) for host-entitlement repair. Delete wrapper and method; no parser contract is needed for a deleted input path. |
+| `FinderIntegrationStatusTests.testParseEntitlementsPlistWithEmptyStringReturnsNil`, `FinderIntegrationStatusTests.swift:324` | Same removed wrapper, empty input. | Same provenance and deletion; no executable owner remains. |
+| `FinderIntegrationStatusTests.testParseEntitlementsPlistWithInvalidXMLReturnsNil`, `FinderIntegrationStatusTests.swift:329` | Same removed wrapper, malformed input. | Same provenance and deletion; no executable owner remains. |
+| `FinderIntegrationStatusTests.testFinderSyncDiagnosticsIgnoresMissingHostAppEntitlements`, `FinderIntegrationStatusTests.swift:195` | Supplies a test-only entitlements argument that diagnostics never use to choose a status. Production always supplies an empty list. Registered/disabled/verified status and auto-repair tests retain the actual decision contracts. | Host sandbox requirements were intentionally removed before the current Finder setup. Delete unused diagnostics argument/storage and unreachable signature-repair state together with this obsolete-input test. |
+
+Focused hosted proof: `swift test --filter FinderIntegrationStatusTests` within
+Swift CI's compiled package. This batch adds no replacement source-inspection
+test. Build/release signing and extension registration remain independent
+contracts, not reasons to preserve a runtime wrapper that has no effect.
