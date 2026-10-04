@@ -604,7 +604,7 @@ struct SkillSetupView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Button("Change Folder…", action: chooseLocation)
-                            .buttonStyle(.sortyPrimary(isSecondary: true, size: .large))
+                            .buttonStyle(.sortyBordered())
                             .accessibilityIdentifier("skill-import.choose-location")
                             .disabled(isCheckingLocation)
                             .fixedSize()
@@ -646,14 +646,14 @@ struct SkillSetupView: View {
                                 .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.sortySecondary)
+                            .buttonStyle(.sortyBordered())
                             .accessibilityAddTraits(activeSection == section ? .isSelected : [])
                             .accessibilityIdentifier("skill-import.section.\(section.rawValue)")
                         }
                         Button(allSelected ? "Deselect All" : "Select All", action: toggleAll)
                             .contentTransition(reduceMotion ? .identity : .numericText())
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: allSelected)
-                            .buttonStyle(.sortySecondary)
+                            .buttonStyle(.sortyBordered())
                             .padding(.top, 12)
                             .accessibilityIdentifier("skill-import.select-all")
                     }
@@ -736,7 +736,7 @@ struct SkillSetupView: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                     CopyButtonWithAnimation(content: exampleRequest, label: "Copy Request", labelFont: readingFont, tint: .primary)
-                    .buttonStyle(.sortyPrimary(isSecondary: true, size: .large))
+                    .buttonStyle(.sortyBordered())
                     .accessibilityIdentifier("skill-import.copy-request")
                 }
                 .padding(20)
@@ -876,7 +876,7 @@ struct SkillSetupView: View {
                     HapticFeedbackManager.shared.tap()
                     Task { await installer.refresh(trackUsage: false) }
                 }
-                    .buttonStyle(.sortySecondary)
+                    .buttonStyle(.sortyBordered())
             }
         case .available, .failed:
             EmptyView()
@@ -906,7 +906,7 @@ struct SkillSetupView: View {
                         HapticFeedbackManager.shared.tap()
                         Task { await unlockLearnings() }
                     }
-                        .buttonStyle(.sortyPrimary(isSecondary: true, size: .large))
+                        .buttonStyle(.sortyBordered())
                         .accessibilityIdentifier("skill-import.unlock-learnings")
                     Text("Authenticate to choose which Learnings to share.")
                         .font(supportingFont).foregroundStyle(.secondary)
@@ -927,7 +927,7 @@ struct SkillSetupView: View {
                         else { selected.formUnion(identifiers) }
                         HapticFeedbackManager.shared.selection()
                     }
-                    .buttonStyle(.sortySecondary)
+                    .buttonStyle(.sortyBordered())
                     .accessibilityHint("Applies to all settings in \(section.rawValue), including hidden search results.")
                     .accessibilityIdentifier("skill-import.select-all.\(section.rawValue)")
                 }
@@ -1028,7 +1028,7 @@ struct SkillSetupView: View {
                     .accessibilityHint("Opens a confirmation before uninstalling Sorty. Your installed skill stays in place.")
                     .accessibilityIdentifier("skill-onboarding.use-skill")
                 Button("Continue with App", action: closeWithFeedback)
-                    .buttonStyle(.sortyPrimary(isSecondary: true, size: .large))
+                    .buttonStyle(.sortyPrimary(isSecondary: true))
                     .accessibilityIdentifier("skill-onboarding.continue-app")
                 Text("Deleting Sorty removes its app data. You'll review the details before confirming.")
                     .font(supportingFont)
@@ -1045,7 +1045,7 @@ struct SkillSetupView: View {
             HStack(spacing: 16) {
                 if step != .complete {
                     Button(isOnboarding ? "Continue with App" : "Cancel", action: closeWithFeedback)
-                        .buttonStyle(.sortyPrimary(isSecondary: true, size: .large))
+                        .buttonStyle(.sortyPrimary(isSecondary: true))
                         .keyboardShortcut(.cancelAction)
                         .disabled(isSaving)
                         .accessibilityIdentifier(isOnboarding ? "skill-onboarding.continue-app" : "skill-import.cancel")
@@ -1053,7 +1053,7 @@ struct SkillSetupView: View {
                 Spacer()
                 if step != setupSteps.first && step != .complete {
                     Button("Back") { changeStep(Step(rawValue: step.rawValue - 1) ?? .welcome) }
-                        .buttonStyle(.sortyPrimary(isSecondary: true, size: .large))
+                        .buttonStyle(.sortyPrimary(isSecondary: true))
                         .disabled(isWaitingForOptions || isSaving)
                         .accessibilityIdentifier("skill-import.back")
                 }
