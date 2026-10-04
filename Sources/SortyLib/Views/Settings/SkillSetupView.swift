@@ -1,4 +1,5 @@
 import AppKit
+@preconcurrency import AVFoundation
 import SwiftUI
 
 /// Presents the existing skill importer before the original app onboarding.
@@ -7,6 +8,8 @@ struct SkillOnboardingView: View {
     @StateObject private var installer = CodexSkillInstaller()
     @State private var isCheckingSkill = false
     @State private var errorMessage: String?
+    @State private var audioPlayer: AVAudioPlayer?
+    @State private var isSoundEnabled = true
 
     var body: some View {
         SkillSetupView(
@@ -34,6 +37,26 @@ struct SkillOnboardingView: View {
                 .accessibilityHidden(true)
         }
         .accessibilityIdentifier("SkillOnboardingView")
+        .overlay(alignment: .topTrailing) {
+            Toggle("Onboarding sound", isOn: $isSoundEnabled)
+                .toggleStyle(.checkbox)
+                .font(.caption)
+                .fixedSize()
+                .padding(.top, 16)
+                .padding(.trailing, 24)
+                .accessibilityIdentifier("skill-onboarding.sound")
+        }
+        .task {
+            await playIntroSound()
+        }
+        .onChange(of: isSoundEnabled) { _, isEnabled in
+            audioPlayer?.volume = isEnabled ? 0.25 : 0
+            HapticFeedbackManager.shared.selection()
+        }
+        .onDisappear {
+            audioPlayer?.stop()
+            audioPlayer = nil
+        }
         .alert("Your Skill Needs Attention", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -54,6 +77,25 @@ struct SkillOnboardingView: View {
             }
             appState.requestUninstallConfirmation(preservingSkillAt: installer.destinationURL)
         }
+    }
+
+    /// Reads the lossless cue after the view mounts and plays it once across the skill steps.
+    private func playIntroSound() async {
+        guard audioPlayer == nil,
+              let soundURL = Bundle.main.url(forResource: "SkillOnboardingSound", withExtension: "m4a")
+                ?? SortyResources.urlForCopiedResource(named: "SkillOnboardingSound.m4a")
+        else { return }
+
+        let data = await Task.detached(priority: .utility) {
+            try? Data(contentsOf: soundURL, options: .mappedIfSafe)
+        }.value
+        guard !Task.isCancelled, audioPlayer == nil, let data,
+              let player = try? AVAudioPlayer(data: data) else { return }
+        player.numberOfLoops = 0
+        player.volume = isSoundEnabled ? 0.25 : 0
+        player.prepareToPlay()
+        audioPlayer = player
+        player.play()
     }
 
     private func useSkill() {
