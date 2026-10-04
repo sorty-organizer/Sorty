@@ -1,6 +1,8 @@
 # Sorty skill
 
-The Sorty skill organizes and renames files through your agent using preferences imported from the app. It can find exact duplicates, preview and apply reversible plans, and restore its own recorded moves.
+The Sorty skill is intended to replace the app's core file workflow with a conversation in your agent. It organizes and renames files using imported preferences, finds exact duplicates, previews and applies reversible plans, and restores its own recorded moves. You can explain your intent and refine a plan before applying it. Once installed, these workflows work without the app. Native features such as Finder integration and background watching still need the app or separate automation.
+
+The introduction states this direction before setup, then explains the conversational workflow, preference import, and when to keep the app. It does not claim complete native feature parity or measured accuracy gains.
 
 ## Set up in the app
 

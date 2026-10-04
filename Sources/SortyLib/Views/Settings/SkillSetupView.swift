@@ -136,8 +136,8 @@ struct SkillSetupView: View {
 
         var title: String {
             switch self {
-            case .rethink: "Sorty can be a skill"
-            case .about: "Meet the Sorty skill"
+            case .rethink: "The skill can replace Sorty"
+            case .about: "Sorty, through conversation"
             case .welcome: "Use Sorty in your agent"
             case .location: "Choose a skills folder"
             case .preferences: "Choose what to share"
@@ -148,9 +148,9 @@ struct SkillSetupView: View {
 
         var explanation: String {
             switch self {
-            case .rethink: "Since the last update, we've thought a lot about how Sorty works."
-            case .about: "The same file organization tools, ready for a conversation with your agent."
-            case .welcome: "The Sorty skill lets your agent organize files using your saved preferences."
+            case .rethink: "We rethought Sorty. Its core file workflows can live in your agent."
+            case .about: "The skill is our next step for Sorty: replacing the app's core workflow with a conversation."
+            case .welcome: "Set up the skill to organize files directly in your agent, with the preferences you already use."
             case .location: "Pick where your agent loads skills, or choose a custom folder."
             case .preferences: "Choose settings to copy into the skill, or import nothing."
             case .review: "Confirm the location and selection. Nothing installs until you import."
@@ -225,7 +225,7 @@ struct SkillSetupView: View {
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityElement(children: .ignore)
-                            .accessibilityLabel("We realized Sorty can be a skill.")
+                            .accessibilityLabel("We realized the skill can replace Sorty.")
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityFocused($isHeadingFocused)
                             .modifier(introductionReveal(at: 2))
@@ -365,7 +365,7 @@ struct SkillSetupView: View {
 
     private var underlinedSkillPhrase: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text("Sorty can be a skill")
+            Text("the skill can replace Sorty")
                 .overlay(alignment: .bottom) {
                     GeometryReader { geometry in
                         Path { path in
@@ -591,11 +591,11 @@ struct SkillSetupView: View {
             .frame(maxWidth: 680)
         case .about:
             VStack(alignment: .leading, spacing: 20) {
-                explanation("The same files, your agent", icon: "folder.badge.gearshape", detail: "Organize folders, rename files, find exact duplicates, and review changes in a conversation.")
+                explanation("A simpler interface", icon: "folder.badge.gearshape", detail: "Organize, rename, find exact duplicates, and undo moves in chat. Explain what you want and refine the plan before applying it.")
                     .modifier(introductionReveal(at: 3))
                 explanation("Bring your preferences", icon: "checklist", detail: "Copy your naming rules, exclusions, saved folders, and Learnings into the skill. You choose what to share.")
                     .modifier(introductionReveal(at: 4))
-                explanation("Choose how to continue", icon: "arrow.triangle.branch", detail: "We'll help you set up the skill. Then you can delete Sorty or continue with the app.")
+                explanation("Move to the skill", icon: "arrow.triangle.branch", detail: "Once set up, the skill works without Sorty. Keep the app if you use native features like Finder integration or background watching.")
                     .modifier(introductionReveal(at: 5))
             }
             .frame(maxWidth: 680)

@@ -27,7 +27,7 @@ struct CodexSkillInstallerCard: View {
                 Text("Sorty skill")
                     .font(.subheadline.weight(.semibold))
 
-                Text("Let your agent organize files with your Sorty preferences. Setup walks you through what to share.")
+                Text("Replace Sorty's core file workflow with a conversation in your agent. Bring your preferences during setup.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
