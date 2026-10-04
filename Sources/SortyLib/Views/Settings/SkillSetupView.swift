@@ -35,12 +35,6 @@ struct SkillOnboardingView: View {
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
         }
-        .overlay(alignment: .topLeading) {
-            OnboardingScreenEdgeGlowPresenter(isVisible: true)
-                .frame(width: 1, height: 1)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
         .accessibilityIdentifier("SkillOnboardingView")
         .task {
             await playIntroSound()
@@ -300,6 +294,17 @@ struct SkillSetupView: View {
                 navigation
                     .padding(.horizontal, 40)
                     .padding(.vertical, 24)
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if isOnboarding {
+                OnboardingScreenEdgeGlowPresenter(
+                    isVisible: true,
+                    strength: step == .rethink && introductionStage >= 2 ? 0.68 : 0.55
+                )
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
         }
         .font(readingFont)

@@ -2027,6 +2027,8 @@ private final class OnboardingOrbitFieldView: NSView {
 }
 private struct OnboardingScreenEdgeGlow: View {
     @SortyHotReload private var hotReload
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var strength = 0.55
     var body: some View {
         ZStack {
             edgeGradient(startPoint: .top, endPoint: .bottom)
@@ -2036,6 +2038,7 @@ private struct OnboardingScreenEdgeGlow: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .compositingGroup()
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.55), value: strength)
         .blur(radius: 12)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -2045,7 +2048,6 @@ private struct OnboardingScreenEdgeGlow: View {
         startPoint: UnitPoint,
         endPoint: UnitPoint
     ) -> some View {
-        let strength = 0.55
         return LinearGradient(
             stops: [
                 .init(
@@ -2334,6 +2336,7 @@ struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
 struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
     @SortyHotReload private var hotReload
     let isVisible: Bool
+    var strength = 0.55
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -2344,6 +2347,7 @@ struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         view.onWindowChanged = { window in
             context.coordinator.attach(to: window)
         }
+        context.coordinator.setStrength(strength)
         context.coordinator.setVisible(isVisible)
         DispatchQueue.main.async {
             context.coordinator.attach(to: view.window)
@@ -2352,6 +2356,7 @@ struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.setStrength(strength)
         context.coordinator.setVisible(isVisible)
         DispatchQueue.main.async {
             context.coordinator.attach(to: nsView.window)
@@ -2370,6 +2375,15 @@ struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         private var pendingDismissal: DispatchWorkItem?
         private var isHostClosing = false
         private var isVisible = false
+
+        private var strength = 0.55
+
+        func setStrength(_ strength: Double) {
+            guard self.strength != strength else { return }
+            self.strength = strength
+            (glowPanel?.contentView as? NSHostingView<OnboardingScreenEdgeGlow>)?.rootView =
+                OnboardingScreenEdgeGlow(strength: strength)
+        }
 
         func setVisible(_ isVisible: Bool) {
             guard self.isVisible != isVisible else { return }
@@ -2505,7 +2519,7 @@ struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                 .ignoresCycle,
                 .stationary
             ]
-            let glowView = NSHostingView(rootView: OnboardingScreenEdgeGlow())
+            let glowView = NSHostingView(rootView: OnboardingScreenEdgeGlow(strength: strength))
             glowView.sizingOptions = []
             glowView.autoresizingMask = [.width, .height]
             panel.contentView = glowView
