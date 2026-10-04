@@ -1182,9 +1182,11 @@ struct SkillSetupView: View {
         errorMessage = nil
         Task {
             defer {
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) { isSaving = false }
+                if isSaving {
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) { isSaving = false }
+                }
                 onSavingChanged(false)
             }
             // Keep the setup shell visible while the content shows import progress.
@@ -1213,10 +1215,8 @@ struct SkillSetupView: View {
                     sound.volume = 0.20
                     sound.play()
                 }
-                // Commit the ready page and dismiss progress in the same update.
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
+                // Reveal the ready page and dismiss progress in one animated update.
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                     step = .complete
                     isSaving = false
                 }

@@ -34,6 +34,7 @@ public struct ContentView: View {
             if !appState.hasCompletedOnboarding {
                 if !appState.hasCompletedSkillIntroduction {
                     SkillOnboardingView()
+                        .transition(.opacity)
                 } else {
                     OnboardingView(
                         hasCompletedOnboarding: Binding(
@@ -78,6 +79,7 @@ public struct ContentView: View {
             personaHighlightDismissalTask?.cancel()
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: appState.hasCompletedOnboarding)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: appState.hasCompletedSkillIntroduction)
         .sheet(item: $appState.personaGeneratorPresentationContext) { context in
             PersonaGeneratorView(
                 store: customPersonaStore,
