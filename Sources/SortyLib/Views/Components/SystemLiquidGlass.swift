@@ -75,6 +75,8 @@ extension View {
         }
     }
 
+    /// Clips only the glass backdrop so its rectangular render bounds cannot
+    /// leave dark patches outside rounded corners. Content stays unclipped.
     @ViewBuilder
     func systemLiquidGlassBackground(
         cornerRadius: CGFloat,
@@ -88,12 +90,14 @@ extension View {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(.clear)
                             .glassEffect(.clear.interactive(), in: .rect(cornerRadius: cornerRadius))
+                            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                     }
                 } else {
                     self.background {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(.clear)
                             .glassEffect(.clear, in: .rect(cornerRadius: cornerRadius))
+                            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                     }
                 }
             } else if interactive {
@@ -101,12 +105,14 @@ extension View {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.clear)
                         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
+                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 }
             } else {
                 self.background {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.clear)
                         .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 }
             }
         } else {
