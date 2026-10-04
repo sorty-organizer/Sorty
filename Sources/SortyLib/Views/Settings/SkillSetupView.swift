@@ -19,6 +19,7 @@ struct SkillSetupView: View {
     @State private var activeSection: SkillImportOption.Section = .preferences
     @State private var expandedSections: Set<SkillImportOption.Section> = []
     @State private var optionSearch = ""
+    @State private var isImportDisclosureHovered = false
     @State private var options: [SkillImportOption] = []
     @State private var selected: Set<String> = []
     @State private var isLoading = true
@@ -574,16 +575,32 @@ struct SkillSetupView: View {
                     .accessibilityIdentifier("skill-import.select-all.\(section.rawValue)")
                 }
                 Divider()
-                DisclosureGroup(isExpanded: Binding(
-                    get: { expandedSections.contains(section) },
-                    set: { value in
-                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
-                            if value { expandedSections.insert(section) }
-                            else { expandedSections.remove(section) }
-                        }
-                        HapticFeedbackManager.shared.selection()
+                Button {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                        if expandedSections.contains(section) { expandedSections.remove(section) }
+                        else { expandedSections.insert(section) }
                     }
-                )) {
+                    HapticFeedbackManager.shared.selection()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: expandedSections.contains(section) ? "chevron.down" : "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .accessibilityHidden(true)
+                        Text("Choose individual settings")
+                            .font(.callout.weight(.medium))
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 18)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .background(Color.primary.opacity(isImportDisclosureHovered ? 0.04 : 0))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, -18)
+                .onHover { isImportDisclosureHovered = $0 }
+                .accessibilityValue(expandedSections.contains(section) ? "Expanded" : "Collapsed")
+                .accessibilityIdentifier("skill-import.expand.\(section.rawValue)")
+                if expandedSections.contains(section) {
                     VStack(alignment: .leading, spacing: 8) {
                         if rows.count > 8 {
                             TextField("Search settings", text: $optionSearch)
@@ -606,11 +623,7 @@ struct SkillSetupView: View {
                         }
                     }
                     .padding(.top, 10)
-                } label: {
-                    Text("Choose individual settings")
-                        .font(.callout.weight(.medium))
                 }
-                .accessibilityIdentifier("skill-import.expand.\(section.rawValue)")
             }
         }
         .padding(18)
