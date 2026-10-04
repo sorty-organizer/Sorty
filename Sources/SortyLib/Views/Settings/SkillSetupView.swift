@@ -371,13 +371,7 @@ struct SkillSetupView: View {
                         .font(.body)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button("Copy Request") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(exampleRequest, forType: .string)
-                        HapticFeedbackManager.shared.tap()
-                        AccessibilityNotification.Announcement("Request copied").post()
-                    }
-                    .buttonStyle(.sortyBordered())
+                    CopyButtonWithAnimation(content: exampleRequest, label: "Copy Request")
                     .accessibilityIdentifier("skill-import.copy-request")
                 }
                 .padding(20)
