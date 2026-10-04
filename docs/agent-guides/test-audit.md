@@ -42,3 +42,30 @@ If execution is needed after a later behavioral change, the focused command is
 The imported test-audit skill references OpenClaw, Vitest, and autoreview tools
 that are absent here. Use Sorty's repository policies and review the diff; do
 not invent replacement commands or claim those checks ran.
+
+## 4 October 2026 follow-up
+
+Read-only discovery found three stale Swift CI expectations in run 37123906655.
+They were updated, not deleted: prompt enumeration is deterministic after
+`c0eb5449`, Finder's manual status control was removed by `eb7bf264`, and
+Settings now routes to the main window. The retained checks cover prompt
+completeness and scan-order independence, searchable Finder setup, and deep-link
+selection/clearing across repeated routes.
+
+The following deletion candidates were reviewed before editing. Locations refer
+to the pre-cleanup files. No production API exists solely for these tests.
+
+| Exact test and location | Actual signal and remaining proof | History and deletion |
+| --- | --- | --- |
+| `FeatureSpecificUITests`, `Tests/SortyUITests/FeatureSpecificUITests.swift:11` | No test methods; cannot detect a failure. No proof is needed for an empty fixture. Native CI retains its four explicitly selected `AppUITests` cases. | `3933d218` removed its last methods but left setup, teardown, and stale cross-reference comments. Delete the empty file and Xcode membership. |
+| `AppUITests.testAppleFoundationModelAvailability`, `AppUITests.swift:526` | No assertion after clicking an obsolete model button. It usually skips before reaching that click. It never verifies availability or provider selection. | Present since `16520e49`; this was an environment-dependent demonstration with an unfinished assertion comment. Delete the method; do not restore the removed control. |
+| `AppUITests.testDeepScanAffectsScanningBehavior`, `AppUITests.swift:559` | Targets a removed `DeepScanToggle` and, if reached, accepts any existing window. Never scans a file. `ContentAnalyzerTests.testDeepScanDisabledSkipsTextFiles` and `testDeepScanDisabledSkipsRTF` exercise the actual analyzer behavior. | Present since `16520e49` as nominal feature integration. Delete the method; no production code or support seam is removed. |
+| `AppUITests.testReasoningAffectsOrganizationOptions`, `AppUITests.swift:596` | Targets a removed `ReasoningToggle`, reads back its click, then checks that a window exists. Never organizes or inspects reasoning. No reasoning contract is lost. `PromptBuilderTests.testBudgetTruncationKeepsReasoningJSONContract` retains the independent prompt-tail contract. | Present since `16520e49` as nominal feature integration. Delete the method; no production code or support seam is removed. |
+
+Risk: removing these methods loses no asserted scanning, model availability, or
+reasoning-delivery contract. The retained native CI cases are
+`testAppHasMainWindow`, `testAllSidebarItemsExistAndAreClickable`,
+`testAllViewsLoadWithoutCrash`, and `testRapidNavigationMaintainsStability`.
+The executable owner is `.github/workflows/macos-ui.yml`; use its existing
+`xcodebuild build-for-testing` and `test-without-building` commands for later UI
+validation. No local UI run is claimed for this minor deletion-only batch.

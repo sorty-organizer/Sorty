@@ -521,113 +521,12 @@ final class AppUITests: XCTestCase {
                      "Learnings view should have content")
     }
 
-    // MARK: - Environment-Dependent Tests
-    
-    func testAppleFoundationModelAvailability() throws {
-        navigateToView("SettingsSidebarItem")
-        
-        let modelField = app.textFields["ModelTextField"]
-        guard waitForElement(modelField, timeout: 2.0) else {
-             throw XCTSkip("Model settings not accessible")
-        }
-        
-        // Check for Apple Foundation Model capability
-        // This demonstrates skipping tests when hardware/feature is unavailable
-        let appleModelOption = app.buttons["Use Apple Foundation Model"]
-        
-        // If the option isn't presented (e.g. on Intel Mac or older OS), skip
-        if !appleModelOption.waitForExistence(timeout: 1.0) {
-             throw XCTSkip("Apple Foundation Models not available on this device/OS environment")
-        }
-        
-        // If available, verify it works
-        appleModelOption.click()
-        // verify selection state if applicable...
-    }
-
     // MARK: - Window Management Tests
 
     func testAppHasMainWindow() throws {
         XCTAssertTrue(app.windows.count > 0, "App should have at least one window")
         let mainWindow = app.windows.firstMatch
         XCTAssertTrue(mainWindow.exists, "Main window should exist")
-    }
-
-    // MARK: - Feature Integration Verification
-    // These tests verify that enabling a feature actually affects the relevant functionality
-
-    func testDeepScanAffectsScanningBehavior() throws {
-        // Enable Deep Scan
-        navigateToView("SettingsSidebarItem")
-
-        let deepScanToggle = app.switches["DeepScanToggle"]
-        guard waitForElement(deepScanToggle, timeout: 2.0) else {
-            throw XCTSkip("Deep Scan toggle not accessible")
-        }
-
-        let wasEnabled = deepScanToggle.value as? String == "1"
-
-        // Enable if not already
-        if !wasEnabled {
-            deepScanToggle.click()
-            Thread.sleep(forTimeInterval: 0.3)
-        }
-
-        // Navigate to Organize view - the feature should be active
-        navigateToView("OrganizeSidebarItem")
-
-        // The organize view should be ready to use deep scanning
-        // We verify by checking the view loads properly
-        let hasOrganizeUI = app.buttons["StartOrganizationButton"].waitForExistence(timeout: 2.0) ||
-                           app.buttons["BrowseForFolderButton"].waitForExistence(timeout: 2.0)
-
-        XCTAssertTrue(hasOrganizeUI || app.windows.count > 0,
-                     "Organize view should function with Deep Scan enabled")
-
-        // Restore original state
-        if !wasEnabled {
-            navigateToView("SettingsSidebarItem")
-            if waitForElement(deepScanToggle, timeout: 2.0) {
-                deepScanToggle.click()
-            }
-        }
-    }
-
-    func testReasoningAffectsOrganizationOptions() throws {
-        // Enable Reasoning
-        navigateToView("SettingsSidebarItem")
-
-        let reasoningToggle = app.switches["ReasoningToggle"]
-        guard waitForElement(reasoningToggle, timeout: 2.0) else {
-            throw XCTSkip("Reasoning toggle not accessible")
-        }
-
-        let wasEnabled = reasoningToggle.value as? String == "1"
-
-        // Enable if not already
-        if !wasEnabled {
-            reasoningToggle.click()
-            Thread.sleep(forTimeInterval: 0.3)
-        }
-
-        // Verify the toggle is now on
-        let currentState = reasoningToggle.value as? String
-        XCTAssertEqual(currentState, "1", "Reasoning should be enabled after toggle")
-
-        // With reasoning enabled, organization should include explanations
-        // Navigate to Organize to verify the view works
-        navigateToView("OrganizeSidebarItem")
-
-        // The organize view should work normally
-        XCTAssertTrue(app.windows.count > 0, "App should remain functional with reasoning enabled")
-
-        // Restore original state
-        if !wasEnabled {
-            navigateToView("SettingsSidebarItem")
-            if waitForElement(reasoningToggle, timeout: 2.0) {
-                reasoningToggle.click()
-            }
-        }
     }
 
     func testDuplicateDetectionIntegration() throws {
