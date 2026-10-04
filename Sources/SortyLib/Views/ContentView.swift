@@ -334,7 +334,6 @@ public struct ContentView: View {
             Text(LocalizedStringKey(item.title))
         } icon: {
             Image(systemName: item.systemImage)
-                .accessibilityHidden(true)
         }
             // The stock .sidebar selection highlight renders from the system
             // accent (NSColor.controlAccentColor) and ignores window-level
