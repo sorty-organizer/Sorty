@@ -36,64 +36,51 @@ public actor FileSystemManager {
     /// our existence check and the move).
     private static let conflictingMoveRetryAttempts = 3
 
+    private struct TransferItem: Equatable {
+        let type: FileAttributeType
+        let size: UInt64
+        let modificationDate: Date?
+        let fileNumber: UInt64?
+    }
+
     private struct TransferSnapshot: Equatable {
-        let itemCount: Int
-        let totalBytes: UInt64
-        let latestModificationDate: Date?
+        let items: [String: TransferItem]
 
         func matchesCopiedContent(_ other: TransferSnapshot) -> Bool {
-            itemCount == other.itemCount && totalBytes == other.totalBytes
+            items.count == other.items.count && items.allSatisfy { path, item in
+                guard let copied = other.items[path] else { return false }
+                return item.type == copied.type && item.size == copied.size
+            }
         }
     }
 
+    /// Include every child, including hidden files and package contents.
+    /// Per-path attributes catch edits that a tree's latest timestamp would hide.
     private func transferSnapshot(at url: URL) throws -> TransferSnapshot {
-        let rootValues = try url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
-        guard rootValues.isDirectory == true else {
-            return TransferSnapshot(
-                itemCount: 1,
-                totalBytes: UInt64(max(rootValues.fileSize ?? 0, 0)),
-                latestModificationDate: rootValues.contentModificationDate
-            )
-        }
-
-        guard let enumerator = fileManager.enumerator(
-            at: url,
-            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants],
-            errorHandler: { _, _ in false }
-        ) else {
-            throw FileSystemError.crossVolumeCopyVerificationFailed(url.path)
-        }
-
-        var itemCount = 1
-        var totalBytes: UInt64 = 0
-        var latestModificationDate = rootValues.contentModificationDate
-        for case let itemURL as URL in enumerator {
+        var items: [String: TransferItem] = [:]
+        var pending = [(url, ".")]
+        while let (itemURL, relativePath) = pending.popLast() {
             try Task.checkCancellation()
-            let values = try itemURL.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey])
-            // Never follow symlinks while snapshotting: directory cycles
-            // would loop forever and escaping links would inflate the totals.
-            if values.isSymbolicLink == true {
-                if values.isDirectory == true {
-                    enumerator.skipDescendants()
+            let attributes = try fileManager.attributesOfItem(atPath: itemURL.path)
+            guard let type = attributes[.type] as? FileAttributeType else {
+                throw FileSystemError.crossVolumeCopyVerificationFailed(itemURL.path)
+            }
+            items[relativePath] = TransferItem(
+                type: type,
+                size: type == .typeDirectory ? 0 : (attributes[.size] as? UInt64 ?? 0),
+                modificationDate: attributes[.modificationDate] as? Date,
+                fileNumber: attributes[.systemFileNumber] as? UInt64
+            )
+            if type == .typeDirectory {
+                // contentsOfDirectory throws on unreadable children instead
+                // of accepting a silently incomplete enumerator snapshot.
+                for child in try fileManager.contentsOfDirectory(at: itemURL, includingPropertiesForKeys: nil) {
+                    let childPath = relativePath == "." ? child.lastPathComponent : relativePath + "/" + child.lastPathComponent
+                    pending.append((child, childPath))
                 }
-                continue
-            }
-            itemCount += 1
-            if values.isDirectory != true {
-                let fileBytes = UInt64(max(values.fileSize ?? 0, 0))
-                totalBytes += fileBytes
-            }
-            if let date = values.contentModificationDate,
-               latestModificationDate == nil || date > latestModificationDate! {
-                latestModificationDate = date
             }
         }
-        return TransferSnapshot(
-            itemCount: itemCount,
-            totalBytes: totalBytes,
-            latestModificationDate: latestModificationDate
-        )
+        return TransferSnapshot(items: items)
     }
 
     public func setCrossVolumeProgressHandler(_ handler: (@Sendable (String, Double) -> Void)?) {
