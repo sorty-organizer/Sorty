@@ -128,6 +128,7 @@ struct SkillSetupView: View {
     @State private var isGetStartedHovered = false
     @State private var hoveredAgentLocation: String?
     @State private var customFolderIcon: NSImage?
+    @State private var skillIcon: NSImage?
     @ScaledMetric(relativeTo: .largeTitle) private var agentIconSize: CGFloat = 36
     @ScaledMetric(relativeTo: .largeTitle) private var titleSize: CGFloat = 32
     @ScaledMetric(relativeTo: .headline) private var headingSize: CGFloat = 18
@@ -370,6 +371,11 @@ struct SkillSetupView: View {
     /// Reveal in place so each line stays visible and the layout never shifts.
     private func revealIntroduction() async {
         guard isIntroduction else { return }
+        if step == .rethink, skillIcon == nil {
+            let image = await SortyResources.imageAsync(named: "SortySkillIcon")
+            guard !Task.isCancelled else { return }
+            skillIcon = image
+        }
         if reduceMotion {
             introductionStage = 5
             isHeadingFocused = true
@@ -389,6 +395,39 @@ struct SkillSetupView: View {
         } catch {
             // SwiftUI cancels the sequence when the user leaves this page.
         }
+    }
+
+    private var skillIconTransition: some View {
+        ZStack {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 160, height: 160)
+                .blur(radius: introductionStage >= 4 && !reduceMotion && !reduceTransparency ? 4 : 0)
+                .opacity(introductionStage >= 4 ? 0.55 : 1)
+                .offset(x: introductionStage >= 4 ? -120 : 0)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: introductionStage >= 4)
+
+            Image(systemName: "arrow.right")
+                .font(.largeTitle.weight(.medium))
+                .foregroundStyle(.secondary)
+                .opacity(introductionStage >= 5 ? 1 : 0)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: introductionStage >= 5)
+
+            if let skillIcon {
+                Image(nsImage: skillIcon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 160, height: 160)
+                    .offset(x: 120)
+                    .opacity(introductionStage >= 5 ? 1 : 0)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.35).delay(0.15), value: introductionStage >= 5)
+            }
+        }
+        .frame(width: 400, height: 180)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("From the Sorty app to the Sorty skill")
+        .accessibilityIdentifier("skill-import.icon-transition")
     }
 
     private var importProgress: some View {
@@ -455,11 +494,7 @@ struct SkillSetupView: View {
         switch step {
         case .rethink:
             VStack(spacing: 28) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 160, height: 160)
-                    .accessibilityHidden(true)
+                skillIconTransition
                     .modifier(introductionReveal(at: 3))
             }
             .frame(maxWidth: 680)
