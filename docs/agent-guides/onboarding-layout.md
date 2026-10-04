@@ -1,5 +1,15 @@
 # Onboarding Layout
 
+## Skill setup
+
+Skill setup keeps its content mounted during import and hides it from pointer
+input and accessibility while a full-window progress view is visible above it.
+Hide the separate screen backdrop blur panel during import so it cannot obscure
+the progress view. The completion tick uses the shared one-shot milestone sliver
+at its fixed 72-point size, with motion disabled under Reduce Motion.
+
+## Onboarding window
+
 The onboarding window has a minimum content size of 1100 by 720 points. Its
 main `VStack` owns the vertical allocation between the progress rail, step
 content, and navigation controls. Non-completion steps receive the stack's

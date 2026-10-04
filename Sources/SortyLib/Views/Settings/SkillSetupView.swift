@@ -66,68 +66,70 @@ struct SkillSetupView: View {
                 .accessibilityHidden(true)
             }
 
+            VStack(spacing: 0) {
+                progressRail
+                    .padding(.top, step == .complete ? 36 : 48)
+                    .padding(.bottom, step == .preferences || step == .complete ? 16 : 28)
+                VStack(spacing: 8) {
+                    Text(step.title)
+                        .contentTransition(reduceMotion ? .identity : .numericText())
+                        .font(step == .preferences ? .title2.weight(.semibold) : .largeTitle.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityFocused($isHeadingFocused)
+                    Text(step.explanation)
+                        .contentTransition(reduceMotion ? .identity : .numericText())
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 590)
+                }
+                .padding(.horizontal, 40)
+                .padding(.bottom, step == .preferences || step == .complete ? 16 : 24)
+
+                Group {
+                    if step == .preferences || step == .review || step == .complete {
+                        stepContent
+                    } else {
+                        ScrollView { stepContent }
+                    }
+                }
+                        .padding(.horizontal, 40)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: 880)
+                        .frame(maxWidth: .infinity)
+                        .id(step)
+                        .transition(.opacity)
+                .frame(maxHeight: .infinity)
+                .disabled(isLoading || isSaving)
+
+                if let errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 40)
+                        .padding(.top, 12)
+                        .accessibilityIdentifier("skill-import.error")
+                }
+                navigation
+                    .padding(.horizontal, 40)
+                    .padding(.vertical, 24)
+            }
+            .opacity(isSaving ? 0 : 1)
+            .allowsHitTesting(!isSaving)
+            .accessibilityHidden(isSaving)
+
             if isSaving {
                 importProgress
-                    .transition(.opacity)
-            } else {
-                VStack(spacing: 0) {
-                    progressRail
-                        .padding(.top, step == .complete ? 36 : 48)
-                        .padding(.bottom, step == .preferences || step == .complete ? 16 : 28)
-                    VStack(spacing: 8) {
-                        Text(step.title)
-                            .contentTransition(reduceMotion ? .identity : .numericText())
-                            .font(step == .preferences ? .title2.weight(.semibold) : .largeTitle.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                            .accessibilityAddTraits(.isHeader)
-                            .accessibilityFocused($isHeadingFocused)
-                        Text(step.explanation)
-                            .contentTransition(reduceMotion ? .identity : .numericText())
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: 590)
-                    }
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, step == .preferences || step == .complete ? 16 : 24)
-
-                    Group {
-                        if step == .preferences || step == .review || step == .complete {
-                            stepContent
-                        } else {
-                            ScrollView { stepContent }
-                        }
-                    }
-                            .padding(.horizontal, 40)
-                            .padding(.vertical, 8)
-                            .frame(maxWidth: 880)
-                            .frame(maxWidth: .infinity)
-                            .id(step)
-                            .transition(.opacity)
-                    .frame(maxHeight: .infinity)
-                    .disabled(isLoading || isSaving)
-
-                    if let errorMessage {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                            .font(.callout)
-                            .foregroundStyle(.red)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 40)
-                            .padding(.top, 12)
-                            .accessibilityIdentifier("skill-import.error")
-                    }
-                    navigation
-                        .padding(.horizontal, 40)
-                        .padding(.vertical, 24)
-                }
+                    .zIndex(1)
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isSaving)
         .background {
             OnboardingScreenBackdropBlurPresenter(
-                isVisible: !reduceTransparency && controlActiveState != .inactive,
-                opacity: isSaving ? 0.5 : 0.86
+                isVisible: !isSaving && !reduceTransparency && controlActiveState != .inactive
             )
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
@@ -360,6 +362,7 @@ struct SkillSetupView: View {
                     .scaledToFit()
                     .frame(width: 72, height: 72)
                     .foregroundStyle(.green)
+                    .milestoneEmptyStateSliver(trigger: 1, tint: .green)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 12) {
@@ -652,6 +655,8 @@ struct SkillSetupView: View {
                 isSaving = false
                 onSavingChanged(false)
             }
+            // Let the progress overlay mount before authentication or import work.
+            await Task.yield()
             if selectedOptions.contains(where: { $0.section == .learnings }) {
                 guard await SecurityManager.shared.authenticateForSensitiveAction(reason: "Authenticate to import your Learnings into the skill.") else { return }
             }
