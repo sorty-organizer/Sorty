@@ -81,10 +81,16 @@ unavailable check is claimed.
   traced and preserved at the live scanner/prepareFilesForVision boundaries.
 - Several unselected UI tests still refer to retired controls. Retain until each
   persistence/accessibility contract has a current owner and supported fixture.
-- The website has open Dependabot alert
-  [84](https://github.com/sorty-organizer/Sorty/security/dependabot/84) for the
-  transitive braces package. The advisory reports no patched version; do not
-  invent a version override or remove an active dependency to hide the alert.
+- Dependabot alert
+  [84](https://github.com/sorty-organizer/Sorty/security/dependabot/84) concerns
+  transitive `braces@3.0.3`. Commit `6ed22ecd` already mitigates
+  [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
+  with a pnpm patch limiting parser nesting and recursive compile, expand, and
+  stringify AST traversal. The lockfile applies the patch to micromatch's
+  dependency, and website CI installs with `--frozen-lockfile`. On October 5,
+  source review confirmed this wiring; no local verification was run. The
+  advisory still lists no patched release. Keep the patch until an upstream
+  fix is available, then replace it with the fixed dependency version.
 
 ## Measured changes
 
