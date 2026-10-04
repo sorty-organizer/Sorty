@@ -175,13 +175,12 @@ private struct SortyTypographyModifier: ViewModifier {
     let weight: Font.Weight
 
     func body(content: Content) -> some View {
-        let size: CGFloat
-        switch style {
-        case .title3: size = titleSize
-        case .headline: size = headlineSize
-        case .caption: size = bodySize * 12 / 14
-        case .caption2: size = bodySize * 11 / 14
-        default: size = bodySize
+        let size: CGFloat = switch style {
+        case .title3: titleSize
+        case .headline: headlineSize
+        case .caption: bodySize * 12 / 14
+        case .caption2: bodySize * 11 / 14
+        default: bodySize
         }
         content
             .font(.system(size: size, weight: weight))
