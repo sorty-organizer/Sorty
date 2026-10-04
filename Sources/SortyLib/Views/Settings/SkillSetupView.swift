@@ -35,6 +35,12 @@ struct SkillOnboardingView: View {
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
         }
+        .overlay(alignment: .topLeading) {
+            OnboardingScreenEdgeGlowPresenter(isVisible: true)
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
         .accessibilityIdentifier("SkillOnboardingView")
         .task {
             await playIntroSound()
