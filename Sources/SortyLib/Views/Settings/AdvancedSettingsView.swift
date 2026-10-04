@@ -38,7 +38,7 @@ struct AdvancedSettingsView: View {
     }
     
     var body: some View {
-        VStack(spacing: SortyDesignSystem.Spacing.sectionMedium) {
+        VStack(spacing: 16) {
             SettingsCard(title: "Menu Bar", icon: "menubar.rectangle", color: .blue) {
                 VStack(spacing: 12) {
                     SettingsToggle(

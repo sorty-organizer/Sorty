@@ -54,7 +54,7 @@ struct AutomationSettingsView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Loading automation settings")
             } else {
-                VStack(spacing: SortyDesignSystem.Spacing.sectionMedium) {
+                VStack(spacing: 16) {
                     globalModelSection
                         .animatedAppearance(delay: 0.05)
 

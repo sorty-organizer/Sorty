@@ -28,7 +28,7 @@ struct OrganizationStrategySettingsView: View {
     @State private var namingReferenceFolderURL: URL?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.sectionMedium) {
+        VStack(alignment: .leading, spacing: 16) {
             SettingsCard(title: "Scanning Options", icon: "doc.text.magnifyingglass", color: .blue) {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {

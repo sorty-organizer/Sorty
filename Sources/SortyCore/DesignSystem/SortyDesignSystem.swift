@@ -105,9 +105,6 @@ public enum SortyDesignSystem {
         public static let xxxl: CGFloat = 32
         public static let xxxxl: CGFloat = 40
 
-        public static let labelToList: CGFloat = 12
-        public static let listVerticalPadding: CGFloat = 12
-        public static let listHorizontalPadding: CGFloat = 20
         public static let buttonHorizontalPadding: CGFloat = 16
         public static let buttonTextPadding: CGFloat = 4
 
@@ -127,7 +124,6 @@ public enum SortyDesignSystem {
         public static let iconXXLarge: CGFloat = 32
         public static let iconHuge: CGFloat = 48
 
-        public static let navigationIcon: CGFloat = 24
         public static let listIcon: CGFloat = 28
 
         // Button sizes

@@ -137,11 +137,11 @@ struct SidebarButton: View {
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: SortyDesignSystem.Spacing.labelToList) {
+            HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: SortyDesignSystem.Sizing.navigationIcon))
+                    .font(.system(size: 14))
                     .foregroundStyle(isSelected ? color : .secondary)
-                    .frame(width: SortyDesignSystem.Sizing.navigationIcon)
+                    .frame(width: 20)
                     .accessibilityHidden(true)
                 
                 Text(LocalizedStringKey(title))
@@ -150,8 +150,8 @@ struct SidebarButton: View {
                 
                 Spacer()
             }
-            .padding(.horizontal, SortyDesignSystem.Spacing.md)
-            .padding(.vertical, SortyDesignSystem.Spacing.listVerticalPadding)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
             .background(isSelected ? color.opacity(0.1) : Color.clear)
             .contentShape(Rectangle())
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -207,7 +207,7 @@ struct SettingsCard<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: isExpanded == nil ? SortyDesignSystem.Spacing.labelToList : 0) {
+        VStack(alignment: .leading, spacing: isExpanded == nil ? 12 : 0) {
             if let isExpanded {
                 Button {
                     withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
@@ -238,7 +238,7 @@ struct SettingsCard<Content: View>: View {
                             )
                     }
                     .contentShape(Rectangle())
-                    .padding(.horizontal, SortyDesignSystem.Spacing.listHorizontalPadding)
+                    .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                 }
                 .buttonStyle(.plain)
@@ -257,16 +257,14 @@ struct SettingsCard<Content: View>: View {
             if isExpanded?.wrappedValue != false {
                 if isExpanded != nil {
                     Divider()
-                        .padding(.horizontal, SortyDesignSystem.Spacing.listHorizontalPadding)
+                        .padding(.horizontal, 16)
                 }
 
                 content
-                    .padding(.horizontal, isExpanded == nil ? 0 : SortyDesignSystem.Spacing.listHorizontalPadding)
-                    .padding(.vertical, isExpanded == nil ? 0 : SortyDesignSystem.Spacing.listVerticalPadding)
+                    .padding(isExpanded == nil ? 0 : 16)
             }
         }
-        .padding(.horizontal, isExpanded == nil ? SortyDesignSystem.Spacing.listHorizontalPadding : 0)
-        .padding(.vertical, isExpanded == nil ? SortyDesignSystem.Spacing.listVerticalPadding : 0)
+        .padding(isExpanded == nil ? 16 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
         // The card is a container. Its controls provide their own interaction
         // feedback, so the glass itself does not need continuous pointer state.

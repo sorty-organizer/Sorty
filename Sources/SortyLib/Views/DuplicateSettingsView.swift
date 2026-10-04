@@ -47,7 +47,7 @@ struct DuplicateSettingsView: View {
             Divider()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.sectionMedium) {
+                VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xl) {
                     SettingsCard(
                         title: "Scan Results",
                         icon: "magnifyingglass",

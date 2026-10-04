@@ -12,7 +12,7 @@ struct OrganizationRulesSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     
     var body: some View {
-        VStack(spacing: SortyDesignSystem.Spacing.sectionMedium) {
+        VStack(spacing: 16) {
             SettingsCard(title: "Content Rules", icon: "checklist", color: .orange) {
                 VStack(alignment: .leading, spacing: 12) {
                     SettingsToggle(

@@ -77,7 +77,7 @@ struct AIProviderSettingsView: View {
     }
 
     private var sections: some View {
-        VStack(spacing: SortyDesignSystem.Spacing.sectionMedium) {
+        VStack(spacing: 16) {
             providerSelectionSection
 
             // Provider-specific configuration

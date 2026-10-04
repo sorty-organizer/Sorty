@@ -24,7 +24,7 @@ struct HelpSettingsView: View {
     private var copiedIssueDetails: Bool { reportCopyFeedback.isCopied }
 
     var body: some View {
-        VStack(spacing: SortyDesignSystem.Spacing.sectionMedium) {
+        VStack(spacing: 20) {
             SettingsCard(title: "Support", icon: "questionmark.circle.fill", color: .teal) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 10) {

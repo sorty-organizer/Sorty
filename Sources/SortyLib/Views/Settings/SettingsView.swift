@@ -143,7 +143,7 @@ struct SettingsView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.sectionMedium) {
+                    VStack(alignment: .leading, spacing: 20) {
                         if isSearching {
                             searchResultsHeader(results: results)
                                 .animatedAppearance(delay: 0.03)
