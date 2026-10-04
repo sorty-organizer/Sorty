@@ -105,9 +105,6 @@ public enum SortyDesignSystem {
         public static let xxxl: CGFloat = 32
         public static let xxxxl: CGFloat = 40
 
-        public static let buttonHorizontalPadding: CGFloat = 16
-        public static let buttonTextPadding: CGFloat = 4
-
         // Section spacing
         public static let sectionSmall: CGFloat = 20
         public static let sectionMedium: CGFloat = 28
@@ -127,7 +124,7 @@ public enum SortyDesignSystem {
         // Button sizes
         public static let buttonHeightSmall: CGFloat = 24
         public static let buttonHeightMedium: CGFloat = 32
-        public static let buttonHeightLarge: CGFloat = 44
+        public static let buttonHeightLarge: CGFloat = 40
 
         // Card sizes
         public static let cardCornerRadius: CGFloat = 12

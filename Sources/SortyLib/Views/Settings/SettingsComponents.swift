@@ -142,7 +142,6 @@ struct SidebarButton: View {
                     .font(.system(size: 14))
                     .foregroundStyle(isSelected ? color : .secondary)
                     .frame(width: 20)
-                    .accessibilityHidden(true)
                 
                 Text(LocalizedStringKey(title))
                     .font(.subheadline)
@@ -161,7 +160,6 @@ struct SidebarButton: View {
 }
 
 struct SettingsCard<Content: View>: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @SortyHotReload private var hotReload
     let title: String
     let icon: String
@@ -210,7 +208,7 @@ struct SettingsCard<Content: View>: View {
         VStack(alignment: .leading, spacing: isExpanded == nil ? 12 : 0) {
             if let isExpanded {
                 Button {
-                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         isExpanded.wrappedValue.toggle()
                     }
                     HapticFeedbackManager.shared.tap()
@@ -220,7 +218,6 @@ struct SettingsCard<Content: View>: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(color)
                             .frame(width: 16)
-                            .accessibilityHidden(true)
 
                         Text(LocalizedStringKey(title))
                             .font(.subheadline.weight(.semibold))
@@ -277,7 +274,6 @@ struct SettingsCard<Content: View>: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(color)
                 .frame(width: 14)
-                .accessibilityHidden(true)
             Text(LocalizedStringKey(title))
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.secondary)
