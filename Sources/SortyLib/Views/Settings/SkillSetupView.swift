@@ -563,7 +563,7 @@ struct SkillSetupView: View {
         let visibleRows = query.isEmpty ? rows : rows.filter {
             $0.title.localizedStandardContains(query) || $0.detail.localizedStandardContains(query)
         }
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(alignment: .leading, spacing: 8) {
             Text(section.rawValue).font(.headline)
                 .contentTransition(reduceMotion ? .identity : .numericText())
                 .accessibilityAddTraits(.isHeader)
@@ -632,8 +632,8 @@ struct SkillSetupView: View {
                                 .textFieldStyle(.roundedBorder)
                                 .accessibilityIdentifier("skill-import.search.\(section.rawValue)")
                         }
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 6) {
+                        SkillImportChecklist {
+                            VStack(alignment: .leading, spacing: 6) {
                                 if visibleRows.isEmpty {
                                     Text("No matching settings")
                                         .font(.callout)
@@ -646,8 +646,8 @@ struct SkillSetupView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .id(section)
                     }
-                    .padding(.top, 10)
                 }
             }
         }
@@ -885,6 +885,44 @@ struct SkillSetupView: View {
             } catch {
                 errorMessage = error.localizedDescription
                 HapticFeedbackManager.shared.error()
+            }
+        }
+    }
+}
+
+/// Uses intrinsic layout for short lists and a bounded viewport for overflow.
+private struct SkillImportChecklist<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+    @State private var hasMoreBelow = false
+
+    var body: some View {
+        ViewThatFits(in: .vertical) {
+            content()
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 4) {
+                ScrollView {
+                    content()
+                }
+                .scrollIndicators(.visible)
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    geometry.containerSize.height > 0
+                        && geometry.contentSize.height + geometry.contentInsets.bottom
+                            > geometry.contentOffset.y + geometry.containerSize.height + 1
+                } action: { _, hasMore in
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        hasMoreBelow = hasMore
+                    }
+                }
+                // Keep the viewport height stable as the hint appears and disappears.
+                Label("Scroll for more", systemImage: "chevron.down")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .opacity(hasMoreBelow ? 1 : 0)
+                    .accessibilityHidden(!hasMoreBelow)
+                    .accessibilityIdentifier("skill-import.scroll-hint")
             }
         }
     }
