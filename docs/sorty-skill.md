@@ -15,6 +15,8 @@ Setup opens in its own resizable window with native Liquid Glass on macOS 26. It
 
 Choose at least one setting to import. Reimporting replaces the previous imported selection, so include every preference you want the agent to keep using.
 
+Changing headings and action labels use text transitions, selection counts use numeric transitions, and step icons use symbol replacement. Reduce Motion disables these animations.
+
 The preferences step uses category navigation and native checkboxes to select:
 
 - naming style, filename formatting, naming instructions, and rename rules;

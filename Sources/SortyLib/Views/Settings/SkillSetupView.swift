@@ -72,11 +72,13 @@ struct SkillSetupView: View {
                     .padding(.bottom, step == .preferences ? 16 : 28)
                 VStack(spacing: 8) {
                     Text(step.title)
+                        .contentTransition(reduceMotion ? .identity : .numericText())
                         .font(step == .preferences ? .title2.weight(.semibold) : .largeTitle.weight(.semibold))
                         .multilineTextAlignment(.center)
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityFocused($isHeadingFocused)
                     Text(step.explanation)
+                        .contentTransition(reduceMotion ? .identity : .numericText())
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -153,6 +155,7 @@ struct SkillSetupView: View {
             ForEach(Array(Step.allCases.prefix(4)), id: \.rawValue) { item in
                 HStack(spacing: 8) {
                     Image(systemName: step.rawValue > item.rawValue ? "checkmark.circle.fill" : "\(item.rawValue + 1).circle\(step == item ? ".fill" : "")")
+                        .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                         .accessibilityHidden(true)
                     Text(["About", "Location", "Preferences", "Review"][item.rawValue])
                         .font(.callout.weight(step == item ? .semibold : .regular))
@@ -251,6 +254,8 @@ struct SkillSetupView: View {
                         .accessibilityIdentifier("skill-import.section.\(section.rawValue)")
                     }
                     Button(allSelected ? "Deselect All" : "Select All", action: toggleAll)
+                        .contentTransition(reduceMotion ? .identity : .numericText())
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: allSelected)
                         .buttonStyle(.sortyBordered(size: .small))
                         .padding(.top, 12)
                         .accessibilityIdentifier("skill-import.select-all")
@@ -259,7 +264,6 @@ struct SkillSetupView: View {
                 ScrollView {
                     importSection(activeSection)
                 }
-                    .id(activeSection)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         case .review:
@@ -278,6 +282,8 @@ struct SkillSetupView: View {
                                 Label(section.rawValue, systemImage: section.icon).font(.headline)
                                 Spacer()
                                 Text(rows.isEmpty ? "None selected" : "\(rows.count) selected")
+                                    .contentTransition(reduceMotion ? .identity : .numericText(value: Double(rows.count)))
+                                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: rows.count)
                                     .font(.callout).foregroundStyle(.secondary)
                             }
                             if !rows.isEmpty {
@@ -371,8 +377,10 @@ struct SkillSetupView: View {
         let sectionSelected = !identifiers.isEmpty && identifiers.isSubset(of: selected)
         return VStack(alignment: .leading, spacing: 12) {
             Text(section.rawValue).font(.headline)
+                .contentTransition(reduceMotion ? .identity : .numericText())
                 .accessibilityAddTraits(.isHeader)
             Text(sectionExplanation(section))
+                .contentTransition(reduceMotion ? .identity : .numericText())
                 .font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if rows.isEmpty {
@@ -393,6 +401,8 @@ struct SkillSetupView: View {
                     HapticFeedbackManager.shared.selection()
                 }
                 .buttonStyle(.sortyBordered(size: .small))
+                .contentTransition(reduceMotion ? .identity : .numericText())
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: sectionSelected)
                 .accessibilityIdentifier("skill-import.select-all.\(section.rawValue)")
                 ForEach(rows) { option in
                     Toggle(isOn: Binding(
@@ -442,6 +452,8 @@ struct SkillSetupView: View {
                 ProgressView(isSaving ? "Importing…" : "Loading settings…").controlSize(.small)
             } else if step == .preferences {
                 Text(selected.isEmpty ? "Choose at least one setting" : "\(selectedOptions.count) selected")
+                    .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedOptions.count)))
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedOptions.count)
                     .font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
@@ -452,6 +464,8 @@ struct SkillSetupView: View {
                     .accessibilityIdentifier("skill-import.back")
             }
             Button(primaryTitle, action: advance)
+                .contentTransition(reduceMotion ? .identity : .numericText())
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: primaryTitle)
                 .buttonStyle(.sortyProminent())
                 .onHover { isGetStartedHovered = step == .welcome && $0 }
                 .keyboardShortcut(.defaultAction)
