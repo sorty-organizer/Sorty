@@ -38,21 +38,21 @@ struct SkillSetupView: View {
 
         var title: String {
             switch self {
-            case .welcome: "Your Sorty preferences. In your agent."
+            case .welcome: "Use Sorty in your agent"
             case .location: "Choose a skills folder"
-            case .preferences: "Choose what your agent should know"
-            case .review: "Ready to bring it together?"
+            case .preferences: "Choose what to share"
+            case .review: "Review and import"
             case .complete: "Your skill is ready"
             }
         }
 
         var explanation: String {
             switch self {
-            case .welcome: "The Sorty skill teaches your agent to organize and rename files using the preferences you've saved here."
-            case .location: "Choose Codex, Claude Code, OpenCode, or Pi. You can also choose a custom skills folder."
+            case .welcome: "The Sorty skill lets your agent organize files using your saved preferences."
+            case .location: "Pick where your agent loads skills, or choose a custom folder."
             case .preferences: "Choose settings to copy into the skill, or import nothing."
-            case .review: "Check the location and your selection. Importing copies these preferences into the skill and leaves your app settings unchanged."
-            case .complete: "Open a new chat in your agent and ask it to use Sorty. Tell it which folder to organize and what you want changed."
+            case .review: "Confirm the location and selection. Nothing installs until you import."
+            case .complete: "Start a new chat, tell it to use Sorty, and name the folder to organize."
             }
         }
     }
@@ -252,9 +252,9 @@ struct SkillSetupView: View {
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isGetStartedHovered)
                 .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 16) {
-                    explanation("Make it familiar", icon: "textformat", detail: "Bring over your naming style, exclusions, saved folders, and Learnings. You choose exactly what to share.")
-                    explanation("Work from a clear plan", icon: "list.bullet.rectangle", detail: "Ask for a preview, organize files, or review exact duplicates. The skill records its moves so it can restore them.")
-                    explanation("Keep control of each task", icon: "text.bubble", detail: "Tell your agent which folder to use, whether to rename, and how to organize it. Saved folders don't start background automation.")
+                    explanation("Your preferences", icon: "textformat", detail: "Naming style, exclusions, saved folders, and Learnings you select.")
+                    explanation("Preview first", icon: "list.bullet.rectangle", detail: "Ask for a preview before moving files. Every move can be restored.")
+                    explanation("You stay in control", icon: "text.bubble", detail: "Name the folder and rules each time. Saved folders never auto-organize.")
                 }
                 .frame(maxWidth: 620)
             }
@@ -286,7 +286,7 @@ struct SkillSetupView: View {
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
-                Text("Nothing is installed until you confirm on the review step.")
+                Text("Nothing installs until you confirm.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -328,13 +328,6 @@ struct SkillSetupView: View {
                             .buttonStyle(.sortyBordered(size: .small))
                             .padding(.top, 12)
                             .accessibilityIdentifier("skill-import.select-all")
-                        Button("Import nothing") {
-                            selected.removeAll()
-                            HapticFeedbackManager.shared.selection()
-                        }
-                        .buttonStyle(.sortyBordered(size: .small))
-                        .accessibilityHint("Clears all selected settings. Continue to review without importing app settings.")
-                        .accessibilityIdentifier("skill-import.import-nothing")
                     }
                     .frame(width: 190)
                     importSection(activeSection)
@@ -420,7 +413,7 @@ struct SkillSetupView: View {
                 }
                 .padding(20)
                 .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
-                Text("You can return here to import updated settings whenever your preferences change.")
+                Text("Return here to update the skill when preferences change, or tell your agent to update the Sorty skill with your new preferences.")
                     .font(.callout).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -678,10 +671,10 @@ struct SkillSetupView: View {
 
     private func sectionExplanation(_ section: SkillImportOption.Section) -> String {
         switch section {
-        case .preferences: "Use your saved naming style, formatting, and rename rules when your agent works on files."
-        case .exclusions: "Tell your agent which files to leave alone and which exceptions you've saved."
-        case .watchedFolders: "Share saved folder paths and their instructions. Importing these doesn't start automatic organization."
-        case .learnings: "Bring over learned rules, corrections, and examples. Selected Learnings are saved as readable files in the skill."
+        case .preferences: "Naming style, formatting, and rename rules."
+        case .exclusions: "Files to leave alone, plus your exceptions."
+        case .watchedFolders: "Saved folder paths and instructions. No automatic organizing."
+        case .learnings: "Learned rules and corrections, saved as readable files."
         }
     }
 
