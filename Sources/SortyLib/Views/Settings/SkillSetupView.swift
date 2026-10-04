@@ -165,7 +165,7 @@ struct SkillSetupView: View {
 
         var explanation: String {
             switch self {
-            case .rethink: "Since the last update, we've thought about how Sorty works."
+            case .rethink: "Since the last update, we've thought a lot about how Sorty works."
             case .about: "The same file organization tools, ready for a conversation with your agent."
             case .welcome: "The Sorty skill lets your agent organize files using your saved preferences."
             case .location: "Pick where your agent loads skills, or choose a custom folder."
