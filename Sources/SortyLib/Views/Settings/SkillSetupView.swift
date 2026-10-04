@@ -66,6 +66,7 @@ struct SkillOnboardingView: View {
 struct SkillSetupView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var settings: SettingsViewModel
     @EnvironmentObject private var exclusions: ExclusionRulesManager
     @EnvironmentObject private var watchedFolders: WatchedFoldersManager
