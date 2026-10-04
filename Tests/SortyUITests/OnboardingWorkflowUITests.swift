@@ -20,7 +20,11 @@ final class OnboardingWorkflowUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Sorty can be a skill"].waitForExistence(timeout: 5))
         let skillContinue = app.buttons["skill-import.continue"]
         XCTAssertTrue(skillContinue.waitForExistence(timeout: 5))
-        XCTAssertTrue(skillContinue.isEnabled)
+        let skillIsReady = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "enabled == true"),
+            object: skillContinue
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [skillIsReady], timeout: 5), .completed)
         skillContinue.click()
         XCTAssertTrue(app.staticTexts["Use Sorty in your agent"].waitForExistence(timeout: 3))
         skillContinue.click()
