@@ -5,6 +5,7 @@ struct SkillSetupView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var settings: SettingsViewModel
     @EnvironmentObject private var exclusions: ExclusionRulesManager
     @EnvironmentObject private var watchedFolders: WatchedFoldersManager
@@ -24,7 +25,7 @@ struct SkillSetupView: View {
     @State private var isConfirmingReplacement = false
     @State private var isGetStartedHovered = false
     @State private var hoveredAgentLocation: String?
-    @ScaledMetric(relativeTo: .largeTitle) private var agentIconSize: CGFloat = 44
+    @ScaledMetric(relativeTo: .largeTitle) private var agentIconSize: CGFloat = 32
     @AccessibilityFocusState private var isHeadingFocused: Bool
 
     private enum Step: Int, CaseIterable {
@@ -413,18 +414,18 @@ struct SkillSetupView: View {
         } label: {
             VStack(spacing: 8) {
                 agentLocationIcon(agent)
-                    .frame(width: 88, height: 88)
-                    .systemLiquidGlassBackground(cornerRadius: 24, interactive: true)
+                    .frame(width: 64, height: 64)
+                    .systemLiquidGlassBackground(cornerRadius: 18, interactive: true)
                     .overlay {
                         if isSelected {
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
                                 .strokeBorder(SortyDesignSystem.Colors.resolvedAccent, lineWidth: 2)
                         }
                     }
                     .overlay(alignment: .topTrailing) {
                         if isSelected {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.body)
+                                .font(.caption)
                                 .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                                 .padding(6)
                         }
@@ -451,14 +452,22 @@ struct SkillSetupView: View {
 
     @ViewBuilder
     private func agentLocationIcon(_ agent: SkillAgent?) -> some View {
-        switch agent {
-        case .codex: ProviderLogoView(provider: .openAI, size: agentIconSize)
-        case .claudeCode: ProviderLogoView(provider: .anthropic, size: agentIconSize)
-        case .openCode: ProviderLogoView(provider: .openCodeZen, size: agentIconSize)
-        case .pi:
-            Text("π")
-                .font(.system(size: agentIconSize, weight: .semibold, design: .rounded))
-        case nil:
+        if let agent {
+            let resource = switch agent {
+            case .codex: "SkillAgentCodex"
+            case .claudeCode: "SkillAgentClaudeCode"
+            case .openCode: colorScheme == .dark ? "SkillAgentOpenCodeDark" : "SkillAgentOpenCodeLight"
+            case .pi: "SkillAgentPi"
+            }
+            if let image = SortyResources.image(named: "AgentIcons/\(resource)", withExtension: "svg") {
+                Image(nsImage: image)
+                    .renderingMode(agent == .codex ? .template : .original)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: agentIconSize, height: agentIconSize)
+                    .foregroundStyle(.primary)
+            }
+        } else {
             Image(systemName: "folder")
                 .resizable()
                 .scaledToFit()

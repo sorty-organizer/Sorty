@@ -19,6 +19,16 @@ Changing headings and action labels use text transitions, selection counts use n
 
 ### Agent locations
 
+The agent row uses 64-point glass tiles and bundled SVG artwork, separate from
+the provider logos. Codex's terminal mark and Claude Code's pixel mascot come
+from [Lobe Icons](https://github.com/lobehub/lobe-icons/tree/master/packages/static-svg/icons).
+OpenCode's light and dark marks come from its
+[brand assets](https://github.com/anomalyco/opencode/tree/dev/packages/console/app/src/asset/brand).
+Pi's mark comes from its [press kit](https://pi.dev/press-kit).
+The SVGs and upstream license notices live in `Resources/Images/AgentIcons`.
+Codex follows the text color, OpenCode uses the matching appearance asset, and
+Claude Code and Pi keep their original colors. Other keeps the native folder icon.
+
 | Agent | Default skills folder | Environment override |
 | --- | --- | --- |
 | Codex | `~/.codex/skills` | `CODEX_HOME`, then `skills` |
