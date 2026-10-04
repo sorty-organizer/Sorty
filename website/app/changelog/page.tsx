@@ -46,7 +46,7 @@ export const metadata: Metadata = {
 const RELEASES = [
   {
     version: 'Sorty 1.3.0',
-    status: 'Unreleased',
+    status: 'Released',
     date: 'October 5, 2026',
     title: 'Meet the Sorty skill',
     summary:
