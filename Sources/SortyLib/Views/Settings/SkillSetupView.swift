@@ -126,6 +126,7 @@ struct SkillSetupView: View {
     @State private var errorMessage: String?
     @State private var isConfirmingReplacement = false
     @State private var isGetStartedHovered = false
+    @State private var isPrimaryActionHovered = false
     @State private var hoveredAgentLocation: String?
     @State private var customFolderIcon: NSImage?
     @State private var skillIcon: NSImage?
@@ -354,6 +355,7 @@ struct SkillSetupView: View {
         .onChange(of: step) { _, _ in
             if !isIntroduction { isHeadingFocused = true }
             isGetStartedHovered = false
+            isPrimaryActionHovered = false
         }
         .onChange(of: errorMessage) { _, message in
             if let message { AccessibilityNotification.Announcement(message).post() }
@@ -1024,6 +1026,8 @@ struct SkillSetupView: View {
             VStack(spacing: 12) {
                 Button("Delete App and Continue with Skill", action: onUseSkill)
                     .buttonStyle(.sortyPrimary(size: .large))
+                    .onboardingBeamBorder(active: isPrimaryActionHovered && !reduceMotion)
+                    .onHover { isPrimaryActionHovered = $0 }
                     .keyboardShortcut(.defaultAction)
                     .accessibilityHint("Opens a confirmation before uninstalling Sorty. Your installed skill stays in place.")
                     .accessibilityIdentifier("skill-onboarding.use-skill")
@@ -1038,6 +1042,12 @@ struct SkillSetupView: View {
         } else {
             setupNavigation
         }
+    }
+
+    private var canAdvanceFromNavigation: Bool {
+        !isWaitingForOptions && !isSaving
+            && (![Step.location, .preferences, .review].contains(step) || canUseLocation)
+            && (step != .review || hasReachedReviewBottom)
     }
 
     private var setupNavigation: some View {
@@ -1061,14 +1071,17 @@ struct SkillSetupView: View {
                     .contentTransition(reduceMotion ? .identity : .numericText())
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: primaryTitle)
                     .buttonStyle(.sortyPrimary(size: .large))
-                    .modifier(introductionReveal(at: step == .rethink ? 3 : 5))
-                    .onHover { isGetStartedHovered = step == .welcome && $0 }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(
-                        isWaitingForOptions || isSaving
-                            || ([Step.location, .preferences, .review].contains(step) && !canUseLocation)
-                            || (step == .review && !hasReachedReviewBottom)
+                    .onboardingBeamBorder(
+                        active: !reduceMotion && canAdvanceFromNavigation
+                            && (step == .welcome || isPrimaryActionHovered)
                     )
+                    .modifier(introductionReveal(at: step == .rethink ? 3 : 5))
+                    .onHover {
+                        isPrimaryActionHovered = $0
+                        isGetStartedHovered = step == .welcome && $0
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canAdvanceFromNavigation)
                     .accessibilityIdentifier(step == .review ? "skill-import.confirm" : "skill-import.continue")
             }
             .overlay(alignment: .center) {
