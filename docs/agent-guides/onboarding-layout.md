@@ -43,7 +43,7 @@ using a separate wall-clock schedule. The 9.583-second, 48 kHz stereo track was
 analyzed using a 2048-sample Hann STFT with a 240-sample hop. Positive changes
 in log spectral magnitude identify note attacks; the spectrum separates chord
 changes from sustained volume peaks. The choreography starts effects on these
-measured attacks, with short ease-out fades so the visual onset follows the sound:
+measured attacks. Lead each effect so its visible midpoint follows the sound:
 
 | Playback time | Reveal | Audio evidence |
 | --- | --- | --- |
@@ -54,12 +54,21 @@ measured attacks, with short ease-out fades so the visual onset follows the soun
 | 4.415 s | Slide and dim app icon | Next midrange accent |
 | 5.710 s | Transformation arrow | Strongest high-frequency attack |
 | 6.135 s | Skill icon | Final prominent swell and midrange accent |
-| 6.925 s | Meet the Skill action | Closing phrase before the decay |
+| 6.925 s | Emphasize and enable Meet the Skill | Closing phrase before the decay |
 
 The mapping of those attacks to UI elements is a choreography choice. Use the
-actual note onsets, not the later RMS maxima, when adjusting it. Playback-position
-polling belongs only to the finite intro task; never keep an idle timer running
-after the reveal. Continue with App remains available throughout.
+actual note onsets, not the later RMS maxima, when adjusting it. AppKit-hosted
+SwiftUI render probes measured these approximate visible-midpoint delays,
+including frame scheduling: 220 ms ease-out fade 115 ms, 320 ms underline 158 ms,
+450 ms ease-in-out slide 258 ms, 160 ms arrow fade 95 ms, and 200 ms button
+emphasis 137 ms. Subtract each effect's lead from its audio landmark. Re-measure
+if an animation's curve or duration changes; these are renderer measurements,
+not a claim of sample-accurate hardware audiovisual synchronization.
+
+Playback-position polling belongs only to the finite intro task; never keep an
+idle timer running after the reveal. Continue with App remains available
+throughout. Meet the Skill remains visible while disabled, then becomes the
+primary action on its closing cue.
 
 Keep the elements mounted and reveal them with opacity so earlier text stays
 visible and the layout stays still. Meet the Skill opens a separate feature page

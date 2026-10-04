@@ -419,7 +419,8 @@ struct SkillSetupView: View {
         introAudioPlayer = player
     }
 
-    /// Follow the actual playback position and begin each reveal on a note attack.
+    /// Follow playback position, leading each effect so its visible midpoint
+    /// coincides with the selected note attack.
     /// Returning to the introduction replays the same sequence.
     private func revealIntroduction() async {
         guard isIntroduction else { return }
@@ -451,11 +452,20 @@ struct SkillSetupView: View {
             return
         }
 
-        // Spectral-flux attacks and chord changes in SkillOnboardingSound.m4a:
-        // sentence, headline, underline, app, slide, arrow, skill, closing action.
-        // These cue the start of each effect, rather than a sustained RMS peak.
+        // Match each effect's visible midpoint to its measured audio attack.
+        // AppKit render probes include the next-frame delay as well as easing;
+        // the slide needs more lead than the fades and underline.
         let cueOffsets: [Double] = step == .rethink
-            ? [0.120, 0.985, 2.690, 3.570, 4.415, 5.710, 6.135, 6.925]
+            ? [
+                0.120 - 0.115, // Sentence and rail: 220 ms ease-out fade.
+                0.985 - 0.115, // Headline: 220 ms ease-out fade.
+                2.690 - 0.158, // Underline: 320 ms ease-out stroke.
+                3.570 - 0.115, // App icon: 220 ms ease-out fade.
+                4.415 - 0.258, // Slide: 450 ms ease-in-out motion.
+                5.710 - 0.095, // Arrow: 160 ms ease-out fade.
+                6.135 - 0.115, // Skill icon: 220 ms ease-out fade.
+                6.925 - 0.137, // Button emphasis: 200 ms ease-in-out.
+            ]
             : [0, 0.70, 1.40, 2.00, 2.60]
         do {
             for (index, offset) in cueOffsets.enumerated() {
