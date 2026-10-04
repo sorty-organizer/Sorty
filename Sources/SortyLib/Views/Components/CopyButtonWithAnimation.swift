@@ -17,16 +17,18 @@ public struct CopyButtonWithAnimation: View {
     var copyIcon: String = "doc.on.doc"
     var iconSize: CGFloat = 13
     var labelFont: Font = .caption
+    var tint: Color = .secondary
     
     @State private var showCheckmark = false
     @State private var resetTask: Task<Void, Never>?
     
-    public init(content: String, label: String? = nil, copyIcon: String = "doc.on.doc", iconSize: CGFloat = 13, labelFont: Font = .caption) {
+    public init(content: String, label: String? = nil, copyIcon: String = "doc.on.doc", iconSize: CGFloat = 13, labelFont: Font = .caption, tint: Color = .secondary) {
         self.content = content
         self.label = label
         self.copyIcon = copyIcon
         self.iconSize = iconSize
         self.labelFont = labelFont
+        self.tint = tint
     }
     
     public var body: some View {
@@ -45,13 +47,13 @@ public struct CopyButtonWithAnimation: View {
                         .opacity(showCheckmark ? 1 : 0)
                 }
                 .frame(width: iconSize, height: iconSize)
-                .foregroundStyle(showCheckmark ? Color.green : Color.secondary)
+                .foregroundStyle(showCheckmark ? Color.green : tint)
                 .accessibilityHidden(true)
                 
                 if let label {
                     Text(label)
                         .font(labelFont)
-                        .foregroundStyle(showCheckmark ? .green : .secondary)
+                        .foregroundStyle(showCheckmark ? .green : tint)
                 }
             }
         }

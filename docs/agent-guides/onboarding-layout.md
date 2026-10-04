@@ -8,7 +8,7 @@ Hide the separate screen backdrop blur panel during import so it cannot obscure
 the progress view. The completion tick uses the shared one-shot milestone sliver
 at its fixed 72-point size, with motion disabled under Reduce Motion.
 Use `CopyButtonWithAnimation` inside a Sorty bordered button for the example
-request. Copy and checkmark symbols share a fixed square and crossfade in place,
+request, using primary text and icon color. Copy and checkmark symbols share a fixed square and crossfade in place,
 keeping the label and row stationary. History uses the same feedback with a
 plain button style.
 

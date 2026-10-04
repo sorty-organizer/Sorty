@@ -371,7 +371,7 @@ struct SkillSetupView: View {
                         .font(.body)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
-                    CopyButtonWithAnimation(content: exampleRequest, label: "Copy Request", labelFont: .body)
+                    CopyButtonWithAnimation(content: exampleRequest, label: "Copy Request", labelFont: .body, tint: .primary)
                     .buttonStyle(.sortyBordered())
                     .accessibilityIdentifier("skill-import.copy-request")
                 }
