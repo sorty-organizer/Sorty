@@ -126,7 +126,8 @@ struct SkillSetupView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isSaving)
         .background {
             OnboardingScreenBackdropBlurPresenter(
-                isVisible: !reduceTransparency && controlActiveState != .inactive
+                isVisible: !reduceTransparency && controlActiveState != .inactive,
+                opacity: isSaving ? 0.5 : 0.86
             )
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
@@ -408,7 +409,11 @@ struct SkillSetupView: View {
     private var locationStatus: some View {
         switch installer.state {
         case .checking, .installing, .replacing, .removing:
-            ProgressView("Checking location…").controlSize(.small)
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Checking location…")
+            }
+            .accessibilityElement(children: .combine)
         case .installed:
             Label("Skill already installed", systemImage: "checkmark.circle")
         case .conflict:
@@ -502,7 +507,11 @@ struct SkillSetupView: View {
                     .accessibilityIdentifier("skill-import.cancel")
             }
             if isLoading || isSaving {
-                ProgressView(isSaving ? "Importing…" : "Loading settings…").controlSize(.small)
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(isSaving ? "Importing…" : "Loading settings…")
+                }
+                .accessibilityElement(children: .combine)
             } else if step == .preferences {
                 Text(selected.isEmpty ? "Choose at least one setting" : "\(selectedOptions.count) selected")
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedOptions.count)))

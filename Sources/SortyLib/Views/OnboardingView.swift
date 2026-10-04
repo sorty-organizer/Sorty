@@ -2069,6 +2069,7 @@ private struct OnboardingScreenEdgeGlow: View {
 struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
     @SortyHotReload private var hotReload
     let isVisible: Bool
+    var opacity: CGFloat = 0.86
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -2079,12 +2080,12 @@ struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         view.onWindowChanged = { window in
             context.coordinator.attach(to: window)
         }
-        context.coordinator.setVisible(isVisible)
+        context.coordinator.setVisible(isVisible, opacity: opacity)
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.setVisible(isVisible)
+        context.coordinator.setVisible(isVisible, opacity: opacity)
         context.coordinator.attach(to: nsView.window)
     }
 
@@ -2100,10 +2101,12 @@ struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         private var pendingDismissal: DispatchWorkItem?
         private var isHostClosing = false
         private var isVisible = false
+        private var opacity: CGFloat = 0.86
 
-        func setVisible(_ isVisible: Bool) {
-            guard self.isVisible != isVisible else { return }
+        func setVisible(_ isVisible: Bool, opacity: CGFloat) {
+            guard self.isVisible != isVisible || self.opacity != opacity else { return }
             self.isVisible = isVisible
+            self.opacity = opacity
             updatePanelFrame()
         }
 
@@ -2303,13 +2306,13 @@ struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         }
 
         private func fadeInPanelIfNeeded() {
-            guard let backdropPanel, backdropPanel.alphaValue == 0 else { return }
+            guard let backdropPanel, abs(backdropPanel.alphaValue - opacity) > 0.001 else { return }
             let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.9
 
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = duration
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                backdropPanel.animator().alphaValue = 0.86
+                backdropPanel.animator().alphaValue = opacity
             }
         }
 
