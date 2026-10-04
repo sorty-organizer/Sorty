@@ -335,8 +335,8 @@ struct SkillSetupView: View {
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
             }
         case .review:
-            VStack(alignment: .leading, spacing: 16) {
-                ScrollView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 16) {
                         Label("Install location", systemImage: "folder").font(.headline)
                         PrivacySensitivePathText(path: installer.destinationURL.path)
@@ -364,17 +364,17 @@ struct SkillSetupView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(18)
+                    .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
+                    Text(installer.state == .conflict
+                         ? "A different Sorty skill is already here. You'll be asked to confirm its replacement."
+                         : "This import replaces the skill's saved preferences. Sorty keeps a private backup of the previous import.")
+                        .font(.callout).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Selected Learnings become readable files your agent can use. Credentials, app permissions, and session history stay in Sorty.")
+                        .font(.callout).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(18)
-                .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
-                Text(installer.state == .conflict
-                     ? "A different Sorty skill is already here. You'll be asked to confirm its replacement."
-                     : "This import replaces the skill's saved preferences. Sorty keeps a private backup of the previous import.")
-                    .font(.callout).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("Selected Learnings become readable files your agent can use. Credentials, app permissions, and session history stay in Sorty.")
-                    .font(.callout).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: 650)
         case .complete:

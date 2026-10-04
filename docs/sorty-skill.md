@@ -60,6 +60,8 @@ Pi's user directory and override are defined in its
 OpenCode's configuration-root precedence is defined in its
 [global paths source](https://github.com/anomalyco/opencode/blob/dev/packages/core/src/global.ts).
 
+The review card fits the install location and selected settings. The review content scrolls when it exceeds the available space.
+
 During import, a centered Sorty icon, status message, and indeterminate progress bar replace the review controls. Reduce Motion shows a static status instead. Completion appears only after the import succeeds; failures return to review with an error.
 
 The preferences step uses category navigation and native checkboxes to select:
