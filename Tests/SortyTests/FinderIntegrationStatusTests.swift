@@ -192,19 +192,6 @@ final class FinderIntegrationStatusTests: XCTestCase {
         XCTAssertTrue(diagnostics.needsRepair)
     }
 
-    func testFinderSyncDiagnosticsIgnoresMissingHostAppEntitlements() {
-        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
-            entries: [.init(path: preferredExtensionPath, isEnabled: true)],
-            preferredPath: preferredExtensionPath,
-            heartbeat: nil,
-            appBundleMissingEntitlements: ["com.apple.security.app-sandbox"]
-        )
-
-        XCTAssertEqual(diagnostics.kind, .registered)
-        XCTAssertFalse(diagnostics.needsCodeSignatureRepair)
-        XCTAssertFalse(diagnostics.needsRepair)
-    }
-
     func testAutoRepairSkipsWhenCurrentBuildIsOnlyRegistered() {
         let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
             entries: [.init(path: preferredExtensionPath, isEnabled: true)],
@@ -293,42 +280,6 @@ final class FinderIntegrationStatusTests: XCTestCase {
         )
 
         XCTAssertTrue(issues.isEmpty)
-    }
-
-    // MARK: - parseEntitlementsPlist
-
-    func testParseEntitlementsPlistWithValidXML() {
-        let xml = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-            <key>com.apple.security.app-sandbox</key>
-            <true/>
-            <key>com.apple.security.application-groups</key>
-            <array>
-                <string>group.com.sorty.app</string>
-            </array>
-        </dict>
-        </plist>
-        """
-
-        let result = ExtensionCommunication.parseEntitlementsPlist(from: xml)
-
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?["com.apple.security.app-sandbox"] as? Bool, true)
-        let groups = result?["com.apple.security.application-groups"] as? [String]
-        XCTAssertEqual(groups, ["group.com.sorty.app"])
-    }
-
-    func testParseEntitlementsPlistWithEmptyStringReturnsNil() {
-        let result = ExtensionCommunication.parseEntitlementsPlist(from: "")
-        XCTAssertNil(result)
-    }
-
-    func testParseEntitlementsPlistWithInvalidXMLReturnsNil() {
-        let result = ExtensionCommunication.parseEntitlementsPlist(from: "not xml at all")
-        XCTAssertNil(result)
     }
 
     // MARK: - finderSyncDiagnostics edge cases
