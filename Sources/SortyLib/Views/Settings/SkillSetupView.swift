@@ -957,20 +957,6 @@ struct SkillSetupView: View {
 
     private var setupNavigation: some View {
         VStack(spacing: 12) {
-            if isLoading || isSaving {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(isSaving ? "Importing…" : "Loading settings…")
-                }
-                .accessibilityElement(children: .combine)
-            }
-            if step == .review && !hasReachedReviewBottom {
-                Text("Scroll to the bottom to enable import")
-                    .font(supportingFont)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("skill-import.scroll-hint")
-            }
             HStack(spacing: 16) {
                 if step != .complete {
                     Button(isOnboarding ? "Continue with App" : "Cancel", action: onClose)
@@ -1001,7 +987,23 @@ struct SkillSetupView: View {
                     .accessibilityIdentifier(step == .review ? "skill-import.confirm" : "skill-import.continue")
             }
             .overlay(alignment: .center) {
-                if step == .preferences && !isLoading && !isSaving && !selected.isEmpty {
+                if isLoading || isSaving {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(isSaving ? "Importing…" : "Loading settings…")
+                    }
+                    .accessibilityElement(children: .combine)
+                    .allowsHitTesting(false)
+                } else if step == .review && !hasReachedReviewBottom {
+                    Text("Scroll to the bottom to enable import")
+                        .font(supportingFont)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 220)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("skill-import.scroll-hint")
+                        .allowsHitTesting(false)
+                } else if step == .preferences && !selected.isEmpty {
                     Text("\(selectedOptions.count) selected")
                         .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedOptions.count)))
                         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedOptions.count)
