@@ -107,6 +107,7 @@ struct SkillSetupView: View {
     let onUseSkill: () -> Void
 
     @State private var introductionStage = 0
+    @State private var hasRevealedSkillUnderline = false
     @State private var step: Step = .welcome
     @State private var activeSection: SkillImportOption.Section = .preferences
     @State private var expandedSections: Set<SkillImportOption.Section> = []
@@ -300,7 +301,7 @@ struct SkillSetupView: View {
             if isOnboarding {
                 OnboardingScreenEdgeGlowPresenter(
                     isVisible: true,
-                    strength: step == .rethink && introductionStage >= 2 ? 0.68 : 0.55
+                    strength: hasRevealedSkillUnderline ? 0.68 : 0.55
                 )
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
@@ -316,6 +317,11 @@ struct SkillSetupView: View {
         }
         .task(id: [step.rawValue, reduceMotion ? 1 : 0]) {
             await revealIntroduction()
+        }
+        .onChange(of: introductionStage) { _, stage in
+            if step == .rethink && stage >= 2 {
+                hasRevealedSkillUnderline = true
+            }
         }
         .onChange(of: step) { _, _ in
             if !isIntroduction { isHeadingFocused = true }
