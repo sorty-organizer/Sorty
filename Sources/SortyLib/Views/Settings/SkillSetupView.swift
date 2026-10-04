@@ -89,7 +89,7 @@ struct SkillSetupView: View {
                 .padding(.bottom, step == .preferences ? 16 : 24)
 
                 Group {
-                    if step == .preferences {
+                    if step == .preferences || step == .review {
                         stepContent
                     } else {
                         ScrollView { stepContent }
@@ -267,41 +267,46 @@ struct SkillSetupView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         case .review:
-            VStack(alignment: .leading, spacing: 22) {
-                VStack(alignment: .leading, spacing: 16) {
-                    Label("Install location", systemImage: "folder").font(.headline)
-                    Text(installer.destinationURL.path)
-                        .font(.callout.monospaced())
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Divider()
-                    ForEach(SkillImportOption.Section.allCases, id: \.self) { section in
-                        let rows = selectedOptions.filter { $0.section == section }
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Label(section.rawValue, systemImage: section.icon).font(.headline)
-                                Spacer()
-                                Text(rows.isEmpty ? "None selected" : "\(rows.count) selected")
-                                    .contentTransition(reduceMotion ? .identity : .numericText(value: Double(rows.count)))
-                                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: rows.count)
-                                    .font(.callout).foregroundStyle(.secondary)
-                            }
-                            if !rows.isEmpty {
-                                Text(rows.map(\.title).joined(separator: ", "))
-                                    .font(.callout).foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 16) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Label("Install location", systemImage: "folder").font(.headline)
+                        Text(installer.destinationURL.path)
+                            .font(.callout.monospaced())
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Divider()
+                        ForEach(SkillImportOption.Section.allCases, id: \.self) { section in
+                            let rows = selectedOptions.filter { $0.section == section }
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Label(section.rawValue, systemImage: section.icon).font(.headline)
+                                    Spacer()
+                                    Text(rows.isEmpty ? "None selected" : "\(rows.count) selected")
+                                        .contentTransition(reduceMotion ? .identity : .numericText(value: Double(rows.count)))
+                                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: rows.count)
+                                        .font(.callout).foregroundStyle(.secondary)
+                                }
+                                if !rows.isEmpty {
+                                    Text(rows.map(\.title).joined(separator: ", "))
+                                        .font(.callout).foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
                             }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(24)
+                .padding(18)
                 .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
                 Text(installer.state == .conflict
                      ? "A different Sorty skill is already here. You'll be asked to confirm its replacement."
                      : "This import replaces the skill's saved preferences. Sorty keeps a private backup of the previous import.")
                     .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("Selected Learnings become readable files your agent can use. Credentials, app permissions, and session history stay in Sorty.")
                     .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: 650)
         case .complete:
