@@ -72,8 +72,8 @@ struct SkillSetupView: View {
             } else {
                 VStack(spacing: 0) {
                     progressRail
-                        .padding(.top, 48)
-                        .padding(.bottom, step == .preferences ? 16 : 28)
+                        .padding(.top, step == .complete ? 36 : 48)
+                        .padding(.bottom, step == .preferences || step == .complete ? 16 : 28)
                     VStack(spacing: 8) {
                         Text(step.title)
                             .contentTransition(reduceMotion ? .identity : .numericText())
@@ -90,10 +90,10 @@ struct SkillSetupView: View {
                             .frame(maxWidth: 590)
                     }
                     .padding(.horizontal, 40)
-                    .padding(.bottom, step == .preferences ? 16 : 24)
+                    .padding(.bottom, step == .preferences || step == .complete ? 16 : 24)
 
                     Group {
-                        if step == .preferences || step == .review {
+                        if step == .preferences || step == .review || step == .complete {
                             stepContent
                         } else {
                             ScrollView { stepContent }
@@ -353,15 +353,15 @@ struct SkillSetupView: View {
             }
             .frame(maxWidth: 650)
         case .complete:
-            VStack(spacing: 28) {
+            VStack(spacing: 16) {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.largeTitle)
                     .foregroundStyle(.green)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text("Try a first request").font(.headline)
                     Text(exampleRequest)
-                        .font(.title3)
+                        .font(.body)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                     Button("Copy Request") {
@@ -373,14 +373,15 @@ struct SkillSetupView: View {
                     .buttonStyle(.sortyBordered())
                     .accessibilityIdentifier("skill-import.copy-request")
                 }
-                .padding(28)
+                .padding(20)
                 .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
                 Text("You can return here to import updated settings whenever your preferences change.")
                     .font(.callout).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: 600)
-            .padding(.vertical, 24)
+            .padding(.vertical, 8)
         }
     }
 
