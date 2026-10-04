@@ -11,7 +11,6 @@ struct SkillOnboardingView: View {
     @StateObject private var installer = CodexSkillInstaller()
     @State private var isCheckingSkill = false
     @State private var errorMessage: String?
-    @State private var audioPlayer: AVAudioPlayer?
 
     var body: some View {
         SkillSetupView(
@@ -39,13 +38,6 @@ struct SkillOnboardingView: View {
                 .accessibilityHidden(true)
         }
         .accessibilityIdentifier("SkillOnboardingView")
-        .task {
-            await playIntroSound()
-        }
-        .onDisappear {
-            audioPlayer?.stop()
-            audioPlayer = nil
-        }
         .alert("Your Skill Needs Attention", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -66,25 +58,6 @@ struct SkillOnboardingView: View {
             }
             appState.requestUninstallConfirmation(preservingSkillAt: installer.destinationURL)
         }
-    }
-
-    /// Loads the bundled soundtrack after mounting and plays it across the skill steps.
-    private func playIntroSound() async {
-        guard audioPlayer == nil,
-              let soundURL = Bundle.main.url(forResource: "SkillOnboardingSound", withExtension: "m4a")
-                ?? SortyResources.urlForCopiedResource(named: "SkillOnboardingSound.m4a")
-        else { return }
-
-        let data = await Task.detached(priority: .utility) {
-            try? Data(contentsOf: soundURL, options: .mappedIfSafe)
-        }.value
-        guard !Task.isCancelled, audioPlayer == nil, let data,
-              let player = try? AVAudioPlayer(data: data) else { return }
-        player.numberOfLoops = 0
-        player.volume = 0.6
-        player.prepareToPlay()
-        audioPlayer = player
-        player.play()
     }
 
     private func useSkill() {
@@ -109,6 +82,7 @@ struct SkillSetupView: View {
     let isOnboarding: Bool
     let onUseSkill: () -> Void
 
+    @State private var introAudioPlayer: AVAudioPlayer?
     @State private var introductionStage = 0
     @State private var hasRevealedSkillUnderline = false
     @State private var step: Step = .welcome
@@ -352,7 +326,11 @@ struct SkillSetupView: View {
                 hasRevealedSkillUnderline = true
             }
         }
-        .onChange(of: step) { _, _ in
+        .onDisappear {
+            introAudioPlayer?.stop()
+        }
+        .onChange(of: step) { previousStep, _ in
+            if previousStep == .rethink { introAudioPlayer?.stop() }
             if !isIntroduction { isHeadingFocused = true }
             isGetStartedHovered = false
             isPrimaryActionHovered = false
@@ -397,7 +375,7 @@ struct SkillSetupView: View {
                         .trim(from: 0, to: introductionStage >= 2 ? 1 : 0)
                         .stroke(.tint, style: StrokeStyle(lineWidth: titleSize * 0.09, lineCap: .round))
                         .animation(
-                            reduceMotion ? nil : .easeOut(duration: 0.55).delay(0.25),
+                            reduceMotion ? nil : .easeOut(duration: 0.55),
                             value: introductionStage >= 2
                         )
                     }
@@ -417,30 +395,69 @@ struct SkillSetupView: View {
         )
     }
 
-    /// Reveal in place so each line stays visible and the layout never shifts.
+    /// Prepare the skill soundtrack in the same task that owns its visual cues.
+    private func prepareIntroSound() async {
+        guard introAudioPlayer == nil,
+              let soundURL = Bundle.main.url(forResource: "SkillOnboardingSound", withExtension: "m4a")
+                ?? SortyResources.urlForCopiedResource(named: "SkillOnboardingSound.m4a")
+        else { return }
+
+        let data = await Task.detached(priority: .utility) {
+            try? Data(contentsOf: soundURL, options: .mappedIfSafe)
+        }.value
+        guard !Task.isCancelled, let data,
+              let player = try? AVAudioPlayer(data: data) else { return }
+        player.numberOfLoops = 0
+        player.volume = 0.6
+        player.prepareToPlay()
+        introAudioPlayer = player
+    }
+
+    /// Reveal in place on the soundtrack's accents, without accumulating delay
+    /// between stages. Returning to the introduction replays the same sequence.
     private func revealIntroduction() async {
         guard isIntroduction else { return }
+        if !reduceMotion {
+            introductionStage = 0
+            if step == .rethink { hasRevealedSkillUnderline = false }
+        }
         if step == .rethink, skillIcon == nil {
             let image = await SortyResources.imageAsync(named: "SortySkillIcon")
             guard !Task.isCancelled else { return }
             skillIcon = image
+        }
+        if isOnboarding && step == .rethink {
+            await prepareIntroSound()
+            guard !Task.isCancelled else { return }
+        }
+
+        let clock = ContinuousClock()
+        var revealStart = clock.now
+        if isOnboarding && step == .rethink, let player = introAudioPlayer {
+            player.stop()
+            player.currentTime = 0
+            // Schedule both against the same start after the assets are ready.
+            let leadIn = 0.1
+            revealStart = clock.now.advanced(by: .seconds(leadIn))
+            player.play(atTime: player.deviceCurrentTime + leadIn)
         }
         if reduceMotion {
             introductionStage = 5
             isHeadingFocused = true
             return
         }
+
+        // Heading, app icon, slide, then skill icon on the final strong accent.
+        let cueOffsets: [Double] = step == .rethink
+            ? [0, 2.70, 3.58, 4.42, 6.14]
+            : [0, 0.70, 1.40, 2.00, 2.60]
         do {
-            introductionStage = 1
-            try await Task.sleep(for: .seconds(step == .rethink ? 2 : 0.7))
-            introductionStage = 2
-            isHeadingFocused = true
-            try await Task.sleep(for: .seconds(step == .rethink ? 1.5 : 0.7))
-            introductionStage = 3
-            try await Task.sleep(for: .seconds(0.6))
-            introductionStage = 4
-            try await Task.sleep(for: .seconds(0.6))
-            introductionStage = 5
+            for (index, offset) in cueOffsets.enumerated() {
+                try await clock.sleep(until: revealStart.advanced(by: .seconds(offset)))
+                try Task.checkCancellation()
+                introductionStage = index + 1
+                if introductionStage == 2 { isHeadingFocused = true }
+            }
         } catch {
             // SwiftUI cancels the sequence when the user leaves this page.
         }
@@ -470,7 +487,7 @@ struct SkillSetupView: View {
                     .frame(width: 160, height: 160)
                     .offset(x: 120)
                     .opacity(introductionStage >= 5 ? 1 : 0)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.35).delay(0.15), value: introductionStage >= 5)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: introductionStage >= 5)
             }
         }
         .frame(width: 400, height: 180)
@@ -1046,6 +1063,7 @@ struct SkillSetupView: View {
 
     private var canAdvanceFromNavigation: Bool {
         !isWaitingForOptions && !isSaving
+            && (!isIntroduction || introductionStage >= 5)
             && (![Step.location, .preferences, .review].contains(step) || canUseLocation)
             && (step != .review || hasReachedReviewBottom)
     }
@@ -1075,7 +1093,7 @@ struct SkillSetupView: View {
                         active: !reduceMotion && canAdvanceFromNavigation
                             && (step == .welcome || isPrimaryActionHovered)
                     )
-                    .modifier(introductionReveal(at: step == .rethink ? 3 : 5))
+                    .modifier(introductionReveal(at: 5))
                     .onHover {
                         isPrimaryActionHovered = $0
                         isGetStartedHovered = step == .welcome && $0
