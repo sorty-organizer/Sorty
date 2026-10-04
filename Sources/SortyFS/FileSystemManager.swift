@@ -314,12 +314,14 @@ public actor FileSystemManager {
                 throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
             }
         } else {
-            // Single-file fast path: staged size plus an unchanged source size
-            // prove the copy without enumerating anything. Directory metadata
-            // sizes vary by volume, so directories keep the snapshot totals.
-            let stagedSize = (try? fileManager.attributesOfItem(atPath: stagingURL.path)[.size] as? UInt64) ?? UInt64.max
-            let currentSourceSize = (try? fileManager.attributesOfItem(atPath: source.path)[.size] as? UInt64) ?? UInt64.max
-            guard stagedSize == fileSize, currentSourceSize == fileSize else {
+            // Re-read attributes directly: cached URL values could miss an
+            // edit or replacement made while the source was being copied.
+            let stagedSize = try fileManager.attributesOfItem(atPath: stagingURL.path)[.size] as? UInt64
+            let currentSourceAttributes = try fileManager.attributesOfItem(atPath: source.path)
+            guard stagedSize == fileSize,
+                  currentSourceAttributes[.size] as? UInt64 == fileSize,
+                  currentSourceAttributes[.modificationDate] as? Date == sourceAttributes[.modificationDate] as? Date,
+                  currentSourceAttributes[.systemFileNumber] as? UInt64 == sourceAttributes[.systemFileNumber] as? UInt64 else {
                 throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
             }
         }
@@ -551,17 +553,6 @@ public actor FileSystemManager {
         }
     }
 
-    /// Stop accessing all tracked security-scoped resources. Single-call use
-    /// only: concurrent callers must release their own `SecurityScopeSession`
-    /// so they don't drain scopes another call still needs.
-    private func stopAccessingAll() {
-        for (url, accessCount) in activeBookmarks {
-            for _ in 0..<accessCount {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-        activeBookmarks.removeAll()
-    }
     public typealias FileOperation = SortyModels.FileOperation
     /// Result of a restore/undo operation
     public struct RestoreResult: Sendable {
@@ -657,104 +648,6 @@ public actor FileSystemManager {
         }
     }
 
-    // MARK: - Folder Creation
-
-    func createFolders(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, exclusionManager: ExclusionRulesManager? = nil) async throws -> [FileOperation] {
-        var operations: [FileOperation] = []
-
-        for suggestion in plan.suggestions {
-            let ops = try await createFolderRecursive(suggestion, parentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager)
-            operations.append(contentsOf: ops)
-        }
-
-        return operations
-    }
-    
-    private func createFolderRecursive(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
-        var operations: [FileOperation] = []
-        
-        let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
-
-        // Check exclusions
-        if let manager = exclusionManager {
-            let item = FileItem(path: folderURL.path, name: folderURL.lastPathComponent, extension: folderURL.pathExtension)
-            if await manager.shouldExclude(item) {
-                ModelLog.debug("Skipping excluded folder creation: \(folderURL.path)")
-                return operations
-            }
-        }
-
-        if !dryRun {
-            var isDirectory: ObjCBool = false
-            if fileManager.fileExists(atPath: folderURL.path, isDirectory: &isDirectory) {
-                if isDirectory.boolValue {
-                    // Folder already exists, continue with subfolders
-                } else {
-                    // Conflict: File exists where folder should be
-                    let backupBaseName = folderURL.lastPathComponent
-                    let backupURL = folderURL.deletingLastPathComponent()
-                        .appendingPathComponent("\(backupBaseName)_file_backup_\(UUID().uuidString.prefix(8))")
-                    try fileManager.moveItem(at: folderURL, to: backupURL)
-
-                    // Record this move for undo
-                    operations.append(FileOperation(
-                        id: UUID(),
-                        type: .moveFile,
-                        sourcePath: folderURL.path,
-                        destinationPath: backupURL.path,
-                        timestamp: Date(),
-                        metadata: FileOperation.OperationMetadata(wasCreatedDuringOrganization: true)
-                    ))
-
-                    try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
-
-                    operations.append(FileOperation(
-                        id: UUID(),
-                        type: .createFolder,
-                        sourcePath: folderURL.path,
-                        destinationPath: nil,
-                        timestamp: Date(),
-                        metadata: FileOperation.OperationMetadata(wasCreatedDuringOrganization: true)
-                    ))
-                }
-            } else {
-                try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
-                operations.append(FileOperation(
-                    id: UUID(),
-                    type: .createFolder,
-                    sourcePath: folderURL.path,
-                    destinationPath: nil,
-                    timestamp: Date(),
-                    metadata: FileOperation.OperationMetadata(wasCreatedDuringOrganization: true)
-                ))
-            }
-        }
-
-        // Create subfolders
-        for subfolder in suggestion.subfolders {
-            let subOps = try await createFolderRecursive(subfolder, parentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager)
-            operations.append(contentsOf: subOps)
-        }
-        
-        return operations
-    }
-
-    // MARK: - File Moving with Rename Support
-
-    func moveFiles(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, exclusionManager: ExclusionRulesManager? = nil) async throws -> [FileOperation] {
-        var operations: [FileOperation] = []
-        // Shared across suggestions so two files targeting the same name in
-        // one run never share a destination.
-        var reserved = Set<String>()
-
-        for suggestion in plan.suggestions {
-            let ops = try await moveFilesInSuggestion(suggestion, parentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager, reserved: &reserved)
-            operations.append(contentsOf: ops)
-        }
-
-        return operations
-    }
-
     private func resolvedFinalFilename(
         for file: FileItem,
         mapping: FileRenameMapping?,
@@ -813,101 +706,6 @@ public actor FileSystemManager {
             },
             uniquingKeysWith: { first, _ in first }
         )
-    }
-    
-    private func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?, reserved: inout Set<String>) async throws -> [FileOperation] {
-        var operations: [FileOperation] = []
-        let renameMappings = renameMappingsByFileID(in: suggestion)
-        
-        let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
-
-        // Process files with potential renaming
-        for file in suggestion.files {
-            guard let sourceURL = file.url else { continue }
-
-            // Check exclusions
-            if let manager = exclusionManager {
-                if await manager.shouldExclude(file) {
-                    ModelLog.debug("Skipping excluded file move: \(sourceURL.path)")
-                    continue
-                }
-            }
-
-            let resolvedName = resolvedFinalFilename(
-                for: file,
-                mapping: renameMappings[file.id],
-                sourceURL: sourceURL,
-                destinationFolderURL: folderURL
-            )
-            let finalFilename = resolvedName.name
-            let renameMetadata = resolvedName.metadata
-
-            var destinationURL = folderURL.appendingPathComponent(finalFilename)
-
-            // Skip if source and destination are identical
-            if sourceURL.standardizedFileURL.path == destinationURL.standardizedFileURL.path {
-                continue
-            }
-
-            if !dryRun {
-                // Create destination directory if needed
-                if !fileManager.fileExists(atPath: folderURL.path) {
-                    try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
-                }
-
-                // Verify source exists
-                guard fileManager.fileExists(atPath: sourceURL.path) else {
-                    continue
-                }
-
-                // Move file, uniquifying against disk + batch reservations and
-                // retrying races. Records the actual destination below so the
-                // preview never silently disagrees with what landed on disk.
-                destinationURL = try await moveFileResolvingConflicts(
-                    from: sourceURL,
-                    proposedDestination: destinationURL,
-                    reserved: &reserved
-                )
-            }
-
-            // Record the operation
-            let operationType = operationType(
-                from: sourceURL,
-                to: destinationURL,
-                renameMetadata: renameMetadata
-            )
-
-            operations.append(FileOperation(
-                id: UUID(),
-                type: operationType,
-                sourcePath: sourceURL.path,
-                destinationPath: destinationURL.path,
-                timestamp: Date(),
-                metadata: renameMetadata
-            ))
-        }
-
-        // Process subfolders
-        for subfolder in suggestion.subfolders {
-            let subOps = try await moveFilesInSuggestion(subfolder, parentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager, reserved: &reserved)
-            operations.append(contentsOf: subOps)
-        }
-        
-        return operations
-    }
-
-    // MARK: - File Tagging
-
-    func tagFiles(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, exclusionManager: ExclusionRulesManager? = nil) async throws -> [FileOperation] {
-        // Tagging is now gated by the caller using this method
-        var operations: [FileOperation] = []
-
-        for suggestion in plan.suggestions {
-            let ops = try await tagFilesInSuggestion(suggestion, parentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager)
-            operations.append(contentsOf: ops)
-        }
-
-        return operations
     }
     
     private func normalizeFinderTag(_ tag: String) -> String {
@@ -1069,52 +867,6 @@ public actor FileSystemManager {
             ),
             failure: failure
         )
-    }
-
-    private func tagFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
-        var operations: [FileOperation] = []
-        let finalFilenames = finalFilenamesByFileID(in: suggestion)
-        
-        let folderURL = try resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
-
-        let folderOutcome = applyTagsAndComment(to: folderURL, tags: suggestion.tags, comment: suggestion.comment, dryRun: dryRun)
-        if let folderOp = folderOutcome.operation {
-            operations.append(folderOp)
-        }
-        if let failure = folderOutcome.failure {
-            throw FileSystemError.partialApplyFailure(operations: operations, underlyingDescription: failure)
-        }
-
-        // Look for tag mappings in this suggestion
-        for mapping in suggestion.fileTagMappings {
-            // Check exclusions
-            if let manager = exclusionManager {
-                if await manager.shouldExclude(mapping.originalFile) {
-                    continue
-                }
-            }
-
-            // Find the file name (use the new name if it was renamed)
-            let finalFilename = finalFilenames[mapping.originalFile.id] ?? mapping.originalFile.displayName
-            
-            let fileURL = folderURL.appendingPathComponent(finalFilename)
-            
-            let outcome = applyTagsAndComment(to: fileURL, tags: mapping.tags, comment: mapping.comment, dryRun: dryRun)
-            if let op = outcome.operation {
-                operations.append(op)
-            }
-            if let failure = outcome.failure {
-                throw FileSystemError.partialApplyFailure(operations: operations, underlyingDescription: failure)
-            }
-        }
-
-        // Recurse
-        for subfolder in suggestion.subfolders {
-            let subOps = try await tagFilesInSuggestion(subfolder, parentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager)
-            operations.append(contentsOf: subOps)
-        }
-        
-        return operations
     }
 
     // MARK: - Apply Organization

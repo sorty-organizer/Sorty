@@ -166,7 +166,6 @@
 
 		AABBCC220002000000000002 /* AppAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000002 /* AppAccessibilityTests.swift */; };
 		AABBCC220002000000000003 /* OrganizationWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */; };
-		AABBCC220002000000000004 /* FeatureSpecificUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000004 /* FeatureSpecificUITests.swift */; };
 		AABBCC220002000000000005 /* DeeplinkUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000005 /* DeeplinkUITests.swift */; };
 		CC220002000000000000B001 /* OnboardingWorkflowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000B001 /* OnboardingWorkflowUITests.swift */; };
 		CC220002000000000000B002 /* LearningsWorkflowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000B002 /* LearningsWorkflowUITests.swift */; };
@@ -420,7 +419,6 @@
 		CC110001000000000000C00C /* CacheMaintenanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheMaintenanceTests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000002 /* AppAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAccessibilityTests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationWorkflowTests.swift; sourceTree = "<group>"; };
-		AABBCC110001000000000004 /* FeatureSpecificUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureSpecificUITests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000005 /* DeeplinkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeeplinkUITests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000006 /* LogManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogManager.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000000A /* ImageVisionAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageVisionAnalyzer.swift; sourceTree = "<group>"; };
@@ -941,7 +939,6 @@
 				330431C3CDD48CC4A07DB898 /* SettingsLayoutStressUITests.swift */,
 				AABBCC110001000000000002 /* AppAccessibilityTests.swift */,
 				AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */,
-				AABBCC110001000000000004 /* FeatureSpecificUITests.swift */,
 				AABBCC110001000000000005 /* DeeplinkUITests.swift */,
 			);
 			path = Tests/SortyUITests;
@@ -1390,7 +1387,6 @@
 				4A0A4B215576BB73EEEEDEB3 /* SettingsLayoutStressUITests.swift in Sources */,
 				AABBCC220002000000000002 /* AppAccessibilityTests.swift in Sources */,
 				AABBCC220002000000000003 /* OrganizationWorkflowTests.swift in Sources */,
-				AABBCC220002000000000004 /* FeatureSpecificUITests.swift in Sources */,
 				AABBCC220002000000000005 /* DeeplinkUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
