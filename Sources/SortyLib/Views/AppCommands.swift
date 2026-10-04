@@ -2196,6 +2196,8 @@ public class AppState: ObservableObject {
         alert.addButton(withTitle: "Uninstall Sorty")
         alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true
+        alert.buttons.first?.bezelColor = .systemRed
+        alert.buttons.first?.contentTintColor = .white
 
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         uninstallSorty()
@@ -2220,9 +2222,13 @@ public class AppState: ObservableObject {
             let detail = failedItems.isEmpty
                 ? "macOS couldn't schedule deletion of the app."
                 : "Sorty couldn't remove its \(failedItems)."
+            let pathDetails = report.failedPaths.sorted { $0.key < $1.key }
+                .map { "\($0.key): \($0.value)" }
+                .joined(separator: "\n")
+            let recovery = pathDetails.isEmpty ? "" : "\n\n\(pathDetails)\n\nIf macOS blocked access, allow Sorty in System Settings > Privacy & Security > Files & Folders, then try again."
             presentHistoryAlert(
                 title: "Uninstall Could Not Finish",
-                message: "\(detail) The app was not deleted, so you can resolve the issue and try again."
+                message: "\(detail) The app was not deleted, so you can resolve the issue and try again.\(recovery)"
             )
         }
     }

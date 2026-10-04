@@ -108,6 +108,8 @@ final class SortyUninstallerTests: XCTestCase {
             "Library/LaunchAgents/com.sorty.app.background-agent.plist",
             "Library/LaunchAgents/com.sorty.app.plist",
             "Library/Preferences/com.sorty.app.plist",
+            "Library/Group Containers/group.com.sorty.app/preferences.json",
+            "Library/Group Containers/group.com.sorty.app/.com.apple.containermanagerd.metadata.plist",
         ]
 
         for relativePath in filesToCreate {
@@ -123,6 +125,12 @@ final class SortyUninstallerTests: XCTestCase {
         )
 
         XCTAssertTrue(result.failed.isEmpty)
+        XCTAssertTrue(fileManager.fileExists(atPath: home.appendingPathComponent(
+            "Library/Group Containers/group.com.sorty.app/.com.apple.containermanagerd.metadata.plist"
+        ).path))
+        XCTAssertFalse(fileManager.fileExists(atPath: home.appendingPathComponent(
+            "Library/Group Containers/group.com.sorty.app/preferences.json"
+        ).path))
         XCTAssertTrue(result.removed.contains(home.appendingPathComponent("Library/Application Support/Sorty").path))
         XCTAssertTrue(result.removed.contains(home.appendingPathComponent("Library/Preferences/com.sorty.app.plist").path))
         XCTAssertTrue(result.removed.contains(home.appendingPathComponent("Library/Services/Organize with Sorty.workflow").path))

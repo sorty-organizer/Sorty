@@ -146,7 +146,14 @@ public enum SortyUninstaller {
         // Schedule post-quit removal before any destructive step. Aborting here
         // (helper failed to start) must leave Keychain, TCC, and login items
         // untouched so the app can be retried safely.
-        let finalRemovalTargets = safeUniqueURLs(removalPaths + applicationURLs)
+        // Container roots and their metadata belong to macOS. Only app-owned
+        // contents may be handed to the shell helper for a second post-quit pass.
+        let finalRemovalTargets = safeUniqueURLs(removalPaths.flatMap { url -> [URL] in
+            guard isManagedContainer(url),
+                  (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true
+            else { return [url] }
+            return (try? containerContents(at: url, fileManager: fileManager)) ?? []
+        } + applicationURLs)
         let removalReadyURL = temporaryDirectory
             .appendingPathComponent("sorty-uninstall-ready-\(UUID().uuidString)")
         let didStartRemovalHelper = schedulePostTerminationRemoval(
@@ -178,16 +185,13 @@ public enum SortyUninstaller {
 
         let removedServiceRegistrations = removeServiceRegistrations()
         let didClearKeychain = KeychainManager.deleteAll()
-        let resetPrivacyPermissions = resetPrivacyPermissions()
+        var resetPrivacyPermissions = false
         var blockingFailures: [String] = []
         if !removedServiceRegistrations {
             blockingFailures.append("login and background items")
         }
         if !didClearKeychain {
             blockingFailures.append("Keychain credentials")
-        }
-        if !resetPrivacyPermissions {
-            blockingFailures.append("privacy permissions")
         }
 
         // Keep the app installed so the user can retry protected cleanup safely.
@@ -263,6 +267,15 @@ public enum SortyUninstaller {
             // Filesystem cleanup is best-effort per path, but data that survived
             // removal must not be reported as a finished uninstall.
             blockingFailures.append("saved app data")
+        }
+
+        // Retain data-access grants until protected filesystem and defaults
+        // cleanup finishes. A failed cleanup must remain retryable.
+        if blockingFailures.isEmpty {
+            resetPrivacyPermissions = self.resetPrivacyPermissions()
+            if !resetPrivacyPermissions {
+                blockingFailures.append("privacy permissions")
+            }
         }
 
         let didScheduleApplicationRemoval = blockingFailures.isEmpty
@@ -618,14 +631,31 @@ public enum SortyUninstaller {
             }
 
             do {
-                try fileManager.removeItem(at: url)
-                removed.append(path)
+                if isManagedContainer(url),
+                   (try url.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink != true {
+                    for item in try containerContents(at: url, fileManager: fileManager) {
+                        try fileManager.removeItem(at: item)
+                        removed.append(item.path)
+                    }
+                } else {
+                    try fileManager.removeItem(at: url)
+                    removed.append(path)
+                }
             } catch {
                 failed[path] = error.localizedDescription
             }
         }
 
         return (removed, missing, failed)
+    }
+
+    private static func isManagedContainer(_ url: URL) -> Bool {
+        ["Containers", "Group Containers"].contains(url.deletingLastPathComponent().lastPathComponent)
+    }
+
+    private static func containerContents(at url: URL, fileManager: FileManager) throws -> [URL] {
+        try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent != ".com.apple.containermanagerd.metadata.plist" }
     }
 
     private static func schedulePostTerminationRemoval(
@@ -745,17 +775,15 @@ public enum SortyUninstaller {
 
     private static func clearDefaults() -> Bool {
         let defaults = UserDefaults.standard
-        for identifier in knownComponentBundleIdentifiers {
-            defaults.removePersistentDomain(forName: identifier)
-        }
-
-        var success = knownComponentBundleIdentifiers.allSatisfy {
-            defaults.persistentDomain(forName: $0) == nil
-        }
+        // Other components' preference files are removed by filesystem cleanup.
+        // Opening their defaults domains can trigger macOS's other-app data
+        // protection, even though the identifier belongs to a Sorty extension.
+        defaults.removePersistentDomain(forName: bundleIdentifier)
+        var success = defaults.persistentDomain(forName: bundleIdentifier)?.isEmpty != false
 
         if let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) {
             sharedDefaults.removePersistentDomain(forName: appGroupIdentifier)
-            success = sharedDefaults.persistentDomain(forName: appGroupIdentifier) == nil && success
+            success = sharedDefaults.persistentDomain(forName: appGroupIdentifier)?.isEmpty != false && success
         }
 
         return success
