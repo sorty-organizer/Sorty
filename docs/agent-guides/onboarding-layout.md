@@ -39,11 +39,27 @@ temporary feedback simple; they do not need a feedback object.
 
 The skill onboarding introduction prepares its icon and bundled audio before
 starting the reveal. Follow `AVAudioPlayer.currentTime` for its cues rather than
-using a separate wall-clock schedule. The heading and underline finish at 2.70
-seconds, the app icon at 3.58, the app slides aside at 4.42, and the skill icon
-and primary action finish at 6.14. Start each animation early by its duration so
-it lands on the accent. Playback-position polling belongs only to the finite
-intro task; never keep an idle timer running after the reveal.
+using a separate wall-clock schedule. The 9.583-second, 48 kHz stereo track was
+analyzed using a 2048-sample Hann STFT with a 240-sample hop. Positive changes
+in log spectral magnitude identify note attacks; the spectrum separates chord
+changes from sustained volume peaks. The choreography starts effects on these
+measured attacks, with short ease-out fades so the visual onset follows the sound:
+
+| Playback time | Reveal | Audio evidence |
+| --- | --- | --- |
+| 0.120 s | Update sentence and progress rail | Opening attack |
+| 0.985 s | Skill headline | Strong early broadband attack |
+| 2.690 s | Draw underline and lift edge glow | Strong midrange accent |
+| 3.570 s | App icon | Chord change and renewed low-frequency energy |
+| 4.415 s | Slide and dim app icon | Next midrange accent |
+| 5.710 s | Transformation arrow | Strongest high-frequency attack |
+| 6.135 s | Skill icon | Final prominent swell and midrange accent |
+| 6.925 s | Meet the Skill action | Closing phrase before the decay |
+
+The mapping of those attacks to UI elements is a choreography choice. Use the
+actual note onsets, not the later RMS maxima, when adjusting it. Playback-position
+polling belongs only to the finite intro task; never keep an idle timer running
+after the reveal. Continue with App remains available throughout.
 
 Keep the elements mounted and reveal them with opacity so earlier text stays
 visible and the layout stays still. Meet the Skill opens a separate feature page

@@ -195,6 +195,11 @@ struct SkillSetupView: View {
 
             VStack(spacing: 0) {
                 progressRail
+                    .modifier(SkillIntroductionReveal(
+                        isVisible: step != .rethink || introductionStage >= 1,
+                        reduceMotion: reduceMotion,
+                        duration: 0.22
+                    ))
                     .padding(.top, 48)
                     .padding(.bottom, 24)
                 VStack(spacing: 12) {
@@ -322,7 +327,7 @@ struct SkillSetupView: View {
             if isOnboarding, !reduceMotion, NSApp.isActive, stage > previousStage, stage >= 2 {
                 HapticFeedbackManager.shared.light()
             }
-            if step == .rethink && stage >= 2 {
+            if step == .rethink && stage >= 3 {
                 hasRevealedSkillUnderline = true
             }
         }
@@ -372,11 +377,11 @@ struct SkillSetupView: View {
                                 control2: CGPoint(x: width * 0.65, y: 10)
                             )
                         }
-                        .trim(from: 0, to: introductionStage >= 2 ? 1 : 0)
+                        .trim(from: 0, to: introductionStage >= 3 ? 1 : 0)
                         .stroke(.tint, style: StrokeStyle(lineWidth: titleSize * 0.09, lineCap: .round))
                         .animation(
-                            reduceMotion ? nil : .easeOut(duration: 0.35),
-                            value: introductionStage >= 2
+                            reduceMotion ? nil : .easeOut(duration: 0.32),
+                            value: introductionStage >= 3
                         )
                     }
                     .frame(height: 10)
@@ -391,7 +396,8 @@ struct SkillSetupView: View {
     private func introductionReveal(at stage: Int) -> SkillIntroductionReveal {
         SkillIntroductionReveal(
             isVisible: !isIntroduction || introductionStage >= stage,
-            reduceMotion: reduceMotion
+            reduceMotion: reduceMotion,
+            duration: step == .rethink ? 0.22 : 0.35
         )
     }
 
@@ -413,7 +419,7 @@ struct SkillSetupView: View {
         introAudioPlayer = player
     }
 
-    /// Follow the actual playback position and finish each reveal on its accent.
+    /// Follow the actual playback position and begin each reveal on a note attack.
     /// Returning to the introduction replays the same sequence.
     private func revealIntroduction() async {
         guard isIntroduction else { return }
@@ -440,15 +446,16 @@ struct SkillSetupView: View {
         }
         let revealStart = clock.now
         if reduceMotion {
-            introductionStage = 5
+            introductionStage = finalIntroductionStage
             isHeadingFocused = true
             return
         }
 
-        // These are animation START times, so each reveal lands on its audio
-        // accent: heading/underline 2.70, app 3.58, slide 4.42, skill 6.14.
+        // Spectral-flux attacks and chord changes in SkillOnboardingSound.m4a:
+        // sentence, headline, underline, app, slide, arrow, skill, closing action.
+        // These cue the start of each effect, rather than a sustained RMS peak.
         let cueOffsets: [Double] = step == .rethink
-            ? [0, 2.35, 3.23, 3.97, 5.79]
+            ? [0.120, 0.985, 2.690, 3.570, 4.415, 5.710, 6.135, 6.925]
             : [0, 0.70, 1.40, 2.00, 2.60]
         do {
             for (index, offset) in cueOffsets.enumerated() {
@@ -474,19 +481,19 @@ struct SkillSetupView: View {
     private var skillIconTransition: some View {
         ZStack {
             SkillIntroductionAppIcon(
-                isBlurred: introductionStage >= 4 && !reduceMotion && !reduceTransparency,
+                isBlurred: introductionStage >= 5 && !reduceMotion && !reduceTransparency,
                 animatesBlur: !reduceMotion
             )
                 .frame(width: 160, height: 160)
-                .opacity(introductionStage >= 4 ? 0.55 : 1)
-                .offset(x: introductionStage >= 4 ? -120 : 0)
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: introductionStage >= 4)
+                .opacity(introductionStage >= 5 ? 0.55 : 1)
+                .offset(x: introductionStage >= 5 ? -120 : 0)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: introductionStage >= 5)
 
             Image(systemName: "arrow.right")
                 .font(.largeTitle.weight(.medium))
                 .foregroundStyle(.secondary)
-                .opacity(introductionStage >= 5 ? 1 : 0)
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: introductionStage >= 5)
+                .opacity(introductionStage >= 6 ? 1 : 0)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: introductionStage >= 6)
 
             if let skillIcon {
                 Image(nsImage: skillIcon)
@@ -494,8 +501,8 @@ struct SkillSetupView: View {
                     .scaledToFit()
                     .frame(width: 160, height: 160)
                     .offset(x: 120)
-                    .opacity(introductionStage >= 5 ? 1 : 0)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: introductionStage >= 5)
+                    .opacity(introductionStage >= 7 ? 1 : 0)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: introductionStage >= 7)
             }
         }
         .frame(width: 400, height: 180)
@@ -569,7 +576,7 @@ struct SkillSetupView: View {
         case .rethink:
             VStack(spacing: 28) {
                 skillIconTransition
-                    .modifier(introductionReveal(at: 3))
+                    .modifier(introductionReveal(at: 4))
             }
             .frame(maxWidth: 680)
         case .about:
@@ -1069,9 +1076,11 @@ struct SkillSetupView: View {
         }
     }
 
+    private var finalIntroductionStage: Int { step == .rethink ? 8 : 5 }
+
     private var canAdvanceFromNavigation: Bool {
         !isWaitingForOptions && !isSaving
-            && (!isIntroduction || introductionStage >= 5)
+            && (!isIntroduction || introductionStage >= finalIntroductionStage)
             && (![Step.location, .preferences, .review].contains(step) || canUseLocation)
             && (step != .review || hasReachedReviewBottom)
     }
@@ -1101,7 +1110,7 @@ struct SkillSetupView: View {
                         active: !reduceMotion && canAdvanceFromNavigation
                             && (step == .welcome || step == .rethink || isPrimaryActionHovered)
                     )
-                    .modifier(introductionReveal(at: 5))
+                    .modifier(introductionReveal(at: finalIntroductionStage))
                     .onHover {
                         isPrimaryActionHovered = $0
                         isGetStartedHovered = step == .welcome && $0
@@ -1372,11 +1381,12 @@ private struct SkillImportChecklist<Content: View>: View {
 private struct SkillIntroductionReveal: ViewModifier {
     let isVisible: Bool
     let reduceMotion: Bool
+    let duration: Double
 
     func body(content: Content) -> some View {
         content
             .opacity(isVisible ? 1 : 0)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: isVisible)
+            .animation(reduceMotion ? nil : .easeOut(duration: duration), value: isVisible)
             .allowsHitTesting(isVisible)
             .accessibilityHidden(!isVisible)
     }
