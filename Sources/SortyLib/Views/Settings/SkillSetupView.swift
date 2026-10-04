@@ -50,7 +50,7 @@ struct SkillSetupView: View {
             switch self {
             case .welcome: "The Sorty skill teaches your agent to organize and rename files using the preferences you've saved here."
             case .location: "Choose Codex, Claude Code, OpenCode, or Pi. You can also choose a custom skills folder."
-            case .preferences: "Share the settings that matter to you. Your instructions for each task always take priority."
+            case .preferences: "Choose settings to copy into the skill, or import nothing."
             case .review: "Check the location and your selection. Importing copies these preferences into the skill and leaves your app settings unchanged."
             case .complete: "Open a new chat in your agent and ask it to use Sorty. Tell it which folder to organize and what you want changed."
             }
@@ -328,6 +328,13 @@ struct SkillSetupView: View {
                             .buttonStyle(.sortyBordered(size: .small))
                             .padding(.top, 12)
                             .accessibilityIdentifier("skill-import.select-all")
+                        Button("Import nothing") {
+                            selected.removeAll()
+                            HapticFeedbackManager.shared.selection()
+                        }
+                        .buttonStyle(.sortyBordered(size: .small))
+                        .accessibilityHint("Clears all selected settings. Continue to review without importing app settings.")
+                        .accessibilityIdentifier("skill-import.import-nothing")
                     }
                     .frame(width: 190)
                     importSection(activeSection)
@@ -369,7 +376,9 @@ struct SkillSetupView: View {
                     .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
                     Text(installer.state == .conflict
                          ? "A different Sorty skill is already here. You'll be asked to confirm its replacement."
-                         : "This import replaces the skill's saved preferences. Sorty keeps a private backup of the previous import.")
+                         : selected.isEmpty
+                            ? "No app settings will be imported. Any settings already saved in the skill stay in place."
+                            : "This import replaces the skill's saved preferences. Sorty keeps a private backup of the previous import.")
                         .font(.callout).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Text("Selected Learnings become readable files your agent can use. Credentials, app permissions, and session history stay in Sorty.")
@@ -692,7 +701,7 @@ struct SkillSetupView: View {
                 }
                 .accessibilityElement(children: .combine)
             } else if step == .preferences {
-                Text(selected.isEmpty ? "Choose at least one setting" : "\(selectedOptions.count) selected")
+                Text(selected.isEmpty ? "No settings will be imported" : "\(selectedOptions.count) selected")
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedOptions.count)))
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedOptions.count)
                     .font(.callout).foregroundStyle(.secondary)
@@ -720,7 +729,6 @@ struct SkillSetupView: View {
                 .disabled(
                     isLoading || isSaving
                         || (step != .welcome && step != .complete && !canUseLocation)
-                        || ((step == .preferences || step == .review) && selected.isEmpty)
                         || (step == .review && !hasReachedReviewBottom)
                 )
                 .accessibilityIdentifier(step == .review ? "skill-import.confirm" : "skill-import.continue")
@@ -732,7 +740,10 @@ struct SkillSetupView: View {
         case .welcome: "Get Started"
         case .location, .preferences: "Continue"
         case .review:
-            if case .installed = installer.state { "Import Settings" }
+            if selected.isEmpty {
+                if case .installed = installer.state { "Finish Setup" }
+                else { "Install Skill" }
+            } else if case .installed = installer.state { "Import Settings" }
             else { "Install and Import" }
         case .complete: "Done"
         }
@@ -835,7 +846,7 @@ struct SkillSetupView: View {
 
     private func importSelected() {
         guard step == .review, hasReachedReviewBottom, !isLoading, !isSaving,
-              canUseLocation, !selected.isEmpty else { return }
+              canUseLocation else { return }
         isSaving = true
         onSavingChanged(true)
         errorMessage = nil
@@ -860,7 +871,11 @@ struct SkillSetupView: View {
                 return
             }
             do {
-                try await installer.importSettings(options: options, selected: selected)
+                if !selected.isEmpty {
+                    try await installer.importSettings(options: options, selected: selected)
+                } else {
+                    HapticFeedbackManager.shared.success()
+                }
                 AccessibilityNotification.Announcement("Your Sorty skill is ready").post()
                 if let sound = NSSound(named: "Glass") {
                     sound.volume = 0.20
