@@ -23,6 +23,8 @@ struct SkillSetupView: View {
     @State private var errorMessage: String?
     @State private var isConfirmingReplacement = false
     @State private var isGetStartedHovered = false
+    @State private var hoveredAgentLocation: String?
+    @ScaledMetric(relativeTo: .largeTitle) private var agentIconSize = 44
     @AccessibilityFocusState private var isHeadingFocused: Bool
 
     private enum Step: Int, CaseIterable {
@@ -250,25 +252,15 @@ struct SkillSetupView: View {
             }
         case .location:
             VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 14) {
-                    Picker("Agent", selection: Binding(
-                        get: { installer.selectedAgent },
-                        set: { agent in
-                            guard let agent else { chooseLocation(); return }
-                            installer.selectedSkillsDirectory = installer.skillsDirectory(for: agent)
-                            errorMessage = nil
-                            HapticFeedbackManager.shared.selection()
-                            Task { await installer.refresh(trackUsage: false) }
-                        }
-                    )) {
-                        ForEach(SkillAgent.allCases, id: \.self) { agent in
-                            Text(installer.detectedAgents.contains(agent) ? "\(agent.rawValue) · Settings folder found" : agent.rawValue)
-                                .tag(Optional(agent))
-                        }
-                        Text("Custom folder…").tag(Optional<SkillAgent>.none)
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(SkillAgent.allCases, id: \.self) { agent in
+                        agentLocationButton(agent)
                     }
-                    .accessibilityIdentifier("skill-import.agent")
-                    .disabled(isCheckingLocation)
+                    agentLocationButton(nil)
+                }
+                .accessibilityIdentifier("skill-import.agent")
+                .disabled(isCheckingLocation)
+                VStack(alignment: .leading, spacing: 14) {
                     Text(installer.destinationURL.path)
                         .font(.body.monospaced())
                         .accessibilityLabel("Installation path: \(installer.destinationURL.path)")
@@ -405,6 +397,73 @@ struct SkillSetupView: View {
             }
             .frame(maxWidth: 600, maxHeight: .infinity)
             .padding(.vertical, 8)
+        }
+    }
+
+    private func agentLocationButton(_ agent: SkillAgent?) -> some View {
+        let name = agent?.rawValue ?? "Other"
+        let isSelected = installer.selectedAgent == agent
+        let isDetected = agent.map { installer.detectedAgents.contains($0) } ?? false
+        return Button {
+            HapticFeedbackManager.shared.selection()
+            guard let agent else { chooseLocation(); return }
+            installer.selectedSkillsDirectory = installer.skillsDirectory(for: agent)
+            errorMessage = nil
+            Task { await installer.refresh(trackUsage: false) }
+        } label: {
+            VStack(spacing: 8) {
+                agentLocationIcon(agent)
+                    .frame(width: 88, height: 88)
+                    .systemLiquidGlassBackground(cornerRadius: 24, interactive: true)
+                    .overlay {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .strokeBorder(SortyDesignSystem.Colors.resolvedAccent, lineWidth: 2)
+                        }
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        if isSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.body)
+                                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                                .padding(6)
+                        }
+                    }
+                    .scaleEffect(!reduceMotion && hoveredAgentLocation == name ? 1.04 : 1)
+                    .accessibilityHidden(true)
+                Text(name)
+                    .font(.callout.weight(isSelected ? .semibold : .regular))
+                Text(agent == nil ? "Choose folder" : isDetected ? "Settings found" : "Standard folder")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hoveredAgentLocation = $0 ? name : nil }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: hoveredAgentLocation)
+        .accessibilityLabel(name)
+        .accessibilityHint(agent == nil ? "Choose a custom skills folder" : isDetected ? "Settings folder found. Use this agent's skills folder." : "Use this agent's standard skills folder.")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("skill-import.agent.\(agent?.rawValue ?? "other")")
+    }
+
+    @ViewBuilder
+    private func agentLocationIcon(_ agent: SkillAgent?) -> some View {
+        switch agent {
+        case .codex: ProviderLogoView(provider: .openAI, size: agentIconSize)
+        case .claudeCode: ProviderLogoView(provider: .anthropic, size: agentIconSize)
+        case .openCode: ProviderLogoView(provider: .openCodeZen, size: agentIconSize)
+        case .pi:
+            Text("π")
+                .font(.system(size: agentIconSize, weight: .semibold, design: .rounded))
+        case nil:
+            Image(systemName: "folder")
+                .resizable()
+                .scaledToFit()
+                .frame(width: agentIconSize, height: agentIconSize)
+                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
         }
     }
 
