@@ -46,6 +46,11 @@ and features in sequence. Cancel each reveal task when its page changes and
 show everything immediately with Reduce Motion. Hidden content must also be
 hidden from accessibility and pointer input.
 
+The opening app icon is 160 points square. Skill onboarding plays the bundled
+`SkillOnboardingSound.m4a` once at 60% volume across its steps, with an
+Onboarding sound checkbox to mute it. Load audio data off the main actor after
+the view mounts and stop playback when onboarding closes.
+
 ## Onboarding window
 
 The onboarding window has a minimum content size of 1100 by 720 points. Its
