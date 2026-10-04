@@ -31,7 +31,7 @@ struct SkillSetupView: View {
         var title: String {
             switch self {
             case .welcome: "Your Sorty preferences. In your agent."
-            case .location: "Give your skill a home"
+            case .location: "Choose a skills folder"
             case .preferences: "Choose what your agent should know"
             case .review: "Ready to bring it together?"
             case .complete: "Your skill is ready"
@@ -41,7 +41,7 @@ struct SkillSetupView: View {
         var explanation: String {
             switch self {
             case .welcome: "The Sorty skill teaches your agent to organize and rename files using the preferences you've saved here."
-            case .location: "Your agent looks for skills in a specific folder. Choose that folder and Sorty will install its skill inside it."
+            case .location: "The default works with Codex. For another agent, choose the folder it uses to load skills."
             case .preferences: "Share the settings that matter to you. Your instructions for each task always take priority."
             case .review: "Check the location and your selection. Importing copies these preferences into the skill and leaves your app settings unchanged."
             case .complete: "Open a new chat in your agent and ask it to use Sorty. Tell it which folder to organize and what you want changed."
@@ -195,11 +195,10 @@ struct SkillSetupView: View {
             .padding(.vertical, 12)
         case .location:
             VStack(alignment: .leading, spacing: 24) {
-                explanation("Choose your agent's skills folder", icon: "folder", detail: "The default works with Codex. For another agent, choose the folder it uses to load skills.")
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Skill will be installed here").font(.headline)
                     Text(installer.destinationURL.path)
                         .font(.body.monospaced())
+                        .accessibilityLabel("Installation path: \(installer.destinationURL.path)")
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack {
