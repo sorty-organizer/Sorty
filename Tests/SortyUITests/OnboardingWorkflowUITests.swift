@@ -17,20 +17,6 @@ final class OnboardingWorkflowUITests: XCTestCase {
             "XCUITEST_DISABLE_STORED_PROVIDER_CREDENTIALS": "1"
         ])
 
-        XCTAssertTrue(app.staticTexts["Sorty can be a skill"].waitForExistence(timeout: 5))
-        let skillContinue = app.buttons["skill-import.continue"]
-        XCTAssertTrue(skillContinue.waitForExistence(timeout: 5))
-        let skillIsReady = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "enabled == true"),
-            object: skillContinue
-        )
-        XCTAssertEqual(XCTWaiter.wait(for: [skillIsReady], timeout: 5), .completed)
-        skillContinue.click()
-        XCTAssertTrue(app.staticTexts["Use Sorty in your agent"].waitForExistence(timeout: 3))
-        skillContinue.click()
-        XCTAssertTrue(app.staticTexts["Choose a skills folder"].waitForExistence(timeout: 3))
-        app.buttons["skill-onboarding.continue-app"].click()
-
         XCTAssertTrue(app.otherElements["OnboardingView"].waitForExistence(timeout: 5))
 
         let advanceButton = app.buttons["OnboardingAdvanceButton"]
@@ -51,10 +37,6 @@ final class OnboardingWorkflowUITests: XCTestCase {
             "XCUITEST_ASSUME_FILES_PERMISSION": "1",
             "XCUITEST_PROVIDER_HEALTHCHECK": "fail_once_then_succeed"
         ])
-
-        let continueWithApp = app.buttons["skill-onboarding.continue-app"]
-        XCTAssertTrue(continueWithApp.waitForExistence(timeout: 5))
-        continueWithApp.click()
 
         XCTAssertTrue(app.otherElements["OnboardingView"].waitForExistence(timeout: 5))
 
@@ -90,9 +72,27 @@ final class OnboardingWorkflowUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Select Provider"].waitForExistence(timeout: 5))
     }
 
-    private func launchApp(environment: [String: String]) {
+    func testContinueWithAppOpensMainApp() throws {
+        launchApp(environment: [
+            "XCUITEST_FORCE_ONBOARDING": "1",
+            "XCUITEST_DISABLE_STORED_PROVIDER_CREDENTIALS": "1"
+        ], showsSkillIntroduction: true)
+
+        let continueWithApp = app.buttons["skill-onboarding.continue-app"]
+        XCTAssertTrue(continueWithApp.waitForExistence(timeout: 5))
+        continueWithApp.click()
+
+        XCTAssertTrue(app.buttons["OrganizeSidebarItem"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.otherElements["OnboardingView"].exists)
+    }
+
+    private func launchApp(environment: [String: String], showsSkillIntroduction: Bool = false) {
         app = XCUIApplication()
         app.launchArguments = ["--uitesting"]
+        if !showsSkillIntroduction {
+            // Exercise app setup directly through UserDefaults' argument domain.
+            app.launchArguments += ["-hasCompletedSkillIntroduction", "YES"]
+        }
         app.launchEnvironment = environment
         app.launch()
     }
