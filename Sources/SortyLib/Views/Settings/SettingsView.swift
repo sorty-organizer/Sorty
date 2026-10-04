@@ -241,6 +241,7 @@ struct SettingsView: View {
         case .finder: return "finder_integration"
         case .notifications: return "notifications"
         case .permissions: return "permissions"
+        case .skill: return "sorty_skill"
         case .advanced: return "advanced"
         case .troubleshooting: return "troubleshooting"
         case .help: return "help_and_support"
@@ -406,6 +407,9 @@ struct SettingsView: View {
         case .permissions:
             PermissionsSettingsView()
                 .environmentObject(appState)
+        case .skill:
+            CodexSkillInstallerCard()
+                .settingsFocusable(.sortySkill)
         case .advanced:
             AdvancedSettingsView().environmentObject(viewModel)
         case .troubleshooting:

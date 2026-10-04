@@ -26,7 +26,7 @@ Flags are defined in `Sources/SortyModels/FeatureFlags.swift`. Terminal keys use
 
 ### Sorty Codex Skill
 
-The Sorty skill installer is a regular setting in Settings → Advanced. It is always available and does not require a feature flag or PostHog assignment. Setup installs the bundled skill and lets users choose which Sorty preferences to share. Existing installations can import updated settings, and removal or replacement requires confirmation.
+The Sorty skill installer is a regular setting in Settings → Features → Sorty Skill. It is always available and does not require a feature flag or PostHog assignment. Setup installs the bundled skill and lets users choose which Sorty preferences to share. Existing installations can import updated settings, and removal or replacement requires confirmation.
 
 ### Harness Mode
 

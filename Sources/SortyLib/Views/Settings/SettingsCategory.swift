@@ -110,7 +110,7 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case advancedMenuBar = "settings.advanced.menu-bar"
     case advancedMenuBarIconStyle = "settings.advanced.menu-bar-icon-style"
     case advancedFinderWorkflow = "settings.advanced.finder-workflow"
-    case advancedSortySkill = "settings.advanced.sorty-skill"
+    case sortySkill = "settings.sorty-skill"
     case advancedPrivacyMode = "settings.advanced.privacy-mode"
     case advancedInternetPrivacy = "settings.advanced.internet-privacy"
     case advancedAnalytics = "settings.advanced.analytics"
@@ -209,7 +209,7 @@ public extension SettingsFocusTarget {
              .permissionsStatusActions, .permissionsUsage:
             return .permissions
 
-        case .advancedMenuBar, .advancedMenuBarIconStyle, .advancedFinderWorkflow, .advancedSortySkill, .advancedPrivacyMode,
+        case .advancedMenuBar, .advancedMenuBarIconStyle, .advancedFinderWorkflow, .advancedPrivacyMode,
              .advancedInternetPrivacy, .advancedAnalytics, .advancedTimeouts, .advancedRequestTimeout,
              .advancedResourceTimeout, .advancedDeveloper, .advancedStats, .advancedErrorLogs:
             return .advanced
@@ -222,6 +222,9 @@ public extension SettingsFocusTarget {
         case .helpSupport, .helpLegal, .helpDocumentation, .helpReportIssue,
              .helpChangelog, .helpPrivacy, .helpTerms, .helpIssueDetails:
             return .help
+
+        case .sortySkill:
+            return .skill
 
         case .experimentalEmptyState:
             return .experimental
@@ -242,6 +245,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     case automation = "Automation"
     case deeplinks = "Deeplinks"
     case finder = "Finder Integration"
+    case skill = "Sorty Skill"
     case notifications = "Notifications"
     case permissions = "Permissions"
     case advanced = "Advanced"
@@ -255,7 +259,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         switch self {
         case .provider, .strategy, .rules:
             return .aiAndOrganization
-        case .automation, .deeplinks, .finder, .notifications:
+        case .automation, .deeplinks, .finder, .skill, .notifications:
             return .features
         case .permissions, .advanced, .troubleshooting, .help, .experimental:
             return .system
@@ -276,6 +280,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .finder: return "folder.badge.plus"
         case .notifications: return "bell"
         case .permissions: return "hand.raised.fill"
+        case .skill: return "folder.badge.gearshape"
         case .advanced: return "gearshape.2"
         case .troubleshooting: return "wrench.and.screwdriver"
         case .help: return "questionmark.circle"
@@ -293,6 +298,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .finder: return .cyan
         case .notifications: return .pink
         case .permissions: return .blue
+        case .skill: return .indigo
         case .advanced: return .gray
         case .troubleshooting: return .red
         case .help: return .teal
@@ -318,8 +324,10 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return ["notification", "notifications", "alerts", "sound", "banner", "hud", "in app hud", "notificli", "completion", "foreground", "permissions", "notification center"]
         case .permissions:
             return ["permission", "permissions", "privacy", "security", "files and folders", "full disk access", "finder automation", "notifications", "system settings", "folder access"]
+        case .skill:
+            return ["skill", "codex", "agent", "install", "import settings"]
         case .advanced:
-            return ["advanced", "skill", "codex", "agent", "import settings", "menu bar", "streaming", "performance", "developer", "diagnostics", "debug", "logs", "error logs", "red logs"]
+            return ["advanced", "menu bar", "streaming", "performance", "developer", "diagnostics", "debug", "logs", "error logs", "red logs"]
         case .troubleshooting:
             return ["troubleshoot", "errors", "reset", "logs", "repair", "recovery", "diagnose"]
         case .help:
@@ -446,12 +454,15 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Open Privacy & Security", "Open the macOS Privacy & Security settings page.", keywords: ["system settings", "privacy settings"], target: .permissionsStatusActions),
                 feature("How Sorty Uses Access", "Review how folder, disk, and system permissions are used and revoked.", keywords: ["privacy", "revoke", "source code", "terms"], target: .permissionsUsage)
             ]
+        case .skill:
+            return [
+                feature("Sorty skill", "Install the Sorty skill and import your preferences, exclusions, watched folders, and Learnings.", keywords: ["skill", "codex", "agent", "install", "import settings"], target: .sortySkill),
+            ]
         case .advanced:
             return [
                 feature("Show Menu Bar Icon", "Display the Sorty icon in the menu bar for quick access.", keywords: ["menu bar", "menubar"], target: .advancedMenuBar),
                 feature("Icon Style", "Use Sorty's colorful style or a white style with native Finder symbols.", keywords: ["white icons", "sorty style", "apple native", "appearance", "menubar", "finder"], target: .advancedMenuBarIconStyle),
                 feature("Finder Workflow", "Open Finder and highlight newly organized folders after each completed run.", keywords: ["automatically reveal organized folders", "view in finder", "auto reveal"], target: .advancedFinderWorkflow),
-                feature("Sorty skill", "Install the Sorty skill and import your preferences, exclusions, watched folders, and Learnings.", keywords: ["skill", "codex", "agent", "install", "import settings"], target: .advancedSortySkill),
                 feature("Privacy Mode", "Mask sensitive paths, usernames, API keys, and raw AI details.", keywords: ["privacy", "redact", "mask", "hide"], target: .advancedPrivacyMode),
                 feature("Block Internet Connections", "Allow only localhost requests for local models and offline workflows.", keywords: ["internet privacy", "network privacy", "offline", "localhost"], target: .advancedInternetPrivacy),
                 feature("Share Anonymous Analytics", "Choose whether Sorty shares anonymous feature usage and sanitized reliability data.", keywords: ["analytics", "telemetry", "posthog", "crash reporting"], target: .advancedAnalytics),
@@ -545,6 +556,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .notificationsPermission
         case .permissions:
             return .permissionsFilesAndFolders
+        case .skill:
+            return .sortySkill
         case .advanced:
             return .advancedMenuBar
         case .troubleshooting:
