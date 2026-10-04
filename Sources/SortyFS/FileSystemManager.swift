@@ -314,12 +314,14 @@ public actor FileSystemManager {
                 throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
             }
         } else {
-            // Single-file fast path: staged size plus an unchanged source size
-            // prove the copy without enumerating anything. Directory metadata
-            // sizes vary by volume, so directories keep the snapshot totals.
-            let stagedSize = (try? fileManager.attributesOfItem(atPath: stagingURL.path)[.size] as? UInt64) ?? UInt64.max
-            let currentSourceSize = (try? fileManager.attributesOfItem(atPath: source.path)[.size] as? UInt64) ?? UInt64.max
-            guard stagedSize == fileSize, currentSourceSize == fileSize else {
+            // Re-read attributes directly: cached URL values could miss an
+            // edit or replacement made while the source was being copied.
+            let stagedSize = try fileManager.attributesOfItem(atPath: stagingURL.path)[.size] as? UInt64
+            let currentSourceAttributes = try fileManager.attributesOfItem(atPath: source.path)
+            guard stagedSize == fileSize,
+                  currentSourceAttributes[.size] as? UInt64 == fileSize,
+                  currentSourceAttributes[.modificationDate] as? Date == sourceAttributes[.modificationDate] as? Date,
+                  currentSourceAttributes[.systemFileNumber] as? UInt64 == sourceAttributes[.systemFileNumber] as? UInt64 else {
                 throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
             }
         }

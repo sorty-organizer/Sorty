@@ -472,6 +472,41 @@ class FileSystemManagerTests: XCTestCase {
     }
 
     @MainActor
+    func testCrossVolumeMoveKeepsSourceEditedDuringCopy() async throws {
+        let source = tempDirectory.appendingPathComponent("editing.txt")
+        try Data("before".utf8).write(to: source)
+        let originalDate = Date(timeIntervalSince1970: 1_700_000_000)
+        try FileManager.default.setAttributes([.modificationDate: originalDate], ofItemAtPath: source.path)
+        await fileSystemManager.setCrossVolumeDetectorForTesting { _, _ in true }
+        await fileSystemManager.setCrossVolumeProgressHandler { _, progress in
+            guard progress == 1 else { return }
+            do {
+                // Same byte count, changed after staging but before verification.
+                try Data("edited".utf8).write(to: source)
+                try FileManager.default.setAttributes(
+                    [.modificationDate: originalDate.addingTimeInterval(60)],
+                    ofItemAtPath: source.path
+                )
+            } catch {
+                XCTFail("Could not edit source during copy: \(error)")
+            }
+        }
+        let file = FileItem(path: source.path, name: "editing", extension: "txt", size: 6)
+        let plan = OrganizationPlan(suggestions: [FolderSuggestion(folderName: "Archive", files: [file])])
+
+        do {
+            _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: false)
+            XCTFail("A changed source must fail verification before deletion")
+        } catch FileSystemError.partialApplyFailure(let operations, _) {
+            XCTAssertTrue(operations.allSatisfy { $0.type == .createFolder })
+        }
+
+        XCTAssertEqual(try Data(contentsOf: source), Data("edited".utf8))
+        let archive = tempDirectory.appendingPathComponent("Archive")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: archive.path), [])
+    }
+
+    @MainActor
     func testReverseOperationsReportsEarlierSuccessWhenLaterRestoreFails() async throws {
         let restoredSource = tempDirectory.appendingPathComponent("restored.txt")
         let successfulDestination = tempDirectory.appendingPathComponent("successful-destination.txt")
