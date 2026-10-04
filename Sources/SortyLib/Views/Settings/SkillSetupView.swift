@@ -24,7 +24,7 @@ struct SkillSetupView: View {
     @State private var isConfirmingReplacement = false
     @State private var isGetStartedHovered = false
     @State private var hoveredAgentLocation: String?
-    @ScaledMetric(relativeTo: .largeTitle) private var agentIconSize = 44
+    @ScaledMetric(relativeTo: .largeTitle) private var agentIconSize: CGFloat = 44
     @AccessibilityFocusState private var isHeadingFocused: Bool
 
     private enum Step: Int, CaseIterable {
