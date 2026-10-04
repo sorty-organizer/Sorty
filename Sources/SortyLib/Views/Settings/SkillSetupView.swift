@@ -40,7 +40,7 @@ struct SkillOnboardingView: View {
         .overlay(alignment: .topTrailing) {
             Toggle("Onboarding sound", isOn: $isSoundEnabled)
                 .toggleStyle(.checkbox)
-                .font(.caption)
+                .font(.title3)
                 .fixedSize()
                 .padding(.top, 16)
                 .padding(.trailing, 24)
@@ -136,7 +136,11 @@ struct SkillSetupView: View {
     @State private var isGetStartedHovered = false
     @State private var hoveredAgentLocation: String?
     @State private var customFolderIcon: NSImage?
-    @ScaledMetric(relativeTo: .largeTitle) private var agentIconSize: CGFloat = 32
+    @ScaledMetric(relativeTo: .largeTitle) private var agentIconSize: CGFloat = 36
+    @ScaledMetric(relativeTo: .largeTitle) private var titleSize: CGFloat = 32
+    @ScaledMetric(relativeTo: .headline) private var headingSize: CGFloat = 18
+    @ScaledMetric(relativeTo: .body) private var readingSize: CGFloat = 16
+    @ScaledMetric(relativeTo: .callout) private var supportingSize: CGFloat = 14
     @AccessibilityFocusState private var isHeadingFocused: Bool
 
     init(
@@ -153,6 +157,10 @@ struct SkillSetupView: View {
         self.onUseSkill = onUseSkill
         self._step = State(initialValue: isOnboarding ? .rethink : .welcome)
     }
+
+    private var readingFont: Font { .system(size: readingSize) }
+    private var supportingFont: Font { .system(size: supportingSize) }
+    private var headingFont: Font { .system(size: headingSize, weight: .semibold) }
 
     private enum Step: Int, CaseIterable {
         case rethink, welcome, location, preferences, review, complete
@@ -215,45 +223,48 @@ struct SkillSetupView: View {
 
             VStack(spacing: 0) {
                 progressRail
-                    .padding(.top, step == .welcome ? 28 : step == .complete ? 36 : 48)
-                    .padding(.bottom, step == .welcome || step == .preferences || step == .complete ? 16 : 28)
-                VStack(spacing: 8) {
+                    .padding(.top, 48)
+                    .padding(.bottom, 24)
+                VStack(spacing: 12) {
                     Text(step.title)
                         .contentTransition(reduceMotion ? .identity : .numericText())
-                        .font(step == .preferences ? .title2.weight(.semibold) : .largeTitle.weight(.semibold))
+                        .font(.system(size: titleSize, weight: .semibold))
+                        .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.center)
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityFocused($isHeadingFocused)
                     Text(step.explanation)
                         .contentTransition(reduceMotion ? .identity : .numericText())
-                        .font(.body)
+                        .font(readingFont)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 590)
+                        .frame(maxWidth: 680)
                 }
                 .padding(.horizontal, 40)
-                .padding(.bottom, step == .welcome || step == .preferences || step == .complete ? 16 : 24)
+                .padding(.bottom, 20)
 
                 Group {
                     if step == .location {
                         ScrollView { stepContent }
+                    } else if step == .rethink || step == .welcome || step == .complete {
+                        SkillImportChecklist { stepContent }
                     } else {
                         stepContent
                     }
                 }
-                        .padding(.horizontal, 40)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: 880)
-                        .frame(maxWidth: .infinity)
-                        .id(step)
-                        .transition(.opacity)
+                .padding(.horizontal, 40)
+                .padding(.vertical, 8)
+                .frame(maxWidth: 880)
+                .frame(maxWidth: .infinity)
+                .id(step)
+                .transition(.opacity)
                 .frame(maxHeight: .infinity)
                 .disabled(isLoading || isSaving)
 
                 if let errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .font(.callout)
+                        .font(supportingFont)
                         .foregroundStyle(.red)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 40)
@@ -273,6 +284,7 @@ struct SkillSetupView: View {
                     .zIndex(1)
             }
         }
+        .font(readingFont)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isSaving)
         .background {
             OnboardingScreenBackdropBlurPresenter(
@@ -319,16 +331,16 @@ struct SkillSetupView: View {
                 .accessibilityHidden(true)
             VStack(spacing: 8) {
                 Text("Importing preferences")
-                    .font(.title2.weight(.semibold))
+                    .font(headingFont)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($isHeadingFocused)
                 Text("Saving your selection to the Sorty skill.")
-                    .font(.body)
+                    .font(readingFont)
                     .foregroundStyle(.secondary)
             }
             if reduceMotion {
                 Label("Import in progress", systemImage: "arrow.down.doc")
-                    .font(.callout)
+                    .font(supportingFont)
                     .foregroundStyle(.secondary)
             } else {
                 ProgressView()
@@ -355,7 +367,7 @@ struct SkillSetupView: View {
                         .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                         .accessibilityHidden(true)
                     Text(item.railTitle)
-                        .font(.callout.weight(step == item ? .semibold : .regular))
+                        .font(supportingFont.weight(step == item ? .semibold : .regular))
                 }
                 .foregroundStyle(step.rawValue >= item.rawValue ? Color.primary : Color.secondary)
                 .accessibilityElement(children: .ignore)
@@ -385,9 +397,9 @@ struct SkillSetupView: View {
                     explanation("Choose how to continue", icon: "arrow.triangle.branch", detail: "We'll help you set up the skill. Then you can delete Sorty or continue with the app.")
                 }
             }
-            .frame(maxWidth: 620)
+            .frame(maxWidth: 680)
         case .welcome:
-            VStack(spacing: 16) {
+            VStack(spacing: 24) {
                 ZStack {
                     Image(systemName: "folder.badge.gearshape")
                         .resizable()
@@ -408,7 +420,7 @@ struct SkillSetupView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isGetStartedHovered)
                 .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 24) {
                     explanation("Your preferences", icon: "textformat", detail: "Naming style, exclusions, saved folders, and Learnings you select.")
                     explanation("Preview first", icon: "list.bullet.rectangle", detail: "Ask for a preview before moving files. Every move can be restored.")
                     explanation("You stay in control", icon: "text.bubble", detail: "Name the folder and rules each time. Saved folders never auto-organize.")
@@ -416,7 +428,7 @@ struct SkillSetupView: View {
                         explanation("Your agent runs the skill", icon: "terminal", detail: "The skill uses your agent's model and file access. Finder integration, automatic watching, and widgets remain in the app.")
                     }
                 }
-                .frame(maxWidth: 620)
+                .frame(maxWidth: 680)
             }
         case .location:
             VStack(alignment: .leading, spacing: 24) {
@@ -431,12 +443,12 @@ struct SkillSetupView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 16) {
                         PrivacySensitivePathText(path: installer.destinationURL.path)
-                            .font(.body.monospaced())
+                            .font(readingFont.monospaced())
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Button("Change Folder…", action: chooseLocation)
-                            .buttonStyle(.sortyBordered())
+                            .buttonStyle(.sortyBordered(size: .large))
                             .accessibilityIdentifier("skill-import.choose-location")
                             .disabled(isCheckingLocation)
                             .fixedSize()
@@ -447,7 +459,7 @@ struct SkillSetupView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
                 Text("Nothing installs until you confirm.")
-                    .font(.callout)
+                    .font(supportingFont)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: 640)
@@ -471,25 +483,25 @@ struct SkillSetupView: View {
                                         .fixedSize(horizontal: false, vertical: true)
                                     Spacer(minLength: 0)
                                     if activeSection == section {
-                                        Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
+                                        Image(systemName: "chevron.right").font(supportingFont).accessibilityHidden(true)
                                     }
                                 }
-                                .font(.callout.weight(activeSection == section ? .semibold : .regular))
-                                .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+                                .font(readingFont.weight(activeSection == section ? .semibold : .regular))
+                                .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.sortyBordered(size: .small))
+                            .buttonStyle(.sortyBordered())
                             .accessibilityAddTraits(activeSection == section ? .isSelected : [])
                             .accessibilityIdentifier("skill-import.section.\(section.rawValue)")
                         }
                         Button(allSelected ? "Deselect All" : "Select All", action: toggleAll)
                             .contentTransition(reduceMotion ? .identity : .numericText())
                             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: allSelected)
-                            .buttonStyle(.sortyBordered(size: .small))
+                            .buttonStyle(.sortyBordered())
                             .padding(.top, 12)
                             .accessibilityIdentifier("skill-import.select-all")
                     }
-                    .frame(width: 190)
+                    .frame(width: 210)
                     importSection(activeSection)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
@@ -499,9 +511,9 @@ struct SkillSetupView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 16) {
-                        Label("Install location", systemImage: "folder").font(.headline)
+                        Label("Install location", systemImage: "folder").font(headingFont)
                         PrivacySensitivePathText(path: installer.destinationURL.path)
-                            .font(.callout.monospaced())
+                            .font(supportingFont.monospaced())
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                         Divider()
@@ -509,16 +521,16 @@ struct SkillSetupView: View {
                             let rows = selectedOptions.filter { $0.section == section }
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
-                                    Label(section.rawValue, systemImage: section.icon).font(.headline)
+                                    Label(section.rawValue, systemImage: section.icon).font(headingFont)
                                     Spacer()
                                     Text(rows.isEmpty ? "None selected" : "\(rows.count) selected")
                                         .contentTransition(reduceMotion ? .identity : .numericText(value: Double(rows.count)))
                                         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: rows.count)
-                                        .font(.callout).foregroundStyle(.secondary)
+                                        .font(supportingFont).foregroundStyle(.secondary)
                                 }
                                 if !rows.isEmpty {
                                     Text(rows.map(\.title).joined(separator: ", "))
-                                        .font(.callout).foregroundStyle(.secondary)
+                                        .font(supportingFont).foregroundStyle(.secondary)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
@@ -532,10 +544,10 @@ struct SkillSetupView: View {
                          : selected.isEmpty
                             ? "No app settings will be imported. Any settings already saved in the skill stay in place."
                             : "This import replaces the skill's saved preferences. Sorty keeps a private backup of the previous import.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(supportingFont).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Text("Selected Learnings become readable files your agent can use. Credentials, app permissions, and session history stay in Sorty.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(supportingFont).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -559,16 +571,16 @@ struct SkillSetupView: View {
                     .frame(width: 72, height: 72)
                     .foregroundStyle(.green)
                     .milestoneEmptyStateSliver(trigger: 1, tint: .green)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Try a first request").font(.headline)
+                    Text("Try a first request").font(headingFont)
                     Text(exampleRequest)
-                        .font(.body)
+                        .font(readingFont)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
-                    CopyButtonWithAnimation(content: exampleRequest, label: "Copy Request", labelFont: .body, tint: .primary)
-                    .buttonStyle(.sortyBordered())
+                    CopyButtonWithAnimation(content: exampleRequest, label: "Copy Request", labelFont: readingFont, tint: .primary)
+                    .buttonStyle(.sortyBordered(size: .large))
                     .accessibilityIdentifier("skill-import.copy-request")
                 }
                 .padding(20)
@@ -576,12 +588,11 @@ struct SkillSetupView: View {
                 Text(isOnboarding
                      ? "Your skill and imported preferences work without the app. Ask your agent to update them whenever your preferences change."
                      : "Return here to update the skill when preferences change, or tell your agent to update the Sorty skill with your new preferences.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(supportingFont).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
             }
-            .frame(maxWidth: 600, maxHeight: .infinity)
+            .frame(maxWidth: 600)
             .padding(.vertical, 8)
         }
     }
@@ -601,7 +612,7 @@ struct SkillSetupView: View {
             VStack(spacing: 8) {
                 agentLocationIcon(agent)
                     .frame(width: agentIconSize, height: agentIconSize, alignment: .center)
-                    .frame(width: 64, height: 64)
+                    .frame(width: 72, height: 72)
                     .systemLiquidGlassBackground(cornerRadius: 18, interactive: true)
                     .overlay {
                         if isSelected {
@@ -612,7 +623,7 @@ struct SkillSetupView: View {
                     .overlay(alignment: .topTrailing) {
                         if isSelected {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.caption)
+                                .font(supportingFont)
                                 .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                                 .padding(6)
                         }
@@ -620,9 +631,13 @@ struct SkillSetupView: View {
                     .scaleEffect(!reduceMotion && hoveredAgentLocation == name ? 1.04 : 1)
                     .accessibilityHidden(true)
                 Text(name)
-                    .font(.callout.weight(isSelected ? .semibold : .regular))
+                    .font(readingFont.weight(isSelected ? .semibold : .regular))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(agent == nil ? "Choose folder" : isDetected ? "Settings found" : "Standard folder")
-                    .font(.caption2)
+                    .font(supportingFont)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity)
@@ -677,9 +692,9 @@ struct SkillSetupView: View {
                 .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 .frame(width: 32)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.headline)
-                Text(detail).font(.body).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title).font(headingFont)
+                Text(detail).font(readingFont).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -702,7 +717,7 @@ struct SkillSetupView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Skill unavailable in this build", systemImage: "exclamationmark.triangle")
                 Button("Check Again") { Task { await installer.refresh(trackUsage: false) } }
-                    .buttonStyle(.sortyBordered(size: .small))
+                    .buttonStyle(.sortyBordered())
             }
         case .available, .failed:
             EmptyView()
@@ -719,28 +734,28 @@ struct SkillSetupView: View {
             $0.title.localizedStandardContains(query) || $0.detail.localizedStandardContains(query)
         }
         return VStack(alignment: .leading, spacing: 8) {
-            Text(section.rawValue).font(.headline)
+            Text(section.rawValue).font(headingFont)
                 .contentTransition(reduceMotion ? .identity : .numericText())
                 .accessibilityAddTraits(.isHeader)
             Text(sectionExplanation(section))
                 .contentTransition(reduceMotion ? .identity : .numericText())
-                .font(.callout).foregroundStyle(.secondary)
+                .font(supportingFont).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if rows.isEmpty {
                 if section == .learnings && (learnings.isLocked || learnings.currentProfile == nil) {
                     Button("Unlock Learnings") { Task { await unlockLearnings() } }
-                        .buttonStyle(.sortyBordered())
+                        .buttonStyle(.sortyBordered(size: .large))
                         .accessibilityIdentifier("skill-import.unlock-learnings")
                     Text("Authenticate to choose which Learnings to share.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(supportingFont).foregroundStyle(.secondary)
                 } else {
                     Text("Nothing saved here yet. You can continue without this section.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(supportingFont).foregroundStyle(.secondary)
                 }
             } else {
                 HStack {
                     Text("\(selectedCount) of \(identifiers.count) selected")
-                        .font(.callout)
+                        .font(supportingFont)
                         .foregroundStyle(.secondary)
                         .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedCount)))
                         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedCount)
@@ -750,7 +765,7 @@ struct SkillSetupView: View {
                         else { selected.formUnion(identifiers) }
                         HapticFeedbackManager.shared.selection()
                     }
-                    .buttonStyle(.sortyBordered(size: .small))
+                    .buttonStyle(.sortyBordered())
                     .accessibilityHint("Applies to all settings in \(section.rawValue), including hidden search results.")
                     .accessibilityIdentifier("skill-import.select-all.\(section.rawValue)")
                 }
@@ -764,10 +779,10 @@ struct SkillSetupView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: expandedSections.contains(section) ? "chevron.down" : "chevron.right")
-                            .font(.caption.weight(.semibold))
+                            .font(supportingFont.weight(.semibold))
                             .accessibilityHidden(true)
                         Text("Choose individual settings")
-                            .font(.callout.weight(.medium))
+                            .font(supportingFont.weight(.medium))
                         Spacer(minLength: 0)
                     }
                     .padding(.horizontal, 18)
@@ -791,7 +806,7 @@ struct SkillSetupView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 if visibleRows.isEmpty {
                                     Text("No matching settings")
-                                        .font(.callout)
+                                        .font(supportingFont)
                                         .foregroundStyle(.secondary)
                                         .padding(.vertical, 8)
                                 }
@@ -820,14 +835,15 @@ struct SkillSetupView: View {
                 HapticFeedbackManager.shared.selection()
             }
         )) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(option.title).font(.callout)
-                Text(option.detail).font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(option.title).font(readingFont)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(option.detail).font(supportingFont).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .toggleStyle(.checkbox)
-        .padding(.vertical, 2)
+        .padding(.vertical, 6)
         .accessibilityIdentifier("skill-import.option.\(option.id)")
     }
 
@@ -845,15 +861,15 @@ struct SkillSetupView: View {
         if isOnboarding && step == .complete {
             VStack(spacing: 12) {
                 Button("Delete App and Continue with Skill", action: onUseSkill)
-                    .buttonStyle(.sortyProminent())
+                    .buttonStyle(.sortyProminent(size: .large))
                     .keyboardShortcut(.defaultAction)
                     .accessibilityHint("Opens a confirmation before uninstalling Sorty. Your installed skill stays in place.")
                     .accessibilityIdentifier("skill-onboarding.use-skill")
                 Button("Continue with App", action: onClose)
-                    .buttonStyle(.sortyBordered())
+                    .buttonStyle(.sortyBordered(size: .large))
                     .accessibilityIdentifier("skill-onboarding.continue-app")
                 Text("Deleting Sorty removes its app data. You'll review the details before confirming.")
-                    .font(.caption)
+                    .font(supportingFont)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -863,14 +879,7 @@ struct SkillSetupView: View {
     }
 
     private var setupNavigation: some View {
-        HStack(spacing: 16) {
-            if step != .complete {
-                Button(isOnboarding ? "Continue with App" : "Cancel", action: onClose)
-                    .buttonStyle(.sortyBordered())
-                    .keyboardShortcut(.cancelAction)
-                    .disabled(isSaving)
-                    .accessibilityIdentifier(isOnboarding ? "skill-onboarding.continue-app" : "skill-import.cancel")
-            }
+        VStack(spacing: 12) {
             if isLoading || isSaving {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -881,34 +890,43 @@ struct SkillSetupView: View {
                 Text(selected.isEmpty ? "No settings will be imported" : "\(selectedOptions.count) selected")
                     .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedOptions.count)))
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedOptions.count)
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(supportingFont).foregroundStyle(.secondary)
             }
             if step == .review && !hasReachedReviewBottom {
                 Text("Scroll to the bottom to enable import")
-                    .font(.callout)
+                    .font(supportingFont)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("skill-import.scroll-hint")
             }
-            Spacer()
-            if step != setupSteps.first && step != .complete {
-                Button("Back") { changeStep(Step(rawValue: step.rawValue - 1) ?? .welcome) }
-                    .buttonStyle(.sortyBordered())
-                    .disabled(isLoading || isSaving)
-                    .accessibilityIdentifier("skill-import.back")
+            HStack(spacing: 16) {
+                if step != .complete {
+                    Button(isOnboarding ? "Continue with App" : "Cancel", action: onClose)
+                        .buttonStyle(.sortyBordered(size: .large))
+                        .keyboardShortcut(.cancelAction)
+                        .disabled(isSaving)
+                        .accessibilityIdentifier(isOnboarding ? "skill-onboarding.continue-app" : "skill-import.cancel")
+                }
+                Spacer()
+                if step != setupSteps.first && step != .complete {
+                    Button("Back") { changeStep(Step(rawValue: step.rawValue - 1) ?? .welcome) }
+                        .buttonStyle(.sortyBordered(size: .large))
+                        .disabled(isLoading || isSaving)
+                        .accessibilityIdentifier("skill-import.back")
+                }
+                Button(primaryTitle, action: advance)
+                    .contentTransition(reduceMotion ? .identity : .numericText())
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: primaryTitle)
+                    .buttonStyle(.sortyProminent(size: .large))
+                    .onHover { isGetStartedHovered = step == .welcome && $0 }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(
+                        isLoading || isSaving
+                            || ([Step.location, .preferences, .review].contains(step) && !canUseLocation)
+                            || (step == .review && !hasReachedReviewBottom)
+                    )
+                    .accessibilityIdentifier(step == .review ? "skill-import.confirm" : "skill-import.continue")
             }
-            Button(primaryTitle, action: advance)
-                .contentTransition(reduceMotion ? .identity : .numericText())
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: primaryTitle)
-                .buttonStyle(.sortyProminent())
-                .onHover { isGetStartedHovered = step == .welcome && $0 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(
-                    isLoading || isSaving
-                        || ([Step.location, .preferences, .review].contains(step) && !canUseLocation)
-                        || (step == .review && !hasReachedReviewBottom)
-                )
-                .accessibilityIdentifier(step == .review ? "skill-import.confirm" : "skill-import.continue")
         }
     }
 
@@ -1096,7 +1114,7 @@ private struct SkillImportChecklist<Content: View>: View {
                 }
                 // Keep the viewport height stable as the hint appears and disappears.
                 Label("Scroll for more", systemImage: "chevron.down")
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                     .opacity(hasMoreBelow ? 1 : 0)
