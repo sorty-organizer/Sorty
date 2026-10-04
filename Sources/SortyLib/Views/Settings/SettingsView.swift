@@ -408,7 +408,7 @@ struct SettingsView: View {
             PermissionsSettingsView()
                 .environmentObject(appState)
         case .skill:
-            CodexSkillInstallerCard()
+            SortySkillSettingsView()
                 .settingsFocusable(.sortySkill)
         case .advanced:
             AdvancedSettingsView().environmentObject(viewModel)

@@ -280,7 +280,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .finder: return "folder.badge.plus"
         case .notifications: return "bell"
         case .permissions: return "hand.raised.fill"
-        case .skill: return "folder.badge.gearshape"
+        case .skill: return "dollarsign"
         case .advanced: return "gearshape.2"
         case .troubleshooting: return "wrench.and.screwdriver"
         case .help: return "questionmark.circle"
