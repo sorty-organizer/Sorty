@@ -222,10 +222,22 @@ struct SkillSetupView: View {
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .modifier(introductionReveal(at: 1))
-                        Text("We realized Sorty can be a skill.")
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                                Text("We realized Sorty can be ")
+                                underlinedSkillPhrase
+                            }
+                            .fixedSize(horizontal: true, vertical: true)
+                            VStack(spacing: 0) {
+                                Text("We realized Sorty can be")
+                                underlinedSkillPhrase
+                            }
+                        }
                             .font(.system(size: titleSize, weight: .semibold))
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("We realized Sorty can be a skill.")
                             .accessibilityAddTraits(.isHeader)
                             .accessibilityFocused($isHeadingFocused)
                             .modifier(introductionReveal(at: 2))
@@ -319,6 +331,36 @@ struct SkillSetupView: View {
 
     private var isIntroduction: Bool {
         step == .rethink || step == .about || step == .welcome
+    }
+
+    private var underlinedSkillPhrase: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text("a skill")
+                .overlay(alignment: .bottom) {
+                    GeometryReader { geometry in
+                        Path { path in
+                            let width = geometry.size.width
+                            path.move(to: CGPoint(x: 0, y: 5))
+                            path.addCurve(
+                                to: CGPoint(x: width, y: 3),
+                                control1: CGPoint(x: width * 0.3, y: 0),
+                                control2: CGPoint(x: width * 0.65, y: 10)
+                            )
+                        }
+                        .trim(from: 0, to: introductionStage >= 2 ? 1 : 0)
+                        .stroke(.tint, style: StrokeStyle(lineWidth: titleSize * 0.09, lineCap: .round))
+                        .animation(
+                            reduceMotion ? nil : .easeOut(duration: 0.55).delay(0.25),
+                            value: introductionStage >= 2
+                        )
+                    }
+                    .frame(height: 10)
+                    .offset(y: 7)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
+            Text(".")
+        }
     }
 
     private func introductionReveal(at stage: Int) -> SkillIntroductionReveal {
