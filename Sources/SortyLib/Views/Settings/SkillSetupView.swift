@@ -9,7 +9,6 @@ struct SkillOnboardingView: View {
     @State private var isCheckingSkill = false
     @State private var errorMessage: String?
     @State private var audioPlayer: AVAudioPlayer?
-    @State private var isSoundEnabled = true
 
     var body: some View {
         SkillSetupView(
@@ -37,21 +36,8 @@ struct SkillOnboardingView: View {
                 .accessibilityHidden(true)
         }
         .accessibilityIdentifier("SkillOnboardingView")
-        .overlay(alignment: .topTrailing) {
-            Toggle("Onboarding sound", isOn: $isSoundEnabled)
-                .toggleStyle(.checkbox)
-                .font(.title3)
-                .fixedSize()
-                .padding(.top, 16)
-                .padding(.trailing, 24)
-                .accessibilityIdentifier("skill-onboarding.sound")
-        }
         .task {
             await playIntroSound()
-        }
-        .onChange(of: isSoundEnabled) { _, isEnabled in
-            audioPlayer?.volume = isEnabled ? 0.6 : 0
-            HapticFeedbackManager.shared.selection()
         }
         .onDisappear {
             audioPlayer?.stop()
@@ -92,7 +78,7 @@ struct SkillOnboardingView: View {
         guard !Task.isCancelled, audioPlayer == nil, let data,
               let player = try? AVAudioPlayer(data: data) else { return }
         player.numberOfLoops = 0
-        player.volume = isSoundEnabled ? 0.6 : 0
+        player.volume = 0.6
         player.prepareToPlay()
         audioPlayer = player
         player.play()

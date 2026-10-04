@@ -47,8 +47,7 @@ show everything immediately with Reduce Motion. Hidden content must also be
 hidden from accessibility and pointer input.
 
 The opening app icon is 160 points square. Skill onboarding plays the bundled
-`SkillOnboardingSound.m4a` once at 60% volume across its steps, with an
-Onboarding sound checkbox to mute it. Load audio data off the main actor after
+`SkillOnboardingSound.m4a` once at 60% volume across its steps. Load audio data off the main actor after
 the view mounts and stop playback when onboarding closes.
 
 ## Onboarding window
