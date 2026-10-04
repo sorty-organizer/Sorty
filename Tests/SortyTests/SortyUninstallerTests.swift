@@ -532,6 +532,69 @@ final class SortyUninstallerTests: XCTestCase {
         XCTAssertFalse(fileManager.fileExists(atPath: ready.path))
     }
 
+    func testPostQuitRemovalLeavesDeniedContainerDataButRemovesAppAndAccessibleFiles() throws {
+        let fileManager = FileManager.default
+        let home = makeTemporaryHome(fileManager: fileManager).resolvingSymlinksInPath()
+        let finderContainer = home.appendingPathComponent("Library/Containers/com.sorty.app.SortyFinderSync")
+        let finderData = finderContainer.appendingPathComponent("Data")
+        let groupContainer = home.appendingPathComponent("Library/Group Containers/group.com.sorty.app")
+        let widgetFile = groupContainer.appendingPathComponent("Widget/overview-snapshot.json")
+        let accessibleFile = groupContainer.appendingPathComponent("settings.json")
+        let app = home.appendingPathComponent("Sorty.app")
+        let ready = home.appendingPathComponent("ready")
+        for directory in [finderData, widgetFile.deletingLastPathComponent(), app] {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        for file in [finderData.appendingPathComponent("saved.json"), widgetFile, accessibleFile] {
+            try Data("saved data".utf8).write(to: file)
+        }
+        let restrictions = [(finderData, "everyone deny list,search"), (widgetFile, "everyone deny delete")]
+        defer {
+            for (path, _) in restrictions {
+                let chmod = Process()
+                chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+                chmod.arguments = ["-N", path.path]
+                try? chmod.run()
+                chmod.waitUntilExit()
+            }
+        }
+        for (path, restriction) in restrictions {
+            let chmod = Process()
+            chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+            chmod.arguments = ["+a", restriction, path.path]
+            try chmod.run()
+            chmod.waitUntilExit()
+            XCTAssertEqual(chmod.terminationStatus, 0)
+        }
+
+        let plan = SortyUninstaller.planFilesystemRemoval(
+            candidates: [finderContainer, groupContainer], fileManager: fileManager
+        )
+        XCTAssertEqual(Set(plan.failed.keys), [finderContainer.path])
+        try Data("ready".utf8).write(to: ready)
+        let sleeper = Process()
+        sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        sleeper.arguments = ["0.2"]
+        try sleeper.run()
+        let helper = Process()
+        helper.executableURL = URL(fileURLWithPath: "/bin/sh")
+        helper.arguments = SortyUninstaller.postTerminationRemovalArguments(
+            processIdentifier: sleeper.processIdentifier, readyURL: ready,
+            targetURLs: [app], bestEffortURLs: plan.targets
+        )
+        helper.standardOutput = FileHandle.nullDevice
+        helper.standardError = FileHandle.nullDevice
+        try helper.run()
+        sleeper.waitUntilExit()
+        helper.waitUntilExit()
+
+        XCTAssertEqual(helper.terminationStatus, 0)
+        XCTAssertFalse(fileManager.fileExists(atPath: app.path))
+        XCTAssertFalse(fileManager.fileExists(atPath: accessibleFile.path))
+        XCTAssertEqual(try Data(contentsOf: widgetFile), Data("saved data".utf8))
+        XCTAssertTrue(fileManager.fileExists(atPath: finderContainer.path))
+    }
+
     private func makeTemporaryHome(fileManager: FileManager) -> URL {
         let home = fileManager.temporaryDirectory
             .appendingPathComponent("SortyUninstallerTests-\(UUID().uuidString)", isDirectory: true)

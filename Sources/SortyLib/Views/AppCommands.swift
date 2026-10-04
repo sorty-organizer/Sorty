@@ -2186,7 +2186,9 @@ public class AppState: ObservableObject {
         alert.alertStyle = .warning
         alert.messageText = "Uninstall Sorty?"
         alert.informativeText = """
-        Sorty will close, delete the app, and remove its settings, history, caches, logs, Keychain credentials, Finder actions, login and background items, notifications, and privacy permissions.
+        Sorty will close, delete the app, clear Keychain credentials, and remove its Finder actions, login and background items, notifications, and privacy permissions. It will remove the settings, history, caches, and logs it can access.
+
+        Saved data that macOS prevents Sorty from removing will remain. No additional file-access permission is required to remove the app.
 
         Files and folders you organized with Sorty won't be changed. This can't be undone.
         """
@@ -2229,20 +2231,13 @@ public class AppState: ObservableObject {
             let pathDetails = report.failedPaths.sorted { $0.key < $1.key }
                 .map { "\($0.key): \($0.value)" }
                 .joined(separator: "\n")
-            let recovery = pathDetails.isEmpty ? "" : "\n\n\(pathDetails)\n\nIf macOS blocked access to Sorty’s containers, enable Sorty in System Settings > Privacy & Security > Full Disk Access, quit and reopen Sorty, then try again. If access is still denied, the listed files may have ownership or file-permission restrictions."
+            let recovery = pathDetails.isEmpty ? "" : "\n\nSaved data that could not be removed:\n\(pathDetails)"
             let alert = NSAlert()
             alert.alertStyle = .warning
             alert.messageText = "Uninstall Could Not Finish"
             alert.informativeText = "\(detail) The app was not deleted, so you can resolve the issue and try again.\(recovery)"
             alert.addButton(withTitle: "OK")
-            if !pathDetails.isEmpty {
-                alert.addButton(withTitle: "Open Full Disk Access")
-                    .setAccessibilityIdentifier("uninstallOpenFullDiskAccess")
-            }
-            if alert.runModal() == .alertSecondButtonReturn,
-               let settingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
-                NSWorkspace.shared.open(settingsURL)
-            }
+            alert.runModal()
         }
     }
     

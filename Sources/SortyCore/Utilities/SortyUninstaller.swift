@@ -143,42 +143,19 @@ public enum SortyUninstaller {
             fileManager: fileManager
         )
 
-        // Check protected data before clearing credentials or registrations. A
-        // denied container read must leave the installed app usable for a retry.
-        var accessFailures: [String: String] = [:]
-        let finalRemovalTargets = safeUniqueURLs(removalPaths.flatMap { url -> [URL] in
-            guard pathExistsOrIsSymbolicLink(url, fileManager: fileManager) else { return [] }
-            do {
-                let isSymbolicLink = try url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true
-                if isSymbolicLink && isApplicationScriptsLocation(url) { return [] }
-                let targets: [URL]
-                if retainsDirectoryDuringCleanup(url), !isSymbolicLink {
-                    targets = try containerContents(at: url, fileManager: fileManager)
-                } else {
-                    targets = [url]
-                }
-                for target in targets where !fileManager.isDeletableFile(atPath: target.path) {
-                    accessFailures[target.path] = "macOS denied permission to remove this saved file."
-                }
-                return targets
-            } catch {
-                accessFailures[url.path] = error.localizedDescription
-                return []
-            }
-        } + applicationURLs)
-        guard accessFailures.isEmpty else {
-            return emptyReport(
-                blockingFailureDescriptions: ["saved app data"],
-                failedPaths: accessFailures
-            )
-        }
-
+        // Container data is best-effort. Lack of data-access permission must
+        // not prevent removal of an application the user chose to uninstall.
+        let filesystemPlan = planFilesystemRemoval(
+            candidates: removalPaths,
+            fileManager: fileManager
+        )
         // Start the post-quit helper before any destructive step. It waits for
         // the ready marker, so a failed cleanup leaves the application installed.
         let removalReadyURL = temporaryDirectory
             .appendingPathComponent("sorty-uninstall-ready-\(UUID().uuidString)")
         let didStartRemovalHelper = schedulePostTerminationRemoval(
-            targetURLs: finalRemovalTargets,
+            targetURLs: applicationURLs,
+            bestEffortURLs: filesystemPlan.targets,
             readyURL: removalReadyURL,
             processIdentifier: ProcessInfo.processInfo.processIdentifier
         )
@@ -284,14 +261,8 @@ public enum SortyUninstaller {
         if !didClearDefaults {
             blockingFailures.append("saved settings")
         }
-        if !pathResult.failed.isEmpty {
-            // Filesystem cleanup is best-effort per path, but data that survived
-            // removal must not be reported as a finished uninstall.
-            blockingFailures.append("saved app data")
-        }
-
-        // Retain data-access grants until protected filesystem and defaults
-        // cleanup finishes. A failed cleanup must remain retryable.
+        // Keep credential and service failures blocking. Retained container
+        // files are reported separately and do not require another permission.
         if blockingFailures.isEmpty {
             resetPrivacyPermissions = self.resetPrivacyPermissions()
             if !resetPrivacyPermissions {
@@ -308,7 +279,7 @@ public enum SortyUninstaller {
         return SortyUninstallReport(
             removedPaths: pathResult.removed,
             missingPaths: pathResult.missing,
-            failedPaths: pathResult.failed,
+            failedPaths: filesystemPlan.failed.merging(pathResult.failed) { _, removalError in removalError },
             blockingFailureDescriptions: blockingFailures,
             applicationPathsScheduledForRemoval: didScheduleApplicationRemoval ? applicationURLs.map(\.path) : [],
             removedQuickActionCount: quickActionResult.removed,
@@ -441,9 +412,12 @@ public enum SortyUninstaller {
     static func postTerminationRemovalArguments(
         processIdentifier: Int32,
         readyURL: URL,
-        targetURLs: [URL]
+        targetURLs: [URL],
+        bestEffortURLs: [URL] = []
     ) -> [String] {
-        [
+        let requiredTargets = safeUniqueURLs(targetURLs)
+        let allTargets = safeUniqueURLs(requiredTargets + bestEffortURLs)
+        return [
             "-c",
             """
             TARGET_PID="$1"
@@ -490,6 +464,7 @@ public enum SortyUninstaller {
             fi
             /bin/rm -f "$READY_FILE"
             ATTEMPT=0
+            REQUIRED_COUNT=\(requiredTargets.count)
             # Finder, Spotlight, and launch services can briefly retain a just-quit
             # app bundle. Keep retrying long enough for those processes to release it.
             while [ "$ATTEMPT" -lt 150 ]; do
@@ -497,7 +472,12 @@ public enum SortyUninstaller {
                     /bin/rm -rf "$TARGET"
                 done
                 REMAINING=false
+                CHECKED=0
                 for TARGET in "$@"; do
+                    if [ "$CHECKED" -ge "$REQUIRED_COUNT" ]; then
+                        break
+                    fi
+                    CHECKED=$((CHECKED + 1))
                     if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
                         REMAINING=true
                         break
@@ -509,7 +489,12 @@ public enum SortyUninstaller {
                 ATTEMPT=$((ATTEMPT + 1))
                 /bin/sleep 0.2
             done
+            CHECKED=0
             for TARGET in "$@"; do
+                if [ "$CHECKED" -ge "$REQUIRED_COUNT" ]; then
+                    break
+                fi
+                CHECKED=$((CHECKED + 1))
                 if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
                     exit 1
                 fi
@@ -519,7 +504,7 @@ public enum SortyUninstaller {
             "sorty-uninstall-remove",
             String(processIdentifier),
             readyURL.path,
-        ] + safeUniqueURLs(targetURLs).map(\.path)
+        ] + allTargets.map(\.path)
     }
 
     private static func removalPathCandidates(
@@ -636,6 +621,32 @@ public enum SortyUninstaller {
         }
     }
 
+    /// Plans post-quit cleanup without following container links into user folders.
+    static func planFilesystemRemoval(
+        candidates: [URL],
+        fileManager: FileManager
+    ) -> (targets: [URL], failed: [String: String]) {
+        var accessFailures: [String: String] = [:]
+        let targets = safeUniqueURLs(candidates.flatMap { url -> [URL] in
+            guard pathExistsOrIsSymbolicLink(url, fileManager: fileManager) else { return [] }
+            do {
+                let isSymbolicLink = try url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true
+                if isSymbolicLink && isApplicationScriptsLocation(url) { return [] }
+                let targets: [URL]
+                if retainsDirectoryDuringCleanup(url), !isSymbolicLink {
+                    targets = try containerContents(at: url, fileManager: fileManager)
+                } else {
+                    targets = [url]
+                }
+                return targets
+            } catch {
+                accessFailures[url.path] = error.localizedDescription
+                return []
+            }
+        })
+        return (targets, accessFailures)
+    }
+
     private static func removeFilesystemState(
         candidates: [URL],
         fileManager: FileManager
@@ -708,6 +719,7 @@ public enum SortyUninstaller {
 
     private static func schedulePostTerminationRemoval(
         targetURLs: [URL],
+        bestEffortURLs: [URL],
         readyURL: URL,
         processIdentifier: Int32
     ) -> Bool {
@@ -716,7 +728,8 @@ public enum SortyUninstaller {
             arguments: postTerminationRemovalArguments(
                 processIdentifier: processIdentifier,
                 readyURL: readyURL,
-                targetURLs: targetURLs
+                targetURLs: targetURLs,
+                bestEffortURLs: bestEffortURLs
             )
         )
     }
@@ -910,15 +923,12 @@ public enum SortyUninstaller {
             || (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) == true
     }
 
-    private static func emptyReport(
-        blockingFailureDescriptions: [String] = ["application bundle"],
-        failedPaths: [String: String] = [:]
-    ) -> SortyUninstallReport {
+    private static func emptyReport() -> SortyUninstallReport {
         SortyUninstallReport(
             removedPaths: [],
             missingPaths: [],
-            failedPaths: failedPaths,
-            blockingFailureDescriptions: blockingFailureDescriptions,
+            failedPaths: [:],
+            blockingFailureDescriptions: ["application bundle"],
             applicationPathsScheduledForRemoval: [],
             removedQuickActionCount: 0,
             didScheduleApplicationRemoval: false,
