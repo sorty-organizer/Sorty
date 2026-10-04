@@ -6,19 +6,34 @@ public struct OrganizationQualityCorpusCase: Codable, Sendable {
     public let decisions: [OrganizationQualityDecision]
     public let manualPreviewEdits: Int
     public let wasReverted: Bool
+    public let replayDirectory: String?
+    public let replayInstructions: String?
+    public let isReplay: Bool?
+    public let replayDurationSeconds: Double?
+    public let replayNeedsReview: Bool?
 
     public init(
         id: String,
         description: String,
         decisions: [OrganizationQualityDecision],
         manualPreviewEdits: Int = 0,
-        wasReverted: Bool = false
+        wasReverted: Bool = false,
+        replayDirectory: String? = nil,
+        replayInstructions: String? = nil,
+        isReplay: Bool? = nil,
+        replayDurationSeconds: Double? = nil,
+        replayNeedsReview: Bool? = nil
     ) {
         self.id = id
         self.description = description
         self.decisions = decisions
         self.manualPreviewEdits = manualPreviewEdits
         self.wasReverted = wasReverted
+        self.replayDirectory = replayDirectory
+        self.replayInstructions = replayInstructions
+        self.isReplay = isReplay
+        self.replayDurationSeconds = replayDurationSeconds
+        self.replayNeedsReview = replayNeedsReview
     }
 }
 
@@ -35,6 +50,8 @@ public struct OrganizationQualityDecision: Codable, Sendable {
     public let renameConfidence: Double?
     public let wasSurfacedForReview: Bool
     public let isObserved: Bool?
+    public let acceptableDestinations: [String]?
+    public let expectedProjectPath: String?
 
     public init(
         sourcePath: String,
@@ -48,7 +65,9 @@ public struct OrganizationQualityDecision: Codable, Sendable {
         renameOutcome: QualityDecisionOutcome? = nil,
         renameConfidence: Double? = nil,
         wasSurfacedForReview: Bool = false,
-        isObserved: Bool? = true
+        isObserved: Bool? = true,
+        acceptableDestinations: [String]? = nil,
+        expectedProjectPath: String? = nil
     ) {
         self.sourcePath = sourcePath
         self.expectedDestination = expectedDestination
@@ -62,6 +81,8 @@ public struct OrganizationQualityDecision: Codable, Sendable {
         self.renameConfidence = renameConfidence.map { min(max($0, 0), 1) }
         self.wasSurfacedForReview = wasSurfacedForReview
         self.isObserved = isObserved
+        self.acceptableDestinations = acceptableDestinations
+        self.expectedProjectPath = expectedProjectPath
     }
 }
 
@@ -88,6 +109,9 @@ public struct OrganizationQualityReport: Codable, Sendable {
     public let manualPreviewEditsPer100Files: Double?
     public let calibrationError: Double?
     public let calibrationBins: [RenameCalibrationBin]
+    public let projectPreservationRate: Double?
+    public let meanReplayDurationSeconds: Double?
+    public let replayNeedsReviewRate: Double?
 }
 
 public struct RenameCalibrationBin: Codable, Sendable {
@@ -103,12 +127,17 @@ public enum OrganizationQualityEvaluator {
         let decisions = cases.flatMap(\.decisions)
         let observedDecisions = decisions.filter { $0.isObserved == true }
         let observedCases = cases.filter { $0.decisions.contains { $0.isObserved == true } }
-        let placementOutcomes = observedDecisions.compactMap(\.placementOutcome)
-        let renameOutcomes = observedDecisions.compactMap(\.renameOutcome)
+        let humanObservedCases = observedCases.filter { $0.isReplay != true }
+        let humanObservedDecisions = humanObservedCases.flatMap(\.decisions).filter { $0.isObserved == true }
+        let placementOutcomes = humanObservedDecisions.compactMap(\.placementOutcome)
+        let renameOutcomes = humanObservedDecisions.compactMap(\.renameOutcome)
 
         let placementExpected = observedDecisions.filter { !$0.shouldRemainUncertain }
         let placementMatches = placementExpected.filter {
-            normalizedPath($0.expectedDestination) == normalizedPath($0.observedDestination)
+            if let alternatives = $0.acceptableDestinations, !alternatives.isEmpty {
+                return alternatives.map { normalizedPath($0) }.contains(normalizedPath($0.observedDestination))
+            }
+            return normalizedPath($0.expectedDestination) == normalizedPath($0.observedDestination)
         }.count
 
         let renameExpected = observedDecisions.filter { $0.expectedRename != nil }
@@ -122,12 +151,29 @@ public enum OrganizationQualityEvaluator {
         }.count
         let ambiguous = observedDecisions.filter(\.shouldRemainUncertain)
         let reviewedAmbiguous = ambiguous.filter(\.wasSurfacedForReview).count
-        let calibrationSamples = observedDecisions.compactMap { decision -> (Double, Bool)? in
+        let calibrationSamples = humanObservedDecisions.compactMap { decision -> (Double, Bool)? in
             guard let confidence = decision.renameConfidence, let outcome = decision.renameOutcome else { return nil }
             return (confidence, outcome == .accepted)
         }
         let bins = calibrationBins(for: calibrationSamples)
         let calibrationError = weightedCalibrationError(bins: bins, sampleCount: calibrationSamples.count)
+        var projectCount = 0
+        var preservedProjects = 0
+        for corpusCase in observedCases {
+            let projectDecisions = corpusCase.decisions.filter { $0.isObserved == true && $0.expectedProjectPath != nil }
+            let projects = Dictionary(grouping: projectDecisions) { normalizedPath($0.expectedProjectPath) }
+            for (project, members) in projects where members.count >= 2 && project != nil {
+                projectCount += 1
+                if members.allSatisfy({ decision in
+                    guard let destination = normalizedPath(decision.observedDestination), let project else { return false }
+                    return destination == project || destination.hasPrefix(project + "/")
+                }) { preservedProjects += 1 }
+            }
+        }
+        let replayCases = cases.filter { $0.isReplay == true }
+        let durations = replayCases.compactMap(\.replayDurationSeconds)
+        let reviewOutcomes = replayCases.compactMap(\.replayNeedsReview)
+        let humanObservedFileCount = humanObservedDecisions.count
 
         return OrganizationQualityReport(
             caseCount: cases.count,
@@ -142,12 +188,15 @@ public enum OrganizationQualityEvaluator {
             renameExpectationMatchRate: rate(renameMatches, renameExpected.count),
             protectedNamePreservationRate: rate(protectedPreserved, protectedNames.count),
             ambiguousReviewRate: rate(reviewedAmbiguous, ambiguous.count),
-            revertRate: rate(observedCases.filter(\.wasReverted).count, observedCases.count),
-            manualPreviewEditsPer100Files: observedDecisions.isEmpty
+            revertRate: rate(humanObservedCases.filter(\.wasReverted).count, humanObservedCases.count),
+            manualPreviewEditsPer100Files: humanObservedFileCount == 0
                 ? nil
-                : Double(observedCases.reduce(0) { $0 + $1.manualPreviewEdits }) / Double(observedDecisions.count) * 100,
+                : Double(humanObservedCases.reduce(0) { $0 + $1.manualPreviewEdits }) / Double(humanObservedFileCount) * 100,
             calibrationError: calibrationError,
-            calibrationBins: bins
+            calibrationBins: bins,
+            projectPreservationRate: rate(preservedProjects, projectCount),
+            meanReplayDurationSeconds: durations.isEmpty ? nil : durations.reduce(0, +) / Double(durations.count),
+            replayNeedsReviewRate: rate(reviewOutcomes.filter { $0 }.count, reviewOutcomes.count)
         )
     }
 

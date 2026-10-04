@@ -158,7 +158,7 @@ var packageTargets: [Target] = [
     ),
     .executableTarget(
         name: "SortyQuality",
-        dependencies: ["SortyQualitySupport"],
+        dependencies: ["SortyQualitySupport", "SortyOrganizer", "SortyModels"],
         path: "Sources/SortyQuality"
     ),
     .testTarget(

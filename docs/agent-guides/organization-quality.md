@@ -32,4 +32,9 @@ than letting the first extension consume the whole budget.
 
 Use `SortyQuality` to report placement expectation matches, acceptance, manual
 preview edits, rename calibration, and reverts on a private reviewed corpus.
+Its optional preview replay runs the production pipeline without applying files.
+Cases can allow several destinations and annotate project boundaries. Replay
+reports include preview latency and review requirements without inventing human
+feedback. See [the corpus guide](../../QualityCorpus/README.md) for config,
+privacy, and comparison instructions.
 Do not claim quality gains from compilation or synthetic tests alone.

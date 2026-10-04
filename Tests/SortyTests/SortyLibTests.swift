@@ -566,4 +566,30 @@ final class OrganizationQualityEvaluatorTests: XCTestCase {
         XCTAssertNil(report.calibrationError)
         XCTAssertTrue(report.calibrationBins.isEmpty)
     }
+
+    func testReplayMeasuresAlternativeDestinationsAndProjectBoundariesWithoutInventingAcceptance() {
+        let corpus = [OrganizationQualityCorpusCase(
+            id: "replayed-project", description: "Two related project files", decisions: [
+                OrganizationQualityDecision(
+                    sourcePath: "acme-proposal.pdf", expectedDestination: "Projects/Acme/Documents",
+                    observedDestination: "Projects/Acme/Contracts", placementOutcome: .accepted,
+                    acceptableDestinations: ["Projects/Acme/Documents", "Projects/Acme/Contracts"],
+                    expectedProjectPath: "Projects/Acme"
+                ),
+                OrganizationQualityDecision(
+                    sourcePath: "acme-budget.xlsx", expectedDestination: "Projects/Acme",
+                    observedDestination: "Projects/Globex", expectedProjectPath: "Projects/Acme"
+                ),
+            ], manualPreviewEdits: 10, wasReverted: true, isReplay: true,
+            replayDurationSeconds: 12, replayNeedsReview: true
+        )]
+        let report = OrganizationQualityEvaluator.evaluate(corpus)
+        XCTAssertEqual(report.placementExpectationMatchRate, 0.5)
+        XCTAssertEqual(report.projectPreservationRate, 0)
+        XCTAssertEqual(report.meanReplayDurationSeconds, 12)
+        XCTAssertEqual(report.replayNeedsReviewRate, 1)
+        XCTAssertNil(report.placementAcceptanceRate)
+        XCTAssertNil(report.manualPreviewEditsPer100Files)
+        XCTAssertNil(report.revertRate)
+    }
 }
