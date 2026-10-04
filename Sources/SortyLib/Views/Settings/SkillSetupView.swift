@@ -66,58 +66,64 @@ struct SkillSetupView: View {
                 .accessibilityHidden(true)
             }
 
-            VStack(spacing: 0) {
-                progressRail
-                    .padding(.top, 48)
-                    .padding(.bottom, step == .preferences ? 16 : 28)
-                VStack(spacing: 8) {
-                    Text(step.title)
-                        .contentTransition(reduceMotion ? .identity : .numericText())
-                        .font(step == .preferences ? .title2.weight(.semibold) : .largeTitle.weight(.semibold))
-                        .multilineTextAlignment(.center)
-                        .accessibilityAddTraits(.isHeader)
-                        .accessibilityFocused($isHeadingFocused)
-                    Text(step.explanation)
-                        .contentTransition(reduceMotion ? .identity : .numericText())
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 590)
-                }
-                .padding(.horizontal, 40)
-                .padding(.bottom, step == .preferences ? 16 : 24)
-
-                Group {
-                    if step == .preferences || step == .review {
-                        stepContent
-                    } else {
-                        ScrollView { stepContent }
+            if isSaving {
+                importProgress
+                    .transition(.opacity)
+            } else {
+                VStack(spacing: 0) {
+                    progressRail
+                        .padding(.top, 48)
+                        .padding(.bottom, step == .preferences ? 16 : 28)
+                    VStack(spacing: 8) {
+                        Text(step.title)
+                            .contentTransition(reduceMotion ? .identity : .numericText())
+                            .font(step == .preferences ? .title2.weight(.semibold) : .largeTitle.weight(.semibold))
+                            .multilineTextAlignment(.center)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityFocused($isHeadingFocused)
+                        Text(step.explanation)
+                            .contentTransition(reduceMotion ? .identity : .numericText())
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: 590)
                     }
-                }
-                        .padding(.horizontal, 40)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: 880)
-                        .frame(maxWidth: .infinity)
-                        .id(step)
-                        .transition(.opacity)
-                .frame(maxHeight: .infinity)
-                .disabled(isLoading || isSaving)
-
-                if let errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .font(.callout)
-                        .foregroundStyle(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 40)
-                        .padding(.top, 12)
-                        .accessibilityIdentifier("skill-import.error")
-                }
-                navigation
                     .padding(.horizontal, 40)
-                    .padding(.vertical, 24)
+                    .padding(.bottom, step == .preferences ? 16 : 24)
+
+                    Group {
+                        if step == .preferences || step == .review {
+                            stepContent
+                        } else {
+                            ScrollView { stepContent }
+                        }
+                    }
+                            .padding(.horizontal, 40)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: 880)
+                            .frame(maxWidth: .infinity)
+                            .id(step)
+                            .transition(.opacity)
+                    .frame(maxHeight: .infinity)
+                    .disabled(isLoading || isSaving)
+
+                    if let errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.callout)
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 40)
+                            .padding(.top, 12)
+                            .accessibilityIdentifier("skill-import.error")
+                    }
+                    navigation
+                        .padding(.horizontal, 40)
+                        .padding(.vertical, 24)
+                }
             }
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isSaving)
         .background {
             OnboardingScreenBackdropBlurPresenter(
                 isVisible: !reduceTransparency && controlActiveState != .inactive
@@ -147,6 +153,43 @@ struct SkillSetupView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This replaces the skill at the chosen location, then imports your selection. Existing imported settings are backed up before the new import.")
+        }
+    }
+
+    private var importProgress: some View {
+        VStack(spacing: 20) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 88, height: 88)
+                .accessibilityHidden(true)
+            VStack(spacing: 8) {
+                Text("Importing preferences")
+                    .font(.title2.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityFocused($isHeadingFocused)
+                Text("Saving your selection to the Sorty skill.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
+            if reduceMotion {
+                Label("Import in progress", systemImage: "arrow.down.doc")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                ProgressView()
+                    .progressViewStyle(.linear)
+                    .frame(width: 220)
+                    .accessibilityLabel("Import in progress")
+            }
+        }
+        .multilineTextAlignment(.center)
+        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier("skill-import.progress")
+        .onAppear {
+            isHeadingFocused = true
+            AccessibilityNotification.Announcement("Importing preferences").post()
         }
     }
 

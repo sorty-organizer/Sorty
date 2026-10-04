@@ -17,6 +17,8 @@ Choose at least one setting to import. Reimporting replaces the previous importe
 
 Changing headings and action labels use text transitions, selection counts use numeric transitions, and step icons use symbol replacement. Reduce Motion disables these animations.
 
+During import, a centered Sorty icon, status message, and indeterminate progress bar replace the review controls. Reduce Motion shows a static status instead. Completion appears only after the import succeeds; failures return to review with an error.
+
 The preferences step uses category navigation and native checkboxes to select:
 
 - naming style, filename formatting, naming instructions, and rename rules;
