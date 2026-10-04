@@ -264,19 +264,19 @@ struct SkillSetupView: View {
                 .accessibilityIdentifier("skill-import.agent")
                 .disabled(isCheckingLocation)
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(installer.destinationURL.path)
-                        .font(.body.monospaced())
-                        .accessibilityLabel("Installation path: \(installer.destinationURL.path)")
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack {
-                        locationStatus
-                        Spacer()
+                    HStack(spacing: 16) {
+                        PrivacySensitivePathText(path: installer.destinationURL.path)
+                            .font(.body.monospaced())
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         Button("Choose Folder…", action: chooseLocation)
                             .buttonStyle(.sortyBordered())
                             .accessibilityIdentifier("skill-import.choose-location")
                             .disabled(isCheckingLocation)
+                            .fixedSize()
                     }
+                    locationStatus
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -332,7 +332,7 @@ struct SkillSetupView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         Label("Install location", systemImage: "folder").font(.headline)
-                        Text(installer.destinationURL.path)
+                        PrivacySensitivePathText(path: installer.destinationURL.path)
                             .font(.callout.monospaced())
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
@@ -516,7 +516,7 @@ struct SkillSetupView: View {
                     .buttonStyle(.sortyBordered(size: .small))
             }
         case .available, .failed:
-            Label("Ready to install", systemImage: "checkmark.circle")
+            EmptyView()
         }
     }
 
