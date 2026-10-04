@@ -342,7 +342,7 @@ struct HistorySummaryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Impact", systemImage: "chart.bar.xaxis.ascending")
-                .font(.headline)
+                .sortyTypography(.headline, weight: .medium)
                 .foregroundStyle(.primary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -615,7 +615,7 @@ struct LoadMoreHistoryRow: View {
     var body: some View {
         Button(action: action) {
             Label("Load More History", systemImage: "chevron.down.circle.fill")
-                .font(.subheadline.weight(.medium))
+                .sortyTypography(.body, weight: .medium)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)

@@ -93,7 +93,7 @@ struct SettingsView: View {
             if categories.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Nothing found")
-                        .font(.subheadline.weight(.medium))
+                        .sortyTypography(.body, weight: .medium)
                     Text("Sorty could not find that setting.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -143,7 +143,7 @@ struct SettingsView: View {
 
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.sectionMedium) {
                         if isSearching {
                             searchResultsHeader(results: results)
                                 .animatedAppearance(delay: 0.03)
@@ -293,7 +293,7 @@ struct SettingsView: View {
             }
 
             Text("\"\(trimmedSearchText)\" matched \(results.count) \(results.count == 1 ? "setting" : "settings") in \(uniqueCategoryCount) \(uniqueCategoryCount == 1 ? "section" : "sections").")
-                .font(.subheadline)
+                .sortyTypography(.body)
                 .foregroundStyle(.secondary)
                 .numericTextTransition(
                     animationValue: "\(trimmedSearchText)-\(results.count)-\(uniqueCategoryCount)"
@@ -315,9 +315,9 @@ struct SettingsView: View {
 
                 VStack(spacing: 5) {
                     Text("Sorty came up empty")
-                        .font(.headline)
+                        .sortyTypography(.headline, weight: .medium)
                     Text("Nothing matches \"\(trimmedSearchText)\" yet.")
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
@@ -335,7 +335,7 @@ struct SettingsView: View {
                     ) {
                         VStack(alignment: .leading, spacing: 10) {
                             Text(LocalizedStringKey(result.snippet.summary))
-                                .font(.subheadline)
+                                .sortyTypography(.body)
                                 .foregroundStyle(.secondary)
 
                             HStack(spacing: 8) {

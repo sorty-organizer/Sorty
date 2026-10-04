@@ -217,7 +217,7 @@ struct PersonaPickerView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Text("Additional Instructions")
-                        .font(.subheadline.weight(.medium))
+                        .sortyTypography(.body, weight: .medium)
 
                     instructionsInfoButton(
                         text: "These instructions are saved with \(personaManager.selectedPersona.displayName) and apply whenever you use this persona. Use them for preferences such as folder count, hierarchy depth, or grouping rules.",
@@ -389,7 +389,7 @@ struct PersonaPickerView: View {
     private var iconPicker: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Choose Icon")
-                .font(.headline)
+                .sortyTypography(.headline, weight: .medium)
 
             ScrollView {
                 LazyVGrid(
@@ -404,7 +404,7 @@ struct PersonaPickerView: View {
                             HapticFeedbackManager.shared.selection()
                         } label: {
                             Image(systemName: icon)
-                                .font(.system(size: 18, weight: .medium))
+                                .sortyTypography(.title3, weight: .medium)
                                 .frame(width: 38, height: 38)
                                 .foregroundStyle(localIcon == icon ? Color.purple : Color.primary)
                                 .background(
@@ -631,7 +631,7 @@ struct CustomPersonaButton: View {
     private func personaButtonLabel(name: String, icon: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.body)
+                .sortyTypography(.body)
                 .symbolRenderingMode(.hierarchical)
                 .accessibilityHidden(true)
 
@@ -674,7 +674,7 @@ struct PersonaButton: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: persona.icon)
-                    .font(.body)
+                    .sortyTypography(.body)
                     .symbolRenderingMode(.hierarchical)
                     .accessibilityHidden(true)
 

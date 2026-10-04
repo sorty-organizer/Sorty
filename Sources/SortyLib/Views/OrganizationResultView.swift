@@ -49,7 +49,7 @@ struct GenerationStatsView: View {
                         .foregroundStyle(.purple)
                     
                     Text("Stats for Nerds")
-                        .font(.headline)
+                        .sortyTypography(.headline, weight: .medium)
                         .foregroundStyle(.primary)
                     
                     Spacer()

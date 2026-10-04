@@ -38,7 +38,7 @@ struct AdvancedSettingsView: View {
     }
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: SortyDesignSystem.Spacing.sectionMedium) {
             SettingsCard(title: "Menu Bar", icon: "menubar.rectangle", color: .blue) {
                 VStack(spacing: 12) {
                     SettingsToggle(
@@ -273,7 +273,7 @@ private struct TimeoutSliderRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(LocalizedStringKey(title))
-                    .font(.subheadline)
+                    .sortyTypography(.body)
                 Spacer()
                 Text("\(Int(value))s")
                     .font(.subheadline.monospacedDigit())

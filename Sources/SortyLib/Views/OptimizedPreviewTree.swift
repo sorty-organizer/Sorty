@@ -1664,7 +1664,7 @@ struct FlatUnorganizedHeaderView: View {
             Image(systemName: "questionmark.folder")
                 .foregroundColor(.orange)
             Text("Unorganized Files")
-                .font(.headline)
+                .sortyTypography(.headline, weight: .medium)
                 .foregroundColor(.secondary)
             
             Spacer()

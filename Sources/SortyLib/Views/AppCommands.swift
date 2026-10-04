@@ -60,7 +60,7 @@ public struct BugReportView: View {
                     Text("Report a bug")
                         .font(.system(size: 22, weight: .semibold, design: .rounded))
                     Text("Describe the problem, then review your GitHub issue draft.")
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -76,7 +76,7 @@ public struct BugReportView: View {
             }
             TextEditor(text: $description)
                 .focused($isDescriptionFocused)
-                .font(.body)
+                .sortyTypography(.body)
                 .frame(height: showsSentryOption ? (sendToSentry ? 100 : 340) : 180)
                 .padding(4)
                 .background(Color(NSColor.controlBackgroundColor))

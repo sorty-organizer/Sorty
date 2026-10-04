@@ -35,7 +35,7 @@ struct TimelineView: View {
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Organization Timeline")
-                        .font(.headline)
+                        .sortyTypography(.headline, weight: .medium)
                     Text("Restore to any previous organization state")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -231,7 +231,7 @@ struct SelectedEntryCard: View {
                     .fill(entry.isUndone ? Color.orange.opacity(0.1) : Color.blue.opacity(0.1))
                     .frame(width: 40, height: 40)
                 Image(systemName: entry.isUndone ? "arrow.uturn.backward" : "folder.badge.gear")
-                    .font(.title3)
+                    .sortyTypography(.title3, weight: .medium)
                     .foregroundColor(entry.isUndone ? .orange : .blue)
                     .symbolReplaceTransition(animationValue: entry.isUndone)
             }
@@ -239,7 +239,7 @@ struct SelectedEntryCard: View {
             // Info
             VStack(alignment: .leading, spacing: 4) {
                 Text(entry.isUndone ? "Reverted State" : "Organization Snapshot")
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
                     .numericTextTransition(animationValue: entry.isUndone)
                 
                 Text(entry.timestamp.formatted(date: .long, time: .shortened))
@@ -262,7 +262,7 @@ struct SelectedEntryCard: View {
             // Action
             if isCurrentState {
                 Label("Current", systemImage: "checkmark.circle.fill")
-                    .font(.subheadline)
+                    .sortyTypography(.body)
                     .foregroundColor(.green)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -318,7 +318,7 @@ struct EmptyTimelineView: View {
                 .foregroundColor(.secondary.opacity(0.5))
             
             Text("No timeline available")
-                .font(.subheadline)
+                .sortyTypography(.body)
                 .foregroundColor(.secondary)
             
             Text("Organize this folder to create timeline snapshots")

@@ -54,7 +54,7 @@ struct AutomationSettingsView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Loading automation settings")
             } else {
-                VStack(spacing: 16) {
+                VStack(spacing: SortyDesignSystem.Spacing.sectionMedium) {
                     globalModelSection
                         .animatedAppearance(delay: 0.05)
 
@@ -79,7 +79,7 @@ struct AutomationSettingsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text("Use separate model for automation")
-                                .font(.subheadline)
+                                .sortyTypography(.body)
 
                             Button {
                                 HapticFeedbackManager.shared.tap()
@@ -100,7 +100,7 @@ struct AutomationSettingsView: View {
                             .popover(isPresented: $showAutomationModelInfo, arrowEdge: .trailing) {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Separate Automation Model")
-                                        .font(.headline)
+                                        .sortyTypography(.headline, weight: .medium)
 
                                     Text("The main Organize page keeps using the model selected under AI Provider. For faster, more responsive automation, try a smaller model such as GPT-5.6 Luna (High).")
                                         .font(.caption)
@@ -204,7 +204,7 @@ struct AutomationSettingsView: View {
                     Toggle(isOn: launchAtLoginBinding) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Launch at Login")
-                                .font(.subheadline)
+                                .sortyTypography(.body)
                             Text("Automatically start Sorty when you log in to macOS")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -217,7 +217,7 @@ struct AutomationSettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
                                 Text("Keep in Background")
-                                    .font(.subheadline)
+                                    .sortyTypography(.body)
 
                                 Button {
                                     HapticFeedbackManager.shared.tap()
@@ -238,7 +238,7 @@ struct AutomationSettingsView: View {
                                     VStack(alignment: .leading, spacing: 12) {
                                         HStack(alignment: .firstTextBaseline) {
                                             Text("Background Activity")
-                                                .font(.headline)
+                                                .sortyTypography(.headline, weight: .medium)
                                             Spacer()
                                             backgroundStatusBadge
                                         }
@@ -273,7 +273,7 @@ struct AutomationSettingsView: View {
                     Toggle(isOn: $hideDockIcon) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Hide Dock Icon")
-                                .font(.subheadline)
+                                .sortyTypography(.body)
                             Text("Run as a menu bar app without showing in the Dock")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)

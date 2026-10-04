@@ -88,7 +88,7 @@ public struct ProviderSelectionStepView: View {
                         .font(.system(size: 28, weight: .bold, design: .rounded))
 
                     Text("Sorty sends file names and metadata to the provider you pick. File contents stay on your Mac unless you enable Deep Scan.")
-                        .font(.body)
+                        .sortyTypography(.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -173,7 +173,7 @@ public struct ProviderSelectionStepView: View {
 
                             if settingsViewModel.config.provider == .unavailableProvider {
                                 Text(setupStatus.message)
-                                    .font(.subheadline)
+                                    .sortyTypography(.body)
                                     .foregroundStyle(.orange)
                             } else {
                                 providerConfigSection
@@ -330,7 +330,7 @@ public struct ProviderSelectionStepView: View {
             if settingsViewModel.config.provider == .openAICompatible || settingsViewModel.config.provider == .ollama {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("API URL")
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                         .fontWeight(.medium)
 
                     TextField("https://api.example.com", text: $apiURLDraft)
@@ -382,7 +382,7 @@ public struct ProviderSelectionStepView: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Model")
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                     Text("Used for organization")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -412,7 +412,7 @@ public struct ProviderSelectionStepView: View {
     private var apiKeyInputSection: some View {
         HStack {
             Text("API Key")
-                .font(.subheadline)
+                .sortyTypography(.body)
                 .fontWeight(.medium)
 
             Spacer()
@@ -492,7 +492,7 @@ public struct ProviderSelectionStepView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Signed in via Codex CLI")
-                            .font(.subheadline)
+                            .sortyTypography(.body)
                             .fontWeight(.medium)
                         if let email = codexAuth.accountEmail {
                             CodexEmailRevealText(value: email)
@@ -615,7 +615,7 @@ public struct ProviderSelectionStepView: View {
                     HStack(spacing: 8) {
                         BouncingSpinner(size: 14, color: .accentColor)
                         Text("Testing connection...")
-                            .font(.subheadline)
+                            .sortyTypography(.body)
                             .foregroundStyle(.secondary)
                     }
 
@@ -624,7 +624,7 @@ public struct ProviderSelectionStepView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                         Text("Connection successful")
-                            .font(.subheadline)
+                            .sortyTypography(.body)
                             .foregroundStyle(.green)
                     }
 
@@ -634,7 +634,7 @@ public struct ProviderSelectionStepView: View {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.orange)
                             Text("Connection failed")
-                                .font(.subheadline)
+                                .sortyTypography(.body)
                                 .foregroundStyle(.orange)
 
                             Button("Retry") {
@@ -1179,12 +1179,12 @@ struct PrivacyFeatureRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .sortyTypography(.body)
                 .foregroundStyle(.green)
                 .frame(width: 20)
 
             Text(text)
-                .font(.subheadline)
+                .sortyTypography(.body)
                 .foregroundStyle(.primary)
 
             if let badge {

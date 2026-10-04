@@ -100,7 +100,7 @@ struct PersonaGeneratorView: View {
                 }
 
                 Text(currentGenerationStatus)
-                    .font(.subheadline)
+                    .sortyTypography(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(width: 360)
@@ -139,7 +139,7 @@ struct PersonaGeneratorView: View {
                     .fontWeight(.bold)
                 
                 Text("Describe your ideal organization style.")
-                    .font(.body)
+                    .sortyTypography(.body)
                     .foregroundColor(.secondary)
             }
             .padding(.top, 24)
@@ -147,7 +147,7 @@ struct PersonaGeneratorView: View {
             // Input Area
             VStack(alignment: .leading, spacing: 8) {
                 Text("I want to organize...")
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
                 
                 ZStack(alignment: .topLeading) {
                     SubmittableTextEditor(
@@ -168,7 +168,7 @@ struct PersonaGeneratorView: View {
                     if prompt.isEmpty {
                         HStack(alignment: .top, spacing: 10) {
                             Text(currentPromptSuggestion)
-                                .font(.body)
+                                .sortyTypography(.body)
                                 .foregroundStyle(.tertiary)
                                 .lineLimit(2)
                                 .numericTextTransition(animationValue: promptSuggestionIndex)
@@ -285,7 +285,7 @@ struct PersonaGeneratorView: View {
 
             VStack(alignment: .leading, spacing: 16) {
                 Text(question.text)
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
                     .fixedSize(horizontal: false, vertical: true)
                 
                 ForEach(question.options, id: \.self) { option in

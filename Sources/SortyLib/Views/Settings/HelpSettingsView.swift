@@ -24,7 +24,7 @@ struct HelpSettingsView: View {
     private var copiedIssueDetails: Bool { reportCopyFeedback.isCopied }
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: SortyDesignSystem.Spacing.sectionMedium) {
             SettingsCard(title: "Support", icon: "questionmark.circle.fill", color: .teal) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 10) {
@@ -78,7 +78,7 @@ struct HelpSettingsView: View {
 
                     HStack(alignment: .center, spacing: 12) {
                         Text("Sorty \(BuildInfo.version) (\(BuildInfo.build))")
-                            .font(.subheadline.weight(.medium))
+                            .sortyTypography(.body, weight: .medium)
 
                         Spacer()
 
@@ -317,7 +317,7 @@ struct DeeplinkSettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Label("Deeplink Library", systemImage: "link.badge.plus")
-                        .font(.headline)
+                        .sortyTypography(.headline, weight: .medium)
                         .foregroundStyle(.primary)
 
                     Button {
@@ -348,7 +348,7 @@ struct DeeplinkSettingsView: View {
                 }
 
                 Text("Copy `sorty://` URLs for Shortcuts, Raycast, AppleScript, shell scripts, and other launchers.")
-                    .font(.subheadline)
+                    .sortyTypography(.body)
                     .foregroundStyle(.secondary)
             }
 
@@ -392,7 +392,7 @@ private struct HelpIconLink: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.title3)
+                    .sortyTypography(.title3, weight: .medium)
                     .foregroundStyle(isHovered ? color : .secondary)
                 Text(LocalizedStringKey(title))
                     .font(.caption.weight(.semibold))

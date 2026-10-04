@@ -62,11 +62,12 @@ public struct SortyStandardButtonStyle: ButtonStyle {
         let radius = size == .small ? 7.0 : 8.0
 
         configuration.label
-            .font(.system(size: fontSize, weight: isProminent ? .semibold : .medium))
+            .sortyTypography(size == .mini ? .caption2 : size == .small ? .caption : size == .large || size == .extraLarge ? .headline : .body, weight: .medium)
             .lineLimit(1)
             .foregroundStyle(foregroundStyle(intent: resolvedIntent, accent: accent))
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
+            .frame(minHeight: isProminent && size != .mini && size != .small ? SortyDesignSystem.Sizing.buttonHeightLarge : nil)
             .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .background {
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -91,21 +92,12 @@ public struct SortyStandardButtonStyle: ButtonStyle {
             }
     }
 
-    private var fontSize: CGFloat {
-        switch size {
-        case .mini: return 11
-        case .small: return 12
-        case .large, .extraLarge: return 15
-        default: return 14
-        }
-    }
-
     private var horizontalPadding: CGFloat {
         switch size {
         case .mini: return 10
         case .small: return 12
-        case .large, .extraLarge: return 20
-        default: return 16
+        case .large, .extraLarge: return SortyDesignSystem.Spacing.buttonHorizontalPadding + SortyDesignSystem.Spacing.buttonTextPadding
+        default: return isProminent ? SortyDesignSystem.Spacing.buttonHorizontalPadding + SortyDesignSystem.Spacing.buttonTextPadding : SortyDesignSystem.Spacing.buttonHorizontalPadding
         }
     }
 
@@ -162,11 +154,12 @@ public struct SortyPrimaryButtonStyle: ButtonStyle {
     
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: size == .small ? 13 : size == .large ? 18 : 15, weight: .semibold))
+            .sortyTypography(size == .large || size == .extraLarge ? .title3 : .body, weight: .medium)
             .lineLimit(1)
             .foregroundStyle(isSecondary ? Color.primary : Color.white)
-            .padding(.horizontal, size == .small ? 16 : size == .large ? 32 : 22)
-            .padding(.vertical, size == .small ? 8 : size == .large ? 16 : 10)
+            .padding(.horizontal, SortyDesignSystem.Spacing.buttonHorizontalPadding + SortyDesignSystem.Spacing.buttonTextPadding)
+            .padding(.vertical, size == .small ? 8 : 10)
+            .frame(minHeight: size == .small || size == .mini ? nil : SortyDesignSystem.Sizing.buttonHeightLarge)
             .background(
                 ZStack {
                     if isSecondary {
@@ -250,11 +243,12 @@ public struct TintedPillButtonStyle: ButtonStyle {
 
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: size == .small ? 13 : 15, weight: .semibold))
+            .sortyTypography(.body, weight: .medium)
             .lineLimit(1)
             .foregroundColor(foregroundColor)
-            .padding(.horizontal, size == .small ? 16 : 22)
+            .padding(.horizontal, SortyDesignSystem.Spacing.buttonHorizontalPadding + SortyDesignSystem.Spacing.buttonTextPadding)
             .padding(.vertical, size == .small ? 8 : 10)
+            .frame(minHeight: size == .small || size == .mini ? nil : SortyDesignSystem.Sizing.buttonHeightLarge)
             .background(
                 ZStack {
                     Capsule()
@@ -305,7 +299,7 @@ public struct SortySecondaryButtonStyle: ButtonStyle {
     
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: size == .small ? 12 : 14, weight: .medium))
+            .sortyTypography(size == .small ? .caption : .body, weight: .medium)
             .lineLimit(1)
             .padding(.horizontal, size == .small ? 12 : 16)
             .padding(.vertical, size == .small ? 6 : 10)
@@ -348,11 +342,12 @@ public struct MetalFxPrimaryButtonStyle: ButtonStyle {
         let pressed = configuration.isPressed
 
         configuration.label
-            .font(.system(size: 14, weight: .semibold))
+            .sortyTypography(.body, weight: .medium)
             .lineLimit(1)
             .foregroundStyle(.white)
-            .padding(.horizontal, 22)
+            .padding(.horizontal, SortyDesignSystem.Spacing.buttonHorizontalPadding + SortyDesignSystem.Spacing.buttonTextPadding)
             .padding(.vertical, 10)
+            .frame(minHeight: SortyDesignSystem.Sizing.buttonHeightLarge)
             .background {
                 MetalFxPillSurface(
                     isPressed: pressed,
@@ -372,8 +367,8 @@ public struct MetalFxPrimaryButtonStyle: ButtonStyle {
             )
             .scaleEffect(pressed ? 0.975 : 1)
             .opacity(isEnabled ? 1 : 0.56)
-            .animation(.easeOut(duration: 0.14), value: pressed)
-            .animation(.spring(response: 0.24, dampingFraction: 0.82), value: isHovering)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: pressed)
+            .animation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82), value: isHovering)
             .onHover { hovering in
                 isHovering = hovering
                 if hovering {

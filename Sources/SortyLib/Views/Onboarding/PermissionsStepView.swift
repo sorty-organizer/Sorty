@@ -53,7 +53,7 @@ public struct PermissionsStepView: View {
                     Text(
                         "Sorty needs Files & Folders access before organizing. Grant optional permissions now if you want Finder actions, broader folder access, or system notifications."
                     )
-                    .font(.body)
+                    .sortyTypography(.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -739,7 +739,7 @@ struct PermissionRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 7) {
                     Text(LocalizedStringKey(type.rawValue))
-                        .font(.headline)
+                        .sortyTypography(.headline, weight: .medium)
 
                     if isRequired {
                         Text("Required")
@@ -1115,7 +1115,7 @@ struct AutomationPermissionRecoveryView: View {
                 .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Text("3. Reopen Sorty and choose Enable again.")
             }
-            .font(.body)
+            .sortyTypography(.body)
 
             HStack {
                 Spacer()

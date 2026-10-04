@@ -195,7 +195,7 @@ struct AIReasoningStatus: View {
                 if isEstablishingConnection {
                     HStack(spacing: 6) {
                         Text(organizationStage)
-                            .font(.headline)
+                            .sortyTypography(.headline, weight: .medium)
                             .foregroundStyle(.primary)
                             .numericTextTransition(
                                 animationValue: organizationStage,
@@ -208,7 +208,7 @@ struct AIReasoningStatus: View {
                     .transition(.opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
                 } else {
                     Text(organizationStage)
-                        .font(.headline)
+                        .sortyTypography(.headline, weight: .medium)
                         .foregroundStyle(.primary)
                         .numericTextTransition(
                             animationValue: organizationStage,
@@ -219,7 +219,7 @@ struct AIReasoningStatus: View {
 
                 if !isEstablishingConnection && isStreaming {
                     Text(isRenameOnly ? renameStatusMessage : funnyMessage)
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                         .foregroundStyle(.secondary)
                         .numericTextTransition(
                             animationValue: isRenameOnly ? renameStatusMessage : funnyMessage,
