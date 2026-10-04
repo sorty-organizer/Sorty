@@ -18,9 +18,9 @@ struct DuplicateSettingsView: View {
             HStack(spacing: SortyDesignSystem.Spacing.lg) {
                 VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xxs) {
                     Text("Duplicate Preferences")
-                        .font(SortyDesignSystem.Typography.title3())
+                        .sortyTypography(.title3, weight: .medium)
                     Text("Control what scans include and how bulk cleanup keeps a copy.")
-                        .font(SortyDesignSystem.Typography.subheadline())
+                        .sortyTypography()
                         .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
                 }
 
@@ -47,7 +47,7 @@ struct DuplicateSettingsView: View {
             Divider()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xl) {
+                VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.sectionMedium) {
                     SettingsCard(
                         title: "Scan Results",
                         icon: "magnifyingglass",
@@ -60,7 +60,7 @@ struct DuplicateSettingsView: View {
                             )
 
                             Text("Similar files may be versions or variants. Sorty keeps them out of bulk cleanup so you can review them individually.")
-                                .font(SortyDesignSystem.Typography.subheadline())
+                                .sortyTypography()
                                 .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
 
@@ -115,7 +115,7 @@ struct DuplicateSettingsView: View {
                             .pickerStyle(.menu)
 
                             Text(settingsManager.settings.defaultKeepStrategy.description)
-                                .font(SortyDesignSystem.Typography.subheadline())
+                                .sortyTypography()
                                 .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }

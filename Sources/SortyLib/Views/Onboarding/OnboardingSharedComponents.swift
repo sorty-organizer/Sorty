@@ -74,7 +74,7 @@ struct GeneratePersonaButton: View {
 
                 VStack(spacing: 4) {
                     Text(LocalizedStringKey(title))
-                        .font(.headline)
+                        .sortyTypography(.headline, weight: .medium)
                         .foregroundStyle(.primary)
 
                     Text(LocalizedStringKey(subtitle))

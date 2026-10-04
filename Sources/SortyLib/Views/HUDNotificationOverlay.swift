@@ -223,7 +223,7 @@ private struct HUDNotificationHeader: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: notification.icon)
-                .font(.title3)
+                .sortyTypography(.title3, weight: .medium)
                 .foregroundStyle(notification.iconColor)
                 .frame(width: 28, height: 28)
                 .symbolReplaceTransition(animationValue: notification.icon)
@@ -231,7 +231,7 @@ private struct HUDNotificationHeader: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(notification.title)
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
                     .fontWeight(.semibold)
                     .foregroundStyle(.primary)
                     .lineLimit(2)

@@ -28,7 +28,7 @@ struct OrganizationStrategySettingsView: View {
     @State private var namingReferenceFolderURL: URL?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.sectionMedium) {
             SettingsCard(title: "Scanning Options", icon: "doc.text.magnifyingglass", color: .blue) {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -211,7 +211,7 @@ struct OrganizationStrategySettingsView: View {
 
                         HStack {
                             Text("Max Length")
-                                .font(.subheadline)
+                                .sortyTypography(.body)
                             NoTickSlider(
                                 value: Binding(
                                     get: { Double(viewModel.config.renameNamingOptions.maxFilenameLength) },
@@ -323,7 +323,7 @@ struct OrganizationStrategySettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 6) {
                             Text(viewModel.config.namingStyle == .custom ? "Custom Naming Instructions" : "Additional Naming Instructions")
-                                .font(.subheadline.weight(.medium))
+                                .sortyTypography(.body, weight: .medium)
                                 .numericTextTransition(
                                     animationValue: viewModel.config.namingStyle
                                 )
@@ -582,18 +582,18 @@ private struct EditPresetSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Edit Naming Preset")
-                .font(.headline)
+                .sortyTypography(.headline, weight: .medium)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Name")
-                    .font(.subheadline.weight(.medium))
+                    .sortyTypography(.body, weight: .medium)
                 TextField("Preset name", text: $editName)
                     .textFieldStyle(.roundedBorder)
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Instructions")
-                    .font(.subheadline.weight(.medium))
+                    .sortyTypography(.body, weight: .medium)
                 TextEditor(text: $editInstructions)
                     .font(.system(.body, design: .monospaced))
                     .frame(minHeight: 120)

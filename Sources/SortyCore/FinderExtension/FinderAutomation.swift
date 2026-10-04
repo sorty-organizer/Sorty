@@ -347,19 +347,3 @@ public enum PermissionStatus: Sendable {
         return self == .granted
     }
 }
-
-// MARK: - String Extension for FourCharCode
-
-extension String {
-    var fourCharCode: FourCharCode {
-        var result: FourCharCode = 0
-        let chars = Array(self.utf8)
-        if chars.count >= 4 {
-            result = FourCharCode(chars[0]) << 24 |
-                     FourCharCode(chars[1]) << 16 |
-                     FourCharCode(chars[2]) << 8 |
-                     FourCharCode(chars[3])
-        }
-        return result
-    }
-}

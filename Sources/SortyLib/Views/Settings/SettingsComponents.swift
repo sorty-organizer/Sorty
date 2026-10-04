@@ -137,20 +137,21 @@ struct SidebarButton: View {
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
+            HStack(spacing: SortyDesignSystem.Spacing.labelToList) {
                 Image(systemName: icon)
-                    .font(.system(size: 14))
+                    .font(.system(size: SortyDesignSystem.Sizing.navigationIcon))
                     .foregroundStyle(isSelected ? color : .secondary)
-                    .frame(width: 20)
+                    .frame(width: SortyDesignSystem.Sizing.navigationIcon)
+                    .accessibilityHidden(true)
                 
                 Text(LocalizedStringKey(title))
-                    .font(.subheadline)
+                    .sortyTypography()
                     .foregroundStyle(isSelected ? .primary : .secondary)
                 
                 Spacer()
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, SortyDesignSystem.Spacing.md)
+            .padding(.vertical, SortyDesignSystem.Spacing.listVerticalPadding)
             .background(isSelected ? color.opacity(0.1) : Color.clear)
             .contentShape(Rectangle())
             .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -160,6 +161,7 @@ struct SidebarButton: View {
 }
 
 struct SettingsCard<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @SortyHotReload private var hotReload
     let title: String
     let icon: String
@@ -205,22 +207,23 @@ struct SettingsCard<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: isExpanded == nil ? 12 : 0) {
+        VStack(alignment: .leading, spacing: isExpanded == nil ? SortyDesignSystem.Spacing.labelToList : 0) {
             if let isExpanded {
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
                         isExpanded.wrappedValue.toggle()
                     }
                     HapticFeedbackManager.shared.tap()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: icon)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: SortyDesignSystem.Sizing.listIcon, weight: .regular))
                             .foregroundStyle(color)
-                            .frame(width: 16)
+                            .frame(width: SortyDesignSystem.Sizing.listIcon)
+                            .accessibilityHidden(true)
 
                         Text(LocalizedStringKey(title))
-                            .font(.subheadline.weight(.semibold))
+                            .sortyTypography(.headline, weight: .medium)
                             .foregroundStyle(.secondary)
 
                         headerAccessory
@@ -235,7 +238,7 @@ struct SettingsCard<Content: View>: View {
                             )
                     }
                     .contentShape(Rectangle())
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, SortyDesignSystem.Spacing.listHorizontalPadding)
                     .padding(.vertical, 12)
                 }
                 .buttonStyle(.plain)
@@ -254,14 +257,16 @@ struct SettingsCard<Content: View>: View {
             if isExpanded?.wrappedValue != false {
                 if isExpanded != nil {
                     Divider()
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, SortyDesignSystem.Spacing.listHorizontalPadding)
                 }
 
                 content
-                    .padding(isExpanded == nil ? 0 : 16)
+                    .padding(.horizontal, isExpanded == nil ? 0 : SortyDesignSystem.Spacing.listHorizontalPadding)
+                    .padding(.vertical, isExpanded == nil ? 0 : SortyDesignSystem.Spacing.listVerticalPadding)
             }
         }
-        .padding(isExpanded == nil ? 16 : 0)
+        .padding(.horizontal, isExpanded == nil ? SortyDesignSystem.Spacing.listHorizontalPadding : 0)
+        .padding(.vertical, isExpanded == nil ? SortyDesignSystem.Spacing.listVerticalPadding : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
         // The card is a container. Its controls provide their own interaction
         // feedback, so the glass itself does not need continuous pointer state.
@@ -271,11 +276,12 @@ struct SettingsCard<Content: View>: View {
     private func header() -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: SortyDesignSystem.Sizing.listIcon, weight: .regular))
                 .foregroundStyle(color)
-                .frame(width: 14)
+                .frame(width: SortyDesignSystem.Sizing.listIcon)
+                .accessibilityHidden(true)
             Text(LocalizedStringKey(title))
-                .font(.system(size: 11, weight: .bold))
+                .sortyTypography(.headline, weight: .medium)
                 .foregroundColor(.secondary)
             headerAccessory
             countBadge
@@ -307,7 +313,7 @@ struct SettingsTextField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(LocalizedStringKey(title))
-                .font(.subheadline)
+                .sortyTypography()
             TextField(LocalizedStringKey(placeholder), text: $text)
                 .textFieldStyle(.roundedBorder)
         }
@@ -328,7 +334,7 @@ struct SettingsSecureField: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(LocalizedStringKey(title))
-                    .font(.subheadline)
+                    .sortyTypography()
                 if isOptional {
                     Text("Optional")
                         .font(.caption)
@@ -393,7 +399,7 @@ struct SettingsToggle: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(LocalizedStringKey(title))
-                    .font(.subheadline.weight(.medium))
+                    .sortyTypography(.body, weight: .medium)
                     .foregroundColor(.primary)
                 if let description = description {
                     Text(LocalizedStringKey(description))
@@ -478,7 +484,7 @@ struct SettingsSubsettingRow<Control: View>: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(LocalizedStringKey(title))
-                        .font(.subheadline.weight(.medium))
+                        .sortyTypography(.body, weight: .medium)
                         .foregroundStyle(.primary)
 
                     if let description {

@@ -62,9 +62,9 @@ public enum SortyDesignSystem {
     public enum Typography {
         // Font sizes (referenced by the style helpers below)
         public static let sizeCaption2: CGFloat = 10
-        public static let sizeSubheadline: CGFloat = 13
+        public static let sizeSubheadline: CGFloat = 14
         public static let sizeBody: CGFloat = 14
-        public static let sizeHeadline: CGFloat = 15
+        public static let sizeHeadline: CGFloat = 16
         public static let sizeTitle3: CGFloat = 18
 
         // Standard font styles
@@ -80,11 +80,11 @@ public enum SortyDesignSystem {
             .system(size: sizeBody, weight: weight)
         }
 
-        public static func headline(weight: Font.Weight = .semibold) -> Font {
+        public static func headline(weight: Font.Weight = .medium) -> Font {
             .system(size: sizeHeadline, weight: weight)
         }
 
-        public static func title3(weight: Font.Weight = .semibold) -> Font {
+        public static func title3(weight: Font.Weight = .medium) -> Font {
             .system(size: sizeTitle3, weight: weight)
         }
     }
@@ -105,6 +105,12 @@ public enum SortyDesignSystem {
         public static let xxxl: CGFloat = 32
         public static let xxxxl: CGFloat = 40
 
+        public static let labelToList: CGFloat = 12
+        public static let listVerticalPadding: CGFloat = 12
+        public static let listHorizontalPadding: CGFloat = 20
+        public static let buttonHorizontalPadding: CGFloat = 16
+        public static let buttonTextPadding: CGFloat = 4
+
         // Section spacing
         public static let sectionSmall: CGFloat = 20
         public static let sectionMedium: CGFloat = 28
@@ -121,10 +127,13 @@ public enum SortyDesignSystem {
         public static let iconXXLarge: CGFloat = 32
         public static let iconHuge: CGFloat = 48
 
+        public static let navigationIcon: CGFloat = 24
+        public static let listIcon: CGFloat = 28
+
         // Button sizes
         public static let buttonHeightSmall: CGFloat = 24
         public static let buttonHeightMedium: CGFloat = 32
-        public static let buttonHeightLarge: CGFloat = 40
+        public static let buttonHeightLarge: CGFloat = 44
 
         // Card sizes
         public static let cardCornerRadius: CGFloat = 12
@@ -152,4 +161,38 @@ public enum SortyDesignSystem {
 // MARK: - Animation Extensions
 public extension Animation {
     static var sortySpringStandard: Animation { .spring(response: 0.5, dampingFraction: 0.8) }
+}
+
+// Shared reading styles use SF Pro and scale with the user's text settings.
+@MainActor
+private struct SortyTypographyModifier: ViewModifier {
+    @ScaledMetric(relativeTo: .body) private var bodySize = SortyDesignSystem.Typography.sizeBody
+    @ScaledMetric(relativeTo: .headline) private var headlineSize = SortyDesignSystem.Typography.sizeHeadline
+    @ScaledMetric(relativeTo: .title3) private var titleSize = SortyDesignSystem.Typography.sizeTitle3
+    @ScaledMetric(relativeTo: .body) private var leading: CGFloat = 4
+
+    let style: Font.TextStyle
+    let weight: Font.Weight
+
+    func body(content: Content) -> some View {
+        let size: CGFloat
+        switch style {
+        case .title3: size = titleSize
+        case .headline: size = headlineSize
+        case .caption: size = bodySize * 12 / 14
+        case .caption2: size = bodySize * 11 / 14
+        default: size = bodySize
+        }
+        content
+            .font(.system(size: size, weight: weight))
+            .lineSpacing(leading)
+    }
+}
+
+public extension View {
+    /// Applies the app's 14, 16, or 18 point reading scale with four points of extra leading.
+    @MainActor
+    func sortyTypography(_ style: Font.TextStyle = .body, weight: Font.Weight = .regular) -> some View {
+        modifier(SortyTypographyModifier(style: style, weight: weight))
+    }
 }

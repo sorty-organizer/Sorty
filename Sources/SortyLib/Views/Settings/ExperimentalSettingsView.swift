@@ -14,7 +14,7 @@ struct ExperimentalSettingsView: View {
     @State private var hasAppeared = false
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: SortyDesignSystem.Spacing.sectionMedium) {
             CodexSkillInstallerCard()
 
             Group {

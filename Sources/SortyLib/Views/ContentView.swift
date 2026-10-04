@@ -334,7 +334,12 @@ public struct ContentView: View {
             Text(LocalizedStringKey(item.title))
         } icon: {
             Image(systemName: item.systemImage)
+                .font(.system(size: SortyDesignSystem.Sizing.navigationIcon))
+                .frame(width: SortyDesignSystem.Sizing.navigationIcon, height: SortyDesignSystem.Sizing.navigationIcon)
+                .accessibilityHidden(true)
         }
+            .sortyTypography(.body, weight: .medium)
+            .sortyTypography(.body, weight: .medium)
             // The stock .sidebar selection highlight renders from the system
             // accent (NSColor.controlAccentColor) and ignores window-level
             // .tint(), so the selected row carries its own accent background.

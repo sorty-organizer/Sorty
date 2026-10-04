@@ -24,7 +24,7 @@ struct TroubleshootingSettingsView: View {
     @State private var isRunningHealthCheck = false
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: SortyDesignSystem.Spacing.sectionMedium) {
             SettingsCard(title: "Maintenance", icon: "wrench.and.screwdriver", color: .orange) {
                 HStack(spacing: 10) {
                     MaintenanceActionTile(

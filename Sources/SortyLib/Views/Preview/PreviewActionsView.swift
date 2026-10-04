@@ -522,7 +522,7 @@ private struct EditsCapturedPopoverContent: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "pencil.and.outline")
-                    .font(.system(size: 14))
+                    .sortyTypography(.body)
                     .foregroundStyle(.green)
                 
                 Text("Edits Captured")

@@ -307,7 +307,7 @@ struct ReadyToOrganizeView: View {
                             }
 
                         Text(storageLocationTitle)
-                            .font(.subheadline)
+                            .sortyTypography(.body)
                             .fontWeight(.medium)
                             .foregroundStyle(.secondary)
                             .numericTextTransition(
@@ -630,7 +630,7 @@ struct ReadyToOrganizeView: View {
                     .popover(isPresented: $showSavePromptDialog) {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Save Prompt")
-                                .font(.headline)
+                                .sortyTypography(.headline, weight: .medium)
 
                             TextField("Prompt name", text: $savePromptName)
                                 .textFieldStyle(.roundedBorder)

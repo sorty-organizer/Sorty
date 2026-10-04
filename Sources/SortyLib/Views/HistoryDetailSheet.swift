@@ -279,7 +279,7 @@ struct HistoryDetailSheet: View {
                         .foregroundStyle(.secondary)
                         .symbolReplaceTransition(animationValue: showRawAIResponse)
                     Text("Raw AI Response")
-                        .font(.headline)
+                        .sortyTypography(.headline, weight: .medium)
                     Spacer()
                 }
                 .contentShape(Rectangle())
@@ -787,7 +787,7 @@ struct ProcessingOverlay: View {
                 LoadingDotsView(dotCount: 3, dotSize: 8, color: .accentColor)
 
                 Text(stage)
-                    .font(.body)
+                    .sortyTypography(.body)
                     .foregroundColor(.primary)
                     .numericTextTransition(animationValue: stage)
             }
@@ -1642,7 +1642,7 @@ struct PartialUndoResultSheet: View {
                     .font(.title2.bold())
 
                 Text("Some files could not be restored")
-                    .font(.subheadline)
+                    .sortyTypography(.body)
                     .foregroundStyle(.secondary)
             }
             .padding(.top, 24)
@@ -1701,7 +1701,7 @@ struct PartialUndoResultSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Label("Files Not Found", systemImage: "questionmark.folder")
-                            .font(.headline)
+                            .sortyTypography(.headline, weight: .medium)
                         Spacer()
                         Text("\(result.missingFiles.count) file\(result.missingFiles.count == 1 ? "" : "s")")
                             .font(.caption)

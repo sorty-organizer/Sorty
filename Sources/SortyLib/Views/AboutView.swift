@@ -42,7 +42,7 @@ struct AboutView: View {
             
             // Description
             Text("The FOSS File Organiser")
-                .font(.subheadline)
+                .sortyTypography(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)

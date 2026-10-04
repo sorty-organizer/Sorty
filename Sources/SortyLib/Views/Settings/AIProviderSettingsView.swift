@@ -77,7 +77,7 @@ struct AIProviderSettingsView: View {
     }
 
     private var sections: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: SortyDesignSystem.Spacing.sectionMedium) {
             providerSelectionSection
 
             // Provider-specific configuration
@@ -231,7 +231,7 @@ struct AIProviderSettingsView: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Model")
-                            .font(.subheadline)
+                            .sortyTypography(.body)
                         Text("Used for organization")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -373,7 +373,7 @@ struct AIProviderSettingsView: View {
             if codexAuth.isAuthenticated {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.title3)
+                        .sortyTypography(.title3, weight: .medium)
                         .foregroundStyle(.green)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -467,7 +467,7 @@ struct AIProviderSettingsView: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Model")
-                            .font(.subheadline)
+                            .sortyTypography(.body)
                         Text("Runs privately on this Mac")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -519,7 +519,7 @@ struct AIProviderSettingsView: View {
                         Toggle(isOn: $viewModel.config.requiresAPIKey) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Requires API Key")
-                                    .font(.subheadline)
+                                    .sortyTypography(.body)
                                 Text("Disable for local endpoints without auth")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -674,7 +674,7 @@ struct AIProviderSettingsView: View {
                                 }
                             }
                         }
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                         .frame(maxWidth: 620, alignment: .center)
                         .transition(.scale.combined(with: .opacity))
                     }
@@ -1047,7 +1047,7 @@ private struct CodexDeviceAuthSheet: View {
                     Text("Reauthenticate ChatGPT Subscription")
                         .font(.title2.weight(.bold))
                     Text("Reauthenticate to keep using your ChatGPT subscription for OpenAI inference.")
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                         .foregroundStyle(.secondary)
                 }
 
@@ -1255,7 +1255,7 @@ struct OpenCodeCredentialLinkView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: isConnected ? "checkmark.circle.fill" : "person.crop.circle.badge.checkmark")
-                    .font(.title3)
+                    .sortyTypography(.title3, weight: .medium)
                     .foregroundStyle(isConnected ? Color.green : Color.secondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isConnected ? "Connected to \(viewModel.config.provider.displayName)" : "Connect with OpenCode")

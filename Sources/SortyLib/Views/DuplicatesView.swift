@@ -343,11 +343,11 @@ struct DuplicatesView: View {
                             .foregroundStyle(.secondary)
                             .accessibilityHidden(true)
                         Text("Choose a group")
-                            .font(.headline)
+                            .sortyTypography(.headline, weight: .medium)
                         Text(
                             "Review exact duplicates first. Similar files stay separate and need individual confirmation."
                         )
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 340)
@@ -776,12 +776,12 @@ struct DuplicatesHeaderNew: View {
 
                     Image(systemName: "doc.on.doc.fill")
                         .foregroundStyle(.blue)
-                        .font(.title3)
+                        .sortyTypography(.title3, weight: .medium)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Duplicate Files")
-                        .font(.headline)
+                        .sortyTypography(.headline, weight: .medium)
                         .lineLimit(1)
 
                     if let dir = currentDirectory {
@@ -799,7 +799,7 @@ struct DuplicatesHeaderNew: View {
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 8, weight: .bold))
                             }
-                            .font(.subheadline)
+                            .sortyTypography(.body)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -811,7 +811,7 @@ struct DuplicatesHeaderNew: View {
                         .help(PrivacyPathMasker.redactedPath(dir.path))
                     } else {
                         Text("No folder selected")
-                            .font(.subheadline)
+                            .sortyTypography(.body)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -887,7 +887,7 @@ private struct DuplicatesResultsSidebarHeader: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Review groups")
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
 
                 Text(summaryText)
                     .font(.caption)
@@ -995,7 +995,7 @@ private struct UnavailableDuplicateFilesPopover: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Unavailable Files")
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
                 Text("Reconnect external drives or download cloud files, then scan again.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1325,17 +1325,17 @@ private struct DuplicateSectionHeader: View {
                 .popover(isPresented: $isInfoPresented) {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("About " + title)
-                            .font(.headline)
+                            .sortyTypography(.headline, weight: .medium)
 
                         Text(guidance)
-                            .font(.body)
+                            .sortyTypography(.body)
                             .foregroundStyle(.primary)
                             .lineLimit(nil)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
 
                         Toggle("Don't show again", isOn: $shouldDismissInfo)
-                            .font(.body)
+                            .sortyTypography(.body)
 
                         HStack {
                             Spacer()
@@ -1747,7 +1747,7 @@ struct UnifiedFileDetailRow: View {
     private var fileSummary: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(file.displayName)
-                .font(.headline)
+                .sortyTypography(.headline, weight: .medium)
                 .lineLimit(2)
                 .truncationMode(.middle)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1962,7 +1962,7 @@ struct DuplicatesEmptyStateView: View {
                     .font(.title2.bold())
 
                 Text(LocalizedStringKey(description))
-                    .font(.body)
+                    .sortyTypography(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 350)

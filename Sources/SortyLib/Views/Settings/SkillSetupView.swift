@@ -79,7 +79,7 @@ struct SkillSetupView: View {
                         .accessibilityFocused($isHeadingFocused)
                     Text(step.explanation)
                         .contentTransition(reduceMotion ? .identity : .numericText())
-                        .font(.body)
+                        .sortyTypography(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -172,7 +172,7 @@ struct SkillSetupView: View {
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityFocused($isHeadingFocused)
                 Text("Saving your selection to the Sorty skill.")
-                    .font(.body)
+                    .sortyTypography(.body)
                     .foregroundStyle(.secondary)
             }
             if reduceMotion {
@@ -336,7 +336,7 @@ struct SkillSetupView: View {
             VStack(alignment: .leading, spacing: 16) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        Label("Install location", systemImage: "folder").font(.headline)
+                        Label("Install location", systemImage: "folder").sortyTypography(.headline, weight: .medium)
                         Text(installer.destinationURL.path)
                             .font(.callout.monospaced())
                             .textSelection(.enabled)
@@ -346,7 +346,7 @@ struct SkillSetupView: View {
                             let rows = selectedOptions.filter { $0.section == section }
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
-                                    Label(section.rawValue, systemImage: section.icon).font(.headline)
+                                    Label(section.rawValue, systemImage: section.icon).sortyTypography(.headline, weight: .medium)
                                     Spacer()
                                     Text(rows.isEmpty ? "None selected" : "\(rows.count) selected")
                                         .contentTransition(reduceMotion ? .identity : .numericText(value: Double(rows.count)))
@@ -386,9 +386,9 @@ struct SkillSetupView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Try a first request").font(.headline)
+                    Text("Try a first request").sortyTypography(.headline, weight: .medium)
                     Text(exampleRequest)
-                        .font(.body)
+                        .sortyTypography(.body)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                     CopyButtonWithAnimation(content: exampleRequest, label: "Copy Request", labelFont: .body, tint: .primary)
@@ -416,8 +416,8 @@ struct SkillSetupView: View {
                 .frame(width: 32)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.headline)
-                Text(detail).font(.body).foregroundStyle(.secondary)
+                Text(title).sortyTypography(.headline, weight: .medium)
+                Text(detail).sortyTypography(.body).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -452,7 +452,7 @@ struct SkillSetupView: View {
         let identifiers = Set(rows.map(\.selectionID))
         let sectionSelected = !identifiers.isEmpty && identifiers.isSubset(of: selected)
         return VStack(alignment: .leading, spacing: 12) {
-            Text(section.rawValue).font(.headline)
+            Text(section.rawValue).sortyTypography(.headline, weight: .medium)
                 .contentTransition(reduceMotion ? .identity : .numericText())
                 .accessibilityAddTraits(.isHeader)
             Text(sectionExplanation(section))
@@ -490,7 +490,7 @@ struct SkillSetupView: View {
                         }
                     )) {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(option.title).font(.body)
+                            Text(option.title).sortyTypography(.body)
                             Text(option.detail).font(.callout).foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }

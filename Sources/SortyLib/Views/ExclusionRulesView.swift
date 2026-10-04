@@ -373,7 +373,7 @@ struct ExclusionRulesView: View {
                 Spacer()
 
                 Text("Add an Exclusion")
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
 
                 Spacer()
 
@@ -1032,7 +1032,7 @@ struct ExclusionRulesView: View {
     private var resolvedRuleDetailsPopover: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Exclusions ready to save")
-                .font(.headline)
+                .sortyTypography(.headline, weight: .medium)
             ForEach(resolvedExceptionRules) { rule in
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
@@ -1121,13 +1121,13 @@ struct EmptyExclusionRulesView: View {
 
             VStack(spacing: 8) {
                 Text("Nothing is excluded")
-                    .font(.title3)
+                    .sortyTypography(.title3, weight: .medium)
                     .fontWeight(.semibold)
 
                 Text(
                     "Choose folders or rules for anything Sorty should exclude from organizations and renames."
                 )
-                .font(.body)
+                .sortyTypography(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 360)
@@ -1311,7 +1311,7 @@ private struct NaturalLanguageExceptionRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(exception.text)
-                        .font(.subheadline.weight(.medium))
+                        .sortyTypography(.body, weight: .medium)
                         .foregroundStyle(exception.isEnabled ? .primary : .secondary)
                         .lineLimit(2)
 
@@ -1436,7 +1436,7 @@ private struct ExclusionRuleUsageButton: View {
         .popover(isPresented: $isShowingDetails, arrowEdge: .trailing) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Rule usage")
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
                 LabeledContent("Files skipped", value: (usage?.matchCount ?? 0).formatted())
                 if let lastMatchedAt = usage?.lastMatchedAt {
                     LabeledContent {
@@ -1528,7 +1528,7 @@ struct ExclusionRuleRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(exclusionTitle)
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                         .fontWeight(.medium)
                         .foregroundStyle(rule.isEnabled ? .primary : .secondary)
 
@@ -1697,11 +1697,11 @@ struct ExclusionRuleRow: View {
                   let labelNumber = Int(rule.pattern),
                   let tagColor = FinderTagColor(rawValue: labelNumber) {
             Image(systemName: "tag.fill")
-                .font(.system(size: 14))
+                .sortyTypography(.body)
                 .foregroundStyle(rule.isEnabled ? tagColor.color : .secondary)
         } else {
             Image(systemName: iconForType(rule.type))
-                .font(.system(size: 14))
+                .sortyTypography(.body)
                 .foregroundStyle(rule.isEnabled ? colorForType(rule.type) : .secondary)
         }
     }
@@ -2035,7 +2035,7 @@ struct AddExclusionRuleView: View {
             Spacer()
 
             Text(editingRule == nil ? (selectedIntent == nil ? "Add an Exclusion" : "Set Up Exclusion") : "Edit Exclusion")
-                .font(.headline)
+                .sortyTypography(.headline, weight: .medium)
 
             Spacer()
 
@@ -2064,7 +2064,7 @@ struct AddExclusionRuleView: View {
                     .font(.title3.weight(.semibold))
 
                 Text("Choose the closest match. You’ll only see the settings that apply.")
-                    .font(.subheadline)
+                    .sortyTypography(.body)
                     .foregroundStyle(.secondary)
             }
             .padding(.bottom, 4)
@@ -2117,7 +2117,7 @@ struct AddExclusionRuleView: View {
     private var linkedConditionsView: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(displayedExceptionName)
-                .font(.headline)
+                .sortyTypography(.headline, weight: .medium)
             Text("Sorty excludes an item only when every condition below matches.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -2176,7 +2176,7 @@ struct AddExclusionRuleView: View {
                 Label(intent.title, systemImage: intent.icon)
                     .font(.title3.weight(.semibold))
                 Text(intent.explanation)
-                    .font(.subheadline)
+                    .sortyTypography(.body)
                     .foregroundStyle(.secondary)
             }
 
@@ -2372,7 +2372,7 @@ struct AddExclusionRuleView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(selectedFolderURL.lastPathComponent)
-                            .font(.subheadline.weight(.medium))
+                            .sortyTypography(.body, weight: .medium)
                         PrivacySensitivePathText(
                             path: selectedFolderURL.deletingLastPathComponent().path
                         )
@@ -2628,7 +2628,7 @@ struct AddExclusionRuleView: View {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.green)
             Text(text)
-                .font(.subheadline)
+                .sortyTypography(.body)
                 .foregroundStyle(.secondary)
         }
     }

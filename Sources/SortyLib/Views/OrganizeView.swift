@@ -822,7 +822,7 @@ struct DirectoryHeader: View {
                         .accessibilityHidden(true)
 
                     Text(mode.workflowTitle)
-                        .font(.headline)
+                        .sortyTypography(.headline, weight: .medium)
                         .lineLimit(1)
                         .numericTextTransition(animationValue: mode)
                 }
@@ -927,7 +927,7 @@ private struct SetupRepairGateView: View {
                 .font(.title3.weight(.semibold))
 
             Text(message)
-                .font(.body)
+                .sortyTypography(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
@@ -1054,7 +1054,7 @@ struct CompactStorageLocationRow: View {
         HStack(spacing: 10) {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: location.isEnabled ? "externaldrive.fill" : "externaldrive")
-                    .font(.system(size: 14))
+                    .sortyTypography(.body)
                     .foregroundStyle(Color.blue)
                     .symbolReplaceTransition(animationValue: location.isEnabled)
 
@@ -1211,7 +1211,7 @@ struct StorageLocationsInfoPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("How Storage Locations Work", systemImage: "externaldrive")
-                .font(.subheadline)
+                .sortyTypography(.body)
                 .fontWeight(.semibold)
 
             VStack(alignment: .leading, spacing: 10) {

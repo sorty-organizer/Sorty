@@ -384,7 +384,7 @@ public struct WelcomeStepView: View {
                             .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.9), value: hasAppeared)
 
                         Text("Sorty-powered file organization for your Mac")
-                            .font(.title3)
+                            .sortyTypography(.title3, weight: .medium)
                             .foregroundStyle(.secondary)
                             .opacity(hasAppeared ? 1 : 0)
                             .offset(y: hasAppeared ? 0 : 15)
@@ -445,10 +445,10 @@ public struct WelcomeStepView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "info.circle.fill")
                         .foregroundStyle(.blue)
-                        .font(.system(size: 18))
+                        .sortyTypography(.title3)
 
                     Text("Before organizing, always ensure you have backups of important files.")
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
@@ -728,14 +728,14 @@ struct WelcomeFeatureRow: View {
                     .frame(width: 40, height: 40)
 
                 Image(systemName: icon)
-                    .font(.system(size: 18))
+                    .sortyTypography(.title3)
                     .foregroundStyle(iconColor)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text(LocalizedStringKey(title))
-                        .font(.headline)
+                        .sortyTypography(.headline, weight: .medium)
 
                     if let badge {
                         OnboardingCapsuleBadge(text: badge)
@@ -743,7 +743,7 @@ struct WelcomeFeatureRow: View {
                 }
 
                 Text(LocalizedStringKey(description))
-                    .font(.subheadline)
+                    .sortyTypography(.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

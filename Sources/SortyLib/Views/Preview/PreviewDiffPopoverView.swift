@@ -7,9 +7,9 @@ struct PreviewDiffPopoverView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Changes between previews")
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
                 Text("\(diff.fromLabel) → \(diff.toLabel)")
-                    .font(.subheadline)
+                    .sortyTypography(.body)
                     .foregroundStyle(.secondary)
                     .numericTextTransition(animationValue: "\(diff.fromLabel)-\(diff.toLabel)")
             }

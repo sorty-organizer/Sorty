@@ -3388,12 +3388,6 @@ public class LearningsManager: ObservableObject {
         return scanState(for: directory)
     }
 
-    private func refreshModelDirectoryScanStates() {
-        modelDirectoryScanStates = Dictionary(
-            uniqueKeysWithValues: modelDirectories.map { ($0.id, scanState(for: $0)) }
-        )
-    }
-
     private func scanState(for directory: ReferenceModelDirectory) -> ReferenceDirectoryScanState {
         scanState(for: directory, isAccessible: directory.isAccessible)
     }

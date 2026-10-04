@@ -505,7 +505,7 @@ struct WorkflowCard<Content: View>: View {
                             .foregroundStyle(.secondary)
                     }
                     Text(LocalizedStringKey(title))
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                         .fontWeight(.medium)
                         .foregroundStyle(.secondary)
                 }

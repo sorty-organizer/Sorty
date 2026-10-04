@@ -23,7 +23,7 @@ struct HistoryDetailHeaderSection: View {
                     Text(directoryName)
                         .font(.title.bold())
                     Text(entry.timestamp.formatted(date: .complete, time: .shortened))
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -117,7 +117,7 @@ struct HistoryPartialUndoSection: View {
         if entry.status == .partiallyUndone {
             VStack(alignment: .leading, spacing: 10) {
                 Label("Not Undone", systemImage: "exclamationmark.triangle.fill")
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
                     .foregroundStyle(.yellow)
                     .accessibilityAddTraits(.isHeader)
 
@@ -343,7 +343,7 @@ private struct HistoryNerdStatsGrid: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Stats for Nerds")
-                .font(.headline)
+                .sortyTypography(.headline, weight: .medium)
                 .padding(.top, 4)
 
             LazyVGrid(columns: columns, spacing: 8) {
@@ -504,7 +504,7 @@ struct HistoryDetailErrorSection: View {
         if !entry.success, let error = entry.errorMessage {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Error", systemImage: "exclamationmark.triangle.fill")
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
                     .foregroundStyle(.red)
                     .accessibilityAddTraits(.isHeader)
 
@@ -537,7 +537,7 @@ struct HistoryDetailActionsSection: View {
         if entry.success || entry.status == .duplicatesCleanup || entry.hasApplicablePlan || entry.isUndone {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Actions")
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
                     .accessibilityAddTraits(.isHeader)
 
                 actionControls
@@ -623,7 +623,7 @@ struct HistoryPlanDetailsSection: View {
         if let plan = entry.plan {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Organization Details")
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
                     .accessibilityAddTraits(.isHeader)
 
                 ForEach(plan.suggestions) { suggestion in
@@ -735,7 +735,7 @@ struct HistoryFileOperationsSection: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("File Operations")
-                        .font(.headline)
+                        .sortyTypography(.headline, weight: .medium)
                         .accessibilityAddTraits(.isHeader)
                     Spacer()
                     Text("\(operations.count) operation\(operations.count == 1 ? "" : "s")")
@@ -777,7 +777,7 @@ struct HistoryRestorableItemsSection: View {
         if let items = entry.restorableItems, !items.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Deleted Files")
-                    .font(.headline)
+                    .sortyTypography(.headline, weight: .medium)
                     .accessibilityAddTraits(.isHeader)
 
                 ForEach(items) { item in

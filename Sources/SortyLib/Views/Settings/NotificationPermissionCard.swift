@@ -53,7 +53,7 @@ struct NotificationPermissionCard: View {
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(LocalizedStringKey(statusInfo.title))
-                            .font(.subheadline.weight(.medium))
+                            .sortyTypography(.body, weight: .medium)
                             .numericTextTransition(animationValue: statusInfo.title)
                         Text(LocalizedStringKey(statusInfo.description))
                             .font(.caption)

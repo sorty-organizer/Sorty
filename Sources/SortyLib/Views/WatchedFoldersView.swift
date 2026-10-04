@@ -281,7 +281,7 @@ struct EmptyWatchedFoldersView: View {
 
             VStack(spacing: 8) {
                 Text("No Watched Folders")
-                    .font(.title3)
+                    .sortyTypography(.title3, weight: .medium)
                     .fontWeight(.semibold)
 
                 VStack(spacing: 4) {
@@ -307,7 +307,7 @@ struct EmptyWatchedFoldersView: View {
 
                     Text("to automatically organize new files as they arrive")
                 }
-                .font(.body)
+                .sortyTypography(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             }
@@ -506,7 +506,7 @@ struct WatchedFolderCard: View {
             .opacity(folder.isEnabled ? 1.0 : 0.6)
 
             Image(systemName: statusIcon)
-                .font(.system(size: 14))
+                .sortyTypography(.body)
                 .foregroundStyle(statusColor)
                 .symbolReplaceTransition(animationValue: statusIcon)
                 .background(
@@ -550,7 +550,7 @@ struct WatchedFolderCard: View {
     private var titleRow: some View {
         HStack(spacing: 8) {
             Text(folder.name)
-                .font(.headline)
+                .sortyTypography(.headline, weight: .medium)
                 .foregroundColor(folder.isEnabled ? .primary : .secondary)
 
             if isOrganizing {
@@ -1304,7 +1304,7 @@ struct WatchedFolderConfigView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(folder.name)
-                            .font(.headline)
+                            .sortyTypography(.headline, weight: .medium)
                         PrivacySensitivePathText(path: folder.path)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -1327,7 +1327,7 @@ struct WatchedFolderConfigView: View {
                     .popover(isPresented: $showNerdStats, arrowEdge: .top) {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Stats for Nerds")
-                                .font(.headline)
+                                .sortyTypography(.headline, weight: .medium)
 
                             Text("Live diagnostics for this watched folder")
                                 .font(.caption)
@@ -1448,7 +1448,7 @@ struct WatchedFolderConfigView: View {
                                 if customPrompt.isEmpty {
                                     HStack(alignment: .top, spacing: 10) {
                                         Text(currentInstructionSuggestion)
-                                            .font(.body)
+                                            .sortyTypography(.body)
                                             .foregroundStyle(.tertiary)
                                             .lineLimit(2)
                                             .numericTextTransition(
@@ -1523,7 +1523,7 @@ struct WatchedFolderConfigView: View {
                             Toggle(isOn: $useCustomModel) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Use Custom Model")
-                                        .font(.subheadline)
+                                        .sortyTypography(.body)
                                     Text("Override the global automation model for this folder")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
@@ -1567,7 +1567,7 @@ struct WatchedFolderConfigView: View {
                                         .popover(isPresented: $showFolderModelInfo, arrowEdge: .trailing) {
                                             VStack(alignment: .leading, spacing: 8) {
                                                 Text("Separate Watched Folder Model")
-                                                    .font(.headline)
+                                                    .sortyTypography(.headline, weight: .medium)
 
                                                 Text(
                                                     "The main Organize page keeps using the model selected under AI Provider. For faster, more responsive automation, try a smaller model such as GPT-5.6 Luna."
@@ -1745,7 +1745,7 @@ struct WatchedFolderConfigView: View {
     private var savePromptPopover: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Save Prompt")
-                .font(.headline)
+                .sortyTypography(.headline, weight: .medium)
 
             TextField("Prompt name", text: $savePromptName)
                 .textFieldStyle(.roundedBorder)
@@ -1999,7 +1999,7 @@ private struct WatchedFolderRecentActions: View {
                     Image(systemName: "clock.badge.questionmark")
                         .foregroundStyle(.secondary)
                     Text("No AI actions for this folder yet")
-                        .font(.subheadline)
+                        .sortyTypography(.body)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -2058,7 +2058,7 @@ private struct WatchedFolderRecentActions: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(summary(for: entry))
-                            .font(.subheadline)
+                            .sortyTypography(.body)
                             .lineLimit(1)
                             .numericTextTransition(animationValue: summary(for: entry))
 

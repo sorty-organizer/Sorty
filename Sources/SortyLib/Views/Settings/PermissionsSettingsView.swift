@@ -51,7 +51,7 @@ struct PermissionsSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.sectionMedium) {
             SettingsCard(
                 title: "Permission Status",
                 icon: "hand.raised.fill",
