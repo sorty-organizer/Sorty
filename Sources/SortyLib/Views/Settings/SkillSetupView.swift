@@ -225,17 +225,20 @@ struct SkillSetupView: View {
             VStack(spacing: 16) {
                 ZStack {
                     Image(systemName: "folder.badge.gearshape")
-                        .font(.largeTitle)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 48, height: 48)
                         .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         .opacity(isGetStartedHovered ? 0 : 1)
                     Image(nsImage: NSApp.applicationIconImage)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 44, height: 44)
+                        .frame(width: 56, height: 56)
                         .opacity(isGetStartedHovered ? 1 : 0)
                 }
-                .frame(width: 64, height: 64)
+                .frame(width: 80, height: 80, alignment: .center)
                 .systemLiquidGlassBackground(cornerRadius: 24, interactive: false)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isGetStartedHovered)
                 .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 16) {
