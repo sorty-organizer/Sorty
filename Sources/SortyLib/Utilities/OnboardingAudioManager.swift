@@ -97,19 +97,23 @@ class OnboardingAudioManager: ObservableObject {
         }
     }
 
-    /// Start the bundled background melody, falling back to the synthesized loop.
-    func startBackgroundMelody(after delay: TimeInterval = 0) {
+    /// Start the soundtrack and return its scheduled start for visual cue deadlines.
+    /// The synthesized fallback starts immediately.
+    @discardableResult
+    func startBackgroundMelody(after delay: TimeInterval = 0) -> ContinuousClock.Instant {
+        var playbackStart = ContinuousClock.now.advanced(by: .seconds(delay))
         // A pending fade-out owns the engine volumes; cancel it so a restart
         // does not get its levels zeroed or its engine stopped mid-fade.
         fadeTask?.cancel()
         fadeTask = nil
         playerStopTask?.cancel()
         playerStopTask = nil
-        guard !state.isRunning else { return }
+        guard !state.isRunning else { return playbackStart }
 
         if let audioPlayer {
             audioPlayer.currentTime = 0
             audioPlayer.volume = 0.25
+            playbackStart = ContinuousClock.now.advanced(by: .seconds(delay))
             if delay > 0 {
                 audioPlayer.play(atTime: audioPlayer.deviceCurrentTime + delay)
             } else {
@@ -117,7 +121,7 @@ class OnboardingAudioManager: ObservableObject {
             }
             state.isRunning = true
             isPlaying = true
-            return
+            return playbackStart
         }
 
         if let soundURL = resolvedBackgroundMelodyURL() {
@@ -125,6 +129,7 @@ class OnboardingAudioManager: ObservableObject {
                 let player = try AVAudioPlayer(contentsOf: soundURL)
                 player.numberOfLoops = 0
                 player.volume = 0.25
+                playbackStart = ContinuousClock.now.advanced(by: .seconds(delay))
                 if delay > 0 {
                     player.play(atTime: player.deviceCurrentTime + delay)
                 } else {
@@ -133,7 +138,7 @@ class OnboardingAudioManager: ObservableObject {
                 audioPlayer = player
                 state.isRunning = true
                 isPlaying = true
-                return
+                return playbackStart
             } catch {
                 print("[OnboardingAudioManager] Failed to play OnboardingSound.m4a: \(error)")
             }
@@ -144,6 +149,7 @@ class OnboardingAudioManager: ObservableObject {
         // Fallback to synthesized melody
         setupAndStartEngine()
         isPlaying = true
+        return ContinuousClock.now
     }
 
     private func resolvedBackgroundMelodyURL() -> URL? {

@@ -726,10 +726,9 @@ private struct OnboardingIntroView: View {
         }
     }
 
-    /// Orchestrates the first-screen reveal in three deliberate phases:
+    /// Orchestrates the first-screen reveal to the bundled soundtrack:
     /// 1. Only the icon and its rose glow, floating on a transparent window.
-    /// 2. After the icon has had the stage to itself, the gradient backdrop,
-    ///    title, and button fade in together.
+    /// 2. The gradient backdrop, title, and button appear on the next accent.
     /// 3. The orbiting file chips drift in last.
     /// The audio engine is deferred so its AVAudioEngine + AVAudioSourceNode
     /// setup does not block the first paint of the icon, and the
@@ -771,10 +770,8 @@ private struct OnboardingIntroView: View {
             await audio.prepareBackgroundMelody()
             os_signpost(.end, log: onboardingPerformanceLog, name: "Onboarding audio preparation")
             guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
-            audio.startBackgroundMelody(after: 0.45)
-            await Task.yield()
-            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
-            beginAnimatedReveal(generation: generation)
+            let playbackStart = audio.startBackgroundMelody(after: 0.1)
+            await beginAnimatedReveal(generation: generation, playbackStart: playbackStart)
         }
     }
 
@@ -786,48 +783,54 @@ private struct OnboardingIntroView: View {
         return await OnboardingFileIconProvider.icons(for: OnboardingOrbitFile.files)
     }
 
-    private func beginAnimatedReveal(generation: Int) {
-        if NSApp.isActive { HapticFeedbackManager.shared.light() }
-        // Phase 1 — the icon materializes with a clean fade + settle (no
-        // blur-in) while the glow blooms around it.
-        withAnimation(.easeOut(duration: 1.0)) {
-            iconOpacity = 1
-        }
-        withAnimation(.spring(response: 0.9, dampingFraction: 0.88)) {
-            iconScale = 1
-        }
-        glowVisible = true
+    /// Cue offsets follow the attacks in OnboardingSound.m4a. Absolute deadlines
+    /// keep later reveals aligned even when an earlier frame runs late.
+    private func beginAnimatedReveal(
+        generation: Int,
+        playbackStart: ContinuousClock.Instant
+    ) async {
+        let clock = ContinuousClock()
+        do {
+            try await clock.sleep(until: playbackStart)
+            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
+            if NSApp.isActive { HapticFeedbackManager.shared.light() }
+            withAnimation(.easeOut(duration: 0.34)) {
+                iconOpacity = 1
+            }
+            withAnimation(.spring(response: 0.56, dampingFraction: 0.88)) {
+                iconScale = 1
+            }
+            glowVisible = true
 
-        Task { @MainActor in
-            // Let the icon establish the first frame before bringing the
-            // screen-edge glow forward in its own fade.
-            try? await Task.sleep(for: .milliseconds(600))
-            guard generation == taskController.revealGeneration else { return }
+            try await clock.sleep(until: playbackStart.advanced(by: .seconds(0.34)))
+            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
             onRevealPhaseChanged(.screenGlow)
             if NSApp.isActive { HapticFeedbackManager.shared.light() }
 
-            // Phase 2 — backdrop, title, and button.
-            try? await Task.sleep(for: .milliseconds(1100))
-            guard generation == taskController.revealGeneration else { return }
+            try await clock.sleep(until: playbackStart.advanced(by: .seconds(0.96)))
+            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
             onRevealPhaseChanged(.window)
             if NSApp.isActive { HapticFeedbackManager.shared.light() }
-            withAnimation(.easeInOut(duration: 0.9)) {
+            withAnimation(.easeInOut(duration: 0.36)) {
                 chromeRevealed = true
             }
-            withAnimation(.easeOut(duration: 0.7).delay(0.15)) {
+            withAnimation(.easeOut(duration: 0.36)) {
                 textOpacity = 1
                 textOffset = 0
             }
-            try? await Task.sleep(for: .milliseconds(850))
-            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
-            isGetStartedAvailable = true
 
-            // Phase 3 — file chips drift in once everything has settled.
-            try? await Task.sleep(for: .milliseconds(650))
-            guard generation == taskController.revealGeneration else { return }
+            try await clock.sleep(until: playbackStart.advanced(by: .seconds(1.32)))
+            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
             filesAppeared = true
             onRevealPhaseChanged(.files)
             if NSApp.isActive { HapticFeedbackManager.shared.light() }
+
+            try await clock.sleep(until: playbackStart.advanced(by: .seconds(2.04)))
+            guard generation == taskController.revealGeneration, !Task.isCancelled else { return }
+            isGetStartedAvailable = true
+        } catch {
+            // Leaving the intro cancels the remaining soundtrack cues.
+            return
         }
     }
 
