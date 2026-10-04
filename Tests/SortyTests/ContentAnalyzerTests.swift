@@ -726,7 +726,7 @@ final class PromptBuilderPrioritizationTests: XCTestCase {
         }
     }
 
-    func testWithoutContentMetadataNoSorting() {
+    func testWithoutContentMetadataPreservesFilesAndStablePromptOrder() {
         var files: [FileItem] = []
         for i in 0..<60 {
             files.append(FileItem(
@@ -737,21 +737,20 @@ final class PromptBuilderPrioritizationTests: XCTestCase {
             ))
         }
 
-        // When includeContentMetadata is false, no sorting should occur
         let prompt = PromptBuilder.buildOrganizationPrompt(
             files: files,
             includeContentMetadata: false
         )
 
-        // Every file should remain present and preserve the input order.
-        var searchFrom = prompt.startIndex
+        let reversedPrompt = PromptBuilder.buildOrganizationPrompt(
+            files: Array(files.reversed()),
+            includeContentMetadata: false
+        )
+        XCTAssertEqual(prompt, reversedPrompt, "Scan order must not change the prompt prefix")
+
         for i in 0..<60 {
             let fileName = "file\(i).pdf"
-            guard let range = prompt.range(of: fileName, range: searchFrom..<prompt.endIndex) else {
-                XCTFail("\(fileName) should appear in the prompt in input order")
-                return
-            }
-            searchFrom = range.upperBound
+            XCTAssertTrue(prompt.contains(fileName), "\(fileName) should appear in the prompt")
         }
     }
 }

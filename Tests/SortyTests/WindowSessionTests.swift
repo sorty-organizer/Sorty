@@ -187,8 +187,8 @@ final class WindowSessionTests: XCTestCase {
         for (section, expected) in rows {
             handle(.settings(section: section))
 
-            XCTAssertEqual(session.appState.currentView, .organize)
             await spinMainActor()
+            XCTAssertEqual(session.appState.currentView, .settings)
             XCTAssertEqual(session.appState.selectedSettingsSection, expected)
             XCTAssertNil(session.appState.settingsFocusTarget)
         }

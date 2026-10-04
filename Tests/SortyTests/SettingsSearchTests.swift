@@ -124,8 +124,8 @@ final class SettingsSearchTests: XCTestCase {
             "Use Separate Automation Model"
         )
         XCTAssertEqual(
-            SettingsCategory.finder.featureMatches(query: "check finder status").first?.snippet.title,
-            "Check Finder Status"
+            SettingsCategory.finder.featureMatches(query: "enable finder").first?.snippet.title,
+            "Finder Extension"
         )
         XCTAssertEqual(
             SettingsCategory.permissions.featureMatches(query: "Open Privacy & Security").first?.snippet.title,
