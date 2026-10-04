@@ -1040,6 +1040,9 @@ private struct CompletionAnalyticsPreference: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .accessibilityIdentifier("OnboardingAnalyticsToggle")
+            .onChange(of: isEnabled) { _, _ in
+                HapticFeedbackManager.shared.selection()
+            }
 
             Button {
                 HapticFeedbackManager.shared.tap()
@@ -1406,6 +1409,9 @@ public struct CompletionStepView: View {
             guard !Task.isCancelled else { return }
             tipsAppeared = true
             showParticles = true
+            if NSApp.isActive {
+                HapticFeedbackManager.shared.light()
+            }
         }
     }
 

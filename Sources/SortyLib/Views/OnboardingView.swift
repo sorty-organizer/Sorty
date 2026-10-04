@@ -790,6 +790,7 @@ private struct OnboardingIntroView: View {
     }
 
     private func beginAnimatedReveal(generation: Int) {
+        if NSApp.isActive { HapticFeedbackManager.shared.light() }
         // Phase 1 — the icon materializes with a clean fade + settle (no
         // blur-in) while the glow blooms around it.
         withAnimation(.easeOut(duration: 1.0)) {
@@ -806,11 +807,13 @@ private struct OnboardingIntroView: View {
             try? await Task.sleep(for: .milliseconds(600))
             guard generation == taskController.revealGeneration else { return }
             onRevealPhaseChanged(.screenGlow)
+            if NSApp.isActive { HapticFeedbackManager.shared.light() }
 
             // Phase 2 — backdrop, title, and button.
             try? await Task.sleep(for: .milliseconds(1100))
             guard generation == taskController.revealGeneration else { return }
             onRevealPhaseChanged(.window)
+            if NSApp.isActive { HapticFeedbackManager.shared.light() }
             withAnimation(.easeInOut(duration: 0.9)) {
                 chromeRevealed = true
             }
@@ -827,6 +830,7 @@ private struct OnboardingIntroView: View {
             guard generation == taskController.revealGeneration else { return }
             filesAppeared = true
             onRevealPhaseChanged(.files)
+            if NSApp.isActive { HapticFeedbackManager.shared.light() }
         }
     }
 

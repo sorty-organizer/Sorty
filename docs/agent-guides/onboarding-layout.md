@@ -327,3 +327,10 @@ artwork at the window backing scale, with the ring sampled at its largest pulse
 size. Unchanged layout bounds must not rebuild scan/ripple paths or discard the
 completion blob's settled rasterization. Completion activity changes only pause
 or resume its layer clock; they must not rerun its reveal or ambient settle.
+
+Onboarding haptics follow discrete reveal milestones and explicit user actions,
+never animation frames. Automatic reveal pulses only play while Sorty is active
+and skip the immediate Reduce Motion reveal. Keep manual connection-test tap
+feedback in its button/retry actions so automatic connection probes stay quiet.
+Reuse existing selection, success, and error feedback instead of adding a second
+pulse around actions that already provide it.

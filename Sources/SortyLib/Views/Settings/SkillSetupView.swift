@@ -333,7 +333,10 @@ struct SkillSetupView: View {
         .task(id: [step.rawValue, reduceMotion ? 1 : 0]) {
             await revealIntroduction()
         }
-        .onChange(of: introductionStage) { _, stage in
+        .onChange(of: introductionStage) { previousStage, stage in
+            if isOnboarding, !reduceMotion, NSApp.isActive, stage > previousStage, stage >= 2 {
+                HapticFeedbackManager.shared.light()
+            }
             if step == .rethink && stage >= 2 {
                 hasRevealedSkillUnderline = true
             }
@@ -859,7 +862,10 @@ struct SkillSetupView: View {
         case .unavailable:
             VStack(alignment: .leading, spacing: 8) {
                 Label("Skill unavailable in this build", systemImage: "exclamationmark.triangle")
-                Button("Check Again") { Task { await installer.refresh(trackUsage: false) } }
+                Button("Check Again") {
+                    HapticFeedbackManager.shared.tap()
+                    Task { await installer.refresh(trackUsage: false) }
+                }
                     .buttonStyle(.sortyBordered())
             }
         case .available, .failed:
@@ -886,7 +892,10 @@ struct SkillSetupView: View {
                 .fixedSize(horizontal: false, vertical: true)
             if rows.isEmpty {
                 if section == .learnings && (learnings.isLocked || learnings.currentProfile == nil) {
-                    Button("Unlock Learnings") { Task { await unlockLearnings() } }
+                    Button("Unlock Learnings") {
+                        HapticFeedbackManager.shared.tap()
+                        Task { await unlockLearnings() }
+                    }
                         .buttonStyle(.sortyBordered(size: .large))
                         .accessibilityIdentifier("skill-import.unlock-learnings")
                     Text("Authenticate to choose which Learnings to share.")
@@ -1008,7 +1017,7 @@ struct SkillSetupView: View {
                     .keyboardShortcut(.defaultAction)
                     .accessibilityHint("Opens a confirmation before uninstalling Sorty. Your installed skill stays in place.")
                     .accessibilityIdentifier("skill-onboarding.use-skill")
-                Button("Continue with App", action: onClose)
+                Button("Continue with App", action: closeWithFeedback)
                     .buttonStyle(.sortyBordered(size: .large))
                     .accessibilityIdentifier("skill-onboarding.continue-app")
                 Text("Deleting Sorty removes its app data. You'll review the details before confirming.")
@@ -1025,7 +1034,7 @@ struct SkillSetupView: View {
         VStack(spacing: 12) {
             HStack(spacing: 16) {
                 if step != .complete {
-                    Button(isOnboarding ? "Continue with App" : "Cancel", action: onClose)
+                    Button(isOnboarding ? "Continue with App" : "Cancel", action: closeWithFeedback)
                         .buttonStyle(.sortyBordered(size: .large))
                         .keyboardShortcut(.cancelAction)
                         .disabled(isSaving)
@@ -1120,6 +1129,11 @@ struct SkillSetupView: View {
         "Use the Sorty skill to preview how you'd organize my Downloads folder with my preferences."
     }
 
+    private func closeWithFeedback() {
+        HapticFeedbackManager.shared.tap()
+        onClose()
+    }
+
     private func changeStep(_ next: Step) {
         HapticFeedbackManager.shared.selection()
         if next == .review { hasReachedReviewBottom = false }
@@ -1138,9 +1152,13 @@ struct SkillSetupView: View {
         case .preferences: changeStep(.review)
         case .review:
             guard hasReachedReviewBottom else { return }
-            if installer.state == .conflict { isConfirmingReplacement = true }
-            else { importSelected() }
-        case .complete: onClose()
+            if installer.state == .conflict {
+                HapticFeedbackManager.shared.tap()
+                isConfirmingReplacement = true
+            } else {
+                importSelected()
+            }
+        case .complete: closeWithFeedback()
         }
     }
 
@@ -1186,6 +1204,7 @@ struct SkillSetupView: View {
     }
 
     private func chooseLocation() {
+        HapticFeedbackManager.shared.tap()
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -1194,6 +1213,7 @@ struct SkillSetupView: View {
         panel.message = "Choose the folder where your agent loads skills. Sorty creates a sorty folder inside it."
         panel.prompt = "Choose Skills Folder"
         guard panel.runModal() == .OK, let directory = panel.url else { return }
+        HapticFeedbackManager.shared.selection()
         installer.selectedSkillsDirectory = directory
         customFolderIcon = NSWorkspace.shared.icon(forFile: directory.path)
         errorMessage = nil
@@ -1203,6 +1223,7 @@ struct SkillSetupView: View {
     private func importSelected() {
         guard step == .review, hasReachedReviewBottom, !isLoading, !isSaving,
               canUseLocation else { return }
+        HapticFeedbackManager.shared.tap()
         isSaving = true
         onSavingChanged(true)
         errorMessage = nil

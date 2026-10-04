@@ -979,6 +979,7 @@ struct PermissionEducationView: View {
                 HStack(spacing: 10) {
                     if currentPage > 0 {
                         Button {
+                            HapticFeedbackManager.shared.selection()
                             currentPage -= 1
                         } label: {
                             Label("Back", systemImage: "chevron.left")
@@ -987,6 +988,7 @@ struct PermissionEducationView: View {
                     }
 
                     Button {
+                        HapticFeedbackManager.shared.selection()
                         if currentPage == pages.count - 1 {
                             onFinish()
                         } else {
@@ -1121,6 +1123,7 @@ struct AutomationPermissionRecoveryView: View {
                 Spacer()
 
                 Button("Done") {
+                    HapticFeedbackManager.shared.selection()
                     onFinish()
                 }
                 .keyboardShortcut(.defaultAction)

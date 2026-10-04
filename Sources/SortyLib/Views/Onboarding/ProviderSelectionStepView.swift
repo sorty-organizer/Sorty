@@ -502,6 +502,7 @@ public struct ProviderSelectionStepView: View {
                     Spacer()
 
                     Button("Sign Out") {
+                        HapticFeedbackManager.shared.tap()
                         codexAuth.signOut()
                         scheduleConnectionTest()
                     }
@@ -638,6 +639,7 @@ public struct ProviderSelectionStepView: View {
                                 .foregroundStyle(.orange)
 
                             Button("Retry") {
+                                HapticFeedbackManager.shared.tap()
                                 testConnection()
                             }
                             .buttonStyle(.sortyBordered)
@@ -1023,7 +1025,10 @@ private struct ProviderTestConnectionButton: View {
     @State private var isHovering = false
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            action()
+        } label: {
             HStack(spacing: 8) {
                 Image(systemName: "bolt.horizontal.circle.fill")
                 Text("Test Connection")
