@@ -382,6 +382,7 @@ struct SkillSetupView: View {
                     .font(.callout).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
             .frame(maxWidth: 600, maxHeight: .infinity)
             .padding(.vertical, 8)
