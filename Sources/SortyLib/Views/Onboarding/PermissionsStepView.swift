@@ -1070,7 +1070,8 @@ struct AutomationPermissionRecoveryView: View {
     @SortyHotReload private var hotReload
     let onFinish: () -> Void
     private let resetCommand = "tccutil reset AppleEvents com.sorty.app"
-    @State private var hasCopiedResetCommand = false
+    @StateObject private var resetCommandCopyFeedback = CopyFeedback()
+    private var hasCopiedResetCommand: Bool { resetCommandCopyFeedback.isCopied }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -1095,21 +1096,10 @@ struct AutomationPermissionRecoveryView: View {
                     Spacer(minLength: 0)
 
                     Button {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(resetCommand, forType: .string)
-                        HapticFeedbackManager.shared.success()
-
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.72)) {
-                            hasCopiedResetCommand = true
-                        }
-
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .seconds(1.5))
-                            guard !Task.isCancelled else { return }
-                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-                                hasCopiedResetCommand = false
-                            }
-                        }
+                        resetCommandCopyFeedback.copy(resetCommand,
+                            animation: reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.72),
+                            resetAnimation: reduceMotion ? nil : .easeOut(duration: 0.18),
+                            haptic: { HapticFeedbackManager.shared.success() })
                     } label: {
                         Image(systemName: hasCopiedResetCommand ? "checkmark" : "doc.on.doc")
                             .symbolReplaceTransition(animationValue: hasCopiedResetCommand)

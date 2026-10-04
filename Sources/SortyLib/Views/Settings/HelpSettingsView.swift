@@ -20,8 +20,8 @@ struct HelpSettingsView: View {
     private let termsOfServiceURL = URL(string: "https://sorty-organizer.github.io/Sorty/terms")!
     private let developerURL = URL(string: "https://github.com/shirishpothi")!
 
-    @State private var copiedIssueDetails = false
-    @State private var copyResetTask: Task<Void, Never>?
+    @StateObject private var reportCopyFeedback = CopyFeedback()
+    private var copiedIssueDetails: Bool { reportCopyFeedback.isCopied }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -143,14 +143,15 @@ struct HelpSettingsView: View {
 
         }
         .onDisappear {
-            copyResetTask?.cancel()
+            reportCopyFeedback.cancel()
         }
     }
 
     private func copyIssueDetails() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(issueDetailsText, forType: .string)
-        HapticFeedbackManager.shared.success()
+        reportCopyFeedback.copy(issueDetailsText,
+            animation: reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7),
+            resetAnimation: reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7),
+            haptic: { HapticFeedbackManager.shared.success() })
         AnalyticsManager.shared.captureFeature(
             feature: "support",
             subfeature: "support_report",
@@ -158,18 +159,6 @@ struct HelpSettingsView: View {
             outcome: "success"
         )
 
-        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7)) {
-            copiedIssueDetails = true
-        }
-
-        copyResetTask?.cancel()
-        copyResetTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1.5))
-            guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7)) {
-                copiedIssueDetails = false
-            }
-        }
     }
 
     private func open(_ url: URL) {
@@ -549,7 +538,8 @@ private struct DeeplinkEntryRow: View {
     let color: Color
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var copied = false
+    @StateObject private var copyFeedback = CopyFeedback()
+    private var copied: Bool { copyFeedback.isCopied }
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
@@ -600,16 +590,7 @@ private struct DeeplinkEntryRow: View {
     }
 
     private func copy(_ value: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(value, forType: .string)
-        HapticFeedbackManager.shared.tap()
-
-        copied = true
-
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_250_000_000)
-            copied = false
-        }
+        copyFeedback.copy(value, duration: .milliseconds(1250))
     }
 }
 

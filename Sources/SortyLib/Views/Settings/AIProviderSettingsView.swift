@@ -33,7 +33,7 @@ struct AIProviderSettingsView: View {
     @State private var codexTerminalButtonState: CodexActionVisualState = .idle
     @State private var codexTerminalResetTask: Task<Void, Never>?
     @State private var codexDeviceAuthDismissTask: Task<Void, Never>?
-    @State private var codexDeviceCodeCopiedID: UUID?
+    @StateObject private var deviceCodeCopyFeedback = CopyFeedback()
     @State private var isShowingCodexDeviceAuth = false
     @State private var connectionSuccessResetTask: Task<Void, Never>?
     @State private var connectionTestTask: Task<Void, Never>?
@@ -159,7 +159,7 @@ struct AIProviderSettingsView: View {
                 onOpenSettings: openChatGPTSecuritySettings,
                 onOpenDeviceAuthorization: openCodexDeviceAuthorization,
                 onCopyCode: copyCodexDeviceCode,
-                copiedID: codexDeviceCodeCopiedID
+                isCodeCopied: deviceCodeCopyFeedback.isCopied
             )
             .frame(width: 610)
             .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
@@ -967,21 +967,9 @@ struct AIProviderSettingsView: View {
     @MainActor
     private func copyCodexDeviceCode() {
         guard let code = codexAuth.deviceAuthSession?.userCode else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(code, forType: .string)
-        HapticFeedbackManager.shared.tap()
-
-        let copiedID = UUID()
-        withAnimation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.72)) {
-            codexDeviceCodeCopiedID = copiedID
-        }
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_250_000_000)
-            guard codexDeviceCodeCopiedID == copiedID else { return }
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-                codexDeviceCodeCopiedID = nil
-            }
-        }
+        deviceCodeCopyFeedback.copy(code, duration: .milliseconds(1250),
+            animation: reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.72),
+            resetAnimation: reduceMotion ? nil : .easeOut(duration: 0.18))
     }
 
     @MainActor
@@ -1027,7 +1015,7 @@ private struct CodexDeviceAuthSheet: View {
     let onOpenSettings: () -> Void
     let onOpenDeviceAuthorization: () -> Void
     let onCopyCode: () -> Void
-    let copiedID: UUID?
+    let isCodeCopied: Bool
 
     private var userCode: String {
         session?.userCode ?? "---- -----"
@@ -1040,10 +1028,6 @@ private struct CodexDeviceAuthSheet: View {
         default:
             return false
         }
-    }
-
-    private var isCodeCopied: Bool {
-        copiedID != nil
     }
 
     var body: some View {

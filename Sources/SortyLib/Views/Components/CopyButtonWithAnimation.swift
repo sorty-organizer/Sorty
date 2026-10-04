@@ -19,8 +19,8 @@ public struct CopyButtonWithAnimation: View {
     var labelFont: Font = .caption
     var tint: Color = .secondary
     
-    @State private var showCheckmark = false
-    @State private var resetTask: Task<Void, Never>?
+    @StateObject private var feedback = CopyFeedback()
+    private var showCheckmark: Bool { feedback.isCopied }
     
     public init(content: String, label: String? = nil, copyIcon: String = "doc.on.doc", iconSize: CGFloat = 13, labelFont: Font = .caption, tint: Color = .secondary) {
         self.content = content
@@ -61,28 +61,13 @@ public struct CopyButtonWithAnimation: View {
         .accessibilityValue(showCheckmark ? "Copied" : "")
         .accessibilityIdentifier("CopyButtonWithAnimation")
         .onDisappear {
-            resetTask?.cancel()
+            feedback.cancel()
         }
     }
     
     private func copyToClipboard() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(content, forType: .string)
-        
-        HapticFeedbackManager.shared.tap()
-        
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
-            showCheckmark = true
-        }
-        
-        resetTask?.cancel()
-        resetTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1.5))
-            guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
-                showCheckmark = false
-            }
-        }
+        feedback.copy(content, animation: reduceMotion ? nil : .easeInOut(duration: 0.15),
+                      resetAnimation: reduceMotion ? nil : .easeInOut(duration: 0.15))
     }
 }
 
@@ -93,4 +78,32 @@ public struct CopyButtonWithAnimation: View {
         CopyButtonWithAnimation(content: "/path/to/file", label: "Copy Path", copyIcon: "folder")
     }
     .padding()
+}
+
+/// Clipboard feedback shared by copy controls; callers own styling and animation.
+@MainActor
+final class CopyFeedback: ObservableObject {
+    @Published private(set) var isCopied = false
+    private var resetTask: Task<Void, Never>?
+
+    func copy(_ text: String, duration: Duration = .seconds(1.5),
+              animation: Animation? = nil, resetAnimation: Animation? = nil,
+              haptic: () -> Void = { HapticFeedbackManager.shared.tap() }) {
+        NSPasteboard.general.clearContents()
+        guard NSPasteboard.general.setString(text, forType: .string) else { return }
+        haptic()
+        resetTask?.cancel()
+        withAnimation(animation) { isCopied = true }
+        resetTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: duration)
+            guard !Task.isCancelled, let self else { return }
+            withAnimation(resetAnimation) { self.isCopied = false }
+        }
+    }
+
+    func cancel() {
+        resetTask?.cancel()
+        resetTask = nil
+        isCopied = false
+    }
 }

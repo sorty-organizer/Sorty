@@ -22,11 +22,11 @@ struct ErrorView: View {
     }
 
     @State private var showRetryOptions = false
-    @State private var showCopiedFeedback = false
+    @StateObject private var copyFeedback = CopyFeedback()
+    private var showCopiedFeedback: Bool { copyFeedback.isCopied }
     @State private var isHoveringCancel = false
     @State private var isHoveringHelpSupport = false
     @State private var isHoveringSettings = false
-    @State private var copyResetTask: Task<Void, Never>?
     @State private var activeActionFeedback: ErrorActionFeedback?
     @State private var actionFeedbackResetTask: Task<Void, Never>?
     @State private var retryAnimationTrigger = 0
@@ -552,21 +552,11 @@ struct ErrorView: View {
                 }
 
                 Button {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(privacySafeSupportDetails, forType: .string)
-                    HapticFeedbackManager.shared.selection()
+                    copyFeedback.copy(privacySafeSupportDetails, duration: .milliseconds(1200),
+                        animation: .spring(response: 0.3, dampingFraction: 0.72),
+                        resetAnimation: .spring(response: 0.3, dampingFraction: 0.72),
+                        haptic: { HapticFeedbackManager.shared.selection() })
                     animateActionFeedback(.copy)
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
-                        showCopiedFeedback = true
-                    }
-                    copyResetTask?.cancel()
-                    copyResetTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 1_200_000_000)
-                        guard !Task.isCancelled else { return }
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
-                            showCopiedFeedback = false
-                        }
-                    }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: showCopiedFeedback ? "checkmark.circle.fill" : "doc.on.doc")

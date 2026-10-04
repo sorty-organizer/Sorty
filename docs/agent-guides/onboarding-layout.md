@@ -18,6 +18,12 @@ request, using primary text and icon color. Copy and checkmark symbols share a f
 keeping the label and row stationary. History uses the same feedback with a
 plain button style.
 
+Copy controls with temporary feedback share `CopyFeedback` for clipboard writes,
+copied state, haptics, and cancellable reset timing. Each view supplies its own
+entrance and reset animations. A failed clipboard write does not show success,
+and another copy cancels the previous reset. Keep one-off copy actions without
+temporary feedback simple; they do not need a feedback object.
+
 ## Onboarding window
 
 The onboarding window has a minimum content size of 1100 by 720 points. Its
