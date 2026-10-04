@@ -318,3 +318,12 @@ ambient it breathes quietly (blob 3.8 s, core 2.9 s, scale only). Reduce
 Motion reveals everything synchronously with no particles or breathing.
 Pause the layers while inactive and fade them on dismissal. Cancel the entry
 task when finishing so it cannot restart the celebration during dismissal.
+
+Keep the skill intro's app icon in its retained image/blur adapter. Its Gaussian
+radius still animates from 0 to 4 over 450 ms while SwiftUI owns the existing
+slide and fade. Reduce Motion and Reduce Transparency keep that blur disabled.
+The original intro glow and completion glow ring rasterize their static blur
+artwork at the window backing scale, with the ring sampled at its largest pulse
+size. Unchanged layout bounds must not rebuild scan/ripple paths or discard the
+completion blob's settled rasterization. Completion activity changes only pause
+or resume its layer clock; they must not rerun its reveal or ambient settle.

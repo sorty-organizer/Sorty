@@ -1000,6 +1000,7 @@ private final class RetainedIntroGlowView: NSView {
     private var lastIsVisible: Bool?
     private var lastReduceMotion: Bool?
     private var lastIsActive: Bool?
+    private var lastLayoutBounds: CGRect?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1007,6 +1008,8 @@ private final class RetainedIntroGlowView: NSView {
         layer?.masksToBounds = false
         setAccessibilityElement(false)
 
+        glowLayer.shouldRasterize = true
+        updateGlowRasterizationScale()
         blurFilter.name = "introGlowBlur"
         blurFilter.radius = 16
         glowShapeLayer.backgroundColor = NSColor(SortyDesignSystem.Colors.resolvedAccent)
@@ -1026,6 +1029,8 @@ private final class RetainedIntroGlowView: NSView {
 
     override func layout() {
         super.layout()
+        guard lastLayoutBounds != bounds else { return }
+        lastLayoutBounds = bounds
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         let blurOutset: CGFloat = 60
@@ -1039,6 +1044,26 @@ private final class RetainedIntroGlowView: NSView {
         CATransaction.commit()
     }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateGlowRasterizationScale()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        updateGlowRasterizationScale()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        glowShapeLayer.backgroundColor = NSColor(SortyDesignSystem.Colors.resolvedAccent)
+            .withAlphaComponent(0.30).cgColor
+    }
+
+    private func updateGlowRasterizationScale() {
+        glowLayer.rasterizationScale = window?.backingScaleFactor ?? 2
+    }
+
     func update(isVisible: Bool, reduceMotion: Bool, isActive: Bool) {
         guard lastIsVisible != isVisible
                 || lastReduceMotion != reduceMotion
@@ -1046,10 +1071,6 @@ private final class RetainedIntroGlowView: NSView {
         lastIsVisible = isVisible
         lastReduceMotion = reduceMotion
         lastIsActive = isActive
-
-        glowShapeLayer.backgroundColor = NSColor(SortyDesignSystem.Colors.resolvedAccent)
-            .withAlphaComponent(0.30)
-            .cgColor
 
         if reduceMotion {
             finishImmediately(isVisible: isVisible)
@@ -1199,6 +1220,7 @@ private final class RetainedEnergyScanIconView: NSView, @preconcurrency CAAnimat
     private var isAnimating = false
     private var isPaused = false
     private var hasCompletedSingleSweep = false
+    private var lastLayoutBounds: CGRect?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1238,6 +1260,8 @@ private final class RetainedEnergyScanIconView: NSView, @preconcurrency CAAnimat
 
     override func layout() {
         super.layout()
+        guard lastLayoutBounds != bounds else { return }
+        lastLayoutBounds = bounds
         let lineHeight = max(1.5, bounds.width * 0.012)
         CATransaction.begin()
         CATransaction.setDisableActions(true)

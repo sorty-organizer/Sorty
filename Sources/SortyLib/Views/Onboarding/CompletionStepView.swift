@@ -69,6 +69,7 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
     private var lastReduceMotion: Bool?
     private var lastIsActive: Bool?
     private var rasterizationTask: Task<Void, Never>?
+    private var lastLayoutBounds: CGRect?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -98,6 +99,8 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
 
     override func layout() {
         super.layout()
+        guard lastLayoutBounds != bounds else { return }
+        lastLayoutBounds = bounds
         disableSettledRasterization()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -149,15 +152,25 @@ private final class RetainedCompletionCelebrationBlobView: NSView {
         reduceMotion: Bool,
         isActive: Bool
     ) {
-        guard lastPhase != phase
+        let celebrationChanged = lastPhase != phase
             || lastExitTriggered != exitTriggered
             || lastReduceMotion != reduceMotion
-            || lastIsActive != isActive else { return }
+        guard celebrationChanged || lastIsActive != isActive else { return }
+        lastIsActive = isActive
+
+        // Focus changes only pause the layer clock. Reapplying the phase would
+        // restart the reveal/settle and invalidate the settled blur surfaces.
+        guard celebrationChanged else {
+            if isActive {
+                resumeIfNeeded()
+            } else {
+                pauseIfNeeded()
+            }
+            return
+        }
         lastPhase = phase
         lastExitTriggered = exitTriggered
         lastReduceMotion = reduceMotion
-        lastIsActive = isActive
-
         refreshPalette()
 
         if reduceMotion {
@@ -703,6 +716,7 @@ private final class RetainedCompletionHeroEffectsView: NSView {
     private var isPaused = false
     private var lastReduceMotion: Bool?
     private var lastIsActive: Bool?
+    private var lastLayoutBounds: CGRect?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -710,6 +724,8 @@ private final class RetainedCompletionHeroEffectsView: NSView {
         setAccessibilityElement(false)
 
         glowHost.wantsLayer = true
+        glowHost.layer?.shouldRasterize = true
+        updateGlowRasterizationScale()
         glowHost.layer?.anchorPoint = CGPoint(x: 0.5, y: 0.5)
         addSubview(glowHost)
 
@@ -730,6 +746,10 @@ private final class RetainedCompletionHeroEffectsView: NSView {
 
     override func layout() {
         super.layout()
+        guard lastLayoutBounds != bounds else { return }
+        lastLayoutBounds = bounds
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         glowHost.frame = CGRect(
             x: bounds.midX - 90,
             y: bounds.midY - 90,
@@ -749,6 +769,23 @@ private final class RetainedCompletionHeroEffectsView: NSView {
             rippleLayer.frame = frame
             rippleLayer.path = CGPath(ellipseIn: rippleLayer.bounds, transform: nil)
         }
+        CATransaction.commit()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateGlowRasterizationScale()
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        updateGlowRasterizationScale()
+    }
+
+    /// Cache the static angular gradient and blur at the pulse's largest size
+    /// so scale animation stays sharp on Retina displays without reblurring.
+    private func updateGlowRasterizationScale() {
+        glowHost.layer?.rasterizationScale = (window?.backingScaleFactor ?? 2) * 1.15
     }
 
     func update(isVisible: Bool, reduceMotion: Bool, isActive: Bool) {

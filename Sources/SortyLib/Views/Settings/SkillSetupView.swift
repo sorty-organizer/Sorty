@@ -1,5 +1,8 @@
 import AppKit
 @preconcurrency import AVFoundation
+import CoreImage
+import CoreImage.CIFilterBuiltins
+import QuartzCore
 import SwiftUI
 
 /// Presents the existing skill importer before the original app onboarding.
@@ -430,11 +433,11 @@ struct SkillSetupView: View {
 
     private var skillIconTransition: some View {
         ZStack {
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .scaledToFit()
+            SkillIntroductionAppIcon(
+                isBlurred: introductionStage >= 4 && !reduceMotion && !reduceTransparency,
+                animatesBlur: !reduceMotion
+            )
                 .frame(width: 160, height: 160)
-                .blur(radius: introductionStage >= 4 && !reduceMotion && !reduceTransparency ? 4 : 0)
                 .opacity(introductionStage >= 4 ? 0.55 : 1)
                 .offset(x: introductionStage >= 4 ? -120 : 0)
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: introductionStage >= 4)
@@ -1299,5 +1302,92 @@ private struct SkillIntroductionReveal: ViewModifier {
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: isVisible)
             .allowsHitTesting(isVisible)
             .accessibilityHidden(!isVisible)
+    }
+}
+
+/// Retains the app image while the compositor animates its Gaussian blur.
+/// The surrounding SwiftUI view still owns the original slide and fade.
+private struct SkillIntroductionAppIcon: NSViewRepresentable {
+    let isBlurred: Bool
+    let animatesBlur: Bool
+
+    func makeNSView(context: Context) -> SkillIntroductionAppIconView {
+        SkillIntroductionAppIconView()
+    }
+
+    func updateNSView(_ nsView: SkillIntroductionAppIconView, context: Context) {
+        nsView.update(isBlurred: isBlurred, animated: animatesBlur)
+    }
+}
+
+@MainActor
+private final class SkillIntroductionAppIconView: NSView {
+    private let imageLayer = CALayer()
+    private let blurContainer = CALayer()
+    private let blurFilter = CIFilter.gaussianBlur()
+    private var lastIsBlurred: Bool?
+    private var lastAnimatesBlur: Bool?
+    private var lastLayoutBounds: CGRect?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = false
+        setAccessibilityElement(false)
+        blurFilter.name = "skillIntroductionBlur"
+        blurFilter.radius = 0
+        blurContainer.filters = [blurFilter]
+        imageLayer.contentsGravity = .resizeAspect
+        var proposedRect = CGRect(x: 0, y: 0, width: 160, height: 160)
+        imageLayer.contents = NSApp.applicationIconImage.cgImage(
+            forProposedRect: &proposedRect,
+            context: nil,
+            hints: nil
+        )
+        blurContainer.addSublayer(imageLayer)
+        layer?.addSublayer(blurContainer)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func layout() {
+        super.layout()
+        guard lastLayoutBounds != bounds else { return }
+        lastLayoutBounds = bounds
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        // Three Gaussian radii retain the same soft edge outside the icon.
+        let outset: CGFloat = 12
+        blurContainer.frame = bounds.insetBy(dx: -outset, dy: -outset)
+        imageLayer.frame = CGRect(origin: CGPoint(x: outset, y: outset), size: bounds.size)
+        CATransaction.commit()
+    }
+
+    func update(isBlurred: Bool, animated: Bool) {
+        guard lastIsBlurred != isBlurred || lastAnimatesBlur != animated else { return }
+        let hadPreviousState = lastIsBlurred != nil
+        lastIsBlurred = isBlurred
+        lastAnimatesBlur = animated
+        let radius: Float = isBlurred ? 4 : 0
+        let keyPath = "filters.skillIntroductionBlur.inputRadius"
+        let currentRadius = blurContainer.presentation()?.value(forKeyPath: keyPath) ?? blurFilter.radius
+        blurContainer.removeAnimation(forKey: "skillIntroductionBlur")
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        blurFilter.radius = radius
+        CATransaction.commit()
+        if animated && hadPreviousState {
+            let animation = CABasicAnimation(keyPath: keyPath)
+            animation.fromValue = currentRadius
+            animation.toValue = radius
+            animation.duration = 0.45
+            animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            blurContainer.add(animation, forKey: "skillIntroductionBlur")
+        }
     }
 }
