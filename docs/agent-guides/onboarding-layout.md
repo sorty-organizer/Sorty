@@ -7,8 +7,10 @@ input and accessibility while a full-window progress view is visible above it.
 Hide the separate screen backdrop blur panel during import so it cannot obscure
 the progress view. The completion tick uses the shared one-shot milestone sliver
 at its fixed 72-point size, with motion disabled under Reduce Motion.
-Use `CopyButtonWithAnimation` for the example request so it shares the compact
-copy icon, checkmark feedback, and haptic used by History.
+Use `CopyButtonWithAnimation` inside a Sorty bordered button for the example
+request. Copy and checkmark symbols share a fixed square and crossfade in place,
+keeping the label and row stationary. History uses the same feedback with a
+plain button style.
 
 ## Onboarding window
 

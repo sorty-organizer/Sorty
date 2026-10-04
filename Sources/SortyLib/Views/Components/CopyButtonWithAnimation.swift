@@ -16,15 +16,17 @@ public struct CopyButtonWithAnimation: View {
     var label: String?
     var copyIcon: String = "doc.on.doc"
     var iconSize: CGFloat = 13
+    var labelFont: Font = .caption
     
     @State private var showCheckmark = false
     @State private var resetTask: Task<Void, Never>?
     
-    public init(content: String, label: String? = nil, copyIcon: String = "doc.on.doc", iconSize: CGFloat = 13) {
+    public init(content: String, label: String? = nil, copyIcon: String = "doc.on.doc", iconSize: CGFloat = 13, labelFont: Font = .caption) {
         self.content = content
         self.label = label
         self.copyIcon = copyIcon
         self.iconSize = iconSize
+        self.labelFont = labelFont
     }
     
     public var body: some View {
@@ -32,19 +34,27 @@ public struct CopyButtonWithAnimation: View {
             copyToClipboard()
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: showCheckmark ? "checkmark" : copyIcon)
-                    .font(.system(size: iconSize))
-                    .foregroundStyle(showCheckmark ? .green : .secondary)
-                    .symbolReplaceTransition(animationValue: showCheckmark)
+                ZStack {
+                    Image(systemName: copyIcon)
+                        .resizable()
+                        .scaledToFit()
+                        .opacity(showCheckmark ? 0 : 1)
+                    Image(systemName: "checkmark")
+                        .resizable()
+                        .scaledToFit()
+                        .opacity(showCheckmark ? 1 : 0)
+                }
+                .frame(width: iconSize, height: iconSize)
+                .foregroundStyle(showCheckmark ? Color.green : Color.secondary)
+                .accessibilityHidden(true)
                 
                 if let label {
                     Text(label)
-                        .font(.caption)
+                        .font(labelFont)
                         .foregroundStyle(showCheckmark ? .green : .secondary)
                 }
             }
         }
-        .buttonStyle(.plain)
         .accessibilityLabel(label ?? "Copy")
         .accessibilityValue(showCheckmark ? "Copied" : "")
         .accessibilityIdentifier("CopyButtonWithAnimation")
@@ -59,7 +69,7 @@ public struct CopyButtonWithAnimation: View {
         
         HapticFeedbackManager.shared.tap()
         
-        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7)) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
             showCheckmark = true
         }
         
@@ -67,7 +77,7 @@ public struct CopyButtonWithAnimation: View {
         resetTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.5))
             guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
                 showCheckmark = false
             }
         }

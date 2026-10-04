@@ -44,6 +44,7 @@ struct HistoryDetailHeaderSection: View {
                     CopyButtonWithAnimation(
                         content: sessionDeeplink
                     )
+                    .buttonStyle(.plain)
                     .help("Copy session deeplink")
                     .accessibilityLabel("Copy session deeplink")
                 }

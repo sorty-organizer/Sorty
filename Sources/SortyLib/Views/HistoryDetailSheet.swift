@@ -296,6 +296,7 @@ struct HistoryDetailSheet: View {
                             content: copyRaw,
                             label: FeatureFlags.privacyModeEnabled ? "Copy Redacted JSON" : "Copy Raw JSON"
                         )
+                        .buttonStyle(.plain)
                         .accessibilityIdentifier("CopyRawJSONButton")
                     }
 
