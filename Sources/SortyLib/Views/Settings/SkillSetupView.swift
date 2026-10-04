@@ -963,11 +963,6 @@ struct SkillSetupView: View {
                     Text(isSaving ? "Importing…" : "Loading settings…")
                 }
                 .accessibilityElement(children: .combine)
-            } else if step == .preferences {
-                Text(selected.isEmpty ? "No settings will be imported" : "\(selectedOptions.count) selected")
-                    .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedOptions.count)))
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedOptions.count)
-                    .font(supportingFont).foregroundStyle(.secondary)
             }
             if step == .review && !hasReachedReviewBottom {
                 Text("Scroll to the bottom to enable import")
@@ -985,6 +980,13 @@ struct SkillSetupView: View {
                         .accessibilityIdentifier(isOnboarding ? "skill-onboarding.continue-app" : "skill-import.cancel")
                 }
                 Spacer()
+                if step == .preferences && !isLoading && !isSaving && !selected.isEmpty {
+                    Text("\(selectedOptions.count) selected")
+                        .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedOptions.count)))
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedOptions.count)
+                        .font(supportingFont)
+                        .foregroundStyle(.secondary)
+                }
                 if step != setupSteps.first && step != .complete {
                     Button("Back") { changeStep(Step(rawValue: step.rawValue - 1) ?? .welcome) }
                         .buttonStyle(.sortyBordered(size: .large))
