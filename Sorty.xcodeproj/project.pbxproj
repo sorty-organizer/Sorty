@@ -513,7 +513,6 @@
 		E50000000000000000000002 /* sorty */ = {isa = PBXFileReference; lastKnownFileType = folder; name = sorty; path = .agents/skills/sorty; sourceTree = SOURCE_ROOT; };
 		E50000000000000000000003 /* CodexSkillInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSkillInstaller.swift; sourceTree = "<group>"; };
 		E50000000000000000000004 /* CodexSkillInstallerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSkillInstallerCard.swift; sourceTree = "<group>"; };
-		E50000000000000000000009 /* SortySkillSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortySkillSettingsView.swift; sourceTree = "<group>"; };
 		E50000000000000000000005 /* SkillSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillSetupView.swift; sourceTree = "<group>"; };
 		E50000000000000000000006 /* SkillSetupWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillSetupWindowController.swift; sourceTree = "<group>"; };
 
@@ -949,7 +948,6 @@
 			isa = PBXGroup;
 			children = (
 				E50000000000000000000004 /* CodexSkillInstallerCard.swift */,
-				E50000000000000000000009 /* SortySkillSettingsView.swift */,
 				E50000000000000000000005 /* SkillSetupView.swift */,
 				E50000000000000000000006 /* SkillSetupWindowController.swift */,
 				AABBCC110001000000000060 /* AIProviderRow.swift */,
