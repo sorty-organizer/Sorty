@@ -270,7 +270,9 @@ struct SkillSetupView: View {
                 .padding(.bottom, 20)
 
                 Group {
-                    if step == .location {
+                    if isSaving {
+                        importProgress
+                    } else if step == .location {
                         ScrollView { stepContent }
                     } else if step == .rethink || step == .about || step == .welcome || step == .complete {
                         SkillImportChecklist { stepContent }
@@ -282,8 +284,6 @@ struct SkillSetupView: View {
                 .padding(.vertical, 8)
                 .frame(maxWidth: 880)
                 .frame(maxWidth: .infinity)
-                .id(step)
-                .transition(.opacity)
                 .frame(maxHeight: .infinity)
                 .disabled(isLoading || isSaving)
 
@@ -299,15 +299,6 @@ struct SkillSetupView: View {
                 navigation
                     .padding(.horizontal, 40)
                     .padding(.vertical, 24)
-            }
-            .opacity(isSaving ? 0 : 1)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isSaving)
-            .allowsHitTesting(!isSaving)
-            .accessibilityHidden(isSaving)
-
-            if isSaving {
-                importProgress
-                    .zIndex(1)
             }
         }
         .font(readingFont)
@@ -1145,10 +1136,12 @@ struct SkillSetupView: View {
         errorMessage = nil
         Task {
             defer {
-                isSaving = false
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { isSaving = false }
                 onSavingChanged(false)
             }
-            // Let the progress overlay mount before authentication or import work.
+            // Keep the setup shell visible while the content shows import progress.
             await Task.yield()
             if selectedOptions.contains(where: { $0.section == .learnings }) {
                 guard await SecurityManager.shared.authenticateForSensitiveAction(reason: "Authenticate to import your Learnings into the skill.") else { return }
@@ -1174,12 +1167,13 @@ struct SkillSetupView: View {
                     sound.volume = 0.20
                     sound.play()
                 }
-                // Resolve the finished page while the setup content is hidden.
-                // Only its reveal fades; layout and glass never transition together.
+                // Commit the ready page and dismiss progress in the same update.
                 var transaction = Transaction()
                 transaction.disablesAnimations = true
-                withTransaction(transaction) { step = .complete }
-                await Task.yield()
+                withTransaction(transaction) {
+                    step = .complete
+                    isSaving = false
+                }
             } catch {
                 errorMessage = error.localizedDescription
                 HapticFeedbackManager.shared.error()
