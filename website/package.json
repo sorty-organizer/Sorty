@@ -63,7 +63,8 @@
       "undici@<7.0.0": "6.28.1"
     },
     "patchedDependencies": {
-      "@highlighters/core@1.2.0": "patches/@highlighters__core@1.2.0.patch"
+      "@highlighters/core@1.2.0": "patches/@highlighters__core@1.2.0.patch",
+      "braces@3.0.3": "patches/braces@3.0.3.patch"
     }
   }
 }
