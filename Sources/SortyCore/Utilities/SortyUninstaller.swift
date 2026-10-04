@@ -292,6 +292,27 @@ public enum SortyUninstaller {
         )
     }
 
+    /// Prevents the skill handoff from uninstalling files inside any cleanup target.
+    public static func canPreserveSkill(at skillURL: URL) -> Bool {
+        let fileManager = FileManager.default
+        let customServicesDirectory = UserDefaults.standard
+            .string(forKey: servicesDirectoryPathDefaultsKey)
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+        let removalPaths = removalPathCandidates(
+            homeDirectory: fileManager.homeDirectoryForCurrentUser,
+            temporaryDirectory: fileManager.temporaryDirectory,
+            customServicesDirectory: customServicesDirectory,
+            fileManager: fileManager
+        ) + [Bundle.main.bundleURL]
+            + [ExtensionCommunication.stagedApplicationURLForUninstall()].compactMap { $0 }
+        let skillPath = skillURL.resolvingSymlinksInPath().standardizedFileURL.path
+        return !removalPaths.contains { url in
+            let removalPath = url.resolvingSymlinksInPath().standardizedFileURL.path
+            return skillPath == removalPath || skillPath.hasPrefix(removalPath + "/")
+                || removalPath.hasPrefix(skillPath + "/")
+        }
+    }
+
     public static func cleanupPathCandidates(homeDirectory: URL) -> [URL] {
         safeUniqueURLs(
             persistentStatePathCandidates(

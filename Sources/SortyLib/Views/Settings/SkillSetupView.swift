@@ -1,6 +1,68 @@
 import AppKit
 import SwiftUI
 
+/// Presents the existing skill importer before the original app onboarding.
+struct SkillOnboardingView: View {
+    @EnvironmentObject private var appState: AppState
+    @StateObject private var installer = CodexSkillInstaller()
+    @State private var isCheckingSkill = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        SkillSetupView(
+            installer: installer,
+            onClose: appState.continueWithAppAfterSkillIntroduction,
+            onSavingChanged: { _ in },
+            isOnboarding: true,
+            onUseSkill: useSkill
+        )
+        .disabled(isCheckingSkill)
+        .overlay {
+            if isCheckingSkill {
+                ProgressView("Checking installed skill…")
+                    .padding(20)
+                    .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+            }
+        }
+        .frame(
+            minWidth: SortyDesignSystem.Sizing.windowOnboardingWidth,
+            minHeight: SortyDesignSystem.Sizing.windowOnboardingHeight
+        )
+        .background {
+            OnboardingWindowTitleConfigurator(preserveWindowPosition: appState.isRestartingOnboarding, onConfigured: {})
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
+        .accessibilityIdentifier("SkillOnboardingView")
+        .alert("Your Skill Needs Attention", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+        .task(id: isCheckingSkill) {
+            guard isCheckingSkill else { return }
+            defer { isCheckingSkill = false }
+            await installer.refresh(trackUsage: false)
+            guard !Task.isCancelled else { return }
+            guard case .installed = installer.state else {
+                errorMessage = "The installed skill is no longer available at the chosen location. Continue with the app and set up the skill again in Settings before deleting Sorty."
+                HapticFeedbackManager.shared.error()
+                return
+            }
+            appState.requestUninstallConfirmation(preservingSkillAt: installer.destinationURL)
+        }
+    }
+
+    private func useSkill() {
+        guard !isCheckingSkill else { return }
+        HapticFeedbackManager.shared.tap()
+        isCheckingSkill = true
+    }
+}
+
 struct SkillSetupView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -14,6 +76,8 @@ struct SkillSetupView: View {
     @ObservedObject var installer: CodexSkillInstaller
     let onClose: () -> Void
     let onSavingChanged: (Bool) -> Void
+    let isOnboarding: Bool
+    let onUseSkill: () -> Void
 
     @State private var step: Step = .welcome
     @State private var activeSection: SkillImportOption.Section = .preferences
@@ -33,11 +97,27 @@ struct SkillSetupView: View {
     @ScaledMetric(relativeTo: .largeTitle) private var agentIconSize: CGFloat = 32
     @AccessibilityFocusState private var isHeadingFocused: Bool
 
+    init(
+        installer: CodexSkillInstaller,
+        onClose: @escaping () -> Void,
+        onSavingChanged: @escaping (Bool) -> Void,
+        isOnboarding: Bool = false,
+        onUseSkill: @escaping () -> Void = {}
+    ) {
+        self.installer = installer
+        self.onClose = onClose
+        self.onSavingChanged = onSavingChanged
+        self.isOnboarding = isOnboarding
+        self.onUseSkill = onUseSkill
+        self._step = State(initialValue: isOnboarding ? .rethink : .welcome)
+    }
+
     private enum Step: Int, CaseIterable {
-        case welcome, location, preferences, review, complete
+        case rethink, welcome, location, preferences, review, complete
 
         var title: String {
             switch self {
+            case .rethink: "Sorty can be a skill"
             case .welcome: "Use Sorty in your agent"
             case .location: "Choose a skills folder"
             case .preferences: "Choose what to share"
@@ -48,6 +128,7 @@ struct SkillSetupView: View {
 
         var explanation: String {
             switch self {
+            case .rethink: "Since the last update, we've rethought how Sorty works. We realized its file organization tools can live in a skill for your agent."
             case .welcome: "The Sorty skill lets your agent organize files using your saved preferences."
             case .location: "Pick where your agent loads skills, or choose a custom folder."
             case .preferences: "Choose settings to copy into the skill, or import nothing."
@@ -55,6 +136,22 @@ struct SkillSetupView: View {
             case .complete: "Start a new chat, tell it to use Sorty, and name the folder to organize."
             }
         }
+
+        var railTitle: String {
+            switch self {
+            case .rethink: "Update"
+            case .welcome: "About"
+            case .location: "Location"
+            case .preferences: "Preferences"
+            case .review: "Review"
+            case .complete: "Ready"
+            }
+        }
+    }
+
+    private var setupSteps: [Step] {
+        isOnboarding ? [.rethink, .welcome, .location, .preferences, .review]
+            : [.welcome, .location, .preferences, .review]
     }
 
     var body: some View {
@@ -66,7 +163,7 @@ struct SkillSetupView: View {
                 Color(NSColor.windowBackgroundColor).ignoresSafeArea()
             } else {
                 OnboardingBottomGradient(
-                    progress: Double(step.rawValue) / Double(Step.complete.rawValue),
+                    progress: Double(step.rawValue - (isOnboarding ? 0 : 1)) / Double(isOnboarding ? 5 : 4),
                     showsBaseColor: false
                 )
                 .ignoresSafeArea()
@@ -151,7 +248,11 @@ struct SkillSetupView: View {
             .accessibilityHidden(true)
         }
         .accessibilityIdentifier("skill-import.window")
-        .task { await loadOptions() }
+        .task {
+            if isOnboarding { await installer.refresh(trackUsage: false) }
+            await loadOptions()
+            isHeadingFocused = true
+        }
         .onChange(of: step) { _, _ in
             isHeadingFocused = true
             isGetStartedHovered = false
@@ -206,17 +307,17 @@ struct SkillSetupView: View {
 
     private var progressRail: some View {
         HStack(spacing: 16) {
-            ForEach(Array(Step.allCases.prefix(4)), id: \.rawValue) { item in
+            ForEach(Array(setupSteps.enumerated()), id: \.element) { index, item in
                 HStack(spacing: 8) {
-                    Image(systemName: step.rawValue > item.rawValue ? "checkmark.circle.fill" : "\(item.rawValue + 1).circle\(step == item ? ".fill" : "")")
+                    Image(systemName: step.rawValue > item.rawValue ? "checkmark.circle.fill" : "\(index + 1).circle\(step == item ? ".fill" : "")")
                         .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                         .accessibilityHidden(true)
-                    Text(["About", "Location", "Preferences", "Review"][item.rawValue])
+                    Text(item.railTitle)
                         .font(.callout.weight(step == item ? .semibold : .regular))
                 }
                 .foregroundStyle(step.rawValue >= item.rawValue ? Color.primary : Color.secondary)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Step \(item.rawValue + 1), \(["About", "Location", "Preferences", "Review"][item.rawValue])")
+                .accessibilityLabel("Step \(index + 1), \(item.railTitle)")
                 .accessibilityValue(step.rawValue > item.rawValue ? "Completed" : step == item ? "Current" : "Upcoming")
                 if item != .review {
                     Rectangle().fill(.secondary.opacity(0.25)).frame(width: 24, height: 1)
@@ -229,6 +330,20 @@ struct SkillSetupView: View {
     @ViewBuilder
     private var stepContent: some View {
         switch step {
+        case .rethink:
+            VStack(spacing: 28) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 88, height: 88)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 20) {
+                    explanation("The same files, your agent", icon: "folder.badge.gearshape", detail: "Organize folders, rename files, find exact duplicates, and review changes in a conversation.")
+                    explanation("Bring your preferences", icon: "checklist", detail: "Copy your naming rules, exclusions, saved folders, and Learnings into the skill. You choose what to share.")
+                    explanation("Choose how to continue", icon: "arrow.triangle.branch", detail: "We'll help you set up the skill. Then you can delete Sorty or continue with the app.")
+                }
+            }
+            .frame(maxWidth: 620)
         case .welcome:
             VStack(spacing: 16) {
                 ZStack {
@@ -255,6 +370,9 @@ struct SkillSetupView: View {
                     explanation("Your preferences", icon: "textformat", detail: "Naming style, exclusions, saved folders, and Learnings you select.")
                     explanation("Preview first", icon: "list.bullet.rectangle", detail: "Ask for a preview before moving files. Every move can be restored.")
                     explanation("You stay in control", icon: "text.bubble", detail: "Name the folder and rules each time. Saved folders never auto-organize.")
+                    if isOnboarding {
+                        explanation("Your agent runs the skill", icon: "terminal", detail: "The skill uses your agent's model and file access. Finder integration, automatic watching, and widgets remain in the app.")
+                    }
                 }
                 .frame(maxWidth: 620)
             }
@@ -413,7 +531,9 @@ struct SkillSetupView: View {
                 }
                 .padding(20)
                 .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
-                Text("Return here to update the skill when preferences change, or tell your agent to update the Sorty skill with your new preferences.")
+                Text(isOnboarding
+                     ? "Your skill and imported preferences work without the app. Ask your agent to update them whenever your preferences change."
+                     : "Return here to update the skill when preferences change, or tell your agent to update the Sorty skill with your new preferences.")
                     .font(.callout).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -678,14 +798,36 @@ struct SkillSetupView: View {
         }
     }
 
+    @ViewBuilder
     private var navigation: some View {
+        if isOnboarding && step == .complete {
+            VStack(spacing: 12) {
+                Button("Delete App and Continue with Skill", action: onUseSkill)
+                    .buttonStyle(.sortyProminent())
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityHint("Opens a confirmation before uninstalling Sorty. Your installed skill stays in place.")
+                    .accessibilityIdentifier("skill-onboarding.use-skill")
+                Button("Continue with App", action: onClose)
+                    .buttonStyle(.sortyBordered())
+                    .accessibilityIdentifier("skill-onboarding.continue-app")
+                Text("Deleting Sorty removes its app data. You'll review the details before confirming.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        } else {
+            setupNavigation
+        }
+    }
+
+    private var setupNavigation: some View {
         HStack(spacing: 16) {
             if step != .complete {
-                Button("Cancel", action: onClose)
+                Button(isOnboarding ? "Continue with App" : "Cancel", action: onClose)
                     .buttonStyle(.sortyBordered())
                     .keyboardShortcut(.cancelAction)
                     .disabled(isSaving)
-                    .accessibilityIdentifier("skill-import.cancel")
+                    .accessibilityIdentifier(isOnboarding ? "skill-onboarding.continue-app" : "skill-import.cancel")
             }
             if isLoading || isSaving {
                 HStack(spacing: 8) {
@@ -707,7 +849,7 @@ struct SkillSetupView: View {
                     .accessibilityIdentifier("skill-import.scroll-hint")
             }
             Spacer()
-            if step != .welcome && step != .complete {
+            if step != setupSteps.first && step != .complete {
                 Button("Back") { changeStep(Step(rawValue: step.rawValue - 1) ?? .welcome) }
                     .buttonStyle(.sortyBordered())
                     .disabled(isLoading || isSaving)
@@ -721,7 +863,7 @@ struct SkillSetupView: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(
                     isLoading || isSaving
-                        || (step != .welcome && step != .complete && !canUseLocation)
+                        || ([Step.location, .preferences, .review].contains(step) && !canUseLocation)
                         || (step == .review && !hasReachedReviewBottom)
                 )
                 .accessibilityIdentifier(step == .review ? "skill-import.confirm" : "skill-import.continue")
@@ -730,6 +872,7 @@ struct SkillSetupView: View {
 
     private var primaryTitle: String {
         switch step {
+        case .rethink: "Meet the Skill"
         case .welcome: "Get Started"
         case .location, .preferences: "Continue"
         case .review:
@@ -773,6 +916,7 @@ struct SkillSetupView: View {
 
     private func advance() {
         switch step {
+        case .rethink: changeStep(.welcome)
         case .welcome: changeStep(.location)
         case .location: changeStep(.preferences)
         case .preferences: changeStep(.review)

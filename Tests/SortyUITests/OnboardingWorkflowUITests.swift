@@ -17,6 +17,16 @@ final class OnboardingWorkflowUITests: XCTestCase {
             "XCUITEST_DISABLE_STORED_PROVIDER_CREDENTIALS": "1"
         ])
 
+        XCTAssertTrue(app.staticTexts["Sorty can be a skill"].waitForExistence(timeout: 5))
+        let skillContinue = app.buttons["skill-import.continue"]
+        XCTAssertTrue(skillContinue.waitForExistence(timeout: 5))
+        XCTAssertTrue(skillContinue.isEnabled)
+        skillContinue.click()
+        XCTAssertTrue(app.staticTexts["Use Sorty in your agent"].waitForExistence(timeout: 3))
+        skillContinue.click()
+        XCTAssertTrue(app.staticTexts["Choose a skills folder"].waitForExistence(timeout: 3))
+        app.buttons["skill-onboarding.continue-app"].click()
+
         XCTAssertTrue(app.otherElements["OnboardingView"].waitForExistence(timeout: 5))
 
         let advanceButton = app.buttons["OnboardingAdvanceButton"]
@@ -37,6 +47,10 @@ final class OnboardingWorkflowUITests: XCTestCase {
             "XCUITEST_ASSUME_FILES_PERMISSION": "1",
             "XCUITEST_PROVIDER_HEALTHCHECK": "fail_once_then_succeed"
         ])
+
+        let continueWithApp = app.buttons["skill-onboarding.continue-app"]
+        XCTAssertTrue(continueWithApp.waitForExistence(timeout: 5))
+        continueWithApp.click()
 
         XCTAssertTrue(app.otherElements["OnboardingView"].waitForExistence(timeout: 5))
 

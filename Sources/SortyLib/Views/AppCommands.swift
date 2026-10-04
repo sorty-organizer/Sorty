@@ -900,6 +900,11 @@ public class AppState: ObservableObject {
             userDefaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
         }
     }
+    @Published public private(set) var hasCompletedSkillIntroduction: Bool {
+        didSet {
+            userDefaults.set(hasCompletedSkillIntroduction, forKey: "hasCompletedSkillIntroduction")
+        }
+    }
     @Published public private(set) var isRestartingOnboarding = false
     @Published public var shouldPresentSteeringPrompts = false
 
@@ -1003,13 +1008,15 @@ public class AppState: ObservableObject {
         // can be written by a launch that never completed onboarding, so it
         // must not force-skip setup on the next run.
         let onboardingCompleted = userDefaults.bool(forKey: "hasCompletedOnboarding")
+        let skillIntroductionCompleted = userDefaults.bool(forKey: "hasCompletedSkillIntroduction")
         let completedOnboardingVersion = userDefaults.string(forKey: Self.completedOnboardingVersionKey)
         let requiresSetupRepair = userDefaults.bool(forKey: Self.requiresSetupRepairKey)
         let setupRepairMessage = userDefaults.string(forKey: Self.setupRepairMessageKey)
 
         let mustRepeatOnboarding = currentVersion == Self.requiredOnboardingVersion
             && completedOnboardingVersion != Self.requiredOnboardingVersion
-        self.hasCompletedOnboarding = onboardingCompleted && !mustRepeatOnboarding
+        self.hasCompletedSkillIntroduction = skillIntroductionCompleted
+        self.hasCompletedOnboarding = onboardingCompleted && !mustRepeatOnboarding && skillIntroductionCompleted
         self.requiresSetupRepair = requiresSetupRepair
         self.setupRepairMessage = setupRepairMessage
 
@@ -1022,9 +1029,18 @@ public class AppState: ObservableObject {
         // content view's onChange; clear the flag so later requests can open the
         // picker instead of finding it stuck `true`.
         showDirectoryPicker = false
+        hasCompletedSkillIntroduction = true
         hasCompletedOnboarding = true
         let currentVersion = userDefaults.string(forKey: "lastLaunchedVersion") ?? BuildInfo.version
         userDefaults.set(currentVersion, forKey: Self.completedOnboardingVersionKey)
+    }
+
+    /// Resumes the original app setup after the skill introduction, including after an update.
+    public func continueWithAppAfterSkillIntroduction() {
+        HapticFeedbackManager.shared.selection()
+        isRestartingOnboarding = true
+        hasCompletedOnboarding = false
+        hasCompletedSkillIntroduction = true
     }
 
     public var hasResults: Bool {
@@ -1361,6 +1377,7 @@ public class AppState: ObservableObject {
             clearSetupRepairState()
             isRestartingOnboarding = true
             showDirectoryPicker = false
+            hasCompletedSkillIntroduction = false
             hasCompletedOnboarding = false
         }
     }
@@ -2140,15 +2157,23 @@ public class AppState: ObservableObject {
         }
     }
 
-    public func requestUninstallConfirmation() {
+    public func requestUninstallConfirmation(preservingSkillAt skillURL: URL? = nil) {
         authenticateForSensitiveAction(
             reason: "Authenticate to uninstall Sorty."
         ) { [weak self] in
-            self?.presentUninstallConfirmation()
+            self?.presentUninstallConfirmation(preservingSkillAt: skillURL)
         }
     }
 
-    private func presentUninstallConfirmation() {
+    private func presentUninstallConfirmation(preservingSkillAt skillURL: URL?) {
+        if let skillURL, !SortyUninstaller.canPreserveSkill(at: skillURL) {
+            HapticFeedbackManager.shared.error()
+            presentHistoryAlert(
+                title: "Move Your Skill Before Deleting Sorty",
+                message: "This skill is inside a folder Sorty removes during uninstall. Set it up in your agent's skills folder outside Sorty's app data, then try again."
+            )
+            return
+        }
         guard SortyUninstaller.canRemoveCurrentApplication() else {
             HapticFeedbackManager.shared.error()
             presentHistoryAlert(
@@ -2166,6 +2191,9 @@ public class AppState: ObservableObject {
 
         Files and folders you organized with Sorty won't be changed. This can't be undone.
         """
+        if skillURL != nil {
+            alert.informativeText += "\n\nYour installed Sorty skill and its imported preferences will stay in place."
+        }
         alert.addButton(withTitle: "Uninstall Sorty")
         alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true

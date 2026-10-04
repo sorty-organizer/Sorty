@@ -1146,6 +1146,7 @@ struct SortyApp: App {
 
         if env["XCUITEST_FORCE_MAIN_APP"] == "1" {
             defaults.set(true, forKey: "hasCompletedOnboarding")
+            defaults.set(true, forKey: "hasCompletedSkillIntroduction")
             defaults.set(BuildInfo.version, forKey: "completedOnboardingVersion")
             defaults.set(false, forKey: "requiresSetupRepair")
             defaults.set(AnalyticsConsent.denied.rawValue, forKey: AnalyticsManager.consentDefaultsKey)
@@ -1160,6 +1161,7 @@ struct SortyApp: App {
         if env["XCUITEST_FORCE_ONBOARDING"] == "1" {
             defaults.removeObject(forKey: "lastLaunchedVersion")
             defaults.set(false, forKey: "hasCompletedOnboarding")
+            defaults.set(false, forKey: "hasCompletedSkillIntroduction")
             defaults.set(false, forKey: "requiresSetupRepair")
             defaults.removeObject(forKey: "setupRepairMessage")
 
@@ -1176,6 +1178,7 @@ struct SortyApp: App {
         if env["XCUITEST_FORCE_SETUP_REPAIR"] == "1" {
             defaults.set(BuildInfo.version, forKey: "lastLaunchedVersion")
             defaults.set(true, forKey: "hasCompletedOnboarding")
+            defaults.set(true, forKey: "hasCompletedSkillIntroduction")
             defaults.set(true, forKey: "requiresSetupRepair")
             defaults.set(
                 "Finish setting up your provider before organizing files.",

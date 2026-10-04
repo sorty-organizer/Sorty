@@ -43,6 +43,32 @@ final class SortyUninstallerTests: XCTestCase {
         XCTAssertEqual(SortyUninstaller.requestDefaultsKey, "runUninstallerOnNextLaunch")
     }
 
+    func testSkillHandoffRejectsCleanupLocationsIncludingSymlinks() throws {
+        let fileManager = FileManager.default
+        let safeDirectory = makeTemporaryHome(fileManager: fileManager)
+        let safeSkill = safeDirectory.appendingPathComponent("sorty", isDirectory: true)
+        try fileManager.createDirectory(at: safeSkill, withIntermediateDirectories: true)
+
+        let temporaryCleanupDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("sorty-skill-handoff-\(UUID().uuidString)", isDirectory: true)
+        temporaryHomes.append(temporaryCleanupDirectory)
+        try fileManager.createDirectory(at: temporaryCleanupDirectory, withIntermediateDirectories: true)
+
+        let applicationAlias = safeDirectory.appendingPathComponent("app-alias", isDirectory: true)
+        try fileManager.createSymbolicLink(at: applicationAlias, withDestinationURL: Bundle.main.bundleURL)
+
+        let cases: [(URL, Bool)] = [
+            (safeSkill, true),
+            (fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".codex/skills/sorty"), true),
+            (fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Sorty/skills/sorty"), false),
+            (temporaryCleanupDirectory.appendingPathComponent("sorty"), false),
+            (applicationAlias.appendingPathComponent("Contents/Resources/sorty"), false)
+        ]
+        for (location, canPreserve) in cases {
+            XCTAssertEqual(SortyUninstaller.canPreserveSkill(at: location), canPreserve, location.path)
+        }
+    }
+
     func testFilesystemCleanupRemovesSortyStateUnderHomeDirectory() throws {
         let fileManager = FileManager.default
         let home = fileManager.temporaryDirectory

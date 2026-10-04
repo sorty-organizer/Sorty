@@ -54,8 +54,11 @@ The loaders are idempotent. A second caller awaits the existing task. Bookmark r
 
 ## Threading rules
 
-Help > Restart Onboarding uses the same timed welcome reveal, audio cue, and
-orbit entrance as a first launch. It preserves the current window position and
+Help > Restart Onboarding opens the skill introduction first. Continue with App
+then opens the original timed welcome reveal, audio cue, and orbit entrance.
+The skill introduction also appears once for users upgrading from app-only setup.
+Its installer is lightweight; agent detection and preference hydration start in
+view tasks, after the interface mounts. Restarting preserves the current window position and
 disables only the outgoing root crossfade while onboarding changes shared window
 chrome. Keep icon rasterization and audio data loading off the main actor, and
 cancel pending intro preparation when Get Started is pressed before the outgoing

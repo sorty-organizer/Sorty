@@ -2883,7 +2883,7 @@ private struct OnboardingWindowChromeSnapshot: @unchecked Sendable {
     }
 }
 
-private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
+struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
     @SortyHotReload private var hotReload
     let preserveWindowPosition: Bool
     let onConfigured: () -> Void

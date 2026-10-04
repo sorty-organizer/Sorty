@@ -32,20 +32,24 @@ public struct ContentView: View {
     public var body: some View {
         ZStack {
             if !appState.hasCompletedOnboarding {
-                OnboardingView(
-                    hasCompletedOnboarding: Binding(
-                        get: { appState.hasCompletedOnboarding },
-                        set: { isComplete in
-                            if isComplete {
-                                appState.recordOnboardingCompletion()
-                            } else {
-                                appState.hasCompletedOnboarding = false
+                if !appState.hasCompletedSkillIntroduction {
+                    SkillOnboardingView()
+                } else {
+                    OnboardingView(
+                        hasCompletedOnboarding: Binding(
+                            get: { appState.hasCompletedOnboarding },
+                            set: { isComplete in
+                                if isComplete {
+                                    appState.recordOnboardingCompletion()
+                                } else {
+                                    appState.hasCompletedOnboarding = false
+                                }
                             }
-                        }
-                    ),
-                    isRestart: appState.isRestartingOnboarding
-                )
+                        ),
+                        isRestart: appState.isRestartingOnboarding
+                    )
                     .transition(.opacity)
+                }
             } else {
                 mainContent
                 .transition(.opacity)
