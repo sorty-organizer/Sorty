@@ -8,8 +8,9 @@ host window changes; window notifications handle geometry and activation.
 Ordinary selection and hover updates must not re-order the screen panels.
 Destination changes refresh installer status without publishing a transient
 checking state, disabling the tile row, or replacing the Settings card behind
-setup with a spinner. Keep tile glass noninteractive; the button owns input
-and haptics, and the icon's local scale supplies hover feedback.
+setup with a spinner. The previous interactive glass and button hover animation
+are restored for an A/B comparison while keeping the stable refresh behavior.
+Runtime attribution of the selection flicker is pending this comparison.
 
 Keep the welcome step outside a scroll view. Its heading, introduction, icon,
 and three explanations share the available height above navigation. Use compact
