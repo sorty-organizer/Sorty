@@ -375,7 +375,7 @@ struct SkillSetupView: View {
                         .trim(from: 0, to: introductionStage >= 2 ? 1 : 0)
                         .stroke(.tint, style: StrokeStyle(lineWidth: titleSize * 0.09, lineCap: .round))
                         .animation(
-                            reduceMotion ? nil : .easeOut(duration: 0.55),
+                            reduceMotion ? nil : .easeOut(duration: 0.35),
                             value: introductionStage >= 2
                         )
                     }
@@ -413,8 +413,8 @@ struct SkillSetupView: View {
         introAudioPlayer = player
     }
 
-    /// Reveal in place on the soundtrack's accents, without accumulating delay
-    /// between stages. Returning to the introduction replays the same sequence.
+    /// Follow the actual playback position and finish each reveal on its accent.
+    /// Returning to the introduction replays the same sequence.
     private func revealIntroduction() async {
         guard isIntroduction else { return }
         if !reduceMotion {
@@ -432,28 +432,36 @@ struct SkillSetupView: View {
         }
 
         let clock = ContinuousClock()
-        var revealStart = clock.now
+        var soundtrack: AVAudioPlayer?
         if isOnboarding && step == .rethink, let player = introAudioPlayer {
             player.stop()
             player.currentTime = 0
-            // Schedule both against the same start after the assets are ready.
-            let leadIn = 0.1
-            revealStart = clock.now.advanced(by: .seconds(leadIn))
-            player.play(atTime: player.deviceCurrentTime + leadIn)
+            if player.play() { soundtrack = player }
         }
+        let revealStart = clock.now
         if reduceMotion {
             introductionStage = 5
             isHeadingFocused = true
             return
         }
 
-        // Heading, app icon, slide, then skill icon on the final strong accent.
+        // These are animation START times, so each reveal lands on its audio
+        // accent: heading/underline 2.70, app 3.58, slide 4.42, skill 6.14.
         let cueOffsets: [Double] = step == .rethink
-            ? [0, 2.70, 3.58, 4.42, 6.14]
+            ? [0, 2.35, 3.23, 3.97, 5.79]
             : [0, 0.70, 1.40, 2.00, 2.60]
         do {
             for (index, offset) in cueOffsets.enumerated() {
-                try await clock.sleep(until: revealStart.advanced(by: .seconds(offset)))
+                if let soundtrack {
+                    // Read the audio's position rather than assuming playback
+                    // began when the main actor called play(). Only this brief
+                    // reveal polls; no idle timer or repeated view updates remain.
+                    while soundtrack.isPlaying && soundtrack.currentTime < offset {
+                        try await Task.sleep(for: .milliseconds(8))
+                    }
+                } else {
+                    try await clock.sleep(until: revealStart.advanced(by: .seconds(offset)))
+                }
                 try Task.checkCancellation()
                 introductionStage = index + 1
                 if introductionStage == 2 { isHeadingFocused = true }

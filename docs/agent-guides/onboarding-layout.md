@@ -37,18 +37,25 @@ entrance and reset animations. A failed clipboard write does not show success,
 and another copy cancels the previous reset. Keep one-off copy actions without
 temporary feedback simple; they do not need a feedback object.
 
-The skill onboarding introduction reveals the update sentence, pauses for two
-seconds, then reveals the skill headline and, after another pause, the app icon.
-Keep those elements mounted and reveal them with opacity so earlier text stays
-visible and the layout stays still. Meet the Skill opens a separate feature page
-before Use Sorty in your agent. Intro pages reveal their heading, explanation,
-and features in sequence. Cancel each reveal task when its page changes and
-show everything immediately with Reduce Motion. Hidden content must also be
-hidden from accessibility and pointer input.
+The skill onboarding introduction prepares its icon and bundled audio before
+starting the reveal. Follow `AVAudioPlayer.currentTime` for its cues rather than
+using a separate wall-clock schedule. The heading and underline finish at 2.70
+seconds, the app icon at 3.58, the app slides aside at 4.42, and the skill icon
+and primary action finish at 6.14. Start each animation early by its duration so
+it lands on the accent. Playback-position polling belongs only to the finite
+intro task; never keep an idle timer running after the reveal.
 
-The opening app icon is 160 points square. Skill onboarding plays the bundled
-`SkillOnboardingSound.m4a` once at 60% volume across its steps. Load audio data off the main actor after
-the view mounts and stop playback when onboarding closes.
+Keep the elements mounted and reveal them with opacity so earlier text stays
+visible and the layout stays still. Meet the Skill opens a separate feature page
+before Use Sorty in your agent. Other intro pages reveal their heading,
+explanation, and features in sequence. Cancel each reveal task when its page
+changes and show everything immediately with Reduce Motion. Hidden content must
+also be hidden from accessibility and pointer input, including keyboard shortcuts.
+
+The opening app icon is 160 points square. Skill onboarding plays
+`SkillOnboardingSound.m4a` at 60% volume, restarting it when returning to the
+Update page. Load audio data off the main actor after the view mounts. Stop
+playback when leaving that page or closing onboarding.
 
 ## Onboarding window
 
