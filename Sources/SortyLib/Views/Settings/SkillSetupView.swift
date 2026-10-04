@@ -25,6 +25,7 @@ struct SkillSetupView: View {
     @State private var isConfirmingReplacement = false
     @State private var isGetStartedHovered = false
     @State private var hoveredAgentLocation: String?
+    @State private var customFolderIcon: NSImage?
     @ScaledMetric(relativeTo: .largeTitle) private var agentIconSize: CGFloat = 32
     @AccessibilityFocusState private var isHeadingFocused: Bool
 
@@ -270,7 +271,7 @@ struct SkillSetupView: View {
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        Button("Choose Folder…", action: chooseLocation)
+                        Button("Change Folder…", action: chooseLocation)
                             .buttonStyle(.sortyBordered())
                             .accessibilityIdentifier("skill-import.choose-location")
                             .disabled(isCheckingLocation)
@@ -472,6 +473,12 @@ struct SkillSetupView: View {
                     .frame(width: agentIconSize, height: agentIconSize)
                     .foregroundStyle(.primary)
             }
+        } else if let customFolderIcon {
+            Image(nsImage: customFolderIcon)
+                .renderingMode(.original)
+                .resizable()
+                .scaledToFit()
+                .frame(width: agentIconSize, height: agentIconSize)
         } else {
             Image(systemName: "folder")
                 .resizable()
@@ -730,6 +737,7 @@ struct SkillSetupView: View {
         panel.prompt = "Choose Skills Folder"
         guard panel.runModal() == .OK, let directory = panel.url else { return }
         installer.selectedSkillsDirectory = directory
+        customFolderIcon = NSWorkspace.shared.icon(forFile: directory.path)
         errorMessage = nil
         Task { await installer.refresh(trackUsage: false, showsCheckingState: false) }
     }
