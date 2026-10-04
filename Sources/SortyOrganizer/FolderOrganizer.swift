@@ -463,14 +463,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         updates()
     }
     
-    /// Perform batch updates asynchronously
-    @MainActor
-    public func withBatchUpdatesAsync(_ updates: () async -> Void) async {
-        beginBatchUpdates()
-        defer { endBatchUpdates() }
-        await updates()
-    }
-
     private func updatePresentation(_ update: (inout PresentationState) -> Void) {
         if batchUpdateDepth == 0 {
             objectWillChange.send()
@@ -1364,11 +1356,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return (currentInsight, insightHistory)
     }
     
-    /// Invalidate the insights cache (call when streaming content significantly changes)
-    public func invalidateInsightsCache() {
-        insightsCache = nil
-    }
-
     @MainActor
     public func setLiveInsightsEnabled(_ enabled: Bool) {
         guard liveInsightsEnabled != enabled else { return }

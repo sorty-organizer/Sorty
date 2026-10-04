@@ -7,7 +7,6 @@
 //  looping pentatonic melody with a bass drone, replacing system sounds.
 //
 
-import AppKit
 @preconcurrency import AVFoundation
 import Combine
 import Foundation
@@ -41,12 +40,6 @@ class OnboardingAudioManager: ObservableObject {
         var bassVolume: Float = OnboardingAudioManager.defaultBassVolume
         var isRunning: Bool = false
 
-        // Fanfare overlay
-        var fanfareActive: Bool = false
-        var fanfareNoteIndex: Int = 0
-        var fanfareSampleCounter: Int = 0
-        var fanfarePhase: Double = 0
-        var fanfareEnvelopeSample: Int = 0
     }
 
     private let state = AudioState()
@@ -74,33 +67,13 @@ class OnboardingAudioManager: ObservableObject {
         4, 3, 2, 0,   // A G F C   (descending home)
     ]
 
-    /// Gentle rising arpeggio for completion (Hz values).
-    nonisolated private static let fanfareNotes: [Double] = [
-        261.63,  // C4
-        349.23,  // F4
-        440.00,  // A4
-        523.25,  // C5
-    ]
-
     /// Bass drone frequency: C3.
     nonisolated private static let bassFrequency: Double = 130.81
 
     /// Duration of each melody note in seconds (slow for ambient pacing).
     nonisolated private static let noteDuration: Double = 0.55
 
-    /// Duration of each fanfare note in seconds.
-    nonisolated private static let fanfareNoteDuration: Double = 0.30
-
     // MARK: - Public API
-
-    enum Phase: String {
-        case messy
-        case scanning
-        case thinking
-        case comparing
-        case organizing
-        case complete
-    }
 
     /// Load and prepare the bundled soundtrack before a reveal begins.
     func prepareBackgroundMelody() async {
@@ -178,62 +151,6 @@ class OnboardingAudioManager: ObservableObject {
             ?? Bundle.main.url(forResource: "OnboardingSound", withExtension: "m4a")
     }
 
-    /// Play a phase-transition accent.  Use soft, ambient system sounds
-    /// that layer gently on top of the melody.
-    func playPhaseSound(_ phase: Phase) {
-        let soundName: NSSound.Name
-        let volume: Float
-        switch phase {
-        case .messy:
-            return
-        case .scanning:
-            soundName = "Submarine"
-            volume = 0.15
-        case .thinking:
-            soundName = "Glass"
-            volume = 0.10
-        case .comparing:
-            return  // Let the melody carry this transition
-        case .organizing:
-            soundName = "Submarine"
-            volume = 0.10
-        case .complete:
-            soundName = "Glass"
-            volume = 0.20
-        }
-        if let sound = NSSound(named: soundName) {
-            sound.volume = volume
-            sound.play()
-        }
-    }
-
-    /// Start the ambient pulse — delegates to the background melody.
-    func startAmbientPulse(interval: TimeInterval = 1.0) {
-        startBackgroundMelody()
-    }
-
-    /// Stop ambient pulse (convenience; calls through to stopAll).
-    func stopAmbientPulse() {
-        // Don't tear down the whole engine here — just note that the pulse
-        // has been conceptually stopped.  The melody keeps going until
-        // stopAll() is called.  This preserves the call-site pattern where
-        // stopAmbientPulse() is called between phases.
-    }
-
-    /// Play a rising arpeggio completion fanfare overlaid on the melody.
-    func playCompletionFanfare() {
-        // If the melody engine isn't running, start it so we have a place
-        // to play the fanfare.
-        if !state.isRunning {
-            setupAndStartEngine()
-        }
-        state.fanfareNoteIndex = 0
-        state.fanfareSampleCounter = 0
-        state.fanfarePhase = 0
-        state.fanfareEnvelopeSample = 0
-        state.fanfareActive = true
-    }
-
     /// Stop all audio and tear down the engine.
     func stopAll() {
         guard state.isRunning || audioPlayer != nil else {
@@ -263,8 +180,6 @@ class OnboardingAudioManager: ObservableObject {
         let startingMelodyVolume = state.melodyVolume
         let startingBassVolume = state.bassVolume
 
-        // Prevent new fanfare from being mixed during fade.
-        state.fanfareActive = false
         isPlaying = false
 
         // Fade synthesized audio before stopping to avoid abrupt cutoff.
@@ -300,7 +215,6 @@ class OnboardingAudioManager: ObservableObject {
 
     deinit {
         state.isRunning = false
-        state.fanfareActive = false
         state.engine?.stop()
         // audioPlayer will be cleaned up automatically
     }
@@ -322,11 +236,9 @@ class OnboardingAudioManager: ObservableObject {
         st.bassPhase = 0
         st.currentNoteIndex = 0
         st.sampleCounter = 0
-        st.fanfareActive = false
         st.isRunning = true
 
         let noteSamples = Int(Self.noteDuration * sampleRate)
-        let fanfareNoteSamples = Int(Self.fanfareNoteDuration * sampleRate)
 
         // ---- Melody source node ----
         let melodyNode = AVAudioSourceNode(format: outputFormat) {
@@ -373,45 +285,6 @@ class OnboardingAudioManager: ObservableObject {
                 envelope = 0.5 * (1.0 - cos(Double.pi * envelope))
 
                 sample *= envelope * Double(st.melodyVolume)
-
-                // ---- Fanfare overlay ----
-                if st.fanfareActive {
-                    let fNoteCount = OnboardingAudioManager.fanfareNotes.count
-                    if st.fanfareNoteIndex < fNoteCount {
-                        let fFreq = OnboardingAudioManager.fanfareNotes[st.fanfareNoteIndex]
-                        let fInc = 2.0 * Double.pi * fFreq / sampleRate
-                        st.fanfarePhase += fInc
-                        if st.fanfarePhase > 2.0 * Double.pi { st.fanfarePhase -= 2.0 * Double.pi }
-                        var fSample = sin(st.fanfarePhase)
-
-                        // Envelope for fanfare note.
-                        let fAttack = max(fanfareNoteSamples / 20, 1)
-                        let fRelease = max(fanfareNoteSamples / 5, 1)
-                        var fEnvelope: Double = 1.0
-                        let fPos = st.fanfareEnvelopeSample
-                        if fPos < fAttack {
-                            fEnvelope = Double(fPos) / Double(fAttack)
-                        } else if fPos > fanfareNoteSamples - fRelease {
-                            let rp = fPos - (fanfareNoteSamples - fRelease)
-                            fEnvelope = 1.0 - Double(rp) / Double(fRelease)
-                        }
-                        fEnvelope = 0.5 * (1.0 - cos(Double.pi * fEnvelope))
-
-                        fSample *= fEnvelope * 0.45
-
-                        sample += fSample
-
-                        st.fanfareEnvelopeSample += 1
-                        if st.fanfareEnvelopeSample >= fanfareNoteSamples {
-                            st.fanfareEnvelopeSample = 0
-                            st.fanfarePhase = 0
-                            st.fanfareNoteIndex += 1
-                            if st.fanfareNoteIndex >= fNoteCount {
-                                st.fanfareActive = false
-                            }
-                        }
-                    }
-                }
 
                 let floatSample = Float(sample)
                 for buffer in ablPointer {
