@@ -158,9 +158,9 @@ struct SkillSetupView: View {
         self._step = State(initialValue: isOnboarding ? .rethink : .welcome)
     }
 
-    private var readingFont: Font { .system(size: readingSize) }
-    private var supportingFont: Font { .system(size: supportingSize) }
-    private var headingFont: Font { .system(size: headingSize, weight: .semibold) }
+    private var readingFont: Font { .system(size: readingSize, design: .default) }
+    private var supportingFont: Font { .system(size: supportingSize, design: .default) }
+    private var headingFont: Font { .system(size: headingSize, weight: .semibold, design: .default) }
 
     private enum Step: Int, CaseIterable {
         case rethink, welcome, location, preferences, review, complete
@@ -228,7 +228,7 @@ struct SkillSetupView: View {
                 VStack(spacing: 12) {
                     Text(step.title)
                         .contentTransition(reduceMotion ? .identity : .numericText())
-                        .font(.system(size: titleSize, weight: .semibold))
+                        .font(.system(size: titleSize, weight: .semibold, design: .default))
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.center)
                         .accessibilityAddTraits(.isHeader)
