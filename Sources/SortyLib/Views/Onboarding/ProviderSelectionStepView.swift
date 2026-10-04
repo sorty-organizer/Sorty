@@ -506,8 +506,7 @@ public struct ProviderSelectionStepView: View {
                         codexAuth.signOut()
                         scheduleConnectionTest()
                     }
-                    .buttonStyle(.sortyBordered)
-                    .controlSize(.small)
+                    .buttonStyle(.sortySecondary(size: .small))
                 }
                 .padding(10)
                 .background(Color.green.opacity(0.08))
@@ -642,8 +641,7 @@ public struct ProviderSelectionStepView: View {
                                 HapticFeedbackManager.shared.tap()
                                 testConnection()
                             }
-                            .buttonStyle(.sortyBordered)
-                            .controlSize(.small)
+                            .buttonStyle(.sortySecondary(size: .small))
                         }
 
                         if let error = connectionError {
@@ -1021,9 +1019,6 @@ private struct ProviderTestConnectionButton: View {
     let canTest: Bool
     let action: () -> Void
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovering = false
-
     var body: some View {
         Button {
             HapticFeedbackManager.shared.tap()
@@ -1035,19 +1030,8 @@ private struct ProviderTestConnectionButton: View {
             }
         }
         .buttonStyle(.sortyPrimary)
-        .onboardingBeamBorder(
-            variant: .featured,
-            active: isHovering && canTest,
-            isIntensified: isHovering,
-            includesInteriorGlow: isHovering
-        )
-        .debouncedHover($isHovering)
         .disabled(!canTest)
         .opacity(canTest ? 1 : 0.5)
-        .animation(
-            reduceMotion ? nil : .easeInOut(duration: 0.16),
-            value: isHovering
-        )
     }
 }
 

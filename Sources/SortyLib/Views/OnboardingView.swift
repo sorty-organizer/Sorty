@@ -272,7 +272,7 @@ public struct OnboardingView: View {
                         }
                         .frame(minWidth: 80)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortySecondary)
                     .keyboardShortcut(.leftArrow, modifiers: [])
                     .accessibilityIdentifier("OnboardingBackButton")
                     .opacity(backHidden ? 0 : 1)
@@ -299,9 +299,6 @@ public struct OnboardingView: View {
                                 }
                             }
                             .buttonStyle(.sortyPrimary)
-                            .onboardingBeamBorder(
-                                active: canUseAdvanceButton(validation: validation) && !isAdvancing
-                            )
                             .keyboardShortcut(.rightArrow, modifiers: [])
                             .disabled(!canUseAdvanceButton(validation: validation) || isAdvancing)
                             .opacity(
@@ -922,7 +919,6 @@ private struct OnboardingIntroContentLayer: View {
                         isGlassInteractive: false
                     )
                 )
-                .onboardingBeamBorder(active: isGetStartedAvailable)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!isGetStartedAvailable)
                 .opacity(isGetStartedAvailable ? 1 : 0.62)

@@ -1008,7 +1008,6 @@ private struct CompletionPrimaryAction: View {
             }
         }
         .buttonStyle(.sortyPrimary(size: .large))
-        .onboardingBeamBorder(variant: .featured, active: !isChecking)
         .keyboardShortcut(.defaultAction)
         .disabled(isChecking)
         .onHover { hovering in
@@ -1449,15 +1448,13 @@ public struct CompletionStepView: View {
                 Button("Retry") {
                     verifyAndFinish()
                 }
-                .buttonStyle(.sortyProminent)
-                .controlSize(.small)
+                .buttonStyle(.sortyPrimary(size: .small))
                 .accessibilityIdentifier("OnboardingCompletionRetryButton")
 
                 Button("Skip for Now") {
                     skipVerificationAndFinish()
                 }
-                .buttonStyle(.sortyBordered)
-                .controlSize(.small)
+                .buttonStyle(.sortySecondary(size: .small))
                 .accessibilityIdentifier("OnboardingCompletionSkipButton")
             }
         }
