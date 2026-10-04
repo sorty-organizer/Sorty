@@ -224,12 +224,12 @@ struct SkillSetupView: View {
                             .modifier(introductionReveal(at: 1))
                         ViewThatFits(in: .horizontal) {
                             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                                Text("We realized Sorty can be ")
+                                Text("We realized ")
                                 underlinedSkillPhrase
                             }
                             .fixedSize(horizontal: true, vertical: true)
                             VStack(spacing: 0) {
-                                Text("We realized Sorty can be")
+                                Text("We realized")
                                 underlinedSkillPhrase
                             }
                         }
@@ -335,7 +335,7 @@ struct SkillSetupView: View {
 
     private var underlinedSkillPhrase: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text("a skill")
+            Text("Sorty can be a skill")
                 .overlay(alignment: .bottom) {
                     GeometryReader { geometry in
                         Path { path in
