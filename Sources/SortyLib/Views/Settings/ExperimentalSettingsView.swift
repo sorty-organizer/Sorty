@@ -15,13 +15,17 @@ struct ExperimentalSettingsView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            CodexSkillInstallerCard()
-
             Group {
                 if analytics.isLoadingExperimentalFeatures {
                     loadingState
                 } else if !otherExperimentalFeatures.isEmpty {
                     featureList
+                } else {
+                    Text("No experimental features are available right now.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(20)
+                        .frame(maxWidth: .infinity)
                 }
             }
         }

@@ -84,6 +84,9 @@ struct AdvancedSettingsView: View {
             }
             .animatedAppearance(delay: 0.03)
 
+            CodexSkillInstallerCard()
+                .settingsFocusable(.advancedSortySkill)
+
             SettingsCard(title: "Privacy", icon: "lock.shield", color: .green) {
                 VStack(spacing: 12) {
                     SettingsToggle(

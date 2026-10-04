@@ -23,21 +23,10 @@ Flags are defined in `Sources/SortyModels/FeatureFlags.swift`. Terminal keys use
 | Sensitive Action Authentication | `sensitiveActionAuthenticationEnabled` | `false` | Requires authentication for sensitive actions such as deleting usage data, changing network privacy mode, and revealing secrets |
 | Subscription Auth | `subscriptionAuthEnabled` | `true` | Makes subscription-based auth methods available for supported AI providers |
 | Support the Developer | `supportDeveloperEnabled` | `true` | In-app links and buttons for supporting the developer; uses the sandbox-container commands below |
-| Sorty Codex Skill | `labs-sorty-codex-skill` | PostHog assignment | Experimental one-click installer in Settings → Experimental; currently registered at 100% rollout |
 
 ### Sorty Codex Skill
 
-PostHog owns the normal rollout. The local override uses the exact same key and is useful for offline development:
-
-```bash
-# Show the installer without a PostHog assignment
-defaults write com.sorty.app labs-sorty-codex-skill -bool true
-
-# Remove the local override and return to PostHog assignment
-defaults delete com.sorty.app labs-sorty-codex-skill
-```
-
-The installer copies Sorty's bundled skill into the user's Codex skills directory. Users can remove a matching installation or explicitly replace a conflicting `sorty` skill after confirmation. Anonymous, opted-in analytics record bounded install, replacement, removal, and availability outcomes so adoption can be evaluated while the feature remains experimental.
+The Sorty skill installer is a regular setting in Settings → Advanced. It is always available and does not require a feature flag or PostHog assignment. Setup installs the bundled skill and lets users choose which Sorty preferences to share. Existing installations can import updated settings, and removal or replacement requires confirmation.
 
 ### Harness Mode
 

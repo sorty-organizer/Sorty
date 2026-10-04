@@ -24,16 +24,8 @@ struct CodexSkillInstallerCard: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
-                    Text("Sorty skill")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Experimental")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.secondary.opacity(0.1), in: Capsule())
-                }
+                Text("Sorty skill")
+                    .font(.subheadline.weight(.semibold))
 
                 Text("Let your agent organize files with your Sorty preferences. Setup walks you through what to share.")
                     .font(.caption)
@@ -60,7 +52,7 @@ struct CodexSkillInstallerCard: View {
                 Button("Remove Existing Skill", role: .destructive) {
                     isConfirmingRemoval = true
                 }
-                .accessibilityIdentifier("experimental.codex-skill.remove")
+                .accessibilityIdentifier("settings.sorty-skill.remove")
                 .disabled(setupWindow.isPresented)
                 Button("Show in Finder") {
                     installer.revealExistingSkill()
@@ -92,24 +84,24 @@ struct CodexSkillInstallerCard: View {
         case .available, .failed:
             Button("Set Up Skill…", action: install)
                 .buttonStyle(.sortyProminent(size: .small))
-                .accessibilityIdentifier("experimental.codex-skill.install")
+                .accessibilityIdentifier("settings.sorty-skill.install")
         case .installed:
             VStack(spacing: 6) {
                 Button("Import Settings…", action: install)
                     .buttonStyle(.sortyProminent(size: .small))
-                    .accessibilityIdentifier("experimental.skill.import-settings")
+                    .accessibilityIdentifier("settings.sorty-skill.import-settings")
                 Button("Remove Skill", role: .destructive) {
                     isConfirmingRemoval = true
                 }
                 .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
-                .accessibilityIdentifier("experimental.codex-skill.remove")
+                .accessibilityIdentifier("settings.sorty-skill.remove")
                 .disabled(setupWindow.isPresented)
             }
         case .conflict:
             VStack(alignment: .center, spacing: 6) {
                 Button("Review Setup…", action: install)
                 .buttonStyle(.sortyProminent(intent: .warning, size: .small))
-                .accessibilityIdentifier("experimental.codex-skill.replace")
+                .accessibilityIdentifier("settings.sorty-skill.replace")
 
                 Button {
                     HapticFeedbackManager.shared.tap()
@@ -142,14 +134,14 @@ struct CodexSkillInstallerCard: View {
                     }
                     isHoveringShowExisting = hovering
                 }
-                .accessibilityIdentifier("experimental.codex-skill.open-folder")
+                .accessibilityIdentifier("settings.sorty-skill.open-folder")
             }
         case .unavailable:
             Button("Check Again") {
                 Task { await installer.refresh(trackUsage: false) }
             }
             .buttonStyle(.sortyBordered(size: .small))
-            .accessibilityIdentifier("experimental.codex-skill.retry")
+            .accessibilityIdentifier("settings.sorty-skill.retry")
         }
     }
 
