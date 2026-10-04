@@ -24,6 +24,7 @@ struct SkillSetupView: View {
     @State private var selected: Set<String> = []
     @State private var isLoading = true
     @State private var isSaving = false
+    @State private var hasReachedReviewBottom = false
     @State private var errorMessage: String?
     @State private var isConfirmingReplacement = false
     @State private var isGetStartedHovered = false
@@ -376,6 +377,17 @@ struct SkillSetupView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                // Include the final disclosure and bottom inset, not just the summary card.
+                geometry.containerSize.height > 0
+                    && geometry.contentSize.height > 0
+                    && geometry.contentOffset.y + geometry.containerSize.height
+                        >= geometry.contentSize.height + geometry.contentInsets.bottom - 1
+            } action: { _, isAtBottom in
+                if step == .review && isAtBottom {
+                    hasReachedReviewBottom = true
+                }
+            }
             .frame(maxWidth: 650)
         case .complete:
             VStack(spacing: 16) {
@@ -685,6 +697,13 @@ struct SkillSetupView: View {
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedOptions.count)
                     .font(.callout).foregroundStyle(.secondary)
             }
+            if step == .review && !hasReachedReviewBottom {
+                Text("Scroll to the bottom to enable import")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("skill-import.scroll-hint")
+            }
             Spacer()
             if step != .welcome && step != .complete {
                 Button("Back") { changeStep(Step(rawValue: step.rawValue - 1) ?? .welcome) }
@@ -702,6 +721,7 @@ struct SkillSetupView: View {
                     isLoading || isSaving
                         || (step != .welcome && step != .complete && !canUseLocation)
                         || ((step == .preferences || step == .review) && selected.isEmpty)
+                        || (step == .review && !hasReachedReviewBottom)
                 )
                 .accessibilityIdentifier(step == .review ? "skill-import.confirm" : "skill-import.continue")
         }
@@ -743,6 +763,7 @@ struct SkillSetupView: View {
 
     private func changeStep(_ next: Step) {
         HapticFeedbackManager.shared.selection()
+        if next == .review { hasReachedReviewBottom = false }
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { step = next }
     }
 
@@ -752,6 +773,7 @@ struct SkillSetupView: View {
         case .location: changeStep(.preferences)
         case .preferences: changeStep(.review)
         case .review:
+            guard hasReachedReviewBottom else { return }
             if installer.state == .conflict { isConfirmingReplacement = true }
             else { importSelected() }
         case .complete: onClose()
@@ -812,6 +834,8 @@ struct SkillSetupView: View {
     }
 
     private func importSelected() {
+        guard step == .review, hasReachedReviewBottom, !isLoading, !isSaving,
+              canUseLocation, !selected.isEmpty else { return }
         isSaving = true
         onSavingChanged(true)
         errorMessage = nil
