@@ -69,10 +69,10 @@ struct SkillSetupView: View {
             VStack(spacing: 0) {
                 progressRail
                     .padding(.top, 48)
-                    .padding(.bottom, 28)
-                VStack(spacing: 12) {
+                    .padding(.bottom, step == .preferences ? 16 : 28)
+                VStack(spacing: 8) {
                     Text(step.title)
-                        .font(.largeTitle.weight(.semibold))
+                        .font(step == .preferences ? .title2.weight(.semibold) : .largeTitle.weight(.semibold))
                         .multilineTextAlignment(.center)
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityFocused($isHeadingFocused)
@@ -84,17 +84,21 @@ struct SkillSetupView: View {
                         .frame(maxWidth: 590)
                 }
                 .padding(.horizontal, 40)
-                .padding(.bottom, 24)
+                .padding(.bottom, step == .preferences ? 16 : 24)
 
-                ScrollView {
-                    stepContent
+                Group {
+                    if step == .preferences {
+                        stepContent
+                    } else {
+                        ScrollView { stepContent }
+                    }
+                }
                         .padding(.horizontal, 40)
                         .padding(.vertical, 8)
                         .frame(maxWidth: 880)
                         .frame(maxWidth: .infinity)
                         .id(step)
                         .transition(.opacity)
-                }
                 .frame(maxHeight: .infinity)
                 .disabled(isLoading || isSaving)
 
@@ -220,7 +224,7 @@ struct SkillSetupView: View {
             .frame(maxWidth: 640)
             .padding(.vertical, 20)
         case .preferences:
-            HStack(alignment: .top, spacing: 28) {
+            HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(SkillImportOption.Section.allCases, id: \.self) { section in
                         Button {
@@ -232,16 +236,17 @@ struct SkillSetupView: View {
                             HStack(spacing: 10) {
                                 Image(systemName: section.icon).accessibilityHidden(true)
                                 Text(section.rawValue)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 0)
                                 if activeSection == section {
                                     Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
                                 }
                             }
                             .font(.callout.weight(activeSection == section ? .semibold : .regular))
-                            .padding(12)
+                            .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.sortyBordered())
+                        .buttonStyle(.sortyBordered(size: .small))
                         .accessibilityAddTraits(activeSection == section ? .isSelected : [])
                         .accessibilityIdentifier("skill-import.section.\(section.rawValue)")
                     }
@@ -250,8 +255,11 @@ struct SkillSetupView: View {
                         .padding(.top, 12)
                         .accessibilityIdentifier("skill-import.select-all")
                 }
-                .frame(width: 184)
-                importSection(activeSection)
+                .frame(width: 190)
+                ScrollView {
+                    importSection(activeSection)
+                }
+                    .id(activeSection)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         case .review:
@@ -361,8 +369,8 @@ struct SkillSetupView: View {
         let rows = options.filter { $0.section == section }
         let identifiers = Set(rows.map(\.selectionID))
         let sectionSelected = !identifiers.isEmpty && identifiers.isSubset(of: selected)
-        return VStack(alignment: .leading, spacing: 18) {
-            Text(section.rawValue).font(.title2.weight(.semibold))
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(section.rawValue).font(.headline)
                 .accessibilityAddTraits(.isHeader)
             Text(sectionExplanation(section))
                 .font(.callout).foregroundStyle(.secondary)
@@ -402,11 +410,12 @@ struct SkillSetupView: View {
                         }
                     }
                     .toggleStyle(.checkbox)
+                    .padding(.vertical, 4)
                     .accessibilityIdentifier("skill-import.option.\(option.id)")
                 }
             }
         }
-        .padding(24)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
     }
