@@ -22,6 +22,7 @@ struct SkillSetupView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var isConfirmingReplacement = false
+    @State private var isGetStartedHovered = false
     @AccessibilityFocusState private var isHeadingFocused: Bool
 
     private enum Step: Int, CaseIterable {
@@ -128,7 +129,10 @@ struct SkillSetupView: View {
         }
         .accessibilityIdentifier("skill-import.window")
         .task { await loadOptions() }
-        .onChange(of: step) { _, _ in isHeadingFocused = true }
+        .onChange(of: step) { _, _ in
+            isHeadingFocused = true
+            isGetStartedHovered = false
+        }
         .onChange(of: errorMessage) { _, message in
             if let message { AccessibilityNotification.Announcement(message).post() }
         }
@@ -166,12 +170,21 @@ struct SkillSetupView: View {
         switch step {
         case .welcome:
             VStack(spacing: 28) {
-                Image(systemName: "folder.badge.gearshape")
-                    .font(.largeTitle)
-                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                    .padding(24)
-                    .systemLiquidGlassBackground(cornerRadius: 24, interactive: false)
-                    .accessibilityHidden(true)
+                ZStack {
+                    Image(systemName: "folder.badge.gearshape")
+                        .font(.largeTitle)
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                        .opacity(isGetStartedHovered ? 0 : 1)
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 56, height: 56)
+                        .opacity(isGetStartedHovered ? 1 : 0)
+                }
+                .frame(width: 82, height: 82)
+                .systemLiquidGlassBackground(cornerRadius: 24, interactive: false)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isGetStartedHovered)
+                .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 22) {
                     explanation("Make it familiar", icon: "textformat", detail: "Bring over your naming style, exclusions, saved folders, and Learnings. You choose exactly what to share.")
                     explanation("Work from a clear plan", icon: "list.bullet.rectangle", detail: "Ask for a preview, organize files, or review exact duplicates. The skill records its moves so it can restore them.")
@@ -432,6 +445,7 @@ struct SkillSetupView: View {
             }
             Button(primaryTitle, action: advance)
                 .buttonStyle(.sortyProminent())
+                .onHover { isGetStartedHovered = step == .welcome && $0 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(
                     isLoading || isSaving

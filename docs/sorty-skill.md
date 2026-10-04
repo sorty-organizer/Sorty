@@ -6,7 +6,7 @@ The Sorty skill organizes and renames files through your agent using preferences
 
 1. Open Settings > Experimental > Sorty skill.
 2. Click Set Up Skill, or Import Settings if it is already installed. Review Setup opens the same flow when another skill is present.
-3. Read the introduction, then choose the folder where your agent loads skills. The default is Codex's skills folder. The setup window opens at 780 × 620 points and can be resized; longer steps scroll above the navigation buttons.
+3. Read the introduction, then choose the folder where your agent loads skills. The default is Codex's skills folder. The setup window opens at 780 × 620 points and can be resized; longer steps scroll above the navigation buttons. Hovering over Get Started changes the introduction's folder icon to the Sorty app icon.
 4. Choose what to share under Preferences, Exclusions, Watched folders, and Learnings. Select an entire section, the full list, or individual items. Unlock Learnings to review them before selecting.
 5. Review the destination and selected settings, then click Install and Import, or Import Settings for an existing installation. Confirm replacement if another skill occupies the location.
 6. The completion screen gives you a sample request to copy into a new agent chat.
