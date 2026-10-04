@@ -127,7 +127,7 @@ User preference learning stored in `LearningsProfile`. Secured with biometric au
 - **Do not use** `.regularMaterial`, `.thinMaterial`, `.ultraThinMaterial`, or custom gradient/blur backgrounds to approximate glass in these surfaces.
 - If `glassEffect` is unavailable for the deployment target, prefer default system chrome (no custom material fallback) instead of trying to mimic glass.
 - Reuse shared liquid-glass helpers and keep them system-only; do not add custom material fallback branches.
-- Clip the glass background to its matching rounded shape after `glassEffect` to prevent rectangular corner artifacts. Keep foreground content unclipped.
+- Clip custom glass rendering after `glassEffect` using its matching shape, including circular button labels and behind-window backgrounds. Background helpers keep foreground content unclipped. Native glass buttons and popovers retain system-managed chrome.
 
 ### Button Styles
 All interactive buttons must use Sorty's pill-style button system defined in `Sources/SortyLib/Utilities/ButtonStyles.swift`. Do **not** use `.buttonStyle(.bordered)` or plain system button styles for action buttons.

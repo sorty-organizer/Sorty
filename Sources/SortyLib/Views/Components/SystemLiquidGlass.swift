@@ -52,6 +52,7 @@ extension View {
                     .interactive(),
                 in: Circle()
             )
+            .clipShape(Circle())
         } else {
             self.background(Circle().fill(Color.primary.opacity(0.10)))
         }
@@ -66,6 +67,7 @@ extension View {
                 BehindWindowBackdropView()
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                     .glassEffect(.clear.interactive(), in: .rect(cornerRadius: cornerRadius))
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             }
         } else {
             self.background {
