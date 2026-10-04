@@ -292,43 +292,47 @@ struct SkillSetupView: View {
             .frame(maxWidth: 640)
             .padding(.vertical, 20)
         case .preferences:
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(SkillImportOption.Section.allCases, id: \.self) { section in
-                        Button {
-                            HapticFeedbackManager.shared.selection()
-                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
-                                activeSection = section
-                                optionSearch = ""
-                            }
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: section.icon).accessibilityHidden(true)
-                                Text(section.rawValue)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 0)
-                                if activeSection == section {
-                                    Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
+            // Bound the checklist to the space between the heading and navigation.
+            GeometryReader { geometry in
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(SkillImportOption.Section.allCases, id: \.self) { section in
+                            Button {
+                                HapticFeedbackManager.shared.selection()
+                                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                                    activeSection = section
+                                    optionSearch = ""
                                 }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: section.icon).accessibilityHidden(true)
+                                    Text(section.rawValue)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Spacer(minLength: 0)
+                                    if activeSection == section {
+                                        Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
+                                    }
+                                }
+                                .font(.callout.weight(activeSection == section ? .semibold : .regular))
+                                .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+                                .contentShape(Rectangle())
                             }
-                            .font(.callout.weight(activeSection == section ? .semibold : .regular))
-                            .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-                            .contentShape(Rectangle())
+                            .buttonStyle(.sortyBordered(size: .small))
+                            .accessibilityAddTraits(activeSection == section ? .isSelected : [])
+                            .accessibilityIdentifier("skill-import.section.\(section.rawValue)")
                         }
-                        .buttonStyle(.sortyBordered(size: .small))
-                        .accessibilityAddTraits(activeSection == section ? .isSelected : [])
-                        .accessibilityIdentifier("skill-import.section.\(section.rawValue)")
+                        Button(allSelected ? "Deselect All" : "Select All", action: toggleAll)
+                            .contentTransition(reduceMotion ? .identity : .numericText())
+                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: allSelected)
+                            .buttonStyle(.sortyBordered(size: .small))
+                            .padding(.top, 12)
+                            .accessibilityIdentifier("skill-import.select-all")
                     }
-                    Button(allSelected ? "Deselect All" : "Select All", action: toggleAll)
-                        .contentTransition(reduceMotion ? .identity : .numericText())
-                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: allSelected)
-                        .buttonStyle(.sortyBordered(size: .small))
-                        .padding(.top, 12)
-                        .accessibilityIdentifier("skill-import.select-all")
+                    .frame(width: 190)
+                    importSection(activeSection)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
-                .frame(width: 190)
-                importSection(activeSection)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
             }
         case .review:
             VStack(alignment: .leading, spacing: 16) {
