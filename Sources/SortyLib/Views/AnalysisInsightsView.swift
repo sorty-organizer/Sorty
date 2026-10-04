@@ -85,7 +85,7 @@ struct InsightHistorySection: View {
                                     Image(systemName: "exclamationmark.triangle.fill")
                                         .foregroundStyle(.orange)
                                     Text("Privacy Warning")
-                                        .sortyTypography(.headline, weight: .medium)
+                                        .font(.headline)
 
                                     Spacer()
 
@@ -263,7 +263,7 @@ struct InsightHistorySection: View {
                 .frame(width: 36, height: 36)
 
             Text(loaderLabel)
-                .sortyTypography(.body, weight: .medium)
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.primary.opacity(0.85))
                 .textSweep()
 
@@ -399,7 +399,7 @@ struct InsightHistorySection: View {
                 .frame(width: 24, height: 24)
 
             Text(displayInsight)
-                .sortyTypography(.body)
+                .font(.subheadline)
                 .fontWeight(.medium)
                 .foregroundStyle(.primary)
                 .lineLimit(2)

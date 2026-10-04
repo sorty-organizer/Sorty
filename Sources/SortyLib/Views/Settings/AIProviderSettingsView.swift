@@ -231,7 +231,7 @@ struct AIProviderSettingsView: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Model")
-                            .sortyTypography(.body)
+                            .font(.subheadline)
                         Text("Used for organization")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -373,7 +373,7 @@ struct AIProviderSettingsView: View {
             if codexAuth.isAuthenticated {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
-                        .sortyTypography(.title3, weight: .medium)
+                        .font(.title3)
                         .foregroundStyle(.green)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -467,7 +467,7 @@ struct AIProviderSettingsView: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Model")
-                            .sortyTypography(.body)
+                            .font(.subheadline)
                         Text("Runs privately on this Mac")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -519,7 +519,7 @@ struct AIProviderSettingsView: View {
                         Toggle(isOn: $viewModel.config.requiresAPIKey) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Requires API Key")
-                                    .sortyTypography(.body)
+                                    .font(.subheadline)
                                 Text("Disable for local endpoints without auth")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -674,7 +674,7 @@ struct AIProviderSettingsView: View {
                                 }
                             }
                         }
-                        .sortyTypography(.body)
+                        .font(.subheadline)
                         .frame(maxWidth: 620, alignment: .center)
                         .transition(.scale.combined(with: .opacity))
                     }
@@ -1047,7 +1047,7 @@ private struct CodexDeviceAuthSheet: View {
                     Text("Reauthenticate ChatGPT Subscription")
                         .font(.title2.weight(.bold))
                     Text("Reauthenticate to keep using your ChatGPT subscription for OpenAI inference.")
-                        .sortyTypography(.body)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
 
@@ -1255,7 +1255,7 @@ struct OpenCodeCredentialLinkView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: isConnected ? "checkmark.circle.fill" : "person.crop.circle.badge.checkmark")
-                    .sortyTypography(.title3, weight: .medium)
+                    .font(.title3)
                     .foregroundStyle(isConnected ? Color.green : Color.secondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isConnected ? "Connected to \(viewModel.config.provider.displayName)" : "Connect with OpenCode")

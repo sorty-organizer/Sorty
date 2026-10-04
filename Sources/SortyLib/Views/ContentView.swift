@@ -336,8 +336,6 @@ public struct ContentView: View {
             Image(systemName: item.systemImage)
                 .accessibilityHidden(true)
         }
-            .sortyTypography(.body, weight: .medium)
-            .sortyTypography(.body, weight: .medium)
             // The stock .sidebar selection highlight renders from the system
             // accent (NSColor.controlAccentColor) and ignores window-level
             // .tint(), so the selected row carries its own accent background.

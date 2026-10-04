@@ -221,7 +221,7 @@ public struct MenuBarView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(headerTitle)
-                    .sortyTypography(.headline, weight: .medium)
+                    .font(.headline)
                     .lineLimit(1)
                     .accessibilityLabel(menuBarController.activity.accessibilityLabel)
                     .accessibilityIdentifier("MenuBarStatusTitle")

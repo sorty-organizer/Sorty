@@ -41,7 +41,7 @@ struct ModelSelectorRow: View {
                         .foregroundColor(.secondary)
                         .numericTextTransition(animationValue: provider)
                     Text(model.isEmpty ? provider.defaultModel : model)
-                        .sortyTypography(.body)
+                        .font(.subheadline)
                         .fontWeight(.medium)
                         .lineLimit(1)
                         .numericTextTransition(
@@ -493,7 +493,7 @@ struct ModelSelectionPopover: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.secondary)
-                    .sortyTypography(.headline)
+                    .font(.system(size: 16))
             }
             .buttonStyle(.plain)
         }

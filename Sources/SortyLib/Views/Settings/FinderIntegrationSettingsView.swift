@@ -20,7 +20,7 @@ struct FinderIntegrationSettingsView: View {
             SettingsCard(title: "Sorty in Finder", icon: "folder", color: .cyan) {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Right-click a folder in Finder to use Sorty without opening the app first.")
-                        .sortyTypography(.body)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -50,7 +50,7 @@ struct FinderIntegrationSettingsView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: statusIcon)
-                            .sortyTypography(.title3, weight: .medium)
+                            .font(.title3)
                             .foregroundStyle(isOn ? Color.green : Color.secondary)
                             .frame(width: 24)
                             .accessibilityHidden(true)
@@ -59,7 +59,7 @@ struct FinderIntegrationSettingsView: View {
                                 .font(.subheadline.weight(.semibold))
                             if !isOn {
                                 Text(statusDetail)
-                                    .sortyTypography(.body)
+                                    .font(.subheadline)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -126,15 +126,15 @@ struct FinderIntegrationSettingsView: View {
     ) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .sortyTypography(.title3, weight: .medium)
+                .font(.title3)
                 .foregroundStyle(.cyan)
                 .frame(width: 24, height: 24)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .sortyTypography(.body, weight: .medium)
+                    .font(.subheadline.weight(.medium))
                 Text(detail)
-                    .sortyTypography(.body)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

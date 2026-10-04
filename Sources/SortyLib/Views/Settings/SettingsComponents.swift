@@ -145,7 +145,7 @@ struct SidebarButton: View {
                     .accessibilityHidden(true)
                 
                 Text(LocalizedStringKey(title))
-                    .sortyTypography()
+                    .font(.subheadline)
                     .foregroundStyle(isSelected ? .primary : .secondary)
                 
                 Spacer()
@@ -217,13 +217,13 @@ struct SettingsCard<Content: View>: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: icon)
-                            .font(.system(size: SortyDesignSystem.Sizing.listIcon, weight: .regular))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(color)
-                            .frame(width: SortyDesignSystem.Sizing.listIcon)
+                            .frame(width: 16)
                             .accessibilityHidden(true)
 
                         Text(LocalizedStringKey(title))
-                            .sortyTypography(.headline, weight: .medium)
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
 
                         headerAccessory
@@ -274,12 +274,12 @@ struct SettingsCard<Content: View>: View {
     private func header() -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: SortyDesignSystem.Sizing.listIcon, weight: .regular))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(color)
-                .frame(width: SortyDesignSystem.Sizing.listIcon)
+                .frame(width: 14)
                 .accessibilityHidden(true)
             Text(LocalizedStringKey(title))
-                .sortyTypography(.headline, weight: .medium)
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.secondary)
             headerAccessory
             countBadge
@@ -311,7 +311,7 @@ struct SettingsTextField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(LocalizedStringKey(title))
-                .sortyTypography()
+                .font(.subheadline)
             TextField(LocalizedStringKey(placeholder), text: $text)
                 .textFieldStyle(.roundedBorder)
         }
@@ -332,7 +332,7 @@ struct SettingsSecureField: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(LocalizedStringKey(title))
-                    .sortyTypography()
+                    .font(.subheadline)
                 if isOptional {
                     Text("Optional")
                         .font(.caption)
@@ -397,7 +397,7 @@ struct SettingsToggle: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(LocalizedStringKey(title))
-                    .sortyTypography(.body, weight: .medium)
+                    .font(.subheadline.weight(.medium))
                     .foregroundColor(.primary)
                 if let description = description {
                     Text(LocalizedStringKey(description))
@@ -482,7 +482,7 @@ struct SettingsSubsettingRow<Control: View>: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(LocalizedStringKey(title))
-                        .sortyTypography(.body, weight: .medium)
+                        .font(.subheadline.weight(.medium))
                         .foregroundStyle(.primary)
 
                     if let description {

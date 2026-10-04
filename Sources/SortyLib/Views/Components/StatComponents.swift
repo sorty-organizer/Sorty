@@ -97,7 +97,7 @@ struct GlassPillButton: View {
                     .foregroundStyle(tint)
 
                 Text(title)
-                    .sortyTypography(.headline, weight: .medium)
+                    .font(.headline)
 
                 if let count {
                     Text("\(count)")

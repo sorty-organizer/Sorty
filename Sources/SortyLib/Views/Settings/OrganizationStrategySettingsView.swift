@@ -211,7 +211,7 @@ struct OrganizationStrategySettingsView: View {
 
                         HStack {
                             Text("Max Length")
-                                .sortyTypography(.body)
+                                .font(.subheadline)
                             NoTickSlider(
                                 value: Binding(
                                     get: { Double(viewModel.config.renameNamingOptions.maxFilenameLength) },
@@ -323,7 +323,7 @@ struct OrganizationStrategySettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 6) {
                             Text(viewModel.config.namingStyle == .custom ? "Custom Naming Instructions" : "Additional Naming Instructions")
-                                .sortyTypography(.body, weight: .medium)
+                                .font(.subheadline.weight(.medium))
                                 .numericTextTransition(
                                     animationValue: viewModel.config.namingStyle
                                 )
@@ -582,18 +582,18 @@ private struct EditPresetSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Edit Naming Preset")
-                .sortyTypography(.headline, weight: .medium)
+                .font(.headline)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Name")
-                    .sortyTypography(.body, weight: .medium)
+                    .font(.subheadline.weight(.medium))
                 TextField("Preset name", text: $editName)
                     .textFieldStyle(.roundedBorder)
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Instructions")
-                    .sortyTypography(.body, weight: .medium)
+                    .font(.subheadline.weight(.medium))
                 TextEditor(text: $editInstructions)
                     .font(.system(.body, design: .monospaced))
                     .frame(minHeight: 120)

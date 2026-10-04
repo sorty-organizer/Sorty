@@ -102,7 +102,7 @@ struct RotatingInstructionSuggestionEditor: View {
             if text.isEmpty {
                 HStack(alignment: .top, spacing: 10) {
                     Text(currentSuggestion)
-                        .sortyTypography(.body)
+                        .font(.body)
                         .foregroundStyle(.tertiary)
                         .lineLimit(2)
                         .numericTextTransition(animationValue: suggestionIndex)

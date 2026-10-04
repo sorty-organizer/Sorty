@@ -52,7 +52,7 @@ struct PreviewHeaderView: View {
 
                 Button(action: { showDiff(currentDiffSource) }) {
                     Text(version == 1 ? "Preview" : "Preview \(version)")
-                        .sortyTypography(.headline, weight: .medium)
+                        .font(.headline)
                         .numericTextTransition(animationValue: version)
                 }
                 .buttonStyle(.plain)

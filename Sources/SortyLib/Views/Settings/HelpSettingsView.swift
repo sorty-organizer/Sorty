@@ -78,7 +78,7 @@ struct HelpSettingsView: View {
 
                     HStack(alignment: .center, spacing: 12) {
                         Text("Sorty \(BuildInfo.version) (\(BuildInfo.build))")
-                            .sortyTypography(.body, weight: .medium)
+                            .font(.subheadline.weight(.medium))
 
                         Spacer()
 
@@ -317,7 +317,7 @@ struct DeeplinkSettingsView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Label("Deeplink Library", systemImage: "link.badge.plus")
-                        .sortyTypography(.headline, weight: .medium)
+                        .font(.headline)
                         .foregroundStyle(.primary)
 
                     Button {
@@ -348,7 +348,7 @@ struct DeeplinkSettingsView: View {
                 }
 
                 Text("Copy `sorty://` URLs for Shortcuts, Raycast, AppleScript, shell scripts, and other launchers.")
-                    .sortyTypography(.body)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
@@ -392,7 +392,7 @@ private struct HelpIconLink: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .sortyTypography(.title3, weight: .medium)
+                    .font(.title3)
                     .foregroundStyle(isHovered ? color : .secondary)
                 Text(LocalizedStringKey(title))
                     .font(.caption.weight(.semibold))

@@ -93,7 +93,7 @@ struct SettingsView: View {
             if categories.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Nothing found")
-                        .sortyTypography(.body, weight: .medium)
+                        .font(.subheadline.weight(.medium))
                     Text("Sorty could not find that setting.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -293,7 +293,7 @@ struct SettingsView: View {
             }
 
             Text("\"\(trimmedSearchText)\" matched \(results.count) \(results.count == 1 ? "setting" : "settings") in \(uniqueCategoryCount) \(uniqueCategoryCount == 1 ? "section" : "sections").")
-                .sortyTypography(.body)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .numericTextTransition(
                     animationValue: "\(trimmedSearchText)-\(results.count)-\(uniqueCategoryCount)"
@@ -315,9 +315,9 @@ struct SettingsView: View {
 
                 VStack(spacing: 5) {
                     Text("Sorty came up empty")
-                        .sortyTypography(.headline, weight: .medium)
+                        .font(.headline)
                     Text("Nothing matches \"\(trimmedSearchText)\" yet.")
-                        .sortyTypography(.body)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
@@ -335,7 +335,7 @@ struct SettingsView: View {
                     ) {
                         VStack(alignment: .leading, spacing: 10) {
                             Text(LocalizedStringKey(result.snippet.summary))
-                                .sortyTypography(.body)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
 
                             HStack(spacing: 8) {

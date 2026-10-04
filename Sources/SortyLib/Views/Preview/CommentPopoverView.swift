@@ -44,7 +44,7 @@ struct CommentPopoverView: View {
             }
 
             Text(comment)
-                .sortyTypography(.body)
+                .font(.body)
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)

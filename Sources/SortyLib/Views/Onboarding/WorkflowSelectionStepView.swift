@@ -35,7 +35,7 @@ public struct WorkflowSelectionStepView: View {
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                     
                     Text("Select a persona that matches how you work. This helps Sorty understand your organization preferences.")
-                        .sortyTypography(.body)
+                        .font(.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     
@@ -43,7 +43,7 @@ public struct WorkflowSelectionStepView: View {
                         Image(systemName: "info.circle.fill")
                             .foregroundStyle(.blue)
                         Text("You can change this anytime in Settings")
-                            .sortyTypography(.body)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     .padding(12)
@@ -88,7 +88,7 @@ public struct WorkflowSelectionStepView: View {
     private var personaColumn: some View {
         VStack(spacing: 8) {
             Text("Select Default Persona")
-                .sortyTypography(.headline, weight: .medium)
+                .font(.headline)
                 .fontWeight(.semibold)
                     
                 // Built-in personas grid - 2x2 layout
@@ -117,7 +117,7 @@ public struct WorkflowSelectionStepView: View {
                         .fill(Color.secondary.opacity(0.2))
                         .frame(height: 1)
                     Text("or")
-                        .sortyTypography(.body)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 12)
                     Rectangle()
@@ -140,7 +140,7 @@ public struct WorkflowSelectionStepView: View {
                             .fill(Color.secondary.opacity(0.2))
                             .frame(height: 1)
                         Text("or")
-                            .sortyTypography(.body)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 12)
                         Rectangle()
@@ -467,7 +467,7 @@ struct OnboardingCustomPersonaCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(persona.name)
-                            .sortyTypography(.headline, weight: .medium)
+                            .font(.headline)
                             .foregroundStyle(.primary)
 
                         Spacer(minLength: 8)
@@ -485,7 +485,7 @@ struct OnboardingCustomPersonaCard: View {
                     }
 
                     Text(isSelected ? "Sorty will use this custom workflow by default." : "Custom workflow ready to use as your default persona.")
-                        .sortyTypography(.body)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .numericTextTransition(animationValue: isSelected)

@@ -51,7 +51,7 @@ struct DirectorySelectionView: View {
                         .opacity(hasAppeared ? 1 : 0)
 
                     Text("Drag and drop a folder here, or click to browse")
-                        .sortyTypography(.title3, weight: .medium)
+                        .font(.title3)
                         .foregroundStyle(.secondary)
                         .opacity(hasAppeared ? 1 : 0)
                 }
@@ -203,7 +203,7 @@ struct DirectorySelectionView: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.5), value: iconBounce)
 
             Text(isTargeted ? "Drop to select" : "Drop folder here")
-                .sortyTypography(.body, weight: .medium)
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(isTargeted ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
                 .numericTextTransition(animationValue: isTargeted)
         }
@@ -480,7 +480,7 @@ struct QuickTipItemCompact: View {
     private var content: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .sortyTypography(.body)
+                .font(.body)
                 .foregroundStyle(isHovering ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
 
             VStack(alignment: .leading, spacing: 1) {

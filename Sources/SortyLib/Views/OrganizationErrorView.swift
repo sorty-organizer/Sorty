@@ -285,11 +285,11 @@ struct ErrorView: View {
 
             VStack(spacing: 8) {
                 Text(errorTitle)
-                    .sortyTypography(.title3, weight: .medium)
+                    .font(.title3)
                     .fontWeight(.semibold)
 
                 Text(error.localizedDescription)
-                    .sortyTypography(.body)
+                    .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 460)

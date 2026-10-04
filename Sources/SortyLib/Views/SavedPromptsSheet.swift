@@ -36,7 +36,7 @@ struct SavedPromptsSheet: View {
                     closeSheet()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .sortyTypography(.title3, weight: .medium)
+                        .font(.title3)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -99,10 +99,10 @@ struct SavedPromptsSheet: View {
 
                         VStack(spacing: 6) {
                             Text("No saved prompts yet")
-                                .sortyTypography(.headline, weight: .medium)
+                                .font(.headline)
 
                             Text("Save your instructions from the organize view to reuse them.")
-                                .sortyTypography(.body)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                                 .frame(maxWidth: 300)
@@ -537,7 +537,7 @@ private struct SavedPromptEditorCard: View {
         VStack(alignment: .leading, spacing: 12) {
             TextField("Prompt name", text: $session.name)
                 .textFieldStyle(.roundedBorder)
-                .sortyTypography(.body, weight: .medium)
+                .font(.subheadline.weight(.medium))
 
             if hasDuplicateName {
                 Text("A prompt with this name already exists.")
@@ -546,7 +546,7 @@ private struct SavedPromptEditorCard: View {
             }
 
             TextEditor(text: $session.text)
-                .sortyTypography(.body)
+                .font(.body)
                 .focused($isEditTextFocused)
                 .frame(minHeight: 100, maxHeight: 160)
                 .scrollContentBackground(.hidden)

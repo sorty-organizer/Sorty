@@ -50,7 +50,7 @@ struct AccreditationsView: View {
                 .font(.system(size: 26, weight: .bold, design: .rounded))
 
             Text("These open-source projects and contributors help keep Sorty alive.")
-                .sortyTypography(.body)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 

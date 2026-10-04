@@ -200,7 +200,7 @@ struct LearningsView: View {
                 Text(
                     "A passive learning system that watches how you organize files and learns your preferences over time."
                 )
-                .sortyTypography(.body)
+                .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 500)
@@ -258,7 +258,7 @@ struct LearningsView: View {
                 }
             }) {
                 Label("Enable Learning", systemImage: "checkmark.circle.fill")
-                    .sortyTypography(.headline, weight: .medium)
+                    .font(.headline)
             }
             .buttonStyle(.sortyPrimary)
             .onboardingBeamBorder(variant: .featured)
@@ -286,8 +286,8 @@ struct LearningsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
-                Text(LocalizedStringKey(title)).sortyTypography(.headline, weight: .medium)
-                Text(LocalizedStringKey(description)).sortyTypography(.body).foregroundStyle(.secondary)
+                Text(LocalizedStringKey(title)).font(.headline)
+                Text(LocalizedStringKey(description)).font(.subheadline).foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .combine)
@@ -447,7 +447,7 @@ struct LearningsView: View {
                     .accessibilityLabel("The Learnings")
 
                     Text("Passively learning from your organization habits")
-                        .sortyTypography(.body)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
 
@@ -587,11 +587,11 @@ struct LearningsView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(heroTitle)
-                        .sortyTypography(.headline, weight: .medium)
+                        .font(.headline)
                         .numericTextTransition(animationValue: heroTitle)
                     if let subtitle = heroSubtitle {
                         Text(LocalizedStringKey(subtitle))
-                            .sortyTypography(.body)
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .numericTextTransition(animationValue: subtitle)
                     }
@@ -682,7 +682,7 @@ struct LearningsView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("What Sorty Has Learned")
-                    .sortyTypography(.headline, weight: .medium)
+                    .font(.headline)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
             }
@@ -1179,13 +1179,13 @@ struct LearningsView: View {
         } label: {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: systemImage)
-                    .sortyTypography(.body)
+                    .font(.body)
                     .foregroundStyle(.secondary)
                     .frame(width: 22)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .sortyTypography(.body)
+                        .font(.subheadline)
                         .fixedSize(horizontal: false, vertical: true)
                     if let detail, !detail.isEmpty {
                         Text(detail)
@@ -1229,7 +1229,7 @@ struct LearningsView: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(rule.explanation)
-                            .sortyTypography(.body)
+                            .font(.subheadline)
                         Text(rule.isEnabled ? "Enabled · \(rule.scope.displayName)" : "Disabled · \(rule.scope.displayName)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -1290,7 +1290,7 @@ struct LearningsView: View {
                                 .font(.caption.bold())
                                 .foregroundStyle(.secondary)
                             Text(field.value)
-                                .sortyTypography(.body)
+                                .font(.body)
                                 .textSelection(.enabled)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -1557,7 +1557,7 @@ struct LearningsView: View {
     private var settingsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Settings")
-                .sortyTypography(.headline, weight: .medium)
+                .font(.headline)
                 .accessibilityAddTraits(.isHeader)
 
             VStack(spacing: 0) {
@@ -1668,7 +1668,7 @@ struct LearningsView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .sortyTypography(.body)
+                    .font(.subheadline)
                 Text(detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1980,7 +1980,7 @@ private struct LearningInsightRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(rule.explanation)
-                    .sortyTypography(.body)
+                    .font(.subheadline)
                     .foregroundColor(rule.isEnabled ? .primary : .secondary)
 
                 HStack(spacing: 8) {

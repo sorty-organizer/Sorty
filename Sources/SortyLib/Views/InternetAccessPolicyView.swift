@@ -73,7 +73,7 @@ struct InternetAccessPolicyView: View {
                     .font(.system(size: 26, weight: .bold, design: .rounded))
 
                 Text("Transparency for every host Sorty may contact")
-                    .sortyTypography(.body)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
@@ -86,7 +86,7 @@ struct InternetAccessPolicyView: View {
     private func loadedContent(_ policy: InternetAccessPolicyDocument) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(policy.applicationDescription)
-                .sortyTypography(.body)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -135,11 +135,11 @@ struct InternetAccessPolicyView: View {
     private func failedContent(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Policy unavailable", systemImage: "exclamationmark.triangle")
-                .sortyTypography(.headline, weight: .medium)
+                .font(.headline)
                 .foregroundStyle(.orange)
 
             Text(message)
-                .sortyTypography(.body)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 

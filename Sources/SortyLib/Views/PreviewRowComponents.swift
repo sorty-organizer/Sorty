@@ -202,7 +202,7 @@ struct FlatFileRowContent: View {
                         .focused(isFocused)
                         .onSubmit(onSave)
                         .onExitCommand(perform: onCancel)
-                        .sortyTypography(.body)
+                        .font(.body)
                 } else {
                     Text(file.displayName)
                         .lineLimit(1)

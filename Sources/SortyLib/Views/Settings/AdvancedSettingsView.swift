@@ -273,7 +273,7 @@ private struct TimeoutSliderRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(LocalizedStringKey(title))
-                    .sortyTypography(.body)
+                    .font(.subheadline)
                 Spacer()
                 Text("\(Int(value))s")
                     .font(.subheadline.monospacedDigit())

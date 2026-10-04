@@ -49,7 +49,7 @@ struct StorageLocationConfigView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 8) {
                             Text(location.name)
-                                .sortyTypography(.headline, weight: .medium)
+                                .font(.headline)
 
                             StorageProviderBadge(provider: location.capabilityProfile.provider)
                         }
@@ -136,7 +136,7 @@ struct StorageLocationConfigView: View {
                                 if description.isEmpty {
                                     HStack(alignment: .top, spacing: 10) {
                                         Text(currentDescriptionSuggestion)
-                                            .sortyTypography(.body)
+                                            .font(.body)
                                             .foregroundStyle(.tertiary)
                                             .lineLimit(2)
                                             .numericTextTransition(

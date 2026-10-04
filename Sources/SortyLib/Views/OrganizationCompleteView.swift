@@ -252,7 +252,7 @@ struct OrganizationCompleteView: View {
                                 .numericTextTransition(animationValue: statusTitle)
 
                             Text(statusMessage)
-                                .sortyTypography(.body)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                                 .opacity(titleAppeared ? 1 : 0)
@@ -484,7 +484,7 @@ struct OrganizationCompleteView: View {
                                 )
                                 .accessibilityHidden(true)
                         }
-                        .sortyTypography(.body)
+                        .font(.subheadline)
                         .foregroundStyle(
                             isHoveringHistoryLink
                                 ? SortyDesignSystem.Colors.accent
@@ -684,7 +684,7 @@ struct OrganizationCompleteView: View {
                     feedbackDraft.outcome = .useful
                 } label: {
                     Image(systemName: feedbackDraft.outcome == .useful ? "hand.thumbsup.fill" : "hand.thumbsup")
-                        .sortyTypography(.body)
+                        .font(.body)
                         .foregroundStyle(feedbackDraft.outcome == .useful ? .green : .secondary)
                 }
                 .buttonStyle(.plain)
@@ -696,7 +696,7 @@ struct OrganizationCompleteView: View {
                     feedbackDraft.outcome = .notUseful
                 } label: {
                     Image(systemName: feedbackDraft.outcome == .notUseful ? "hand.thumbsdown.fill" : "hand.thumbsdown")
-                        .sortyTypography(.body)
+                        .font(.body)
                         .foregroundStyle(feedbackDraft.outcome == .notUseful ? .orange : .secondary)
                 }
                 .buttonStyle(.plain)
@@ -1278,7 +1278,7 @@ private struct CompletionFeatureSuggestionCard: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .sortyTypography(.title3, weight: .medium)
+                .font(.title3)
                 .foregroundStyle(.blue)
                 .frame(width: 32, height: 32)
                 .background(

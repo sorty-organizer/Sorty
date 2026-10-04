@@ -480,7 +480,7 @@ struct HistoryView: View {
                             .frame(width: 18, height: 18)
                             .accessibilityHidden(true)
                     }
-                        .sortyTypography(.headline, weight: .medium)
+                        .font(.headline)
                     Spacer()
                     Text("\(totalCount)")
                         .font(.caption)
@@ -723,7 +723,7 @@ struct HistorySearchEmptyStateView: View {
                     .font(.title3.bold())
 
                 Text("No history entries match \"\(searchText)\"")
-                    .sortyTypography(.body)
+                    .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -787,7 +787,7 @@ struct HistoryEmptyStateView: View {
                         .font(.title2.bold())
 
                     Text("Organize a folder to start tracking sessions, results, and actions you can revisit later.")
-                        .sortyTypography(.body)
+                        .font(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 400)

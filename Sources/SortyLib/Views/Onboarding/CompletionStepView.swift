@@ -1049,10 +1049,10 @@ private struct CompletionAnalyticsPreference: View {
     private var analyticsDetails: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Anonymous analytics")
-                .sortyTypography(.headline, weight: .medium)
+                .font(.headline)
 
             Text("When this is on, Sorty sends limited product and reliability events so we can see which parts of the app are useful and where failures occur.")
-                .sortyTypography(.body)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -1387,7 +1387,7 @@ public struct CompletionStepView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Provider check failed")
-                        .sortyTypography(.headline, weight: .medium)
+                        .font(.headline)
                     Text(message)
                         .font(.caption)
                         .foregroundStyle(.secondary)

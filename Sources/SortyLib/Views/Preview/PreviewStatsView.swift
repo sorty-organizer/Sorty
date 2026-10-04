@@ -32,7 +32,7 @@ struct PreviewStatsView: View {
                             .foregroundStyle(.purple)
                         
                         Text("Stats for Nerds")
-                            .sortyTypography(.body)
+                            .font(.subheadline)
                             .fontWeight(.medium)
                         
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")

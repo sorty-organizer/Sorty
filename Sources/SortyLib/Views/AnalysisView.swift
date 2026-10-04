@@ -532,11 +532,11 @@ struct AnalysisView: View {
 
             VStack(spacing: 8) {
                 Text(emptyDirectoryTitle)
-                    .sortyTypography(.title3, weight: .medium)
+                    .font(.title3)
                     .fontWeight(.semibold)
 
                 Text(emptyDirectoryMessage)
-                    .sortyTypography(.body)
+                    .font(.body)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 400)

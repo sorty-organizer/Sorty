@@ -45,7 +45,7 @@ struct ReadyToOrganizeTitle: View {
             }
 
             Text(LocalizedStringKey(mode.description))
-                .sortyTypography(.body)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
