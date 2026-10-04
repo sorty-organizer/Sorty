@@ -66,9 +66,10 @@ normal copy/rename, modification metadata, progress, tree content, and undo.
 Three focused tests passed. Temporary harness files and logs live outside git.
 
 Local app builds and native UI tests were not run for deletion-only batches.
-`git diff --check` passed. Hosted Swift CI remains the full compilation, app
-packaging, and suite gate. The first dispatched run, 37175507732, was cancelled
-by concurrent main-branch work; a later run must verify the final code.
+`git diff --check` passed. Hosted [Swift CI run 37175669349](https://github.com/sorty-organizer/Sorty/actions/runs/37175669349)
+passed for code commit `90a654f6`: full compilation, app packaging, unit suite,
+prerelease validation, and the security-check job. The earlier dispatched run,
+37175507732, was cancelled by concurrent main-branch work.
 The imported OpenClaw/Vitest/autoreview commands are absent, as already recorded
 in test-audit.md. Changes received a caller audit and manual diff review; no
 unavailable check is claimed.
@@ -84,3 +85,13 @@ unavailable check is claimed.
   [84](https://github.com/sorty-organizer/Sorty/security/dependabot/84) for the
   transitive braces package. The advisory reports no patched version; do not
   invent a version override or remove an active dependency to hide the alert.
+
+## Measured changes
+
+Production: 58 lines added, 874 deleted; net -816.
+Tests: 84 lines added, 210 deleted; net -126.
+Xcode test membership: four lines deleted. Documentation is counted separately.
+These counts include this audit's changes only; concurrent UI work is excluded.
+No PR was created; coherent commits were pushed to main.
+
+net: -942 production/test lines, -0 deps possible.
