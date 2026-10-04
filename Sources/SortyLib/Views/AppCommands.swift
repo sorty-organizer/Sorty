@@ -2195,9 +2195,13 @@ public class AppState: ObservableObject {
         }
         alert.addButton(withTitle: "Uninstall Sorty")
         alert.addButton(withTitle: "Cancel")
-        alert.buttons.first?.hasDestructiveAction = true
-        alert.buttons.first?.bezelColor = .systemRed
-        alert.buttons.first?.contentTintColor = .white
+        if let uninstallButton = alert.buttons.first {
+            uninstallButton.hasDestructiveAction = true
+            uninstallButton.bezelColor = .systemRed
+            let title = NSMutableAttributedString(attributedString: uninstallButton.attributedTitle)
+            title.addAttribute(.foregroundColor, value: NSColor.white, range: NSRange(location: 0, length: title.length))
+            uninstallButton.attributedTitle = title
+        }
 
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         uninstallSorty()
