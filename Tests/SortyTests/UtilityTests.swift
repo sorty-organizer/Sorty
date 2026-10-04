@@ -6,6 +6,56 @@ import XCTest
 
 final class UtilityTests: XCTestCase {
 
+    func testSkillAgentLocationsMatchUserSkillDiscoveryContracts() {
+        let home = URL(fileURLWithPath: "/example/home", isDirectory: true)
+        let locations: [(SkillAgent, String, String, String)] = [
+            (.codex, ".codex/skills", "CODEX_HOME", "~/custom-codex"),
+            (.claudeCode, ".claude/skills", "CLAUDE_CONFIG_DIR", "~/custom-claude"),
+            (.openCode, ".config/opencode/skills", "XDG_CONFIG_HOME", "~/custom-config"),
+            (.pi, ".pi/agent/skills", "PI_CODING_AGENT_DIR", "~/custom-pi")
+        ]
+        for (agent, path, key, override) in locations {
+            XCTAssertEqual(agent.skillsDirectory(home: home, environment: [:]).path, "/example/home/\(path)")
+            let suffix = agent == .openCode ? "/opencode/skills" : "/skills"
+            XCTAssertEqual(agent.skillsDirectory(home: home, environment: [key: override]).path,
+                           "/example/home/\(override.dropFirst(2))\(suffix)")
+            XCTAssertEqual(agent.skillsDirectory(home: home, environment: [key: " "]).path, "/example/home/\(path)")
+        }
+        XCTAssertEqual(SkillAgent.openCode.skillsDirectory(home: home, environment: [
+            "OPENCODE_CONFIG_DIR": "/custom/opencode", "XDG_CONFIG_HOME": "/other/config"
+        ]).path, "/custom/opencode/skills")
+    }
+
+    @MainActor
+    func testSkillInstallerDetectsExistingAgentFoldersAndKeepsCustomSelection() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("sorty-agent-locations-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let environment = [
+            "CODEX_HOME": root.appendingPathComponent("codex").path,
+            "CLAUDE_CONFIG_DIR": root.appendingPathComponent("claude").path,
+            "XDG_CONFIG_HOME": root.appendingPathComponent("config").path,
+            "PI_CODING_AGENT_DIR": root.appendingPathComponent("pi").path
+        ]
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("claude"), withIntermediateDirectories: true)
+        // A file at a config path must not be reported as an agent settings folder.
+        try Data().write(to: root.appendingPathComponent("pi"))
+        let installer = CodexSkillInstaller(environment: environment)
+        await installer.refresh(trackUsage: false)
+        XCTAssertEqual(installer.detectedAgents, [.claudeCode])
+        XCTAssertEqual(installer.selectedAgent, .codex)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("codex").path))
+
+        installer.selectedSkillsDirectory = installer.skillsDirectory(for: .claudeCode)
+        XCTAssertEqual(installer.selectedAgent, .claudeCode)
+        XCTAssertEqual(installer.destinationURL.path, root.appendingPathComponent("claude/skills/sorty").path)
+        let custom = root.appendingPathComponent("project/.agents/skills")
+        installer.selectedSkillsDirectory = custom
+        await installer.refresh(trackUsage: false)
+        XCTAssertNil(installer.selectedAgent)
+        XCTAssertEqual(installer.destinationURL.path, custom.appendingPathComponent("sorty").path)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: custom.path))
+    }
+
     func testRenameRuleEngineAppliesRegexAndLiteralRules() {
         let rules = [
             RenameRule(pattern: "^IMG\\s+", replacement: "", isRegex: true),

@@ -6,7 +6,7 @@ The Sorty skill organizes and renames files through your agent using preferences
 
 1. Open Settings > Experimental > Sorty skill.
 2. Click Set Up Skill, or Import Settings if it is already installed. Review Setup opens the same flow when another skill is present.
-3. Read the introduction, then choose the folder where your agent loads skills. The default is Codex's skills folder. Location shows one heading and explanation above the installation path and folder picker. The setup window opens at 780 × 620 points and can be resized; longer steps scroll above the navigation buttons. Hovering over Get Started changes the introduction's folder icon to the Sorty app icon.
+3. Read the introduction, then choose Codex, Claude Code, OpenCode, Pi, or a custom skills folder. Agent choices show "Settings folder found" when their configuration directory exists. The installation path updates with your choice. The setup window opens at 780 × 620 points and can be resized. The welcome text stays visible without scrolling; longer configuration steps scroll above navigation. Hovering over Get Started changes the introduction's folder icon to the Sorty app icon.
 4. Choose what to share under Preferences, Exclusions, Watched folders, and Learnings. The compact category column stays visible while the options scroll independently. Select an entire section, the full list, or individual items. Unlock Learnings to review them before selecting.
 5. Review the destination and selected settings in the scrollable summary, then click Install and Import, or Import Settings for an existing installation. The summary's glass panel stays fixed while its contents scroll; import details remain visible below it. Confirm replacement if another skill occupies the location.
 6. The completion screen shows a sample request, Copy Request, and the reimport reminder without scrolling. Copy the request into a new agent chat, then click Done.
@@ -16,6 +16,32 @@ Setup opens in its own resizable window with native Liquid Glass on macOS 26. It
 Choose at least one setting to import. Reimporting replaces the previous imported selection, so include every preference you want the agent to keep using.
 
 Changing headings and action labels use text transitions, selection counts use numeric transitions, and step icons use symbol replacement. Reduce Motion disables these animations.
+
+### Agent locations
+
+| Agent | Default skills folder | Environment override |
+| --- | --- | --- |
+| Codex | `~/.codex/skills` | `CODEX_HOME`, then `skills` |
+| Claude Code | `~/.claude/skills` | `CLAUDE_CONFIG_DIR`, then `skills` |
+| OpenCode | `~/.config/opencode/skills` | `OPENCODE_CONFIG_DIR`, then `skills`; otherwise `XDG_CONFIG_HOME`, then `opencode/skills` |
+| Pi | `~/.pi/agent/skills` | `PI_CODING_AGENT_DIR`, then `skills` |
+
+Sorty checks these configuration directories without launching agents or reading
+credentials. A found folder does not prove an agent is installed. Every agent
+remains selectable before its folder exists; installation creates the selected
+skills folder only when you confirm. Environment overrides apply when inherited
+by the Sorty process. For a different shell environment or a project-specific
+location, use Choose Folder and select the parent of the `sorty` skill directory.
+
+All choices receive the same portable `sorty/SKILL.md`, supporting scripts, and
+selected imported preferences. The locations and format follow the
+[Claude Code skills documentation](https://code.claude.com/docs/en/skills),
+[OpenCode skills documentation](https://opencode.ai/docs/skills/), and
+[Pi skills documentation](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md).
+Pi's user directory and override are defined in its
+[configuration source](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/config.ts).
+OpenCode's configuration-root precedence is defined in its
+[global paths source](https://github.com/anomalyco/opencode/blob/dev/packages/core/src/global.ts).
 
 During import, a centered Sorty icon, status message, and indeterminate progress bar replace the review controls. Reduce Motion shows a static status instead. Completion appears only after the import succeeds; failures return to review with an error.
 

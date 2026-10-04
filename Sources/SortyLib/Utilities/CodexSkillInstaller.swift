@@ -14,6 +14,37 @@ enum CodexSkillInstallState: Equatable, Sendable {
     case failed
 }
 
+enum SkillAgent: String, CaseIterable, Sendable {
+    case codex = "Codex"
+    case claudeCode = "Claude Code"
+    case openCode = "OpenCode"
+    case pi = "Pi"
+
+    func skillsDirectory(home: URL, environment: [String: String]) -> URL {
+        func configuredDirectory(_ key: String, fallback: URL) -> URL {
+            guard let path = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !path.isEmpty else { return fallback }
+            if path == "~" { return home }
+            if path.hasPrefix("~/") { return home.appendingPathComponent(String(path.dropFirst(2)), isDirectory: true) }
+            return URL(fileURLWithPath: path, isDirectory: true)
+        }
+        let root: URL
+        switch self {
+        case .codex:
+            root = configuredDirectory("CODEX_HOME", fallback: home.appendingPathComponent(".codex", isDirectory: true))
+        case .claudeCode:
+            root = configuredDirectory("CLAUDE_CONFIG_DIR", fallback: home.appendingPathComponent(".claude", isDirectory: true))
+        case .openCode:
+            let config = configuredDirectory("XDG_CONFIG_HOME", fallback: home.appendingPathComponent(".config", isDirectory: true))
+                .appendingPathComponent("opencode", isDirectory: true)
+            root = configuredDirectory("OPENCODE_CONFIG_DIR", fallback: config)
+        case .pi:
+            root = configuredDirectory("PI_CODING_AGENT_DIR", fallback: home.appendingPathComponent(".pi/agent", isDirectory: true))
+        }
+        return root.appendingPathComponent("skills", isDirectory: true)
+    }
+}
+
 struct SkillImportOption: Identifiable, Sendable {
     enum Section: String, CaseIterable, Sendable {
         case preferences = "Preferences"
@@ -132,6 +163,7 @@ struct SkillImportOption: Identifiable, Sendable {
 final class CodexSkillInstaller: ObservableObject {
     @Published private(set) var state: CodexSkillInstallState = .checking
     @Published var selectedSkillsDirectory: URL?
+    @Published private(set) var detectedAgents: Set<SkillAgent> = []
 
     private let fileManager: FileManager
     private let environment: [String: String]
@@ -145,32 +177,37 @@ final class CodexSkillInstaller: ObservableObject {
     }
 
     var destinationURL: URL {
-        if let selectedSkillsDirectory {
-            return selectedSkillsDirectory.appendingPathComponent("sorty", isDirectory: true)
-        }
-        let codexHome: URL
-        if let configuredHome = environment["CODEX_HOME"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !configuredHome.isEmpty {
-            codexHome = URL(fileURLWithPath: configuredHome, isDirectory: true)
-        } else {
-            codexHome = fileManager.homeDirectoryForCurrentUser
-                .appendingPathComponent(".codex", isDirectory: true)
-        }
-        return codexHome
-            .appendingPathComponent("skills", isDirectory: true)
+        (selectedSkillsDirectory ?? skillsDirectory(for: .codex))
             .appendingPathComponent("sorty", isDirectory: true)
+    }
+
+    var selectedAgent: SkillAgent? {
+        let directory = destinationURL.deletingLastPathComponent().standardizedFileURL
+        return SkillAgent.allCases.first { skillsDirectory(for: $0).standardizedFileURL == directory }
+    }
+
+    func skillsDirectory(for agent: SkillAgent) -> URL {
+        agent.skillsDirectory(home: fileManager.homeDirectoryForCurrentUser, environment: environment)
     }
 
     func refresh(trackUsage: Bool = true) async {
         state = .checking
         let source = Self.bundledSkillURL()
         let destination = destinationURL
-        let nextState = await Task.detached(priority: .utility) {
-            Self.inspect(source: source, destination: destination)
+        let directories = SkillAgent.allCases.map { ($0, skillsDirectory(for: $0).deletingLastPathComponent()) }
+        let result = await Task.detached(priority: .utility) {
+            let detected = Set(directories.compactMap { agent, directory -> SkillAgent? in
+                var isDirectory: ObjCBool = false
+                return FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory)
+                    && isDirectory.boolValue ? agent : nil
+            })
+            return (Self.inspect(source: source, destination: destination), detected)
         }.value
-        state = nextState
+        guard destinationURL == destination else { return }
+        detectedAgents = result.1
+        state = result.0
         if trackUsage {
-            captureStatus(nextState)
+            captureStatus(result.0)
         }
     }
 

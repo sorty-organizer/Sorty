@@ -41,7 +41,7 @@ struct SkillSetupView: View {
         var explanation: String {
             switch self {
             case .welcome: "The Sorty skill teaches your agent to organize and rename files using the preferences you've saved here."
-            case .location: "The default works with Codex. For another agent, choose the folder it uses to load skills."
+            case .location: "Choose Codex, Claude Code, OpenCode, or Pi. You can also choose a custom skills folder."
             case .preferences: "Share the settings that matter to you. Your instructions for each task always take priority."
             case .review: "Check the location and your selection. Importing copies these preferences into the skill and leaves your app settings unchanged."
             case .complete: "Open a new chat in your agent and ask it to use Sorty. Tell it which folder to organize and what you want changed."
@@ -251,6 +251,24 @@ struct SkillSetupView: View {
         case .location:
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 14) {
+                    Picker("Agent", selection: Binding(
+                        get: { installer.selectedAgent },
+                        set: { agent in
+                            guard let agent else { chooseLocation(); return }
+                            installer.selectedSkillsDirectory = installer.skillsDirectory(for: agent)
+                            errorMessage = nil
+                            HapticFeedbackManager.shared.selection()
+                            Task { await installer.refresh(trackUsage: false) }
+                        }
+                    )) {
+                        ForEach(SkillAgent.allCases, id: \.self) { agent in
+                            Text(installer.detectedAgents.contains(agent) ? "\(agent.rawValue) · Settings folder found" : agent.rawValue)
+                                .tag(Optional(agent))
+                        }
+                        Text("Custom folder…").tag(Optional<SkillAgent>.none)
+                    }
+                    .accessibilityIdentifier("skill-import.agent")
+                    .disabled(isCheckingLocation)
                     Text(installer.destinationURL.path)
                         .font(.body.monospaced())
                         .accessibilityLabel("Installation path: \(installer.destinationURL.path)")
