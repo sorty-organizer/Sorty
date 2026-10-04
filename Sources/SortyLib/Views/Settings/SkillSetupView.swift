@@ -414,6 +414,7 @@ struct SkillSetupView: View {
         } label: {
             VStack(spacing: 8) {
                 agentLocationIcon(agent)
+                    .frame(width: agentIconSize, height: agentIconSize, alignment: .center)
                     .frame(width: 64, height: 64)
                     .systemLiquidGlassBackground(cornerRadius: 18, interactive: true)
                     .overlay {
@@ -459,9 +460,10 @@ struct SkillSetupView: View {
             case .openCode: colorScheme == .dark ? "SkillAgentOpenCodeDark" : "SkillAgentOpenCodeLight"
             case .pi: "SkillAgentPi"
             }
-            if let image = SortyResources.image(named: "AgentIcons/\(resource)", withExtension: "svg") {
+            // Vector PDFs preserve the SVG paths without AppKit's SVG sizing differences.
+            if let image = SortyResources.image(named: "AgentIcons/\(resource)", withExtension: "pdf") {
                 Image(nsImage: image)
-                    .renderingMode(agent == .codex ? .template : .original)
+                    .renderingMode(agent == .codex || agent == .pi ? .template : .original)
                     .resizable()
                     .scaledToFit()
                     .frame(width: agentIconSize, height: agentIconSize)
