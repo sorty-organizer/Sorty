@@ -2,6 +2,11 @@
 
 ## Skill setup
 
+Agent tiles use the immediate tap haptic. Selecting the current agent leaves
+its location unchanged. Backdrop and edge-glow presenters attach only when the
+host window changes; window notifications handle geometry and activation.
+Ordinary selection and hover updates must not re-order the screen panels.
+
 Keep the welcome step outside a scroll view. Its heading, introduction, icon,
 and three explanations share the available height above navigation. Use compact
 spacing and an 80-point glass tile with a centered 48-point symbol. Keep the

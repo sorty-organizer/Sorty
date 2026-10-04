@@ -2111,10 +2111,8 @@ struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
         }
 
         func attach(to window: NSWindow?) {
-            guard hostWindow !== window else {
-                updatePanelFrame()
-                return
-            }
+            // Window notifications handle geometry changes; ordinary view updates must not re-order the screen panel.
+            guard hostWindow !== window else { return }
 
             removeObservers()
             pendingDismissal?.cancel()
@@ -2380,10 +2378,7 @@ struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         }
 
         func attach(to window: NSWindow?) {
-            guard hostWindow !== window else {
-                showPanelIfPossible()
-                return
-            }
+            guard hostWindow !== window else { return }
 
             removeObservers()
             pendingDismissal?.cancel()

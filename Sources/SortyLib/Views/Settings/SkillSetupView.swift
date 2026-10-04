@@ -408,8 +408,9 @@ struct SkillSetupView: View {
         let isSelected = installer.selectedAgent == agent
         let isDetected = agent.map { installer.detectedAgents.contains($0) } ?? false
         return Button {
-            HapticFeedbackManager.shared.selection()
+            HapticFeedbackManager.shared.tap()
             guard let agent else { chooseLocation(); return }
+            guard installer.selectedAgent != agent else { return }
             installer.selectedSkillsDirectory = installer.skillsDirectory(for: agent)
             errorMessage = nil
             Task { await installer.refresh(trackUsage: false) }
