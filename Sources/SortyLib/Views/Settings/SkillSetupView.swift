@@ -554,7 +554,7 @@ struct SkillSetupView: View {
         let visibleRows = query.isEmpty ? rows : rows.filter {
             $0.title.localizedStandardContains(query) || $0.detail.localizedStandardContains(query)
         }
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 12) {
             Text(section.rawValue).font(.headline)
                 .contentTransition(reduceMotion ? .identity : .numericText())
                 .accessibilityAddTraits(.isHeader)
@@ -623,8 +623,8 @@ struct SkillSetupView: View {
                                 .textFieldStyle(.roundedBorder)
                                 .accessibilityIdentifier("skill-import.search.\(section.rawValue)")
                         }
-                        SkillImportChecklist {
-                            VStack(alignment: .leading, spacing: 6) {
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 6) {
                                 if visibleRows.isEmpty {
                                     Text("No matching settings")
                                         .font(.callout)
@@ -637,8 +637,8 @@ struct SkillSetupView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .id(section)
                     }
+                    .padding(.top, 10)
                 }
             }
         }
@@ -870,42 +870,6 @@ struct SkillSetupView: View {
             } catch {
                 errorMessage = error.localizedDescription
                 HapticFeedbackManager.shared.error()
-            }
-        }
-    }
-}
-
-/// Fits short checklists to their content and keeps overflow inside the available pane.
-private struct SkillImportChecklist<Content: View>: View {
-    @ViewBuilder var content: () -> Content
-    @State private var contentHeight: CGFloat = 0
-    @State private var hasMoreBelow = false
-
-    var body: some View {
-        VStack(spacing: 4) {
-            ScrollView {
-                content()
-                    .onGeometryChange(for: CGFloat.self) { geometry in
-                        geometry.size.height
-                    } action: { height in
-                        contentHeight = height
-                    }
-            }
-            .scrollIndicators(.visible)
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentSize.height + geometry.contentInsets.bottom
-                    > geometry.contentOffset.y + geometry.containerSize.height + 1
-            } action: { _, hasMore in
-                hasMoreBelow = hasMore
-            }
-            .frame(minHeight: 0, idealHeight: contentHeight,
-                   maxHeight: contentHeight > 0 ? contentHeight : .infinity)
-            if hasMoreBelow {
-                Label("Scroll for more", systemImage: "chevron.down")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .accessibilityIdentifier("skill-import.scroll-hint")
             }
         }
     }
