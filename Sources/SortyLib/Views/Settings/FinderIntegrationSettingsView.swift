@@ -45,6 +45,7 @@ struct FinderIntegrationSettingsView: View {
                 }
             }
             .settingsFocusable(.finderIntegration)
+            .animatedAppearance(delay: 0.05)
 
             SettingsCard(title: "Finder extension", icon: "puzzlepiece.extension", color: .cyan) {
                 VStack(alignment: .leading, spacing: 14) {
@@ -101,6 +102,7 @@ struct FinderIntegrationSettingsView: View {
                     }
                 }
             }
+            .animatedAppearance(delay: 0.1)
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: setupState)
         .task(id: refreshGeneration) {

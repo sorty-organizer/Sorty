@@ -351,10 +351,12 @@ struct DeeplinkSettingsView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
+            .animatedAppearance(delay: 0.05)
 
             VStack(alignment: .leading, spacing: groupSpacing) {
-                ForEach(groups) { group in
+                ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                     DeeplinkGroupSection(group: group)
+                        .animatedAppearance(delay: 0.1 + Double(index) * 0.05)
                 }
             }
         }

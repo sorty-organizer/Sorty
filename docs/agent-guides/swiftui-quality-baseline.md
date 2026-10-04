@@ -18,6 +18,9 @@ Use this baseline when changing Sorty's macOS SwiftUI surfaces.
 
 ## Motion and rendering
 
+- Settings sections, including Deeplinks and Finder Integration, use
+  `.animatedAppearance(delay:)` for the shared staggered fade-and-rise entrance.
+  The modifier shows content immediately when Reduce Motion is enabled.
 - Reduce Motion must stop continuous schedules and repeating tasks, not only
   freeze the rendered phase. Pause or remove `TimelineView` clocks and disable
   auto-rotating content while the setting is active.
