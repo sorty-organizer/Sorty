@@ -140,6 +140,80 @@ final class SortyUninstallerTests: XCTestCase {
         }
     }
 
+    func testContainerCleanupRetainsProtectedDirectoriesButRemovesSavedData() throws {
+        let fileManager = FileManager.default
+        let home = makeTemporaryHome(fileManager: fileManager).resolvingSymlinksInPath()
+        let directories = [
+            home.appendingPathComponent("Library/Containers/com.sorty.app.SortyFinderSync/Data"),
+            home.appendingPathComponent("Library/Group Containers/group.com.sorty.app/Widget"),
+        ]
+        let externalDirectory = home.appendingPathComponent("Documents")
+        try fileManager.createDirectory(at: externalDirectory, withIntermediateDirectories: true)
+        let externalFile = externalDirectory.appendingPathComponent("keep.txt")
+        try Data("user document".utf8).write(to: externalFile)
+
+        for directory in directories {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data("saved data".utf8).write(to: directory.appendingPathComponent("snapshot.json"))
+            try fileManager.createSymbolicLink(
+                at: directory.appendingPathComponent("Documents"),
+                withDestinationURL: externalDirectory
+            )
+            let chmod = Process()
+            chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+            chmod.arguments = ["+a", "everyone deny delete", directory.path]
+            try chmod.run()
+            chmod.waitUntilExit()
+            XCTAssertEqual(chmod.terminationStatus, 0)
+        }
+        defer {
+            for directory in directories {
+                let chmod = Process()
+                chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+                chmod.arguments = ["-N", directory.path]
+                try? chmod.run()
+                chmod.waitUntilExit()
+            }
+        }
+
+        let result = SortyUninstaller.removeFilesystemState(homeDirectory: home, fileManager: fileManager)
+
+        XCTAssertTrue(result.failed.isEmpty, "\(result.failed)")
+        for directory in directories {
+            XCTAssertTrue(fileManager.fileExists(atPath: directory.path))
+            XCTAssertTrue(try fileManager.contentsOfDirectory(atPath: directory.path).isEmpty)
+        }
+        XCTAssertEqual(try Data(contentsOf: externalFile), Data("user document".utf8))
+
+        // An undeletable saved file must still block uninstall, while other
+        // files in the same container are cleaned up independently.
+        let protectedFile = directories[0].appendingPathComponent("credentials.json")
+        let removableFile = directories[0].appendingPathComponent("cache.json")
+        try Data("protected data".utf8).write(to: protectedFile)
+        try Data("cache".utf8).write(to: removableFile)
+        let chmod = Process()
+        chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+        chmod.arguments = ["+a", "everyone deny delete", protectedFile.path]
+        try chmod.run()
+        chmod.waitUntilExit()
+        XCTAssertEqual(chmod.terminationStatus, 0)
+        defer {
+            let restore = Process()
+            restore.executableURL = URL(fileURLWithPath: "/bin/chmod")
+            restore.arguments = ["-N", protectedFile.path]
+            try? restore.run()
+            restore.waitUntilExit()
+        }
+
+        let blockedResult = SortyUninstaller.removeFilesystemState(homeDirectory: home, fileManager: fileManager)
+        XCTAssertEqual(
+            Set(blockedResult.failed.keys.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }),
+            [protectedFile.resolvingSymlinksInPath().path]
+        )
+        XCTAssertTrue(fileManager.fileExists(atPath: protectedFile.path))
+        XCTAssertFalse(fileManager.fileExists(atPath: removableFile.path))
+    }
+
     func testCleanupPathCandidatesIncludeMatchingByHostAndDiagnosticFiles() throws {
         let fileManager = FileManager.default
         let home = makeTemporaryHome(fileManager: fileManager)

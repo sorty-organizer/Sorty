@@ -146,8 +146,8 @@ public enum SortyUninstaller {
         // Schedule post-quit removal before any destructive step. Aborting here
         // (helper failed to start) must leave Keychain, TCC, and login items
         // untouched so the app can be retried safely.
-        // Container roots and their metadata belong to macOS. Only app-owned
-        // contents may be handed to the shell helper for a second post-quit pass.
+        // Container directories and metadata can be protected by macOS ACLs.
+        // Retry only files and symlinks after quitting, never directory removal.
         let finalRemovalTargets = safeUniqueURLs(removalPaths.flatMap { url -> [URL] in
             guard isManagedContainer(url),
                   (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true
@@ -634,8 +634,12 @@ public enum SortyUninstaller {
                 if isManagedContainer(url),
                    (try url.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink != true {
                     for item in try containerContents(at: url, fileManager: fileManager) {
-                        try fileManager.removeItem(at: item)
-                        removed.append(item.path)
+                        do {
+                            try fileManager.removeItem(at: item)
+                            removed.append(item.path)
+                        } catch {
+                            failed[item.path] = error.localizedDescription
+                        }
                     }
                 } else {
                     try fileManager.removeItem(at: url)
@@ -654,8 +658,19 @@ public enum SortyUninstaller {
     }
 
     private static func containerContents(at url: URL, fileManager: FileManager) throws -> [URL] {
-        try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
+        // Delete saved data while retaining the directory skeleton. macOS can
+        // deny deletion of Data and other container directories even when their
+        // contents are writable. Never traverse symlinks into user folders.
+        let keys: Set<URLResourceKey> = [.isDirectoryKey, .isSymbolicLinkKey]
+        return try fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: Array(keys))
             .filter { $0.lastPathComponent != ".com.apple.containermanagerd.metadata.plist" }
+            .flatMap { item in
+                let values = try item.resourceValues(forKeys: keys)
+                if values.isDirectory == true && values.isSymbolicLink != true {
+                    return try containerContents(at: item, fileManager: fileManager)
+                }
+                return [item]
+            }
     }
 
     private static func schedulePostTerminationRemoval(
