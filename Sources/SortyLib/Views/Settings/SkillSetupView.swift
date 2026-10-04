@@ -231,6 +231,8 @@ struct SkillSetupView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 48, height: 48)
+                        // Compensate for the folder badge symbol's uneven optical margins.
+                        .offset(x: 2, y: -1)
                         .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         .opacity(isGetStartedHovered ? 0 : 1)
                     Image(nsImage: NSApp.applicationIconImage)

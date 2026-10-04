@@ -32,6 +32,9 @@ keeping the original aspect ratio. The UI loads the vector PDFs to avoid AppKit
 SVG sizing differences. Codex and Pi follow the text color, OpenCode uses the
 matching appearance asset, and Claude Code keeps its original color. Other
 keeps the native folder icon.
+OpenCode's SVG keeps the original filled paths without redundant clipping or
+luminance masks, which can disappear when its PDF is displayed by AppKit.
+The welcome folder badge has a small optical offset inside its centered tile.
 
 | Agent | Default skills folder | Environment override |
 | --- | --- | --- |
