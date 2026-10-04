@@ -1,5 +1,7 @@
 interface:
   display_name: "Sorty"
+  icon_small: "./assets/drift-sorty-skill-icon.png"
+  icon_large: "./assets/drift-sorty-skill-icon.png"
   short_description: "Organize files and import Sorty preferences"
   default_prompt: "Use $sorty to organize this folder safely."
 policy:
