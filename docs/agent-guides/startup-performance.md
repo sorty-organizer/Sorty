@@ -54,6 +54,16 @@ The loaders are idempotent. A second caller awaits the existing task. Bookmark r
 
 ## Threading rules
 
+Main-window toolbar items must contain a visible control. Omit unavailable Back
+items in the toolbar builder instead of returning `EmptyView()` from an item, and
+do not add empty items to force toolbar creation. Sentry issue
+[SORTY-MACOS-2J](https://sorty-z1.sentry.io/issues/7780212160/events/71fd2bff1f234ea4a2b5c73a7e7d4add/)
+recorded a launch crash on macOS 27.2 in `NSHostingView.updateConstraints` while
+SwiftUI replaced the native toolbar and AppKit reentered constraint layout through
+its key-view loop. Removing the empty items is a targeted mitigation; the event
+does not include the underlying exception reason, and the affected OS still needs
+runtime validation.
+
 Help > Restart Onboarding opens the skill introduction first. Continue with App
 then opens the main app and records onboarding completion, including on fresh installs.
 The skill introduction also appears once for users upgrading from app-only setup.

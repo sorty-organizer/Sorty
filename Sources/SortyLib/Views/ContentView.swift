@@ -141,13 +141,11 @@ public struct ContentView: View {
             contentView(for: appState.currentView)
                 .accessibilityIdentifier(contentAccessibilityIdentifier(for: appState.currentView))
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    EmptyView()
-                }
-
-                ToolbarItem(placement: .navigation) {
-                    if let returnRoute = appState.navigationReturnRoute,
-                       returnRoute.destination == appState.currentView {
+                // Keep unavailable actions out of the native toolbar rather
+                // than creating toolbar items whose content is empty.
+                if let returnRoute = appState.navigationReturnRoute,
+                   returnRoute.destination == appState.currentView {
+                    ToolbarItem(placement: .navigation) {
                         Button {
                             HapticFeedbackManager.shared.tap()
                             appState.clearNavigationReturnRoute()
@@ -157,9 +155,11 @@ public struct ContentView: View {
                         }
                         .accessibilityIdentifier("RelatedViewReturnButton")
                         .accessibilityLabel("Return to previous view")
-                    } else if appState.navigatedFromSettings,
-                              let prev = previousView,
-                              prev != appState.currentView {
+                    }
+                } else if appState.navigatedFromSettings,
+                          let prev = previousView,
+                          prev != appState.currentView {
+                    ToolbarItem(placement: .navigation) {
                         Button {
                             HapticFeedbackManager.shared.tap()
                             appState.navigatedFromSettings = false
@@ -169,8 +169,6 @@ public struct ContentView: View {
                         }
                         .accessibilityIdentifier("SettingsReturnButton")
                         .accessibilityLabel("Return to previous view")
-                    } else {
-                        EmptyView()
                     }
                 }
             }
