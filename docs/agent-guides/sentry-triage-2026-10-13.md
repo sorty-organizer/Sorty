@@ -28,6 +28,7 @@ The website has only three old ingestion/allowlist verification events from
 29 July, with no new unresolved errors.
 
 No issues were marked resolved or muted. No local build, tests, or computer-use
-verification was run for the small URL, open-API, and event-message changes. The
-follow-up concurrency and diagnostic changes are submitted to hosted Swift CI.
+verification was run for the small URL, open-API, and event-message changes. Hosted [Swift CI run 38349696995](https://github.com/sorty-organizer/Sorty/actions/runs/38349696995)
+passed for commit `7e7e1d99`, including security checks, test compilation, app
+build, and tests. Pre-release validation was skipped by that workflow.
 A focused privacy test covers partial-apply classification without raw details.
