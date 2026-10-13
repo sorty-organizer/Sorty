@@ -478,12 +478,12 @@ public final class ModelCatalog: ObservableObject {
                     guard refreshIDs[.openAI] == refreshID, !Task.isCancelled else {
                         throw CancellationError()
                     }
-                    ReliabilityManager.shared.capture(
-                        error: error,
-                        feature: "model_catalog",
-                        operation: "refresh_codex_models_stale_fallback"
-                    )
                     if !codexSubscriptionModels.isEmpty {
+                        ReliabilityManager.shared.capture(
+                            error: error,
+                            feature: "model_catalog",
+                            operation: "refresh_codex_models_stale_fallback"
+                        )
                         return (codexSubscriptionModels, true)
                     }
                     throw error
@@ -501,7 +501,7 @@ public final class ModelCatalog: ObservableObject {
         try ensureNetworkAllowed(url)
 
         guard let authHeader = ProviderAuthResolver.authHeader(for: .openAI, config: config) else {
-            throw ModelCatalogError.fetchFailed
+            throw AIClientError.missingAPIKey
         }
         
         var request = URLRequest(url: url)
@@ -511,8 +511,9 @@ public final class ModelCatalog: ObservableObject {
         
         let (data, response) = try await session.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            throw ModelCatalogError.fetchFailed
+        guard let httpResponse = response as? HTTPURLResponse else { throw AIClientError.invalidResponse }
+        guard httpResponse.statusCode == 200 else {
+            throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Model list request failed")
         }
         
         let models = try await Self.decodedOpenAICompatibleModels(from: data, provider: .openAI)
@@ -541,7 +542,7 @@ public final class ModelCatalog: ObservableObject {
         try ensureNetworkAllowed(url)
         
         guard let groqAPIKey = await KeychainManager.getAsync(key: AIProvider.groq.keychainKey), !groqAPIKey.isEmpty else {
-            throw ModelCatalogError.fetchFailed
+            throw AIClientError.missingAPIKey
         }
         
         var request = URLRequest(url: url)
@@ -551,8 +552,9 @@ public final class ModelCatalog: ObservableObject {
         
         let (data, response) = try await session.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            throw ModelCatalogError.fetchFailed
+        guard let httpResponse = response as? HTTPURLResponse else { throw AIClientError.invalidResponse }
+        guard httpResponse.statusCode == 200 else {
+            throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Model list request failed")
         }
         
         return try await Self.decodedOpenAICompatibleModels(from: data, provider: .groq)

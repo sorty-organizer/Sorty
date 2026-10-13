@@ -479,6 +479,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 
 @MainActor
 private enum ApplicationMover {
+    private static var isMoving = false
     private static let suggestionIdentifier = "move-to-applications"
     private static let suggestionDismissalKey = "hasDismissedMoveToApplicationsSuggestion"
     private static let onboardingCompletionKey = "hasCompletedOnboarding"
@@ -595,25 +596,25 @@ private enum ApplicationMover {
     }
 
     private static func moveAndRelaunch(from sourceURL: URL) {
+        guard !isMoving else { return }
+        isMoving = true
         let destinationURL = AppRelocationService.destinationForMove(from: sourceURL)
         // Move instead of copying so the downloaded app is not left behind,
         // then strip quarantine so the installed app launches without
         // Gatekeeper translocation (which would re-trigger this prompt).
-        let script = AppRelocationService.moveScript(source: sourceURL, destination: destinationURL)
-
-        var error: NSDictionary?
-        guard NSAppleScript(source: script)?.executeAndReturnError(&error) != nil else {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = "Sorty couldn’t be moved"
-            alert.informativeText = error?[NSAppleScript.errorMessage] as? String
-                ?? "Move Sorty to Applications in Finder, then reopen it."
-            alert.runModal()
-            return
+        Task {
+            defer { isMoving = false }
+            if let error = await AppRelocationService.move(source: sourceURL, destination: destinationURL) {
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = "Sorty couldn’t be moved"
+                alert.informativeText = error
+                alert.runModal()
+                return
+            }
+            relaunch(at: destinationURL)
+            quitImmediately()
         }
-
-        relaunch(at: destinationURL)
-        quitImmediately()
     }
 
     /// Waits for this instance to exit, then opens the moved copy. Opening

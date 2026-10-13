@@ -8,14 +8,14 @@ unresolved website issues. The recent macOS events are production events from
 | --- | --- | --- |
 | [2N](https://sorty-z1.sentry.io/issues/7783850830/) | Main thread in `setScannedFiles`, `FileItem.displayName`, URL directory detection, and `lstat`. | Give name-formatting URLs an explicit directory hint to avoid filesystem probing. Production recurrence still needs monitoring after release. |
 | [2S](https://sorty-z1.sentry.io/issues/7786696259/) | Duplicate file button blocked in synchronous `NSWorkspace.open` and Launch Services IPC. | Use the asynchronous open API. Runtime validation remains outstanding. |
-| [2Q](https://sorty-z1.sentry.io/issues/7786650905/) | Move-to-Applications HUD action executes `NSAppleScript` synchronously, waiting in administrator authorization. | Still open. Move script execution to an asynchronous subprocess while preserving authorization, error reporting, and move/relaunch ordering. Do not run the destructive move script as a diagnostic. |
+| [2Q](https://sorty-z1.sentry.io/issues/7786650905/) | Move-to-Applications HUD action executes `NSAppleScript` synchronously, waiting in administrator authorization. | Script execution now uses an asynchronous subprocess with a duplicate-move guard, preserving authorization, error reporting, and move/relaunch ordering. Runtime validation remains outstanding. Do not run the destructive move script as a diagnostic. |
 | [23](https://sorty-z1.sentry.io/issues/7751822643/) | SwiftUI display-list dictionary updates during layout. | Still open. Stack alone does not identify the expensive view or establish a safe fix. Needs a representative UI trace. |
 | [2R](https://sorty-z1.sentry.io/issues/7786668619/), [2V](https://sorty-z1.sentry.io/issues/7786771508/) | JSON response decoding failures during generation and regeneration. | Still open. Current events omit provider/model and the fixed decoding failure category. No response content should be uploaded. |
 | [2G](https://sorty-z1.sentry.io/issues/7772815841/), [2W](https://sorty-z1.sentry.io/issues/7786783210/), [2Y](https://sorty-z1.sentry.io/issues/7787118936/) | Provider HTTP 400, 404, and 413 respectively. | Still open. Need safe provider/model, request-size, and error-code diagnostics to distinguish unsupported models, invalid parameters, and request limits. Blind retries will not fix these statuses. |
 | [2F](https://sorty-z1.sentry.io/issues/7772736705/) | `NSURLErrorTimedOut` during generation. | Still open. A timeout alone does not establish a client defect. |
-| [2D](https://sorty-z1.sentry.io/issues/7770242348/), [2P](https://sorty-z1.sentry.io/issues/7784419701/) | OpenAI and Groq model-list fetch failures, without underlying status. | Still open. Preserve underlying safe failure classification rather than a generic fetch failure. |
-| [2K](https://sorty-z1.sentry.io/issues/7783847930/), [2M](https://sorty-z1.sentry.io/issues/7783848052/) | Same-time HTTP 500 during Codex stale fallback and OpenAI provider refresh. | Provider failure; retain stale models. Review duplicate reporting at the fallback boundary. |
-| [2X](https://sorty-z1.sentry.io/issues/7786796652/) | Unclassified apply failure; partial operations exist. | Still open. Preserve partial-operation history and undo behavior. Need typed failure classification before changing file operations. |
+| [2D](https://sorty-z1.sentry.io/issues/7770242348/), [2P](https://sorty-z1.sentry.io/issues/7784419701/) | OpenAI and Groq model-list fetch failures, without underlying status. | Missing credentials and HTTP statuses now retain safe typed failures. Existing events cannot recover the discarded status. |
+| [2K](https://sorty-z1.sentry.io/issues/7783847930/), [2M](https://sorty-z1.sentry.io/issues/7783848052/) | Same-time HTTP 500 during Codex stale fallback and OpenAI provider refresh. | Provider failure; stale models remain available. The fallback boundary now reports only errors it consumes; rethrown failures are reported once by the outer refresh. |
+| [2X](https://sorty-z1.sentry.io/issues/7786796652/) | Unclassified apply failure; partial operations exist. | Filesystem errors now get fixed typed causes, including partial apply, without collecting associated paths or descriptions. Partial-operation history and undo behavior are preserved. The original underlying failure is unavailable. |
 | [2T](https://sorty-z1.sentry.io/issues/7786706059/) | Informational diagnostic-report generation. | Expected telemetry, not an application error. |
 | [2J](https://sorty-z1.sentry.io/issues/7780212160/) | Previously reviewed AppKit toolbar crash; no newer event. | Existing empty-toolbar mitigation is on main. Released verification remains outstanding. |
 
@@ -28,4 +28,6 @@ The website has only three old ingestion/allowlist verification events from
 29 July, with no new unresolved errors.
 
 No issues were marked resolved or muted. No local build, tests, or computer-use
-verification was run for the small URL, open-API, and event-message changes.
+verification was run for the small URL, open-API, and event-message changes. The
+follow-up concurrency and diagnostic changes are submitted to hosted Swift CI.
+A focused privacy test covers partial-apply classification without raw details.

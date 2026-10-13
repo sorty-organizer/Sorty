@@ -64,6 +64,30 @@ public enum AppRelocationService {
         """
     }
 
+    /// Authorization can wait for user input; never block the app's main thread.
+    public static func move(source: URL, destination: URL) async -> String? {
+        let script = moveScript(source: source, destination: destination)
+        return await Task.detached(priority: .userInitiated) { () -> String? in
+            let process = Process()
+            let errors = Pipe()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript", isDirectory: false)
+            process.arguments = ["-e", script]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = errors
+            do {
+                try process.run()
+                let errorData = errors.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                guard process.terminationStatus != 0 else { return nil }
+                let message = String(decoding: errorData, as: UTF8.self)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return message.isEmpty ? "Move Sorty to Applications in Finder, then reopen it." : message
+            } catch {
+                return error.localizedDescription
+            }
+        }.value
+    }
+
     /// Waits for this instance to exit, then opens the moved copy. Opening
     /// while the old instance is still running would just re-activate it.
     public static func relaunch(at destinationURL: URL) {

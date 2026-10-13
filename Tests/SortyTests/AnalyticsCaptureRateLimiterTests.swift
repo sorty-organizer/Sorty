@@ -87,4 +87,13 @@ final class ReliabilityErrorDiagnosticsTests: XCTestCase {
         XCTAssertEqual(ReliabilityManager.classify(failure).cause, "plan_directory_mismatch")
         XCTAssertFalse(String(describing: ReliabilityManager.errorDiagnostics(failure)).contains("/private/"))
     }
+
+    func testPartialApplyFailureIsClassifiedWithoutPrivateDetails() {
+        let failure = FileSystemError.partialApplyFailure(
+            operations: [], underlyingDescription: "private filename and provider response"
+        )
+        XCTAssertEqual(ReliabilityManager.classify(failure).cause, "partial_apply_failure")
+        XCTAssertEqual(ReliabilityManager.classify(failure).category, "filesystem")
+        XCTAssertFalse(String(describing: ReliabilityManager.errorDiagnostics(failure)).contains("private"))
+    }
 }

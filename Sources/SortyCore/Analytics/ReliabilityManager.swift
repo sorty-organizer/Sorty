@@ -7,6 +7,7 @@
 
 import Foundation
 @preconcurrency import Sentry
+import SortyFS
 
 public enum BugReportArea: String, CaseIterable, Sendable {
     case organize
@@ -556,6 +557,24 @@ public final class ReliabilityManager {
         }
         if error is DecodingError {
             return .init(category: "validation", cause: "decoding_failed", type: "decoding_error")
+        }
+
+        if let fileError = error as? FileSystemError {
+            let cause: String
+            switch fileError {
+            case .fileNotFound: cause = "file_not_found"
+            case .permissionDenied: cause = "access_denied"
+            case .diskFull: cause = "disk_full"
+            case .readOnlyFileSystem: cause = "read_only_filesystem"
+            case .quotaExceeded: cause = "quota_exceeded"
+            case .uniqueNameExhausted: cause = "unique_name_exhausted"
+            case .partialFailure: cause = "partial_failure"
+            case .partialApplyFailure: cause = "partial_apply_failure"
+            case .preValidationFailed: cause = "prevalidation_failed"
+            case .crossVolumeCopyVerificationFailed: cause = "copy_verification_failed"
+            case .destinationEscapesBaseDirectory: cause = "destination_outside_base"
+            }
+            return .init(category: "filesystem", cause: cause, type: "filesystem_error")
         }
 
         let nsError = error as NSError
