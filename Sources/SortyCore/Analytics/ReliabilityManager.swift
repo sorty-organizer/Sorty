@@ -236,6 +236,7 @@ public final class ReliabilityManager {
         )
 
         let event = Event(error: sanitizedError as NSError)
+        event.message = SentryMessage(formatted: "\(safeFeature).\(safeOperation): \(classification.category).\(classification.cause)")
         event.extra = Self.errorDiagnostics(error)
         switch severity {
         case "warning": event.level = .warning

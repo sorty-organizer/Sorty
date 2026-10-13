@@ -1864,7 +1864,7 @@ struct UnifiedFileDetailRow: View {
     }
 
     private func openFile() {
-        _ = NSWorkspace.shared.open(fileURL)
+        NSWorkspace.shared.open(fileURL, configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
     }
 
     private func revealInFinder() {

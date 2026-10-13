@@ -118,7 +118,8 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
     }
 
     public var displayName: String {
-        let url = URL(fileURLWithPath: path)
+        // Name formatting must not probe the filesystem during scan/UI updates.
+        let url = URL(fileURLWithPath: path, isDirectory: false)
 
         let baseName = name.isEmpty
             ? url.deletingPathExtension().lastPathComponent
