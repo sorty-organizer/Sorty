@@ -765,6 +765,25 @@ struct DuplicatesHeaderNew: View {
         manager.isScanning || manager.state == .preparing
     }
 
+    /// Path-keyed folder icon cache. The header re-renders on every scan
+    /// progress tick (twice, through `ViewThatFits`), so an uncached
+    /// NSWorkspace lookup would hand AppKit a new image each time.
+    nonisolated(unsafe) private static let folderIconCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 8
+        return cache
+    }()
+
+    private static func folderIcon(for path: String) -> NSImage {
+        let key = path as NSString
+        if let cached = folderIconCache.object(forKey: key) {
+            return cached
+        }
+        let icon = NSWorkspace.shared.icon(forFile: path)
+        folderIconCache.setObject(icon, forKey: key)
+        return icon
+    }
+
     private func headerLayout(spacing: CGFloat, showsFullControls: Bool) -> some View {
         HStack(spacing: spacing) {
             // Left Side: Title & Target Folder
@@ -788,7 +807,7 @@ struct DuplicatesHeaderNew: View {
                         Button(action: onSelectDirectory) {
                             HStack(spacing: 4) {
                                 AppKitImageView(
-                                    image: NSWorkspace.shared.icon(forFile: dir.path),
+                                    image: Self.folderIcon(for: dir.path),
                                     size: CGSize(width: 16, height: 16)
                                 )
                                 .frame(width: 16, height: 16)

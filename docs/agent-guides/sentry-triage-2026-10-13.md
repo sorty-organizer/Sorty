@@ -32,3 +32,26 @@ verification was run for the small URL, open-API, and event-message changes. Hos
 passed for commit `7e7e1d99`, including security checks, test compilation, app
 build, and tests. Pre-release validation was skipped by that workflow.
 A focused privacy test covers partial-apply classification without raw details.
+
+## Follow-up, 15 October 2026
+
+Fifteen new hang issues ([2Z](https://sorty-z1.sentry.io/issues/7793427679/)
+through [3B](https://sorty-z1.sentry.io/issues/7794032537/), plus recurrences of
+[Q](https://sorty-z1.sentry.io/issues/7646194145/), [Y](https://sorty-z1.sentry.io/issues/7648829635/),
+and [23](https://sorty-z1.sentry.io/issues/7751822643/)) came from one 1.3.0
+session on an 8 GB MacBook Air with about 150 MB free memory. Every event shows
+two duplicate-scan workers in `computeSampleFingerprintResult` reads while the
+main thread is doing ordinary SwiftUI work in `DuplicatesView`,
+`DuplicatesHeaderNew`, `ScanProgressViewNew`, `AppKitImageView.updateNSView`,
+and window chrome. The main thread is slow, not blocked by one bad call.
+
+- `DuplicatesHeaderNew` called `NSWorkspace.icon(forFile:)` in its body. Each
+  4 Hz progress tick evaluated it twice through `ViewThatFits`, and the new
+  image identity forced `AppKitImageView` to reassign its image. The icon is now
+  cached by path.
+- Hash reads now set `F_NOCACHE`, so scanning large folders does not fill the
+  unified buffer cache and evict app pages under memory pressure.
+
+Recurrence needs monitoring after the next release. The generic SwiftUI frames
+in these issues will group under different titles, so judge by Duplicates-scan
+sessions on low-memory Macs rather than individual issue IDs.

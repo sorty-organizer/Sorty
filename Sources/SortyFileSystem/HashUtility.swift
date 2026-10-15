@@ -93,6 +93,11 @@ public enum HashUtility {
             )
         }
 
+        // Hash reads touch each byte once. Bypassing the unified buffer cache
+        // keeps large scans from evicting the app's own pages on low-memory
+        // Macs, which surfaced as main-thread hangs during duplicate scans.
+        _ = fcntl(descriptor, F_NOCACHE, 1)
+
         return .success(FileHandle(fileDescriptor: descriptor, closeOnDealloc: true))
     }
 
