@@ -109,6 +109,10 @@ public struct ExtensionCommunication {
     /// each other's updates.
     private static let pbsDomainLock = NSLock()
 
+    // NSWorkspace.setIcon uses process-wide Carbon resource maps. Serialize icon
+    // rendering and writes across workflow installs and appearance refreshes.
+    private static let quickActionIconLock = NSLock()
+
     // MARK: - URL Scheme Handling
 
     /// Handle incoming URL schemes: sorty://organize?path=/path/to/folder
@@ -1469,6 +1473,9 @@ public struct ExtensionCommunication {
         contentsDir: URL,
         style: QuickActionIconStyle = .organize
     ) {
+        quickActionIconLock.lock()
+        defer { quickActionIconLock.unlock() }
+
         let iconImage = quickActionIconImage(style: style)
 
         // Use the action-specific mascot instead of Automator's default wand icon.
