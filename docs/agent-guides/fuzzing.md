@@ -8,9 +8,9 @@ bash scripts/fuzz.sh --seed 42 --iterations 100000
 bash scripts/fuzz.sh --iterations 0  # Fixed boundary corpus only
 ```
 
-The runner compiles the actual `FilenameSanitizer`, `StorageLocationPathResolver`,
-and `RenameRuleEngine` sources with Swift 6. It uses a temporary directory for
-its executable and compiler cache, then removes both on exit. It does not launch
+The runner compiles the actual filesystem and model modules, `ResponseParser`,
+and the shared JSON extractor with Swift 6. It uses a temporary directory for
+its executable, libraries, and compiler cache, then removes them on exit. It does not launch
 Sorty, fetch package dependencies, call AI providers, or modify user files.
 
 ## Contracts
@@ -24,12 +24,21 @@ Sorty, fetch package dependencies, call AI providers, or modify user files.
   sibling prefixes and traversal. These are lexical checks, not symlink checks.
 - Literal rename rules match standard-library replacement behavior. Invalid
   regexes leave filenames intact, and chained rules apply captures in order.
+- Complete and partial organization plans account for every input exactly once.
+  Qualified paths select the correct file even when basenames collide, while
+  ambiguous bare names remain unresolved. Exact names outrank stem aliases.
+- Compact IDs select their indexed input. Partial recovery rejects boolean and
+  fractional IDs and stops at metadata rather than treating its numbers as IDs.
+- Streaming recovery decodes escaped filenames, and organize mode discards
+  rename suggestions.
+- JSON extraction handles reversed delimiters without crashing, and quoted
+  brackets or escaped quotes do not split otherwise valid objects and arrays.
 
 This is a seeded mutation and property fuzzer, not a coverage-guided engine.
 It combines a fixed corpus with mutations involving Unicode, combining marks,
 emoji, separators, whitespace, dots, and byte-length boundaries. Regex patterns
 are bounded fixtures, not arbitrary patterns that could stall Foundation.
-It does not cover AI response parsing, filesystem apply/undo, concurrency, or UI.
+It does not cover network providers, filesystem apply/undo, concurrency, or UI.
 
 ## Failures and replay
 
@@ -63,3 +72,34 @@ The first run against the original sanitizer failed before these repairs:
 - Removing an extension could expose whitespace or another extension, causing
   preview and apply to disagree. Extensionless targets now remove the complete
   dotted suffix, and final trimming runs after adjustment and truncation.
+
+## Parser findings
+
+The parser cases failed against the original implementation before repair:
+
+- A qualified path could resolve through its basename before checking the
+  relative-path index. Duplicate basenames and stem aliases also selected the
+  first scanned file. Lookup now prioritizes qualified paths and exact names,
+  and leaves ambiguous references unresolved with the existing review warnings.
+- Streaming ID recovery coerced booleans and fractions through `NSNumber`, or
+  scraped numbers from later metadata. Completed lists now decode integers;
+  unfinished lists stop at the first invalid token. Partial rename IDs require
+  a complete integer token too.
+- Partial string arrays returned raw JSON escapes, so filenames containing
+  escaped slashes, quotes, or backslashes were lost. Recovery now decodes string
+  literals, including folder names. `./` references are also tried before
+  interpreting backslashes as separators.
+
+The extractor lives in `LLMJSONExtractor.swift` so this runner compiles the
+same implementation as provider requests without linking the networking code
+that previously shared its file. SwiftPM discovers it in the existing SortyAI
+target; the Xcode app links that package product.
+
+The extractor check also reproduced a process crash for `] [` and `} {`.
+Fallback extraction now searches for a closing delimiter after its opening
+delimiter, rather than constructing an invalid Swift range.
+
+For the parser repair, seed 42 with 100 mutations failed seven contracts against
+the original parser. The repaired implementation passed 70,006 parser cases and
+5,004 extractor cases with 5,000 mutations of that seed. These are local
+diagnostics, not a claim that the full hosted suite passed.

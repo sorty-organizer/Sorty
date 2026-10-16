@@ -1,4 +1,5 @@
 import Foundation
+import SortyFileSystem
 
 // SplitMix64 keeps a reported seed reproducible across Swift versions.
 struct Generator {
@@ -128,7 +129,9 @@ for _ in 0..<iterations {
 }
 
 print("seed=\(seed) iterations=\(iterations) filenameCases=\(checkedCases) failedChecks=\(failedCases) propertiesFailed=\(failures.count)")
-if !failures.isEmpty {
+let parserFailures = fuzzParser(seed: seed, iterations: iterations)
+let extractorFailures = fuzzJSONExtractor(seed: seed, iterations: iterations)
+if !failures.isEmpty || parserFailures > 0 || extractorFailures > 0 {
     print("Replay: bash scripts/fuzz.sh --seed \(seed) --iterations \(iterations)")
     exit(1)
 }

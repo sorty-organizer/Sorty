@@ -14,74 +14,75 @@ struct ResponseParser {
 
     private struct FileLookup {
         let files: [FileItem]
-        private let exactNames: [String: FileItem]
-        private let foldedNames: [String: FileItem]
-        private let relativePaths: [String: FileItem]
+        private enum Match {
+            case unique(FileItem)
+            case ambiguous
+
+            var file: FileItem? {
+                if case .unique(let file) = self { return file }
+                return nil
+            }
+        }
+
+        private let exactNames: [String: Match]
+        private let foldedNames: [String: Match]
+        private let exactStems: [String: Match]
+        private let foldedStems: [String: Match]
 
         init(files: [FileItem]) {
             self.files = files
-            var exactNames: [String: FileItem] = [:]
-            var foldedNames: [String: FileItem] = [:]
-            var relativePaths: [String: FileItem] = [:]
-            exactNames.reserveCapacity(files.count * 2)
-            foldedNames.reserveCapacity(files.count * 2)
-            relativePaths.reserveCapacity(files.count)
+            var exactNames: [String: Match] = [:]
+            var foldedNames: [String: Match] = [:]
+            var exactStems: [String: Match] = [:]
+            var foldedStems: [String: Match] = [:]
+            exactNames.reserveCapacity(files.count * 3)
+            foldedNames.reserveCapacity(files.count * 3)
+
+            func insert(_ key: String, file: FileItem, into index: inout [String: Match]) {
+                guard !key.isEmpty else { return }
+                if let existing = index[key] {
+                    if existing.file?.id != file.id { index[key] = .ambiguous }
+                } else {
+                    index[key] = .unique(file)
+                }
+            }
 
             for file in files {
-                if exactNames[file.displayName] == nil {
-                    exactNames[file.displayName] = file
+                // Full names and paths outrank stem aliases. Keep collisions
+                // ambiguous so inventory order never chooses a move target.
+                for key in [file.displayName, file.path, file.relativePath ?? ""] {
+                    insert(key, file: file, into: &exactNames)
+                    insert(key.lowercased(), file: file, into: &foldedNames)
                 }
-                if exactNames[file.name] == nil {
-                    exactNames[file.name] = file
-                }
-
-                let displayKey = file.displayName.lowercased()
-                let nameKey = file.name.lowercased()
-                if foldedNames[displayKey] == nil {
-                    foldedNames[displayKey] = file
-                }
-                if foldedNames[nameKey] == nil {
-                    foldedNames[nameKey] = file
-                }
-
-                // Relative-path index so qualified references ("docs/report.pdf")
-                // resolve in O(1) without scanning every scanned file per lookup.
-                if let relative = file.relativePath?.lowercased(), !relative.isEmpty {
-                    if relativePaths[relative] == nil {
-                        relativePaths[relative] = file
-                    }
-                    let lastComponent = URL(fileURLWithPath: relative).lastPathComponent.lowercased()
-                    if !lastComponent.isEmpty, relativePaths[lastComponent] == nil {
-                        relativePaths[lastComponent] = file
-                    }
-                }
+                insert(file.name, file: file, into: &exactStems)
+                insert(file.name.lowercased(), file: file, into: &foldedStems)
             }
 
             self.exactNames = exactNames
             self.foldedNames = foldedNames
-            self.relativePaths = relativePaths
+            self.exactStems = exactStems
+            self.foldedStems = foldedStems
         }
 
         func resolve(_ filename: String) -> FileItem? {
             let candidates = ResponseParser.normalizedFilenameCandidates(from: filename)
             guard !candidates.isEmpty else { return nil }
 
-            for candidate in candidates {
-                if let exact = exactNames[candidate] {
-                    return exact
+            // Try every qualified spelling before basename fallback, including
+            // case-folded and percent-decoded paths.
+            for group in [candidates.filter { $0.contains("/") }, candidates.filter { !$0.contains("/") }] {
+                for candidate in group {
+                    if let match = exactNames[candidate] { return match.file }
+                }
+                for candidate in group {
+                    if let match = foldedNames[candidate.lowercased()] { return match.file }
                 }
             }
             for candidate in candidates {
-                if let folded = foldedNames[candidate.lowercased()] {
-                    return folded
-                }
+                if let match = exactStems[candidate] { return match.file }
             }
-            // Relative-path hits cover qualified references exactly, so the
-            // O(files) scan below only runs when the dictionaries missed.
             for candidate in candidates {
-                if let relativeHit = relativePaths[candidate.lowercased()] {
-                    return relativeHit
-                }
+                if let match = foldedStems[candidate.lowercased()] { return match.file }
             }
 
             // Suffix/path match is the only fallback: qualified paths bind to
@@ -1010,6 +1011,9 @@ struct ResponseParser {
 
         let strippedQuotes = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
         appendCandidate(strippedQuotes)
+        if strippedQuotes.hasPrefix("./") {
+            appendCandidate(String(strippedQuotes.dropFirst(2)))
+        }
 
         let slashNormalized = strippedQuotes.replacingOccurrences(of: "\\", with: "/")
         appendCandidate(slashNormalized)
@@ -1272,11 +1276,12 @@ struct ResponseParser {
             return value
         }
 
-        let pattern = "\\\"\(NSRegularExpression.escapedPattern(for: key))\\\"\\s*:\\s*\\\"([^\\\"]+)\\\""
+        let pattern = #""\#(NSRegularExpression.escapedPattern(for: key))"\s*:\s*("(?:\\.|[^"\\])*")"#
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(in: object, range: NSRange(object.startIndex..., in: object)),
-              let valueRange = Range(match.range(at: 1), in: object) else { return nil }
-        return String(object[valueRange])
+              let valueRange = Range(match.range(at: 1), in: object),
+              let data = String(object[valueRange]).data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(String.self, from: data)
     }
 
     private static func fileNames(in object: String) -> [String] {
@@ -1329,7 +1334,11 @@ struct ResponseParser {
                     isEscaping = true
                 } else if character == "\"" {
                     if arrayDepth == 1, objectDepth == 0 {
-                        values.append(String(arrayRemainder[start..<index]))
+                        let literal = String(arrayRemainder[arrayRemainder.index(before: start)...index])
+                        if let data = literal.data(using: .utf8),
+                           let filename = try? JSONDecoder().decode(String.self, from: data) {
+                            values.append(filename)
+                        }
                     }
                     stringStart = nil
                 }
@@ -1358,23 +1367,38 @@ struct ResponseParser {
     private static func integerValues(forKey key: String, in object: String) -> [Int] {
         if let payload = arrayPayload(forKey: key, in: object),
            let data = payload.data(using: .utf8),
-           let values = try? JSONSerialization.jsonObject(with: data) as? [Any] {
-            return values.compactMap { ($0 as? NSNumber)?.intValue }
+           let values = try? JSONDecoder().decode(LossyArray<Int>.self, from: data) {
+            return values.elements
         }
 
-        guard let remainder = arrayRemainder(forKey: key, in: object),
-              let regex = try? NSRegularExpression(pattern: #"\d+"#) else { return [] }
-        return regex.matches(in: remainder, range: NSRange(remainder.startIndex..., in: remainder)).compactMap { match in
-            guard let range = Range(match.range, in: remainder) else { return nil }
-            return Int(remainder[range])
+        guard let remainder = arrayRemainder(forKey: key, in: object) else { return [] }
+        var input = remainder.dropFirst() // Opening bracket.
+        var values: [Int] = []
+        while true {
+            input = input.drop(while: { $0.isWhitespace })
+            let digits = input.hasPrefix("-") ? input.dropFirst() : input
+            let number = digits.prefix(while: { $0.isASCII && $0.isNumber })
+            guard !number.isEmpty else { break }
+            let tokenLength = number.count + (input.hasPrefix("-") ? 1 : 0)
+            let tail = input.dropFirst(tokenLength).drop(while: { $0.isWhitespace })
+            // A fractional/exponent token, quoted metadata, or another field
+            // ends recovery. Never scrape unrelated numbers from the remainder.
+            guard tail.isEmpty || tail.first == "," || tail.first == "]" else { break }
+            if let value = Int(input.prefix(tokenLength)) { values.append(value) }
+            guard tail.first == "," else { break }
+            input = tail.dropFirst()
         }
+        return values
     }
 
     private static func renameSuggestionFileIDs(in object: String) -> [Int] {
-        guard let marker = object.range(of: "\"rename_suggestions\""),
-              let arrayStart = arrayStart(after: marker.upperBound, in: object),
-              let regex = try? NSRegularExpression(pattern: #""file_id"\s*:\s*(\d+)"#) else { return [] }
-        let remainder = String(object[arrayStart...])
+        if let payload = arrayPayload(forKey: "rename_suggestions", in: object),
+           let data = payload.data(using: .utf8),
+           let renames = try? JSONDecoder().decode(LossyArray<RenameSuggestionResponse>.self, from: data) {
+            return renames.elements.map(\.fileID)
+        }
+        guard let remainder = arrayRemainder(forKey: "rename_suggestions", in: object),
+              let regex = try? NSRegularExpression(pattern: #""file_id"\s*:\s*(-?\d+)(?=\s*[,}\]]|\s*$)"#) else { return [] }
         return regex.matches(in: remainder, range: NSRange(remainder.startIndex..., in: remainder)).compactMap { match in
             guard let range = Range(match.range(at: 1), in: remainder) else { return nil }
             return Int(remainder[range])

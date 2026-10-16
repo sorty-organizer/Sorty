@@ -70,7 +70,7 @@ jobs:
       - name: Check source cache invalidation
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -p 'test_*cache.py'
 
-      - name: Fuzz filename, path, and rename contracts
+      - name: Fuzz filenames, paths, rename rules, and AI responses
         run: bash scripts/fuzz.sh --seed 357813081177 --iterations 20000
 
       - name: Configure test Keychain
