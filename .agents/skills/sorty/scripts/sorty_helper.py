@@ -460,6 +460,51 @@ def validate_plan(plan_path: Path) -> dict[str, Any]:
     }
 
 
+def build_plan(draft_path: Path, scan_path: Path, output: Path) -> dict[str, Any]:
+    """Complete a draft plan with snapshots from a saved scan, write it, and validate it.
+
+    The draft uses the plan format without `expected` fields. Sources must appear in
+    the scan, so hidden, excluded, or unscanned items cannot be planned by accident.
+    """
+    draft = load_plan(draft_path)
+    try:
+        inventory = json.loads(scan_path.read_text(encoding="utf-8"))
+        scan_root = canonical(Path(inventory["source_root"]))
+        snapshots = {item["path"]: item["snapshot"] for item in inventory["items"]}
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise SortyError(f"cannot read scan output: {error}") from error
+    root = canonical(Path(draft.get("source_root") or scan_root))
+    if root != scan_root:
+        raise SortyError(f"draft source_root {root} does not match scan root {scan_root}")
+    operations = draft.get("operations")
+    if not isinstance(operations, list):
+        raise SortyError("operations must be an array")
+    for index, operation in enumerate(operations):
+        if not isinstance(operation, dict) or not isinstance(operation.get("source"), str):
+            raise SortyError(f"operation {index} must contain a string source")
+        source = Path(operation["source"])
+        relative = source.relative_to(root).as_posix() if source.is_absolute() and is_within(source, root) else source.as_posix()
+        if relative not in snapshots:
+            raise SortyError(f"operation {index} source is not in the scan (hidden, excluded, or not scanned): {operation['source']}")
+        operation["expected"] = snapshots[relative]
+    exclusions = list(dict.fromkeys([*inventory.get("exclusions", []), *draft.get("exclusions", [])]))
+    plan = {
+        "version": PLAN_VERSION,
+        "source_root": str(root),
+        "mode": draft.get("mode"),
+        "operations": operations,
+        "tags": draft.get("tags", []),
+        "exclusions": exclusions,
+        "duplicate_groups": draft.get("duplicate_groups", []),
+        "unorganized": draft.get("unorganized", []),
+        "warnings": draft.get("warnings", []),
+    }
+    output = canonical(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {**validate_plan(output), "plan": str(output)}
+
+
 def append_journal(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
@@ -595,6 +640,10 @@ def build_parser() -> argparse.ArgumentParser:
         subparser.add_argument("--include-hidden", action="store_true")
         if name == "scan":
             subparser.add_argument("--expand-packages", action="store_true")
+    plan_parser = subparsers.add_parser("plan")
+    plan_parser.add_argument("draft", type=Path)
+    plan_parser.add_argument("--scan", type=Path, required=True)
+    plan_parser.add_argument("--output", type=Path, required=True)
     validate = subparsers.add_parser("validate")
     validate.add_argument("plan", type=Path)
     apply_parser = subparsers.add_parser("apply")
@@ -612,8 +661,11 @@ def main() -> int:
             result = scan(arguments.root, arguments.exclude, arguments.include_hidden, arguments.expand_packages)
         elif arguments.command == "duplicates":
             result = exact_duplicates(arguments.root, arguments.exclude, arguments.include_hidden)
-        elif arguments.command == "validate":
-            result = validate_plan(arguments.plan)
+        elif arguments.command in ("plan", "validate"):
+            if arguments.command == "plan":
+                result = build_plan(arguments.draft, arguments.scan, arguments.output)
+            else:
+                result = validate_plan(arguments.plan)
             emit(result)
             return 0 if result["valid"] else 2
         elif arguments.command == "apply":

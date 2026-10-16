@@ -275,6 +275,28 @@ class SortyHelperTests(unittest.TestCase):
         statuses = [row.get("status") for row in rows if row.get("record") == "operation"]
         self.assertEqual(statuses, ["pending", "completed", "pending"])
 
+    def test_plan_fills_scan_snapshots_and_refuses_unscanned_sources(self):
+        (self.root / "notes.txt").write_text("notes", encoding="utf-8")
+        (self.root / "Keep").mkdir()
+        (self.root / "Keep" / "private.txt").write_text("private", encoding="utf-8")
+        scan = self.base / "scan.json"
+        scan.write_text(json.dumps(sorty_helper.scan(self.root, ["Keep/**"], False, False)), encoding="utf-8")
+        draft = self.base / "draft.json"
+        output = self.base / "plan.json"
+        draft.write_text(json.dumps({"mode": "organize", "operations": [
+            {"source": "notes.txt", "destination": "Docs/notes.txt"},
+        ]}), encoding="utf-8")
+        result = sorty_helper.build_plan(draft, scan, output)
+        self.assertTrue(result["valid"], result["errors"])
+        plan = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(plan["exclusions"], ["Keep/**"])
+        self.assertEqual(plan["operations"][0]["expected"], sorty_helper.source_snapshot(self.root / "notes.txt"))
+        draft.write_text(json.dumps({"mode": "organize", "operations": [
+            {"source": "Keep/private.txt", "destination": "private.txt"},
+        ]}), encoding="utf-8")
+        with self.assertRaisesRegex(sorty_helper.SortyError, "not in the scan"):
+            sorty_helper.build_plan(draft, scan, output)
+
 
 if __name__ == "__main__":
     unittest.main()
