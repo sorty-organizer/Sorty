@@ -353,7 +353,9 @@ task when finishing so it cannot restart the celebration during dismissal.
 
 Keep the skill intro's app icon in its retained image/blur adapter. Its Gaussian
 radius still animates from 0 to 4 over 450 ms while SwiftUI owns the existing
-slide and fade. Reduce Motion and Reduce Transparency keep that blur disabled.
+slide and fade. Set the final radius through the layer's filter key path so
+the blur remains after the animation ends; CALayer copies assigned filters.
+Reduce Motion and Reduce Transparency keep that blur disabled.
 The original intro glow and completion glow ring rasterize their static blur
 artwork at the window backing scale, with the ring sampled at its largest pulse
 size. Unchanged layout bounds must not rebuild scan/ripple paths or discard the

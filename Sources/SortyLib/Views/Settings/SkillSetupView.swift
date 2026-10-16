@@ -1483,11 +1483,13 @@ private final class SkillIntroductionAppIconView: NSView {
         lastAnimatesBlur = animated
         let radius: Float = isBlurred ? 4 : 0
         let keyPath = "filters.skillIntroductionBlur.inputRadius"
-        let currentRadius = blurContainer.presentation()?.value(forKeyPath: keyPath) ?? blurFilter.radius
+        let currentRadius = blurContainer.presentation()?.value(forKeyPath: keyPath)
+            ?? blurContainer.value(forKeyPath: keyPath)
         blurContainer.removeAnimation(forKey: "skillIntroductionBlur")
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        blurFilter.radius = radius
+        // CALayer copies its filters; persist the endpoint on the layer's copy.
+        blurContainer.setValue(radius, forKeyPath: keyPath)
         CATransaction.commit()
         if animated && hadPreviousState {
             let animation = CABasicAnimation(keyPath: keyPath)
