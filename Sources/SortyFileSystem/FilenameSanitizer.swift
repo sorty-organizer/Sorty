@@ -81,52 +81,57 @@ public struct FilenameSanitizer {
         let wasExtensionOnlyBeforeTrim = isExtensionOnlyToken(whitespaceTrimmedOnly)
 
         let trimmedName = workingName.trimmingCharacters(in: trimCharacterSet)
-        let hadTrimming = trimmedName != workingName
+        var hadTrimming = trimmedName != workingName
         workingName = trimmedName
 
         var isEmpty = workingName.isEmpty
         var isReservedName = wasReservedBeforeTrim || (workingName == "." || workingName == "..")
         var isExtensionOnly = wasExtensionOnlyBeforeTrim
+        let desiredExtension = normalizedExtension(originalExtension)
 
         if !isEmpty && !isReservedName && enforceExtension {
-            let desiredExtension = normalizedExtension(originalExtension)
-            let existingExtension = normalizedExtension((workingName as NSString).pathExtension)
             var baseName = (workingName as NSString).deletingPathExtension
 
             if desiredExtension.isEmpty {
-                if !existingExtension.isEmpty {
+                // Strip the complete suffix so preview and apply return the same name.
+                if let dot = workingName.firstIndex(of: ".") {
                     extensionAdjusted = true
-                    workingName = baseName
+                    workingName = String(workingName[..<dot])
                 }
             } else {
                 if baseName.isEmpty {
                     baseName = workingName
                 }
-                if existingExtension != desiredExtension {
+                if !workingName.lowercased().hasSuffix(".\(desiredExtension)") {
                     extensionAdjusted = true
                     workingName = baseName.isEmpty ? "untitled.\(desiredExtension)" : "\(baseName).\(desiredExtension)"
-                } else if existingExtension.isEmpty {
-                    extensionAdjusted = true
-                    workingName = "\(baseName).\(desiredExtension)"
                 }
             }
         }
 
         if !workingName.isEmpty {
             let baseName = (workingName as NSString).deletingPathExtension
-            isExtensionOnly = isExtensionOnly || baseName.isEmpty
+            isExtensionOnly = isExtensionOnly || baseName.isEmpty || isExtensionOnlyToken(workingName)
         }
 
         if utf8ByteCount(workingName) > maxFilenameBytes {
-            workingName = truncateToMaxBytes(workingName, maxBytes: maxFilenameBytes)
+            workingName = truncateToMaxBytes(
+                workingName,
+                maxBytes: maxFilenameBytes,
+                preservingExtension: enforceExtension ? desiredExtension : (workingName as NSString).pathExtension
+            )
             exceededMaxBytes = true
         }
 
+        // Removing an extension or truncating can expose trailing whitespace/dots.
+        let finalTrimmedName = workingName.trimmingCharacters(in: trimCharacterSet)
+        hadTrimming = hadTrimming || finalTrimmedName != workingName
+        workingName = finalTrimmedName
         isEmpty = workingName.isEmpty
         isReservedName = isReservedName || (workingName == "." || workingName == "..")
         if !workingName.isEmpty {
             let baseName = (workingName as NSString).deletingPathExtension
-            isExtensionOnly = isExtensionOnly || baseName.isEmpty
+            isExtensionOnly = isExtensionOnly || baseName.isEmpty || isExtensionOnlyToken(workingName)
         }
 
         let sanitized: String? = (isEmpty || isReservedName || isExtensionOnly) ? nil : workingName
@@ -151,9 +156,8 @@ public struct FilenameSanitizer {
     }
 
     private static func normalizedExtension(_ value: String?) -> String {
-        (value ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        replaceInvalidCharacters(in: value ?? "").value
+            .trimmingCharacters(in: trimCharacterSet)
             .lowercased()
     }
 
@@ -174,21 +178,22 @@ public struct FilenameSanitizer {
         return (String(output), didReplace)
     }
 
-    private static func truncateToMaxBytes(_ value: String, maxBytes: Int) -> String {
+    private static func truncateToMaxBytes(_ value: String, maxBytes: Int, preservingExtension ext: String) -> String {
         guard utf8ByteCount(value) > maxBytes else { return value }
 
-        let currentExt = normalizedExtension((value as NSString).pathExtension)
-        let suffix = currentExt.isEmpty ? "" : ".\(currentExt)"
+        let extensionRange = ext.isEmpty ? nil : value.range(of: ".\(ext)", options: [.caseInsensitive, .anchored, .backwards])
+        let suffix = extensionRange.map { String(value[$0]) } ?? ""
         let suffixBytes = utf8ByteCount(suffix)
 
-        // If suffix alone exceeds limit (unlikely), hard-truncate by scalar.
+        // Reject names whose extension leaves no room for a basename.
         if suffixBytes >= maxBytes {
-            return truncateWithoutBreakingUnicode(value, maxBytes: maxBytes)
+            return ""
         }
 
-        let baseName = (value as NSString).deletingPathExtension
+        let baseName = extensionRange.map { String(value[..<$0.lowerBound]) } ?? value
         let allowedBaseBytes = maxBytes - suffixBytes
         let truncatedBase = truncateWithoutBreakingUnicode(baseName, maxBytes: allowedBaseBytes)
+        guard !truncatedBase.isEmpty else { return "" }
         return truncatedBase + suffix
     }
 

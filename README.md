@@ -346,6 +346,11 @@ swift test --disable-sandbox --filter SortyTests.TestClass/testMethod
 
 `make ci`, `make test`, and `make test-full` still exist for local troubleshooting, but they do not replace Blacksmith checks.
 
+Run the reproducible filename, path, and rename-rule fuzzer with
+`bash scripts/fuzz.sh --seed 357813081177 --iterations 20000`.
+It compiles the production leaf sources without fetching app dependencies or
+launching Sorty. See [Fuzzing](docs/agent-guides/fuzzing.md) for coverage and replay.
+
 Use `make daily` for everyday use or startup profiling. `make now` prioritizes
 compile speed and leaves an unoptimized Debug app; `make hot` also embeds the
 InjectionLite runtime. All three replace `releases/Sorty.app`, so run `make daily`
