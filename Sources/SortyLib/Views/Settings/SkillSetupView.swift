@@ -401,22 +401,28 @@ struct SkillSetupView: View {
         )
     }
 
-    /// Prepare the skill soundtrack in the same task that owns its visual cues.
+    /// Prepare the skill soundtrack without blocking the window's first frame.
     private func prepareIntroSound() async {
-        guard introAudioPlayer == nil,
-              let soundURL = Bundle.main.url(forResource: "SkillOnboardingSound", withExtension: "m4a")
-                ?? SortyResources.urlForCopiedResource(named: "SkillOnboardingSound.m4a")
-        else { return }
+        guard introAudioPlayer == nil else { return }
+        let player = await Self.makeIntroPlayer()
+        guard !Task.isCancelled else { return }
+        introAudioPlayer = player
+    }
 
-        let data = await Task.detached(priority: .utility) {
-            try? Data(contentsOf: soundURL, options: .mappedIfSafe)
-        }.value
-        guard !Task.isCancelled, let data,
-              let player = try? AVAudioPlayer(data: data) else { return }
+    /// Transfers the prepared player to the main actor before playback begins.
+    @concurrent
+    private static func makeIntroPlayer() async -> sending AVAudioPlayer? {
+        guard !Task.isCancelled,
+              let soundURL = Bundle.main.url(forResource: "SkillOnboardingSound", withExtension: "m4a")
+                ?? SortyResources.urlForCopiedResource(named: "SkillOnboardingSound.m4a"),
+              let data = try? Data(contentsOf: soundURL, options: .mappedIfSafe),
+              let player = try? AVAudioPlayer(data: data)
+        else { return nil }
+
         player.numberOfLoops = 0
         player.volume = 0.6
         player.prepareToPlay()
-        introAudioPlayer = player
+        return player
     }
 
     /// Follow playback position, leading each effect so its visible midpoint

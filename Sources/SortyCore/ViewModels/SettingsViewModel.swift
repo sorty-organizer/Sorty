@@ -189,6 +189,7 @@ public class SettingsViewModel: ObservableObject {
     private var persistedStateLoadTask: Task<AIConfig?, Never>?
     private var persistedStateLoadGeneration = 0
     private var isApplyingConfigMutation = false
+    private var appleModelStatusTask: Task<Void, Never>?
 
     private func modelSelectionKey(for provider: AIProvider) -> String {
         "lastSelectedModel_\(provider.rawValue)"
@@ -258,7 +259,7 @@ public class SettingsViewModel: ObservableObject {
 
         hasLoadedPersistedState = true
         persistedStateLoadTask = nil
-        checkAppleModelAvailability()
+        refreshAppleModelStatus()
         hydrateConfiguredCredentialIfNeeded()
     }
 
@@ -509,7 +510,8 @@ public class SettingsViewModel: ObservableObject {
         }
     }
     
-    private func checkAppleModelAvailability() {
+    @concurrent
+    private static func readAppleModelAvailability() async -> (isAvailable: Bool, status: String) {
         let availability: Bool
         let status: String
 
@@ -526,16 +528,22 @@ public class SettingsViewModel: ObservableObject {
         status = "Apple Intelligence is not supported on this version of macOS."
         #endif
 
-        if isAppleModelAvailable != availability {
-            isAppleModelAvailable = availability
-        }
-        if appleModelStatus != status {
-            appleModelStatus = status
-        }
+        return (availability, status)
     }
 
     public func refreshAppleModelStatus() {
-        checkAppleModelAvailability()
+        guard appleModelStatusTask == nil else { return }
+        appleModelStatusTask = Task { [weak self] in
+            let result = await Self.readAppleModelAvailability()
+            guard let self else { return }
+            if isAppleModelAvailable != result.isAvailable {
+                isAppleModelAvailable = result.isAvailable
+            }
+            if appleModelStatus != result.status {
+                appleModelStatus = result.status
+            }
+            appleModelStatusTask = nil
+        }
     }
     
     public func testConnection() async throws {

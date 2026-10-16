@@ -74,6 +74,13 @@ chrome. Keep icon rasterization and audio data loading off the main actor, and
 cancel pending intro preparation when Get Started is pressed before the outgoing
 intro finishes its transition.
 
+The skill introduction prepares its `AVAudioPlayer` on the concurrent executor,
+including resource lookup, decoding, and `prepareToPlay()`. Reading the audio file
+off-main is insufficient: player construction and audio-queue preparation can
+block for hundreds of milliseconds. The prepared player transfers to the main
+actor before playback; a cancelled view task discards it without starting audio.
+Keep the existing playback-position cues and Reduce Motion behavior.
+
 File reads, journal replay, and JSON decoding run in detached user-initiated tasks. Published state and persistence writes remain on the main actor. `UserDefaultsDataReader` exposes reads only and uses the documented thread-safe `UserDefaults` read behavior. Do not add write methods to it.
 
 For asynchronous bookmark restoration, snapshot the bookmark, item identity, and generation before leaving the main actor. Accept a result only when its generation and bookmark still match the current item. Keep access ownership explicit. Balance every successful security-scope acquisition with its eventual `stopAccessingSecurityScopedResource()` release, including discarded results. Discard stale results after removal, reauthorization, or reset. Await required access before automation uses a folder. `StorageLocationsManager.refreshAccess(for:)` remains a synchronous main-actor operation for the one-item add-location path. Only bulk restore uses the asynchronous path.
@@ -91,6 +98,11 @@ The manual window becomes ready without waiting for history, Learnings, storage-
 Settings credential hydration uses detached Keychain reads on a cache miss and
 rejects results after provider changes, edits, or reset. Preserve that path rather
 than adding another detached wrapper.
+
+Apple Intelligence availability probes also run on the concurrent executor.
+Settings hydration schedules a coalesced status refresh without waiting for the
+system model service. Provider screens use the same refresh path, and only the
+result is published on the main actor.
 
 Manual and Learnings AI clients are configured on first use. The automation organizer and its client exist only while at least one watched folder is active. Sparkle starts after 45 seconds of idle startup time and only when its persisted daily interval has elapsed; PostHog feature flags, Finder menu-action verification, and the initial widget snapshot are similarly deferred. Finder runtime monitoring may start earlier because it only observes the extension heartbeat. Safe Finder registration maintenance runs with the deferred menu-action setup after 30 seconds. It coalesces requests and limits registration attempts to once every five minutes without restarting Finder, staging app copies, or changing signing.
 
