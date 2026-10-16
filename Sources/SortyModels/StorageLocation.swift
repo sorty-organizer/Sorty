@@ -310,7 +310,11 @@ public class StorageLocationsManager: ObservableObject {
         let didAccess: Bool
     }
     
-    public init(userDefaults: UserDefaults = .standard) {
+    public convenience init() {
+        self.init(userDefaults: .standard)
+    }
+
+    public init(userDefaults: UserDefaults) {
         self.userDefaults = userDefaults
         self.persistedDataReader = UserDefaultsDataReader(userDefaults)
         setupNotificationObservers()
