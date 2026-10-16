@@ -2,6 +2,13 @@
 
 Next.js marketing site for Sorty.
 
+## Dependency security
+
+Keep security overrides in `package.json` and `pnpm-lock.yaml` synchronized.
+Preserve both `patchedDependencies` entries when updating dependencies, then
+regenerate the lockfile with `pnpm install --lockfile-only --ignore-scripts`.
+The GitHub Pages workflow validates and deploys website dependency updates.
+
 ## Local Preview
 
 ```bash
