@@ -140,3 +140,30 @@ For launch-time acceptance:
 - State missing evidence plainly. Builds, tests, and source inspection cannot establish a measured launch-time reduction.
 
 See Apple's [Reducing your app's launch time](https://developer.apple.com/documentation/xcode/reducing-your-app-s-launch-time) for first-frame measurement and separate startup-activity instrumentation.
+
+### Local comparison, 2026-10-16
+
+Three warm-cache launches on the same Mac and saved data, using signed SPM
+Release builds without InjectionLite at `releases/Sorty.app`:
+
+| Source | Launch request to visible window (seconds) | Median |
+| --- | --- | --- |
+| `39aed918`, build 2668 | 1.294, 0.605, 0.759 | 0.759 s |
+| `d43952d8`, build 2671 | 0.768, 0.635, 0.542 | 0.635 s |
+
+The observed median improved by 16%; the run ranges overlap. A native helper
+opened the exact app path through `NSWorkspace` and polled `CGWindowListCopyWindowInfo`
+for a visible, layer-zero window larger than 100 × 100 points. Each instance
+stayed open for nine seconds after visibility and quit gracefully. This measures
+window visibility, not painted content or usable controls; cold-boot and input
+latency measurements remain outstanding.
+
+Instruments recorded about 120 ms of main-thread audio construction, preparation,
+and first playback in the Release baseline. The final natural-launch trace
+recorded those calls on a worker thread, with no main-thread samples for them.
+
+Executable SHA-256 values were
+`d7405f15a087a4daef18f8855adf565a92c8961815ca2a3a9df0840a8b24ce0d`
+before and
+`791810c26bd2e0010560d070c1e081e88ab3c88f170531cbf8d249c66a7b3a69`
+after. The development build and Blacksmith Swift CI passed for the changed source.
