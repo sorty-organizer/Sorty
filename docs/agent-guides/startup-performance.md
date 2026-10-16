@@ -108,7 +108,7 @@ Use focused tests while developing:
 swift test --filter 'SettingsViewModelStartupTests|HistoryTests|FolderWatcherTests|StorageLocationsReliabilityTests'
 ```
 
-For substantive startup changes, run `make dev` to verify the app target and Swift 6 isolation checks. Focus tests on stored-state restoration, edits or resets during loading, dependent operations waiting for hydration, stale bookmark results, and balanced security-scope ownership. `StartupHydrationTests` cover hydration, reset, and bookmark-less races. They do not replace manual reauthorization, removal, reset, stale-bookmark recreation, or volume-rename checks. Documentation-only changes do not need a build. Local checks do not replace required Blacksmith checks.
+For substantive startup changes, run `make dev` to verify the app target and Swift 6 isolation checks. Focus tests on stored-state restoration, edits or resets during loading, dependent operations waiting for hydration, stale bookmark results, and balanced security-scope ownership. `StorageLocationsReliabilityTests` use a unique UserDefaults suite per test so parallel persistence checks cannot overwrite one another. `StartupHydrationTests` cover hydration, reset, and bookmark-less races. They do not replace manual reauthorization, removal, reset, stale-bookmark recreation, or volume-rename checks. Documentation-only changes do not need a build. Local checks do not replace required Blacksmith checks.
 
 For launch-time acceptance:
 

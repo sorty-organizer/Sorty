@@ -281,8 +281,8 @@ public enum StorageEnvironmentInspector {
 public class StorageLocationsManager: ObservableObject {
     @Published public private(set) var locations: [StorageLocation] = []
     @Published public private(set) var hasLoadedPersistedState = false
-    private let userDefaults = UserDefaults.standard
-    private let persistedDataReader = UserDefaultsDataReader(.standard)
+    private let userDefaults: UserDefaults
+    private let persistedDataReader: UserDefaultsDataReader
     private let storageKey = "storageLocations"
     private var activeSecurityScopedURLs: [UUID: URL] = [:]
     private let subfolderDiscovery = StorageSubfolderDiscoveryService()
@@ -310,7 +310,9 @@ public class StorageLocationsManager: ObservableObject {
         let didAccess: Bool
     }
     
-    public init() {
+    public init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        self.persistedDataReader = UserDefaultsDataReader(userDefaults)
         setupNotificationObservers()
     }
 

@@ -6,13 +6,19 @@ import XCTest
 
 final class StorageLocationsReliabilityTests: XCTestCase {
     private var tempRoot: URL!
+    private var defaults: UserDefaults!
+    private var defaultsSuiteName: String!
 
     override func setUpWithError() throws {
+        defaultsSuiteName = "StorageLocationsReliabilityTests.\(UUID().uuidString)"
+        defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuiteName))
         tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
     }
 
     override func tearDownWithError() throws {
+        defaults.removePersistentDomain(forName: defaultsSuiteName)
+        defaults = nil
         if let tempRoot {
             try? FileManager.default.removeItem(at: tempRoot)
         }
@@ -384,7 +390,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
 
     @MainActor
     func testStoragePromptContextIncludesValidPathList() async {
-        let manager = StorageLocationsManager()
+        let manager = StorageLocationsManager(userDefaults: defaults)
         manager.clearAll()
         defer { manager.clearAll() }
 
@@ -408,7 +414,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
 
     @MainActor
     func testPersistedLocationsLoadAfterConstruction() async {
-        let firstManager = StorageLocationsManager()
+        let firstManager = StorageLocationsManager(userDefaults: defaults)
         firstManager.clearAll()
         defer { firstManager.clearAll() }
 
@@ -416,7 +422,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
         try? FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
         firstManager.addLocation(StorageLocation(path: archive.path, name: "Deferred Archive"))
 
-        let reloadedManager = StorageLocationsManager()
+        let reloadedManager = StorageLocationsManager(userDefaults: defaults)
         XCTAssertFalse(reloadedManager.hasLoadedPersistedState)
         XCTAssertTrue(reloadedManager.locations.isEmpty)
 
@@ -428,7 +434,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
 
     @MainActor
     func testStoragePromptExplainsPurposeAndExactDestinationPath() async {
-        let manager = StorageLocationsManager()
+        let manager = StorageLocationsManager(userDefaults: defaults)
         manager.clearAll()
         defer { manager.clearAll() }
 
@@ -450,7 +456,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
 
     @MainActor
     func testAddLocationFromURLCreatesEntry() throws {
-        let manager = StorageLocationsManager()
+        let manager = StorageLocationsManager(userDefaults: defaults)
         manager.clearAll()
         defer { manager.clearAll() }
 
@@ -470,7 +476,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
 
     @MainActor
     func testAddingDuplicateLocationThrowsClearError() throws {
-        let manager = StorageLocationsManager()
+        let manager = StorageLocationsManager(userDefaults: defaults)
         manager.clearAll()
         defer { manager.clearAll() }
 
@@ -486,7 +492,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
 
     @MainActor
     func testRepeatedAccessRefreshKeepsLocationValid() async throws {
-        let manager = StorageLocationsManager()
+        let manager = StorageLocationsManager(userDefaults: defaults)
         manager.clearAll()
         defer { manager.clearAll() }
 
@@ -503,7 +509,7 @@ final class StorageLocationsReliabilityTests: XCTestCase {
 
     @MainActor
     func testDiscoverAllSubfoldersIncludesMoreThanPromptLimitedSet() async throws {
-        let manager = StorageLocationsManager()
+        let manager = StorageLocationsManager(userDefaults: defaults)
         manager.clearAll()
         defer { manager.clearAll() }
 
