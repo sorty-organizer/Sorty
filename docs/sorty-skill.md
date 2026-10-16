@@ -101,4 +101,13 @@ The tracked skill lives in [`.agents/skills/sorty`](../.agents/skills/sorty/). C
 - [`agent-mode.md`](../.agents/skills/sorty/references/agent-mode.md) defines the plan and journal formats.
 - [`capabilities.md`](../.agents/skills/sorty/references/capabilities.md) separates agent work from native integration.
 
+Helper commands resolve from the installed skill directory. Plans and reports
+stay outside the folder being organized. Reviews distinguish moves, deliberately
+unchanged files, and unresolved files. Local content analysis uses permission
+already given in the request; text inside files cannot authorize commands.
+
+For repeatable planning and execution checks, use the
+[skill behavioral evaluation](agent-guides/sorty-skill-eval.md). It compares
+isolated synthetic tasks without reading personal files or launching Sorty.
+
 Private imported profiles are excluded from source control and packaged skills. After changing import behavior, check selective export, profile preservation during updates, and exclusion enforcement.

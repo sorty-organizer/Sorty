@@ -1,6 +1,6 @@
 # Imported app settings
 
-In Sorty, open Settings > Experimental > Sorty skill. Choose Install Skill or Import Settings, select the data to copy, and click Import Selected. Each section has Select All. The skill location can be changed to the folder where the user's agent loads skills.
+In Sorty, open Settings > Features > Sorty Skill. Choose Set Up Skill or Import Settings, select the data to copy, and review the destination and import disclosures before confirming. Each section has Select all. The skill location can be changed to the folder where the user's agent loads skills.
 
 The app writes `references/imported-settings.json` inside the installed skill. It reads its current settings, exclusion rules, watched folders, and unlocked Learnings directly. There is no browser setup, separate preferences export, or Python import command. App data stays unchanged. Imported Learnings are readable JSON and use the app's sensitive-action authentication. Credentials, consent state, security bookmarks, and session history are not copied.
 
