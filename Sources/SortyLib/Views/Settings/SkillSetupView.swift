@@ -401,17 +401,26 @@ struct SkillSetupView: View {
         )
     }
 
-    /// Prepare the skill soundtrack without blocking the window's first frame.
-    private func prepareIntroSound() async {
-        guard introAudioPlayer == nil else { return }
-        let player = await Self.makeIntroPlayer()
-        guard !Task.isCancelled else { return }
+    /// Starts the first soundtrack off-main, then follows its playback position.
+    private func startIntroSound() async -> AVAudioPlayer? {
+        if let player = introAudioPlayer {
+            player.stop()
+            player.currentTime = 0
+            return player.play() ? player : nil
+        }
+
+        let player = await Self.makePlayingIntroPlayer()
+        guard !Task.isCancelled else {
+            player?.stop()
+            return nil
+        }
         introAudioPlayer = player
+        return player
     }
 
-    /// Transfers the prepared player to the main actor before playback begins.
+    /// Transfers sole ownership after audio-queue setup and the first play call.
     @concurrent
-    private static func makeIntroPlayer() async -> sending AVAudioPlayer? {
+    private static func makePlayingIntroPlayer() async -> sending AVAudioPlayer? {
         guard !Task.isCancelled,
               let soundURL = Bundle.main.url(forResource: "SkillOnboardingSound", withExtension: "m4a")
                 ?? SortyResources.urlForCopiedResource(named: "SkillOnboardingSound.m4a"),
@@ -422,6 +431,7 @@ struct SkillSetupView: View {
         player.numberOfLoops = 0
         player.volume = 0.6
         player.prepareToPlay()
+        guard !Task.isCancelled, player.play() else { return nil }
         return player
     }
 
@@ -439,17 +449,11 @@ struct SkillSetupView: View {
             guard !Task.isCancelled else { return }
             skillIcon = image
         }
-        if isOnboarding && step == .rethink {
-            await prepareIntroSound()
-            guard !Task.isCancelled else { return }
-        }
-
         let clock = ContinuousClock()
         var soundtrack: AVAudioPlayer?
-        if isOnboarding && step == .rethink, let player = introAudioPlayer {
-            player.stop()
-            player.currentTime = 0
-            if player.play() { soundtrack = player }
+        if isOnboarding && step == .rethink {
+            soundtrack = await startIntroSound()
+            guard !Task.isCancelled else { return }
         }
         let revealStart = clock.now
         if reduceMotion {

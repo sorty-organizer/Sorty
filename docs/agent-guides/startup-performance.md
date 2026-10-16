@@ -75,10 +75,12 @@ cancel pending intro preparation when Get Started is pressed before the outgoing
 intro finishes its transition.
 
 The skill introduction prepares its `AVAudioPlayer` on the concurrent executor,
-including resource lookup, decoding, and `prepareToPlay()`. Reading the audio file
+including resource lookup, decoding, `prepareToPlay()`, and the first `play()`.
+Reading the audio file
 off-main is insufficient: player construction and audio-queue preparation can
-block for hundreds of milliseconds. The prepared player transfers to the main
-actor before playback; a cancelled view task discards it without starting audio.
+block for hundreds of milliseconds. The playing instance transfers to the main
+actor for cue tracking and replay. Cancellation is checked before playback and
+after transfer; a cancelled view stops and discards the returned player.
 Keep the existing playback-position cues and Reduce Motion behavior.
 
 File reads, journal replay, and JSON decoding run in detached user-initiated tasks. Published state and persistence writes remain on the main actor. `UserDefaultsDataReader` exposes reads only and uses the documented thread-safe `UserDefaults` read behavior. Do not add write methods to it.
