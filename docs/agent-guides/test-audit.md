@@ -173,4 +173,9 @@ net -39. Documentation is counted separately. Only the two obsolete Finder
 presentation test methods were deleted outright; the other affected contracts
 were retained at their live owners. Native UI tests were not run. Existing
 SortyApp analytics actor-isolation warnings remain outside this cleanup.
-Hosted Swift CI will validate the pushed code commit independently.
+Hosted [Swift CI run 39050540535](https://github.com/sorty-organizer/Sorty/actions/runs/39050540535)
+passed for code commit `2f2cf615`: all 1,002 package tests, test compilation,
+app build, fuzzing, cache-tooling checks, and Gitleaks. The dispatch-only
+pre-release validation step did not run on this push. This is build/test proof,
+not native UI or release-signing proof. No PR was created; changes were pushed
+directly to main.
