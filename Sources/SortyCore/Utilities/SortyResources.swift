@@ -168,6 +168,16 @@ public enum SortyResources {
             mainBundle.bundleURL.appendingPathComponent("PlugIns/Sorty_SortyLib.bundle"),
         ].compactMap { $0 }
 
+        // SwiftPM links SortyCore into the test bundle, so the bundle that
+        // contains this type sits beside the matching resource bundle.
+        let codeBundleURL = Bundle(for: BundleLocator.self).bundleURL
+        if codeBundleURL != mainBundle.bundleURL {
+            possiblePaths.insert(
+                codeBundleURL.deletingLastPathComponent().appendingPathComponent(bundleName),
+                at: 0
+            )
+        }
+
         for root in roots {
             var ancestor = root
             for _ in 0..<4 {
@@ -176,13 +186,26 @@ public enum SortyResources {
             }
         }
 
+        for path in possiblePaths {
+            if FileManager.default.fileExists(atPath: path.path) {
+                // SwiftPM resource bundles on macOS are directory bundles and may
+                // not contain an Info.plist. Bundle(path:) matches the generated
+                // Bundle.module accessor and still resolves those bundles.
+                if let bundle = Bundle(path: path.path) {
+                    return bundle
+                }
+            }
+        }
+
         // `swift test` can report the xctest launcher in Xcode's toolchain as
         // Bundle.main, so no executable-relative candidate reaches the package
         // build directory. Search the local SwiftPM build root without relying
         // on Bundle.module, whose generated accessor traps when a bundle is
-        // absent from an Xcode-built app.
+        // absent from an Xcode-built app. `make` links `.build` to a shared
+        // cache, and FileManager does not enumerate through that symlink.
         let localBuildRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(".build", isDirectory: true)
+            .resolvingSymlinksInPath()
         if let enumerator = FileManager.default.enumerator(
             at: localBuildRoot,
             includingPropertiesForKeys: [.isDirectoryKey],
@@ -196,17 +219,6 @@ public enum SortyResources {
                 }
                 if candidate.lastPathComponent == bundleName,
                    let bundle = Bundle(path: candidate.path) {
-                    return bundle
-                }
-            }
-        }
-
-        for path in possiblePaths {
-            if FileManager.default.fileExists(atPath: path.path) {
-                // SwiftPM resource bundles on macOS are directory bundles and may
-                // not contain an Info.plist. Bundle(path:) matches the generated
-                // Bundle.module accessor and still resolves those bundles.
-                if let bundle = Bundle(path: path.path) {
                     return bundle
                 }
             }
