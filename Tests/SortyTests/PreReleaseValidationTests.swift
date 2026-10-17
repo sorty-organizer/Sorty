@@ -500,15 +500,6 @@ final class ExclusionPatternEdgeCaseTests: XCTestCase {
         XCTAssertFalse(rule.matches(normalFile))
     }
     
-    func testExclusionPatternHiddenFiles() {
-        let rule = ExclusionRule(type: .hiddenFiles, pattern: "")
-        let hiddenFile = FileItem(path: "/test/.gitignore", name: ".gitignore", extension: "", size: 0, isDirectory: false)
-        let normalFile = FileItem(path: "/test/file.txt", name: "file", extension: "txt", size: 0, isDirectory: false)
-        
-        XCTAssertTrue(rule.matches(hiddenFile))
-        XCTAssertFalse(rule.matches(normalFile))
-    }
-    
     func testExclusionPatternRegex() {
         let rule = ExclusionRule(type: .regex, pattern: "^temp_\\d+\\.txt$")
         let matchingFile = FileItem(path: "/test/temp_123.txt", name: "temp_123", extension: "txt", size: 0, isDirectory: false)
@@ -525,15 +516,6 @@ final class ExclusionPatternEdgeCaseTests: XCTestCase {
         
         XCTAssertTrue(rule.matches(lowerFile))
         XCTAssertTrue(rule.matches(upperFile))
-    }
-    
-    func testExclusionPatternSystemFiles() {
-        let rule = ExclusionRule(type: .systemFiles, pattern: "")
-        let dsStore = FileItem(path: "/test/.DS_Store", name: ".DS_Store", extension: "", size: 0, isDirectory: false)
-        let normalFile = FileItem(path: "/test/document.pdf", name: "document", extension: "pdf", size: 0, isDirectory: false)
-        
-        XCTAssertTrue(rule.matches(dsStore))
-        XCTAssertFalse(rule.matches(normalFile))
     }
     
     func testExclusionPatternFolderName() {

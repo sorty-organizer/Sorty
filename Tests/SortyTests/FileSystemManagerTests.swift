@@ -818,27 +818,27 @@ class FileSystemManagerTests: XCTestCase {
         
         let file = destFolder.appendingPathComponent("file.txt")
         try "Content".write(to: file, atomically: true, encoding: .utf8)
-        
+        try (file as NSURL).setResourceValue(["Existing"], forKey: .tagNamesKey)
+
         let fileItem = FileItem(path: file.path, name: "file", extension: "txt", size: 7, isDirectory: false)
         var suggestion = FolderSuggestion(folderName: "Tagged", files: [fileItem])
-        
+
         let tagMapping = FileTagMapping(originalFile: fileItem, tags: ["TestTag"])
         suggestion.fileTagMappings.append(tagMapping)
-        
-        let plan = OrganizationPlan(suggestions: [suggestion], unorganizedFiles: [], notes: "")
-        
-        let ops = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: true)
 
-        // Reverse the tagging
+        let plan = OrganizationPlan(suggestions: [suggestion], unorganizedFiles: [], notes: "")
+
+        let ops = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: true)
+        XCTAssertEqual(Set(try diskTags(at: file.path)), ["Existing", "TestTag"])
+
         _ = try await fileSystemManager.reverseOperations(ops.filter { $0.type == .tagFile })
-        
-        // Tags should be restored to original state
-        let url = URL(fileURLWithPath: file.path)
-        let resourceValues = try? url.resourceValues(forKeys: [.tagNamesKey])
-        let currentTags = resourceValues?.tagNames ?? []
-        
-        // Should be back to original tags (empty in this case)
-        XCTAssertTrue(currentTags.isEmpty || !currentTags.contains("TestTag"))
+
+        XCTAssertEqual(try diskTags(at: file.path), ["Existing"])
+    }
+
+    /// Reads Finder tags from a fresh URL so cached resource values cannot mask disk state.
+    private func diskTags(at path: String) throws -> [String] {
+        try URL(fileURLWithPath: path).resourceValues(forKeys: [.tagNamesKey]).tagNames ?? []
     }
     
     @MainActor

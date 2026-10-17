@@ -16,9 +16,7 @@ import SortyQualitySupport
 actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     let config: AIConfig
     var analyzeHandler: (([FileItem]) async throws -> OrganizationPlan)?
-    var indexedAnalyzeHandler: (([FileItem], Int) async throws -> OrganizationPlan)?
     private(set) var analyzedBatchSizes: [Int] = []
-    private(set) var analyzedInstructions: [String?] = []
     @MainActor weak var streamingDelegate: StreamingDelegate?
 
     init(config: AIConfig) {
@@ -27,10 +25,6 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
 
     func analyze(files: [FileItem], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan {
         analyzedBatchSizes.append(files.count)
-        analyzedInstructions.append(customInstructions)
-        if let indexedAnalyzeHandler {
-            return try await indexedAnalyzeHandler(files, analyzedBatchSizes.count)
-        }
         if let handler = analyzeHandler {
             return try await handler(files)
         }
@@ -41,16 +35,8 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
         self.analyzeHandler = handler
     }
 
-    func setIndexedHandler(_ handler: @escaping @Sendable ([FileItem], Int) async throws -> OrganizationPlan) {
-        indexedAnalyzeHandler = handler
-    }
-
     func currentAnalyzedBatchSizes() -> [Int] {
         analyzedBatchSizes
-    }
-
-    func currentAnalyzedInstructions() -> [String?] {
-        analyzedInstructions
     }
 
     func generateText(prompt: String, systemPrompt: String?) async throws -> String {
