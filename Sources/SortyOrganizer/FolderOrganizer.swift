@@ -2554,8 +2554,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         adaptiveDepth: Int = 0
     ) async throws -> [OrganizationPlan] {
         // Cap halve-and-retry recursion so a persistently failing batch cannot
-        // recurse without bound; depth 5 splits 350 -> ~5 files minimum.
-        let maxAdaptiveDepth = 5
+        // recurse without bound; depth 9 lets a 350-file batch reach one file.
+        let maxAdaptiveDepth = 9
         if job.cancellationRequested || Task.isCancelled {
             throw CancellationError()
         }
@@ -2648,8 +2648,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         adaptiveDepth: Int = 0
     ) async throws -> [OrganizationPlan] {
         // Cap halve-and-retry recursion so a persistently failing batch cannot
-        // recurse without bound; depth 5 splits 350 -> ~5 files minimum.
-        let maxAdaptiveDepth = 5
+        // recurse without bound; depth 9 lets a 350-file batch reach one file.
+        let maxAdaptiveDepth = 9
         try checkCancellation()
 
         // Compact prompts number this request's files 1-based; publish the same
@@ -2752,12 +2752,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         after error: Error,
         fileCount: Int
     ) -> Bool {
-        guard fileCount > minimumAdaptiveAnalysisBatchSize else { return false }
+        guard fileCount > 1 else { return false }
 
         if let clientError = error as? AIClientError {
             switch clientError {
             case .invalidResponseFormat, .jsonDecodingError:
-                return true
+                return fileCount > minimumAdaptiveAnalysisBatchSize
             case .apiError(let statusCode, let message):
                 if statusCode == 413 {
                     return true

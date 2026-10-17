@@ -664,8 +664,22 @@ public final class ReliabilityManager {
         var diagnostics: [String: Any] = ["diagnostics_version": 1]
         var underlying = error
         if let aiError = error as? AIClientError {
-            if case .apiError(let statusCode, _) = aiError, (100...599).contains(statusCode) {
+            if case .apiError(let statusCode, let message) = aiError, (100...599).contains(statusCode) {
                 diagnostics["http_status"] = statusCode
+                if statusCode == 413 {
+                    // Only fixed hints leave the device. A 413 can also be
+                    // synthesized locally for model context/output limits.
+                    let normalized = message.lowercased()
+                    if normalized.contains("output limit") || normalized.contains("max_tokens") || normalized.contains("finish_reason: length") {
+                        diagnostics["limit_hint"] = "output"
+                    } else if normalized.contains("context") || normalized.contains("too many tokens") {
+                        diagnostics["limit_hint"] = "context"
+                    } else if normalized.contains("payload") || normalized.contains("request too large") || normalized.contains("request entity too large") {
+                        diagnostics["limit_hint"] = "request_size"
+                    } else {
+                        diagnostics["limit_hint"] = "unknown"
+                    }
+                }
             }
             if case .networkError(let wrapped) = aiError { underlying = wrapped }
         }

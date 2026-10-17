@@ -72,6 +72,24 @@ final class ReliabilityErrorDiagnosticsTests: XCTestCase {
         XCTAssertTrue(ReliabilityManager.shouldIgnore(AIClientError.networkError(URLError(.cancelled))))
     }
 
+    func testLimitHintsDoNotCollectProviderMessages() {
+        let cases = [
+            ("The model reached its output limit.", "output"),
+            ("Anthropic reached max_tokens.", "output"),
+            ("Maximum context length exceeded.", "context"),
+            ("Request entity too large.", "request_size"),
+            ("Rejected.", "unknown"),
+        ]
+        for (message, expectedHint) in cases {
+            let diagnostics = ReliabilityManager.errorDiagnostics(
+                AIClientError.apiError(statusCode: 413, message: message + " private-file-name secret-token")
+            )
+            XCTAssertEqual(diagnostics["limit_hint"] as? String, expectedHint)
+            XCTAssertFalse(String(describing: diagnostics).contains("private-file-name"))
+            XCTAssertFalse(String(describing: diagnostics).contains("secret-token"))
+        }
+    }
+
     func testArbitraryDomainAndDecodingContextAreNotCollected() {
         let failure = NSError(domain: "private-file-name", code: NSURLErrorCancelled)
         XCTAssertFalse(ReliabilityManager.shouldIgnore(failure))
