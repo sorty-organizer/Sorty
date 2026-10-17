@@ -198,26 +198,6 @@ public struct ExtensionCommunication {
         )
     }
 
-    /// Atomic read-take of the app-group handoff slot. Validates the payload
-    /// exactly like a deeplink (exists, directory, blocklist); invalid or
-    /// missing payloads return nil. Callers must still treat the result as
-    /// untrusted until the user confirms any destructive action.
-    ///
-    /// Blocking: the filesystem probes run on the calling thread, so UI paths
-    /// should prefer `receiveFromExtensionAsync()`.
-    public static func receiveFromExtension() -> URL? {
-        guard let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier),
-              let path = sharedDefaults.string(forKey: directoryKey) else {
-            return nil
-        }
-        sharedDefaults.removeObject(forKey: directoryKey)
-        guard let validated = IncomingPathValidator.validatedDirectoryURLIfValid(path: path) else {
-            DebugLogger.log("Rejected invalid Finder extension directory: \(path)")
-            return nil
-        }
-        return validated
-    }
-
     /// Read-take used by the UI delivery path. The filesystem validation runs
     /// off the calling actor so a stalled network mount cannot freeze the main
     /// thread; callers hop back to the main actor with the validated URL.
@@ -3349,54 +3329,6 @@ public struct ExtensionCommunication {
             [quickActionInstalled, quickWatchActionInstalled, quickExcludeActionInstalled, toolbarAppInstalled, finderSyncEnabled, menuBarEnabled]
                 .filter { $0 }.count
         }
-    }
-
-    public struct FinderIntegrationAvailabilityStatus: Sendable, Equatable {
-        enum State: Sendable, Equatable {
-            case featureDisabled
-            case checking
-            case setupPending
-            case ready
-        }
-
-        let state: State
-        let title: String
-        let detail: String
-    }
-
-    static func finderIntegrationAvailabilityStatus(
-        featureFlagEnabled: Bool,
-        diagnostics: FinderSyncDiagnostics?
-    ) -> FinderIntegrationAvailabilityStatus {
-        guard featureFlagEnabled else {
-            return FinderIntegrationAvailabilityStatus(
-                state: .featureDisabled,
-                title: "Feature Flag Disabled",
-                detail: "Turn this on to show Sorty's Finder integration controls and setup flow."
-            )
-        }
-
-        guard let diagnostics else {
-            return FinderIntegrationAvailabilityStatus(
-                state: .checking,
-                title: "Checking Finder Sync",
-                detail: "Sorty is checking whether the macOS Finder Sync extension is enabled."
-            )
-        }
-
-        if diagnostics.isOperational {
-            return FinderIntegrationAvailabilityStatus(
-                state: .ready,
-                title: diagnostics.isVerifiedWorking ? "Finder Sync Verified" : "Finder Sync Registered",
-                detail: diagnostics.detailMessage
-            )
-        }
-
-        return FinderIntegrationAvailabilityStatus(
-            state: .setupPending,
-            title: "Finder Sync Needs Setup",
-            detail: "The Finder extension is currently \(diagnostics.statusText.lowercased()). Sorty maintains its registration automatically. Open Settings > Finder Integration for setup and macOS extension controls."
-        )
     }
 
     /// Whether the legacy "Organize with Sorty" toolbar app bundle exists.

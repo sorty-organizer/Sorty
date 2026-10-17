@@ -830,34 +830,9 @@ final class ImageBase64Cache: @unchecked Sendable {
     }
 }
 
-/// Accounts base64 image payloads against the 32MB prepared-vision cap.
-/// Base64 inflates ~4/3, so budgets are estimated on the encoded size.
+/// Estimates base64 size for the organizer's prepared-vision budget.
 public enum VisionPayloadBudget {
-    public static let maximumPreparedVisionBytes = 32 * 1_024 * 1_024
-
-    public static func totalBase64Bytes(for payload: [String: Data]) -> Int {
-        payload.values.reduce(0) { $0 + encodedByteCount(for: $1) }
-    }
-
     public static func encodedByteCount(for data: Data) -> Int {
         ((data.count + 2) / 3) * 4
-    }
-
-    /// Drops trailing sorted keys until the estimated encoded size fits.
-    /// Keeps deterministic survivors so retries behave identically.
-    public static func clamped(
-        _ payload: [String: Data],
-        cap: Int = maximumPreparedVisionBytes
-    ) -> [String: Data] {
-        var kept: [String: Data] = [:]
-        var budgeted = 0
-        for key in payload.keys.sorted() {
-            guard let data = payload[key] else { continue }
-            let encoded = encodedByteCount(for: data)
-            if budgeted + encoded > cap { continue }
-            kept[key] = data
-            budgeted += encoded
-        }
-        return kept
     }
 }

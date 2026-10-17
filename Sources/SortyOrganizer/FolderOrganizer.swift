@@ -1347,15 +1347,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
     
-    /// Get cached insights if available, otherwise returns current insights
-    /// Use this from UI to avoid re-parsing during render
-    public func getCachedInsights() -> (current: String, history: [AIInsight]) {
-        if let cache = insightsCache, cache.isValid {
-            return (cache.currentInsight, cache.insights)
-        }
-        return (currentInsight, insightHistory)
-    }
-    
     @MainActor
     public func setLiveInsightsEnabled(_ enabled: Bool) {
         guard liveInsightsEnabled != enabled else { return }

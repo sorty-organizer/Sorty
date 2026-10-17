@@ -377,6 +377,7 @@ public class LearningsAnalyzer: ObservableObject {
         result = result.replacingOccurrences(of: "{category}", with: category.rawValue.capitalized)
         result = result.replacingOccurrences(of: "{year}", with: String(year))
         result = result.replacingOccurrences(of: "{month}", with: month)
+        result = result.replacingOccurrences(of: "{day}", with: day)
         result = result.replacingOccurrences(of: "{date}", with: dateStr)
         
         // Prepend root path if template is relative

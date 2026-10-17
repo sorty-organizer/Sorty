@@ -366,9 +366,8 @@ final class StreamingLogicTests: XCTestCase {
 
         organizer.didReceiveChunk("\n>> decision: Grouping project documents together\n")
 
-        let cached = organizer.getCachedInsights()
-        XCTAssertEqual(cached.current, "Grouping project documents together")
-        XCTAssertEqual(cached.history.last?.text, "Grouping project documents together")
+        XCTAssertEqual(organizer.currentInsight, "Grouping project documents together")
+        XCTAssertEqual(organizer.insightHistory.last?.text, "Grouping project documents together")
     }
 
     func testStreamingDisplayPreservesCharacterBoundariesAndPreviewEllipsis() async {

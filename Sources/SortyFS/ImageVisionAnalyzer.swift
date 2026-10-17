@@ -89,46 +89,6 @@ public final class ImageVisionAnalyzer: Sendable {
         }.value
     }
     
-    /// Prepares multiple images in parallel and reports each completed attempt.
-    public func prepareImagesForVision(
-        urls: [URL],
-        progress: (@Sendable (_ completed: Int, _ total: Int) async -> Void)? = nil
-    ) async -> [URL: Data] {
-        let uniqueURLs = Array(Set(urls))
-        let total = uniqueURLs.count
-
-        return await withTaskGroup(of: (URL, Data?).self) { group in
-            var iterator = uniqueURLs.makeIterator()
-            for _ in 0..<min(maxConcurrentPreparations, total) {
-                guard let url = iterator.next() else { break }
-                group.addTask {
-                    let data = await self.prepareImageForVision(at: url, pruneAfterWrite: false)
-                    return (url, data)
-                }
-            }
-            
-            var completed = 0
-            var results: [URL: Data] = [:]
-            for await (url, data) in group {
-                if let data = data {
-                    results[url] = data
-                }
-
-                completed += 1
-                await progress?(completed, total)
-
-                if let nextURL = iterator.next(), !Task.isCancelled {
-                    group.addTask {
-                        let data = await self.prepareImageForVision(at: nextURL, pruneAfterWrite: false)
-                        return (nextURL, data)
-                    }
-                }
-            }
-            self.pruneCacheAfterBatch()
-            return results
-        }
-    }
-
     /// Prepares supported files for multimodal analysis.
     /// Images are resized/compressed, while PDFs are rendered into per-page JPEG assets.
     public func prepareFilesForVision(

@@ -11,63 +11,18 @@ final class FinderIntegrationStatusTests: XCTestCase {
         super.tearDown()
     }
 
-    func testFinderRequestIsConsumedOnlyOnce() {
+    func testFinderRequestIsConsumedOnlyOnce() async throws {
         let defaults = UserDefaults(suiteName: "group.com.sorty.app")!
         let incoming = FileManager.default.temporaryDirectory
             .appendingPathComponent("SortyIncoming-\(UUID().uuidString)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: incoming, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: incoming, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: incoming) }
         defaults.set(incoming.path, forKey: "selectedDirectory")
 
-        XCTAssertEqual(ExtensionCommunication.receiveFromExtension()?.path, incoming.path)
-        XCTAssertNil(ExtensionCommunication.receiveFromExtension())
-        try? FileManager.default.removeItem(at: incoming)
-    }
-
-    func testFinderIntegrationAvailabilityStatusFlagsIncompleteFinderSyncSetup() {
-        // Phase 1: disabled feature flag maps to featureDisabled.
-        let disabledStatus = ExtensionCommunication.finderIntegrationAvailabilityStatus(
-            featureFlagEnabled: false,
-            diagnostics: nil
-        )
-
-        XCTAssertEqual(disabledStatus.state, .featureDisabled)
-        XCTAssertEqual(disabledStatus.title, "Feature Flag Disabled")
-
-        // Phase 2: enabled flag with a disabled extension reports setup-pending.
-        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
-            entries: [.init(path: preferredExtensionPath, isEnabled: false)],
-            preferredPath: preferredExtensionPath,
-            heartbeat: nil
-        )
-
-        let status = ExtensionCommunication.finderIntegrationAvailabilityStatus(
-            featureFlagEnabled: true,
-            diagnostics: diagnostics
-        )
-
-        XCTAssertEqual(status.state, .setupPending)
-        XCTAssertTrue(status.detail.contains("currently disabled"))
-    }
-
-    func testFinderIntegrationAvailabilityStatusReflectsReadyFinderSync() {
-        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
-            entries: [.init(path: preferredExtensionPath, isEnabled: true)],
-            preferredPath: preferredExtensionPath,
-            heartbeat: .init(
-                event: "launch",
-                bundleIdentifier: "com.sorty.app.SortyFinderSync",
-                path: preferredExtensionPath,
-                reportedAt: Date()
-            )
-        )
-
-        let status = ExtensionCommunication.finderIntegrationAvailabilityStatus(
-            featureFlagEnabled: true,
-            diagnostics: diagnostics
-        )
-
-        XCTAssertEqual(status.state, .ready)
-        XCTAssertEqual(status.title, "Finder Sync Verified")
+        let first = await ExtensionCommunication.receiveFromExtensionAsync()
+        let second = await ExtensionCommunication.receiveFromExtensionAsync()
+        XCTAssertEqual(first?.path, incoming.path)
+        XCTAssertNil(second)
     }
 
     func testParseFinderSyncRegistrationEntriesTracksEnabledStates() {

@@ -639,7 +639,7 @@ final class LearningsAnalyzerTests: XCTestCase {
     func testProposeMappingWithMatchingRule() async {
         let rule = InferredRule(
             pattern: "^IMG_\\d{8}_\\d{6}",
-            template: "{year}/{filename}",
+            template: "{year}/{month}/{day}/{filename}",
             priority: 80,
             explanation: "Photo organization"
         )
@@ -653,7 +653,7 @@ final class LearningsAnalyzerTests: XCTestCase {
         )
         
         XCTAssertEqual(mapping.srcPath, "/Downloads/IMG_20240101_123456.jpg")
-        XCTAssertTrue(mapping.proposedDstPath.contains("/Photos/"))
+        XCTAssertEqual(mapping.proposedDstPath, "/Photos/2024/01/01/IMG_20240101_123456.jpg")
         XCTAssertGreaterThan(mapping.confidence, 0.5)
         XCTAssertNotNil(mapping.ruleId)
     }

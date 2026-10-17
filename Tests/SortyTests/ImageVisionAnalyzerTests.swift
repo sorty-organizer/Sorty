@@ -9,11 +9,12 @@ final class ImageVisionAnalyzerTests: XCTestCase {
     private var tempDirectory: URL!
 
     func testVisionPayloadBudgetUsesEncodedSize() {
-        let image = Data(repeating: 0, count: 3)
-        let payload = ["a": image, "b": image]
-
-        XCTAssertEqual(VisionPayloadBudget.totalBase64Bytes(for: payload), 8)
-        XCTAssertEqual(VisionPayloadBudget.clamped(payload, cap: 7), ["a": image])
+        for (byteCount, encodedSize) in [0, 4, 4, 4, 8].enumerated() {
+            XCTAssertEqual(
+                VisionPayloadBudget.encodedByteCount(for: Data(repeating: 0, count: byteCount)),
+                encodedSize
+            )
+        }
     }
 
     override func setUp() async throws {
@@ -53,7 +54,7 @@ final class ImageVisionAnalyzerTests: XCTestCase {
         XCTAssertEqual(smallDimensions?.height, 100)
     }
 
-    func testPrepareImagesForVisionProcessesMultipleImages() async throws {
+    func testPrepareFilesForVisionProcessesMultipleImages() async throws {
         let urls = [
             tempDirectory.appendingPathComponent("a.png"),
             tempDirectory.appendingPathComponent("b.png"),
@@ -64,15 +65,18 @@ final class ImageVisionAnalyzerTests: XCTestCase {
         try createPNG(at: urls[2], width: 80, height: 180)
 
         let analyzer = ImageVisionAnalyzer()
-        let result = await analyzer.prepareImagesForVision(urls: urls)
+        let files = urls.map {
+            FileItem(path: $0.path, name: $0.deletingPathExtension().lastPathComponent, extension: "png", size: 0)
+        }
+        let result = await analyzer.prepareFilesForVision(files: files)
 
         XCTAssertEqual(result.count, 3)
-        XCTAssertNotNil(result[urls[0]])
-        XCTAssertNotNil(result[urls[1]])
-        XCTAssertNotNil(result[urls[2]])
+        XCTAssertNotNil(result["a.png"])
+        XCTAssertNotNil(result["b.png"])
+        XCTAssertNotNil(result["c.png"])
     }
 
-    func testPrepareImagesForVisionReportsCompletedAttempts() async throws {
+    func testPrepareFilesForVisionReportsCompletedAttempts() async throws {
         let urls = [
             tempDirectory.appendingPathComponent("a.png"),
             tempDirectory.appendingPathComponent("b.png"),
@@ -84,11 +88,14 @@ final class ImageVisionAnalyzerTests: XCTestCase {
         let progress = VisionPreparationProgressRecorder()
 
         let analyzer = ImageVisionAnalyzer()
-        let result = await analyzer.prepareImagesForVision(urls: urls) { completed, total in
+        let files = urls.map {
+            FileItem(path: $0.path, name: $0.deletingPathExtension().lastPathComponent, extension: "png", size: 0)
+        }
+        let result = await analyzer.prepareFilesForVision(files: files) { completed, total in
             await progress.record(completed: completed, total: total)
         }
 
-        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(Set(result.keys), ["a.png", "b.png"])
         let updates = await progress.updates
         XCTAssertEqual(updates.map(\.completed), [1, 2, 3])
         XCTAssertEqual(updates.map(\.total), [3, 3, 3])

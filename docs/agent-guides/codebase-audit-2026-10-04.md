@@ -76,9 +76,11 @@ unavailable check is claimed.
 
 ## Follow-ups kept separate
 
-- ContentAnalyzer.analyzeFiles and ImageVisionAnalyzer.prepareImagesForVision
-  appear to serve tests alone. Retain until progress/cancellation coverage is
-  traced and preserved at the live scanner/prepareFilesForVision boundaries.
+- ContentAnalyzer.analyzeFiles appears to serve tests alone. Retain until
+  progress/cancellation coverage is traced and preserved at the live scanner
+  boundary. The October 18 [test audit](test-audit.md#18-october-2026-deep-audit)
+  moved image-batch progress coverage to prepareFilesForVision and removed the
+  obsolete prepareImagesForVision API.
 - Several unselected UI tests still refer to retired controls. Retain until each
   persistence/accessibility contract has a current owner and supported fixture.
 - Dependabot alert

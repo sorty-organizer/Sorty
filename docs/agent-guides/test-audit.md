@@ -98,3 +98,79 @@ Focused hosted proof: `swift test --filter FinderIntegrationStatusTests` within
 Swift CI's compiled package. This batch adds no replacement source-inspection
 test. Build/release signing and extension registration remain independent
 contracts, not reasons to preserve a runtime wrapper that has no effect.
+
+## 18 October 2026 deep audit
+
+Three independent discovery lanes reviewed core/filesystem/organizer tests,
+AI/Learnings, and scripts/CI/native UI. Caller searches covered all tracked
+sources and tests, then checked historical consumers before selecting cuts.
+This is a static audit plus focused execution, not proof of every native UI
+interaction or every public library client's usage.
+
+### Deletion evidence
+
+| Exact test or seam before cleanup | Actual signal and surviving owner | History and deletion decision |
+| --- | --- | --- |
+| `ImageVisionAnalyzerTests.testPrepareImagesForVisionProcessesMultipleImages` and `testPrepareImagesForVisionReportsCompletedAttempts`, `ImageVisionAnalyzerTests.swift:55,75` | Batch aggregation and progress for successful and corrupt images are meaningful. Move both tests to `prepareFilesForVision`, preserving exact attachment keys and completed attempts `[1, 2, 3]`. PDF, resizing, missing/corrupt input, relative-name, unsupported-type, and organizer vision-flow tests remain. | `98087cc5` replaced the sole organizer call with the file/PDF API. Remove the old image-only batch implementation after moving its coverage. This resolves the deferred vision item in the October 4 audit. |
+| `ImageVisionAnalyzerTests.testVisionPayloadBudgetUsesEncodedSize`, `ImageVisionAnalyzerTests.swift:11` | The old case covered an unused clamping wrapper. Retain the live encoded-byte contract with fixed expected sizes for input lengths 0 through 4. The organizer still owns its cap, skip accounting, and payload selection. | Helpers came from `ffe9ada2` and `f485b8e1`; the prior complexity audit removed `prepareVisionBatch`. Delete its remaining `totalBase64Bytes`, `clamped`, and duplicate cap, whose only consumers were each other and this test. No live cap or safety check is removed. |
+| `StreamingLogicTests.testProgressLineInvalidatesOlderExtractedInsightCache`, `StreamingLogicTests.swift:361` | Preserve the decision-line regression against `currentInsight` and `insightHistory`, the properties the UI actually reads. Keep `InsightsCache`, which extraction still consumes. | `adbb4b6f` switched AnalysisView from `getCachedInsights()` to those published properties. Remove the getter, whose sole remaining caller was this test. |
+| `FinderIntegrationStatusTests.testFinderIntegrationAvailabilityStatusFlagsIncompleteFinderSyncSetup` and `testFinderIntegrationAvailabilityStatusReflectsReadyFinderSync`, `FinderIntegrationStatusTests.swift:26,52` | Detect only changes to abandoned presentation states and text. Real registered, disabled, missing, indeterminate, heartbeat, and running-process diagnostics tests remain. No current presentation contract needs replacement proof. | `6ffa92a2` added the mapper for an experimental settings row; `e9d11de0` removed its UI consumers. Delete these two methods plus `FinderIntegrationAvailabilityStatus` and its mapper. Current settings use `FinderSyncDiagnostics.setupState`. |
+| `FinderIntegrationStatusTests.testFinderRequestIsConsumedOnlyOnce`, `FinderIntegrationStatusTests.swift:14` | Preserve the consume-once IPC contract by awaiting the live `receiveFromExtensionAsync` twice. Fixture creation now throws and directory cleanup uses `defer`. | `7530e24b` migrated ExtensionListener to the async receiver. Remove the unused synchronous receiver, retaining off-main validation and read/remove ordering in the live path. |
+
+These are internal app implementation leftovers. SwiftPM declares public
+library products, so caller counts alone were insufficient; each removed API
+also has a documented replacement or a deleted owning flow. No package,
+protocol, persistence, migration, or documented external contract was removed.
+Risk is loss of a downstream dependency on an undocumented obsolete helper;
+repository callers and compiled tests must be checked after removal.
+
+### Genuine bug retained and repaired
+
+`LLMRuleInducer` advertises `{day}` in destination templates, but
+`LearningsAnalyzer.applyTemplate` computed the day without substituting it.
+The existing matching-rule test now demands the exact
+`/Photos/2024/01/01/IMG_20240101_123456.jpg` destination for a
+`{year}/{month}/{day}/{filename}` template. The repair belongs in the shared
+expander used by both batch analysis and single-file proposals. It needs no
+new production hook.
+
+### Retained and deferred
+
+Keep history/profile/snapshot/default-key migrations, quota/auth redaction,
+prompt contracts, and all five cache-tooling test files. The cache tests run in
+Swift CI and exercise real invalidation, corruption, metadata, signing, and
+executable behavior. Documented hidden error-preview routes are maintained
+manual tooling, not dead tests.
+
+`ContentAnalyzer.analyzeFiles` still has test-only callers, but scanner progress
+and cancellation proof must move to the live scanner boundary before removing
+it. Public model mutation/convenience APIs, mapping feedback/JSON helpers,
+secure deletion, and organizer reset need more contract/history evidence.
+Several native UI tests target retired controls or allow conditional no-op
+success. They require supported fixtures and a native UI run before deciding
+what to repair or remove. None was deleted to hide a failure.
+
+### Execution
+
+Focused Swift selection:
+`swift test --filter 'ImageVisionAnalyzerTests|FolderOrganizerVisionFlowTests|FinderIntegrationStatusTests|StreamingLogicTests|LearningsAnalyzerTests|LearningsRuleScoringTests'`.
+Tooling selection matches hosted CI:
+`PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -p 'test_*cache.py'`.
+
+Execution results and hosted run links are recorded below after checks finish.
+The imported OpenClaw/Vitest/autoreview commands remain unavailable; independent
+subagent diff review and Sorty's actual checks are used instead.
+
+Local results: all 101 selected Swift tests passed after rebuilding the changed
+production modules, including the exact-path day regression. Before the fix,
+that regression failed with `/Photos/2024/01/{day}/IMG_20240101_123456.jpg`.
+All seven cache-tooling tests passed. An earlier sandbox-denied build attempt
+ran stale output and is excluded from this proof. `git diff --check` passed;
+independent subagent diff review found no blocking issue.
+
+Production: 2 lines added, 143 removed, net -141. Tests: 31 added, 70 removed,
+net -39. Documentation is counted separately. Only the two obsolete Finder
+presentation test methods were deleted outright; the other affected contracts
+were retained at their live owners. Native UI tests were not run. Existing
+SortyApp analytics actor-isolation warnings remain outside this cleanup.
+Hosted Swift CI will validate the pushed code commit independently.
