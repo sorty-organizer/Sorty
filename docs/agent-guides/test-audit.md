@@ -244,6 +244,7 @@ duplicate `SemanticAnalysisTests`).
 Local: `swift build --build-tests` clean (only existing SortyApp analytics
 actor-isolation warnings); 293 affected tests passed, then the full package
 suite: 993 tests, 0 failures, 1 skipped. Production net -1,051 lines, tests net
--157 since `57f3fd41`. Native UI tests were not run. Hosted Swift CI was
-triggered by `3cc5be10`.
+-157 since `57f3fd41`. Native UI tests were not run. Hosted
+[Swift CI run 39097524984](https://github.com/sorty-organizer/Sorty/actions/runs/39097524984)
+passed for `3cc5be10` (package tests, app build, fuzzing, Gitleaks).
 
