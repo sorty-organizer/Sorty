@@ -1230,7 +1230,7 @@ struct LearningsView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(rule.explanation)
                             .font(.subheadline)
-                        Text(rule.isEnabled ? "Enabled · \(rule.scope.displayName)" : "Disabled · \(rule.scope.displayName)")
+                        Text("\(ruleStateLabel(rule)) · \(rule.scope.displayName)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -1244,6 +1244,10 @@ struct LearningsView: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint("Shows the pattern, evidence, and usage details")
+
+            if rule.status == .pendingApproval {
+                PendingRuleApprovalButton(rule: rule, manager: manager)
+            }
 
             Toggle(
                 "Enable \(rule.explanation)",
@@ -1347,8 +1351,8 @@ struct LearningsView: View {
 
     private func patternRecordFields(_ rule: InferredRule) -> [LearningRecordField] {
         var fields = [
-            LearningRecordField(label: "Status", value: rule.isEnabled ? "Enabled" : "Disabled"),
-            LearningRecordField(label: "Approval", value: rule.status.rawValue.capitalized),
+            LearningRecordField(label: "Status", value: ruleStateLabel(rule)),
+            LearningRecordField(label: "Approval", value: ruleApprovalLabel(rule.status)),
             LearningRecordField(label: "Scope", value: rule.scope.displayName),
             LearningRecordField(label: "Pattern", value: rule.pattern),
             LearningRecordField(label: "Destination Template", value: rule.template),
@@ -1961,6 +1965,45 @@ struct LearningsView: View {
     }
 }
 
+// MARK: - Pending Rule Approval
+
+/// Low-confidence induced rules start as `.pendingApproval`: the model sees
+/// them only as flagged candidates and they never apply on their own. Rule
+/// rows use this to say so, and the Approve button promotes the rule to active.
+private func ruleStateLabel(_ rule: InferredRule) -> String {
+    if rule.status == .pendingApproval {
+        return rule.isEnabled ? "Awaiting approval" : "Awaiting approval, disabled"
+    }
+    return rule.isEnabled ? "Enabled" : "Disabled"
+}
+
+private func ruleApprovalLabel(_ status: RuleStatus) -> String {
+    switch status {
+    case .active: return "Approved"
+    case .pendingApproval: return "Awaiting approval"
+    case .rejected: return "Rejected"
+    case .cooldown: return "Cooling down"
+    }
+}
+
+private struct PendingRuleApprovalButton: View {
+    let rule: InferredRule
+    @ObservedObject var manager: LearningsManager
+
+    var body: some View {
+        Button("Approve") {
+            Task {
+                await manager.approveRule(ruleId: rule.id)
+                HapticFeedbackManager.shared.success()
+            }
+        }
+        .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
+        .help("Let Sorty apply this pattern on its own")
+        .accessibilityLabel("Approve pattern")
+        .accessibilityIdentifier("ApprovePendingRuleButton")
+    }
+}
+
 // MARK: - Learning Insight Row
 
 private struct LearningInsightRow: View {
@@ -2023,6 +2066,10 @@ private struct LearningInsightRow: View {
 
             Spacer()
 
+            if rule.status == .pendingApproval {
+                PendingRuleApprovalButton(rule: rule, manager: manager)
+            }
+
             Toggle(
                 "",
                 isOn: Binding(
@@ -2050,7 +2097,7 @@ private struct LearningInsightRow: View {
             if hovering { HapticFeedbackManager.shared.selection() }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(rule.explanation). \(rule.isEnabled ? "Enabled" : "Disabled")")
+        .accessibilityLabel("\(rule.explanation). \(ruleStateLabel(rule))")
     }
 
     private var confidenceColor: Color {
