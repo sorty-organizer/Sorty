@@ -233,27 +233,6 @@ final class FolderSuggestionTests: XCTestCase {
         XCTAssertEqual(mapping?.suggestedName, "renamed.txt")
     }
     
-    // MARK: - Files With Final Names Tests
-    
-    func testFilesWithFinalNames() {
-        let file1 = FileItem(path: "/test/file1.txt", name: "file1", extension: "txt", size: 100, isDirectory: false)
-        let file2 = FileItem(path: "/test/file2.txt", name: "file2", extension: "txt", size: 100, isDirectory: false)
-        
-        let rename1 = FileRenameMapping(originalFile: file1, suggestedName: "renamed1.txt")
-        
-        let suggestion = FolderSuggestion(
-            folderName: "Test",
-            files: [file1, file2],
-            fileRenameMappings: [rename1]
-        )
-        
-        let withNames = suggestion.filesWithFinalNames
-        
-        XCTAssertEqual(withNames.count, 2)
-        XCTAssertEqual(withNames[0].finalName, "renamed1.txt")
-        XCTAssertEqual(withNames[1].finalName, file2.displayName)
-    }
-    
     // MARK: - Mutating Helper Tests
     
     func testAddFileWithRename() {

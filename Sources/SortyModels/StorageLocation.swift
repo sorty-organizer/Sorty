@@ -96,29 +96,6 @@ private extension StorageOrganizationCapability {
     }
 }
 
-/// RAII-style wrapper for security-scoped resource access
-public class ScopedSecurityAccess {
-    public let url: URL
-    private let didAccess: Bool
-    private var didCleanup = false
-
-    public init(url: URL, didAccess: Bool) {
-        self.url = url
-        self.didAccess = didAccess
-    }
-    
-    deinit {
-        cleanup()
-    }
-    
-    public func cleanup() {
-        if didAccess && !didCleanup {
-            didCleanup = true
-            url.stopAccessingSecurityScopedResource()
-        }
-    }
-}
-
 /// A local, cloud, or external location that can participate in organization.
 public struct StorageLocation: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
@@ -603,55 +580,6 @@ public class StorageLocationsManager: ObservableObject {
             }
             return result
         }
-    }
-    
-    /// Resolves a storage location URL with security-scoped access
-    /// Returns a wrapper that ensures balanced access (call .cleanup() when done).
-    /// Renews stale bookmarks so access survives across launches.
-    public func resolveURL(for location: StorageLocation) -> ScopedSecurityAccess? {
-        guard let bookmarkData = location.bookmarkData else {
-            return ScopedSecurityAccess(url: location.url, didAccess: false)
-        }
-
-        var isStale = false
-        do {
-            let url = try URL(resolvingBookmarkData: bookmarkData,
-                              options: .withSecurityScope,
-                              relativeTo: nil,
-                              bookmarkDataIsStale: &isStale)
-
-            if isStale {
-                do {
-                    let renewed = try url.bookmarkData(
-                        options: .withSecurityScope,
-                        includingResourceValuesForKeys: nil,
-                        relativeTo: nil
-                    )
-                    if let index = locations.firstIndex(where: { $0.id == location.id }) {
-                        locations[index].bookmarkData = renewed
-                        saveLocations()
-                    }
-                } catch {
-                    ModelLog.debug("Failed to renew stale storage bookmark: \(error.localizedDescription)")
-                }
-            }
-
-            if url.startAccessingSecurityScopedResource() {
-                return ScopedSecurityAccess(url: url, didAccess: true)
-            }
-            // startAccessing returns false outside the sandbox even for valid
-            // bookmarks; only mark lost when actually sandboxed.
-            if SandboxEnvironment.isSandboxed {
-                markAccessLost(for: location.id)
-            } else {
-                return ScopedSecurityAccess(url: url, didAccess: false)
-            }
-        } catch {
-            markAccessLost(for: location.id)
-            ModelLog.debug("Failed to resolve storage location bookmark: \(error)")
-        }
-
-        return nil
     }
     
     /// Restores access to all security-scoped bookmarks off the main actor.

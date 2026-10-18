@@ -1043,10 +1043,6 @@ public class OrganizationHistory: ObservableObject {
         entries.count
     }
 
-    public var revertedCount: Int {
-        entries.filter { $0.status == .undo || $0.status == .partiallyUndone || $0.isUndone }.count
-    }
-    
     public var successRate: Double {
         let completed = entries.filter { $0.status == .completed }.count
         let total = entries.count
@@ -1069,11 +1065,6 @@ public class OrganizationHistory: ObservableObject {
     public var totalTimeSaved: TimeInterval {
         entries.filter { $0.status == .completed }
             .compactMap(\.storedEstimatedTimeSaved)
-            .reduce(0, +)
-    }
-
-    public var totalEstimatedCost: Decimal {
-        entries.compactMap(\.storedEstimatedCost)
             .reduce(0, +)
     }
 

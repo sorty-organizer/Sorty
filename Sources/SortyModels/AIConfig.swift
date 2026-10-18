@@ -732,8 +732,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
     /// clamped here instead of reaching `URLSession` as 0/negative values.
     public static let minRequestTimeout: TimeInterval = 30
     public static let maxRequestTimeout: TimeInterval = 300
-    /// Global deadline for a whole organize run across all batches/retries.
-    public static let globalOrganizeDeadline: TimeInterval = 600
 
     public var provider: AIProvider {
         didSet {
@@ -1154,12 +1152,6 @@ public extension AIConfig {
     /// cannot pin the radio for the legacy 600s default.
     public var effectiveOrganizeResourceTimeout: TimeInterval {
         min(max(resourceTimeout, Self.minOrganizeResourceTimeout), Self.maxOrganizeResourceTimeout)
-    }
-
-    /// Deadline for a whole organize run; callers capture `Date() + deadline`
-    /// before the first batch and check `Date() > deadline` per batch/retry.
-    func organizeDeadlineDate(from start: Date = Date()) -> Date {
-        start.addingTimeInterval(Self.globalOrganizeDeadline)
     }
 
     /// Keeps a programmatically supplied temperature inside the range

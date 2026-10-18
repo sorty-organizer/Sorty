@@ -16,9 +16,6 @@ public actor FileSystemManager {
     private let fileManager = FileManager.default
     private var activeBookmarks: [URL: Int] = [:]
 
-    // Track files that are currently being reverted to prevent re-organization
-    private var revertingPaths: Set<String> = []
-
     // MARK: - Cross-Volume Move Optimization
 
     private var crossVolumeProgressHandler: (@Sendable (String, Double) -> Void)?
@@ -613,27 +610,6 @@ public actor FileSystemManager {
     }
 
     public init() {}
-
-    // MARK: - Revert Protection
-
-    /// Check if a path is currently being reverted
-    public func isPathBeingReverted(_ path: String) -> Bool {
-        return revertingPaths.contains(path) || revertingPaths.contains { StorageLocationPathResolver.isPath(path, within: $0) }
-    }
-
-    /// Mark paths as being reverted to prevent re-organization
-    private func markPathsAsReverting(_ paths: [String]) {
-        for path in paths {
-            revertingPaths.insert(path)
-        }
-    }
-
-    /// Clear revert marks after completion
-    private func clearRevertMarks(_ paths: [String]) {
-        for path in paths {
-            revertingPaths.remove(path)
-        }
-    }
 
     private func resolvedFinalFilename(
         for file: FileItem,
@@ -1684,14 +1660,6 @@ public actor FileSystemManager {
             _ = startAccessing(URL(fileURLWithPath: path), recordingInto: securityScope)
         }
         defer { releaseSecurityScope(securityScope) }
-
-        // Mark paths as reverting to prevent re-organization by watched folders
-        markPathsAsReverting(involvedPaths)
-
-        defer {
-            // Always clear revert marks when done
-            clearRevertMarks(involvedPaths)
-        }
 
         // Reverse in opposite order of creation
         let reversedOps = operations.reversed()

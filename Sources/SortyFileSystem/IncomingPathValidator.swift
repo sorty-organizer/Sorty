@@ -178,14 +178,6 @@ public struct IncomingPathValidator {
         return .success(url)
     }
 
-    /// Non-throwing convenience for observers that must drop invalid IPC silently.
-    public static func validatedDirectoryURLIfValid(path: String?) -> URL? {
-        if case .success(let url) = validatedDirectoryURL(for: path) {
-            return url
-        }
-        return nil
-    }
-
     /// Off-main variant for IPC/deeplink observers: fileExists/readability
     /// probes run on a utility worker so notification delivery never blocks
     /// the main thread. Hop back to MainActor only for confirmed URLs.

@@ -83,10 +83,6 @@ public actor VisionAnalyzer {
         recognitionLanguages = cleaned.isEmpty ? ["en-US"] : Array(Set(cleaned)).sorted()
     }
 
-    public func getRecognitionLanguages() -> [String] {
-        recognitionLanguages
-    }
-
     public func clearCache() {
         ocrCache.removeAll()
     }

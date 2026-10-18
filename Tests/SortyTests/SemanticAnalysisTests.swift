@@ -383,22 +383,6 @@ class FileItemSemanticTests: XCTestCase {
         XCTAssertNil(fileWithoutDimensions.totalPixels)
     }
 
-    func testFinalDisplayName() {
-        let file = FileItem(
-            path: "/test/IMG_001.jpg",
-            name: "IMG_001",
-            extension: "jpg",
-            suggestedFilename: "2024-01-15_Beach.jpg"
-        )
-        XCTAssertEqual(file.finalDisplayName, "2024-01-15_Beach.jpg")
-
-        let fileWithoutSuggestion = FileItem(
-            path: "/test/photo.jpg",
-            name: "photo",
-            extension: "jpg"
-        )
-        XCTAssertEqual(fileWithoutSuggestion.finalDisplayName, "photo.jpg")
-    }
 }
 
 // MARK: - Response Parser Smart Renaming Tests

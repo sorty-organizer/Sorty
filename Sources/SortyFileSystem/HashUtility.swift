@@ -148,13 +148,6 @@ public enum HashUtility {
         return .success(hexDigest(hasher.finalize()))
     }
 
-    /// Reads only the first and last 64 KiB of large files. Files at or below
-    /// 128 KiB are hashed completely, so that digest can be used as the final
-    /// exact-match hash without reading the file again.
-    public static func computeSampleFingerprint(for url: URL) -> SampleFingerprint? {
-        computeSampleFingerprintResult(for: url).value
-    }
-
     package static func computeSampleFingerprintResult(for url: URL) -> ReadResult<SampleFingerprint> {
         let handle: FileHandle
         switch openRegularFile(at: url) {

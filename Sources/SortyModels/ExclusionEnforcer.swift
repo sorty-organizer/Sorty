@@ -216,21 +216,6 @@ public class ExclusionEnforcer: ObservableObject {
         }
     }
     
-    /// Get commonly violated rule types for improving default prompts
-    public func getViolationPatterns() -> [ExclusionRuleType: Int] {
-        var patterns: [ExclusionRuleType: Int] = [:]
-        
-        for violation in recentViolations {
-            patterns[violation.rule.type, default: 0] += 1
-        }
-        
-        return patterns
-    }
-    
-    /// Clear violation history
-    public func clearViolationHistory() {
-        recentViolations.removeAll()
-    }
 }
 
 // MARK: - FolderSuggestion Extension

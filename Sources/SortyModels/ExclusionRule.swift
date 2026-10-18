@@ -625,19 +625,6 @@ public struct ExclusionMatcher: Sendable {
         return matchingRules(cache: &cache).first?.id
     }
 
-    func matchingRuleIDs(for file: FileItem) -> [UUID] {
-        var cache = ExclusionMatchCache(
-            path: file.path,
-            name: file.name,
-            pathExtension: file.extension,
-            size: file.size,
-            creationDate: file.creationDate,
-            modificationDate: file.modificationDate,
-            finderLabelNumber: file.finderLabelNumber
-        )
-        return matchingRules(cache: &cache).map(\.id)
-    }
-
     private func matchesAnyRule(cache: inout ExclusionMatchCache) -> Bool {
         matchesAnyRule(in: rules, cache: &cache)
     }
@@ -1315,13 +1302,6 @@ public class ExclusionRulesManager: ObservableObject {
     public func updateRule(_ rule: ExclusionRule) {
         if let index = rules.firstIndex(where: { $0.id == rule.id }) {
             rules[index] = rule
-            saveRules()
-        }
-    }
-
-    public func toggleRule(_ rule: ExclusionRule) {
-        if let index = rules.firstIndex(where: { $0.id == rule.id }) {
-            rules[index].isEnabled.toggle()
             saveRules()
         }
     }

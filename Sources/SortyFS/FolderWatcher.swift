@@ -252,42 +252,12 @@ public final class FolderWatcher: @unchecked Sendable {
         }
     }
 
-    public func startWatching(_ folder: WatchedFolder) {
-        queue.async { [weak self] in
-            guard let self, folder.isEnabled else { return }
-            let previousRoots = self.monitoringRoots
-            self.install(folder, minimumEventID: FSEventsGetCurrentEventId())
-            self.rebuildPathIndex()
-            if previousRoots != self.monitoringRoots {
-                self.rebuildStream()
-            }
-            self.beginScan(
-                at: self.rootPath(for: folder.id, folder: folder),
-                isRecovery: true
-            )
-            self.startHealthTimerIfNeeded()
-        }
-    }
-
     /// Reconciles persisted baselines with disk without waiting for a stream event.
     /// This is used after launch/configuration and as a bounded fallback if FSEvents
     /// was quiet while the app was rebuilding or not running.
     public func reconcileNow() {
         queue.async { [weak self] in
             self?.scheduleFullReconciliation()
-        }
-    }
-
-    public func stopWatching(_ folder: WatchedFolder) {
-        queue.async { [weak self] in
-            guard let self else { return }
-            let previousRoots = self.monitoringRoots
-            self.uninstall(folderID: folder.id)
-            self.rebuildPathIndex()
-            if previousRoots != self.monitoringRoots {
-                self.rebuildStream()
-            }
-            self.stopHealthTimerIfIdle()
         }
     }
 
@@ -369,13 +339,6 @@ public final class FolderWatcher: @unchecked Sendable {
             }
             self.startHealthTimerIfNeeded()
             self.stopHealthTimerIfIdle()
-        }
-    }
-
-    public func reacquireAccessIfNeeded(for folder: WatchedFolder) -> Bool {
-        performOnQueueSyncIfNeeded {
-            guard watchedFolders[folder.id] != nil else { return false }
-            return resolveBookmark(for: folder) != nil
         }
     }
 

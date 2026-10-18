@@ -581,13 +581,6 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertEqual(organizer.state, .applying)
     }
     
-    func testResetToIdleState() {
-        _ = organizer.transition(to: .scanning)
-        XCTAssertEqual(organizer.state, .scanning)
-        
-        organizer.resetToIdleState()
-        XCTAssertEqual(organizer.state, .idle)
-    }
 }
 
 actor IsolatedBatchStreamingMockClient: AIClientProtocol {

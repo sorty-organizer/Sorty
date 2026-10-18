@@ -160,14 +160,6 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         finderLabelNumber.flatMap(FinderTagColor.init(rawValue:))?.name
     }
 
-    /// Returns the suggested filename if available, otherwise the original display name
-    public var finalDisplayName: String {
-        if let suggested = suggestedFilename, !suggested.isEmpty {
-            return suggested
-        }
-        return displayName
-    }
-
     /// Check if this file has semantic content (OCR or extracted text)
     public var hasSemanticContent: Bool {
         if let ocr = ocrText, !ocr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
