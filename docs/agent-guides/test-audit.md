@@ -374,4 +374,10 @@ Xcode project parsing, and `git diff --check` passed.
 Production: 31 lines added, 1,946 removed, net -1,915. Tests including native:
 7 added, 564 removed, net -557. Binary resources: 1,074,107 bytes removed.
 Manifest, Xcode, docs, and tooling counts are separate. Native UI tests and
-release-signing were not run. Hosted CI results follow after completion.
+release-signing were not run.
+
+Pushed runtime cleanup `f3501672` and tour/test cleanup `ba8d577c` directly to
+`main`. The user opted out of Blacksmith validation after the automatic
+[run 39105784683](https://github.com/sorty-organizer/Sorty/actions/runs/39105784683)
+was triggered; cancellation was requested. This pass claims local build/test,
+fuzz, pruning, and static-review proof only.
