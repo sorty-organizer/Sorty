@@ -21,24 +21,6 @@ final class ResourceLoadingTests: XCTestCase {
         XCTAssertNil(invalidImage, "Non-existent image should return nil")
     }
 
-    func testWhatsNewTourImagesLoadFromResources() {
-        let expectedImages = [
-            "whats-new-preview",
-            "whats-new-design-system-1",
-            "whats-new-design-system-2",
-            "whats-new-design-system-3",
-            "whats-new-design-system-4",
-            "whats-new-design-system-5"
-        ]
-
-        for imageName in expectedImages {
-            let image = SortyResources.image(named: imageName)
-            XCTAssertNotNil(image, "\(imageName) should be bundled for the What's New tour")
-            XCTAssertGreaterThan(image?.size.width ?? 0, 2, "\(imageName) should have a valid width")
-            XCTAssertGreaterThan(image?.size.height ?? 0, 2, "\(imageName) should have a valid height")
-        }
-    }
-
     func testWhatsNewAppIconLoadsWithoutBundleModule() {
         // The What's New tour shows AppIcon-Release.png from Resources/AppIcons.
         // Loading must use safe bundle lookups only — Bundle.module traps with

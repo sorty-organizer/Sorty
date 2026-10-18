@@ -1031,6 +1031,12 @@ prune_nonshipping_resources() {
         "${resources_dir}/dmg-background.png" \
         "${resources_dir}/dmg-background-with-toolbar.png" \
         "${resources_dir}/dmg-layout.json" \
+        "${resources_dir}/whats-new-preview.png" \
+        "${resources_dir}/whats-new-design-system-1.png" \
+        "${resources_dir}/whats-new-design-system-2.png" \
+        "${resources_dir}/whats-new-design-system-3.png" \
+        "${resources_dir}/whats-new-design-system-4.png" \
+        "${resources_dir}/whats-new-design-system-5.png" \
         "${resources_dir}/whats-new-mid-generation.png" \
         "${resources_dir}/whats-new-rename-only.png"
 

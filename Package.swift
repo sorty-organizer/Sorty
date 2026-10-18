@@ -132,12 +132,6 @@ var packageTargets: [Target] = [
             .copy("Resources/Images"),
             .copy("Resources/AppIcons"),
             .copy("Resources/Shaders"),
-            .copy("Resources/whats-new-design-system-1.png"),
-            .copy("Resources/whats-new-design-system-2.png"),
-            .copy("Resources/whats-new-design-system-3.png"),
-            .copy("Resources/whats-new-design-system-4.png"),
-            .copy("Resources/whats-new-design-system-5.png"),
-            .copy("Resources/whats-new-preview.png"),
             .copy("Resources/SortyAppRepair.entitlements"),
             .process("Resources/Localizable.xcstrings"),
             .process("Resources/SortyMascotTemplate.svg")

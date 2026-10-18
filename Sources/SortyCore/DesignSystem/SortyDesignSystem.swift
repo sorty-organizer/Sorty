@@ -113,27 +113,6 @@ public enum SortyDesignSystem {
 
     // MARK: - Sizing
     public enum Sizing {
-        // Icon sizes
-        public static let iconSmall: CGFloat = 12
-        public static let iconMedium: CGFloat = 16
-        public static let iconLarge: CGFloat = 20
-        public static let iconXLarge: CGFloat = 24
-        public static let iconXXLarge: CGFloat = 32
-        public static let iconHuge: CGFloat = 48
-
-        // Button sizes
-        public static let buttonHeightSmall: CGFloat = 24
-        public static let buttonHeightMedium: CGFloat = 32
-        public static let buttonHeightLarge: CGFloat = 40
-
-        // Card sizes
-        public static let cardCornerRadius: CGFloat = 12
-        public static let cardPadding: CGFloat = 16
-        public static let cardMinWidth: CGFloat = 200
-
-        // Window sizes
-        public static let windowMinWidth: CGFloat = 1000
-        public static let windowMinHeight: CGFloat = 700
         public static let windowOnboardingWidth: CGFloat = 1100
         public static let windowOnboardingHeight: CGFloat = 720
     }

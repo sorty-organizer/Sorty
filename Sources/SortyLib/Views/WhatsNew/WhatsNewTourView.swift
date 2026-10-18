@@ -8,17 +8,13 @@ public struct WhatsNewTourView: View {
     private let onFinish: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.controlActiveState) private var controlActiveState
-    @Environment(\.scenePhase) private var scenePhase
     @State private var currentPage = 0
-    @State private var workflowImageIndex = 0
     @State private var isActionHovering = false
     @State private var interactionMonitor: Any?
     @State private var isPointerInside = false
     @State private var swipeAccumulatedTranslation: CGFloat = 0
     @State private var hasTriggeredSwipeForGesture = false
     @State private var navigationDirection: CGFloat = 1
-    @State private var isWindowVisible = true
 
     private let swipeThreshold: CGFloat = 42
     private let maximumSwipeOffset: CGFloat = 14
@@ -40,28 +36,7 @@ public struct WhatsNewTourView: View {
                 .padding(.bottom, 8)
         }
         .animation(pageTransitionAnimation, value: currentPage)
-        .task(
-            id: ImageRotationTaskID(
-                page: currentPage,
-                reduceMotion: reduceMotion,
-                isWindowVisible: isWindowVisible,
-                controlActiveState: controlActiveState,
-                scenePhase: scenePhase
-            )
-        ) {
-            guard !reduceMotion, isWindowVisible, controlActiveState != .inactive,
-                  scenePhase == .active, page.imageNames.count > 1 else { return }
-
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(8_000))
-                guard !Task.isCancelled else { return }
-                withAnimation(imageTransitionAnimation) {
-                    workflowImageIndex = (workflowImageIndex + 1) % page.imageNames.count
-                }
-            }
-        }
         .contentShape(Rectangle())
-        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .windowLinkHoverPillHost()
         .onHover { isInside in
             isPointerInside = isInside
@@ -75,10 +50,6 @@ public struct WhatsNewTourView: View {
         .onDisappear {
             removeInteractionMonitor()
         }
-    }
-
-    private var imageTransitionAnimation: Animation? {
-        reduceMotion ? nil : .easeInOut(duration: 0.72)
     }
 
     private var pageTransitionAnimation: Animation? {
@@ -355,8 +326,8 @@ public struct WhatsNewTourView: View {
             if currentPage == 1 {
                 menuIconComparison
                     .frame(width: 640, height: 400)
-            } else if let imageName = page.activeImageName(at: imageIndex(for: page)) {
-                bundledImage(imageName, fillsFrame: page.imageNames.count > 1)
+            } else if let imageName = page.imageName {
+                bundledImage(imageName)
                     .padding(.vertical, currentPage == 0 ? 10 : 0)
                     .frame(width: 640, height: 400)
                     .clipped()
@@ -367,9 +338,6 @@ public struct WhatsNewTourView: View {
                             removal: .opacity.combined(with: .scale(scale: 0.994))
                         )
                     )
-            } else {
-                finderIntegrationPreview
-                    .frame(width: 640, height: 400)
             }
 
             if currentPage != 1 {
@@ -386,11 +354,6 @@ public struct WhatsNewTourView: View {
             }
         }
         .frame(width: 640, height: 400)
-        .animation(imageTransitionAnimation, value: workflowImageIndex)
-    }
-
-    private func imageIndex(for page: WhatsNewPage) -> Int {
-        page.imageNames.count > 1 ? workflowImageIndex : 0
     }
 
     // The 1.3.0 comparison is temporary. Remove this page and the Old PNGs
@@ -425,11 +388,11 @@ public struct WhatsNewTourView: View {
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .frame(width: 160, height: 40, alignment: .leading)
 
-                    bundledImage("SortyMenuOld\(activity.resource).png", fillsFrame: false)
+                    bundledImage("SortyMenuOld\(activity.resource).png")
                         .frame(width: 82, height: 40)
                         .accessibilityLabel("Previous \(activity.name) icon")
 
-                    bundledImage("SortyMenu\(activity.resource).png", fillsFrame: false)
+                    bundledImage("SortyMenu\(activity.resource).png")
                         .frame(width: 82, height: 40)
                         .accessibilityLabel("New \(activity.name) icon")
                 }
@@ -440,19 +403,12 @@ public struct WhatsNewTourView: View {
     }
 
     @ViewBuilder
-    private func bundledImage(_ name: String, fillsFrame: Bool) -> some View {
+    private func bundledImage(_ name: String) -> some View {
         if let image = WhatsNewImageLoader.image(named: name) {
-            if fillsFrame {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            } else {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            }
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         } else {
             missingImagePlaceholder(name)
         }
@@ -469,108 +425,6 @@ public struct WhatsNewTourView: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var finderIntegrationPreview: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
-                .frame(width: 500, height: 276)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-                }
-
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 8) {
-                    Circle().fill(Color.red.opacity(0.85)).frame(width: 10, height: 10)
-                    Circle().fill(Color.yellow.opacity(0.85)).frame(width: 10, height: 10)
-                    Circle().fill(Color.green.opacity(0.85)).frame(width: 10, height: 10)
-                    Spacer()
-                    Image(systemName: "folder")
-                        .foregroundStyle(.cyan)
-                }
-                .padding(16)
-
-                Divider()
-
-                HStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        finderSidebarRow("Downloads", icon: "arrow.down.circle", isActive: true)
-                        finderSidebarRow("Desktop", icon: "desktopcomputer", isActive: false)
-                        finderSidebarRow("Documents", icon: "doc.text", isActive: false)
-                    }
-                    .padding(14)
-                    .frame(width: 160, alignment: .topLeading)
-                    .frame(maxHeight: .infinity, alignment: .topLeading)
-                    .background(Color.primary.opacity(0.04))
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(["Invoices", "Screenshots", "Loose PDFs"], id: \.self) { folder in
-                            HStack(spacing: 10) {
-                                Image(systemName: "folder.fill")
-                                    .foregroundStyle(.cyan)
-                                Text(folder)
-                                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                                    .foregroundStyle(.primary.opacity(0.88))
-                                Spacer()
-                            }
-                        }
-                    }
-                    .padding(18)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                }
-            }
-            .frame(width: 500, height: 276)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 7) {
-                finderMenuItem("Organize with Sorty", icon: "sparkles", isPrimary: true)
-                finderMenuItem("Watch with Sorty", icon: "eye", isPrimary: false)
-                Divider()
-                finderMenuItem("Repair Finder Extension", icon: "puzzlepiece.extension", isPrimary: false)
-            }
-            .padding(10)
-            .frame(width: 220)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.primary.opacity(0.14), lineWidth: 1)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .shadow(color: .black.opacity(0.35), radius: 18, y: 10)
-            .offset(x: 136, y: 58)
-        }
-    }
-
-    private func finderSidebarRow(_ title: String, icon: String, isActive: Bool) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .foregroundStyle(isActive ? .cyan : .secondary)
-            Text(LocalizedStringKey(title))
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(isActive ? .primary : .secondary)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(isActive ? Color.cyan.opacity(0.16) : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private func finderMenuItem(_ title: String, icon: String, isPrimary: Bool) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .frame(width: 16)
-                .foregroundStyle(isPrimary ? .cyan : .secondary)
-            Text(LocalizedStringKey(title))
-                .font(.system(size: 12, weight: isPrimary ? .semibold : .medium, design: .rounded))
-                .foregroundStyle(isPrimary ? .primary : .secondary)
-            Spacer()
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(isPrimary ? Color.cyan.opacity(0.14) : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 
     private var topControls: some View {
@@ -856,42 +710,18 @@ private struct GooeyPageIndicator: View, @MainActor Animatable {
     }
 }
 
-private struct ImageRotationTaskID: Hashable {
-    let page: Int
-    let reduceMotion: Bool
-    let isWindowVisible: Bool
-    let controlActiveState: ControlActiveState
-    let scenePhase: ScenePhase
-}
-
 private struct WhatsNewPage: Hashable {
-    let imageNames: [String]
+    let imageName: String?
     let title: String
     let description: String
 
-    init(imageName: String, title: String, description: String) {
-        self.imageNames = [imageName]
+    init(imageName: String? = nil, title: String, description: String) {
+        self.imageName = imageName
         self.title = title
         self.description = description
-    }
-
-    init(title: String, description: String) {
-        self.imageNames = []
-        self.title = title
-        self.description = description
-    }
-
-    init(imageNames: [String], title: String, description: String) {
-        self.imageNames = imageNames
-        self.title = title
-        self.description = description
-    }
-
-    func activeImageName(at index: Int) -> String? {
-        guard imageNames.indices.contains(index) else { return nil }
-        return imageNames[index]
     }
 }
+
 private enum WhatsNewImageLoader {
     static func image(named name: String) -> NSImage? {
         let resourceName = (name as NSString).deletingPathExtension

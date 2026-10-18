@@ -263,13 +263,13 @@ pass, and no failing test was deleted as a substitute for repairing a bug.
 | Removed code or exact test | Evidence of obsolescence | Retained proof and risk |
 | --- | --- | --- |
 | `AnalysisView.stageIndicator`, `AIReasoningStatus`, `AnalysisRefreshManager`, `RefreshManager` | `df4334d3` removed the rendered stage indicator. The remaining computed property had no caller; timer outputs fed only that property. Removing the manager leaves the generic timer with no source, test, or script consumer. Remove its Xcode file entries too. | Active `StreamingProgressBeam`, progress banner, stream observers, and accessibility labels remain. No checked-in tests exercised the abandoned timer. UI rendering is not claimed by package tests. |
-| `AutomationManager` selection monitoring, timers, activation callbacks, settings/state | `4850d163` introduced demand enrollment, but no caller ever used `beginSelectionMonitoring` or `endSelectionMonitoring`. Demand stays zero, and no feature reads its selection state. | Permission activation observer, opt-in migration, and post-organization actions remain. Explicit selection goes through `LiveOrganizerServices.finderSelectionReader` to `FinderAutomation.getSelectedFiles`. `PermissionReliabilityTests` and Finder diagnostics remain. |
+| `AutomationManager` selection monitoring, timers, activation callbacks, settings/state | `4850d163` introduced demand enrollment, but no caller ever used `beginSelectionMonitoring` or `endSelectionMonitoring`. Demand stays zero, and no feature reads its selection state. | Permission activation observer, opt-in migration, and post-organization actions remain. The subsequent pass below traces that reader to an abandoned entry point and removes it too. Current Finder Sync uses folder deeplinks. `PermissionReliabilityTests` and Finder diagnostics remain. |
 | `ContentAnalyzer.analyzeFiles`; `testAnalyzeFilesEmpty`, `testAnalyzeFilesWithProgress`, `testAnalyzeFilesMixedTypes` in `ContentAnalyzerTests.swift` | The three tests were the only batch-API callers. Production `DirectoryScanner` owns its own two-lane enrichment and invokes `analyze(fileURL:)`, including its cache scheduling. | Extend the existing scanner deep-scan test to check exact text, unsupported-file metadata, and actual progress callbacks. Single-file extraction, cache, OCR, UTF-8, and deep-scan-disabled tests remain. Empty-batch behavior needs no proof after deleting that API. |
 | `FolderSuggestion.addFile`, `removeFile`, `addTag`; `testAddFileWithoutRename`, `testAddFileWithRename`, `testRemoveFile`, `testAddTagToFile`, `testAddDuplicateTag` in `FolderSuggestionTests.swift` | Helpers originated in `44cd5f74`/`24345996`; their only remaining callers were these exclusive helper tests. Live preview edits arrays, and parsing constructs mappings directly. | Keep nested tag/rename lookup, parser, organizer, and live preview coverage. Remove the unused `preservesOriginalExtension` predicate while retaining the exact sanitized-name assertion. |
 | `LearningsManager.acceptMapping`, `rejectMapping`, `editMapping`; `testAcceptMapping`, `testRejectMapping`, `testEditMapping` | Convenience wrappers from `24345996`/`a963c30b` never reached the current app flow. Only these tests called them. | Existing `testAddLabeledExample` owns acceptance. Retarget rejection/edit cases to `addLabeledExample`, preserving category, action, and destination checks. Leave profile persistence, consent, cooldown, and migration tests. |
 | `StorageLocationsManager.discoverAllSubfolders`; `testDiscoverAllSubfoldersIncludesMoreThanPromptLimitedSet` | The 200-folder wrapper had exactly one caller, its own test. Current prompt generation independently calls the same discovery service with a 12-folder limit. | Keep prompt discovery and storage access/recovery tests. The removed test guarded only the retired wrapper's larger inventory, not the prompt contract. |
 | Provider model-documentation properties, instruction placeholder, unused quality accessor/error enum/monitor accessor/private lost-access helper | No source, test, or script consumer. The provider docs UI stopped consuming the properties in `c3833623`. The lost-access helper survived earlier deletion of its caller. | No stored fields, coding keys, migration, protocol requirements, auth, or scoped-access lifecycle removed. These are undocumented app helpers despite SwiftPM's public library products. |
-| Unused Learnings hero, header transition, privacy blur modifier, tour image inventory, preview factories/container | Each entry was declaration-only or reachable solely from another removed helper. Active previews/harnesses use the retained factories. | Keep active privacy masking and `PrivacyPathMaskerTests`, actual tour assets and packaging tests, current Learnings dashboard, and live onboarding/preview helpers. No current rendered UI contract is replaced. |
+| Unused Learnings hero, header transition, privacy blur modifier, tour image inventory, preview factories/container | Each entry was declaration-only or reachable solely from another removed helper. Active previews/harnesses use the retained factories. | Keep active privacy masking and `PrivacyPathMaskerTests`, current tour artwork and packaging tests, current Learnings dashboard, and live onboarding/preview helpers. No current rendered UI contract is replaced. |
 
 ### Retained and deferred
 
@@ -316,3 +316,62 @@ passed: all 983 package tests, test compilation, app build, 20,000-iteration
 fuzzing, cache-tooling checks, and Gitleaks. The dispatch-only pre-release
 validation step was skipped by workflow policy. Native UI and release-signing
 validation remain outside this pass. No PR or branch was created.
+
+## 18 October 2026 continued removal
+
+Baseline: `1bba78c7`. Three agents traced the next candidates and independently
+reviewed each other's removals. Caller searches cover source, tests, scripts,
+Xcode membership, and current UI entry points. Counts below describe only this
+pass.
+
+### Removed owners and retained contracts
+
+| Candidate | Evidence before editing | Coverage and active owner |
+| --- | --- | --- |
+| `LearningsAnalyzer`, `LLMRuleInducer`, manager `analyze`/`runAnalysis`/`configure`, proposal/result DTOs and merge helper | `6ffa92a2` replaced the original analysis UI; `3ba3dc96` removed its synthesis successor, and `4e652c66` removed obsolete commands. The remaining manager operation had only a test caller. The configured analyzer and menu-bar subscription never performed work. Result/proposal types were absent from the profile/archive schema. | Retain `LocalRuleInferenceEngine`, auto-inference triggers, scoped prompt generation, attribution, eligibility, cooldown, exclusions, and encrypted archive/migration tests. Retarget the accepted-example test to `runLocalRuleInference`. Remove the dormant subscription and its no-op early configuration call. |
+| Analyzer-only tests | `LearningsAnalyzerTests.testProposeMappingWithMatchingRule`, `testProposeMappingWithNoMatchingRule`, `testProposeMappingWithMultipleRules`; scoring `testProposeMappingSkipsIneligibleRules`, `testProposeMappingNeverUsesAvoidTemplateAndVetoesAvoidedFolder`; inducer `testInduceRulesFromExamples`, `testInduceRulesWithInvalidJSON`; serialization `testProposedMappingConfidenceLevels` exercise only the retired pipeline. | Remove these tests and their exclusive mock. The earlier `{day}` regression belongs to the retired template expander, not current organization. Rule scoring, avoid parsing, live inference/merge, profile serialization, actual organizer prompts, and attribution tests remain. No live behavior is replaced by a mock. |
+| `LLMJSONExtractor.fencedOrBracketedJSON` | Only the retired inducer and two fuzz assertions consumed it. | Remove the helper and those assertions. Keep balanced object/array extraction and its quoted-delimiter fuzz properties used by real AI clients. |
+| Old selected-Finder organization graph | `16520e49` removed `FinderSelectionButton`, its last UI caller. `organizeSelectedFiles` and its private execution pipeline have no test/script caller. The injected selection reader and AppleScript selection query then have no consumer. | Remove the callbacks, dead error case/classification, and old orchestration. Keep current Finder Sync container selection and `sorty://organize` routing, normal/incremental organization, permission checks, Finder reveal/refresh, filesystem apply/undo, and deeplink tests. No tests needed deletion for this graph. This corrects the earlier pass's incomplete claim that the reader was live merely because the abandoned organizer referenced it. |
+| Public `SortyOrganizer.OrganizationProgress` and unused `VisionAnalysisSummary.hasWarning` | The public progress type originated in `94c45277` and was split in `b7bf6cef`; only four calculator tests construct it. No UI producer consumes it. | Remove `testOrganizationProgressPercentage`, `testOrganizationProgressZeroTotal`, `testOrganizationProgressPhaseWeights`, `testOrganizationProgressPhaseBaseProgress`. Keep the distinct private filesystem progress type, live measured-work counts, stream progress regressions, and apply tests. |
+| Six tour PNGs, screenshot rotation/preload, and old Finder mock | `546d5d3e` replaced both screenshot pages. Current tour pages render the app icon, menu comparison, and native summary. The remaining preload and packaging test only kept retired images alive. | Remove `testWhatsNewTourImagesLoadFromResources`. Retain current app-icon/menu image tests and actual tour resources. Keep navigation, accessibility labels, Reduce Motion transitions, startup delay, hydration, and cancellation gates. Add the six obsolete names to existing bundle pruning so incremental builds drop stale copies. Source assets total 1,074,107 bytes. |
+| Three stale native UI tests | `910cbb4b` removed `ReasoningToggle`, `DeepScanToggle`, and `DuplicatesToggle`. `testSettingsWorkflow` and `testDuplicateDetectionIntegration` always skip; every assertion in `testSettingsFullConfigurationFlow` is conditional on absent controls. None is selected by native CI. | Delete these obsolete tests. Keep real scanner/duplicate settings, provider persistence, navigation, and native layout tests. Keep the meaningful settings-deeplink test with its known stale selector pending a native repair. |
+| Fourteen unused sizing constants | Exact source/test searches found declarations only. | Keep onboarding width/height and their consumers. No replacement constants added. |
+
+### Ineffective Learnings selector
+
+The user explicitly requested its removal. Its selection affected only a label,
+not local inference, reference-directory scanning, or organization. Remove the
+row, overlay, provider-list fetch, state, display helpers, and `effectiveAIConfig`
+plus `testLearningsModelOverrideUsesDedicatedModelForAnalysis` and
+`testLearningsModelOverrideFallsBackWhenProviderChanges`. Existing archive fields, stored
+selection, import/export compatibility, and their round-trip tests remain.
+The regular organization model selector still controls actual AI requests.
+
+### Retained and deferred
+
+Uninstall cleanup wrappers remain. Moving their tests would require exposing
+private methods solely for tests or expanding setup without simplifying the
+owner. Their filesystem safety contracts are valuable. Cross-volume progress
+callbacks also remain because real copy/cancellation tests use them; missing
+UI wiring is a product follow-up. Other stale native UI selectors remain for
+repair rather than deletion. No native app automation was performed.
+
+### Validation
+
+Fresh `swift test --disable-sandbox` compiled the changed modules, app, and
+tests, then passed all 968 package tests with 0 failures and the existing
+security-scoped-bookmark host skip. An initial compile exposed two old
+`fillsFrame: false` tour call sites after the helper simplification; both were
+corrected before this successful build. No failing behavioral test was removed.
+
+`bash scripts/fuzz.sh --seed 357813081177 --iterations 20000` passed all filename,
+parser, and JSON-extractor properties. All seven cache-tooling tests passed.
+The actual `prune_nonshipping_resources` function ran against a temporary bundle
+fixture: all six obsolete images and the stale nested bundle were removed;
+current app-icon/menu resources retained their bytes. `bash -n scripts/build.sh`,
+Xcode project parsing, and `git diff --check` passed.
+
+Production: 31 lines added, 1,946 removed, net -1,915. Tests including native:
+7 added, 564 removed, net -557. Binary resources: 1,074,107 bytes removed.
+Manifest, Xcode, docs, and tooling counts are separate. Native UI tests and
+release-signing were not run. Hosted CI results follow after completion.

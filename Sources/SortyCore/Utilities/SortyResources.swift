@@ -37,24 +37,6 @@ public enum SortyResources {
         imageCache.removeAllObjects()
     }
 
-    /// Resolves the resource bundle and decodes images away from the main
-    /// actor. Callers use this for launch-adjacent artwork that is not needed
-    /// for the first frame.
-    @MainActor
-    public static func preloadImages(named names: [String]) async {
-        await Task.detached(priority: .utility) {
-            for name in names {
-                let resourceName = (name as NSString).deletingPathExtension
-                let resourceExtension = (name as NSString).pathExtension
-                let loaded = image(
-                    named: resourceName,
-                    withExtension: resourceExtension.isEmpty ? "png" : resourceExtension
-                )
-                prepareForDisplay(loaded)
-            }
-        }.value
-    }
-
     @MainActor
     public static func imageAsync(named name: String, withExtension ext: String = "png") async -> NSImage? {
         let loaded = await Task.detached(priority: .utility) {

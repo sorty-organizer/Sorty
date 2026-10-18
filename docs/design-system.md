@@ -8,7 +8,7 @@ Only the members listed here exist — everything unused was removed.
 - **Colors** — brand (`accent`), semantic category pairs (`purple/blue/green/orange/red` + `*Light`), status (`success/warning/error/info`), backgrounds, text tiers, glass/overlay tokens.
 - **Typography** — five helpers with matching size constants: `caption2`, `subheadline`, `body`, `headline`, `title3`.
 - **Spacing** — `xxs…xl` plus section spacing constants.
-- **Sizing** — icon/button/card sizes, corner radius, window minimums.
+- **Sizing** — onboarding window dimensions.
 - **Radius** — corner radius tokens.
 
 ## Usage

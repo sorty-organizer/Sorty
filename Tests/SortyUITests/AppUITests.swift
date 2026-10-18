@@ -44,82 +44,6 @@ final class AppUITests: XCTestCase {
         }
     }
 
-    // MARK: - Settings Persistence Tests
-    // These tests verify that settings changes actually persist
-
-    // MARK: - Settings Workflow Tests
-    // Consolidated test to reduce app relaunch overhead
-    
-    func testSettingsWorkflow() throws {
-        navigateToView("SettingsSidebarItem")
-        
-        // 1. Test Reasoning Toggle & Persistence
-        let reasoningToggle = app.switches["ReasoningToggle"]
-        guard waitForElement(reasoningToggle, timeout: 3.0) else {
-            throw XCTSkip("Reasoning toggle not found")
-        }
-        
-        // Get initial state
-        let initialReasoningState = reasoningToggle.value as? String
-        
-        // Toggle
-        reasoningToggle.click()
-        Thread.sleep(forTimeInterval: 0.3)
-        let toggledReasoningState = reasoningToggle.value as? String
-        XCTAssertNotEqual(initialReasoningState, toggledReasoningState, "Toggle should change state")
-        
-        // Navigate away and back to verify persistence
-        navigateToView("OrganizeSidebarItem")
-        navigateToView("SettingsSidebarItem")
-        
-        let persistedReasoningState = reasoningToggle.value as? String
-        XCTAssertEqual(toggledReasoningState, persistedReasoningState, "Reasoning state should persist")
-        
-        // Restore
-        if persistedReasoningState != initialReasoningState {
-             reasoningToggle.click()
-        }
-        
-        // 2. Test Deep Scan Toggle
-        let deepScanToggle = app.switches["DeepScanToggle"]
-        if waitForElement(deepScanToggle) {
-            let initialDeepState = deepScanToggle.value as? String
-            
-            // Ensure on
-            if initialDeepState == "0" {
-                deepScanToggle.click()
-                Thread.sleep(forTimeInterval: 0.2)
-            }
-            XCTAssertEqual(deepScanToggle.value as? String, "1", "Deep Scan should be enabled")
-            
-            // Restore
-            if initialDeepState == "0" {
-                deepScanToggle.click()
-            }
-        }
-        
-        // 3. Test Duplicates Integration
-        let duplicatesToggle = app.switches["DuplicatesToggle"]
-        if waitForElement(duplicatesToggle) {
-             let initialDupState = duplicatesToggle.value as? String
-             if initialDupState == "0" {
-                 duplicatesToggle.click()
-             }
-             
-             // Verify effect in Duplicates view
-             navigateToView("DuplicatesSidebarItem")
-             let scanButton = app.buttons["ScanDuplicatesButton"]
-             XCTAssertTrue(waitForElement(scanButton), "Scan button should exist when enabled")
-             
-             // Restore
-             navigateToView("SettingsSidebarItem")
-             if initialDupState == "0" {
-                 duplicatesToggle.click()
-             }
-        }
-        
-    }
-
     // MARK: - Exclusion Rules Functional Tests
     // These tests verify exclusion rules actually work
 
@@ -445,20 +369,6 @@ final class AppUITests: XCTestCase {
         XCTAssertTrue(settingsTitle.waitForExistence(timeout: 3.0), "App should be responsive after rapid navigation")
     }
 
-    // MARK: - Feature Toggle Verification Tests
-    // These verify that toggling features has the expected effect
-
-    // MARK: - Feature Toggle Verification Tests
-    // Duplicate of the workflow test logic, removing to avoid redundancy
-    // These checks are now covered by testSettingsWorkflow()
-
-
-    // MARK: - Error Handling Tests
-
-    // MARK: - Error Handling Tests
-    // Cancel sheet logic is now covered in testExclusionRulesWorkflow()
-
-
     // MARK: - Sidebar Navigation Tests
 
     func testAllSidebarItemsExistAndAreClickable() throws {
@@ -529,40 +439,6 @@ final class AppUITests: XCTestCase {
         XCTAssertTrue(mainWindow.exists, "Main window should exist")
     }
 
-    func testDuplicateDetectionIntegration() throws {
-        // Enable Duplicate Detection
-        navigateToView("SettingsSidebarItem")
-
-        let duplicatesToggle = app.switches["DuplicatesToggle"]
-        guard waitForElement(duplicatesToggle, timeout: 2.0) else {
-            throw XCTSkip("Duplicates toggle not accessible")
-        }
-
-        let wasEnabled = duplicatesToggle.value as? String == "1"
-
-        // Enable if not already
-        if !wasEnabled {
-            duplicatesToggle.click()
-            Thread.sleep(forTimeInterval: 0.3)
-        }
-
-        // Navigate to Duplicates view - the feature should be fully functional
-        navigateToView("DuplicatesSidebarItem")
-
-        // Scan button should be available and enabled
-        let scanButton = app.buttons["ScanDuplicatesButton"]
-        XCTAssertTrue(waitForElement(scanButton), "Scan button should exist")
-        XCTAssertTrue(scanButton.isEnabled, "Scan button should be enabled when duplicate detection is on")
-
-        // Restore original state
-        if !wasEnabled {
-            navigateToView("SettingsSidebarItem")
-            if waitForElement(duplicatesToggle, timeout: 2.0) {
-                duplicatesToggle.click()
-            }
-        }
-    }
-
     // MARK: - End-to-End Workflow Tests
 
     func testCompleteExclusionRuleCreationAndVerification() throws {
@@ -603,68 +479,4 @@ final class AppUITests: XCTestCase {
         }
     }
 
-    func testSettingsFullConfigurationFlow() throws {
-        navigateToView("SettingsSidebarItem")
-
-        // Record initial states
-        var initialStates: [String: String] = [:]
-
-        let toggles = ["ReasoningToggle", "DeepScanToggle", "DuplicatesToggle"]
-        for toggleId in toggles {
-            let toggle = app.switches[toggleId]
-            if waitForElement(toggle, timeout: 1.0) {
-                initialStates[toggleId] = toggle.value as? String ?? "0"
-            }
-        }
-
-        // Toggle all settings
-        for toggleId in toggles {
-            let toggle = app.switches[toggleId]
-            if toggle.exists {
-                toggle.click()
-                Thread.sleep(forTimeInterval: 0.2)
-            }
-        }
-
-        // Verify all changed
-        for toggleId in toggles {
-            let toggle = app.switches[toggleId]
-            if toggle.exists {
-                let currentState = toggle.value as? String
-                let initialState = initialStates[toggleId]
-                XCTAssertNotEqual(currentState, initialState,
-                                 "\(toggleId) should have changed state")
-            }
-        }
-
-        // Navigate away and back to verify persistence
-        navigateToView("OrganizeSidebarItem")
-        Thread.sleep(forTimeInterval: 0.3)
-        navigateToView("SettingsSidebarItem")
-        Thread.sleep(forTimeInterval: 0.3)
-
-        // Verify states persisted
-        for toggleId in toggles {
-            let toggle = app.switches[toggleId]
-            if waitForElement(toggle, timeout: 1.0) {
-                let currentState = toggle.value as? String
-                let initialState = initialStates[toggleId]
-                XCTAssertNotEqual(currentState, initialState,
-                                 "\(toggleId) state should persist after navigation")
-            }
-        }
-
-        // Restore original states
-        for toggleId in toggles {
-            let toggle = app.switches[toggleId]
-            if toggle.exists {
-                let currentState = toggle.value as? String
-                let initialState = initialStates[toggleId]
-                if currentState != initialState {
-                    toggle.click()
-                    Thread.sleep(forTimeInterval: 0.2)
-                }
-            }
-        }
-    }
 }
