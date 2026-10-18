@@ -303,4 +303,16 @@ actor-isolation and package-resource warnings remain. Production: 0 added,
 1,186 removed. Tests: 29 added, 182 removed, net -153. Xcode membership and
 documentation are separate from those counts.
 
-Full-suite and hosted CI results follow after completion.
+The full package suite then passed against that fresh build: 983 tests,
+0 failures, 1 skip in `AppStateTests.testFilesAndFoldersPermissionPersistsSeparatelyFromSelectedDirectory`
+because the test host cannot create security-scoped bookmarks. This is an
+existing environment guard, unchanged by the audit. The command was
+`swift test --disable-sandbox --skip-build`, after the successful fresh
+`swift test --disable-sandbox --filter` selection above.
+
+Code commit `b25d1303` was pushed directly to `main`. Hosted Swift CI
+[run 39103590450](https://github.com/sorty-organizer/Sorty/actions/runs/39103590450)
+passed: all 983 package tests, test compilation, app build, 20,000-iteration
+fuzzing, cache-tooling checks, and Gitleaks. The dispatch-only pre-release
+validation step was skipped by workflow policy. Native UI and release-signing
+validation remain outside this pass. No PR or branch was created.
