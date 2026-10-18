@@ -285,11 +285,6 @@ public class LearningsFSMonitor: ObservableObject {
         }
     }
     
-    /// Get list of currently monitored directories
-    public var monitoredURLs: [URL] {
-        Array(monitoringGenerations.keys)
-    }
-    
     // MARK: - Event Handling
     
     fileprivate func handleFSEvents(paths: [String], flags: [FSEventStreamEventFlags]) {

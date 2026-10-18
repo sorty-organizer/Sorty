@@ -62,12 +62,6 @@ public struct FileRenameMapping: Codable, Identifiable, Hashable, Sendable {
         suggestedName != nil && suggestedName != originalFile.displayName
     }
 
-    public var preservesOriginalExtension: Bool {
-        let originalExtension = originalFile.extension.lowercased()
-        let suggestedExtension = (suggestedName as NSString?)?.pathExtension.lowercased() ?? ""
-        return originalExtension == suggestedExtension
-    }
-
     public var isLowConfidence: Bool {
         confidenceBand == .low
     }
@@ -217,31 +211,6 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
 
     // MARK: - Mutating Helpers
 
-    /// Add a file to this folder
-    public mutating func addFile(
-        _ file: FileItem,
-        suggestedName: String? = nil,
-        renameReason: String? = nil,
-        renameConfidence: Double? = nil
-    ) {
-        files.append(file)
-        if suggestedName != nil {
-            let mapping = FileRenameMapping(
-                originalFile: file,
-                suggestedName: suggestedName,
-                renameReason: renameReason,
-                renameConfidence: renameConfidence
-            )
-            fileRenameMappings.append(mapping)
-        }
-    }
-
-    /// Remove a file from this folder
-    public mutating func removeFile(_ file: FileItem) {
-        files.removeAll { $0.id == file.id }
-        fileRenameMappings.removeAll { $0.originalFile.id == file.id }
-    }
-
     /// Update rename suggestion for a file
     public mutating func updateRename(
         for file: FileItem,
@@ -310,21 +279,5 @@ public struct FileTagMapping: Codable, Identifiable, Hashable, Sendable {
         self.originalFile = originalFile
         self.tags = tags
         self.comment = comment
-    }
-}
-
-public extension FolderSuggestion {
-    mutating func addTag(_ tag: String, for file: FileItem) {
-        if let index = fileTagMappings.firstIndex(where: { $0.originalFile.id == file.id }) {
-            if !fileTagMappings[index].tags.contains(tag) {
-                fileTagMappings[index].tags.append(tag)
-            }
-        } else {
-            let mapping = FileTagMapping(
-                originalFile: file,
-                tags: [tag]
-            )
-            fileTagMappings.append(mapping)
-        }
     }
 }

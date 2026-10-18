@@ -248,3 +248,59 @@ suite: 993 tests, 0 failures, 1 skipped. Production net -1,051 lines, tests net
 [Swift CI run 39097524984](https://github.com/sorty-organizer/Sorty/actions/runs/39097524984)
 passed for `3cc5be10` (package tests, app build, fuzzing, Gitleaks).
 
+
+## 18 October 2026 deep follow-up
+
+Baseline: `9784dbe0` on `main`, clean checkout. Three read-only discovery lanes
+traced production entry points, tests, references, and history before deleting.
+This pass continues the earlier audit rather than counting its removals again.
+Independent preservation reviews checked the model/learnings, scanner/Finder,
+and UI boundaries after edits. No new product defect was demonstrated in this
+pass, and no failing test was deleted as a substitute for repairing a bug.
+
+### Evidence and coverage ownership
+
+| Removed code or exact test | Evidence of obsolescence | Retained proof and risk |
+| --- | --- | --- |
+| `AnalysisView.stageIndicator`, `AIReasoningStatus`, `AnalysisRefreshManager`, `RefreshManager` | `df4334d3` removed the rendered stage indicator. The remaining computed property had no caller; timer outputs fed only that property. Removing the manager leaves the generic timer with no source, test, or script consumer. Remove its Xcode file entries too. | Active `StreamingProgressBeam`, progress banner, stream observers, and accessibility labels remain. No checked-in tests exercised the abandoned timer. UI rendering is not claimed by package tests. |
+| `AutomationManager` selection monitoring, timers, activation callbacks, settings/state | `4850d163` introduced demand enrollment, but no caller ever used `beginSelectionMonitoring` or `endSelectionMonitoring`. Demand stays zero, and no feature reads its selection state. | Permission activation observer, opt-in migration, and post-organization actions remain. Explicit selection goes through `LiveOrganizerServices.finderSelectionReader` to `FinderAutomation.getSelectedFiles`. `PermissionReliabilityTests` and Finder diagnostics remain. |
+| `ContentAnalyzer.analyzeFiles`; `testAnalyzeFilesEmpty`, `testAnalyzeFilesWithProgress`, `testAnalyzeFilesMixedTypes` in `ContentAnalyzerTests.swift` | The three tests were the only batch-API callers. Production `DirectoryScanner` owns its own two-lane enrichment and invokes `analyze(fileURL:)`, including its cache scheduling. | Extend the existing scanner deep-scan test to check exact text, unsupported-file metadata, and actual progress callbacks. Single-file extraction, cache, OCR, UTF-8, and deep-scan-disabled tests remain. Empty-batch behavior needs no proof after deleting that API. |
+| `FolderSuggestion.addFile`, `removeFile`, `addTag`; `testAddFileWithoutRename`, `testAddFileWithRename`, `testRemoveFile`, `testAddTagToFile`, `testAddDuplicateTag` in `FolderSuggestionTests.swift` | Helpers originated in `44cd5f74`/`24345996`; their only remaining callers were these exclusive helper tests. Live preview edits arrays, and parsing constructs mappings directly. | Keep nested tag/rename lookup, parser, organizer, and live preview coverage. Remove the unused `preservesOriginalExtension` predicate while retaining the exact sanitized-name assertion. |
+| `LearningsManager.acceptMapping`, `rejectMapping`, `editMapping`; `testAcceptMapping`, `testRejectMapping`, `testEditMapping` | Convenience wrappers from `24345996`/`a963c30b` never reached the current app flow. Only these tests called them. | Existing `testAddLabeledExample` owns acceptance. Retarget rejection/edit cases to `addLabeledExample`, preserving category, action, and destination checks. Leave profile persistence, consent, cooldown, and migration tests. |
+| `StorageLocationsManager.discoverAllSubfolders`; `testDiscoverAllSubfoldersIncludesMoreThanPromptLimitedSet` | The 200-folder wrapper had exactly one caller, its own test. Current prompt generation independently calls the same discovery service with a 12-folder limit. | Keep prompt discovery and storage access/recovery tests. The removed test guarded only the retired wrapper's larger inventory, not the prompt contract. |
+| Provider model-documentation properties, instruction placeholder, unused quality accessor/error enum/monitor accessor/private lost-access helper | No source, test, or script consumer. The provider docs UI stopped consuming the properties in `c3833623`. The lost-access helper survived earlier deletion of its caller. | No stored fields, coding keys, migration, protocol requirements, auth, or scoped-access lifecycle removed. These are undocumented app helpers despite SwiftPM's public library products. |
+| Unused Learnings hero, header transition, privacy blur modifier, tour image inventory, preview factories/container | Each entry was declaration-only or reachable solely from another removed helper. Active previews/harnesses use the retained factories. | Keep active privacy masking and `PrivacyPathMaskerTests`, actual tour assets and packaging tests, current Learnings dashboard, and live onboarding/preview helpers. No current rendered UI contract is replaced. |
+
+### Retained and deferred
+
+Keep historical data/defaults/bookmark migrations, current provider routing,
+security boundaries, cache tests, and active UI previews. Native UI tests still
+have stale identifiers and conditional no-op assertions, as listed in the earlier
+pass. Their intended product contracts require repair and native execution;
+this audit does not delete them merely because they may fail. Likewise,
+`SortyUninstaller` cleanup helpers preserve filesystem safety contracts and
+remain pending a real-boundary test migration. Cross-volume progress wiring
+remains an earlier unresolved product question.
+
+The earlier deferred `ContentAnalyzer.analyzeFiles` and mapping feedback-wrapper
+items are resolved by this pass. No computer use or native UI run was performed.
+The imported OpenClaw/Vitest/autoreview tooling is unavailable here; independent
+subagent preservation review and the repository's actual Swift checks apply.
+
+### Validation
+
+The freshly compiled affected selection passed all 176 tests. The migrated
+scanner case initially failed because it compared raw `/var` fixture paths with
+Foundation's `/private/var` enumeration paths. A separate Foundation probe
+reproduced that spelling difference. The test now locates each unique filename,
+unwrapping both records and preserving the exact content, unsupported-type, and
+progress assertions. No production change was needed for that test error.
+
+All seven cache-tooling tests passed using CI's unittest discovery command.
+`git diff --check` and `plutil -lint Sorty.xcodeproj/project.pbxproj` passed.
+The fresh Swift build compiled the app and tests; existing SortyApp analytics
+actor-isolation and package-resource warnings remain. Production: 0 added,
+1,186 removed. Tests: 29 added, 182 removed, net -153. Xcode membership and
+documentation are separate from those counts.
+
+Full-suite and hosted CI results follow after completion.

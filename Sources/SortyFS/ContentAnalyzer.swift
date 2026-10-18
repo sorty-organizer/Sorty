@@ -466,55 +466,6 @@ public actor ContentAnalyzer {
         return result
     }
 
-    /// Batch analyze multiple files
-    public func analyzeFiles(
-        _ urls: [URL],
-        enableOCR: Bool = true,
-        progressHandler: (@Sendable (Int, Int) -> Void)? = nil
-    ) async -> [URL: ContentMetadata] {
-        var results: [URL: ContentMetadata] = [:]
-        let total = urls.count
-
-        // Process in batches to limit concurrency
-        let batchSize = 4
-        for batchStart in stride(from: 0, to: urls.count, by: batchSize) {
-            let batchEnd = min(batchStart + batchSize, urls.count)
-            let batch = Array(urls[batchStart..<batchEnd])
-
-            let batchResults = await withTaskGroup(of: (URL, ContentMetadata?).self) { group in
-                for url in batch {
-                    group.addTask(priority: .utility) {
-                        let metadata = await self.analyze(fileURL: url, enableOCR: enableOCR)
-                        return (url, metadata)
-                    }
-                }
-
-                var batchDict: [URL: ContentMetadata] = [:]
-                for await (url, metadata) in group {
-                    if let metadata = metadata {
-                        batchDict[url] = metadata
-                    }
-                }
-                return batchDict
-            }
-
-            results.merge(batchResults) { _, new in new }
-            progressHandler?(batchEnd, total)
-
-            // Yield for UI updates between batches, and cooperatively every
-            // 50 files on .utility so large runs stay cancellable.
-            if batchEnd.isMultiple(of: 50) || batchEnd == total {
-                await Task.yield()
-            }
-            guard !Task.isCancelled else { break }
-        }
-
-        // Save cache after batch analysis
-        await SharedContentMetadataCache.shared.flush()
-
-        return results
-    }
-
     // MARK: - PDF Extraction
 
     private func extractPDFContent(

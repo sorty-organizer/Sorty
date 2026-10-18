@@ -99,30 +99,6 @@ final class FolderSuggestionTests: XCTestCase {
         XCTAssertTrue(tags.contains("Invoice"))
     }
     
-    func testAddTagToFile() {
-        let file = FileItem(path: "/test/doc.txt", name: "doc", extension: "txt", size: 100, isDirectory: false)
-        var suggestion = FolderSuggestion(folderName: "Docs", files: [file])
-        
-        suggestion.addTag("Important", for: file)
-        suggestion.addTag("Review", for: file)
-        
-        let tags = suggestion.tags(for: file)
-        XCTAssertEqual(tags.count, 2)
-        XCTAssertTrue(tags.contains("Important"))
-        XCTAssertTrue(tags.contains("Review"))
-    }
-    
-    func testAddDuplicateTag() {
-        let file = FileItem(path: "/test/file.txt", name: "file", extension: "txt", size: 100, isDirectory: false)
-        var suggestion = FolderSuggestion(folderName: "Test", files: [file])
-        
-        suggestion.addTag("Tag1", for: file)
-        suggestion.addTag("Tag1", for: file) // Duplicate
-        
-        let tags = suggestion.tags(for: file)
-        XCTAssertEqual(tags.count, 1) // Should not add duplicate
-    }
-    
     func testTagsForFileInNestedFolder() {
         let file = FileItem(path: "/test/nested/file.txt", name: "file", extension: "txt", size: 100, isDirectory: false)
         let tagMapping = FileTagMapping(originalFile: file, tags: ["Nested"])
@@ -235,45 +211,6 @@ final class FolderSuggestionTests: XCTestCase {
     
     // MARK: - Mutating Helper Tests
     
-    func testAddFileWithRename() {
-        var suggestion = FolderSuggestion(folderName: "Test")
-        
-        let file = FileItem(path: "/test/file.txt", name: "file", extension: "txt", size: 100, isDirectory: false)
-        suggestion.addFile(file, suggestedName: "new_name.txt", renameReason: "Better name")
-        
-        XCTAssertEqual(suggestion.files.count, 1)
-        XCTAssertEqual(suggestion.fileRenameMappings.count, 1)
-        XCTAssertEqual(suggestion.fileRenameMappings.first?.suggestedName, "new_name.txt")
-    }
-    
-    func testAddFileWithoutRename() {
-        var suggestion = FolderSuggestion(folderName: "Test")
-        
-        let file = FileItem(path: "/test/file.txt", name: "file", extension: "txt", size: 100, isDirectory: false)
-        suggestion.addFile(file)
-        
-        XCTAssertEqual(suggestion.files.count, 1)
-        XCTAssertTrue(suggestion.fileRenameMappings.isEmpty)
-    }
-    
-    func testRemoveFile() {
-        let file1 = FileItem(path: "/test/file1.txt", name: "file1", extension: "txt", size: 100, isDirectory: false)
-        let file2 = FileItem(path: "/test/file2.txt", name: "file2", extension: "txt", size: 100, isDirectory: false)
-        
-        let rename1 = FileRenameMapping(originalFile: file1, suggestedName: "renamed.txt")
-        
-        var suggestion = FolderSuggestion(
-            folderName: "Test",
-            files: [file1, file2],
-            fileRenameMappings: [rename1]
-        )
-        
-        suggestion.removeFile(file1)
-        
-        XCTAssertEqual(suggestion.files.count, 1)
-        XCTAssertTrue(suggestion.fileRenameMappings.isEmpty) // Should remove rename mapping too
-    }
-    
     func testUpdateRename() {
         let file = FileItem(path: "/test/file.txt", name: "file", extension: "txt", size: 100, isDirectory: false)
         let rename = FileRenameMapping(originalFile: file, suggestedName: "old_name.txt")
@@ -306,7 +243,6 @@ final class FolderSuggestionTests: XCTestCase {
         let mapping = FileRenameMapping(originalFile: file, suggestedName: "renamed.png")
 
         XCTAssertEqual(mapping.suggestedName, "renamed.jpg")
-        XCTAssertTrue(mapping.preservesOriginalExtension)
     }
 
     func testFileRenameMappingConfidenceClampsAndFlagsLowConfidence() {

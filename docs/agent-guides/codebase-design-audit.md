@@ -95,3 +95,11 @@ it does not prove a proposed replacement's runtime behavior or performance.
 No tests or UI elements changed. Local build, tests, computer use, and hosted
 CI were skipped for these minor cuts under AGENTS.md. Runtime behavior and
 accessibility have not been verified.
+
+## Follow-up, 18 October 2026
+
+The entire refresh chain was removed after tracing the deleted stage display.
+`df4334d3` removed that display, leaving `AnalysisRefreshManager` updating state
+that nothing rendered. Its removal leaves `RefreshManager` with no consumer.
+The timer semantics above describe the historical implementation, not a current
+product contract. Active analysis progress and streaming insights remain.

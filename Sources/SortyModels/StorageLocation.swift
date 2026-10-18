@@ -555,33 +555,6 @@ public class StorageLocationsManager: ObservableObject {
         return prompt
     }
 
-    /// Returns known subfolders for each enabled storage location.
-    /// Keys are canonical root paths; values are lists of discovered subfolder absolute paths.
-    public func discoverAllSubfolders() async -> [String: [String]] {
-        let enabled = enabledLocations
-        return await withTaskGroup(
-            of: (String, [String]).self,
-            returning: [String: [String]].self
-        ) { group in
-            for location in enabled {
-                group.addTask { [subfolderDiscovery] in
-                    let subfolders = await subfolderDiscovery.discover(
-                        for: location,
-                        maxDepth: 3,
-                        maxCount: 200
-                    )
-                    return (location.path, subfolders)
-                }
-            }
-
-            var result: [String: [String]] = [:]
-            for await (path, subfolders) in group where !subfolders.isEmpty {
-                result[path] = subfolders
-            }
-            return result
-        }
-    }
-    
     /// Restores access to all security-scoped bookmarks off the main actor.
     /// Snapshots identity before leaving, accepts results only for matching items,
     /// and balances every acquisition. Callers await this before automation uses locations.
@@ -873,17 +846,6 @@ public class StorageLocationsManager: ObservableObject {
     private func stopSecurityScopedAccess(for id: UUID) {
         guard let url = activeSecurityScopedURLs.removeValue(forKey: id) else { return }
         url.stopAccessingSecurityScopedResource()
-    }
-
-    private func markAccessLost(for id: UUID) {
-        stopSecurityScopedAccess(for: id)
-        accessNeedsRefresh = true
-        guard let index = locations.firstIndex(where: { $0.id == id }),
-              locations[index].accessStatus != .lost else {
-            return
-        }
-        locations[index].accessStatus = .lost
-        saveLocations()
     }
 
     private func stopAllSecurityScopedAccess() {

@@ -506,27 +506,4 @@ final class StorageLocationsReliabilityTests: XCTestCase {
         XCTAssertEqual(manager.locations.first?.accessStatus, .valid)
         XCTAssertEqual(manager.enabledLocations.count, 1)
     }
-
-    @MainActor
-    func testDiscoverAllSubfoldersIncludesMoreThanPromptLimitedSet() async throws {
-        let manager = StorageLocationsManager(userDefaults: defaults)
-        manager.clearAll()
-        defer { manager.clearAll() }
-
-        let archive = tempRoot.appendingPathComponent("Archive", isDirectory: true)
-        try FileManager.default.createDirectory(at: archive, withIntermediateDirectories: true)
-
-        for index in 1...20 {
-            let folder = archive.appendingPathComponent(String(format: "Folder%02d", index), isDirectory: true)
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        }
-
-        manager.addLocation(StorageLocation(path: archive.path, name: "Archive"))
-
-        let discovered = await manager.discoverAllSubfolders()
-        let paths = discovered[StorageLocationPathResolver.canonicalPath(archive.path)] ?? []
-
-        XCTAssertTrue(paths.contains(archive.appendingPathComponent("Folder20", isDirectory: true).path))
-        XCTAssertGreaterThanOrEqual(paths.count, 20)
-    }
 }

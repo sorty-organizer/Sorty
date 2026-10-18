@@ -85,31 +85,13 @@ final class LearningsManagerTests: XCTestCase {
         XCTAssertEqual(manager.currentProfile?.positiveExamples.first?.action, .accept)
     }
     
-    func testAcceptMapping() {
-        let mapping = ProposedMapping(
+    func testAddRejectedLabeledExample() {
+        manager.addLabeledExample(
             srcPath: "/test/file.txt",
-            proposedDstPath: "/organized/file.txt",
-            confidence: 0.9,
-            explanation: "Test"
+            dstPath: "/test/file.txt",
+            action: .reject
         )
-        
-        manager.acceptMapping(mapping)
-        
-        // Should go to positiveExamples
-        XCTAssertEqual(manager.currentProfile?.positiveExamples.count, 1)
-        XCTAssertEqual(manager.currentProfile?.positiveExamples.first?.action, .accept)
-    }
-    
-    func testRejectMapping() {
-        let mapping = ProposedMapping(
-            srcPath: "/test/file.txt",
-            proposedDstPath: "/organized/file.txt",
-            confidence: 0.3,
-            explanation: "Test"
-        )
-        
-        manager.rejectMapping(mapping)
-        
+
         // Should go to rejections
         XCTAssertEqual(manager.currentProfile?.rejections.count, 1)
         XCTAssertEqual(manager.currentProfile?.rejections.first?.action, .reject)
@@ -117,16 +99,13 @@ final class LearningsManagerTests: XCTestCase {
         XCTAssertEqual(manager.currentProfile?.rejections.first?.dstPath, "/test/file.txt")
     }
     
-    func testEditMapping() {
-        let mapping = ProposedMapping(
+    func testAddEditedLabeledExample() {
+        manager.addLabeledExample(
             srcPath: "/test/file.txt",
-            proposedDstPath: "/organized/file.txt",
-            confidence: 0.7,
-            explanation: "Test"
+            dstPath: "/custom/location/file.txt",
+            action: .edit
         )
-        
-        manager.editMapping(mapping, newDstPath: "/custom/location/file.txt")
-        
+
         // Should go to corrections
         XCTAssertEqual(manager.currentProfile?.corrections.count, 1)
         XCTAssertEqual(manager.currentProfile?.corrections.first?.action, .edit)

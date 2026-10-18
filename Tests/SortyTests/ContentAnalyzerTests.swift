@@ -351,64 +351,6 @@ final class ContentAnalyzerTests: XCTestCase {
         XCTAssertLessThanOrEqual(result?.textPreview?.count ?? 0, ContentAnalyzer.defaultTextPreviewLength)
     }
     
-    // MARK: - Batch Analysis
-    
-    func testAnalyzeFilesEmpty() async {
-        let analyzer = ContentAnalyzer()
-        
-        let results = await analyzer.analyzeFiles([])
-        
-        XCTAssertTrue(results.isEmpty)
-    }
-    
-    func testAnalyzeFilesWithProgress() async throws {
-        let analyzer = ContentAnalyzer()
-        
-        // Create test files
-        let file1 = tempDirectory.appendingPathComponent("file1.txt")
-        let file2 = tempDirectory.appendingPathComponent("file2.txt")
-        
-        try "Content 1".write(to: file1, atomically: true, encoding: .utf8)
-        try "Content 2".write(to: file2, atomically: true, encoding: .utf8)
-        
-        // Track that progress handler was called using nonisolated(unsafe) for the @Sendable closure
-        nonisolated(unsafe) var progressCalled = false
-        nonisolated(unsafe) var lastProgress: (current: Int, total: Int) = (0, 0)
-        
-        let results = await analyzer.analyzeFiles([file1, file2]) { current, total in
-            progressCalled = true
-            lastProgress = (current, total)
-        }
-        
-        XCTAssertEqual(results.count, 2)
-        XCTAssertNotNil(results[file1])
-        XCTAssertNotNil(results[file2])
-        
-        // Verify progress handler was called and final state is correct
-        XCTAssertTrue(progressCalled)
-        XCTAssertEqual(lastProgress.current, 2)
-        XCTAssertEqual(lastProgress.total, 2)
-    }
-    
-    func testAnalyzeFilesMixedTypes() async throws {
-        let analyzer = ContentAnalyzer()
-        
-        let textFile = tempDirectory.appendingPathComponent("test.txt")
-        let unsupportedFile = tempDirectory.appendingPathComponent("test.xyz")
-        
-        try "Text content".write(to: textFile, atomically: true, encoding: .utf8)
-        try "Other content".write(to: unsupportedFile, atomically: true, encoding: .utf8)
-        
-        let results = await analyzer.analyzeFiles([textFile, unsupportedFile])
-        
-        // Only supported file should have results
-        XCTAssertEqual(results.count, 1)
-        XCTAssertNotNil(results[textFile])
-        XCTAssertNil(results[unsupportedFile])
-    }
-    
-    // MARK: - OCR Flag Tests
-    
     // MARK: - UTF-8 Boundary Tests
     
     func testAnalyzeCJKTextFileSplitAtReadCapKeepsUTF8Text() async throws {

@@ -1,4 +1,5 @@
 
+import Synchronization
 import XCTest
 @testable import SortyLib
 @testable import SortyCore
@@ -52,16 +53,28 @@ class DirectoryScannerTests: XCTestCase {
         XCTAssertEqual(filesWithHidden.count, 2)
     }
     
-    func testDeepScan() async throws {
+    func testDeepScanEnrichesSupportedFilesAndReportsProgress() async throws {
         let textFile = tempDirectory.appendingPathComponent("sample.txt")
+        let unsupportedFile = tempDirectory.appendingPathComponent("sample.xyz")
         let content = "This is a sample text file for deep scanning."
         try content.write(to: textFile, atomically: true, encoding: .utf8)
-        
+        try "Unsupported content".write(to: unsupportedFile, atomically: true, encoding: .utf8)
+        let progress = Mutex<[(Int, Int)]>([])
+        await scanner.setDeepScanProgressCallback { current, total in
+            progress.withLock { $0.append((current, total)) }
+        }
+
         let files = try await scanner.scanDirectory(at: tempDirectory, deepScan: true)
-        
-        XCTAssertEqual(files.count, 1)
-        XCTAssertNotNil(files.first?.contentMetadata)
-        XCTAssertEqual(files.first?.contentMetadata?.textPreview, content)
+
+        XCTAssertEqual(files.count, 2)
+        let text = try XCTUnwrap(files.first(where: { $0.displayName == "sample.txt" }))
+        XCTAssertEqual(text.contentMetadata?.textPreview, content)
+        let unsupported = try XCTUnwrap(files.first(where: { $0.displayName == "sample.xyz" }))
+        XCTAssertNil(unsupported.contentMetadata)
+        let updates = progress.withLock { $0 }
+        XCTAssertEqual(updates.map { $0.0 }, [1, 2])
+        // Enumeration has no stable total while the scan is running.
+        XCTAssertTrue(updates.allSatisfy { $0.1 == 0 })
     }
 
     func testFastScanSkipsContentMetadata() async throws {

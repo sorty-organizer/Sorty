@@ -18,47 +18,22 @@ public final class AutomationManager: ObservableObject {
     // MARK: - Published Properties
     
     @Published public private(set) var automationStatus: PermissionStatus = .unknown
-    @Published public private(set) var selectedFinderItems: [URL] = []
-    @Published public private(set) var hasValidFinderSelection: Bool = false
     @Published public private(set) var statusMessage: String = "Waiting for permission check"
     @Published public private(set) var lastPermissionError: String?
-    @Published public private(set) var lastSelectionRefresh: Date?
     
     // MARK: - Private Properties
     
-    private var selectionCheckTimer: Timer?
-    private var selectionRefreshTask: Task<Void, Never>?
-    private var selectionMonitoringDemandCount = 0
-    // Battery-friendly poll: 45s with 30% tolerance. Freshness comes from
-    // explicit refresh triggers (app/Finder activation, manual refresh), not
-    // from a tight timer.
-    private let selectionCheckInterval: TimeInterval = 45.0
     private var isInitializing = true
     private var isStartedUp = false
     private var automationChecksEnabled = false
-    private var isApplicationActive = NSApp.isActive
     
     // MARK: - UserDefaults Keys
     
-    private let enableSelectionMonitoringKey = "automation.enableSelectionMonitoring"
     private let autoSelectOrganizedFoldersKey = "automation.autoSelectOrganizedFolders"
     private let autoSelectOptInMigrationKey = "automation.autoSelectOrganizedFoldersMigratedToOptIn"
     private let previouslyGrantedKey = "automation.previouslyGranted"
     
     // MARK: - Settings
-    
-    @Published public var enableSelectionMonitoring: Bool {
-        didSet {
-            guard !isInitializing else { return }
-            UserDefaults.standard.set(enableSelectionMonitoring, forKey: enableSelectionMonitoringKey)
-            guard isStartedUp else { return }
-            if enableSelectionMonitoring && selectionMonitoringDemandCount > 0 {
-                startSelectionMonitoring()
-            } else {
-                stopSelectionMonitoring()
-            }
-        }
-    }
     
     @Published public var autoSelectOrganizedFolders: Bool {
         didSet {
@@ -73,7 +48,6 @@ public final class AutomationManager: ObservableObject {
         let defaults = UserDefaults.standard
 
         // Load settings from UserDefaults
-        self.enableSelectionMonitoring = defaults.bool(forKey: enableSelectionMonitoringKey)
         self.autoSelectOrganizedFolders = defaults.object(forKey: autoSelectOrganizedFoldersKey) as? Bool ?? false
         self.automationChecksEnabled = defaults.bool(forKey: previouslyGrantedKey)
         if automationChecksEnabled {
@@ -91,7 +65,6 @@ public final class AutomationManager: ObservableObject {
     
     deinit {
         NotificationCenter.default.removeObserver(self)
-        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
     
     // MARK: - Lifecycle
@@ -110,20 +83,6 @@ public final class AutomationManager: ObservableObject {
             self,
             selector: #selector(appDidBecomeActive),
             name: NSApplication.didBecomeActiveNotification,
-            object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(appDidResignActive),
-            name: NSApplication.didResignActiveNotification,
-            object: nil
-        )
-        // Prefer event-driven refresh over polling: when Finder activates,
-        // refresh the selection once instead of waiting for the next tick.
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self,
-            selector: #selector(workspaceAppDidActivate(_:)),
-            name: NSWorkspace.didActivateApplicationNotification,
             object: nil
         )
     }
@@ -178,13 +137,6 @@ public final class AutomationManager: ObservableObject {
         if automationStatus == .granted {
             UserDefaults.standard.set(true, forKey: previouslyGrantedKey)
         }
-
-        if isStartedUp,
-           enableSelectionMonitoring,
-           selectionMonitoringDemandCount > 0,
-           automationStatus == .granted {
-            startSelectionMonitoring()
-        }
     }
 
     /// Open System Settings to Automation permissions
@@ -196,115 +148,6 @@ public final class AutomationManager: ObservableObject {
             sourceFrameInScreen: sourceFrameInScreen,
             onMissingApp: onMissingApp
         )
-    }
-    
-    // MARK: - Finder Selection
-
-    /// Retain Finder selection updates while a visible feature consumes them.
-    public func beginSelectionMonitoring() {
-        selectionMonitoringDemandCount += 1
-        guard selectionMonitoringDemandCount == 1, enableSelectionMonitoring else { return }
-        startSelectionMonitoring()
-    }
-
-    /// Release a feature's interest without stopping updates needed elsewhere.
-    public func endSelectionMonitoring() {
-        selectionMonitoringDemandCount = max(0, selectionMonitoringDemandCount - 1)
-        if selectionMonitoringDemandCount == 0 {
-            stopSelectionMonitoring()
-        }
-    }
-    
-    /// Start monitoring Finder selection periodically
-    public func startSelectionMonitoring() {
-        guard selectionMonitoringDemandCount > 0 else {
-            pauseSelectionMonitoring()
-            return
-        }
-        guard automationChecksEnabled else {
-            DebugLogger.log("Automation checks not enabled; deferring selection monitoring")
-            statusMessage = "Selection monitoring deferred until permission check"
-            return
-        }
-        guard automationStatus == .granted else {
-            DebugLogger.log("Cannot start selection monitoring: Automation permission not granted")
-            statusMessage = "Selection monitoring unavailable (permission not granted)"
-            return
-        }
-        guard isApplicationActive else {
-            pauseSelectionMonitoring()
-            return
-        }
-        
-        pauseSelectionMonitoring()
-        
-        // Check immediately
-        updateFinderSelection()
-        
-        // Setup timer for periodic checks
-        selectionCheckTimer = Timer.scheduledTimer(
-            withTimeInterval: selectionCheckInterval,
-            repeats: true
-        ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self, self.isApplicationActive else { return }
-                self.updateFinderSelection()
-            }
-        }
-        selectionCheckTimer?.tolerance = selectionCheckInterval * 0.3
-        statusMessage = "Monitoring Finder selection"
-    }
-    
-    /// Stop monitoring Finder selection
-    public func stopSelectionMonitoring() {
-        pauseSelectionMonitoring()
-        selectedFinderItems = []
-        hasValidFinderSelection = false
-        statusMessage = "Finder selection monitoring paused"
-    }
-    
-    /// Manually update the Finder selection
-    public func updateFinderSelection() {
-        guard automationStatus == .granted else {
-            statusMessage = "Cannot refresh Finder selection without permission"
-            return
-        }
-
-        guard selectionRefreshTask == nil else { return }
-        selectionRefreshTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            let selection = await FinderAutomation.getSelectedFiles()
-            guard !Task.isCancelled else { return }
-            applyFinderSelection(selection)
-            selectionRefreshTask = nil
-        }
-    }
-
-    private func applyFinderSelection(_ selection: [URL]?) {
-        let updatedItems = selection ?? []
-        let updatedHasValidSelection = !updatedItems.isEmpty
-        let updatedStatus = selection == nil
-            ? "Finder selection unavailable"
-            : updatedItems.isEmpty
-                ? "Finder selection is empty"
-                : "Finder selection updated (\(updatedItems.count) item\(updatedItems.count == 1 ? "" : "s"))"
-
-        guard updatedItems != selectedFinderItems
-                || updatedHasValidSelection != hasValidFinderSelection
-                || updatedStatus != statusMessage
-        else { return }
-
-        selectedFinderItems = updatedItems
-        hasValidFinderSelection = updatedHasValidSelection
-        lastSelectionRefresh = Date()
-        statusMessage = updatedStatus
-    }
-
-    private func pauseSelectionMonitoring() {
-        selectionCheckTimer?.invalidate()
-        selectionCheckTimer = nil
-        selectionRefreshTask?.cancel()
-        selectionRefreshTask = nil
     }
     
     // MARK: - Post-Organization Actions
@@ -339,7 +182,6 @@ public final class AutomationManager: ObservableObject {
 
     /// Updates Sorty's in-memory state after its Finder Automation TCC decision is reset.
     public func markAutomationPermissionReset() {
-        stopSelectionMonitoring()
         automationStatus = .unknown
         statusMessage = "Finder automation permission removed"
         lastPermissionError = nil
@@ -351,36 +193,8 @@ public final class AutomationManager: ObservableObject {
     @objc private func appDidBecomeActive() {
         Task { @MainActor [weak self] in
             guard let self = self, self.isStartedUp else { return }
-            self.isApplicationActive = true
             guard self.automationChecksEnabled else { return }
             self.checkPermissions()
-
-            if self.enableSelectionMonitoring,
-               self.selectionMonitoringDemandCount > 0,
-               self.automationStatus == .granted {
-                self.startSelectionMonitoring()
-            }
-        }
-    }
-
-    @objc private func appDidResignActive() {
-        isApplicationActive = false
-        pauseSelectionMonitoring()
-    }
-
-    /// Event-driven refresh: when Finder comes forward, pull the selection
-    /// once (manual-refresh path) instead of polling faster.
-    @objc private func workspaceAppDidActivate(_ notification: Notification) {
-        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-              app.bundleIdentifier == "com.apple.finder" else { return }
-        Task { @MainActor [weak self] in
-            guard let self,
-                  self.isStartedUp,
-                  self.isApplicationActive,
-                  self.enableSelectionMonitoring,
-                  self.selectionMonitoringDemandCount > 0,
-                  self.automationStatus == .granted else { return }
-            self.updateFinderSelection()
         }
     }
 }

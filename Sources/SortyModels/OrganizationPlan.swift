@@ -165,11 +165,6 @@ public struct PlanQualityAssessment: Codable, Hashable, Sendable {
     }
 
     public var passes: Bool { score >= Self.passingScore }
-    public var uncertainFileIDs: Set<UUID> {
-        Set(issues
-            .filter { $0.kind == .unorganizedFolderDestination }
-            .flatMap(\.fileIDs))
-    }
 }
 
 public struct PlanQualityIssue: Codable, Hashable, Sendable, Identifiable {

@@ -321,62 +321,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         }
     }
     
-    /// URL to the provider's model documentation
-    public var modelDocumentationURL: URL? {
-        switch self {
-        case .unavailableProvider:
-            return nil
-        case .openAI:
-            return URL(string: "https://platform.openai.com/docs/models")
-        case .openCodeZen:
-            return URL(string: "https://opencode.ai/docs/zen/")
-        case .openCodeGo:
-            return URL(string: "https://opencode.ai/docs/go/")
-        case .groq:
-            return URL(string: "https://console.groq.com/docs/models")
-        case .openAICompatible:
-            return nil
-        case .openRouter:
-            return URL(string: "https://openrouter.ai/models")
-        case .ollama:
-            return URL(string: "https://ollama.com/search")
-        case .anthropic:
-            return URL(string: "https://docs.anthropic.com/en/docs/about-claude/models")
-        case .gemini:
-            return URL(string: "https://ai.google.dev/gemini-api/docs/models")
-        case .appleFoundationModel:
-            return nil
-        }
-    }
-    
-    /// Short label for the model documentation link
-    public var modelDocsLinkLabel: String {
-        switch self {
-        case .unavailableProvider:
-            return ""
-        case .openAI:
-            return "OpenAI Models"
-        case .openCodeZen:
-            return "OpenCode Zen Models"
-        case .openCodeGo:
-            return "OpenCode Go Models"
-        case .groq:
-            return "Groq Models"
-        case .openAICompatible:
-            return "provider docs"
-        case .openRouter:
-            return "OpenRouter Models"
-        case .ollama:
-            return "Ollama Library"
-        case .anthropic:
-            return "Claude Models"
-        case .gemini:
-            return "Gemini Models"
-        case .appleFoundationModel:
-            return ""
-        }
-    }
-    
     public var logoImageName: String {
         switch self {
         case .unavailableProvider: return "exclamationmark.triangle"
@@ -625,17 +569,6 @@ public enum OrganizationMode: String, Codable, CaseIterable, Sendable {
         case .organize: return "Successfully organized your files into a clean structure."
         case .organizeAndRename: return "Successfully organized your files and improved their names."
         case .renameOnly: return "Successfully renamed your files in place."
-        }
-    }
-
-    public var instructionPlaceholder: String {
-        switch self {
-        case .organize:
-            return "e.g. \"Group by project\", \"Separate RAW photos\", \"Keep documents by year\"..."
-        case .organizeAndRename:
-            return "e.g. \"Group by client, then rename invoices with dates and vendor names\"..."
-        case .renameOnly:
-            return "e.g. \"Use clear invoice names\", \"Keep dates first\", \"Use natural names with spaces\"..."
         }
     }
 }

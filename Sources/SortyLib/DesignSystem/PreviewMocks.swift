@@ -155,102 +155,6 @@ public enum PreviewMocks {
         )
     }
     
-    /// Creates an array of mock FileItems
-    public static func makeFileItems(count: Int = 5) -> [FileItem] {
-        let extensions = ["pdf", "jpg", "png", "txt", "md", "swift", "json"]
-        let names = ["document", "image", "report", "data", "backup", "config", "notes"]
-        
-        return (0..<count).map { index in
-            let ext = extensions[index % extensions.count]
-            let name = "\(names[index % names.count])_\(index + 1)"
-            let size = Int64.random(in: 1024...(10 * 1024 * 1024))
-            
-            return FileItem(
-                id: UUID(),
-                path: "/test/\(name).\(ext)",
-                name: name,
-                extension: ext,
-                size: size,
-                isDirectory: false,
-                creationDate: Date().addingTimeInterval(-Double.random(in: 0...(7 * 24 * 3600))),
-                modificationDate: Date()
-            )
-        }
-    }
-    
-    /// Creates a mock AIConfig
-    public static func makeAIConfig(
-        provider: AIProvider = .openAI,
-        model: String = "gpt-4o"
-    ) -> AIConfig {
-        var config = AIConfig.default
-        config.provider = provider
-        config.model = model
-        return config
-    }
-    
-    /// Creates a mock AI response
-    public static func makeAIResponse() -> String {
-        """
-        {
-          "folders": [
-            {
-              "name": "Documents",
-              "reasoning": "General document files",
-              "files": ["doc1.pdf", "report.docx"],
-              "subfolders": []
-            }
-          ],
-          "unorganized": [],
-          "notes": "Files organized by type and purpose"
-        }
-        """
-    }
-    
-    /// Creates mock folder suggestions
-    public static func makeFolderSuggestions(count: Int = 3) -> [FolderSuggestion] {
-        let folderNames = ["Documents", "Images", "Code", "Archives", "Media"]
-        let reasonings = [
-            "General document files organized by type",
-            "Photos and graphics files",
-            "Development files and projects",
-            "Compressed and archived files",
-            "Audio and video content"
-        ]
-        
-        return (0..<count).map { index in
-            FolderSuggestion(
-                id: UUID(),
-                folderName: folderNames[index % folderNames.count],
-                description: reasonings[index % reasonings.count],
-                files: makeFileItems(count: 3),
-                subfolders: index < 2 ? makeFolderSuggestions(count: 1) : [],
-                reasoning: "AI generated organization"
-            )
-        }
-    }
-    
-    /// Creates mock storage locations
-    public static func makeStorageLocations() -> [StorageLocation] {
-        [
-            StorageLocation(
-                id: UUID(),
-                path: "/Users/user/Documents",
-                isEnabled: true
-            ),
-            StorageLocation(
-                id: UUID(),
-                path: "/Volumes/External/Archives",
-                isEnabled: false
-            ),
-            StorageLocation(
-                id: UUID(),
-                path: "/Users/user/Projects",
-                isEnabled: true
-            )
-        ]
-    }
-    
     /// Creates mock exclusion rules
     public static func makeExclusionRules() -> [ExclusionRule] {
         [
@@ -281,68 +185,6 @@ public enum PreviewMocks {
         ]
     }
     
-    /// Creates mock watched folders
-    public static func makeWatchedFolders() -> [WatchedFolder] {
-        [
-            WatchedFolder(
-                id: UUID(),
-                path: "/Users/user/Downloads",
-                isEnabled: true,
-                autoOrganize: true
-            ),
-            WatchedFolder(
-                id: UUID(),
-                path: "/Users/user/Desktop",
-                isEnabled: false,
-                autoOrganize: false
-            )
-        ]
-    }
-    
-    /// Creates mock organization history entries
-    public static func makeOrganizationHistory() -> [OrganizationHistoryEntry] {
-        [
-            OrganizationHistoryEntry(
-                id: UUID(),
-                timestamp: Date().addingTimeInterval(-24 * 3600),
-                directoryPath: "/Users/user/Downloads",
-                filesOrganized: 45,
-                foldersCreated: 8,
-                plan: nil,
-                status: .completed
-            ),
-            OrganizationHistoryEntry(
-                id: UUID(),
-                timestamp: Date().addingTimeInterval(-7 * 24 * 3600),
-                directoryPath: "/Users/user/Documents",
-                filesOrganized: 128,
-                foldersCreated: 15,
-                plan: nil,
-                status: .completed
-            )
-        ]
-    }
-}
-
-// MARK: - Preview Helpers
-public extension PreviewMocks {
-    
-    /// Wraps a view with necessary environment objects for previews
-    @MainActor
-    static func previewContainer<Content: View>(
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        content()
-            .environmentObject(AppState.preview)
-            .environmentObject(SettingsViewModel.preview)
-            .environmentObject(FolderOrganizer.preview)
-            .environmentObject(ExclusionRulesManager.preview)
-            .environmentObject(ExtensionListener.preview)
-            .environmentObject(PersonaManager.preview)
-            .environmentObject(LearningsManager.preview)
-            .environmentObject(CustomPersonaStore.preview)
-            .environmentObject(StorageLocationsManager.preview)
-    }
 }
 
 // MARK: - Environment Object Extensions for Previews
@@ -411,13 +253,6 @@ extension CustomPersonaStore {
     @MainActor
     static var preview: CustomPersonaStore {
         CustomPersonaStore()
-    }
-}
-
-extension StorageLocationsManager {
-    @MainActor
-    static var preview: StorageLocationsManager {
-        StorageLocationsManager()
     }
 }
 

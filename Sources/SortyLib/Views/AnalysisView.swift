@@ -5,7 +5,6 @@
 //  Real-time organization display with streaming progress
 //
 
-import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 import Beam
@@ -64,119 +63,6 @@ enum AnalysisIconProvider {
     }
 }
 
-// MARK: - Unified Refresh Manager
-
-/// Owns the status-message timer and pauses it while the analysis view is inactive.
-@MainActor
-final class AnalysisRefreshManager: ObservableObject {
-    @Published var currentFunnyMessage: String = ""
-    @Published var funnyMessageOpacity: Double = 0
-
-    private var refreshManager: RefreshManager?
-    private weak var organizer: FolderOrganizer?
-
-    private let funnyMessages = [
-        "Teaching folders to play nice together...",
-        "Convincing files they belong somewhere...",
-        "Negotiating peace between PDFs and PNGs...",
-        "Whispering sweet nothings to your documents...",
-        "Giving your files a well-deserved spa day...",
-        "Herding digital cats into folders...",
-        "Making your chaos look intentional...",
-        "Turning your file salad into a proper meal...",
-        "Convincing duplicates to pick a side...",
-        "Teaching old files new tricks...",
-        "Sorting at the speed of thought...",
-        "Giving your desktop a makeover...",
-        "Playing matchmaker with your files...",
-        "Building tiny digital homes for your data...",
-        "Turning file spaghetti into lasagna...",
-        "Your files are learning to get along...",
-        "Orchestrating a symphony of folders...",
-        "Performing file feng shui...",
-        "Making Marie Kondo proud...",
-        "Alphabetizing... just kidding, we're smarter than that...",
-    ]
-
-    private let calmerMessages = [
-        "Still working...",
-        "Almost there...",
-        "Processing your files...",
-        "Preparing your preview...",
-        "Just a moment longer...",
-    ]
-
-    func start(organizer: FolderOrganizer) {
-        self.organizer = organizer
-
-        // Set initial values
-        currentFunnyMessage = nextStatusMessage()
-
-        withAnimation(.easeIn(duration: 0.5)) {
-            funnyMessageOpacity = 1
-        }
-
-        refreshManager = RefreshManager()
-
-        startRefreshLoop()
-    }
-
-    func stop() {
-        refreshManager?.cancelAll()
-        refreshManager = nil
-        organizer = nil
-        currentFunnyMessage = ""
-        funnyMessageOpacity = 0
-    }
-
-    func pause() {
-        refreshManager?.pause()
-    }
-
-    func resume() {
-        refreshManager?.resume()
-    }
-
-    private func startRefreshLoop() {
-        // Use async tasks with weak self to prevent retain cycles
-        // Funny message cycle: every 5s (reduced from 4s)
-        refreshManager?.schedule(interval: 5.0) { [weak self] in
-            Task { [weak self] in
-                await self?.cycleFunnyMessage()
-            }
-        }
-    }
-
-    private func cycleFunnyMessage() async {
-        guard organizer != nil else { return }
-        // Fire only while an organization run is active; the timer itself is
-        // started/stopped with the view lifecycle (onAppear/onDisappear).
-        guard organizer?.state == .organizing else { return }
-
-        withAnimation(.easeInOut(duration: 0.55)) {
-            funnyMessageOpacity = 0
-        }
-
-        try? await Task.sleep(nanoseconds: 520_000_000)
-        guard organizer != nil else { return }
-
-        let elapsedSeconds = Int(organizer?.elapsedTime ?? 0)
-        if elapsedSeconds > 30 {
-            currentFunnyMessage = calmerMessages.randomElement() ?? calmerMessages.first ?? "Still working..."
-        } else {
-            currentFunnyMessage = nextStatusMessage()
-        }
-
-        withAnimation(.easeInOut(duration: 0.65)) {
-            funnyMessageOpacity = 1
-        }
-    }
-
-    private func nextStatusMessage() -> String {
-        funnyMessages.randomElement() ?? funnyMessages.first ?? "Working..."
-    }
-}
-
 struct AnalysisView: View {
     @SortyHotReload private var hotReload
     var onReturnToStart: (() -> Void)?
@@ -187,10 +73,8 @@ struct AnalysisView: View {
     @EnvironmentObject var learningsManager: LearningsManager
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("analysis.liveInsightsEnabled") private var liveInsightsEnabled = true
     @AppStorage("analysis.hideTakingLongerHUD") private var hideTakingLongerHUD = false
-    @StateObject private var refreshManager = AnalysisRefreshManager()
     @State private var hasAppeared = false
     @State private var showCancelConfirmation = false
     @State private var showFasterModelPicker = false
@@ -316,18 +200,7 @@ struct AnalysisView: View {
             settingsViewModel.config.enableStreaming = true
             liveInsightsEnabled = true
             organizer.setLiveInsightsEnabled(true)
-            refreshManager.start(organizer: organizer)
             refreshStreamDerivedState(force: true)
-        }
-        .onDisappear {
-            refreshManager.stop()
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
-                refreshManager.resume()
-            } else {
-                refreshManager.pause()
-            }
         }
         .onChange(of: liveInsightsEnabled) { _, enabled in
             organizer.setLiveInsightsEnabled(enabled)
@@ -447,18 +320,6 @@ struct AnalysisView: View {
     private var showsLiveInsightsIsland: Bool {
         guard !isRenameOnlyFlow, !hasOrganizeStreamEvents else { return false }
         return isAIAnalysisPhaseActive
-    }
-
-    private var stageIndicator: some View {
-        AIReasoningStatus(
-            state: organizer.state,
-            organizationStage: organizer.organizationStage,
-            isStreaming: organizer.isStreaming,
-            isEstablishingConnection: isEstablishingConnection,
-            isRenameOnly: isRenameOnlyFlow,
-            funnyMessage: refreshManager.currentFunnyMessage,
-            funnyMessageOpacity: refreshManager.funnyMessageOpacity
-        )
     }
 
     private var isEstablishingConnection: Bool {

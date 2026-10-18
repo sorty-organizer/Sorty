@@ -81,54 +81,6 @@ struct PrivacySensitivePathText: View {
     }
 }
 
-struct PrivacyBlurModifier: ViewModifier {
-    var enabled: Bool = FeatureFlags.privacyModeEnabled
-    var blurRadius: CGFloat = 10
-    var revealOnHover: Bool = true
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovering = false
-
-    private var shouldReveal: Bool {
-        revealOnHover && isHovering
-    }
-
-    private var revealAnimation: Animation {
-        shouldReveal
-            ? .timingCurve(0.2, 0.95, 0.2, 1.0, duration: 0.34)
-            : .easeInOut(duration: 0.24)
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .blur(radius: enabled && !shouldReveal ? blurRadius : 0)
-            .onChange(of: revealOnHover) { _, newValue in
-                if !newValue {
-                    isHovering = false
-                }
-            }
-            .animation(reduceMotion ? nil : revealAnimation, value: shouldReveal)
-            .onHover { hovering in
-                guard enabled, revealOnHover else { return }
-                guard hovering != isHovering else { return }
-                isHovering = hovering
-                HapticFeedbackManager.shared.selection()
-            }
-    }
-}
-
-extension View {
-    func privacyBlurredIfNeeded(blurRadius: CGFloat = 10, revealOnHover: Bool = true) -> some View {
-        modifier(
-            PrivacyBlurModifier(
-                enabled: FeatureFlags.privacyModeEnabled,
-                blurRadius: blurRadius,
-                revealOnHover: revealOnHover
-            )
-        )
-    }
-}
-
 enum PrivacyPathMasker {
     struct Segments {
         let leading: String

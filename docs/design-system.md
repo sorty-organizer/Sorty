@@ -27,6 +27,6 @@ hover feedback, short spring transitions).
 
 ## Mock data
 
-`PreviewMocks.swift` provides mock builders (`makeOrganizationPlan()`,
-`makeFileItems(count:)`, …) and `.preview` static environment objects for
-SwiftUI previews.
+`PreviewMocks.swift` provides `makeOrganizationPlan()`, its generation stats,
+and exclusion rules for the active harnesses and SwiftUI previews. Its
+`.preview` environment objects support the previews that use them.

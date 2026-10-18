@@ -1988,33 +1988,6 @@ public class LearningsManager: ObservableObject {
         await runAnalysis(rootPaths: rootPaths, examplePaths: effectiveExamplePaths)
     }
 
-    /// Accept a proposed mapping
-    public func acceptMapping(_ mapping: ProposedMapping) {
-        addLabeledExample(
-            srcPath: mapping.srcPath,
-            dstPath: mapping.proposedDstPath,
-            action: .accept
-        )
-    }
-    
-    /// Reject a proposed mapping
-    public func rejectMapping(_ mapping: ProposedMapping) {
-        addLabeledExample(
-            srcPath: mapping.srcPath,
-            dstPath: mapping.srcPath,  // Keep in place
-            action: .reject
-        )
-    }
-    
-    /// Edit a proposed mapping
-    public func editMapping(_ mapping: ProposedMapping, newDstPath: String) {
-        addLabeledExample(
-            srcPath: mapping.srcPath,
-            dstPath: newDstPath,
-            action: .edit
-        )
-    }
-    
     // MARK: - Export
     
     /// Export a portable, integrity-checked profile archive.
@@ -3674,21 +3647,5 @@ public class LearningsManager: ObservableObject {
         }
 
         return merged.values.sorted { $0.priority > $1.priority }
-    }
-}
-
-// MARK: - Errors
-
-public enum LearningsError: LocalizedError {
-    case noProject
-    case noAnalysisResult
-
-    public var errorDescription: String? {
-        switch self {
-        case .noProject:
-            return "No project is currently loaded"
-        case .noAnalysisResult:
-            return "No analysis result available. Run analysis first."
-        }
     }
 }

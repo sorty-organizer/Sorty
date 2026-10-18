@@ -885,32 +885,6 @@ struct DirectoryHeader: View {
     }
 }
 
-private struct HeaderBlurReplaceModifier: ViewModifier {
-    let radius: CGFloat
-    let opacity: Double
-
-    func body(content: Content) -> some View {
-        content
-            .blur(radius: radius)
-            .opacity(opacity)
-    }
-}
-
-private extension AnyTransition {
-    static var headerBlurReplace: AnyTransition {
-        .asymmetric(
-            insertion: .modifier(
-                active: HeaderBlurReplaceModifier(radius: 7, opacity: 0),
-                identity: HeaderBlurReplaceModifier(radius: 0, opacity: 1)
-            ),
-            removal: .modifier(
-                active: HeaderBlurReplaceModifier(radius: 5, opacity: 0),
-                identity: HeaderBlurReplaceModifier(radius: 0, opacity: 1)
-            )
-        )
-    }
-}
-
 private struct SetupRepairGateView: View {
     @SortyHotReload private var hotReload
     let message: String
