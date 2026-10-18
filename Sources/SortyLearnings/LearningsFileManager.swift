@@ -114,11 +114,6 @@ public struct LearningsFileManager {
         }
     }
     
-    /// Delete all persisted Learnings files and destroy the encryption key.
-    public static func secureDelete() throws {
-        try deleteAllData()
-    }
-
     public static func deleteAllData(
         fileManager: FileManager = .default,
         directory: URL? = nil
@@ -141,16 +136,6 @@ public struct LearningsFileManager {
             return
         }
         try fileManager.removeItem(at: directory)
-    }
-    
-    /// Check if a profile exists
-    public static var profileExists: Bool {
-        FileManager.default.fileExists(atPath: profileURL.path)
-    }
-    
-    /// Directory containing encrypted .learning profiles
-    public static var storageDirectoryPath: String {
-        learningsDirectory.path
     }
     
     // MARK: - Encryption

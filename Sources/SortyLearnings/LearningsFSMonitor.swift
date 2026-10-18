@@ -285,33 +285,6 @@ public class LearningsFSMonitor: ObservableObject {
         }
     }
     
-    /// Stop all monitoring
-    public func stopAllMonitoring() {
-        streamManager.stopStream()
-        watchedPaths = []
-        for task in cleanupTasks.values {
-            task.cancel()
-        }
-        for task in pendingSnapshotUpdates.values {
-            task.cancel()
-        }
-        for task in activeSnapshotUpdates.values {
-            task.cancel()
-        }
-        for task in initialSnapshotTasks.values {
-            task.cancel()
-        }
-        monitoredDirectories.removeAll()
-        monitoringGenerations.removeAll()
-        cleanupTasks.removeAll()
-        pendingSnapshotUpdates.removeAll()
-        activeSnapshotUpdates.removeAll()
-        initialSnapshotTasks.removeAll()
-        pendingSnapshotScopes.removeAll()
-        directoriesNeedingFullSnapshot.removeAll()
-        pendingCorrectionScopes.removeAll()
-    }
-    
     /// Get list of currently monitored directories
     public var monitoredURLs: [URL] {
         Array(monitoringGenerations.keys)

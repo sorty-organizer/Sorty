@@ -635,20 +635,6 @@ public class ContinuousLearningObserver: ObservableObject {
         ModelLog.log("Recorded an additional instruction", level: .debug, category: "LearningObserver")
     }
     
-    /// Track when user provides guiding instructions for next attempt
-    public func trackGuidingInstruction(_ instruction: String) {
-        guard canCollect else { return }
-        if LearningsManager.instructionsExcludeCurrentRun(instruction) {
-            if let folderPath = currentSession?.folderPath {
-                excludeCurrentRun(folderPath: folderPath)
-            }
-            return
-        }
-        
-        learningsManager.recordGuidingInstruction(instruction)
-        ModelLog.log("Recorded guiding instruction", level: .debug, category: "LearningObserver")
-    }
-    
     // MARK: - History Revert Tracking
     
     private func handleRevertNotification(_ notification: Notification) {

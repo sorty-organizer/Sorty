@@ -66,12 +66,6 @@ public class LearningsConsentManager: ObservableObject {
         ModelLog.log("Initial setup complete, Touch ID will be required", category: "ConsentManager")
     }
     
-    /// Reset initial setup (for testing or re-onboarding)
-    public func resetInitialSetup() {
-        hasCompletedInitialSetup = false
-        userDefaults.set(false, forKey: setupCompleteKey)
-    }
-    
     /// Delete ALL user learning data securely
     public func deleteAllData() async throws {
         try LearningsFileManager.deleteAllData()

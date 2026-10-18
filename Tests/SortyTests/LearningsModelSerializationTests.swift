@@ -44,41 +44,4 @@ final class LearningsModelSerializationTests: XCTestCase {
         )
         XCTAssertEqual(lowConfidence.confidenceLevel, .low)
     }
-    
-    // MARK: - Models Tests
-
-    func testAnalysisResultToJSON() throws {
-        let result = LearningsAnalysisResult(
-            inferredRules: [
-                InferredRule(
-                    id: "rule-1",
-                    pattern: "^IMG_.*",
-                    template: "{year}/{filename}",
-                    metadataCues: ["exif:DateTimeOriginal"],
-                    priority: 50,
-                    exampleIds: ["ex-1"],
-                    explanation: "Photo organization rule"
-                )
-            ],
-            proposedMappings: [
-                ProposedMapping(
-                    srcPath: "/Downloads/test.jpg",
-                    proposedDstPath: "/Photos/2024/test.jpg",
-                    ruleId: "rule-1",
-                    confidence: 0.8,
-                    explanation: "Matched photo rule"
-                )
-            ],
-            confidenceSummary: ConfidenceSummary(high: 1, medium: 0, low: 0),
-            humanSummary: ["Learned 1 rule from examples"]
-        )
-        
-        let jsonData = try result.toJSON()
-        XCTAssertNotNil(jsonData)
-        
-        // Verify it can be decoded back
-        let decoded = try JSONDecoder().decode(LearningsAnalysisResult.self, from: jsonData)
-        XCTAssertEqual(decoded.inferredRules.count, 1)
-        XCTAssertEqual(decoded.proposedMappings.count, 1)
-    }
 }

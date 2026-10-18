@@ -589,13 +589,6 @@ public struct LearningsAnalysisResult: Codable, Sendable {
         self.humanSummary = humanSummary
     }
     
-    /// Export to JSON for preview
-    public func toJSON() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        return try encoder.encode(self)
-    }
 }
 
 // MARK: - File Type Classification

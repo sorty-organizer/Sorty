@@ -775,21 +775,6 @@ final class EnhancedLearningsTests: XCTestCase {
         XCTAssertFalse(activeRules.contains(where: { $0.explanation == "CSV files rule" }), "Pending rule should NOT be in active rules")
     }
     
-    func testGetPendingRules() {
-        var profile = LearningsProfile()
-        profile.consentGranted = true
-        profile.inferredRules = [
-            InferredRule(pattern: ".*\\.txt$", template: "Text/{filename}", priority: 60, explanation: "Text rule", scope: .global, status: .active),
-            InferredRule(pattern: ".*\\.csv$", template: "Data/{filename}", priority: 50, explanation: "CSV rule", scope: .global, status: .pendingApproval),
-            InferredRule(pattern: ".*\\.json$", template: "Config/{filename}", priority: 40, explanation: "JSON rule", scope: .global, status: .pendingApproval)
-        ]
-        manager.currentProfile = profile
-        
-        let pending = manager.getPendingRules()
-        XCTAssertEqual(pending.count, 2)
-        XCTAssertTrue(pending.allSatisfy { $0.status == .pendingApproval })
-    }
-    
     func testApproveRule() async {
         var profile = LearningsProfile()
         profile.consentGranted = true
@@ -798,11 +783,15 @@ final class EnhancedLearningsTests: XCTestCase {
             InferredRule(id: ruleId, pattern: ".*\\.csv$", template: "Data/{filename}", priority: 50, explanation: "CSV rule", scope: .global, status: .pendingApproval)
         ]
         manager.currentProfile = profile
-        
+        let pending = manager.currentProfile?.inferredRules.first(where: { $0.id == ruleId })
+        XCTAssertTrue(pending?.isEnabled ?? false, "Induced pending rules start enabled as prompt candidates")
+        XCTAssertFalse(pending?.isEligible() ?? true, "Pending rules never apply until approved")
+
         await manager.approveRule(ruleId: ruleId)
-        
+
         let rule = manager.currentProfile?.inferredRules.first(where: { $0.id == ruleId })
         XCTAssertEqual(rule?.status, .active)
+        XCTAssertTrue(rule?.isEligible() ?? false)
     }
     
     func testRejectRuleWithCooldown() async {
@@ -821,8 +810,7 @@ final class EnhancedLearningsTests: XCTestCase {
         XCTAssertNotNil(rule?.rejectedAt)
         XCTAssertNotNil(rule?.cooldownUntil)
         XCTAssertFalse(rule?.isEnabled ?? true)
-        
-        XCTAssertTrue(manager.isRuleInCooldown(pattern: ".*\\.csv$"))
+        XCTAssertFalse(rule?.isEligible() ?? true)
     }
 
     func testApprovingCoolingDownRuleClearsRejectionState() async {
@@ -848,7 +836,6 @@ final class EnhancedLearningsTests: XCTestCase {
         XCTAssertNil(approved?.rejectedAt)
         XCTAssertNil(approved?.cooldownUntil)
         XCTAssertTrue(approved?.isEligible() ?? false)
-        XCTAssertFalse(manager.isRuleInCooldown(pattern: ".*\\.csv$"))
     }
     
     // MARK: - Learning Exclusion Tests
@@ -1085,8 +1072,6 @@ final class EnhancedLearningsTests: XCTestCase {
 
         let summary = manager.summary
         XCTAssertEqual(summary.state, .noConsent)
-        XCTAssertFalse(summary.shouldShowBadge)
-        XCTAssertFalse(summary.canProvideFeedback)
     }
 
     func testSummaryPausedRetainsActiveRuleCounts() {
@@ -1110,7 +1095,6 @@ final class EnhancedLearningsTests: XCTestCase {
         XCTAssertEqual(summary.state, .paused)
         XCTAssertEqual(summary.activeRuleCount, 1)
         XCTAssertTrue(summary.hasActiveRules)
-        XCTAssertFalse(summary.canProvideFeedback)
     }
 
     func testSummaryEstablishedUsesSessionAndRuleMaturity() {
@@ -1240,7 +1224,7 @@ final class EnhancedLearningsTests: XCTestCase {
         LearningsFileManager.storageDirectoryOverride = storageDirectory
         LearningsKeychain.shared = ProfileImportTestKeychain()
         defer {
-            try? LearningsFileManager.secureDelete()
+            try? LearningsFileManager.deleteAllData()
             LearningsFileManager.storageDirectoryOverride = nil
             LearningsKeychain.shared = previousKeychain
         }

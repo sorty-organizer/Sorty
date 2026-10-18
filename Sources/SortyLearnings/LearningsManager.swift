@@ -113,15 +113,6 @@ public class LearningsManager: ObservableObject {
             state == .building || state == .established
         }
         
-        /// Whether the badge should be visible in the UI
-        public var shouldShowBadge: Bool {
-            state != .noConsent
-        }
-        
-        /// Whether feedback controls should be enabled
-        public var canProvideFeedback: Bool {
-            state != .noConsent && state != .locked && state != .paused
-        }
     }
     
     /// Computed summary for UI display - updated reactively when profile changes
@@ -2708,19 +2699,6 @@ public class LearningsManager: ObservableObject {
         profile.rejectedRuleCooldowns.removeValue(forKey: ruleId)
     }
     
-    /// Record a rule success (applied and no correction followed)
-    public func recordRuleSuccess(ruleId: String) {
-        guard consentManager.canCollectData else { return }
-        guard var profile = currentProfile else { return }
-        
-        if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
-            profile.inferredRules[index].successCount += 1
-            profile.inferredRules[index].lastAppliedAt = Date()
-            currentProfile = profile
-            debouncedSave()
-        }
-    }
-    
     /// Record a rule failure (applied but user corrected)
     public func recordRuleFailure(ruleId: String) {
         guard consentManager.canCollectData else { return }
@@ -2827,12 +2805,6 @@ public class LearningsManager: ObservableObject {
     
     // MARK: - Rule Suggestion Inbox
     
-    /// Get pending approval rules
-    public func getPendingRules() -> [InferredRule] {
-        guard let profile = currentProfile else { return [] }
-        return profile.inferredRules.filter { $0.status == .pendingApproval }
-    }
-    
     /// Approve a pending rule
     public func approveRule(ruleId: String) async {
         guard var profile = currentProfile else { return }
@@ -2860,61 +2832,6 @@ public class LearningsManager: ObservableObject {
             
             currentProfile = profile
             await saveProfile()
-        }
-    }
-    
-    /// Edit a pending rule's explanation and approve it
-    public func editAndApproveRule(ruleId: String, newExplanation: String? = nil, newPriority: Int? = nil, newScope: RuleScope? = nil) async {
-        guard var profile = currentProfile else { return }
-        
-        if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
-            clearRejectionState(on: &profile, at: index)
-            if let explanation = newExplanation {
-                let rule = profile.inferredRules[index]
-                let updatedRule = InferredRule(
-                    id: rule.id,
-                    pattern: rule.pattern,
-                    template: rule.template,
-                    metadataCues: rule.metadataCues,
-                    priority: newPriority ?? rule.priority,
-                    exampleIds: rule.exampleIds,
-                    explanation: explanation,
-                    successCount: rule.successCount,
-                    failureCount: rule.failureCount,
-                    isEnabled: true,
-                    lastAppliedAt: rule.lastAppliedAt,
-                    supportCount: rule.supportCount,
-                    initialConfidence: rule.initialConfidence,
-                    scope: newScope ?? rule.scope,
-                    status: .active,
-                    evidenceIds: rule.evidenceIds,
-                    evidenceDescription: rule.evidenceDescription,
-                    rejectedAt: nil,
-                    cooldownUntil: nil
-                )
-                profile.inferredRules[index] = updatedRule
-            } else {
-                if let priority = newPriority {
-                    profile.inferredRules[index].priority = priority
-                }
-                if let scope = newScope {
-                    profile.inferredRules[index].scope = scope
-                }
-            }
-            currentProfile = profile
-            await saveProfile()
-        }
-    }
-    
-    /// Check if a rule pattern is in cooldown (was recently rejected)
-    public func isRuleInCooldown(pattern: String) -> Bool {
-        guard let profile = currentProfile else { return false }
-        let now = Date()
-        
-        return profile.inferredRules.contains { rule in
-            rule.pattern == pattern &&
-            (rule.status == .rejected || rule.status == .cooldown) &&
-            (rule.cooldownUntil ?? .distantPast) > now
         }
     }
     
@@ -3124,18 +3041,6 @@ public class LearningsManager: ObservableObject {
         addModelDirectory(url: URL(fileURLWithPath: path))
     }
     
-    /// Add multiple directories at once, returning the count of newly added ones
-    @discardableResult
-    public func addModelDirectories(paths: [String]) -> Int {
-        var added = 0
-        for path in paths {
-            if addModelDirectory(path: path) {
-                added += 1
-            }
-        }
-        return added
-    }
-    
     /// Remove a model directory by its ID
     public func removeModelDirectory(id: String) {
         modelDirectoryGeneration &+= 1
@@ -3158,11 +3063,6 @@ public class LearningsManager: ObservableObject {
         modelDirectoryScanStates[id] = scanState(for: modelDirectories[index])
         saveModelDirectories()
         return true
-    }
-    
-    /// Validate all directories, restoring bookmark access where needed
-    public func validateModelDirectories() {
-        Task { await restoreModelDirectoryAccess() }
     }
     
     /// Restore security-scoped access for all saved directories by resolving bookmarks.
