@@ -179,3 +179,71 @@ app build, fuzzing, cache-tooling checks, and Gitleaks. The dispatch-only
 pre-release validation step did not run on this push. This is build/test proof,
 not native UI or release-signing proof. No PR was created; changes were pushed
 directly to main.
+
+## 18 October 2026 follow-up
+
+Second pass over production symbols with no callers outside their own tests.
+Each removal was proven with `git grep -nw` across `Sources`, `Tests`, and
+`scripts`, `git log -S` for the commit that dropped the last caller, and a
+confirmed live replacement.
+
+### Deletion evidence
+
+| Removed | Why obsolete | Live path |
+| --- | --- | --- |
+| `ExtensionCommunication` handoff slot, `receiveFromExtensionAsync`, `ExtensionListener.drainHandoffSlot` | Only writer was `SortyActionExtension`, deleted in `7d574b19` | Finder Sync deeplinks via `DeeplinkHandler` |
+| Quick Action uninstall/status probes, `FinderIntegrationStatus`, `appleScriptForOrganizing` | No callers since Finder setup simplification (`eb7bf264`) | `FinderSyncDiagnostics.setupState`/`isOperational` |
+| `FinderSyncDiagnostics.isVerifiedWorking`/`needsRepair` | Shorthands; tests now assert `setupState`/`isOperational` directly | Same diagnostics |
+| `AutomationManager` front-window, `canOrganizeSelection`, recovery helpers; `FinderAutomation.getFrontmostFinderWindowPath` | No callers since `eb7bf264` | `requestAutomationPermissionCheck`, selection monitoring |
+| `NotificationManager.showProcessingComplete` overloads, preview sample, action labels | Superseded completion API | Current completion notifications |
+| `ModelCatalog.refreshAllAvailable`, `visionModelPrefixes` | Prefix table replaced in `6ffa92a2` | `matchesProviderVisionPrefixes`, per-provider refresh |
+| `CodexCLIAuthManager.startLaunchProbeIfNeeded` | Launch probe removed deliberately in `1fee260a` | On-demand auth checks |
+| `FileSystemManager` revert marks | Write-only; never read | `AppCoordinator` `.organizationDidRevert` snapshot refresh |
+| `FolderWatcher.startWatching`/`stopWatching`/`reacquireAccessIfNeeded` | Single-folder entry points unused | Batch watcher sync |
+| `AIConfig.organizeDeadlineDate`/`globalOrganizeDeadline` | Never wired since `745a604d` | Per-request timeouts |
+| `FolderOrganizer.regenerateWithProvider`, `resetToIdleState` | Superseded / test-only | `regenerateWithModel(provider:model:)`, `transition(to:)` |
+| `ScopedSecurityAccess`, `StorageLocation.resolveURL(for:)` | Orphaned | Bookmark resolution in storage services |
+| `LearningsManager.recordRuleSuccess`, `getPendingRules`, `isRuleInCooldown`, model-directory helpers | Replaced by explicit feedback (`fa4fb449`) | `InferredRule.isEligible()`, `approveRule`/`rejectRule` |
+| `LearningsFileManager.secureDelete`/`profileExists`/`storageDirectoryPath`, `LearningsAnalysisResult.toJSON` | Test-only | `deleteAllData`; result is never persisted |
+| `FileItem.finalDisplayName`, `FolderSuggestion.filesWithFinalNames`, summary `shouldShowBadge`/`canProvideFeedback` | Test-only | Views read rename mappings and `summary.state` directly |
+| Misc: `Constants` enum, `toggleLaunchAtLogin`, `getRecognitionLanguages`, `preferredAvailableSessionID`, `biometryDisplayName`, `authenticateForLearningsAccess`, `computeSampleFingerprint`, exclusion history helpers, history cost totals | No callers | Learnings gate uses `authenticateForSensitiveAction` |
+
+Tests deleted only where they exercised a removed symbol or were strict subsets
+of a surviving test (`PreReleaseValidationTests` hidden/system exclusion cases
+duplicate `SemanticAnalysisTests`).
+
+### Genuine bugs fixed
+
+- `SortyResources.findSPMBundle` returned nil under `make`'s `.build` symlink to
+  the shared cache, so `ResourceLoadingTests` failed locally (18 nil images)
+  while CI passed. Lookup now tries the code bundle's sibling first and resolves
+  the symlink before enumerating (`0c154e65`).
+- Low-confidence learned rules start as `pendingApproval` and are never applied,
+  but Learnings rows showed them as "Enabled" with no way to approve. Rows now
+  say "Awaiting approval" and offer an Approve button (`3d805719`).
+- `testReverseTaggingOperation` could pass while wiping pre-existing tags; it now
+  seeds an existing tag and asserts it survives reversal (`cf73e810`).
+
+### Deferred
+
+- `ContentAnalyzer.analyzeFiles` and `LearningsManager.proposeMapping`: test-only
+  but guard live behavior; retarget tests before removing.
+- `setCrossVolumeProgressHandler`: production reads a handler nobody sets, so
+  cross-volume moves report no progress. Wire it up or remove it.
+- `SortyUninstaller.cleanupPathCandidates`: test-only, not investigated.
+- Native UI tests (`Tests/SortyUITests`) reference stale identifiers
+  (`ReasoningToggle`, `ScanDuplicatesButton`, `ConfirmAddRuleButton`,
+  "Organization History", the "Success" filter, "Organization Controls"),
+  and several make no assertions or always skip. CI only runs four
+  `AppUITests` cases on manual dispatch, so they need repair against current
+  ids (`HistoryScreen`, `HistoryFilterPicker`, `StartScanAction`, "Undoable")
+  or deletion.
+
+### Execution
+
+Local: `swift build --build-tests` clean (only existing SortyApp analytics
+actor-isolation warnings); 293 affected tests passed, then the full package
+suite: 993 tests, 0 failures, 1 skipped. Production net -1,051 lines, tests net
+-157 since `57f3fd41`. Native UI tests were not run. Hosted Swift CI was
+triggered by `3cc5be10`.
+
