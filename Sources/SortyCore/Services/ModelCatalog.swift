@@ -71,8 +71,6 @@ public final class ModelCatalog: ObservableObject {
     private var codexModelsTimestamp: Date?
     private var cachedOpenAIAuthMethod: ProviderAuthMethod?
     private var refreshIDs: [AIProvider: UUID] = [:]
-    /// Coalesces refreshAllAvailable fan-out; latest non-forced call wins.
-    private var refreshAllTask: Task<Void, Never>?
     /// Per-model Ollama capability cache so /api/tags stays a single call.
     private var ollamaCapabilityCache: [String: [String]] = [:]
     
@@ -364,39 +362,6 @@ public final class ModelCatalog: ObservableObject {
                 feature: "model_catalog",
                 operation: "refresh_provider_\(provider.rawValue)"
             )
-        }
-    }
-    
-    public func refreshAllAvailable(force: Bool = false) async {
-        // Coalesce fan-out: UI appear paths can fire this repeatedly while
-        // navigating settings. Non-forced calls debounce 500ms (latest wins);
-        // force=true is reserved for the explicit Retry button and runs now.
-        // Per-provider TTL checks inside refresh() still skip fresh entries.
-        if !force {
-            refreshAllTask?.cancel()
-            let task = Task<Void, Never> { [weak self] in
-                do {
-                    try await Task.sleep(nanoseconds: 500_000_000)
-                } catch {
-                    return
-                }
-                guard !Task.isCancelled else { return }
-                await self?.runRefreshAll(force: false)
-            }
-            refreshAllTask = task
-            await task.value
-            return
-        }
-        await runRefreshAll(force: true)
-    }
-
-    private func runRefreshAll(force: Bool) async {
-        await withTaskGroup(of: Void.self) { group in
-            for provider in AIProvider.allCases where provider.isAvailable {
-                group.addTask {
-                    await self.refresh(provider: provider, force: force)
-                }
-            }
         }
     }
     
@@ -1422,23 +1387,6 @@ public final class ModelCatalog: ObservableObject {
         "meta-llama/llama-4-scout-17b-16e-instruct", "llama-4-scout-17b-16e-instruct"
     ]
 
-    /// Known model prefixes that support vision (for partial matching)
-    private static let visionModelPrefixes: [String] = [
-        // OpenAI GPT models
-        "gpt-5", "gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1",
-        // OpenAI reasoning models with vision
-        "o1", "o3", "o4",
-        // Anthropic - Legacy naming
-        "claude-3-5-sonnet", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "claude-3.5", "claude-3.7",
-        // Anthropic - New naming
-        "claude-sonnet-4", "claude-opus-4", "claude-haiku-4", "claude-sonnet", "claude-opus",
-        // Gemini
-        "gemini-3", "gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-exp", "gemini-pro-vision",
-        // Other
-        "llama-3.2-11b-vision", "llama-3.2-90b-vision", "llama-4-scout", "llava", "phi-3-vision",
-        "qwen3-vl", "qwen2.5vl", "llama3.2-vision"
-    ]
-    
     /// General vision keywords used across providers
     private static let visionKeywords: [String] = [
         "vision", "image", "multimodal", "omni", "vl", "mm"

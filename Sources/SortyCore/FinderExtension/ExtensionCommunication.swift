@@ -56,7 +56,6 @@ private actor FinderIntegrationSetupGate {
 
 public struct ExtensionCommunication {
     private static let appGroupIdentifier = "group.com.sorty.app"
-    private static let directoryKey = "selectedDirectory"
     private static let organizeQuickActionWorkflowName = "Organize with Sorty.workflow"
     private static let watchQuickActionWorkflowName = "Watch with Sorty.workflow"
     private static let excludeQuickActionWorkflowName = "Exclude from Sorty.workflow"
@@ -115,56 +114,6 @@ public struct ExtensionCommunication {
 
     // MARK: - URL Scheme Handling
 
-    /// Handle incoming URL schemes: sorty://organize?path=/path/to/folder
-    /// Case-insensitive to match DeeplinkHandler; query values from
-    /// URLComponents are already decoded once so no second
-    /// removingPercentEncoding is applied (prevents %252e traversal).
-    public static func handleURL(_ url: URL) -> URL? {
-        guard url.scheme?.lowercased() == "sorty" else { return nil }
-
-        switch url.host?.lowercased() {
-        case "organize":
-            // sorty://organize?path=/path/to/folder
-            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-               let pathItem = components.queryItems?.first(where: { $0.name == "path" }),
-               let path = pathItem.value {
-                return URL(fileURLWithPath: path)
-            }
-
-        case "scan":
-            // sorty://scan?path=/path/to/folder
-            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-               let pathItem = components.queryItems?.first(where: { $0.name == "path" }),
-               let path = pathItem.value {
-                return URL(fileURLWithPath: path)
-            }
-
-        case "open":
-            // sorty://open?path=/path/to/folder
-            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-               let pathItem = components.queryItems?.first(where: { $0.name == "path" }),
-               let path = pathItem.value {
-                return URL(fileURLWithPath: path)
-            }
-
-        case "watched":
-            // sorty://watched?action=add&path=/path/to/folder
-            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-               let pathItem = components.queryItems?.first(where: { $0.name == "path" }),
-               let path = pathItem.value {
-                return URL(fileURLWithPath: path)
-            }
-
-        default:
-            // Legacy: sorty:///path/to/folder (path in URL path component)
-            if !url.path.isEmpty && url.path != "/" {
-                return URL(fileURLWithPath: url.path)
-            }
-        }
-
-        return nil
-    }
-
     /// Generate a URL scheme command for organizing a given path
     public static func urlForOrganizing(path: String) -> URL? {
         var components = URLComponents()
@@ -174,45 +123,7 @@ public struct ExtensionCommunication {
         return components.url
     }
 
-    /// Generate a URL scheme command for scanning a given path
-    public static func urlForScanning(path: String) -> URL? {
-        var components = URLComponents()
-        components.scheme = "sorty"
-        components.host = "scan"
-        components.queryItems = [URLQueryItem(name: "path", value: path)]
-        return components.url
-    }
-
-    // MARK: - App Group Communication (for sandboxed extensions)
-
-    public static func sendDirectoryToApp(_ directoryURL: URL) {
-        if let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) {
-            sharedDefaults.set(directoryURL.path, forKey: directoryKey)
-        }
-
-        let notificationCenter = DistributedNotificationCenter.default()
-        notificationCenter.post(
-            name: notificationName,
-            object: nil,
-            userInfo: ["path": directoryURL.path]
-        )
-    }
-
-    /// Read-take used by the UI delivery path. The filesystem validation runs
-    /// off the calling actor so a stalled network mount cannot freeze the main
-    /// thread; callers hop back to the main actor with the validated URL.
-    public static func receiveFromExtensionAsync() async -> URL? {
-        guard let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier),
-              let path = sharedDefaults.string(forKey: directoryKey) else {
-            return nil
-        }
-        sharedDefaults.removeObject(forKey: directoryKey)
-        guard let validated = await IncomingPathValidator.validatedDirectoryURLIfValidAsync(path: path) else {
-            DebugLogger.log("Rejected invalid Finder extension directory: \(path)")
-            return nil
-        }
-        return validated
-    }
+    // MARK: - Finder Extension Notifications
 
     @discardableResult
     public static func setupNotificationObserver(handler: @escaping @Sendable @MainActor (URL) -> Void) -> NSObjectProtocol {
@@ -226,7 +137,6 @@ public struct ExtensionCommunication {
                   let path = userInfo["path"] as? String else {
                 return
             }
-            UserDefaults(suiteName: appGroupIdentifier)?.removeObject(forKey: directoryKey)
             // DistributedNotificationCenter is unauthenticated: any local
             // process can post SortyDirectorySelected. Validate like a deeplink
             // off-main, then deliver the confirmed URL on the main actor.
@@ -313,18 +223,6 @@ public struct ExtensionCommunication {
             }
         }
 
-        var isVerifiedWorking: Bool {
-            kind == .verified
-        }
-
-        var needsRepair: Bool {
-            switch kind {
-            case .registered, .verified:
-                return false
-            default:
-                return true
-            }
-        }
     }
 
     package enum FinderSetupState: Sendable, Equatable {
@@ -991,10 +889,6 @@ public struct ExtensionCommunication {
         )
     }
 
-    public static func isFinderSyncExtensionActiveAsync() async -> Bool {
-        (await getFinderSyncDiagnosticsAsync()).isOperational
-    }
-
     /// Maintains Finder menu actions and registration without restarting Finder,
     /// staging another app copy, or changing the app's code signature.
     package static func prepareFinderIntegrationAsync() async -> FinderSyncDiagnostics {
@@ -1530,13 +1424,6 @@ public struct ExtensionCommunication {
             return true
         }
         return false
-    }
-
-    private static func hasInstalledWatchWorkflowPackage() -> Bool {
-        candidateServicesDirectories().contains { servicesDir in
-            let workflowPath = servicesDir.appendingPathComponent(watchQuickActionWorkflowName)
-            return FileManager.default.fileExists(atPath: workflowPath.path)
-        }
     }
 
     private static func watchWorkflowUsesExpectedIconConfiguration(
@@ -2246,39 +2133,6 @@ public struct ExtensionCommunication {
         return false
     }
 
-    /// Check if Quick Action is installed (async)
-    public static func isQuickActionInstalledAsync() async -> Bool {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                let result = isQuickActionInstalled()
-                continuation.resume(returning: result)
-            }
-        }
-    }
-
-    /// Uninstall the Quick Action
-    public static func uninstallQuickAction() -> Bool {
-        var removed = false
-
-        for servicesDir in candidateServicesDirectories() {
-            let workflowPath = servicesDir.appendingPathComponent(organizeQuickActionWorkflowName)
-            if FileManager.default.fileExists(atPath: workflowPath.path) {
-                do {
-                    try FileManager.default.removeItem(at: workflowPath)
-                    removed = true
-                } catch {
-                    // Continue trying other candidate directories.
-                }
-            }
-        }
-
-        if removed {
-            refreshDynamicServicesRegistry()
-        }
-
-        return removed
-    }
-
     // MARK: - Quick Watch Action Installation
 
     /// Install a "Watch with Sorty" Quick Action workflow to ~/Library/Services
@@ -2853,65 +2707,6 @@ public struct ExtensionCommunication {
         }
     }
 
-    /// Check if Quick Watch Action is installed
-    public static func isQuickWatchActionInstalled() -> Bool {
-        return isWatchWorkflowInstalledAndCompatible()
-            && isWorkflowInstalledAndCompatible(
-                workflowName: watchQuickActionWorkflowName,
-                bundleIdentifier: watchQuickActionBundleIdentifier,
-                expectedCommand: Self.watchQuickActionCommandMarker
-            )
-    }
-
-    public static func isQuickExcludeActionInstalled() -> Bool {
-        return isWorkflowInstalledAndCompatible(
-            workflowName: excludeQuickActionWorkflowName,
-            bundleIdentifier: excludeQuickActionBundleIdentifier,
-            expectedCommand: Self.excludeQuickActionCommandMarker
-        )
-    }
-
-    public static func isQuickWatchActionInstalledAsync() async -> Bool {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                let result = isQuickWatchActionInstalled()
-                continuation.resume(returning: result)
-            }
-        }
-    }
-
-    public static func isQuickExcludeActionInstalledAsync() async -> Bool {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                let result = isQuickExcludeActionInstalled()
-                continuation.resume(returning: result)
-            }
-        }
-    }
-
-    /// Uninstall the Quick Watch Action
-    public static func uninstallQuickWatchAction() -> Bool {
-        var removed = false
-
-        for servicesDir in candidateServicesDirectories() {
-            let workflowPath = servicesDir.appendingPathComponent(watchQuickActionWorkflowName)
-            if FileManager.default.fileExists(atPath: workflowPath.path) {
-                do {
-                    try FileManager.default.removeItem(at: workflowPath)
-                    removed = true
-                } catch {
-                    // Continue trying other candidate directories.
-                }
-            }
-        }
-
-        if removed {
-            refreshDynamicServicesRegistry()
-        }
-
-        return removed
-    }
-
     // MARK: - Quick Preview Action Installation
 
     /// Install a "Preview with Sorty" Quick Action workflow to ~/Library/Services
@@ -3196,38 +2991,6 @@ public struct ExtensionCommunication {
         }
     }
 
-    /// Check if Quick Preview Action is installed
-    public static func isQuickPreviewActionInstalled() -> Bool {
-        return isWorkflowInstalledAndCompatible(
-            workflowName: previewQuickActionWorkflowName,
-            bundleIdentifier: previewQuickActionBundleIdentifier,
-            expectedCommand: Self.previewQuickActionCommandMarker
-        )
-    }
-
-    /// Uninstall the Quick Preview Action
-    public static func uninstallQuickPreviewAction() -> Bool {
-        var removed = false
-
-        for servicesDir in candidateServicesDirectories() {
-            let workflowPath = servicesDir.appendingPathComponent(previewQuickActionWorkflowName)
-            if FileManager.default.fileExists(atPath: workflowPath.path) {
-                do {
-                    try FileManager.default.removeItem(at: workflowPath)
-                    removed = true
-                } catch {
-                    // Continue trying other candidate directories.
-                }
-            }
-        }
-
-        if removed {
-            refreshDynamicServicesRegistry()
-        }
-
-        return removed
-    }
-
     /// Uninstall all Quick Action workflows
     public static func uninstallAllQuickActions() -> (success: Bool, removed: Int) {
         let workflows = [
@@ -3265,21 +3028,7 @@ public struct ExtensionCommunication {
         return (removedCount > 0, removedCount)
     }
 
-    // MARK: - AppleScript Integration
-
-    /// Generate AppleScript for organizing a folder
-    public static func appleScriptForOrganizing() -> String {
-        return """
-        on run {input, parameters}
-            repeat with theItem in input
-                set thePath to POSIX path of theItem
-                set encodedPath to do shell script "/usr/bin/python3 -c \\"import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))\\" " & quoted form of thePath & " 2>/dev/null || printf '%s' " & quoted form of thePath & " | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'"
-                do shell script "open -g 'sorty://organize?path=" & encodedPath & "&source=finder'"
-            end repeat
-            return input
-        end run
-        """
-    }
+    // MARK: - System Settings
 
     /// Open Finder Extension preferences
     public static func openFinderExtensionSettings() {
@@ -3296,70 +3045,5 @@ public struct ExtensionCommunication {
                 return
             }
         }
-    }
-
-    // MARK: - Finder Integration Status
-
-    public struct FinderIntegrationStatus: Sendable {
-        public let quickActionInstalled: Bool
-        public let quickWatchActionInstalled: Bool
-        public let quickExcludeActionInstalled: Bool
-        public let toolbarAppInstalled: Bool
-        public let finderSyncEnabled: Bool
-        public let menuBarEnabled: Bool
-
-        public static let totalIntegrations = 6
-        public static let empty = FinderIntegrationStatus(
-            quickActionInstalled: false,
-            quickWatchActionInstalled: false,
-            quickExcludeActionInstalled: false,
-            toolbarAppInstalled: false,
-            finderSyncEnabled: false,
-            menuBarEnabled: false
-        )
-
-        public var overallStatus: String {
-            if quickActionInstalled || quickWatchActionInstalled || quickExcludeActionInstalled || toolbarAppInstalled || finderSyncEnabled || menuBarEnabled {
-                return "Active"
-            }
-            return "Not Configured"
-        }
-
-        public var integrationCount: Int {
-            [quickActionInstalled, quickWatchActionInstalled, quickExcludeActionInstalled, toolbarAppInstalled, finderSyncEnabled, menuBarEnabled]
-                .filter { $0 }.count
-        }
-    }
-
-    /// Whether the legacy "Organize with Sorty" toolbar app bundle exists.
-    private static func isToolbarAppInstalled() -> Bool {
-        let appPath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first?
-            .appendingPathComponent("Sorty")
-            .appendingPathComponent("Organize with Sorty.app")
-        guard let appPath else { return false }
-        return FileManager.default.fileExists(atPath: appPath.path)
-    }
-
-    public static func getIntegrationStatusAsync() async -> FinderIntegrationStatus {
-        let finderSyncEnabled = await isFinderSyncExtensionActiveAsync()
-        UserDefaults.standard.set(finderSyncEnabled, forKey: "enableFinderSyncExtension")
-
-        let quickWatchActionInstalled = await isQuickWatchActionInstalledAsync()
-        let quickExcludeActionInstalled = await isQuickExcludeActionInstalledAsync()
-        let toolbarAppInstalled = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                continuation.resume(returning: isToolbarAppInstalled())
-            }
-        }
-
-        return FinderIntegrationStatus(
-            quickActionInstalled: await isQuickActionInstalledAsync(),
-            quickWatchActionInstalled: quickWatchActionInstalled,
-            quickExcludeActionInstalled: quickExcludeActionInstalled,
-            toolbarAppInstalled: toolbarAppInstalled,
-            finderSyncEnabled: finderSyncEnabled,
-            menuBarEnabled: UserDefaults.standard.bool(forKey: "showMenuBarExtra")
-        )
     }
 }

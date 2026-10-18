@@ -104,19 +104,9 @@ public final class CodexCLIAuthManager: ObservableObject {
         let account_id: String?
     }
 
-    private var hasStartedLaunchProbe = false
-
     /// Construction never probes: the status check spawns the Codex CLI, which
     /// must not run before the first window is on screen.
     public init() {}
-
-    /// Runs the first status probe once per launch. `SortyApp` calls this from
-    /// the window-ready callback so the subprocess starts after interactive setup.
-    public func startLaunchProbeIfNeeded() {
-        guard !hasStartedLaunchProbe else { return }
-        hasStartedLaunchProbe = true
-        checkStatus()
-    }
 
     nonisolated static func hasUsableSubscriptionLogin() -> Bool {
         readLoginStatus().isSubscriptionUsable

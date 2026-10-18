@@ -1,21 +1,9 @@
 //
-//  Constants.swift
+//  SortyCoreConstants.swift
 //  Sorty
-//
-//  App-wide constants
 //
 
 import Foundation
-
-enum Constants {
-    static let appGroupIdentifier = "group.com.sorty.app"
-    static let maxPreviewVersions = 5
-}
-
-
-
-
-
 import SwiftUI
 import AppKit
 

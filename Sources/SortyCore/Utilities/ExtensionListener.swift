@@ -24,17 +24,6 @@ public class ExtensionListener: ObservableObject {
         }
     }
 
-    /// Drains the app-group handoff slot after first paint. Reads the shared
-    /// defaults slot and validates the payload; call from
-    /// `configureGlobalsIfNeeded` rather than init to keep scene creation free
-    /// of IPC validation and filesystem checks.
-    public func drainHandoffSlot() {
-        Task { @MainActor [weak self] in
-            guard let url = await ExtensionCommunication.receiveFromExtensionAsync() else { return }
-            self?.route(url)
-        }
-    }
-
     private func route(_ directoryURL: URL) {
         MainWindowRouter.shared.routeFinderDirectory(directoryURL)
     }

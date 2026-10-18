@@ -143,13 +143,7 @@ public class LoginItemManager: ObservableObject {
         }
     }
 
-    // MARK: - Toggle
-
-    /// Toggles the launch-at-login registration state.
-    /// Registers the app as a login item if currently disabled, or unregisters it if enabled.
-    public func toggleLaunchAtLogin() {
-        setLaunchAtLogin(!isLaunchAtLoginEnabled)
-    }
+    // MARK: - Launch at Login
 
     /// Applies a user-driven Launch at Login change from Settings or the menu
     /// bar: writes the preference, publishes the intent immediately, and

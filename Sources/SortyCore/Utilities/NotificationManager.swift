@@ -711,34 +711,6 @@ public class NotificationManager: ObservableObject {
         )
     }
     
-    /// Show processing complete notification
-    public func showProcessingComplete(fileCount: Int, folderName: String) {
-        show(.processingComplete(fileCount: fileCount, folderName: folderName))
-    }
-    
-    /// Show processing complete notification with folder path and undo support
-    public func showProcessingComplete(
-        fileCount: Int,
-        folderName: String,
-        folderPath: String?,
-        canUndo: Bool = false,
-        isAutomated: Bool = false,
-        onAction: NotificationActionHandler? = nil
-    ) {
-        let type = NotificationType.processingComplete(
-            fileCount: fileCount,
-            folderName: folderName,
-            folderPath: folderPath,
-            canUndo: canUndo,
-            isAutomated: isAutomated
-        )
-        if let handler = onAction {
-            show(type, actionHandler: handler)
-        } else {
-            show(type)
-        }
-    }
-    
     /// Show processing error notification
     public func showError(message: String, isCritical: Bool = false) {
         show(.processingError(message: message, isCritical: isCritical, canRetry: false, isAutomated: false))
@@ -873,10 +845,6 @@ public class NotificationManager: ObservableObject {
             backend: "native",
             detail: stageDetail
         )
-    }
-
-    public func sendInFlowPreviewSample() {
-        show(.previewReady(folderName: "Current Preview"))
     }
 
     /// Show a demo of the in-app HUD delivery style.
@@ -1553,10 +1521,6 @@ public class NotificationManager: ObservableObject {
         }
     }
 
-    func notificationActionLabels(for type: NotificationType) -> [String] {
-        notificationActions(for: type).map(\.label)
-    }
-
     private func notificationActions(for type: NotificationType) -> [CuratedNotificationAction] {
         let maxActions = 4
         var candidates: [(priority: Int, action: CuratedNotificationAction)] = []
@@ -1616,16 +1580,6 @@ public class NotificationManager: ObservableObject {
             }
             .prefix(maxActions)
             .map { $0 }
-    }
-
-    private func applyAction() -> CuratedNotificationAction {
-        CuratedNotificationAction(
-            label: "Apply Now",
-            identifier: NativeNotificationActionIdentifier.apply,
-            action: .apply,
-            role: .guardedConfirmation,
-            confirmationNotificationName: .requestApplyOrganizationConfirmation
-        )
     }
 
     private func undoAction(label: String = "Undo", identifier: String = NativeNotificationActionIdentifier.undo) -> CuratedNotificationAction {

@@ -307,17 +307,6 @@ public final class AutomationManager: ObservableObject {
         selectionRefreshTask = nil
     }
     
-    /// Get the path of the frontmost Finder window
-    public func getFrontmostFinderWindow() async -> URL? {
-        guard automationStatus == .granted else { return nil }
-        return await FinderAutomation.getFrontmostFinderWindowPath()
-    }
-    
-    /// Check if current selection is a valid organization target
-    public func canOrganizeSelection() -> Bool {
-        return hasValidFinderSelection && automationStatus == .granted
-    }
-    
     // MARK: - Post-Organization Actions
     
     /// Select organized folders in Finder after organization completes
@@ -346,32 +335,6 @@ public final class AutomationManager: ObservableObject {
     public func refreshFinder(at url: URL) {
         guard automationStatus == .granted else { return }
         FinderAutomation.refreshFinder(at: url)
-    }
-
-    /// Attempt recovery from stale/denied automation states without app restart.
-    public func recoverAutomationState() {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            await recoverAutomationStateAfterPermissionRequest()
-        }
-    }
-
-    private func recoverAutomationStateAfterPermissionRequest() async {
-        await requestAutomationPermissionCheck()
-
-        guard automationStatus == .granted else {
-            if automationStatus == .denied {
-                statusMessage = "Automation still denied. Open System Settings to allow Finder control."
-            }
-            return
-        }
-
-        if enableSelectionMonitoring && selectionMonitoringDemandCount > 0 {
-            startSelectionMonitoring()
-        } else {
-            updateFinderSelection()
-        }
-        statusMessage = "Automation state refreshed"
     }
 
     /// Updates Sorty's in-memory state after its Finder Automation TCC decision is reset.

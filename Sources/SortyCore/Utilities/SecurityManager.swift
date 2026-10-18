@@ -18,9 +18,7 @@ public class SecurityManager: ObservableObject {
     // MARK: - Published State
     
     @Published public var isUnlocked: Bool = false
-    @Published public var biometryType: LABiometryType = .none {
-        didSet { hasResolvedBiometryType = true }
-    }
+    @Published public var biometryType: LABiometryType = .none
     @Published public var error: String?
     @Published public var authenticationMethod: AuthenticationMethod = .none
     
@@ -52,8 +50,6 @@ public class SecurityManager: ObservableObject {
     /// Construction stays cheap for fast launch; biometry resolves lazily on
     /// first authentication or settings presentation, not in `init`.
     public init() {}
-
-    private var hasResolvedBiometryType = false
     
     // MARK: - Authentication Methods
     
@@ -65,7 +61,6 @@ public class SecurityManager: ObservableObject {
     
     /// Checks what kind of biometry is available on the device
     public func checkBiometryType() {
-        hasResolvedBiometryType = true
         let context = LAContext()
         var error: NSError?
         
@@ -77,34 +72,6 @@ public class SecurityManager: ObservableObject {
         }
     }
     
-    /// Display name for the available biometry type
-    public var biometryDisplayName: String {
-        if !hasResolvedBiometryType {
-            checkBiometryType()
-        }
-        switch biometryType {
-        case .touchID:
-            return "Touch ID"
-        case .faceID:
-            return "Face ID"
-        case .opticID:
-            return "Optic ID"
-        case .none:
-            return "Password"
-        @unknown default:
-            return "Biometric"
-        }
-    }
-    
-    /// Requests authentication specifically for Learnings access.
-    /// Returns `true` when access is granted.
-    @discardableResult
-    public func authenticateForLearningsAccess() async -> Bool {
-        await authenticateForSensitiveAction(
-            reason: "Authenticate to access your personal organization learnings."
-        )
-    }
-
     /// Central authentication entry point for any sensitive action in the app.
     /// Returns `true` when the action should proceed.
     @discardableResult

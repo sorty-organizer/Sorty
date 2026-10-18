@@ -220,31 +220,6 @@ public final class FinderAutomation {
         return paths.map { URL(fileURLWithPath: $0) }
     }
     
-    /// Get the path of the frontmost Finder window
-    /// Returns nil if no Finder window is open
-    public static func getFrontmostFinderWindowPath() async -> URL? {
-        guard checksEnabled else { return nil }
-        guard checkAutomationPermission() == .granted else {
-            return nil
-        }
-        
-        let scriptSource = """
-        with timeout of \(finderAutomationScriptTimeoutSeconds) seconds
-            tell application "Finder"
-                set targetFolder to target of front window as alias
-                return POSIX path of targetFolder
-            end tell
-        end timeout
-        """
-        
-        guard let result = await execute(source: scriptSource, description: "front window query"),
-              result.status == 0 else {
-            return nil
-        }
-        let path = String(result.output.dropLast(result.output.hasSuffix("\n") ? 1 : 0))
-        return path.isEmpty ? nil : URL(fileURLWithPath: path)
-    }
-
     // MARK: - Finder Selection Control
     
     /// Select items in the frontmost Finder window

@@ -6,25 +6,6 @@ final class FinderIntegrationStatusTests: XCTestCase {
     private let preferredExtensionPath = "/Users/test/Applications/Sorty.app/Contents/PlugIns/SortyFinderSync.appex"
     private let staleExtensionPath = "/Applications/Sorty.app/Contents/PlugIns/SortyFinderSync.appex"
 
-    override func tearDown() {
-        UserDefaults(suiteName: "group.com.sorty.app")?.removeObject(forKey: "selectedDirectory")
-        super.tearDown()
-    }
-
-    func testFinderRequestIsConsumedOnlyOnce() async throws {
-        let defaults = UserDefaults(suiteName: "group.com.sorty.app")!
-        let incoming = FileManager.default.temporaryDirectory
-            .appendingPathComponent("SortyIncoming-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: incoming, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: incoming) }
-        defaults.set(incoming.path, forKey: "selectedDirectory")
-
-        let first = await ExtensionCommunication.receiveFromExtensionAsync()
-        let second = await ExtensionCommunication.receiveFromExtensionAsync()
-        XCTAssertEqual(first?.path, incoming.path)
-        XCTAssertNil(second)
-    }
-
     func testParseFinderSyncRegistrationEntriesTracksEnabledStates() {
         let output = """
         +    com.sorty.app.SortyFinderSync(1.1.2)\tUUID-1\t2026-03-07 02:42:55 +0000\t\(preferredExtensionPath)
@@ -74,7 +55,7 @@ final class FinderIntegrationStatusTests: XCTestCase {
 
         XCTAssertEqual(diagnostics.kind, .activeElsewhere)
         XCTAssertEqual(diagnostics.activePath, staleExtensionPath)
-        XCTAssertTrue(diagnostics.needsRepair)
+        XCTAssertFalse(diagnostics.isOperational)
     }
 
     func testFinderSyncDiagnosticsDoesNotClaimWorkingWithoutFinderHeartbeat() {
@@ -86,7 +67,7 @@ final class FinderIntegrationStatusTests: XCTestCase {
 
         XCTAssertEqual(diagnostics.kind, .registered)
         XCTAssertTrue(diagnostics.isOperational)
-        XCTAssertFalse(diagnostics.isVerifiedWorking)
+        XCTAssertEqual(diagnostics.setupState, .registered)
     }
 
     func testFinderSyncDiagnosticsVerifiesCurrentBuildWithHeartbeat() {
@@ -103,7 +84,7 @@ final class FinderIntegrationStatusTests: XCTestCase {
 
         XCTAssertEqual(diagnostics.kind, .verified)
         XCTAssertTrue(diagnostics.isOperational)
-        XCTAssertTrue(diagnostics.isVerifiedWorking)
+        XCTAssertEqual(diagnostics.setupState, .enabled)
     }
 
     func testFinderSyncDiagnosticsVerifiesCurrentBuildWithRunningProcessPath() {
@@ -116,7 +97,7 @@ final class FinderIntegrationStatusTests: XCTestCase {
 
         XCTAssertEqual(diagnostics.kind, .verified)
         XCTAssertTrue(diagnostics.isOperational)
-        XCTAssertTrue(diagnostics.isVerifiedWorking)
+        XCTAssertEqual(diagnostics.setupState, .enabled)
     }
 
     func testFinderSyncDiagnosticsFlagsAnotherActiveCopyFromRunningProcessPath() {
@@ -129,7 +110,7 @@ final class FinderIntegrationStatusTests: XCTestCase {
 
         XCTAssertEqual(diagnostics.kind, .activeElsewhere)
         XCTAssertEqual(diagnostics.activePath, staleExtensionPath)
-        XCTAssertTrue(diagnostics.needsRepair)
+        XCTAssertFalse(diagnostics.isOperational)
     }
 
     func testFinderSyncDiagnosticsFlagsStaleDuplicateRegistrations() {
@@ -144,7 +125,7 @@ final class FinderIntegrationStatusTests: XCTestCase {
 
         XCTAssertEqual(diagnostics.kind, .needsCleanup)
         XCTAssertEqual(diagnostics.problemPaths, [staleExtensionPath])
-        XCTAssertTrue(diagnostics.needsRepair)
+        XCTAssertFalse(diagnostics.isOperational)
     }
 
     func testAutoRepairSkipsWhenCurrentBuildIsOnlyRegistered() {
@@ -247,7 +228,7 @@ final class FinderIntegrationStatusTests: XCTestCase {
         )
 
         XCTAssertEqual(diagnostics.kind, .notRegistered)
-        XCTAssertTrue(diagnostics.needsRepair)
+        XCTAssertFalse(diagnostics.isOperational)
     }
 
     func testFinderSyncDiagnosticsReportsDisabledWhenPreferredEntryDisabled() {
@@ -258,7 +239,7 @@ final class FinderIntegrationStatusTests: XCTestCase {
         )
 
         XCTAssertEqual(diagnostics.kind, .disabled)
-        XCTAssertTrue(diagnostics.needsRepair)
+        XCTAssertFalse(diagnostics.isOperational)
     }
 
     func testFinderSyncDiagnosticsReportsMissingWhenNoPreferredPath() {

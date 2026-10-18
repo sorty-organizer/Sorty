@@ -130,11 +130,6 @@ public final class MainWindowRouter {
         return preferredSessionID(in: sessions)
     }
 
-    public var preferredAvailableSessionID: UUID? {
-        pruneClosedSessions()
-        return preferredSessionID(in: sessions.filter { !$0.value.isBusy })
-    }
-
     private var preferredReadySessionID: UUID? {
         pruneClosedSessions()
         return preferredSessionID(in: sessions.filter(\.value.isReady))
