@@ -89,7 +89,6 @@ public enum OrganizationState: Equatable, Sendable {
 
 public enum OrganizationError: LocalizedError, Equatable {
     case clientNotConfigured
-    case automationNotConfigured
     case noCurrentPlan
     case planDirectoryMismatch(expected: String, actual: String)
     case fileMoveFailed(String)
@@ -100,8 +99,6 @@ public enum OrganizationError: LocalizedError, Equatable {
         switch self {
         case .clientNotConfigured:
             return "AI Client not configured. Please check your settings."
-        case .automationNotConfigured:
-            return "Automation permission not granted. Please enable it in System Settings > Privacy & Security > Automation."
         case .noCurrentPlan:
             return "No organization plan available to apply."
         case .planDirectoryMismatch(let expected, let actual):

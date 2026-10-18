@@ -46,7 +46,6 @@ public enum OrganizerServices {
     public static var attentionRequester: () -> Void = {}
     public static var visionSupportChecker: (String, AIProvider) -> Bool = { _, _ in false }
     public static var keychainReader: (String) -> String? = { _ in nil }
-    public static var finderSelectionReader: () async -> [URL]? = { nil }
 
     public static func log(
         _ message: @autoclosure () -> String,

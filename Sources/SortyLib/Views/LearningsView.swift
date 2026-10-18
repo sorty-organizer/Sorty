@@ -13,7 +13,6 @@ import UniformTypeIdentifiers
 
 struct LearningsView: View {
     @SortyHotReload private var hotReload
-    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var manager: LearningsManager
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var exclusionRules: ExclusionRulesManager
@@ -23,7 +22,6 @@ struct LearningsView: View {
     @State private var showingWithdrawConfirmation = false
     @State private var activeFileImporter: ActiveFileImporter?
     @State private var isShowingFileImporter = false
-    @State private var showLearningsModelPicker = false
     @State private var emptyLearningsHasAppeared = false
     @State private var emptyExampleFoldersHasAppeared = false
     @State private var pendingControlAction: PendingControlAction?
@@ -159,12 +157,6 @@ struct LearningsView: View {
                     .transition(.opacity.combined(with: .scale(scale: 1.015)))
             }
         }
-        .onAppear {
-            manager.configure(with: settingsViewModel.config)
-        }
-        .onChange(of: settingsViewModel.config) { _, config in
-            manager.configure(with: config)
-        }
         .animation(.easeInOut(duration: 0.36), value: manager.consentManager.hasConsented)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .contain)
@@ -175,11 +167,6 @@ struct LearningsView: View {
             await manager.loadPersistedState()
             if !manager.isLocked {
                 await manager.loadProfileIfNeededForCollectionAsync()
-            }
-        }
-        .onAppear {
-            if settingsViewModel.availableModels.isEmpty {
-                settingsViewModel.updateAvailableModels()
             }
         }
         .navigationTitle("Learnings")
@@ -319,42 +306,6 @@ struct LearningsView: View {
             }
             .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
         }
-        .modelSelectionOverlay(
-            isPresented: $showLearningsModelPicker,
-            currentProvider: usesDedicatedLearningsModel
-                ? (manager.learningsModelSelection?.provider ?? settingsViewModel.config.provider)
-                : settingsViewModel.config.provider,
-            currentModel: usesDedicatedLearningsModel
-                ? effectiveLearningsModel
-                : settingsViewModel.config.model,
-            contextMessage: usesDedicatedLearningsModel
-                ? "Organization uses \(organizationModelDisplay)."
-                : "Learnings uses the organization model (\(organizationModelDisplay)). Picking a different model creates a dedicated override for learnings analysis.",
-            resetActionTitle: usesDedicatedLearningsModel ? "Use Organization Model" : nil,
-            onReset: {
-                manager.clearLearningsModelOverride()
-            },
-            reasoningEffortForModel: { provider, model in
-                settingsViewModel.config.reasoningEffort(for: provider, model: model)
-            },
-            onSelectReasoningEffort: { provider, model, effort in
-                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
-            },
-            onSelect: { provider, model, authMethod in
-                if let authMethod {
-                    settingsViewModel.config.setAuthMethod(authMethod, for: provider)
-                }
-                HapticFeedbackManager.shared.selection()
-                if provider == settingsViewModel.config.provider
-                    && model == settingsViewModel.config.model
-                {
-                    manager.clearLearningsModelOverride()
-                } else {
-                    manager.setLearningsModelOverride(provider: provider, model: model)
-                }
-            },
-            isSubscriptionSelected: settingsViewModel.config.authMethod(for: usesDedicatedLearningsModel ? (manager.learningsModelSelection?.provider ?? settingsViewModel.config.provider) : settingsViewModel.config.provider) == .accountSignIn
-        )
         .sheet(item: $selectedLearningRecordsCategory) { category in
             if let profile = manager.currentProfile {
                 learningRecordsDetailSheet(category: category, profile: profile)
@@ -1461,32 +1412,6 @@ struct LearningsView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     settingsRowLabel(
-                        systemImage: "wand.and.stars",
-                        title: "Learnings Model",
-                        detail: usesDedicatedLearningsModel
-                            ? "Dedicated model for learnings analysis"
-                            : "Same model as organization"
-                    )
-                    Spacer()
-                    ModelSelectorCompactButton(
-                        provider: usesDedicatedLearningsModel
-                            ? (manager.learningsModelSelection?.provider
-                                ?? settingsViewModel.config.provider)
-                            : settingsViewModel.config.provider,
-                        label: usesDedicatedLearningsModel ? effectiveLearningsModel : "Default",
-                        onTap: {
-                            showLearningsModelPicker = true
-                        }
-                    )
-                    .modelSelectorTriggerBounds()
-                }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 12)
-
-                Divider().padding(.leading, 40)
-
-                HStack(spacing: 12) {
-                    settingsRowLabel(
                         systemImage: "calendar.badge.clock",
                         title: "Data Retention",
                         detail: "How long to keep learning data"
@@ -1683,16 +1608,6 @@ struct LearningsView: View {
 
     // MARK: - Helpers
 
-    private var effectiveLearningsModel: String {
-        manager.effectiveAIConfig(from: settingsViewModel.config).model
-    }
-
-    private var organizationModelDisplay: String {
-        let provider = settingsViewModel.config.provider
-        let model = settingsViewModel.config.model
-        return "\(provider.displayName) / \(model.isEmpty ? provider.defaultModel : model)"
-    }
-
     private func presentFileImporter(_ importer: ActiveFileImporter) {
         HapticFeedbackManager.shared.tap()
         activeFileImporter = importer
@@ -1731,11 +1646,6 @@ struct LearningsView: View {
             }
             onSuccess()
         }
-    }
-
-    private var usesDedicatedLearningsModel: Bool {
-        guard let selection = manager.learningsModelSelection else { return false }
-        return selection.provider == settingsViewModel.config.provider
     }
 
     // MARK: - Export / Import

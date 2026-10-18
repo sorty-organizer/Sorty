@@ -34,21 +34,6 @@ public final class FinderAutomation {
     nonisolated static let permissionEventClass = AEEventClass(kAECoreSuite)
     nonisolated static let permissionEventID = AEEventID(kAEGetData)
 
-    /// NUL delimiters preserve commas and newlines in Finder filenames.
-    private static let selectionQueryScript = """
-        with timeout of \(finderAutomationScriptTimeoutSeconds) seconds
-            tell application "Finder"
-                set selectedItems to selection
-                set filePaths to {}
-                repeat with anItem in selectedItems
-                    set end of filePaths to POSIX path of (anItem as alias)
-                end repeat
-                set AppleScript's text item delimiters to ASCII character 0
-                return filePaths as text
-            end tell
-        end timeout
-        """
-    
     public static func enableAutomationChecks() {
         checksEnabled = true
     }
@@ -199,25 +184,6 @@ public final class FinderAutomation {
                 onMissingApp: onMissingApp
             )
         }
-    }
-    
-    // MARK: - Finder Selection
-    
-    /// Get the currently selected files in the frontmost Finder window
-    /// Returns nil if no Finder window is open or no selection
-    public static func getSelectedFiles() async -> [URL]? {
-        guard checksEnabled,
-              determineAutomationPermission(prompt: false) == .granted,
-              let result = await execute(source: selectionQueryScript, description: "selection query"),
-              result.status == 0 else {
-            return nil
-        }
-
-        let paths = String(result.output.dropLast(result.output.hasSuffix("\n") ? 1 : 0))
-            .split(separator: "\0")
-            .map(String.init)
-        guard !paths.isEmpty else { return nil }
-        return paths.map { URL(fileURLWithPath: $0) }
     }
     
     // MARK: - Finder Selection Control

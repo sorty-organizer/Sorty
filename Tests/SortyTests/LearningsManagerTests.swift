@@ -232,9 +232,9 @@ final class LearningsManagerTests: XCTestCase {
         XCTAssertFalse(rules.contains(where: \.isAvoidRule))
     }
     
-    // MARK: - Analysis Tests
+    // MARK: - Local inference tests
     
-    func testAnalyzeWithNoInputsUsesExistingLearningSignals() async {
+    func testLocalInferenceUsesAcceptedExamples() async {
         manager.addLabeledExample(
             srcPath: "/Downloads/Invoice_001.pdf",
             dstPath: "/Finance/Invoice_001.pdf",
@@ -246,16 +246,11 @@ final class LearningsManagerTests: XCTestCase {
             action: .accept
         )
 
-        // Error-clear phase (folded from testErrorStateClearing): a stale
-        // error is cleared by a successful analyze with no inputs.
-        manager.error = "Previous error"
+        await manager.runLocalRuleInference()
 
-        await manager.analyze(rootPaths: [], examplePaths: [])
-
-        XCTAssertNil(manager.error)
-        XCTAssertNotNil(manager.analysisResult)
-        XCTAssertFalse(manager.analysisResult?.inferredRules.isEmpty ?? true)
+        XCTAssertFalse(manager.currentProfile?.inferredRules.isEmpty ?? true)
     }
+
     // MARK: - Prompt Context Generation Tests
     
     func testGeneratePromptContext() async {
@@ -569,116 +564,6 @@ final class LearningsManagerTests: XCTestCase {
                 scanSnapshot: snapshot
             )
         }
-    }
-
-    func testLearningsModelOverrideUsesDedicatedModelForAnalysis() {
-       manager.setLearningsModelOverride(provider: .openAI, model: "gpt-5-mini")
-
-       var baseConfig = AIConfig.default
-       baseConfig.provider = .openAI
-       baseConfig.model = "gpt-5"
-
-       let effectiveConfig = manager.effectiveAIConfig(from: baseConfig)
-
-       XCTAssertEqual(effectiveConfig.provider, .openAI)
-       XCTAssertEqual(effectiveConfig.model, "gpt-5-mini")
-    }
-
-    func testLearningsModelOverrideFallsBackWhenProviderChanges() {
-       manager.setLearningsModelOverride(provider: .openAI, model: "gpt-5-mini")
-
-       var baseConfig = AIConfig.default
-       baseConfig.provider = .anthropic
-       baseConfig.model = "claude-sonnet-4-20250514"
-
-       let effectiveConfig = manager.effectiveAIConfig(from: baseConfig)
-
-       XCTAssertEqual(effectiveConfig.provider, .anthropic)
-       XCTAssertEqual(effectiveConfig.model, "claude-sonnet-4-20250514")
-    }
-}
-
-// MARK: - LearningsAnalyzer Tests
-
-@MainActor
-final class LearningsAnalyzerTests: XCTestCase {
-    
-    var analyzer: LearningsAnalyzer!
-    
-    override func setUp() async throws {
-        
-        analyzer = LearningsAnalyzer()
-    }
-    
-    override func tearDown() async throws {
-        analyzer = nil
-        
-    }
-    
-    func testProposeMappingWithMatchingRule() async {
-        let rule = InferredRule(
-            pattern: "^IMG_\\d{8}_\\d{6}",
-            template: "{year}/{month}/{day}/{filename}",
-            priority: 80,
-            explanation: "Photo organization"
-        )
-        
-        let fileURL = URL(fileURLWithPath: "/Downloads/IMG_20240101_123456.jpg")
-        
-        let mapping = await analyzer.proposeMapping(
-            for: fileURL,
-            using: [rule],
-            rootPath: "/Photos"
-        )
-        
-        XCTAssertEqual(mapping.srcPath, "/Downloads/IMG_20240101_123456.jpg")
-        XCTAssertEqual(mapping.proposedDstPath, "/Photos/2024/01/01/IMG_20240101_123456.jpg")
-        XCTAssertGreaterThan(mapping.confidence, 0.5)
-        XCTAssertNotNil(mapping.ruleId)
-    }
-    
-    func testProposeMappingWithNoMatchingRule() async {
-        let fileURL = URL(fileURLWithPath: "/Downloads/random_file.txt")
-        
-        let mapping = await analyzer.proposeMapping(
-            for: fileURL,
-            using: [],
-            rootPath: "/Documents"
-        )
-        
-        XCTAssertEqual(mapping.srcPath, "/Downloads/random_file.txt")
-        XCTAssertTrue(mapping.proposedDstPath.contains("/Documents/"))
-        XCTAssertLessThan(mapping.confidence, 0.5) // Low confidence fallback
-        XCTAssertNil(mapping.ruleId)
-    }
-    
-    func testProposeMappingWithMultipleRules() async {
-        let rule1 = InferredRule(
-            pattern: "^IMG_.*",
-            template: "{category}/{filename}",
-            priority: 50,
-            explanation: "Basic photo rule"
-        )
-        
-        let rule2 = InferredRule(
-            pattern: "^IMG_\\d{8}.*",
-            template: "{year}/{date}/{filename}",
-            priority: 90,
-            explanation: "Advanced photo rule"
-        )
-        
-        let fileURL = URL(fileURLWithPath: "/Downloads/IMG_20240101_120000.jpg")
-        
-        let mapping = await analyzer.proposeMapping(
-            for: fileURL,
-            using: [rule1, rule2],
-            rootPath: "/Photos"
-        )
-        
-        // Should use higher priority rule
-        XCTAssertEqual(mapping.ruleId, rule2.id)
-        XCTAssertEqual(mapping.proposedDstPath, "/Photos/2024/2024-01-01/IMG_20240101_120000.jpg")
-        XCTAssertFalse(mapping.alternatives.isEmpty)
     }
 }
 

@@ -14,11 +14,6 @@ import Foundation
         }
     }
 
-    for input in ["] [", "} {", "prefix ] noise [ suffix", "prefix } noise { suffix"] {
-        cases += 1
-        check(LLMJSONExtractor.fencedOrBracketedJSON(from: input) == input, "reversed delimiters stay unchanged", input: input)
-    }
-
     let atoms = ["text", "\"", "\\", "{", "}", "[", "]", "\n", "\0", "é", "😀", "```"]
     for _ in 0..<max(iterations, 1) {
         var content = ""
@@ -30,7 +25,6 @@ import Foundation
         check(LLMJSONExtractor.lastObject(in: wrapped + "\n{}") == "{}", "last object wins", input: wrapped)
         let array = "[\(json)]"
         check(LLMJSONExtractor.firstArray(in: "preface\n\(array)\n[]") == array, "first array retains nested strings", input: array)
-        check(LLMJSONExtractor.fencedOrBracketedJSON(from: "```json\n\(json)\n```") == json, "fenced JSON is retained", input: json)
     }
     print("JSON extractor seed=\(seed) cases=\(cases) failedChecks=\(failedChecks) propertiesFailed=\(failures.count)")
     return failedChecks

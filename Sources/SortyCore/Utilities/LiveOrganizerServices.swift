@@ -85,7 +85,6 @@ public enum LiveOrganizerServices {
             ModelCatalog.shared.supportsVision(modelId: $0, provider: $1)
         }
         OrganizerServices.keychainReader = { KeychainManager.get(key: $0) }
-        OrganizerServices.finderSelectionReader = { await FinderAutomation.getSelectedFiles() }
     }
 }
 

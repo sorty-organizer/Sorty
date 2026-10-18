@@ -2,8 +2,8 @@
 //  LearningsRuleScoringTests.swift
 //  SortyTests
 //
-//  Focused tests for rule eligibility, unified confidence scoring, avoid-rule
-//  handling in mapping proposals, and merge-strengthening on re-inference.
+//  Tests for rule eligibility, confidence scoring, avoid-rule parsing,
+//  and merge-strengthening on re-inference.
 //
 
 import XCTest
@@ -118,70 +118,6 @@ final class LearningsRuleScoringTests: XCTestCase {
         let normal = InferredRule(pattern: ".*", template: "Documents/{filename}", explanation: "normal")
         XCTAssertFalse(normal.isAvoidRule)
         XCTAssertNil(normal.avoidedFolderName)
-    }
-
-    // MARK: - proposeMapping
-
-    @MainActor
-    func testProposeMappingSkipsIneligibleRules() async {
-        let analyzer = LearningsAnalyzer()
-        let disabledStrong = InferredRule(
-            pattern: ".*\\.pdf$",
-            template: "Disabled/{filename}",
-            priority: 95,
-            explanation: "disabled strong rule",
-            isEnabled: false
-        )
-        let enabledWeak = InferredRule(
-            pattern: ".*\\.pdf$",
-            template: "Enabled/{filename}",
-            priority: 40,
-            explanation: "enabled weak rule"
-        )
-
-        let mapping = await analyzer.proposeMapping(
-            for: URL(fileURLWithPath: "/tmp/root/report.pdf"),
-            using: [disabledStrong, enabledWeak],
-            rootPath: "/tmp/root"
-        )
-
-        XCTAssertEqual(mapping.ruleId, enabledWeak.id)
-        XCTAssertTrue(mapping.proposedDstPath.contains("Enabled/"))
-        XCTAssertFalse(mapping.proposedDstPath.contains("Disabled/"))
-    }
-
-    @MainActor
-    func testProposeMappingNeverUsesAvoidTemplateAndVetoesAvoidedFolder() async {
-        let analyzer = LearningsAnalyzer()
-        let avoidDocuments = InferredRule(
-            pattern: ".*\\.pdf$",
-            template: "AVOID:Documents/{filename}",
-            priority: -40,
-            explanation: "avoid Documents for PDFs"
-        )
-        let documentsRule = InferredRule(
-            pattern: ".*\\.pdf$",
-            template: "Documents/{filename}",
-            priority: 90,
-            explanation: "PDFs to Documents"
-        )
-        let reportsRule = InferredRule(
-            pattern: ".*\\.pdf$",
-            template: "Reports/{filename}",
-            priority: 50,
-            explanation: "PDFs to Reports"
-        )
-
-        let mapping = await analyzer.proposeMapping(
-            for: URL(fileURLWithPath: "/tmp/root/invoice.pdf"),
-            using: [avoidDocuments, documentsRule, reportsRule],
-            rootPath: "/tmp/root"
-        )
-
-        XCTAssertFalse(mapping.proposedDstPath.contains("AVOID:"))
-        XCTAssertFalse(mapping.proposedDstPath.contains("Documents/"))
-        XCTAssertEqual(mapping.ruleId, reportsRule.id)
-        XCTAssertTrue(mapping.proposedDstPath.contains("Reports/"))
     }
 
     // MARK: - Re-inference merge

@@ -1046,10 +1046,6 @@ struct SortyApp: App {
             ExtensionCommunication.beginMonitoringFinderSyncRuntime()
         }
 
-        menuBarController.configure(
-            settings: settingsViewModel,
-            learningsManager: learningsManager
-        )
         if watchedFoldersManager.activeFolderCount > 0 {
             await configureAutomationIfNeeded()
         }
@@ -1084,8 +1080,7 @@ struct SortyApp: App {
         try? await automationOrganizer.configure(with: settingsViewModel.config)
         menuBarController.configure(
             settings: settingsViewModel,
-            automationOrganizer: automationOrganizer,
-            learningsManager: learningsManager
+            automationOrganizer: automationOrganizer
         )
     }
 

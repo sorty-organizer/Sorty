@@ -22,7 +22,6 @@ public class LearningsManager: ObservableObject {
     @Published public var currentProfile: LearningsProfile?
     @Published public var isLoading: Bool = false
     @Published public var error: String?
-    @Published public var analysisResult: LearningsAnalysisResult?
     
     // Security & Consent
     @Published public var isLocked: Bool = false
@@ -266,7 +265,6 @@ public class LearningsManager: ObservableObject {
     
     private let userDefaults: UserDefaults
     private let persistedDataReader: UserDefaultsDataReader
-    public let analyzer = LearningsAnalyzer()
     
     public init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
@@ -449,15 +447,6 @@ public class LearningsManager: ObservableObject {
         }
     }
     
-    public func configure(with config: AIConfig) {
-        do {
-            let client = try AIClientFactory.createClient(config: effectiveAIConfig(from: config))
-            analyzer.configure(aiClient: client)
-        } catch {
-            self.error = "Failed to configure AI: \(error.localizedDescription)"
-        }
-    }
-    
     // MARK: - Security & Authentication
     
     /// Load the profile after the view has handled any required authentication.
@@ -472,7 +461,6 @@ public class LearningsManager: ObservableObject {
         LearningsRuntime.lockSession()
         isLocked = true
         currentProfile = nil
-        analysisResult = nil
     }
     
     /// Mark the initial learning setup complete.
@@ -529,7 +517,6 @@ public class LearningsManager: ObservableObject {
             try await consentManager.deleteAllData()
 
             currentProfile = nil
-            analysisResult = nil
             pendingExceptionSuggestions = []
             sessionLearningPaused = false
             showingImportPicker = false
@@ -1939,55 +1926,6 @@ public class LearningsManager: ObservableObject {
         Task { await checkAndTriggerAutoInference() }
     }
     
-    // MARK: - Analysis
-
-    private func runAnalysis(rootPaths: [String], examplePaths: [String]) async {
-        guard let profile = currentProfile else {
-            error = "No profile loaded"
-            return
-        }
-
-        let sanitizedProfile = filteredLearningProfile(from: profile)
-        if learningProfileSnapshot(sanitizedProfile) != learningProfileSnapshot(profile) {
-            currentProfile = sanitizedProfile
-        }
-
-        error = nil
-
-        let filteredRootPaths = rootPaths.filter { !isPathExcludedFromLearning($0) }.orderedDeduplicated()
-        let filteredExamplePaths = examplePaths.filter { !isPathExcludedFromLearning($0) }.orderedDeduplicated()
-
-        do {
-            analysisResult = try await analyzer.analyze(
-                profile: sanitizedProfile,
-                rootPaths: filteredRootPaths,
-                examplePaths: filteredExamplePaths
-            )
-
-            if let result = analysisResult {
-                var updatedProfile = sanitizedProfile
-                updatedProfile.inferredRules = mergeInferredRules(existing: sanitizedProfile.inferredRules, new: result.inferredRules)
-                currentProfile = updatedProfile
-                await saveProfile()
-            }
-        } catch {
-            self.error = "Analysis failed: \(error.localizedDescription)"
-        }
-    }
-    
-    /// Run analysis on current profile and paths
-    public func analyze(rootPaths: [String], examplePaths: [String]) async {
-        // Use configured model directories as example paths when none are explicitly provided
-        let effectiveExamplePaths: [String]
-        if examplePaths.isEmpty {
-            effectiveExamplePaths = enabledModelDirectoryPaths()
-        } else {
-            effectiveExamplePaths = examplePaths
-        }
-
-        await runAnalysis(rootPaths: rootPaths, examplePaths: effectiveExamplePaths)
-    }
-
     // MARK: - Export
     
     /// Export a portable, integrity-checked profile archive.
@@ -2821,7 +2759,6 @@ public class LearningsManager: ObservableObject {
         if !profile.learningExclusionPatterns.map(normalizedLearningPattern).contains(normalizedPattern) {
             profile.learningExclusionPatterns.append(storedPattern)
             currentProfile = profile
-            analysisResult = nil
             await pruneExcludedLearningData()
             await saveProfile()
         }
@@ -2835,7 +2772,6 @@ public class LearningsManager: ObservableObject {
             normalizedLearningPattern($0) == normalizedPattern
         }
         currentProfile = profile
-        analysisResult = nil
         await saveProfile()
     }
     
@@ -2909,19 +2845,6 @@ public class LearningsManager: ObservableObject {
         saveLearningsModelSelection()
     }
 
-    public func effectiveAIConfig(from config: AIConfig) -> AIConfig {
-        guard
-            let learningsModelSelection,
-            learningsModelSelection.provider == config.provider
-        else {
-            return config
-        }
-
-        var effectiveConfig = config
-        effectiveConfig.model = learningsModelSelection.model
-        return effectiveConfig
-    }
-    
     private var modelDirectoriesSaveTask: Task<Void, Never>?
 
     /// Coalesced 250ms-debounced write: rescan completions, batch adds, and
@@ -3608,44 +3531,5 @@ public class LearningsManager: ObservableObject {
             guard let personaId else { return false }
             return rulePersonaId == personaId
         }
-    }
-
-    private func mergeInferredRules(existing: [InferredRule], new: [InferredRule]) -> [InferredRule] {
-        var merged: [String: InferredRule] = [:]
-
-        for rule in existing {
-            merged["\(rule.pattern)|\(rule.template)"] = rule
-        }
-
-        for rule in new {
-            let key = "\(rule.pattern)|\(rule.template)"
-            if let existingRule = merged[key] {
-                merged[key] = InferredRule(
-                    id: existingRule.id,
-                    pattern: rule.pattern,
-                    template: rule.template,
-                    metadataCues: Array(Set(existingRule.metadataCues + rule.metadataCues)),
-                    priority: max(existingRule.priority, rule.priority),
-                    exampleIds: Array(Set(existingRule.exampleIds + rule.exampleIds)),
-                    explanation: rule.explanation,
-                    successCount: existingRule.successCount,
-                    failureCount: existingRule.failureCount,
-                    isEnabled: existingRule.isEnabled,
-                    lastAppliedAt: existingRule.lastAppliedAt ?? rule.lastAppliedAt,
-                    supportCount: max(existingRule.supportCount, rule.supportCount),
-                    initialConfidence: rule.initialConfidence ?? existingRule.initialConfidence,
-                    scope: rule.scope,
-                    status: existingRule.status,
-                    evidenceIds: Array(Set(existingRule.evidenceIds + rule.evidenceIds)),
-                    evidenceDescription: rule.evidenceDescription ?? existingRule.evidenceDescription,
-                    rejectedAt: existingRule.rejectedAt,
-                    cooldownUntil: existingRule.cooldownUntil
-                )
-            } else {
-                merged[key] = rule
-            }
-        }
-
-        return merged.values.sorted { $0.priority > $1.priority }
     }
 }

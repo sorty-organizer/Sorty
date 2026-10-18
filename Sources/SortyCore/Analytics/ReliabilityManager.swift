@@ -546,7 +546,6 @@ public final class ReliabilityManager {
             let cause: String
             switch organizationError {
             case .clientNotConfigured: category = "configuration"; cause = "client_not_configured"
-            case .automationNotConfigured: category = "permission"; cause = "automation_not_granted"
             case .noCurrentPlan: category = "validation"; cause = "missing_plan"
             case .planDirectoryMismatch: category = "validation"; cause = "plan_directory_mismatch"
             case .fileMoveFailed: category = "filesystem"; cause = "file_move_failed"

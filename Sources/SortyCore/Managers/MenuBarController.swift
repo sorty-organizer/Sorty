@@ -79,44 +79,28 @@ public final class MenuBarController: ObservableObject {
     private var nextActivityOrder: UInt64 = 0
     private var greetingResetTask: Task<Void, Never>?
     private var automationActivitySubscription: AnyCancellable?
-    private var learningActivitySubscription: AnyCancellable?
 
     public init() {}
 
     public func configure(
         settings: SettingsViewModel,
-        automationOrganizer: FolderOrganizer? = nil,
-        learningsManager: LearningsManager? = nil
+        automationOrganizer: FolderOrganizer
     ) {
-        if let automationOrganizer {
-            automationActivitySubscription = Publishers.CombineLatest(
-                automationOrganizer.statePublisher,
-                settings.$config
+        automationActivitySubscription = Publishers.CombineLatest(
+            automationOrganizer.statePublisher,
+            settings.$config
+        )
+        .removeDuplicates(by: { previous, next in
+            previous.0 == next.0 && previous.1 == next.1
+        })
+        .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
+        .sink { [weak self] state, config in
+            self?.updateOrganizationActivity(
+                state: state,
+                mode: config.mode,
+                sourceID: "global.watched-folder",
+                isWatchedFolder: true
             )
-            .removeDuplicates(by: { previous, next in
-                previous.0 == next.0 && previous.1 == next.1
-            })
-            .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
-            .sink { [weak self] state, config in
-                self?.updateOrganizationActivity(
-                    state: state,
-                    mode: config.mode,
-                    sourceID: "global.watched-folder",
-                    isWatchedFolder: true
-                )
-            }
-        }
-
-        if let learningsManager {
-            learningActivitySubscription = learningsManager.analyzer.$isAnalyzing
-                .removeDuplicates()
-                .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
-                .sink { [weak self] isAnalyzing in
-                    self?.setActivity(
-                        isAnalyzing ? .learning : nil,
-                        sourceID: "global.learning"
-                    )
-                }
         }
     }
 

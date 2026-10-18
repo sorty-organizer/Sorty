@@ -114,7 +114,7 @@ macOS-disabled extension; normal setup does not require Terminal commands.
 - A stale Finder Sync binary can stay active even when workspace code is updated; after deploy, `pkill -f SortyFinderSync`, re-enable `com.sorty.app.SortyFinderSync`, and restart Finder.
 
 ## Learnings System
-User preference learning stored in `LearningsProfile`. Secured with biometric auth via `SecurityManager`.
+User preferences are stored in `LearningsProfile`. `LocalRuleInferenceEngine` derives rules from accepted examples and corrections; reference-folder snapshots add context to the actual organization request. The abandoned standalone analyzer and its model selector were removed. Archive model-selection fields remain for compatibility. Sensitive actions use `SecurityManager`.
 
 ## UI Presentation Pitfalls
 

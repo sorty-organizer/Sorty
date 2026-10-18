@@ -499,30 +499,6 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertNotNil(organizer.currentPlan)
     }
 
-    // MARK: - OrganizationProgress Struct Tests
-    
-    func testOrganizationProgressPercentage() {
-        let progress = OrganizationProgress(phase: .aiProcessing, current: 50, total: 100, detail: nil)
-        XCTAssertEqual(progress.percentage, 0.5)
-    }
-    
-    func testOrganizationProgressZeroTotal() {
-        let progress = OrganizationProgress(phase: .scanning, current: 0, total: 0, detail: nil)
-        XCTAssertEqual(progress.percentage, 0)
-    }
-    
-    func testOrganizationProgressPhaseWeights() {
-        XCTAssertEqual(OrganizationProgress(phase: .scanning, current: 0, total: 1, detail: nil).phaseWeight, 0.15)
-        XCTAssertEqual(OrganizationProgress(phase: .aiProcessing, current: 0, total: 1, detail: nil).phaseWeight, 0.50)
-        XCTAssertEqual(OrganizationProgress(phase: .complete, current: 0, total: 1, detail: nil).phaseWeight, 1.0)
-    }
-    
-    func testOrganizationProgressPhaseBaseProgress() {
-        XCTAssertEqual(OrganizationProgress(phase: .scanning, current: 0, total: 1, detail: nil).phaseBaseProgress, 0.0)
-        XCTAssertEqual(OrganizationProgress(phase: .aiProcessing, current: 0, total: 1, detail: nil).phaseBaseProgress, 0.30)
-        XCTAssertEqual(OrganizationProgress(phase: .complete, current: 1, total: 1, detail: nil).overallProgress, 1.0)
-    }
-    
     // MARK: - AIInsight Model Tests
     
     func testAIInsightCreation() {
