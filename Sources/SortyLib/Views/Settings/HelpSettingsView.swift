@@ -218,7 +218,9 @@ struct DeeplinkSettingsView: View {
                     .accessibilityLabel("Deeplink encoding information")
                 }
 
-                DeeplinkGroupControl(
+                CapsuleSegmentedControl(
+                    accessibilityLabel: "Deeplink group",
+                    accessibilityIdentifier: "DeeplinkGroupPicker",
                     labels: groups.map { "\($0.title) (\($0.entries.count))" },
                     selectedIndex: groupIndexSelection
                 )
@@ -375,65 +377,6 @@ private struct HelpIconLink: View {
             if hovering {
                 HapticFeedbackManager.shared.selection()
             }
-        }
-    }
-}
-
-/// Matches the native capsule selector used by the provider authentication
-/// picker and History filters. Haptics come from the caller's binding.
-private struct DeeplinkGroupControl: NSViewRepresentable {
-    let labels: [String]
-    @Binding var selectedIndex: Int
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(selectedIndex: $selectedIndex)
-    }
-
-    func makeNSView(context: Context) -> NSSegmentedControl {
-        let control = NSSegmentedControl(
-            labels: labels,
-            trackingMode: .selectOne,
-            target: context.coordinator,
-            action: #selector(Coordinator.selectionChanged(_:))
-        )
-        control.font = .systemFont(ofSize: 11, weight: .medium)
-        control.setAccessibilityLabel("Deeplink group")
-        control.setAccessibilityIdentifier("DeeplinkGroupPicker")
-        if #available(macOS 26.0, *) {
-            control.controlSize = .extraLarge
-            control.borderShape = .capsule
-        } else {
-            control.controlSize = .large
-        }
-        // Adopt the public tabs role when the project moves to the macOS 27 SDK.
-        if control.responds(to: NSSelectorFromString("setRole:")) {
-            control.setValue(1, forKey: "role")
-        }
-        control.segmentDistribution = .fillEqually
-        return control
-    }
-
-    func updateNSView(_ control: NSSegmentedControl, context: Context) {
-        context.coordinator.selectedIndex = $selectedIndex
-        control.segmentCount = labels.count
-        for (index, label) in labels.enumerated() {
-            control.setLabel(label, forSegment: index)
-        }
-        control.selectedSegment = selectedIndex
-    }
-
-    @MainActor
-    final class Coordinator: NSObject {
-        var selectedIndex: Binding<Int>
-
-        init(selectedIndex: Binding<Int>) {
-            self.selectedIndex = selectedIndex
-        }
-
-        @objc func selectionChanged(_ sender: NSSegmentedControl) {
-            guard sender.selectedSegment >= 0,
-                  sender.selectedSegment != selectedIndex.wrappedValue else { return }
-            selectedIndex.wrappedValue = sender.selectedSegment
         }
     }
 }

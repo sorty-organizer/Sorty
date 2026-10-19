@@ -187,24 +187,25 @@ struct AIProviderSettingsView: View {
         SettingsCard(title: "API Configuration", icon: "key", color: .orange) {
             VStack(alignment: .leading, spacing: 12) {
                 if [.openCodeZen, .openCodeGo].contains(viewModel.config.provider) {
-                    Picker("OpenCode plan", selection: Binding(
-                        get: { viewModel.config.provider },
-                        set: { selectProvider($0) }
-                    )) {
-                        Label {
-                            Text("Zen")
-                        } icon: {
-                            ProviderLogoView(provider: .openCodeZen, size: 14)
-                        }
-                        .tag(AIProvider.openCodeZen)
-                        Label {
-                            Text("Go")
-                        } icon: {
-                            ProviderLogoView(provider: .openCodeGo, size: 14)
-                        }
-                        .tag(AIProvider.openCodeGo)
+                    HStack(spacing: 12) {
+                        Text("OpenCode plan")
+                        Spacer()
+                        CapsuleSegmentedControl(
+                            accessibilityLabel: "OpenCode plan",
+                            accessibilityIdentifier: "OpenCodePlanPicker",
+                            labels: ["Zen", "Go"],
+                            selectedIndex: Binding(
+                                get: { viewModel.config.provider == .openCodeGo ? 1 : 0 },
+                                set: { index in
+                                    let provider: AIProvider = index == 1 ? .openCodeGo : .openCodeZen
+                                    guard provider != viewModel.config.provider else { return }
+                                    HapticFeedbackManager.shared.selection()
+                                    selectProvider(provider)
+                                }
+                            )
+                        )
+                        .frame(width: 200)
                     }
-                    .pickerStyle(.segmented)
                 }
 
                 if [.openAICompatible, .ollama].contains(viewModel.config.provider) {
