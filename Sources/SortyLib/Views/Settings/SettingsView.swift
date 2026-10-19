@@ -7,12 +7,36 @@
 
 import SwiftUI
 
+/// One shared page-change animation for Settings. Only the incoming page
+/// animates; the outgoing page is removed immediately so the switch never
+/// lays out and composites two heavy pages at once.
+enum SettingsPageTransition {
+    /// How long pages should wait before starting main-actor probes, so
+    /// permission or Finder checks never land mid-transition.
+    static let settleMilliseconds = 240
+
+    static func animation(reduceMotion: Bool) -> Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.12)
+            : .spring(response: 0.26, dampingFraction: 0.9)
+    }
+
+    static func transition(reduceMotion: Bool) -> AnyTransition {
+        .asymmetric(
+            insertion: reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)),
+            removal: .identity
+        )
+    }
+}
+
 struct SettingsView: View {
     @SortyHotReload private var hotReload
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
     @ObservedObject private var analytics = AnalyticsManager.shared
-    @State private var selectedCategory: SettingsCategory = .rules
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var selectedCategory: SettingsCategory = .general
+    @State private var appStateSyncTask: Task<Void, Never>?
     @State private var searchText = ""
     @StateObject private var windowLinkHoverState = WindowLinkHoverState()
 
@@ -80,7 +104,39 @@ struct SettingsView: View {
             appState.settingsFocusTarget = nil
         }
         .onDisappear {
+            // Leaving mid-transition still remembers the page, without
+            // re-running openSettingsWindow and navigating back here.
+            if appStateSyncTask != nil, appState.selectedSettingsSection != selectedCategory {
+                let category = selectedCategory
+                Task { @MainActor in
+                    appState.selectedSettingsSection = category
+                }
+            }
+            appStateSyncTask?.cancel()
             windowLinkHoverState.clearAllHover()
+        }
+    }
+
+    /// Switches pages from the sidebar. Only this view's state changes on the
+    /// click frame; publishing to AppState re-renders the whole window, so
+    /// that waits until the incoming page has finished animating in.
+    private func selectFromSidebar(_ category: SettingsCategory) {
+        HapticFeedbackManager.shared.selection()
+        if appState.settingsFocusTarget != nil {
+            // A pending focus target would route straight back to its own page.
+            appState.settingsFocusTarget = nil
+        }
+        guard category != selectedCategory else { return }
+
+        withAnimation(SettingsPageTransition.animation(reduceMotion: reduceMotion)) {
+            selectedCategory = category
+        }
+
+        appStateSyncTask?.cancel()
+        appStateSyncTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(SettingsPageTransition.settleMilliseconds))
+            guard !Task.isCancelled, selectedCategory == category else { return }
+            appState.openSettingsWindow(section: category)
         }
     }
 
@@ -102,7 +158,9 @@ struct SettingsView: View {
                 .padding(.top, 10)
             } else {
                 ForEach(groups, id: \.self) { group in
-                    sectionHeader(group.rawValue)
+                    if !group.rawValue.isEmpty {
+                        sectionHeader(group.rawValue)
+                    }
                     ForEach(categoriesByGroup[group] ?? []) { category in
                         SidebarButton(
                             title: category.rawValue,
@@ -110,11 +168,7 @@ struct SettingsView: View {
                             color: category.color,
                             isSelected: selectedCategory == category
                         ) {
-                            // Update the detail with the click, instead of waiting
-                            // for AppState's onChange to schedule a second update.
-                            selectedCategory = category
-                            appState.openSettingsWindow(section: category)
-                            HapticFeedbackManager.shared.selection()
+                            selectFromSidebar(category)
                         }
                         .help("\(category.rawValue) settings")
                         .accessibilityHint("Open \(category.rawValue) settings")
@@ -152,9 +206,8 @@ struct SettingsView: View {
                             )
                                 .animatedAppearance(delay: 0.08)
                         } else {
-                            categoryHeader
-                                .animatedAppearance(delay: 0.03)
-                            Group {
+                            VStack(alignment: .leading, spacing: 20) {
+                                categoryHeader
                                 categoryContent
                                     .settingsFocusTarget(appState.settingsFocusTarget)
                                     .settingsFocusDismissAction { target in
@@ -162,6 +215,10 @@ struct SettingsView: View {
                                         appState.settingsFocusTarget = nil
                                     }
                             }
+                            // A fresh identity per page gives each one its own
+                            // state and lets the page transition run on insert.
+                            .id(selectedCategory)
+                            .transition(SettingsPageTransition.transition(reduceMotion: reduceMotion))
                         }
                     }
                     .padding(24)
@@ -232,6 +289,7 @@ struct SettingsView: View {
     
     private func analyticsSectionName(_ category: SettingsCategory) -> String {
         switch category {
+        case .general: return "general"
         case .provider: return "ai_provider"
         case .strategy: return "analysis_and_naming"
         case .rules: return "organize_rules"
@@ -240,7 +298,6 @@ struct SettingsView: View {
         case .finder: return "finder_integration"
         case .notifications: return "notifications"
         case .permissions: return "permissions"
-        case .skill: return "sorty_skill"
         case .advanced: return "advanced"
         case .troubleshooting: return "troubleshooting"
         case .help: return "help_and_support"
@@ -262,16 +319,15 @@ struct SettingsView: View {
 
     private var categoryHeader: some View {
         HStack(spacing: 12) {
-            Image(systemName: selectedCategory.icon)
-                .font(.title2)
-                .foregroundStyle(selectedCategory.color)
+            Image(systemName: selectedCategory.sidebarIcon)
+                .symbolVariant(.fill)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
-                .symbolReplaceTransition(animationValue: selectedCategory)
-                .background(selectedCategory.color.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .background(selectedCategory.color.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .accessibilityHidden(true)
             Text(LocalizedStringKey(selectedCategory.rawValue))
                 .font(.title2.bold())
-                .numericTextTransition(animationValue: selectedCategory)
             Spacer()
         }
         .padding(.bottom, 4)
@@ -385,6 +441,8 @@ struct SettingsView: View {
     @ViewBuilder
     private var categoryContent: some View {
         switch selectedCategory {
+        case .general:
+            GeneralSettingsView()
         case .rules:
             OrganizationRulesSettingsView()
                 .environmentObject(appState)
@@ -398,7 +456,11 @@ struct SettingsView: View {
                 .environmentObject(viewModel)
                 .environmentObject(appState)
         case .deeplinks:
-            DeeplinkSettingsView()
+            VStack(alignment: .leading, spacing: 20) {
+                CodexSkillInstallerCard()
+                    .settingsFocusable(.deeplinksSortySkill)
+                DeeplinkSettingsView()
+            }
         case .finder:
             FinderIntegrationSettingsView()
         case .notifications:
@@ -406,9 +468,6 @@ struct SettingsView: View {
         case .permissions:
             PermissionsSettingsView()
                 .environmentObject(appState)
-        case .skill:
-            CodexSkillInstallerCard()
-                .settingsFocusable(.sortySkill)
         case .advanced:
             AdvancedSettingsView().environmentObject(viewModel)
         case .troubleshooting:

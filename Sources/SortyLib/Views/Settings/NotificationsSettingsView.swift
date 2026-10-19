@@ -17,7 +17,6 @@ struct NotificationsSettingsView: View {
             // Permission Status
             NotificationPermissionCard()
                 .settingsFocusable(.notificationsPermission)
-                .animatedAppearance(delay: 0.0)
             
             // Delivery Method
             SettingsCard(title: "Delivery Method", icon: "bell.badge", color: .pink) {
@@ -41,10 +40,20 @@ struct NotificationsSettingsView: View {
                         previewIcon: "play.fill",
                         focusTarget: .notificationsSystem
                     )
+
+                    Divider()
+
+                    SettingsToggle(
+                        isOn: $notificationSettings.settings.playCompletionSound,
+                        title: "Completion Sound",
+                        description: "Play a satisfying sound when organization finishes",
+                        previewAction: { previewCompletionSound() },
+                        previewIcon: "play.fill",
+                        focusTarget: .notificationsCompletionSound
+                    )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .animatedAppearance(delay: 0.1)
             
             // Notification Types
             SettingsCard(title: "Notification Types", icon: "list.bullet", color: .blue) {
@@ -91,21 +100,10 @@ struct NotificationsSettingsView: View {
                         focusTarget: .notificationsWatchedFolderFinished
                     )
 
-                    Divider()
-
-                    SettingsToggle(
-                        isOn: $notificationSettings.settings.playCompletionSound,
-                        title: "Completion Sound",
-                        description: "Play a satisfying sound when organization finishes",
-                        previewAction: { previewCompletionSound() },
-                        previewIcon: "play.fill",
-                        focusTarget: .notificationsCompletionSound
-                    )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .settingsFocusable(.notificationsTypes)
-            .animatedAppearance(delay: 0.15)
         }
     }
 

@@ -24,7 +24,7 @@ final class SettingsLayoutStressUITests: XCTestCase {
         settingsSidebarItem.click()
 
         // The Settings view should show the category list.
-        XCTAssertTrue(waitForElement(app.buttons["Organization Controls"], timeout: 8.0), "Settings categories should render")
+        XCTAssertTrue(waitForElement(app.buttons["Organization Style"], timeout: 8.0), "Settings categories should render")
     }
 
     private func resizeMainWindow(deltaWidth: CGFloat, deltaHeight: CGFloat) {
@@ -48,7 +48,8 @@ final class SettingsLayoutStressUITests: XCTestCase {
         resizeMainWindow(deltaWidth: 700, deltaHeight: 500)
 
         let categories = [
-            "Organization Controls",
+            "General",
+            "Organization Style",
             "AI Provider",
             "Analysis & Naming",
             "Finder Integration",

@@ -173,7 +173,7 @@ public struct BugReportView: View {
                 }
 
                 if !canSubmitBugFeedback {
-                    Text("Sentry sharing stays off while Block Internet Connections is on. Turn it off in Settings, Advanced to share with Sentry.")
+                    Text("Sentry sharing stays off while Block Internet Connections is on. Turn it off in Settings, Privacy & Permissions to share with Sentry.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

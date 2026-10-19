@@ -17,6 +17,9 @@ struct PermissionsSettingsView: View {
     @EnvironmentObject private var automationManager: AutomationManager
     @ObservedObject private var notificationManager = NotificationManager.shared
     @ObservedObject private var notificationSettings = NotificationSettingsManager.shared
+    @ObservedObject private var analytics = AnalyticsManager.shared
+    @AppStorage("privacyModeEnabled") private var privacyModeEnabled = true
+    @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
 
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
     @State private var selectedEducationPermission: PermissionType?
@@ -50,8 +53,63 @@ struct PermissionsSettingsView: View {
         isHoveringOpenPrivacySettings || isOpeningPrivacySettings
     }
 
+    private var analyticsEnabled: Binding<Bool> {
+        Binding(
+            get: { analytics.consent == .granted },
+            set: { analytics.setConsent($0 ? .granted : .denied) }
+        )
+    }
+
+    private var analyticsDescription: String {
+        if analytics.consent == .granted, internetPrivacyModeEnabled {
+            return "Allowed, but paused while Block Internet Connections is on"
+        }
+        return "Share anonymous feature usage and sanitized reliability data; never file names, paths, contents, prompts, or AI responses"
+    }
+
+    /// Sorty's own privacy switches, shown above the macOS permissions they complement.
+    private var privacySection: some View {
+        SettingsCard(title: "Privacy", icon: "lock.shield", color: .green) {
+            VStack(spacing: 12) {
+                SettingsToggle(
+                    isOn: $privacyModeEnabled,
+                    title: "Privacy Mode",
+                    description: "Mask usernames, paths, API keys, and raw AI details in the interface",
+                    focusTarget: .privacyMode
+                )
+                .accessibilityIdentifier("PrivacyModeToggle")
+
+                Divider()
+
+                SettingsToggle(
+                    isOn: $internetPrivacyModeEnabled,
+                    title: "Block Internet Connections",
+                    description: "Allow only localhost requests for local models and offline workflows",
+                    focusTarget: .privacyBlockInternet
+                )
+                .accessibilityIdentifier("InternetPrivacyModeToggle")
+                .onChange(of: internetPrivacyModeEnabled) { _, isEnabled in
+                    analytics.networkPrivacyDidChange(isEnabled: isEnabled)
+                }
+
+                Divider()
+
+                SettingsToggle(
+                    isOn: analyticsEnabled,
+                    title: "Share Anonymous Analytics",
+                    description: analyticsDescription,
+                    focusTarget: .privacyAnalytics
+                )
+                .accessibilityIdentifier("AnonymousAnalyticsToggle")
+            }
+        }
+        .settingsFocusable(.privacySettings)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            privacySection
+
             SettingsCard(
                 title: "Permission Status",
                 icon: "hand.raised.fill",
@@ -232,6 +290,10 @@ struct PermissionsSettingsView: View {
             .settingsFocusable(.permissionsUsage)
         }
         .task {
+            // The Finder Automation probe is a synchronous TCC round trip on the
+            // main actor; let the page transition finish before running it.
+            try? await Task.sleep(for: .milliseconds(SettingsPageTransition.settleMilliseconds))
+            guard !Task.isCancelled else { return }
             refreshPermissions(animateNewGrants: false)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in

@@ -126,6 +126,7 @@
 		AABBCC220002000000000031 /* AutomationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000031 /* AutomationManager.swift */; };
 		AABBCC220002000000000060 /* AIProviderRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000060 /* AIProviderRow.swift */; };
 		AABBCC220002000000000061 /* AdvancedSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000061 /* AdvancedSettingsView.swift */; };
+		AABBCC2200020000000000F0 /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC1100010000000000F0 /* GeneralSettingsView.swift */; };
 		AABBCC220002000000000062 /* AutomationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000062 /* AutomationSettingsView.swift */; };
 		AABBCC220002000000000066 /* CommentPopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000066 /* CommentPopoverView.swift */; };
 		AABBCC220002000000000067 /* CompletionStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000067 /* CompletionStepView.swift */; };
@@ -450,6 +451,7 @@
 		AABBCC110001000000000031 /* AutomationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationManager.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000060 /* AIProviderRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProviderRow.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000061 /* AdvancedSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSettingsView.swift; sourceTree = "<group>"; };
+		AABBCC1100010000000000F0 /* GeneralSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000062 /* AutomationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000066 /* CommentPopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentPopoverView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000067 /* CompletionStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionStepView.swift; sourceTree = "<group>"; };
@@ -945,6 +947,7 @@
 				E50000000000000000000006 /* SkillSetupWindowController.swift */,
 				AABBCC110001000000000060 /* AIProviderRow.swift */,
 				AABBCC110001000000000061 /* AdvancedSettingsView.swift */,
+				AABBCC1100010000000000F0 /* GeneralSettingsView.swift */,
 				AABBCC110001000000000062 /* AutomationSettingsView.swift */,
 				AABBCC11000100000000006F /* FinderIntegrationSettingsView.swift */,
 				AABBCC110001000000000074 /* HelpSettingsView.swift */,

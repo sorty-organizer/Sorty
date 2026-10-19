@@ -10,6 +10,7 @@ import SwiftUI
 
 struct FinderIntegrationSettingsView: View {
     @SortyHotReload private var hotReload
+    @EnvironmentObject private var automationManager: AutomationManager
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var setupState: ExtensionCommunication.FinderSetupState?
     @State private var refreshGeneration = 0
@@ -45,7 +46,6 @@ struct FinderIntegrationSettingsView: View {
                 }
             }
             .settingsFocusable(.finderIntegration)
-            .animatedAppearance(delay: 0.05)
 
             SettingsCard(title: "Finder extension", icon: "puzzlepiece.extension", color: .cyan) {
                 VStack(alignment: .leading, spacing: 14) {
@@ -102,7 +102,16 @@ struct FinderIntegrationSettingsView: View {
                     }
                 }
             }
-            .animatedAppearance(delay: 0.1)
+
+            SettingsCard(title: "After Organizing", icon: "macwindow.and.cursorarrow", color: .mint) {
+                SettingsToggle(
+                    isOn: $automationManager.autoSelectOrganizedFolders,
+                    title: "Reveal organized folders",
+                    description: "Open Finder and highlight newly organized folders after each completed run",
+                    focusTarget: .finderRevealOrganized
+                )
+                .accessibilityIdentifier("FinderAutoRevealToggle")
+            }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: setupState)
         .task(id: refreshGeneration) {
@@ -178,5 +187,6 @@ struct FinderIntegrationSettingsView: View {
 
 #Preview {
     FinderIntegrationSettingsView()
+        .environmentObject(AutomationManager())
         .frame(width: 500)
 }

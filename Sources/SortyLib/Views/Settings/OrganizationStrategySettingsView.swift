@@ -58,7 +58,6 @@ struct OrganizationStrategySettingsView: View {
                     }
                 }
             }
-            .animatedAppearance(delay: 0.05)
             .onAppear(perform: enforceProviderScanMode)
             .onChange(of: viewModel.config.provider) { _, _ in
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) {
@@ -92,7 +91,6 @@ struct OrganizationStrategySettingsView: View {
                     }
                 }
             }
-            .animatedAppearance(delay: 0.1)
 
             // Renaming Section
             SettingsCard(
@@ -488,7 +486,6 @@ struct OrganizationStrategySettingsView: View {
                 }
             }
             .settingsFocusable(.strategyRenaming)
-            .animatedAppearance(delay: 0.15)
             .alert("Save as Naming Preset", isPresented: $showingSavePresetAlert) {
                 TextField("Preset name", text: $presetNameInput)
                 Button("Save") {

@@ -73,7 +73,6 @@ struct AIProviderSettingsView: View {
             }
         }
         .settingsFocusable(.providerSelect)
-        .animatedAppearance(delay: 0.05)
     }
 
     private var sections: some View {
@@ -89,16 +88,13 @@ struct AIProviderSettingsView: View {
                 .settingsFocusable(.providerConfiguration)
             } else if viewModel.config.provider == .appleFoundationModel {
                 appleConfigSection
-                    .animatedAppearance(delay: 0.1)
             } else if [.openAI, .openCodeZen, .openCodeGo, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini].contains(viewModel.config.provider) {
                 apiConfigSection
-                    .animatedAppearance(delay: 0.1)
             }
 
             // Connection Test
             if [.openAI, .openCodeZen, .openCodeGo, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini, .appleFoundationModel].contains(viewModel.config.provider) {
                 connectionSection
-                    .animatedAppearance(delay: 0.15)
             }
         }
     }
@@ -645,8 +641,8 @@ struct AIProviderSettingsView: View {
                                 Button {
                                     HapticFeedbackManager.shared.tap()
                                     appState.openSettingsWindow(
-                                        section: .advanced,
-                                        focusTarget: .advancedInternetPrivacy
+                                        section: .permissions,
+                                        focusTarget: .privacyBlockInternet
                                     )
                                     appState.navigatedFromSettings = true
                                 } label: {
@@ -658,7 +654,7 @@ struct AIProviderSettingsView: View {
                                     .contentTransition(.symbolEffect(.replace))
                                 }
                                 .buttonStyle(.tintedPill(.orange, size: .small))
-                                .help("Open Advanced Settings and focus Block Internet Connections")
+                                .help("Open Privacy & Permissions settings and focus Block Internet Connections")
                                 .accessibilityHint(
                                     "Opens the setting that prevents Sorty from contacting cloud providers"
                                 )

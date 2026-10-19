@@ -110,7 +110,7 @@ struct ErrorView: View {
     private var recoveryText: String {
         switch category {
         case .internetPrivacy:
-            return "Sorty stopped the request before it reached your AI provider. Turn off Block Internet Connections in Advanced Settings, then retry."
+            return "Sorty stopped the request before it reached your AI provider. Turn off Block Internet Connections in Privacy & Permissions settings, then retry."
         case .apiKey:
             return "Check your provider and API key in Settings, then retry."
         case .quota:
@@ -207,7 +207,7 @@ struct ErrorView: View {
     private var privacySafeSuggestedAction: String {
         switch category {
         case .internetPrivacy:
-            return "Open Advanced Settings, turn off Block Internet Connections, then retry."
+            return "Open Privacy & Permissions settings, turn off Block Internet Connections, then retry."
         case .apiKey:
             return "Check the selected provider and its API key in Settings, then retry."
         case .quota:
@@ -401,8 +401,8 @@ struct ErrorView: View {
                         HapticFeedbackManager.shared.tap()
                         animateActionFeedback(.settings)
                         appState.openSettingsWindow(
-                            section: .advanced,
-                            focusTarget: .advancedInternetPrivacy
+                            section: .permissions,
+                            focusTarget: .privacyBlockInternet
                         )
                         appState.navigatedFromSettings = true
                     } label: {
@@ -421,7 +421,7 @@ struct ErrorView: View {
                     }
                     .buttonStyle(.tintedPill(.indigo, size: .small))
                     .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
-                    .help("Open Advanced Settings and focus Block Internet Connections")
+                    .help("Open Privacy & Permissions settings and focus Block Internet Connections")
                     .accessibilityHint(
                         "Opens the setting that prevents Sorty from contacting cloud providers"
                     )
@@ -535,13 +535,13 @@ struct ErrorView: View {
                                         transaction.disablesAnimations = true
                                     }
                                 }
-                            Text("Help & Support")
+                            Text("Help & About")
                                 .font(.caption.bold())
                         }
                     }
                     .buttonStyle(.tintedPill(.green, size: .small))
                     .scaleEffect(activeActionFeedback == .helpSupport ? 1.04 : 1.0)
-                    .help("Open Help & Support")
+                    .help("Open Help & About")
                     .accessibilityHint("Opens the Help and Support settings page")
                     .accessibilityIdentifier("ErrorHelpSupportButton")
                     .onHover { hovering in
@@ -612,7 +612,7 @@ struct ErrorView: View {
 
                 Text("If it still fails, simplify your Instructions or Persona, then review Learnings, workflow, and organization rules.")
 
-                Text("Still stuck? Copy the details and open Help & Support.")
+                Text("Still stuck? Copy the details and open Help & About.")
             }
             .font(.caption)
             .foregroundStyle(.tertiary)

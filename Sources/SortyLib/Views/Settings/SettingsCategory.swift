@@ -64,11 +64,13 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case rulesContentRules = "settings.rules.content-rules"
     case rulesFileTagging = "settings.rules.file-tagging"
     case rulesOrganizationStyle = "settings.rules.organization-style"
+    case rulesExclusions = "settings.rules.exclusions"
     case automationGlobalModel = "settings.automation.global-model"
     case automationSeparateModel = "settings.automation.separate-model"
-    case automationLaunchAtLogin = "settings.automation.launch-at-login"
+    case generalLaunchAtLogin = "settings.general.launch-at-login"
     case automationKeepInBackground = "settings.automation.keep-in-background"
-    case automationHideDockIcon = "settings.automation.hide-dock-icon"
+    case automationWatchedFolders = "settings.automation.watched-folders"
+    case generalHideDockIcon = "settings.general.hide-dock-icon"
     case deeplinksOpenApp = "settings.deeplinks.open-app"
     case deeplinksSettings = "settings.deeplinks.settings"
     case deeplinksHelp = "settings.deeplinks.help"
@@ -107,19 +109,21 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case permissionsNotifications = "settings.permissions.notifications"
     case permissionsStatusActions = "settings.permissions.status-actions"
     case permissionsUsage = "settings.permissions.usage"
-    case advancedMenuBar = "settings.advanced.menu-bar"
-    case advancedMenuBarIconStyle = "settings.advanced.menu-bar-icon-style"
-    case advancedFinderWorkflow = "settings.advanced.finder-workflow"
-    case sortySkill = "settings.sorty-skill"
-    case advancedPrivacyMode = "settings.advanced.privacy-mode"
-    case advancedInternetPrivacy = "settings.advanced.internet-privacy"
-    case advancedAnalytics = "settings.advanced.analytics"
+    case generalMenuBar = "settings.general.menu-bar"
+    case generalMenuBarIconStyle = "settings.general.menu-bar-icon-style"
+    case finderRevealOrganized = "settings.finder.reveal-organized"
+    case deeplinksSortySkill = "settings.sorty-skill"
+    case privacySettings = "settings.privacy.settings"
+    case privacyMode = "settings.privacy.mode"
+    case privacyBlockInternet = "settings.privacy.block-internet"
+    case privacyAnalytics = "settings.privacy.analytics"
     case advancedTimeouts = "settings.advanced.timeouts"
     case advancedRequestTimeout = "settings.advanced.request-timeout"
     case advancedResourceTimeout = "settings.advanced.resource-timeout"
     case advancedDeveloper = "settings.advanced.developer"
     case advancedStats = "settings.advanced.stats"
-    case advancedErrorLogs = "settings.advanced.error-logs"
+    case troubleshootingReports = "settings.troubleshooting.reports"
+    case troubleshootingDiagnosticReport = "settings.troubleshooting.diagnostic-report"
     case troubleshootingMaintenance = "settings.troubleshooting.maintenance"
     case troubleshootingCache = "settings.troubleshooting.cache"
     case troubleshootingLearnings = "settings.troubleshooting.learnings"
@@ -132,7 +136,7 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case helpChangelog = "settings.help.changelog"
     case helpPrivacy = "settings.help.privacy"
     case helpTerms = "settings.help.terms"
-    case helpIssueDetails = "settings.help.issue-details"
+    case troubleshootingSupportReport = "settings.troubleshooting.support-report"
     case experimentalEmptyState = "settings.experimental.empty-state"
 }
 
@@ -167,6 +171,9 @@ public extension SettingsFocusTarget {
 
     var category: SettingsCategory {
         switch self {
+        case .generalLaunchAtLogin, .generalHideDockIcon, .generalMenuBar, .generalMenuBarIconStyle:
+            return .general
+
         case .providerSelect, .providerConfiguration, .providerConnection,
              .providerOpenAI, .providerOpenCodeZen, .providerOpenCodeGo, .providerGroq,
              .providerCompatibleAPI, .providerOpenRouter, .providerOllama,
@@ -180,14 +187,15 @@ public extension SettingsFocusTarget {
              .strategyMaxFilenameLength, .strategyNamingInstructions:
             return .strategy
 
-        case .rulesContentRules, .rulesFileTagging, .rulesOrganizationStyle:
+        case .rulesContentRules, .rulesFileTagging, .rulesOrganizationStyle, .rulesExclusions:
             return .rules
 
-        case .automationGlobalModel, .automationSeparateModel, .automationLaunchAtLogin,
-             .automationKeepInBackground, .automationHideDockIcon:
+        case .automationGlobalModel, .automationSeparateModel,
+             .automationKeepInBackground, .automationWatchedFolders:
             return .automation
 
-        case .deeplinksOpenApp, .deeplinksSettings, .deeplinksHelp, .deeplinksHistory,
+        case .deeplinksSortySkill,
+             .deeplinksOpenApp, .deeplinksSettings, .deeplinksHelp, .deeplinksHistory,
              .deeplinksOrganizeFolder, .deeplinksDuplicates, .deeplinksStorage,
              .deeplinksWatchedFolders, .deeplinksRules, .deeplinksExclusions,
              .deeplinksPersona, .deeplinksLearnings, .deeplinksProviderSettings,
@@ -195,7 +203,8 @@ public extension SettingsFocusTarget {
              .deeplinksFinderSettings:
             return .deeplinks
 
-        case .finderIntegration, .finderOrganize, .finderWatch, .finderExclude, .finderExtension:
+        case .finderIntegration, .finderOrganize, .finderWatch, .finderExclude, .finderExtension,
+             .finderRevealOrganized:
             return .finder
 
         case .notificationsPermission, .notificationsInAppHUD, .notificationsSystem,
@@ -204,27 +213,25 @@ public extension SettingsFocusTarget {
              .notificationsWatchedFolderFinished, .notificationsCompletionSound:
             return .notifications
 
-        case .permissionsFilesAndFolders, .permissionsFullDiskAccess,
+        case .privacySettings, .privacyMode, .privacyBlockInternet, .privacyAnalytics,
+             .permissionsFilesAndFolders, .permissionsFullDiskAccess,
              .permissionsAutomation, .permissionsNotifications,
              .permissionsStatusActions, .permissionsUsage:
             return .permissions
 
-        case .advancedMenuBar, .advancedMenuBarIconStyle, .advancedFinderWorkflow, .advancedPrivacyMode,
-             .advancedInternetPrivacy, .advancedAnalytics, .advancedTimeouts, .advancedRequestTimeout,
-             .advancedResourceTimeout, .advancedDeveloper, .advancedStats, .advancedErrorLogs:
+        case .advancedTimeouts, .advancedRequestTimeout, .advancedResourceTimeout,
+             .advancedDeveloper, .advancedStats:
             return .advanced
 
         case .troubleshootingMaintenance, .troubleshootingCache,
              .troubleshootingLearnings, .troubleshootingReset,
-             .troubleshootingAssistant:
+             .troubleshootingAssistant, .troubleshootingReports,
+             .troubleshootingDiagnosticReport, .troubleshootingSupportReport:
             return .troubleshooting
 
         case .helpSupport, .helpLegal, .helpDocumentation, .helpReportIssue,
-             .helpChangelog, .helpPrivacy, .helpTerms, .helpIssueDetails:
+             .helpChangelog, .helpPrivacy, .helpTerms:
             return .help
-
-        case .sortySkill:
-            return .skill
 
         case .experimentalEmptyState:
             return .experimental
@@ -233,35 +240,39 @@ public extension SettingsFocusTarget {
 }
 
 public enum SettingsCategoryGroup: String, CaseIterable {
-    case aiAndOrganization = "AI & Organization"
-    case features = "Features"
+    /// Pinned above the named groups without a header, like System Settings.
+    case pinned = ""
+    case aiAndOrganization = "Organization"
+    case features = "Integrations"
     case system = "System"
 }
 
 public enum SettingsCategory: String, CaseIterable, Identifiable {
+    case general = "General"
     case provider = "AI Provider"
     case strategy = "Analysis & Naming"
-    case rules = "Organize Rules"
+    case rules = "Organization Style"
     case automation = "Automation"
-    case deeplinks = "Deeplinks"
     case finder = "Finder Integration"
-    case skill = "Sorty Skill"
     case notifications = "Notifications"
-    case permissions = "Permissions"
+    case deeplinks = "Deeplinks & Skill"
+    case permissions = "Privacy & Permissions"
     case advanced = "Advanced"
     case troubleshooting = "Troubleshooting"
-    case help = "Help & Support"
     case experimental = "Experimental"
+    case help = "Help & About"
     
     public var id: String { rawValue }
     
     public var group: SettingsCategoryGroup {
         switch self {
-        case .provider, .strategy, .rules:
+        case .general:
+            return .pinned
+        case .provider, .strategy, .rules, .automation:
             return .aiAndOrganization
-        case .automation, .deeplinks, .finder, .skill, .notifications:
+        case .finder, .notifications, .deeplinks:
             return .features
-        case .permissions, .advanced, .troubleshooting, .help, .experimental:
+        case .permissions, .advanced, .troubleshooting, .experimental, .help:
             return .system
         }
     }
@@ -272,22 +283,22 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     
     public var icon: String {
         switch self {
-        case .rules: return "folder.badge.gearshape"
+        case .general: return "gearshape"
+        case .rules: return "paintpalette"
         case .provider: return "cpu"
         case .strategy: return "wand.and.stars"
         case .automation: return "bolt.circle"
-        case .deeplinks: return "link.badge.plus"
+        case .deeplinks: return "link"
         case .finder: return "folder.badge.plus"
         case .notifications: return "bell"
         case .permissions: return "hand.raised.fill"
-        case .skill: return "dollarsign"
         case .advanced: return "gearshape.2"
         case .troubleshooting: return "wrench.and.screwdriver"
         case .help: return "questionmark.circle"
         case .experimental: return "flask"
         }
     }
-    
+
     /// Glyph drawn white on the colored sidebar tile. Circled symbols read as a
     /// blob once filled, so those swap to their bare glyph here.
     public var sidebarIcon: String {
@@ -298,50 +309,51 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Each section gets its own tile color so neighbours stay distinguishable.
     public var color: Color {
         switch self {
-        case .rules: return .blue
+        case .general: return .gray
         case .provider: return .purple
         case .strategy: return .orange
+        case .rules: return .pink
         case .automation: return .green
-        case .deeplinks: return .cyan
         case .finder: return .cyan
-        case .notifications: return .pink
+        case .notifications: return .red
+        case .deeplinks: return .indigo
         case .permissions: return .blue
-        case .skill: return .indigo
-        case .advanced: return .gray
-        case .troubleshooting: return .red
+        case .advanced: return .brown
+        case .troubleshooting: return .yellow
+        case .experimental: return .mint
         case .help: return .teal
-        case .experimental: return .indigo
         }
     }
 
     public var searchKeywords: [String] {
         switch self {
+        case .general:
+            return ["general", "launch at login", "login item", "start on login", "dock icon", "menu bar", "menubar", "menu bar icon", "startup"]
         case .provider:
             return ["api key", "provider", "model", "endpoint", "token", "connection", "opencode", "ollama", "openrouter", "anthropic", "gemini"]
         case .strategy:
             return ["strategy", "analysis", "fast mode", "deep scan", "deep scanning", "content analysis", "vision", "image analysis", "naming style", "rename", "renaming", "folder structure", "organization style"]
         case .rules:
-            return ["rules", "controls", "organization controls", "instructions", "tagging", "pattern"]
+            return ["rules", "style", "persona", "organization controls", "tagging", "finder tags", "exclusions", "exclude", "ignore"]
         case .automation:
-            return ["automation", "watched folders", "auto organize", "background", "scheduler", "spring cleaning", "folder trigger", "custom model", "global model", "launch at login", "login item", "dock icon", "menu bar app"]
+            return ["automation", "watched folders", "auto organize", "background", "scheduler", "spring cleaning", "folder trigger", "custom model", "global model"]
         case .deeplinks:
-            return ["deeplink", "deeplinks", "deep link", "url scheme", "sorty://", "shortcuts", "raycast", "automation links", "scripts", "downloads", "desktop", "documents", "open url"]
+            return ["skill", "codex", "agent", "install", "import settings", "deeplink", "deeplinks", "deep link", "url scheme", "sorty://", "shortcuts", "raycast", "automation links", "scripts", "downloads", "desktop", "documents", "open url"]
         case .finder:
-            return ["finder", "quick action", "organize action", "watch action", "exclude action", "extension", "service", "automation permission", "repair"]
+            return ["finder", "reveal", "auto reveal", "quick action", "organize action", "watch action", "exclude action", "extension", "service", "automation permission", "repair"]
         case .notifications:
             return ["notification", "notifications", "alerts", "sound", "banner", "hud", "in app hud", "notificli", "completion", "foreground", "permissions", "notification center"]
         case .permissions:
-            return ["permission", "permissions", "privacy", "security", "files and folders", "full disk access", "finder automation", "notifications", "system settings", "folder access"]
-        case .skill:
-            return ["skill", "codex", "agent", "install", "import settings"]
+            return ["permission", "permissions", "privacy", "privacy mode", "redact", "offline", "block internet", "analytics", "telemetry", "security", "files and folders", "full disk access", "finder automation", "notifications", "system settings", "folder access"]
         case .advanced:
-            return ["advanced", "menu bar", "streaming", "performance", "developer", "diagnostics", "debug", "logs", "error logs", "red logs"]
+            return ["advanced", "timeouts", "performance", "developer", "stats for nerds", "metrics"]
         case .troubleshooting:
-            return ["troubleshoot", "errors", "reset", "logs", "repair", "recovery", "diagnose"]
+            return ["troubleshoot", "errors", "reset", "logs", "error logs", "repair", "recovery", "diagnose", "diagnostics", "support report", "bug report"]
         case .help:
-            return ["help", "support", "documentation", "faq", "guide", "tips", "contact", "issue details", "bug report", "diagnostics"]
+            return ["help", "about", "version", "support", "documentation", "faq", "guide", "changelog", "privacy policy", "terms", "contact"]
         case .experimental:
             return ["experimental", "labs", "beta", "feature flags"]
         }
@@ -363,6 +375,13 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         }
 
         switch self {
+        case .general:
+            return [
+                feature("Launch at Login", "Automatically start Sorty when you log in to macOS.", keywords: ["launch-at-login", "login item", "start on login"], target: .generalLaunchAtLogin),
+                feature("Hide Dock Icon", "Run Sorty as a menu bar app without showing in the Dock.", keywords: ["dock visibility", "menu bar app"], target: .generalHideDockIcon),
+                feature("Show Menu Bar Icon", "Display the Sorty icon in the menu bar for quick access.", keywords: ["menu bar", "menubar"], target: .generalMenuBar),
+                feature("Icon Style", "Use Sorty's colorful style or a white style with native Finder symbols.", keywords: ["white icons", "sorty style", "apple native", "appearance", "menubar", "finder"], target: .generalMenuBarIconStyle)
+            ]
         case .provider:
             return [
                 feature("Select Provider", "Choose OpenAI, OpenCode, Anthropic, Gemini, Ollama, or OpenAI-compatible APIs.", target: .providerSelect),
@@ -399,17 +418,16 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .rules:
             return [
-                feature("Content Rules", "Control AI suggestions that affect organized files.", keywords: ["rules", "organization controls"], target: .rulesContentRules),
+                feature("Organization Style", "Pick personas and style preferences for folder structures.", keywords: ["persona", "folder style"], target: .rulesOrganizationStyle),
                 feature("Enable File Tagging", "Allow AI to suggest and apply Finder tags to files.", keywords: ["tagging", "finder tags", "smart tags"], target: .rulesFileTagging),
-                feature("Organization Style", "Pick personas and style preferences for folder structures.", keywords: ["persona", "folder style"], target: .rulesOrganizationStyle)
+                feature("Exclusions", "Keep files and folders out of every organization plan.", keywords: ["exclude", "ignore", "exclusion rules", "skip"], target: .rulesExclusions)
             ]
         case .automation:
             return [
                 feature("Global Automation Model", "Use one dedicated model for watched-folder automation, overriding folder-specific model picks while enabled.", keywords: ["custom model", "watched folder model override"], target: .automationGlobalModel),
                 feature("Use Separate Automation Model", "Turn the dedicated watched-folder automation model on or off.", keywords: ["separate model", "automation override"], target: .automationSeparateModel),
-                feature("Launch at Login", "Automatically start Sorty when you log in to macOS.", keywords: ["launch-at-login", "login item", "start on login"], target: .automationLaunchAtLogin),
                 feature("Keep in Background", "Continue monitoring folders even when all windows are closed.", keywords: ["background activity", "background app", "folder watching"], target: .automationKeepInBackground),
-                feature("Hide Dock Icon", "Run Sorty as a menu bar app without showing in the Dock.", keywords: ["dock visibility", "menu bar app"], target: .automationHideDockIcon)
+                feature("Watched Folders", "Manage the folders Sorty organizes automatically.", keywords: ["watch", "auto organize", "folder trigger"], target: .automationWatchedFolders)
             ]
         case .deeplinks:
             // One snippet per library entry so search navigates to and
@@ -417,6 +435,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             // Every entry carries the "deeplink" keyword so multi-term
             // queries like "persona deeplink" still resolve.
             return [
+                feature("Sorty skill", "Install the Sorty skill and import your preferences, exclusions, watched folders, and Learnings.", keywords: ["skill", "codex", "agent", "install", "import settings"], target: .deeplinksSortySkill),
                 feature("Open App", "Copy the sorty://open link to bring Sorty to front and preload a directory.", keywords: ["deeplink", "sorty://open"], target: .deeplinksOpenApp),
                 feature("Settings", "Copy the sorty://settings link to open Settings at a specific section.", keywords: ["deeplink", "sorty://settings"], target: .deeplinksSettings),
                 feature("Help", "Copy the sorty://help link to open help and support content.", keywords: ["deeplink", "sorty://help"], target: .deeplinksHelp),
@@ -440,7 +459,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Organize with Sorty", "Run Sorty directly from Finder context menus.", keywords: ["quick action", "service"], target: .finderOrganize),
                 feature("Watch with Sorty", "Add watched folders directly from Finder context menus.", keywords: ["quick action", "service", "watched folders"], target: .finderWatch),
                 feature("Exclude from Sorty", "Add files and folders to exclusions directly from Finder context menus.", keywords: ["quick action", "service", "exclude path", "exclusion rules"], target: .finderExclude),
-                feature("Finder Extension", "Enable Sorty or manage its Finder extension in macOS Extensions settings.", keywords: ["finder sync", "extensions", "enable finder", "setup"], target: .finderExtension)
+                feature("Finder Extension", "Enable Sorty or manage its Finder extension in macOS Extensions settings.", keywords: ["finder sync", "extensions", "enable finder", "setup"], target: .finderExtension),
+                feature("Reveal Organized Folders", "Open Finder and highlight newly organized folders after each completed run.", keywords: ["automatically reveal organized folders", "view in finder", "auto reveal", "finder workflow"], target: .finderRevealOrganized)
             ]
         case .notifications:
             return [
@@ -456,6 +476,9 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .permissions:
             return [
+                feature("Privacy Mode", "Mask sensitive paths, usernames, API keys, and raw AI details.", keywords: ["privacy", "redact", "mask", "hide"], target: .privacyMode),
+                feature("Block Internet Connections", "Allow only localhost requests for local models and offline workflows.", keywords: ["internet privacy", "network privacy", "offline", "localhost"], target: .privacyBlockInternet),
+                feature("Share Anonymous Analytics", "Choose whether Sorty shares anonymous feature usage and sanitized reliability data.", keywords: ["analytics", "telemetry", "posthog", "crash reporting"], target: .privacyAnalytics),
                 feature("Files & Folders", "Choose the folders Sorty can scan and organize.", keywords: ["folder picker", "grant access"], target: .permissionsFilesAndFolders),
                 feature("Full Disk Access", "Allow access to protected folders you explicitly choose.", keywords: ["privacy and security", "protected folders"], target: .permissionsFullDiskAccess),
                 feature("Finder Automation", "Allow Sorty to read Finder selections for Finder Integration.", keywords: ["automation permission", "apple events"], target: .permissionsAutomation),
@@ -464,30 +487,21 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Open Privacy & Security", "Open the macOS Privacy & Security settings page.", keywords: ["system settings", "privacy settings"], target: .permissionsStatusActions),
                 feature("How Sorty Uses Access", "Review how folder, disk, and system permissions are used and revoked.", keywords: ["privacy", "revoke", "source code", "terms"], target: .permissionsUsage)
             ]
-        case .skill:
-            return [
-                feature("Sorty skill", "Install the Sorty skill and import your preferences, exclusions, watched folders, and Learnings.", keywords: ["skill", "codex", "agent", "install", "import settings"], target: .sortySkill),
-            ]
         case .advanced:
             return [
-                feature("Show Menu Bar Icon", "Display the Sorty icon in the menu bar for quick access.", keywords: ["menu bar", "menubar"], target: .advancedMenuBar),
-                feature("Icon Style", "Use Sorty's colorful style or a white style with native Finder symbols.", keywords: ["white icons", "sorty style", "apple native", "appearance", "menubar", "finder"], target: .advancedMenuBarIconStyle),
-                feature("Finder Workflow", "Open Finder and highlight newly organized folders after each completed run.", keywords: ["automatically reveal organized folders", "view in finder", "auto reveal"], target: .advancedFinderWorkflow),
-                feature("Privacy Mode", "Mask sensitive paths, usernames, API keys, and raw AI details.", keywords: ["privacy", "redact", "mask", "hide"], target: .advancedPrivacyMode),
-                feature("Block Internet Connections", "Allow only localhost requests for local models and offline workflows.", keywords: ["internet privacy", "network privacy", "offline", "localhost"], target: .advancedInternetPrivacy),
-                feature("Share Anonymous Analytics", "Choose whether Sorty shares anonymous feature usage and sanitized reliability data.", keywords: ["analytics", "telemetry", "posthog", "crash reporting"], target: .advancedAnalytics),
                 feature("Timeouts", "Tune request timeout and maximum total request duration.", target: .advancedTimeouts),
                 feature("Request Timeout", "Set how long Sorty waits for the initial AI response.", keywords: ["initial response", "seconds"], target: .advancedRequestTimeout),
                 feature("Resource Timeout", "Set the maximum total duration of an AI request.", keywords: ["total request duration", "seconds"], target: .advancedResourceTimeout),
-                feature("Stats for Nerds", "Show detailed generation metrics.", keywords: ["developer", "metrics", "tokens", "throughput", "cost"], target: .advancedStats),
-                feature("Generate Diagnostic Report", "Save a privacy-safe ZIP with app, system, log, PostHog, and Sentry diagnostics.", keywords: ["developer tools", "report", "zip", "error logs", "logs", "analytics"], target: .advancedErrorLogs)
+                feature("Stats for Nerds", "Show detailed generation metrics.", keywords: ["developer", "metrics", "tokens", "throughput", "cost"], target: .advancedStats)
             ]
         case .troubleshooting:
             return [
                 feature("Support Assistant", "Run local health checks and open the exact setting needed to recover.", keywords: ["health check", "diagnose", "repair", "support"], target: .troubleshootingAssistant),
                 feature("Cache", "Clear cached data and recover from stale state.", keywords: ["clear cache"], target: .troubleshootingCache),
                 feature("Learnings Data", "Inspect or reset learning signals and history.", keywords: ["delete learnings"], target: .troubleshootingLearnings),
-                feature("Reset Sorty", "Perform a full reset of app configuration.", keywords: ["erase all data", "factory reset"], target: .troubleshootingReset)
+                feature("Reset Sorty", "Perform a full reset of app configuration.", keywords: ["erase all data", "factory reset"], target: .troubleshootingReset),
+                feature("Copy Support Report", "Copy privacy-safe app, system, and configuration details.", keywords: ["support data", "diagnostics", "bug report", "issue details"], target: .troubleshootingSupportReport),
+                feature("Generate Diagnostic Report", "Save a privacy-safe ZIP with app, system, log, PostHog, and Sentry diagnostics.", keywords: ["developer tools", "report", "zip", "error logs", "logs", "analytics"], target: .troubleshootingDiagnosticReport)
             ]
         case .help:
             return [
@@ -496,8 +510,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Report Issue", "Open GitHub Issues to report a bug or request a feature.", keywords: ["bug report", "github issue"], target: .helpReportIssue),
                 feature("View Changelog", "Review recent Sorty releases and product changes.", keywords: ["release notes", "what's new"], target: .helpChangelog),
                 feature("Privacy Policy", "Read Sorty’s privacy policy.", keywords: ["legal", "data"], target: .helpPrivacy),
-                feature("Terms of Service", "Read Sorty’s terms of service.", keywords: ["legal", "terms"], target: .helpTerms),
-                feature("Copy Support Report", "Copy privacy-safe app, system, and configuration details.", keywords: ["support data", "diagnostics", "bug report"], target: .helpIssueDetails)
+                feature("Terms of Service", "Read Sorty’s terms of service.", keywords: ["legal", "terms"], target: .helpTerms)
             ]
         case .experimental:
             return [
@@ -550,26 +563,26 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
 
     private var fallbackFocusTarget: SettingsFocusTarget? {
         switch self {
+        case .general:
+            return .generalLaunchAtLogin
         case .provider:
             return .providerSelect
         case .strategy:
             return .strategyFastMode
         case .rules:
-            return .rulesContentRules
+            return .rulesOrganizationStyle
         case .automation:
             return .automationGlobalModel
         case .deeplinks:
-            return .deeplinksOpenApp
+            return .deeplinksSortySkill
         case .finder:
             return .finderIntegration
         case .notifications:
             return .notificationsPermission
         case .permissions:
-            return .permissionsFilesAndFolders
-        case .skill:
-            return .sortySkill
+            return .privacySettings
         case .advanced:
-            return .advancedMenuBar
+            return .advancedTimeouts
         case .troubleshooting:
             return .troubleshootingMaintenance
         case .help:

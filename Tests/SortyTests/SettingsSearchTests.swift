@@ -44,8 +44,8 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertTrue(matches.contains { $0.snippet.title == "Organize Folder" })
     }
 
-    func testAutomationCategoryMatchesHyphenSeparatedQuery() {
-        XCTAssertTrue(SettingsCategory.automation.matchesSearch(query: "launch-at-login"))
+    func testGeneralCategoryMatchesHyphenSeparatedQuery() {
+        XCTAssertTrue(SettingsCategory.general.matchesSearch(query: "launch-at-login"))
     }
 
     func testRulesFeatureMatchesFinderTagsQuery() {
@@ -75,12 +75,11 @@ final class SettingsSearchTests: XCTestCase {
     }
 
     func testRulesFocusTargetMappingsForKnownSnippets() {
-        XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Content Rules")), .rulesContentRules)
         XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Enable File Tagging")), .rulesFileTagging)
         XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Organization Style")), .rulesOrganizationStyle)
         XCTAssertEqual(SettingsCategory.notifications.focusTarget(for: snippet(in: .notifications, titled: "System Notifications")), .notificationsSystem)
-        XCTAssertEqual(SettingsCategory.advanced.focusTarget(for: snippet(in: .advanced, titled: "Block Internet Connections")), .advancedInternetPrivacy)
-        XCTAssertEqual(SettingsCategory.advanced.focusTarget(for: snippet(in: .advanced, titled: "Generate Diagnostic Report")), .advancedErrorLogs)
+        XCTAssertEqual(SettingsCategory.permissions.focusTarget(for: snippet(in: .permissions, titled: "Block Internet Connections")), .privacyBlockInternet)
+        XCTAssertEqual(SettingsCategory.troubleshooting.focusTarget(for: snippet(in: .troubleshooting, titled: "Generate Diagnostic Report")), .troubleshootingDiagnosticReport)
     }
 
     func testFocusTargetIsNilForUnknownSnippet() {
@@ -91,7 +90,7 @@ final class SettingsSearchTests: XCTestCase {
 
     func testHelpFocusTargetMappingsForKnownSnippets() {
         XCTAssertEqual(SettingsCategory.help.focusTarget(for: snippet(in: .help, titled: "Support Links")), .helpSupport)
-        XCTAssertEqual(SettingsCategory.help.focusTarget(for: snippet(in: .help, titled: "Copy Support Report")), .helpIssueDetails)
+        XCTAssertEqual(SettingsCategory.troubleshooting.focusTarget(for: snippet(in: .troubleshooting, titled: "Copy Support Report")), .troubleshootingSupportReport)
     }
 
     func testEveryVisibleFeatureSnippetHasAFocusTarget() {

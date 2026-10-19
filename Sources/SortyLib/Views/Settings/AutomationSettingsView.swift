@@ -12,6 +12,7 @@ struct AutomationSettingsView: View {
     @SortyHotReload private var hotReload
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var loginItemManager: LoginItemManager
+    @EnvironmentObject var appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @AppStorage("keepInBackground") private var keepInBackground = false
@@ -24,46 +25,15 @@ struct AutomationSettingsView: View {
     @State private var showBackgroundInfo = false
     @State private var isLoadingSettings = true
 
-    /// Reflects the real SMAppService registration (not just the stored
-    /// preference) and routes toggles back through the manager.
-    private var launchAtLoginBinding: Binding<Bool> {
-        Binding(
-            get: { loginItemManager.isLaunchAtLoginEnabled },
-            set: { newValue in
-                loginItemManager.setLaunchAtLogin(newValue)
-                AnalyticsManager.shared.captureSettingChanged(
-                    "Launch at Login",
-                    isEnabled: newValue,
-                    section: "automation"
-                )
-            }
-        )
-    }
-    
     var body: some View {
-        Group {
-            if isLoadingSettings {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Loading automation settings…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 80)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Loading automation settings")
-            } else {
-                VStack(spacing: 16) {
-                    globalModelSection
-                        .animatedAppearance(delay: 0.05)
-
-                    backgroundBehaviorSection
-                        .animatedAppearance(delay: 0.1)
-                }
-            }
+        VStack(spacing: 16) {
+            watchedFoldersSection
+            globalModelSection
+            backgroundBehaviorSection
         }
         .onAppear {
+            // Hydrate before the first frame commits so the page never shows
+            // a placeholder; analytics stay quiet until the next runloop turn.
             loadAutomationSettings()
             Task { @MainActor in
                 await Task.yield()
@@ -198,21 +168,9 @@ struct AutomationSettingsView: View {
     }
 
     private var backgroundBehaviorSection: some View {
-        SettingsCard(title: "Background Behavior", icon: "menubar.rectangle", color: .purple) {
+        SettingsCard(title: "Background", icon: "moon.zzz", color: .purple) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle(isOn: launchAtLoginBinding) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Launch at Login")
-                                .font(.subheadline)
-                            Text("Automatically start Sorty when you log in to macOS")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .toggleStyle(.switch)
-                    .settingsFocusableSetting(.automationLaunchAtLogin)
-
                     Toggle(isOn: $keepInBackground) {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
@@ -269,31 +227,34 @@ struct AutomationSettingsView: View {
                         )
                     }
 
-                    @AppStorage("hideDockIcon") var hideDockIcon = false
-                    Toggle(isOn: $hideDockIcon) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Hide Dock Icon")
-                                .font(.subheadline)
-                            Text("Run as a menu bar app without showing in the Dock")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .toggleStyle(.switch)
-                    .settingsFocusableSetting(.automationHideDockIcon)
-                    .onChange(of: hideDockIcon) { _, newValue in
-                        // The main-window onChange is window-scoped; apply the
-                        // policy here so the toggle works with zero windows.
-                        NSApp.setActivationPolicy(newValue ? .accessory : .regular)
-                        AnalyticsManager.shared.captureSettingChanged(
-                            "Hide Dock Icon",
-                            isEnabled: newValue,
-                            section: "automation"
-                        )
-                    }
                 }
 
             }
+        }
+    }
+
+    private var watchedFoldersSection: some View {
+        SettingsCard(title: "Watched Folders", icon: "eye", color: .green) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    WatchedFolderCountLabel()
+                    Text("Sorty organizes new files in these folders automatically.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    appState.openRelatedView(.watchedFolders)
+                } label: {
+                    Label("Manage", systemImage: "arrow.up.right")
+                }
+                .buttonStyle(.sortyBordered(intent: .info, size: .small))
+                .accessibilityIdentifier("SettingsManageWatchedFoldersButton")
+            }
+            .settingsFocusableSetting(.automationWatchedFolders)
         }
     }
 
@@ -333,6 +294,26 @@ struct AutomationSettingsView: View {
             useSeparateModel = false
             selectedProvider = viewModel.config.provider
             selectedModel = viewModel.config.model
+        }
+    }
+}
+
+/// Observes watched folders on its own so live folder activity only redraws this label.
+private struct WatchedFolderCountLabel: View {
+    @EnvironmentObject private var watchedFolders: WatchedFoldersManager
+
+    var body: some View {
+        Text(summary)
+            .font(.subheadline.weight(.medium))
+            .numericTextTransition(animationValue: summary)
+    }
+
+    private var summary: String {
+        guard watchedFolders.hasLoadedPersistedState else { return "Watched folders" }
+        switch watchedFolders.folders.count {
+        case 0: return "No watched folders"
+        case 1: return "1 watched folder"
+        default: return "\(watchedFolders.folders.count) watched folders"
         }
     }
 }
