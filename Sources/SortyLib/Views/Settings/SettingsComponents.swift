@@ -127,6 +127,8 @@ private struct SortyFocusHighlightModifier<FocusShape: InsettableShape>: ViewMod
     }
 }
 
+/// Settings sidebar row styled like System Settings: a filled glyph on a
+/// colored rounded tile, primary label, and a neutral selection capsule.
 struct SidebarButton: View {
     @SortyHotReload private var hotReload
     let title: String
@@ -134,28 +136,43 @@ struct SidebarButton: View {
     let color: Color
     let isSelected: Bool
     let action: () -> Void
-    
+
+    @State private var isHovering = false
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .foregroundStyle(isSelected ? color : .secondary)
-                    .frame(width: 20)
-                
+                    .symbolVariant(.fill)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 24, height: 24)
+                    .background(color.gradient, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+
                 Text(LocalizedStringKey(title))
-                    .font(.subheadline)
-                    .foregroundStyle(isSelected ? .primary : .secondary)
-                
-                Spacer()
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(isSelected ? color.opacity(0.1) : Color.clear)
-            .contentShape(Rectangle())
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
+            .background(rowBackground, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.12)) {
+                isHovering = hovering
+            }
+        }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var rowBackground: Color {
+        if isSelected { return Color.primary.opacity(0.1) }
+        return isHovering ? Color.primary.opacity(0.05) : .clear
     }
 }
 

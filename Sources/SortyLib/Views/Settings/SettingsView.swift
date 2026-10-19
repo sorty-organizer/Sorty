@@ -89,7 +89,7 @@ struct SettingsView: View {
         let categoriesByGroup = Dictionary(grouping: categories, by: \.group)
         let groups = SettingsCategoryGroup.allCases.filter { categoriesByGroup[$0]?.isEmpty == false }
 
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: 2) {
             if categories.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Nothing found")
@@ -106,7 +106,7 @@ struct SettingsView: View {
                     ForEach(categoriesByGroup[group] ?? []) { category in
                         SidebarButton(
                             title: category.rawValue,
-                            icon: category.icon,
+                            icon: category.sidebarIcon,
                             color: category.color,
                             isSelected: selectedCategory == category
                         ) {
@@ -129,11 +129,10 @@ struct SettingsView: View {
     
     private func sectionHeader(_ title: String) -> some View {
         Text(LocalizedStringKey(title))
-            .font(.caption)
-            .fontWeight(.semibold)
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 8)
-            .padding(.top, 12)
+            .padding(.horizontal, 6)
+            .padding(.top, 14)
             .padding(.bottom, 4)
     }
 

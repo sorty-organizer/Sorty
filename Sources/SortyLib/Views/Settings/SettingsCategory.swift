@@ -288,6 +288,16 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         }
     }
     
+    /// Glyph drawn white on the colored sidebar tile. Circled symbols read as a
+    /// blob once filled, so those swap to their bare glyph here.
+    public var sidebarIcon: String {
+        switch self {
+        case .help: return "questionmark"
+        case .automation: return "bolt"
+        default: return icon
+        }
+    }
+
     public var color: Color {
         switch self {
         case .rules: return .blue
