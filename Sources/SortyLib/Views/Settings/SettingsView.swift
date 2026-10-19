@@ -53,7 +53,7 @@ struct SettingsView: View {
             ScrollView {
                 settingsSidebar
             }
-            .frame(width: 200)
+            .frame(width: 224)
             .background(Color(NSColor.windowBackgroundColor))
             .animatedAppearance(delay: 0.03)
             Divider()

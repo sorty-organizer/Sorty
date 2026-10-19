@@ -84,8 +84,6 @@ public enum SettingsFocusTarget: String, CaseIterable, Hashable, Sendable {
     case deeplinksPersona = "settings.deeplinks.persona"
     case deeplinksLearnings = "settings.deeplinks.learnings"
     case deeplinksProviderSettings = "settings.deeplinks.provider-settings"
-    case deeplinksFinderOrganize = "settings.deeplinks.finder-organize"
-    case deeplinksFinderWatch = "settings.deeplinks.finder-watch"
     case deeplinksFinderExclude = "settings.deeplinks.finder-exclude"
     case deeplinksFinderSettings = "settings.deeplinks.finder-settings"
     case finderIntegration = "settings.finder.integration"
@@ -199,7 +197,7 @@ public extension SettingsFocusTarget {
              .deeplinksOrganizeFolder, .deeplinksDuplicates, .deeplinksStorage,
              .deeplinksWatchedFolders, .deeplinksRules, .deeplinksExclusions,
              .deeplinksPersona, .deeplinksLearnings, .deeplinksProviderSettings,
-             .deeplinksFinderOrganize, .deeplinksFinderWatch, .deeplinksFinderExclude,
+             .deeplinksFinderExclude,
              .deeplinksFinderSettings:
             return .deeplinks
 
@@ -449,8 +447,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 feature("Persona", "Copy the sorty://persona link for persona create and select flows.", keywords: ["deeplink", "sorty://persona"], target: .deeplinksPersona),
                 feature("Learnings", "Copy the sorty://learnings link for learnings stats, export, import, or clear actions.", keywords: ["deeplink", "sorty://learnings"], target: .deeplinksLearnings),
                 feature("Provider Settings", "Copy the provider setup link that jumps straight to provider settings.", keywords: ["deeplink", "sorty://settings?section=provider", "provider setup"], target: .deeplinksProviderSettings),
-                feature("Organize with Sorty", "Copy the Finder service link that organizes the selected folder.", keywords: ["deeplink", "sorty://organize", "finder service", "finder actions"], target: .deeplinksFinderOrganize),
-                feature("Watch with Sorty", "Copy the Finder service link that watches the selected folder.", keywords: ["deeplink", "sorty://watched", "finder service", "finder actions"], target: .deeplinksFinderWatch),
                 feature("Exclude from Sorty", "Copy the Finder service link that excludes the selected file or folder.", keywords: ["deeplink", "sorty://exclude", "finder service", "finder actions"], target: .deeplinksFinderExclude),
                 feature("Finder Settings", "Copy the Finder integration link that jumps straight to Finder settings.", keywords: ["deeplink", "sorty://settings?section=finder", "finder integration", "finder settings"], target: .deeplinksFinderSettings)
             ]
