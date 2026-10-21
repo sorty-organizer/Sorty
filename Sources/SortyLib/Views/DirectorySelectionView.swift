@@ -210,48 +210,11 @@ struct DirectorySelectionView: View {
     }
 
     private var dropZone: some View {
-        let dropZoneCornerRadius: CGFloat = 16
-        return Button {
+        Button {
             HapticFeedbackManager.shared.tap()
             selectDirectory()
         } label: {
-            Group {
-                if #available(macOS 26.0, *) {
-                    dropZoneContent
-                        .systemLiquidGlassBackground(cornerRadius: dropZoneCornerRadius, clear: true)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                                .fill(isTargeted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : .clear)
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                                .strokeBorder(
-                                    isTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3),
-                                    lineWidth: 1
-                                )
-                        }
-                } else {
-                    dropZoneContent
-                        .background {
-                            RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                                .fill(
-                                    isTargeted
-                                        ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08)
-                                        : Color.secondary.opacity(0.05))
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                                .fill(isTargeted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : .clear)
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                                .strokeBorder(
-                                    isTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3),
-                                    lineWidth: 1
-                                )
-                        }
-                }
-            }
+            dropZoneLabel
         }
         .buttonStyle(.plain)
         .scaleEffect(isTargeted ? 1.05 : 1.0)
@@ -447,6 +410,47 @@ struct DirectorySelectionView: View {
         }
 
         return true
+    }
+
+    private var dropZoneLabel: some View {
+        let dropZoneCornerRadius: CGFloat = 16
+        return Group {
+            if #available(macOS 26.0, *) {
+                dropZoneContent
+                    .systemLiquidGlassBackground(cornerRadius: dropZoneCornerRadius, clear: true)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                            .fill(isTargeted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : .clear)
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                            .strokeBorder(
+                                isTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    }
+            } else {
+                dropZoneContent
+                    .background {
+                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                            .fill(
+                                isTargeted
+                                    ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08)
+                                    : Color.secondary.opacity(0.05))
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                            .fill(isTargeted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : .clear)
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                            .strokeBorder(
+                                isTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    }
+            }
+        }
     }
 }
 

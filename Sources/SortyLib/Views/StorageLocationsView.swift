@@ -42,67 +42,7 @@ struct StorageLocationConfigView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
-                HStack(spacing: 12) {
-                    FolderThumbnailView(url: location.url, size: CGSize(width: 28, height: 28))
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 8) {
-                            Text(location.name)
-                                .font(.headline)
-
-                            StorageProviderBadge(provider: location.capabilityProfile.provider)
-                        }
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            NSWorkspace.shared.selectFile(
-                                nil,
-                                inFileViewerRootedAtPath: location.path
-                            )
-                        } label: {
-                            HStack(spacing: 5) {
-                                PrivacySensitivePathText(path: location.path)
-                                    .lineLimit(1)
-
-                                Image(systemName: "arrow.up.right")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .frame(width: 10)
-                                    .opacity(isHoveringPath ? 1 : 0)
-                                    .offset(
-                                        x: reduceMotion || isHoveringPath ? 0 : -3,
-                                        y: reduceMotion || isHoveringPath ? 0 : 3
-                                    )
-                                    .scaleEffect(reduceMotion || isHoveringPath ? 1 : 0.75)
-                                    .foregroundStyle(Color.accentColor)
-                                    .accessibilityHidden(true)
-                            }
-                            .frame(minHeight: 20)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .animation(
-                            reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
-                            value: isHoveringPath
-                        )
-                        .onHover { isHoveringPath = $0 }
-                        .help("Reveal \(location.name) in Finder")
-                        .accessibilityLabel("Reveal \(location.name) in Finder") // [VERIFY] confirm label matches intent
-                    }
-                }
-                
-                Spacer()
-                
-                Button("Done") {
-                    HapticFeedbackManager.shared.success()
-                    save()
-                }
-                .buttonStyle(.sortyProminent)
-            }
-            .padding()
-            .systemLiquidGlassBackground(cornerRadius: 12)
-            
+            locationHeader
             Divider()
             
             ScrollView {
@@ -253,6 +193,69 @@ struct StorageLocationConfigView: View {
             storageLocationsManager.updateLocation(updated)
         }
         dismiss()
+    }
+
+    private var locationHeader: some View {
+        HStack {
+            HStack(spacing: 12) {
+                FolderThumbnailView(url: location.url, size: CGSize(width: 28, height: 28))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text(location.name)
+                            .font(.headline)
+
+                        StorageProviderBadge(provider: location.capabilityProfile.provider)
+                    }
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        NSWorkspace.shared.selectFile(
+                            nil,
+                            inFileViewerRootedAtPath: location.path
+                        )
+                    } label: {
+                        HStack(spacing: 5) {
+                            PrivacySensitivePathText(path: location.path)
+                                .lineLimit(1)
+
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 9, weight: .semibold))
+                                .frame(width: 10)
+                                .opacity(isHoveringPath ? 1 : 0)
+                                .offset(
+                                    x: reduceMotion || isHoveringPath ? 0 : -3,
+                                    y: reduceMotion || isHoveringPath ? 0 : 3
+                                )
+                                .scaleEffect(reduceMotion || isHoveringPath ? 1 : 0.75)
+                                .foregroundStyle(Color.accentColor)
+                                .accessibilityHidden(true)
+                        }
+                        .frame(minHeight: 20)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                        value: isHoveringPath
+                    )
+                    .onHover { isHoveringPath = $0 }
+                    .help("Reveal \(location.name) in Finder")
+                    .accessibilityLabel("Reveal \(location.name) in Finder") // [VERIFY] confirm label matches intent
+                }
+            }
+
+            Spacer()
+
+            Button("Done") {
+                HapticFeedbackManager.shared.success()
+                save()
+            }
+            .buttonStyle(.sortyProminent)
+        }
+        .padding()
+        .systemLiquidGlassBackground(cornerRadius: 12)
     }
 }
 
