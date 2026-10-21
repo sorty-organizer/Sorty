@@ -47,7 +47,7 @@ Always get separate approval immediately before:
 - overwriting or merging an existing destination;
 - resolving an ambiguous collision;
 - sending file contents to a cloud model;
-- installing a background item, enabling a watcher's unattended `--apply`, or giving a watcher a routing script. Name the folder, rules or script, and schedule;
+- installing a background item, giving a watcher an AI handler, or enabling its unattended `--apply`. Name the folder, the exact handler command, and the schedule;
 - clearing Learnings, history, exclusions, personas, or other stored data.
 
 When one item needs approval, such as a collision, apply the rest of an authorized plan, list that item under `unorganized` with the reason, and report what decision is needed. Never broaden authorization from one folder to another. Preserve hidden files, packages, exclusions, timestamps, extended attributes, and existing Finder tags unless the user explicitly changes them.

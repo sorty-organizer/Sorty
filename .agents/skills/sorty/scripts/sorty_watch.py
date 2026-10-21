@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
 """App-free watched folders for the Sorty skill.
 
-A watcher is a saved folder plus rules. Each `run` looks at the folder's top-level
-items once: settled new items that match an approved rule are moved through the
-helper's guarded, journaled apply, and everything else is queued for the agent's
-next session. When glob rules are not expressive enough, an agent can write a
-routing script on the user's machine; its JSON output goes through the same
-validation, journal, and rollback path. `install` registers a per-user launchd agent so runs happen in the
-background when the folder changes and on a timer. Native Sorty is never required.
+A watcher notices settled new items in a folder's top level; it never decides
+where they go. Without a handler, new items are queued for the agent's next
+session. With a handler, an AI command the agent configured on this machine
+receives the folder's existing structure, the new items, and saved preferences,
+and replies with placements that go through the helper's validation, journal,
+and rollback path. `install` registers a per-user launchd agent so runs happen
+in the background when the folder changes and on a timer. Native Sorty is never
+required.
 """
 
 from __future__ import annotations
 
 import argparse
 import fcntl
-import fnmatch
 import json
 import os
 import plistlib
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -34,7 +35,6 @@ from sorty_helper import (
     apply_plan,
     canonical,
     emit,
-    has_unsafe_components,
     is_package,
     matches_exclusion,
     now,
@@ -48,6 +48,17 @@ WATCHER_VERSION = 1
 LABEL_PREFIX = "com.sorty.skill.watch."
 PARTIAL_SUFFIXES = {".crdownload", ".download", ".part", ".partial", ".opdownload", ".tmp", ".icloud"}
 ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+STRUCTURE_LIMIT = 400
+HANDLER_TASK = """You are organizing new items that arrived in a watched folder.
+Decide where each item belongs so the folder stays coherent with how this user already organizes it.
+Infer their style from `structure` (existing folders and sample names), the item names and contents
+you are allowed to read, `prompt`, `preferences`, and `learnings`. Reuse existing folders and naming
+patterns before inventing new ones, avoid one-off folders and generic buckets, and leave an item in
+`unorganized` with a specific reason when the evidence is weak.
+Do not move, rename, delete, or edit anything yourself. Reply with only this JSON object:
+{"operations": [{"source": "<item path as given>", "destination": "<path relative to source_root>"}],
+ "unorganized": [{"path": "<item path>", "reason": "<why>"}]}
+Destinations may rename an item but must keep its extension. Never overwrite an existing path."""
 
 
 def watchers_dir() -> Path:
@@ -108,54 +119,64 @@ def watcher_lock(watch_id: str):
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def parse_rule(value: str) -> dict[str, str]:
-    """Parse `GLOB=DESTINATION`, where the glob matches top-level item names case-insensitively."""
-    if "=" not in value:
-        raise SortyError(f"rule must look like GLOB=DESTINATION: {value!r}")
-    pattern, destination = (part.strip() for part in value.split("=", 1))
-    if not pattern or not destination:
-        raise SortyError(f"rule must look like GLOB=DESTINATION: {value!r}")
-    destination_path = Path(destination).expanduser()
-    if has_unsafe_components(destination_path):
-        raise SortyError(f"rule destination contains dot segments or control characters: {destination}")
-    return {"match": pattern, "destination": str(destination_path)}
-
-
-def top_level_items(root: Path, config: dict[str, Any], outputs: list[str] = ()) -> list[Path]:
+def exclusion_filter(config: dict[str, Any]):
     try:
         imported_exclusion = exclusion_checker()
     except ValueError as error:
         raise SortyError(str(error)) from error
-    reserved = rule_folders(config) | set(outputs)
-    items = []
-    for entry in sorted(os.scandir(root), key=lambda entry: entry.name):
-        path = root / entry.name
-        if entry.name.startswith(".") or entry.name in reserved:
-            continue
-        if matches_exclusion(entry.name, config.get("exclusions", [])) or imported_exclusion(path):
-            continue
-        items.append(path)
-    return items
+    def keep(root: Path, path: Path) -> bool:
+        relative = path.relative_to(root)
+        return not (
+            any(part.startswith(".") for part in relative.parts)
+            or matches_exclusion(relative.as_posix(), config.get("exclusions", []))
+            or imported_exclusion(path)
+        )
+    return keep
 
 
-def rule_folders(config: dict[str, Any]) -> set[str]:
-    """Top-level folders that rules move items into, so a watcher never queues its own output."""
-    return {
-        Path(rule["destination"]).parts[0]
-        for rule in config.get("rules", [])
-        if not Path(rule["destination"]).is_absolute()
-    }
+def top_level_items(root: Path, config: dict[str, Any], outputs: list[str] = ()) -> list[Path]:
+    """New-item candidates: visible, non-excluded top-level entries, minus folders the watcher created."""
+    keep = exclusion_filter(config)
+    reserved = set(outputs)
+    return [
+        root / entry.name
+        for entry in sorted(os.scandir(root), key=lambda entry: entry.name)
+        if entry.name not in reserved and keep(root, root / entry.name)
+    ]
+
+
+def folder_structure(root: Path, config: dict[str, Any], skip: set[str]) -> list[str]:
+    """Sample the folder's existing layout, two levels deep, so the AI can match the user's style."""
+    keep = exclusion_filter(config)
+    lines: list[str] = []
+    def walk(directory: Path, depth: int) -> None:
+        try:
+            entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
+        except OSError:
+            return
+        folders = [entry for entry in entries if entry.is_dir(follow_symlinks=False) and not is_package(Path(entry.path))]
+        files = [entry for entry in entries if entry not in folders]
+        for entry in folders:
+            path = Path(entry.path)
+            if len(lines) >= STRUCTURE_LIMIT or (depth == 0 and entry.name in skip) or not keep(root, path):
+                continue
+            lines.append(path.relative_to(root).as_posix() + "/")
+            if depth < 1:
+                walk(path, depth + 1)
+        samples = [entry for entry in files if (depth > 0 or entry.name not in skip) and keep(root, Path(entry.path))]
+        for entry in samples[:8]:
+            if len(lines) < STRUCTURE_LIMIT:
+                lines.append(Path(entry.path).relative_to(root).as_posix())
+        if len(samples) > 8 and len(lines) < STRUCTURE_LIMIT:
+            lines.append(f"{directory.relative_to(root).as_posix() or '.'}/… {len(samples) - 8} more files")
+    walk(root, 0)
+    return lines
 
 
 def is_settled(path: Path, settle_seconds: int) -> bool:
     if path.suffix.casefold() in PARTIAL_SUFFIXES:
         return False
     return time.time() - path.lstat().st_mtime >= settle_seconds
-
-
-def matching_rule(name: str, rules: list[dict[str, str]]) -> dict[str, str] | None:
-    folded = name.casefold()
-    return next((rule for rule in rules if fnmatch.fnmatchcase(folded, rule["match"].casefold())), None)
 
 
 def notify(title: str, message: str) -> bool:
@@ -186,20 +207,23 @@ def add_watcher(arguments: argparse.Namespace) -> dict[str, Any]:
     existing = read_json(directory / "config.json", None)
     if existing and not arguments.replace:
         raise SortyError(f"watcher {watch_id!r} already exists; pass --replace to update it")
-    rules = [parse_rule(value) for value in arguments.rule]
-    script = str(canonical(Path(arguments.script))) if arguments.script else None
-    if script and not os.access(script, os.X_OK):
-        raise SortyError(f"routing script must exist and be executable: {script}")
-    if arguments.apply and not (rules or script):
-        raise SortyError("--apply needs at least one --rule or a --script")
+    handler = shlex.split(arguments.handler) if arguments.handler else None
+    if handler:
+        # Store an absolute path: background runs do not get the interactive shell's PATH.
+        executable = shutil.which(handler[0])
+        if not executable:
+            raise SortyError(f"handler command not found: {handler[0]}")
+        handler[0] = executable
+    if arguments.apply and not handler:
+        raise SortyError("--apply needs a --handler that decides placements")
     config = {
         "version": WATCHER_VERSION,
         "id": watch_id,
         "name": arguments.name or root.name,
         "path": str(root),
         "action": "apply" if arguments.apply else "queue",
-        "rules": rules,
-        "script": script,
+        "handler": handler,
+        "handler_timeout": arguments.handler_timeout,
         "exclusions": arguments.exclude,
         "prompt": arguments.prompt,
         "settle_seconds": arguments.settle,
@@ -230,9 +254,9 @@ def import_profile_watchers() -> dict[str, Any]:
             skipped.append({"id": watch_id, "path": str(path), "reason": "exists" if path.is_dir() else "path not found"})
             continue
         add_watcher(argparse.Namespace(
-            path=str(path), id=watch_id, name=folder.get("name"), replace=False, rule=[], apply=False,
-            exclude=[], prompt=folder.get("customPrompt"), settle=60, interval=1800, no_notify=False,
-            include_existing=False, script=None,
+            path=str(path), id=watch_id, name=folder.get("name"), replace=False, handler=None, handler_timeout=600,
+            apply=False, exclude=[], prompt=folder.get("customPrompt"), settle=60, interval=1800, no_notify=False,
+            include_existing=False,
         ))
         created.append(watch_id)
     return {"created": created, "skipped": skipped}
@@ -279,7 +303,7 @@ def summary_text(result: dict[str, Any]) -> str:
         return f"Needs attention: {result['error']}"
     parts = []
     if result["moved"]:
-        parts.append(f"Moved {len(result['moved'])}")
+        parts.append(f"Organized {len(result['moved'])}")
     if result["queued"]:
         parts.append(f"{len(result['queued'])} waiting for review")
     return " · ".join(parts)
@@ -294,57 +318,40 @@ def scan_once(config: dict[str, Any], state: dict[str, Any], dry_run: bool) -> d
     if not root.is_dir():
         result.update(status="error", error=f"watched folder is missing: {root}")
         return result
+    outputs = state.get("output_folders", [])
     try:
-        items = top_level_items(root, config, state.get("output_folders", []))
+        items = top_level_items(root, config, outputs)
     except (SortyError, OSError) as error:
         result.update(status="error", error=str(error))
         return result
 
     seen: dict[str, int] = state.setdefault("seen", {})
     current: dict[str, int] = {}
-    operations: list[dict[str, Any]] = []
-    queued: list[dict[str, str]] = []
-    scripted: list[Path] = []
+    new_items: list[Path] = []
     for path in items:
         info = path.lstat()
         if not is_settled(path, config["settle_seconds"]):
             result["waiting"].append(path.name)
             continue
         current[path.name] = info.st_ino
-        if seen.get(path.name) == info.st_ino:
-            continue
-        rule = matching_rule(path.name, config.get("rules", []))
-        if rule is None and config.get("script"):
-            scripted.append(path)
-        elif path.is_dir() and not is_package(path):
-            queued.append({"path": path.name, "reason": "new folder needs review"})
-        elif rule is None:
-            queued.append({"path": path.name, "reason": "no rule matched"})
-        elif config["action"] != "apply":
-            queued.append({"path": path.name, "reason": f"matches {rule['match']} but this watcher is queue-only"})
-        else:
-            destination_folder = Path(rule["destination"])
-            destination = (destination_folder if destination_folder.is_absolute() else root / destination_folder) / path.name
-            if destination.exists() or destination.is_symlink():
-                queued.append({"path": path.name, "reason": f"destination already exists: {destination}"})
-            else:
-                operations.append({
-                    "source": path.name,
-                    "destination": str(destination if destination_folder.is_absolute() else destination.relative_to(root)),
-                    "expected": source_snapshot(path),
-                })
+        if seen.get(path.name) != info.st_ino:
+            new_items.append(path)
 
-    if scripted:
+    operations: list[dict[str, Any]] = []
+    queued: list[dict[str, str]] = []
+    if new_items and config.get("handler"):
         try:
-            routed, unrouted = run_routing_script(config, root, scripted)
+            suggested, queued = ask_handler(config, root, new_items)
             if config["action"] == "apply":
-                operations.extend(routed)
+                operations = suggested
             else:
-                unrouted.extend({"path": op["source"], "reason": f"script suggests {op['destination']} but this watcher is queue-only"} for op in routed)
-            queued.extend(unrouted)
+                queued.extend({"path": op["source"], "reason": f"AI suggests {op['destination']}; watcher is review-only"}
+                              for op in suggested)
         except SortyError as error:
-            result["error"] = str(error)
-            queued.extend({"path": path.name, "reason": "routing script failed"} for path in scripted)
+            result.update(status="error", error=str(error))
+            queued = [{"path": path.name, "reason": "handler failed"} for path in new_items]
+    else:
+        queued = [{"path": path.name, "reason": "waiting for the agent to organize"} for path in new_items]
 
     if dry_run:
         result["moved"] = [{"source": op["source"], "destination": op["destination"]} for op in operations]
@@ -367,9 +374,10 @@ def scan_once(config: dict[str, Any], state: dict[str, Any], dry_run: bool) -> d
             applied = apply_plan(plan_path, Path(STATE_DIR), origin=f"watcher:{config['id']}")
             result["journals"].append(applied["journal"])
             result["moved"] = [{"source": op["source"], "destination": op["destination"]} for op in operations]
-            outputs = {Path(op["destination"]).parts[0] for op in operations
-                       if not Path(op["destination"]).is_absolute() and len(Path(op["destination"]).parts) > 1}
-            state["output_folders"] = sorted(set(state.get("output_folders", [])) | outputs)
+            created = {Path(op["destination"]).parts[0] for op in operations
+                       if not Path(op["destination"]).is_absolute() and len(Path(op["destination"]).parts) > 1
+                       and Path(op["destination"]).parts[0] not in current}
+            state["output_folders"] = sorted(set(outputs) | created)
         except (SortyError, OSError) as error:
             result.update(status="error", error=f"apply stopped: {error}. Check `sorty_helper.py history` before retrying.")
             queued.extend({"path": op["source"], "reason": "apply failed"} for op in operations if (root / op["source"]).exists())
@@ -386,54 +394,83 @@ def scan_once(config: dict[str, Any], state: dict[str, Any], dry_run: bool) -> d
     return result
 
 
-def run_routing_script(config: dict[str, Any], root: Path, paths: list[Path]) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
-    """Ask the watcher's agent-written script where new items go.
-
-    The script reads `{"source_root", "prompt", "items": [{"path", "kind", "size", "modified_at"}]}`
-    on stdin and prints `{"operations": [{"source", "destination"}], "unorganized": [{"path", "reason"}]}`.
-    Items it omits are queued. Sources must be items it was given; everything else is checked by the helper.
-    """
-    items = {
-        path.name: {
-            "path": path.name,
-            "kind": "package" if is_package(path) else "directory" if path.is_dir() else "file",
-            "size": path.lstat().st_size,
-            "modified_at": datetime.fromtimestamp(path.lstat().st_mtime, timezone.utc).isoformat(),
-        }
-        for path in paths
+def handler_request(config: dict[str, Any], root: Path, paths: list[Path]) -> dict[str, Any]:
+    profile = load_profile()
+    return {
+        "task": HANDLER_TASK,
+        "source_root": str(root),
+        "prompt": config.get("prompt") or profile.get("preferences", {}).get("instructions"),
+        "preferences": profile.get("preferences", {}),
+        "learnings": {"agent": profile.get("agentLearnings", []), "imported": profile.get("learnings", {})},
+        "structure": folder_structure(root, config, {path.name for path in paths}),
+        "items": [
+            {
+                "path": path.name,
+                "kind": "package" if is_package(path) else "directory" if path.is_dir() else "file",
+                "size": path.lstat().st_size,
+                "modified_at": datetime.fromtimestamp(path.lstat().st_mtime, timezone.utc).isoformat(),
+            }
+            for path in paths
+        ],
     }
-    payload = json.dumps({"source_root": str(root), "prompt": config.get("prompt"), "items": list(items.values())})
+
+
+def parse_handler_output(text: str) -> dict[str, Any]:
+    """Accept bare JSON or JSON wrapped in prose or a code fence, as model CLIs often print."""
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        start, end = text.find("{"), text.rfind("}")
+        if start < 0 or end <= start:
+            raise SortyError("handler printed no JSON object") from None
+        try:
+            value = json.loads(text[start:end + 1])
+        except json.JSONDecodeError as error:
+            raise SortyError(f"handler printed invalid JSON: {error}") from error
+    if not isinstance(value, dict):
+        raise SortyError("handler output must be a JSON object")
+    return value
+
+
+def ask_handler(config: dict[str, Any], root: Path, paths: list[Path]) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """Ask the watcher's AI handler where new items go.
+
+    The handler gets one JSON request on stdin (see `handler_request`) with the working
+    directory set to the watched folder, and prints placements. Snapshots are taken
+    first, so anything the handler touches itself makes the plan fail validation.
+    Items it omits are queued; everything it proposes is still checked by the helper.
+    """
+    snapshots = {path.name: source_snapshot(path) for path in paths}
+    payload = json.dumps(handler_request(config, root, paths), indent=2)
     try:
         completed = subprocess.run(
-            [config["script"]], input=payload, capture_output=True, text=True, timeout=120, cwd=str(root),
+            config["handler"], input=payload, capture_output=True, text=True,
+            timeout=config.get("handler_timeout", 600), cwd=str(root),
         )
     except (OSError, subprocess.SubprocessError) as error:
-        raise SortyError(f"routing script could not run: {error}") from error
+        raise SortyError(f"handler could not run: {error}") from error
     if completed.returncode != 0:
-        raise SortyError(f"routing script exited {completed.returncode}: {completed.stderr.strip()[:300]}")
-    try:
-        output = json.loads(completed.stdout or "{}")
-        raw_operations = output.get("operations", [])
-        raw_unorganized = output.get("unorganized", [])
-    except (json.JSONDecodeError, AttributeError) as error:
-        raise SortyError(f"routing script printed invalid JSON: {error}") from error
+        raise SortyError(f"handler exited {completed.returncode}: {completed.stderr.strip()[:300]}")
+    output = parse_handler_output(completed.stdout)
     operations, unorganized, handled = [], [], set()
-    for raw in raw_operations:
+    for raw in output.get("operations") or []:
         source = raw.get("source") if isinstance(raw, dict) else None
         destination = raw.get("destination") if isinstance(raw, dict) else None
-        if source not in items or source in handled or not isinstance(destination, str) or not destination:
-            raise SortyError(f"routing script returned an invalid operation: {raw!r}")
+        if source not in snapshots or source in handled or not isinstance(destination, str) or not destination.strip():
+            raise SortyError(f"handler returned an invalid operation: {raw!r}")
         handled.add(source)
         target = Path(destination).expanduser()
-        if (target if target.is_absolute() else root / target).exists():
+        if target == Path(source):
+            unorganized.append({"path": source, "reason": "AI left it in place"})
+        elif (target if target.is_absolute() else root / target).exists():
             unorganized.append({"path": source, "reason": f"destination already exists: {destination}"})
-            continue
-        operations.append({"source": source, "destination": str(target), "expected": source_snapshot(root / source)})
-    for raw in raw_unorganized:
-        if isinstance(raw, dict) and raw.get("path") in items and raw["path"] not in handled:
+        else:
+            operations.append({"source": source, "destination": str(target), "expected": snapshots[source]})
+    for raw in output.get("unorganized") or []:
+        if isinstance(raw, dict) and raw.get("path") in snapshots and raw["path"] not in handled:
             handled.add(raw["path"])
-            unorganized.append({"path": raw["path"], "reason": str(raw.get("reason") or "left by routing script")})
-    unorganized.extend({"path": name, "reason": "routing script did not place it"} for name in items if name not in handled)
+            unorganized.append({"path": raw["path"], "reason": str(raw.get("reason") or "left by the AI")})
+    unorganized.extend({"path": name, "reason": "AI did not place it"} for name in snapshots if name not in handled)
     return operations, unorganized
 
 
@@ -489,7 +526,8 @@ def install_watcher(watch_id: str) -> dict[str, Any]:
             "cron": f"*/{max(1, config['interval_seconds'] // 60)} * * * * {sys.executable} {script} run {watch_id}",
         }
     log = watcher_dir(watch_id) / "background.log"
-    environment = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin"}
+    # Keep the installer's PATH so handlers written for Node or Homebrew tools still resolve.
+    environment = {"PATH": os.environ.get("PATH") or "/usr/bin:/bin:/usr/sbin:/sbin"}
     if os.environ.get("SORTY_SKILL_STATE_DIR"):
         environment["SORTY_SKILL_STATE_DIR"] = os.environ["SORTY_SKILL_STATE_DIR"]
     plist = {
@@ -559,9 +597,9 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("path")
     add.add_argument("--id")
     add.add_argument("--name")
-    add.add_argument("--rule", action="append", default=[], help="GLOB=DESTINATION, first match wins")
-    add.add_argument("--apply", action="store_true", help="move rule matches unattended (needs explicit approval)")
-    add.add_argument("--script", help="agent-written executable that routes items rules do not match")
+    add.add_argument("--handler", help="AI command that decides placements, e.g. a non-interactive agent CLI")
+    add.add_argument("--handler-timeout", type=int, default=600, help="seconds before the handler is stopped")
+    add.add_argument("--apply", action="store_true", help="apply the handler's placements unattended (needs explicit approval)")
     add.add_argument("--exclude", action="append", default=[])
     add.add_argument("--prompt", help="saved instructions for reviewing this folder's queue")
     add.add_argument("--settle", type=int, default=60, help="seconds an item must be unchanged")

@@ -12,12 +12,12 @@ Use this map to route current Sorty behavior. Recheck `README.md`, `CHANGELOG.md
 | Semantic duplicates | Native preferred | Without the app, the agent may flag likely matches as judgment, never as exact |
 | Exclusions and "only" matching | Native or agent | Non-matching items stay untouched |
 | Finder tags and label colors | Native or agent | `sorty_tags.py` writes the tag xattr with a restore journal |
-| Personas | Native or agent | Without the app, save lasting `instructions` in the profile |
+| Personas | Native | The agent infers style from the folder's existing organization, contents, and request instead |
 | Imported Learnings | Agent | Selected exported instructions and examples guide future plans |
 | Passive Learnings | Native | Encryption, consent, and biometric controls stay app-owned |
 | Agent Learnings and exclusions | Agent | `sorty_profile.py learn` and `exclude`, plain JSON in the skill |
 | Saved watched folders | Agent | `sorty_watch.py add`, or `import-profile` for imported folders |
-| Background watching | Native or agent | `sorty_watch.py install` registers a launchd item; needs explicit approval |
+| Background watching | Native or agent | `sorty_watch.py install` registers a launchd item; an AI handler decides placements; needs explicit approval |
 | Snooze, retry, notify-to-review | Native or agent | Watcher `pause`, `run`, queue, and desktop notifications |
 | Naming and completion preferences | Agent | Select in the app; task instructions determine what to do |
 | Storage destinations | Native preferred | Agent mode accepts an explicit absolute destination |

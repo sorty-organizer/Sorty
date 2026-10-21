@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
 import sys
 import tempfile
 import unittest
@@ -33,76 +34,91 @@ class SortyWatchTests(unittest.TestCase):
 
     def add(self, **overrides):
         values = dict(
-            path=str(self.root), id="inbox", name=None, replace=False, rule=[], apply=False, exclude=[],
-            prompt=None, settle=0, interval=1800, no_notify=True, include_existing=False, script=None,
+            path=str(self.root), id="inbox", name=None, replace=False, handler=None, handler_timeout=60, apply=False,
+            exclude=[], prompt=None, settle=0, interval=1800, no_notify=True, include_existing=False,
         )
         values.update(overrides)
         return sorty_watch.add_watcher(argparse.Namespace(**values))
 
-    def test_applies_approved_rules_queues_the_rest_and_reports_each_item_once(self):
+    def handler(self, body):
+        """A stand-in AI handler: reads the request, records it, and prints prose-wrapped JSON."""
+        script = self.base / "handler.py"
+        script.write_text("\n".join([
+            f"#!{sys.executable}",
+            "import json, sys",
+            "request = json.load(sys.stdin)",
+            f"open({str(self.base / 'request.json')!r}, 'w').write(json.dumps(request))",
+            "items = [item['path'] for item in request['items']]",
+            body,
+            "print('Here is the plan:\\n```json\\n' + json.dumps(reply) + '\\n```')",
+        ]), encoding="utf-8")
+        script.chmod(0o755)
+        return str(script)
+
+    def test_without_a_handler_new_items_wait_for_the_agent_once(self):
         (self.root / "old.pdf").write_text("baseline", encoding="utf-8")
-        self.add(rule=["*.PDF=Documents/PDFs"], apply=True)
+        self.add()
         (self.root / "new.pdf").write_text("new", encoding="utf-8")
+        result = sorty_watch.run_watcher("inbox")
+        self.assertEqual(result["moved"], [])
+        self.assertEqual([entry["path"] for entry in result["queued"]], ["new.pdf"])
+        self.assertEqual(sorty_watch.run_watcher("inbox")["queued"], [], "items are reported once")
+        self.assertEqual([entry["path"] for entry in sorty_watch.update_queue("inbox", [], False)["queue"]], ["new.pdf"])
+
+    def test_handler_sees_existing_style_and_its_placements_are_journaled(self):
+        (self.root / "Finance").mkdir()
+        (self.root / "Finance/2025 invoice acme.pdf").write_text("old", encoding="utf-8")
+        handler = self.handler("reply = {'operations': [{'source': p, 'destination': 'Finance/2026 ' + p.lower()} for p in items if 'Invoice' in p]}")
+        self.add(handler=handler, apply=True, prompt="Keep finance tidy")
+        (self.root / "Invoice Acme.pdf").write_text("invoice", encoding="utf-8")
         (self.root / "notes.txt").write_text("notes", encoding="utf-8")
-        (self.root / "Project").mkdir()
 
         result = sorty_watch.run_watcher("inbox")
 
-        self.assertEqual(result["moved"], [{"source": "new.pdf", "destination": "Documents/PDFs/new.pdf"}])
-        self.assertTrue((self.root / "Documents/PDFs/new.pdf").exists())
-        self.assertTrue((self.root / "old.pdf").exists(), "baselined items stay put")
-        self.assertEqual({entry["path"] for entry in result["queued"]}, {"notes.txt", "Project"})
-        again = sorty_watch.run_watcher("inbox")
-        self.assertEqual((again["moved"], again["queued"]), ([], []))
+        request = json.loads((self.base / "request.json").read_text(encoding="utf-8"))
+        self.assertIn("Finance/2025 invoice acme.pdf", request["structure"])
+        self.assertNotIn("notes.txt", request["structure"], "new items are not presented as existing style")
+        self.assertEqual(request["prompt"], "Keep finance tidy")
+        self.assertEqual(result["moved"], [{"source": "Invoice Acme.pdf", "destination": "Finance/2026 invoice acme.pdf"}])
+        self.assertEqual(result["queued"], [{"path": "notes.txt", "reason": "AI did not place it"}])
         rollback = sorty_helper.rollback(Path(result["journals"][0]))
         self.assertEqual(rollback["restored"], 1)
-        self.assertTrue((self.root / "new.pdf").exists())
+        self.assertTrue((self.root / "Invoice Acme.pdf").exists())
 
-    def test_queue_only_watchers_never_move_and_collisions_are_queued(self):
-        self.add(rule=["*.pdf=PDFs"])
-        (self.root / "a.pdf").write_text("a", encoding="utf-8")
+    def test_review_only_handlers_never_move_and_unsafe_placements_are_refused(self):
+        handler = self.handler("reply = {'operations': [{'source': p, 'destination': 'Sorted/' + p.replace('.txt', '.zip')} for p in items]}")
+        self.add(handler=handler)
+        (self.root / "a.txt").write_text("a", encoding="utf-8")
         result = sorty_watch.run_watcher("inbox")
         self.assertEqual(result["moved"], [])
-        self.assertIn("queue-only", result["queued"][0]["reason"])
+        self.assertIn("review-only", result["queued"][0]["reason"])
 
-        self.add(rule=["*.pdf=PDFs"], apply=True, replace=True, id="second")
+        self.add(handler=handler, apply=True, id="second", include_existing=True)
+        result = sorty_watch.run_watcher("second")
+        self.assertEqual(result["status"], "error", "extension changes still need explicit approval")
+        self.assertTrue((self.root / "a.txt").exists())
+
+    def test_handler_failures_and_collisions_queue_items(self):
         (self.root / "PDFs").mkdir()
         (self.root / "PDFs/b.pdf").write_text("existing", encoding="utf-8")
+        handler = self.handler("reply = {'operations': [{'source': p, 'destination': 'PDFs/' + p} for p in items]}")
+        self.add(handler=handler, apply=True)
         (self.root / "b.pdf").write_text("incoming", encoding="utf-8")
-        result = sorty_watch.run_watcher("second")
-        self.assertEqual(result["moved"], [])
+        result = sorty_watch.run_watcher("inbox")
         self.assertIn("destination already exists", result["queued"][0]["reason"])
         self.assertEqual((self.root / "PDFs/b.pdf").read_text(encoding="utf-8"), "existing")
 
+        self.add(handler=self.handler("raise SystemExit(4)"), apply=True, id="broken", include_existing=True)
+        result = sorty_watch.run_watcher("broken")
+        self.assertEqual((result["status"], result["queued"][0]["reason"]), ("error", "handler failed"))
+
     def test_unsettled_and_partial_downloads_wait(self):
-        self.add(rule=["*=Sorted"], apply=True, settle=3600)
+        self.add(settle=3600)
         (self.root / "fresh.pdf").write_text("fresh", encoding="utf-8")
         (self.root / "movie.mp4.crdownload").write_text("partial", encoding="utf-8")
         result = sorty_watch.run_watcher("inbox")
         self.assertEqual(sorted(result["waiting"]), ["fresh.pdf", "movie.mp4.crdownload"])
-        self.assertEqual(result["moved"], [])
-
-    def test_routing_script_output_is_validated_and_journaled(self):
-        script = self.base / "route.py"
-        script.write_text("\n".join([
-            f"#!{sys.executable}",
-            "import json, sys",
-            "items = json.load(sys.stdin)['items']",
-            "ops = [{'source': i['path'], 'destination': 'Invoices/' + i['path'].lower()} for i in items if 'Invoice' in i['path']]",
-            "ops += [{'source': i['path'], 'destination': 'x.zip'} for i in items if i['path'].endswith('.txt')]",
-            "print(json.dumps({'operations': ops}))",
-        ]), encoding="utf-8")
-        script.chmod(0o755)
-        self.add(script=str(script), apply=True)
-        (self.root / "Invoice A.pdf").write_text("invoice", encoding="utf-8")
-        result = sorty_watch.run_watcher("inbox")
-        self.assertEqual(result["moved"], [{"source": "Invoice A.pdf", "destination": "Invoices/invoice a.pdf"}])
-        self.assertEqual(sorty_watch.run_watcher("inbox")["queued"], [], "script output folders are not re-queued")
-
-        (self.root / "notes.txt").write_text("notes", encoding="utf-8")
-        result = sorty_watch.run_watcher("inbox")
-        self.assertEqual(result["status"], "error", "extension changes still need explicit approval")
-        self.assertTrue((self.root / "notes.txt").exists())
+        self.assertEqual(result["queued"], [])
 
     def test_agent_exclusions_and_learnings_work_without_an_import(self):
         sorty_profile.update_exclusion("*.key")
