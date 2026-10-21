@@ -79,7 +79,7 @@ package struct InlineNotice: View {
                 Text(message)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
+                    .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(isCentered ? .center : .leading)
                     .padding(.leading, isCentered ? 0 : 20)
@@ -132,6 +132,7 @@ private struct InlineNoticeHeader: View {
             Text(LocalizedStringKey(title))
                 .font(.caption)
                 .fontWeight(.semibold)
+                .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
         }
@@ -181,6 +182,7 @@ private struct InlineNoticeActionButton: View {
                 Text(action.title)
                     .font(.caption)
                     .fontWeight(.medium)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .buttonStyle(.plain)

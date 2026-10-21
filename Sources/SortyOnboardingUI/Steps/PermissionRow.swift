@@ -45,6 +45,7 @@ struct PermissionRow: View {
                 HStack(spacing: 7) {
                     Text(LocalizedStringKey(type.rawValue))
                         .font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     if isRequired {
                         Text("Required")
@@ -59,13 +60,14 @@ struct PermissionRow: View {
                 Text(type.description(for: state))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer()
 
             trailingControl
+                .fixedSize()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 13)

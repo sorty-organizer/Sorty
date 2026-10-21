@@ -167,7 +167,7 @@ package struct SidebarButton: View {
                 Text(LocalizedStringKey(title))
                     .font(.body)
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Spacer(minLength: 0)
             }
@@ -454,6 +454,7 @@ package struct SettingsToggle: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(LocalizedStringKey(title))
                     .font(.subheadline.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
                     .foregroundColor(.primary)
                 if let description = description {
                     Text(LocalizedStringKey(description))
@@ -491,6 +492,7 @@ package struct SettingsToggle: View {
             Toggle("", isOn: $isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
+                .fixedSize()
         }
         .padding(.vertical, 4)
         .settingsFocusableSetting(focusTarget)
@@ -539,6 +541,7 @@ package struct SettingsSubsettingRow<Control: View>: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(LocalizedStringKey(title))
                         .font(.subheadline.weight(.medium))
+                        .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(.primary)
 
                     if let description {

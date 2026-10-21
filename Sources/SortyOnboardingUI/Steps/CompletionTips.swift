@@ -83,8 +83,7 @@ struct QuickTipRow: View {
             Text(text)
                 .font(.system(size: 13.5, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 4)
     }

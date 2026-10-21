@@ -162,15 +162,13 @@ struct OnboardingProviderRow: View {
                 Text(isOpenCodeCard ? "OpenCode" : provider.selectorTitle)
                     .font(.system(size: 13, weight: isSelected ? .semibold : .regular, design: .rounded))
                     .foregroundColor(provider.isAvailable ? .primary : .secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.88)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if let subtitle {
                     Text(LocalizedStringKey(subtitle))
                         .font(.caption2)
                         .foregroundStyle(subtitleColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.88)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

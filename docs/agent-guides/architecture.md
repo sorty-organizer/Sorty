@@ -130,7 +130,7 @@ User preferences are stored in `LearningsProfile`. `LocalRuleInferenceEngine` de
 - Clip custom glass rendering after `glassEffect` using its matching shape, including circular button labels and behind-window backgrounds. Background helpers keep foreground content unclipped. Native glass buttons and popovers retain system-managed chrome.
 
 ### Button Styles
-All interactive buttons must use Sorty's pill-style button system defined in `Sources/SortyLib/Utilities/ButtonStyles.swift`. Do **not** use `.buttonStyle(.bordered)` or plain system button styles for action buttons.
+All interactive buttons must use Sorty's pill-style button system defined in `Sources/SortyUI/Utilities/ButtonStyles.swift`. Do **not** use `.buttonStyle(.bordered)` or plain system button styles for action buttons.
 
 | Style | Usage | Example |
 |-------|-------|---------|
@@ -141,6 +141,16 @@ All interactive buttons must use Sorty's pill-style button system defined in `So
 | `.sortySecondary(size: .small, color:)` | Secondary actions | Reset |
 
 Always pair buttons with `HapticFeedbackManager.shared.tap()` on press, and use `HStack(spacing: 4)` with an SF Symbol icon + `.caption.bold()` text for compact pill button labels.
+
+### Text layout
+
+Shared action styles allow multiline labels and grow vertically. Keep settings,
+provider descriptions, permission explanations, notices, and onboarding tips
+readable at narrow widths with `.fixedSize(horizontal: false, vertical: true)`.
+Use minimum heights for text containers. Reserve horizontal space for switches
+and trailing controls so they do not compress alongside the text. Keep explicit
+truncation local to compact filenames, paths, or previews with a way to read the
+full content; do not impose a single-line limit in shared button styles.
 
 ## Common Tasks
 - **Add AI provider**: Create client in `Sources/SortyAI/`, implement `AIClientProtocol`, add to `AIProvider` enum + `AIClientFactory`

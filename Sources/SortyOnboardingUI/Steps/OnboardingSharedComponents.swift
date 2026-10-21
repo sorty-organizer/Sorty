@@ -105,7 +105,7 @@ struct GeneratePersonaButton: View {
                     Text(LocalizedStringKey(subtitle))
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 0)

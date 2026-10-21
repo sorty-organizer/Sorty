@@ -323,7 +323,7 @@ struct ReadyToOrganizeView: View {
                 Text("Connection warning: \(error)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(minHeight: 16)

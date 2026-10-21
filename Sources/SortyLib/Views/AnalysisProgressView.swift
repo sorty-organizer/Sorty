@@ -88,7 +88,7 @@ struct StreamingProgressBeam: View {
         ZStack {
             HStack(alignment: .center, spacing: 10) {
                 Text(displayedStage)
-                    .lineLimit(2)
+                    .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
                     .numericTextTransition(
                         animationValue: displayedStage,
@@ -117,6 +117,7 @@ struct StreamingProgressBeam: View {
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 22)
+            .padding(.vertical, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, minHeight: 92)

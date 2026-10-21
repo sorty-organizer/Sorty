@@ -63,7 +63,9 @@ public struct SortyStandardButtonStyle: ButtonStyle {
 
         configuration.label
             .font(.system(size: fontSize, weight: isProminent ? .semibold : .medium))
-            .lineLimit(1)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(.center)
             .foregroundStyle(foregroundStyle(intent: resolvedIntent, accent: accent))
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
@@ -163,7 +165,9 @@ public struct SortyPrimaryButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: size == .small ? 13 : size == .large ? 18 : 15, weight: .semibold))
-            .lineLimit(1)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(.center)
             .foregroundStyle(isSecondary ? Color.primary : Color.white)
             .padding(.horizontal, size == .small ? 16 : size == .large ? 32 : 22)
             .padding(.vertical, size == .small ? 8 : size == .large ? 16 : 10)
@@ -251,7 +255,9 @@ public struct TintedPillButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: size == .small ? 13 : 15, weight: .semibold))
-            .lineLimit(1)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(.center)
             .foregroundColor(foregroundColor)
             .padding(.horizontal, size == .small ? 16 : 22)
             .padding(.vertical, size == .small ? 8 : 10)
@@ -306,7 +312,9 @@ public struct SortySecondaryButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: size == .small ? 12 : 14, weight: .medium))
-            .lineLimit(1)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(.center)
             .padding(.horizontal, size == .small ? 12 : 16)
             .padding(.vertical, size == .small ? 6 : 10)
             .background(
@@ -349,7 +357,9 @@ public struct MetalFxPrimaryButtonStyle: ButtonStyle {
 
         configuration.label
             .font(.system(size: 14, weight: .semibold))
-            .lineLimit(1)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(.center)
             .foregroundStyle(.white)
             .padding(.horizontal, 22)
             .padding(.vertical, 10)

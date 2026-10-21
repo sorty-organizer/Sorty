@@ -33,15 +33,15 @@ struct MaintenanceActionTile: View {
                     Text(LocalizedStringKey(title))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(isHovered ? .primary : .secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.center)
 
                     if let detail {
                         Text(detail)
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.8)
+                            .fixedSize()
                             .numericTextTransition(animationValue: detail)
                     }
                 }
@@ -50,12 +50,14 @@ struct MaintenanceActionTile: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .lineLimit(3)
+                    .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(minHeight: 32, alignment: .center)
 
                 Label(buttonTitle, systemImage: buttonIcon)
                     .font(.caption.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.center)
                     .foregroundStyle(isHovered ? color : .secondary)
                     .padding(.top, 1)
             }

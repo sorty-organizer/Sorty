@@ -101,14 +101,12 @@ struct AIProviderRow: View {
                 Text(isOpenCodeCard ? "OpenCode" : provider.selectorTitle)
                     .font(.subheadline.weight(isSelected ? .semibold : .medium))
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.88)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text(isOpenCodeCard ? "Zen or Go" : provider.selectorDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.88)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .layoutPriority(1)
