@@ -22,35 +22,35 @@ struct OrganizationCompleteView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
     @EnvironmentObject var learningsManager: LearningsManager
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
     
-    @State private var iconAppeared = false
-    @State private var titleAppeared = false
-    @State private var timeSavedAppeared = false
-    @State private var summaryAppeared = false
-    @State private var buttonsAppeared = false
+    @State var iconAppeared = false
+    @State var titleAppeared = false
+    @State var timeSavedAppeared = false
+    @State var summaryAppeared = false
+    @State var buttonsAppeared = false
     @State private var historyLinkAppeared = false
     @State private var isHoveringHistoryLink = false
-    @State private var showParticles = false
-    @State private var glowPulseID = 0
-    @State private var undoState: UndoPresentationState = .idle
-    @State private var undoRestoredCount = 0
-    @State private var undoSkippedCount = 0
-    @State private var lastUndoneEntry: OrganizationHistoryEntry?
-    @State private var failureMessage: String?
-    @State private var failedAction: FailedAction?
+    @State var showParticles = false
+    @State var glowPulseID = 0
+    @State var undoState: UndoPresentationState = .idle
+    @State var undoRestoredCount = 0
+    @State var undoSkippedCount = 0
+    @State var lastUndoneEntry: OrganizationHistoryEntry?
+    @State var failureMessage: String?
+    @State var failedAction: FailedAction?
     @State private var isStorageSuggestionDismissed = false
     /// True while an undo/redo failure from this view owns the completion
     /// screen. The organizer's `.error` transition clears the completion pin,
     /// which would swap this view's failure card for the generic ErrorView, so
     /// the pin is restored until the user leaves the failure.
-    @State private var keepsFailureCardPinned = false
+    @State var keepsFailureCardPinned = false
     
     @State private var shouldShowFinalCounts = false
-    @State private var feedbackDraft = SessionFeedbackDraft()
-    @State private var feedbackSubmitted = false
+    @State var feedbackDraft = SessionFeedbackDraft()
+    @State var feedbackSubmitted = false
 
-    private enum UndoPresentationState: Equatable {
+    enum UndoPresentationState: Equatable {
         case idle
         case undoing
         case completed
@@ -78,7 +78,7 @@ struct OrganizationCompleteView: View {
 
     /// The action that produced the current `.failed` state, so the view can
     /// title the error and offer the matching retry button.
-    private enum FailedAction: Equatable {
+    enum FailedAction: Equatable {
         case undo
         case redo
     }
@@ -96,7 +96,7 @@ struct OrganizationCompleteView: View {
         organizer.currentPlan?.totalFolders ?? totalFolders
     }
 
-    private var primaryStatLabel: String {
+    var primaryStatLabel: String {
         if undoState == .completed {
             return undoRestoredCount == 1 ? "File Restored" : "Files Restored"
         }
@@ -107,7 +107,7 @@ struct OrganizationCompleteView: View {
         }
     }
 
-    private var primaryStatValue: String {
+    var primaryStatValue: String {
         if undoState == .completed {
             return "\(undoRestoredCount)"
         }
@@ -115,7 +115,7 @@ struct OrganizationCompleteView: View {
         return "\(shouldShowFinalCounts ? primaryStatTarget : 0)"
     }
 
-    private var secondaryStatValue: String {
+    var secondaryStatValue: String {
         if undoState == .completed {
             // Nothing was reversed, so don't claim folder cleanup either.
             if undoRestoredCount == 0 && undoSkippedCount == 0 { return "0" }
@@ -128,7 +128,7 @@ struct OrganizationCompleteView: View {
         return "\(shouldShowFinalCounts ? secondaryStatTarget : 0)"
     }
 
-    private var secondaryStatLabel: String {
+    var secondaryStatLabel: String {
         if undoState == .completed {
             if undoSkippedCount > 0 {
                 return undoSkippedCount == 1 ? "Item Skipped" : "Items Skipped"
@@ -156,17 +156,17 @@ struct OrganizationCompleteView: View {
     /// Undo is actionable when there is no action in flight; a failed undo
     /// offers its retry, while a failed redo does not (the redo button owns
     /// that retry) so the undo button can never silently no-op.
-    private var canUndo: Bool {
+    var canUndo: Bool {
         undoState == .idle || (undoState == .failed && failedAction == .undo)
     }
 
     /// Redo is actionable after a completed undo or as the retry of a failed
     /// redo.
-    private var canRedo: Bool {
+    var canRedo: Bool {
         undoState == .completed || (undoState == .failed && failedAction == .redo)
     }
 
-    private var combinedModeHighlight: (value: String, label: String, icon: String, color: Color)? {
+    var combinedModeHighlight: (value: String, label: String, icon: String, color: Color)? {
         if renameCount > 0 {
             return (
                 "\(shouldShowFinalCounts ? renameCount : 0)",
@@ -196,147 +196,9 @@ struct OrganizationCompleteView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: usesCompactVerticalLayout ? 18 : 28) {
-                    VStack(spacing: usesCompactVerticalLayout ? 10 : 16) {
-                        ZStack {
-                            CompletionBadgeGlow(color: statusColor)
-                                .phaseAnimator([false, true, false], trigger: glowPulseID) { content, isIntensified in
-                                    content
-                                        .scaleEffect(!reduceMotion && isIntensified ? 1.12 : 1)
-                                        .brightness(isIntensified ? 0.08 : 0)
-                                        .shadow(
-                                            color: statusColor.opacity(isIntensified ? 0.65 : 0),
-                                            radius: isIntensified ? 20 : 0
-                                        )
-                                } animation: { isIntensified in
-                                    reduceMotion
-                                        ? .linear(duration: 0.01)
-                                        : isIntensified
-                                            ? .spring(response: 0.2, dampingFraction: 0.68)
-                                            : .easeOut(duration: 0.48)
-                                }
-                                .scaleEffect(iconAppeared ? 1 : 0.7)
-                                .opacity(iconAppeared ? 1 : 0)
+                    completionHero(usesCompactVerticalLayout: usesCompactVerticalLayout)
 
-                            if showParticles {
-                                ConfettiParticlesView()
-                            }
-
-                            ZStack {
-                                Circle()
-                                    .fill(statusColor)
-                                    .frame(width: 58, height: 58)
-
-                                Image(systemName: statusIcon)
-                                    .font(.system(size: 30, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .symbolReplaceTransition(animationValue: statusIcon)
-                            }
-                            .scaleEffect(iconAppeared ? 1 : 0.3)
-                            .shadow(color: statusColor.opacity(0.42), radius: 12)
-                        }
-                        .scaleEffect(usesCompactVerticalLayout ? 0.84 : 1)
-                        .frame(height: usesCompactVerticalLayout ? 92 : 112)
-                        .contentShape(Circle())
-                        .onTapGesture {
-                            glowPulseID += 1
-                            HapticFeedbackManager.shared.light()
-                        }
-                        .help("Click to intensify the glow")
-                        .accessibilityHidden(true)
-                        
-                        VStack(spacing: usesCompactVerticalLayout ? 5 : 8) {
-                            Text(statusTitle)
-                                .font(.title.bold())
-                                .opacity(titleAppeared ? 1 : 0)
-                                .offset(y: titleAppeared ? 0 : 10)
-                                .numericTextTransition(animationValue: statusTitle)
-
-                            Text(statusMessage)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .opacity(titleAppeared ? 1 : 0)
-                                .offset(y: titleAppeared ? 0 : 10)
-                                .numericTextTransition(animationValue: statusMessage)
-
-                            let effectiveTimeSaved: TimeInterval = {
-                                if let stats = stats, stats.estimatedTimeSaved > 0 {
-                                    return stats.estimatedTimeSaved
-                                }
-                                return GenerationStats.estimatedTimeSaved(forFileCount: totalFiles)
-                            }()
-                            
-                            if effectiveTimeSaved > 0 && undoState == .idle {
-                                TimeSavedHighlight(
-                                    value: timeSavedString(effectiveTimeSaved),
-                                    animationValue: effectiveTimeSaved,
-                                    usesCompactVerticalLayout: usesCompactVerticalLayout
-                                )
-                                .padding(.top, usesCompactVerticalLayout ? 2 : 8)
-                                .opacity(timeSavedAppeared ? 1 : 0)
-                                .offset(y: timeSavedAppeared ? 0 : 10)
-                            }
-                        }
-                    }
-                    
-                    VStack(spacing: usesCompactVerticalLayout ? 12 : 18) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(statusColor)
-
-                            Text(undoState == .completed ? "Undo summary" : "Run summary")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.secondary)
-
-                            Spacer()
-                        }
-
-                        HStack(spacing: 0) {
-                            IconStatItem(
-                                style: .completion,
-                                icon: mode == .renameOnly ? "pencil.line" : "doc.on.doc.fill",
-                                value: primaryStatValue,
-                                label: primaryStatLabel,
-                                color: .blue
-                            )
-
-                            IconStatDivider(height: 54)
-
-                            IconStatItem(
-                                style: .completion,
-                                icon: mode == .renameOnly ? "doc.text" : "folder.fill.badge.plus",
-                                value: secondaryStatValue,
-                                label: secondaryStatLabel,
-                                color: .purple
-                            )
-
-                            if mode == .organizeAndRename,
-                               undoState != .completed,
-                               let combinedModeHighlight {
-                                IconStatDivider(height: 54)
-
-                                IconStatItem(
-                                    style: .completion,
-                                    icon: combinedModeHighlight.icon,
-                                    value: combinedModeHighlight.value,
-                                    label: combinedModeHighlight.label,
-                                    color: combinedModeHighlight.color
-                                )
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, usesCompactVerticalLayout ? 13 : 18)
-                    .frame(maxWidth: 560)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                    )
-                    .opacity(summaryAppeared ? 1 : 0)
-                    .offset(y: summaryAppeared ? 0 : 30)
+                    completionSummary(usesCompactVerticalLayout: usesCompactVerticalLayout)
 
                     completionFeedbackCard
                         .frame(maxWidth: 560)
@@ -373,95 +235,8 @@ struct OrganizationCompleteView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                     
-                    VStack(spacing: usesCompactVerticalLayout ? 8 : 12) {
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            returnToStart()
-                        } label: {
-                            Label("Organise Another", systemImage: "folder.badge.plus")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.sortyPrimary(size: .large))
-                        .onHover { hovering in
-                            if hovering {
-                                HapticFeedbackManager.shared.selection()
-                            }
-                        }
-                        .help("Return to the folder picker to organise another folder")
-                        .accessibilityHint("Returns to the folder picker to organise another folder")
-                        .disabled(undoState.isBusy)
+                    completionActions(usesCompactVerticalLayout: usesCompactVerticalLayout)
 
-                        HStack(spacing: 12) {
-                            if canRedo || undoState.isRedoing {
-                                Button {
-                                    HapticFeedbackManager.shared.tap()
-                                    redoLastOrganization()
-                                } label: {
-                                    if undoState.isRedoing {
-                                        Label("Redoing...", systemImage: "arrow.triangle.2.circlepath")
-                                            .frame(maxWidth: .infinity)
-                                    } else {
-                                        Label("Redo", systemImage: "arrow.uturn.forward")
-                                            .frame(maxWidth: .infinity)
-                                    }
-                                }
-                                .buttonStyle(.sortyBordered(intent: .primary, size: .regular))
-                                .onHover { hovering in
-                                    if hovering {
-                                        HapticFeedbackManager.shared.selection()
-                                    }
-                                }
-                                .help("Reapply the organization you just undid")
-                                .accessibilityHint("Reapplies the most recent organization plan")
-                                .disabled(undoState.isRedoing || lastUndoneEntry == nil)
-                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                            } else {
-                                Button {
-                                    HapticFeedbackManager.shared.tap()
-                                    undoLastOrganization()
-                                } label: {
-                                    if undoState.isUndoing {
-                                        Label("Undoing...", systemImage: "arrow.triangle.2.circlepath")
-                                            .frame(maxWidth: .infinity)
-                                    } else {
-                                        Label("Undo", systemImage: "arrow.uturn.backward")
-                                            .frame(maxWidth: .infinity)
-                                    }
-                                }
-                                .buttonStyle(.sortyBordered(size: .regular))
-                                .onHover { hovering in
-                                    if hovering {
-                                        HapticFeedbackManager.shared.selection()
-                                    }
-                                }
-                                .help("Undo the latest organization for this folder")
-                                .accessibilityHint("Restores files from the most recent successful run")
-                                .disabled(undoState.isBusy || !canUndo)
-                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                            }
-
-                            Button {
-                                HapticFeedbackManager.shared.tap()
-                                NSWorkspace.shared.open(directoryURL)
-                            } label: {
-                                Label(mode == .renameOnly ? "Show Renamed Files" : "View in Finder", systemImage: "folder.fill")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.sortyBordered(size: .regular))
-                            .onHover { hovering in
-                                if hovering {
-                                    HapticFeedbackManager.shared.selection()
-                                }
-                            }
-                            .help(mode == .renameOnly ? "Open the folder containing renamed files" : "Open the organized folder in Finder")
-                            .accessibilityHint(mode == .renameOnly ? "Shows your renamed files in Finder" : "Shows your organized files in Finder")
-                            .disabled(undoState.isBusy)
-                        }
-                    }
-                    .frame(maxWidth: 560)
-                    .opacity(buttonsAppeared ? 1 : 0)
-                    .offset(y: buttonsAppeared ? 0 : 20)
-                    
                     Button {
                         HapticFeedbackManager.shared.tap()
                         appState.openRelatedView(.history)
@@ -593,750 +368,4 @@ struct OrganizationCompleteView: View {
         }
     }
 
-    private var statusIcon: String {
-        switch undoState {
-        case .idle:
-            return "checkmark"
-        case .undoing:
-            return "arrow.uturn.backward"
-        case .completed:
-            return "checkmark"
-        case .redoing:
-            return "arrow.uturn.forward"
-        case .failed:
-            return "exclamationmark"
-        }
-    }
-
-    private var statusColor: Color {
-        switch undoState {
-        case .idle:
-            return .green
-        case .undoing:
-            return .blue
-        case .completed:
-            return .green
-        case .redoing:
-            return .blue
-        case .failed:
-            return .red
-        }
-    }
-
-    private var statusTitle: String {
-        switch undoState {
-        case .idle:
-            return mode.completionTitle
-        case .undoing:
-            return "Undoing Changes"
-        case .completed:
-            return "Undo Complete"
-        case .redoing:
-            return "Redoing Changes"
-        case .failed:
-            switch failedAction {
-            case .undo: return "Undo Failed"
-            case .redo: return "Redo Failed"
-            case nil: return "Action Failed"
-            }
-        }
-    }
-
-    private var statusMessage: String {
-        switch undoState {
-        case .idle:
-            return mode.completionMessage
-        case .undoing:
-            return "Restoring files to their previous locations..."
-        case .completed:
-            if undoRestoredCount == 0 && undoSkippedCount == 0 {
-                return "Nothing to restore for this run."
-            }
-            return undoSkippedCount > 0
-                ? "Restored what could be safely reverted. Review history for skipped items."
-                : "Restored your files to their previous locations."
-        case .redoing:
-            return "Reapplying the organization plan..."
-        case .failed:
-            return failureMessage ?? "Sorty could not complete that action. Please review history for details."
-        }
-    }
-
-    // Post-apply feedback: history entry backing this run, if already stored.
-    private var feedbackHistoryEntryID: String? {
-        organizer.history.entries.first(where: { $0.directoryPath == directoryURL.path })?.id.uuidString
-    }
-
-    private var isFeedbackStoragePaused: Bool { learningsManager.sessionLearningPaused }
-
-    private var canStoreFeedback: Bool { learningsManager.consentManager.canCollectData }
-
-    // "Was this helpful?" card with optional reason and Undo/History actions on 👎.
-    @ViewBuilder
-    private var completionFeedbackCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Text("Was this helpful?")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Button {
-                    HapticFeedbackManager.shared.success()
-                    feedbackDraft.outcome = .useful
-                } label: {
-                    Image(systemName: feedbackDraft.outcome == .useful ? "hand.thumbsup.fill" : "hand.thumbsup")
-                        .font(.body)
-                        .foregroundStyle(feedbackDraft.outcome == .useful ? .green : .secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("CompleteFeedbackUsefulButton")
-                .accessibilityLabel("Mark as helpful")
-                .disabled(feedbackSubmitted)
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    feedbackDraft.outcome = .notUseful
-                } label: {
-                    Image(systemName: feedbackDraft.outcome == .notUseful ? "hand.thumbsdown.fill" : "hand.thumbsdown")
-                        .font(.body)
-                        .foregroundStyle(feedbackDraft.outcome == .notUseful ? .orange : .secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("CompleteFeedbackNotUsefulButton")
-                .accessibilityLabel("Mark as not helpful")
-                .disabled(feedbackSubmitted)
-            }
-
-            if feedbackSubmitted {
-                Label("Thanks — feedback recorded.", systemImage: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("CompleteFeedbackConfirmation")
-            } else if feedbackDraft.outcome != nil {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 6)], spacing: 6) {
-                    ForEach(LearningsManager.sessionFeedbackReasonPresets, id: \.self) { chip in
-                        Button {
-                            HapticFeedbackManager.shared.selection()
-                            feedbackDraft.selectedChip = (feedbackDraft.selectedChip == chip) ? nil : chip
-                        } label: {
-                            Text(chip)
-                                .font(.caption)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(
-                                    Capsule().fill(feedbackDraft.selectedChip == chip ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.1))
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("CompleteFeedbackChip-\(chip)")
-                    }
-                }
-                TextField("Tell us what went wrong (optional)", text: $feedbackDraft.freeText)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.callout)
-                    .accessibilityIdentifier("CompleteFeedbackReasonTextField")
-
-                if isFeedbackStoragePaused {
-                    Text("Learning is paused — feedback won't be stored.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("CompleteFeedbackPausedNotice")
-                } else if !canStoreFeedback {
-                    Text("Enable Learning to save feedback for future runs.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-
-                Button {
-                    submitCompletionFeedback()
-                } label: {
-                    Text("Send feedback")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.sortyBordered(size: .small))
-                .disabled(!feedbackDraft.canSubmit)
-                .accessibilityIdentifier("CompleteFeedbackSubmitButton")
-
-                if feedbackDraft.outcome == .notUseful {
-                    Divider().opacity(0.4)
-                    Text("Not quite right? Undo, or fix individual files in History — undone files teach Sorty.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: 8) {
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            undoLastOrganization()
-                        } label: {
-                            Label("Undo", systemImage: "arrow.uturn.backward")
-                        }
-                        .buttonStyle(.sortyBordered(size: .small))
-                        .disabled(undoState.isBusy || !canUndo)
-                        .accessibilityIdentifier("CompleteFeedbackUndoButton")
-                        Button {
-                            HapticFeedbackManager.shared.selection()
-                            appState.openRelatedView(.history)
-                        } label: {
-                            Label("Fix files in History", systemImage: "clock.arrow.circlepath")
-                        }
-                        .buttonStyle(.sortyBordered(size: .small))
-                        .accessibilityIdentifier("CompleteFeedbackHistoryButton")
-                    }
-                }
-            } else if isFeedbackStoragePaused {
-                Text("Learning is paused — feedback won't be stored.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("CompleteFeedbackPausedNotice")
-            }
-        }
-        .padding(14)
-        .systemLiquidGlassBackground(cornerRadius: 14)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Rate this organization")
-    }
-
-    private func submitCompletionFeedback() {
-        guard let outcome = feedbackDraft.outcome, feedbackDraft.canSubmit else { return }
-        learningsManager.recordSessionOutcomeFeedback(
-            sessionId: feedbackHistoryEntryID ?? directoryURL.path,
-            outcome: outcome,
-            folderPath: directoryURL.path,
-            reason: feedbackDraft.resolvedReason
-        )
-        HapticFeedbackManager.shared.success()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            feedbackSubmitted = true
-        }
-    }
-    
-    /// Restores the failed undo/redo card when this view is mounted again while
-    /// the organizer still carries the failure (for example after visiting
-    /// History), instead of briefly showing the success presentation.
-    private func restoreFailureCardIfNeeded() {
-        guard undoState == .idle,
-              case .error = organizer.state,
-              let action = organizer.completionFailureAction else { return }
-        failureMessage = organizer.errorMessage
-        failedAction = action == .undo ? FailedAction.undo : FailedAction.redo
-        if action == .redo {
-            // Redo retries the exact entry that failed; without it a remounted
-            // card would show a disabled Redo button.
-            lastUndoneEntry = organizer.completionFailureEntry
-        }
-        keepsFailureCardPinned = true
-        undoState = .failed
-    }
-
-    private func undoLastOrganization() {
-        guard canUndo else {
-            // A failed redo is retried through the redo button; route there
-            // instead of leaving the caller with a silent no-op.
-            if undoState == .failed && failedAction == .redo {
-                redoLastOrganization()
-            }
-            return
-        }
-        let isRetry = undoState == .failed && failedAction == .undo
-        guard let lastEntry = organizer.history.entries.first(where: { $0.directoryPath == directoryURL.path && $0.success && !$0.isUndone }) else { return }
-        lastUndoneEntry = lastEntry
-        keepsFailureCardPinned = false
-        organizer.pinsCompletionView = true
-        if isRetry {
-            failureMessage = nil
-            failedAction = nil
-            organizer.errorMessage = nil
-            organizer.completionFailureAction = nil
-            organizer.completionFailureEntry = nil
-        }
-
-        withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
-            undoState = .undoing
-            showParticles = false
-        }
-        
-        Task {
-            do {
-                // Load details first so the restored count can be limited to
-                // file operations instead of every reversed operation.
-                let detailedEntry = await organizer.history.details(for: lastEntry)
-                let result = try await organizer.undoHistoryEntry(lastEntry)
-                await MainActor.run {
-                    undoRestoredCount = restoredDisplayCount(for: detailedEntry, result: result)
-                    undoSkippedCount = result.missingFiles.count
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
-                        undoState = .completed
-                    }
-                    if undoRestoredCount > 0 || undoSkippedCount > 0 {
-                        HapticFeedbackManager.shared.success()
-                        showUndoCompleteHUD()
-                    } else {
-                        HapticFeedbackManager.shared.tap()
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    let message = "Couldn't restore your files: \(error.localizedDescription)"
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
-                        undoState = .failed
-                    }
-                    failureMessage = message
-                    failedAction = .undo
-                    organizer.errorMessage = message
-                    organizer.completionFailureAction = .undo
-                    organizer.completionFailureEntry = lastEntry
-                    keepsFailureCardPinned = true
-                    organizer.pinsCompletionView = true
-                    HapticFeedbackManager.shared.error()
-                }
-                DebugLogger.log("Failed to undo organization: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    private func showUndoCompleteHUD() {
-        let message = undoRestoredSummaryText
-        NotificationManager.shared.showHUDInfo(
-            title: "Files restored",
-            message: message,
-            icon: "checkmark.seal.fill",
-            iconColor: .mint,
-            actions: [
-                HUDNotificationAction(title: "Redo", systemImage: "arrow.uturn.forward") {
-                    NotificationManager.shared.dismissHUD()
-                    redoLastOrganization()
-                }
-            ]
-        )
-    }
-
-    private var undoRestoredSummaryText: String {
-        if undoSkippedCount > 0 {
-            return "\(undoRestoredCount) restored, \(undoSkippedCount) skipped"
-        }
-        return "\(undoRestoredCount) restored"
-    }
-
-    private func restoredDisplayCount(
-        for entry: OrganizationHistoryEntry,
-        result: FileSystemManager.RestoreResult
-    ) -> Int {
-        // Only move/rename/copy operations touch files; `successfulOperations`
-        // also counts tag restores and folder cleanups. A missing operation list,
-        // or a pass with nothing restored and nothing missing, means there is
-        // nothing to report as restored.
-        let fileOperations = (entry.operations ?? []).filter { operation in
-            operation.type == .moveFile || operation.type == .renameFile || operation.type == .copyFile
-        }
-        guard !fileOperations.isEmpty,
-              result.successfulOperations > 0 || !result.missingFiles.isEmpty else {
-            return 0
-        }
-
-        let failedOperationIDs = Set(result.retryableFailedOperationIDs)
-        return fileOperations.filter { !failedOperationIDs.contains($0.id) }.count
-    }
-
-    private func redoLastOrganization() {
-        guard canRedo else { return }
-        let isRetry = undoState == .failed && failedAction == .redo
-        guard let entry = lastUndoneEntry else { return }
-        keepsFailureCardPinned = false
-        organizer.pinsCompletionView = true
-        if isRetry {
-            failureMessage = nil
-            failedAction = nil
-            organizer.errorMessage = nil
-            organizer.completionFailureAction = nil
-            organizer.completionFailureEntry = nil
-        }
-
-        withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
-            undoState = .redoing
-        }
-
-        Task {
-            do {
-                try await organizer.redoOrganization(from: entry)
-                await MainActor.run {
-                    failedAction = nil
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
-                        undoState = .idle
-                    }
-                    lastUndoneEntry = nil
-                    undoRestoredCount = 0
-                    undoSkippedCount = 0
-                    HapticFeedbackManager.shared.success()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        showParticles = true
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    let message = "Couldn't reapply the organization: \(error.localizedDescription)"
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
-                        undoState = .failed
-                    }
-                    failureMessage = message
-                    failedAction = .redo
-                    organizer.errorMessage = message
-                    organizer.completionFailureAction = .redo
-                    organizer.completionFailureEntry = entry
-                    keepsFailureCardPinned = true
-                    organizer.pinsCompletionView = true
-                    HapticFeedbackManager.shared.error()
-                }
-                DebugLogger.log("Failed to redo organization: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    private func returnToStart() {
-        keepsFailureCardPinned = false
-        organizer.completionFailureAction = nil
-        organizer.completionFailureEntry = nil
-        organizer.pinsCompletionView = false
-        if let onReturnToStart {
-            onReturnToStart()
-        } else {
-            withAnimation(.smooth(duration: 0.34)) {
-                organizer.reset()
-            }
-        }
-    }
-    
-    private func timeSavedString(_ seconds: TimeInterval) -> String {
-        if seconds >= 3600 {
-            let hours = seconds / 3600
-            return String(format: "%.1f hours", hours)
-        } else if seconds >= 60 {
-            let minutes = seconds / 60
-            return String(format: "%.0f minutes", minutes)
-        } else {
-            return String(format: "%.0f seconds", seconds)
-        }
-    }
-}
-
-// One follow-up question for uncertain placements. Dismissible, max once
-// per session (enforced by the observer's consume path).
-private struct InlineLearningMomentCard: View {
-    @SortyHotReload private var hotReload
-    @ObservedObject var observer: ContinuousLearningObserver
-    @EnvironmentObject var learningsManager: LearningsManager
-
-    @State private var moment: InlineLearningMoment?
-
-    var body: some View {
-        Group {
-            if let moment {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "questionmark.bubble.fill")
-                            .foregroundStyle(.teal)
-                        Text("Quick question")
-                            .font(.subheadline.weight(.semibold))
-                        Spacer()
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            observer.dismissPendingLearningMoment()
-                            self.moment = nil
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("InlineMomentDismissButton")
-                        .accessibilityLabel("Dismiss question")
-                    }
-                    Text(moment.prompt)
-                        .font(.callout)
-                        .fixedSize(horizontal: false, vertical: true)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 6)], spacing: 6) {
-                        ForEach(moment.options, id: \.self) { option in
-                            Button {
-                                HapticFeedbackManager.shared.selection()
-                                answer(option, for: moment)
-                            } label: {
-                                Text(option)
-                                    .font(.caption)
-                                    .lineLimit(2)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .frame(maxWidth: .infinity)
-                                    .background(Capsule().fill(Color.secondary.opacity(0.1)))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("InlineMomentOption-\(option)")
-                        }
-                    }
-                }
-                .padding(14)
-                .systemLiquidGlassBackground(cornerRadius: 14)
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("InlineMomentCard")
-                .accessibilityLabel("Follow-up question: \(moment.prompt)")
-            }
-        }
-        .onAppear { presentIfAvailable() }
-        .onReceive(observer.$pendingLearningMoment) { _ in presentIfAvailable() }
-    }
-
-    private func presentIfAvailable() {
-        guard moment == nil else { return }
-        guard observer.pendingLearningMoment != nil else { return }
-        moment = observer.consumePendingLearningMoment()
-        if moment != nil {
-            HapticFeedbackManager.shared.selection()
-        }
-    }
-
-    private func answer(_ option: String, for moment: InlineLearningMoment) {
-        let answer = InlineLearningMomentAnswer(
-            momentId: moment.id,
-            sessionId: moment.sessionId,
-            selectedOption: option
-        )
-        Task { await learningsManager.recordInlineLearningMomentAnswer(answer) }
-        HapticFeedbackManager.shared.success()
-        withAnimation(.easeOut(duration: 0.2)) {
-            self.moment = nil
-        }
-    }
-}
-
-private struct TimeSavedHighlight: View {
-    @SortyHotReload private var hotReload
-    let value: String
-    let animationValue: TimeInterval
-    let usesCompactVerticalLayout: Bool
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 32, height: 32)
-                .background(Color.secondary.opacity(0.1), in: Circle())
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Estimated time saved")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-
-                Text(value)
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.primary)
-                    .numericTextTransition(animationValue: animationValue)
-            }
-
-            Spacer(minLength: 12)
-
-            Text("Manual work")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, usesCompactVerticalLayout ? 7 : 10)
-        .frame(maxWidth: 340)
-        .background(Color.secondary.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Estimated manual time saved: \(value)")
-    }
-}
-
-private struct CompletionBadgeGlow: View {
-    @SortyHotReload private var hotReload
-    let color: Color
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isBreathing = false
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            color.opacity(0.34),
-                            color.opacity(0.16),
-                            color.opacity(0)
-                        ],
-                        center: .center,
-                        startRadius: 22,
-                        endRadius: 56
-                    )
-                )
-                .frame(width: 112, height: 112)
-                .scaleEffect(isBreathing ? 1.08 : 0.96)
-                .opacity(isBreathing ? 0.9 : 0.68)
-
-            Circle()
-                .stroke(color.opacity(0.32), lineWidth: 9)
-                .frame(width: 68, height: 68)
-                .blur(radius: 10)
-                .scaleEffect(isBreathing ? 1.04 : 0.98)
-
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.white.opacity(0.16),
-                            color.opacity(0.08),
-                            Color.clear
-                        ],
-                        center: UnitPoint(x: 0.34, y: 0.3),
-                        startRadius: 0,
-                        endRadius: 46
-                    )
-                )
-                .frame(width: 88, height: 88)
-                .blur(radius: 8)
-        }
-        .frame(width: 112, height: 112)
-        .accessibilityHidden(true)
-        .onAppear {
-            guard !reduceMotion else { return }
-
-            withAnimation(.easeInOut(duration: 1.4).repeatCount(2, autoreverses: true)) {
-                isBreathing = true
-            }
-        }
-    }
-}
-
-private struct ConfettiParticlesView: View {
-    @SortyHotReload private var hotReload
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    struct Particle: Identifiable {
-        let id = UUID()
-        let angle: Double
-        let distance: CGFloat
-        let color: Color
-        let size: CGFloat
-        let delay: Double
-    }
-    
-    @State private var burstedParticles: Set<UUID> = []
-    
-    private let particles: [Particle] = {
-        let colors: [Color] = [.green, .blue, .purple, .orange, .yellow, .mint]
-        return (0..<12).map { i in
-            Particle(
-                angle: Double(i) * 30 + Double.random(in: -10...10),
-                distance: CGFloat.random(in: 50...80),
-                color: colors[i % colors.count],
-                size: CGFloat.random(in: 4...7),
-                delay: Double.random(in: 0...0.25)
-            )
-        }
-    }()
-    
-    var body: some View {
-        ZStack {
-            ForEach(particles) { particle in
-                let isBursted = burstedParticles.contains(particle.id)
-                Circle()
-                    .fill(particle.color)
-                    .frame(width: particle.size, height: particle.size)
-                    .offset(
-                        x: isBursted ? cos(particle.angle * .pi / 180) * particle.distance : 0,
-                        y: isBursted ? sin(particle.angle * .pi / 180) * particle.distance : 0
-                    )
-                    .opacity(isBursted ? 0 : 0.8)
-                    .scaleEffect(isBursted ? 0.3 : 1)
-            }
-        }
-        .onAppear {
-            guard !reduceMotion else { return }
-            for particle in particles {
-                _ = withAnimation(.easeOut(duration: Double.random(in: 0.5...0.9)).delay(particle.delay)) {
-                    burstedParticles.insert(particle.id)
-                }
-            }
-        }
-    }
-}
-
-private struct CompletionFeatureSuggestionCard: View {
-    @SortyHotReload private var hotReload
-    let icon: String
-    let title: String
-    let description: String
-    let actionTitle: String
-    let usesCompactVerticalLayout: Bool
-    let onDismiss: () -> Void
-    let action: () -> Void
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(.blue)
-                .frame(width: 32, height: 32)
-                .background(
-                    Circle()
-                        .fill(Color.blue.opacity(0.12))
-                )
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(LocalizedStringKey(title))
-                    .font(.subheadline.weight(.semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(LocalizedStringKey(description))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .help(description)
-            }
-            
-            Spacer()
-            
-            Button(action: action) {
-                Text(actionTitle)
-                    .lineLimit(1)
-                    .font(.subheadline.weight(.semibold))
-            }
-                .buttonStyle(.sortyBordered(intent: .primary, size: .small))
-                .fixedSize(horizontal: true, vertical: false)
-                .layoutPriority(2)
-                .help("Open storage location settings")
-
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Dismiss suggestion")
-            .accessibilityLabel("Dismiss storage location suggestion")
-        }
-        .padding(usesCompactVerticalLayout ? 12 : 16)
-        .systemLiquidGlassBackground(cornerRadius: 16)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.28), Color.white.opacity(0.08)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 5)
-        .help(description)
-        .accessibilityElement(children: .contain)
-    }
 }
