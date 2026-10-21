@@ -515,7 +515,67 @@ public struct SortyCommands: Commands {
 
         // History menu
         historyCommands
-        helpCommands
+        CommandGroup(replacing: .help) {
+            Button("Accreditations", systemImage: "rosette") {
+                appState?.showAccreditations(entryPoint: .help)
+            }
+                .keyboardShortcut("©", modifiers: .command)
+                .disabled(appState == nil)
+
+            Button("Internet Access Policy", systemImage: "network") {
+                appState?.showInternetAccessPolicy()
+            }
+            .keyboardShortcut("🌐", modifiers: .command)
+            .disabled(appState == nil)
+
+            Divider()
+
+            Button("Sorty Help", systemImage: "questionmark.circle") {
+                appState?.showHelp()
+            }
+            .keyboardShortcut("?", modifiers: .command)
+            .disabled(appState == nil)
+            
+            Link(destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!) { Label("Documentation", systemImage: "book") }
+            
+            Button("Report Bug", systemImage: "ladybug") {
+                appState?.showBugReport()
+            }
+            .disabled(appState == nil)
+
+            if FeatureFlags.supportDeveloperEnabled {
+                Link(destination: URL(string: "https://github.com/sponsors/shirishpothi")!) { Label("Support the Developer", systemImage: "heart") }
+            }
+            
+            Divider()
+            
+            Button("Restart Onboarding...", systemImage: "sparkles") {
+                appState?.showOnboarding()
+            }
+            .disabled(appState == nil)
+            
+            Button("Delete All Usage Data...", systemImage: "trash") {
+                appState?.requestDeleteUsageDataConfirmation()
+            }
+            .disabled(appState == nil)
+            
+            Divider()
+            
+            Link(destination: URL(string: "https://github.com/shirishpothi/Sorty")!) { Label("GitHub Repository", systemImage: "chevron.left.forwardslash.chevron.right") }
+
+            Button("Uninstall Sorty...", systemImage: "trash") {
+                appState?.requestUninstallConfirmation()
+            }
+            .disabled(appState == nil)
+
+            Divider()
+
+            Button("Thank you for using Sorty", systemImage: "heart.fill") {
+                appState?.showThanksForUsingSorty()
+            }
+            .keyboardShortcut("♥", modifiers: .command)
+            .disabled(appState == nil)
+        }
     }
 
     private static func commandKeyEquivalent(for index: Int) -> KeyEquivalent {
@@ -590,70 +650,6 @@ public struct SortyCommands: Commands {
             Button("Clear History", systemImage: "trash") {
                 appState?.clearHistoryWithConfirmation()
             }
-            .disabled(appState == nil)
-        }
-    }
-
-    private var helpCommands: some Commands {
-        CommandGroup(replacing: .help) {
-            Button("Accreditations", systemImage: "rosette") {
-                appState?.showAccreditations(entryPoint: .help)
-            }
-                .keyboardShortcut("©", modifiers: .command)
-                .disabled(appState == nil)
-
-            Button("Internet Access Policy", systemImage: "network") {
-                appState?.showInternetAccessPolicy()
-            }
-            .keyboardShortcut("🌐", modifiers: .command)
-            .disabled(appState == nil)
-
-            Divider()
-
-            Button("Sorty Help", systemImage: "questionmark.circle") {
-                appState?.showHelp()
-            }
-            .keyboardShortcut("?", modifiers: .command)
-            .disabled(appState == nil)
-
-            Link(destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!) { Label("Documentation", systemImage: "book") }
-
-            Button("Report Bug", systemImage: "ladybug") {
-                appState?.showBugReport()
-            }
-            .disabled(appState == nil)
-
-            if FeatureFlags.supportDeveloperEnabled {
-                Link(destination: URL(string: "https://github.com/sponsors/shirishpothi")!) { Label("Support the Developer", systemImage: "heart") }
-            }
-
-            Divider()
-
-            Button("Restart Onboarding...", systemImage: "sparkles") {
-                appState?.showOnboarding()
-            }
-            .disabled(appState == nil)
-
-            Button("Delete All Usage Data...", systemImage: "trash") {
-                appState?.requestDeleteUsageDataConfirmation()
-            }
-            .disabled(appState == nil)
-
-            Divider()
-
-            Link(destination: URL(string: "https://github.com/shirishpothi/Sorty")!) { Label("GitHub Repository", systemImage: "chevron.left.forwardslash.chevron.right") }
-
-            Button("Uninstall Sorty...", systemImage: "trash") {
-                appState?.requestUninstallConfirmation()
-            }
-            .disabled(appState == nil)
-
-            Divider()
-
-            Button("Thank you for using Sorty", systemImage: "heart.fill") {
-                appState?.showThanksForUsingSorty()
-            }
-            .keyboardShortcut("♥", modifiers: .command)
             .disabled(appState == nil)
         }
     }
