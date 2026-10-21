@@ -56,4 +56,13 @@ final class OpenCodeModelFilterTests: XCTestCase {
             id: "glm-5.3", displayName: "glm-5.3", provider: .openCodeZen
         )))
     }
+
+    func testFreeModelsUseSuffixAndZenBigPickle() {
+        XCTAssertTrue(AIProvider.openCodeZen.isOpenCodeFreeModel("deepseek-v4.1-flash-free"))
+        XCTAssertTrue(AIProvider.openCodeGo.isOpenCodeFreeModel(" Beam-Free "))
+        XCTAssertTrue(AIProvider.openCodeZen.isOpenCodeFreeModel("big-pickle"))
+        XCTAssertFalse(AIProvider.openCodeGo.isOpenCodeFreeModel("big-pickle"))
+        XCTAssertFalse(AIProvider.openCodeZen.isOpenCodeFreeModel("glm-5.3-flash"))
+        XCTAssertFalse(AIProvider.openRouter.isOpenCodeFreeModel("beam-free"))
+    }
 }

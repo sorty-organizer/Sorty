@@ -450,6 +450,14 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// OpenCode tags free models with a `-free` suffix; Big Pickle is free on
+    /// Zen without one. Their live catalog carries no pricing to check instead.
+    public func isOpenCodeFreeModel(_ model: String) -> Bool {
+        guard self == .openCodeZen || self == .openCodeGo else { return false }
+        let id = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return id.hasSuffix("-free") || (self == .openCodeZen && id == "big-pickle")
+    }
+
     /// The protocol-specific inference endpoint for an OpenCode model. The
     /// legacy `/zen/...` completion paths reject Bearer auth for Messages and
     /// Gemini, so completions always use `/inference/...`. Model lists stay

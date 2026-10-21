@@ -266,11 +266,8 @@ struct ModelSelectionPopover: View {
     private var modelsForSelectedProvider: [String] {
         var models = getModelsForProvider(selectedProvider)
 
-        // Filter free models for OpenRouter if toggled
-        if showFreeOnly && selectedProvider == .openRouter {
-            let catalogModels = modelCatalog.cachedModels(for: selectedProvider)
-            let freeIds = Set(catalogModels.filter { $0.isFree }.map { $0.id })
-            models = models.filter { freeIds.contains($0) }
+        if showFreeOnly && supportsFreeFilter {
+            models = models.filter(isModelFree)
         }
 
         // Filter Codex (subscription) models for OpenAI if toggled
@@ -285,8 +282,17 @@ struct ModelSelectionPopover: View {
         return showAllModels || !debouncedSearchText.isEmpty ? models : Array(models.prefix(10))
     }
 
-    /// Returns whether a model ID is free (for badge display)
+    /// Providers whose catalogs identify free models, enabling the Free toggle and badge.
+    private var supportsFreeFilter: Bool {
+        switch selectedProvider {
+        case .openRouter, .openCodeZen, .openCodeGo: return true
+        default: return false
+        }
+    }
+
+    /// Returns whether a model ID is free, for the Free toggle and badge.
     private func isModelFree(_ modelId: String) -> Bool {
+        if selectedProvider.isOpenCodeFreeModel(modelId) { return true }
         let catalogModels = modelCatalog.cachedModels(for: selectedProvider)
         return catalogModels.first(where: { $0.id == modelId })?.isFree ?? false
     }
@@ -596,7 +602,7 @@ struct ModelSelectionPopover: View {
 
                 Spacer()
 
-                if selectedProvider == .openRouter {
+                if supportsFreeFilter {
                     HStack(spacing: 4) {
                         Text("Free")
                             .font(.system(size: 10))
@@ -746,7 +752,7 @@ struct ModelSelectionPopover: View {
                     .fixedSize()
                 }
 
-                if selectedProvider == .openRouter && isModelFree(model) {
+                if supportsFreeFilter && isModelFree(model) {
                     Text("Free")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundColor(selectedModel == model ? .white : .green)
