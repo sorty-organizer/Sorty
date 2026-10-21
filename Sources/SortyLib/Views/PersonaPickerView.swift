@@ -37,31 +37,7 @@ struct PersonaPickerView: View {
                     .foregroundColor(.secondary)
             }
 
-            LazyVGrid(columns: personaGridColumns, spacing: 8) {
-                ForEach(PersonaType.allCases, id: \.self) { persona in
-                    PersonaButton(
-                        persona: persona,
-                        isSelected: personaManager.selectedPersona == persona
-                            && personaManager.selectedCustomPersonaId == nil,
-                        isHovering: hoveringPersona == persona
-                    ) {
-                        saveChangesIfNeeded()
-                        withAnimation(.spring(response: 0.3)) {
-                            personaManager.selectPersona(persona)
-                            updateLocalPrompt()
-                        }
-                        AnalyticsManager.shared.capturePersonaInventory(
-                            action: "persona_selected",
-                            customPersonaCount: customStore.customPersonas.count,
-                            selectionKind: "built_in"
-                        )
-                    }
-                    .onHover { hovering in
-                        hoveringPersona = hovering ? persona : nil
-                    }
-                }
-            }
-
+            builtInPersonaGrid
             if !customStore.customPersonas.isEmpty {
                 Divider()
 
@@ -597,6 +573,33 @@ struct PersonaPickerView: View {
             repeating: GridItem(.flexible(minimum: 10, maximum: .infinity), spacing: 8),
             count: columnCount
         )
+    }
+
+    private var builtInPersonaGrid: some View {
+        LazyVGrid(columns: personaGridColumns, spacing: 8) {
+            ForEach(PersonaType.allCases, id: \.self) { persona in
+                PersonaButton(
+                    persona: persona,
+                    isSelected: personaManager.selectedPersona == persona
+                        && personaManager.selectedCustomPersonaId == nil,
+                    isHovering: hoveringPersona == persona
+                ) {
+                    saveChangesIfNeeded()
+                    withAnimation(.spring(response: 0.3)) {
+                        personaManager.selectPersona(persona)
+                        updateLocalPrompt()
+                    }
+                    AnalyticsManager.shared.capturePersonaInventory(
+                        action: "persona_selected",
+                        customPersonaCount: customStore.customPersonas.count,
+                        selectionKind: "built_in"
+                    )
+                }
+                .onHover { hovering in
+                    hoveringPersona = hovering ? persona : nil
+                }
+            }
+        }
     }
 }
 

@@ -135,33 +135,37 @@ struct TimelineSliderTrack: View {
                     let xPosition = entries.count > 1 ? nodeSpacing * CGFloat(index) : width / 2
                     let magnitude = Double(entry.filesOrganized) / Double(max(1, maxFiles))
                     
-                    Button {
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.3)) {
-                            selectedIndex = index
-                        }
-                    } label: {
-                        TimelineNode(
-                            entry: entry,
-                            isSelected: index == selectedIndex,
-                            isHovered: hoverIndex == index,
-                            magnitude: magnitude
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
-                    .onHover { hovering in
-                        hoverIndex = hovering ? index : nil
-                    }
-                    .accessibilityLabel(entry.timestamp.formatted(date: .long, time: .shortened))
-                    .accessibilityValue(index == selectedIndex ? "Selected" : "Not selected")
-                    .accessibilityAddTraits(index == selectedIndex ? .isSelected : [])
+                    timelineNodeButton(index: index, entry: entry, magnitude: magnitude)
                     .position(x: xPosition, y: geo.size.height / 2)
                 }
             }
         }
         .frame(height: 44)
         .padding(.horizontal, 22)
+    }
+
+    private func timelineNodeButton(index: Int, entry: OrganizationHistoryEntry, magnitude: Double) -> some View {
+        Button {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.3)) {
+                selectedIndex = index
+            }
+        } label: {
+            TimelineNode(
+                entry: entry,
+                isSelected: index == selectedIndex,
+                isHovered: hoverIndex == index,
+                magnitude: magnitude
+            )
+        }
+        .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            hoverIndex = hovering ? index : nil
+        }
+        .accessibilityLabel(entry.timestamp.formatted(date: .long, time: .shortened))
+        .accessibilityValue(index == selectedIndex ? "Selected" : "Not selected")
+        .accessibilityAddTraits(index == selectedIndex ? .isSelected : [])
     }
 }
 
