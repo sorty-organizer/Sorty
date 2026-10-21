@@ -109,9 +109,7 @@ struct OnboardingProviderRow: View {
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(
-                    isSelected
-                        ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12)
-                        : (isHovering ? Color.primary.opacity(0.05) : Color.clear)
+                    backgroundColor
                 )
         )
         .overlay(
@@ -193,4 +191,8 @@ struct OnboardingProviderRow: View {
         .blur(radius: isBlockedByInternetPrivacy ? 2 : 0)
         .contentShape(Rectangle())
     }
+    private var backgroundColor: Color {
+        isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : (isHovering ? Color.primary.opacity(0.05) : Color.clear)
+    }
+
 }

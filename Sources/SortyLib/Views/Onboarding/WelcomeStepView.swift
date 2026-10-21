@@ -47,20 +47,7 @@ public struct WelcomeStepView: View {
 
             // Floating particles (appear after reveal). Size and lane are
             // seeded from the index so parent re-renders never re-randomize them.
-            if showParticles {
-                ZStack {
-                    ForEach(0..<7, id: \.self) { i in
-                        FloatingParticle(
-                            delay: Double(i) * 0.4,
-                            size: 3 + CGFloat((i * 37 + 11) % 30) / 10,
-                            xPosition: CGFloat((i * 137 + 43) % 400) - 200
-                        )
-                    }
-                }
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
-
+            welcomeParticles
             // Content
             welcomeContent
         }
@@ -269,6 +256,31 @@ public struct WelcomeStepView: View {
         }
         .frame(maxWidth: 460)
         .padding(.horizontal, 40)
+    }
+
+    private func particleSize(for index: Int) -> CGFloat {
+        3 + CGFloat((index * 37 + 11) % 30) / 10
+    }
+
+    private func particleXPosition(for index: Int) -> CGFloat {
+        CGFloat((index * 137 + 43) % 400) - 200
+    }
+
+    @ViewBuilder
+    private var welcomeParticles: some View {
+        if showParticles {
+            ZStack {
+                ForEach(0..<7, id: \.self) { i in
+                    FloatingParticle(
+                        delay: Double(i) * 0.4,
+                        size: particleSize(for: i),
+                        xPosition: particleXPosition(for: i)
+                    )
+                }
+            }
+            .allowsHitTesting(false)
+            .transition(.opacity)
+        }
     }
 }
 

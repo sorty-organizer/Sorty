@@ -94,62 +94,7 @@ struct HUDNotificationCard: View {
     }
     
     var body: some View {
-        HStack(spacing: 10) {
-            Capsule(style: .continuous)
-                .fill(notification.iconColor)
-                .frame(width: 3)
-                .padding(.vertical, 10)
-
-            VStack(alignment: .leading, spacing: 10) {
-                HUDNotificationHeader(
-                    notification: notification,
-                    isHovered: isHovered,
-                    showsInlineAction: usesInlineAction,
-                    onDismiss: onDismiss
-                )
-
-                if !usesInlineAction, !notification.actions.isEmpty {
-                    HUDNotificationActionGrid(actions: notification.actions)
-                }
-
-                if queuedCount > 0 {
-                    HUDNotificationQueueControls(
-                        summary: queuedSummary,
-                        queuedCount: queuedCount,
-                        onShowNext: onShowNext,
-                        onDismissAll: onDismissAll
-                    )
-                }
-            }
-            .padding(.trailing, 12)
-            .padding(.vertical, 10)
-        }
-        .padding(.leading, 12)
-        .frame(width: 420)
-        .fixedSize(horizontal: false, vertical: true)
-        // Single glass surface: hudFallbackBackground already applies the
-        // sanctioned liquid-glass background (or a solid fallback when
-        // transparency is reduced). A second glass layer here doubles the
-        // backdrop sampling cost and draws a visible inner edge.
-        .hudFallbackBackground(cornerRadius: 14)
-        .overlay(alignment: .bottom) {
-            if !notification.isPersistent {
-                HUDNotificationProgress(
-                    color: notification.iconColor,
-                    remaining: progressRemaining
-                )
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(
-                    Color.white.opacity(0.18),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: notification.iconColor.opacity(0.12), radius: 12, x: 0, y: 6)
-        .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
+        notificationContent
         .onHover { hovering in
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
                 isHovered = hovering
@@ -206,6 +151,65 @@ struct HUDNotificationCard: View {
             return "Opens the notification"
         }
         return notification.isPersistent ? "" : "Dismisses the notification"
+    }
+
+    private var notificationContent: some View {
+        HStack(spacing: 10) {
+            Capsule(style: .continuous)
+                .fill(notification.iconColor)
+                .frame(width: 3)
+                .padding(.vertical, 10)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HUDNotificationHeader(
+                    notification: notification,
+                    isHovered: isHovered,
+                    showsInlineAction: usesInlineAction,
+                    onDismiss: onDismiss
+                )
+
+                if !usesInlineAction, !notification.actions.isEmpty {
+                    HUDNotificationActionGrid(actions: notification.actions)
+                }
+
+                if queuedCount > 0 {
+                    HUDNotificationQueueControls(
+                        summary: queuedSummary,
+                        queuedCount: queuedCount,
+                        onShowNext: onShowNext,
+                        onDismissAll: onDismissAll
+                    )
+                }
+            }
+            .padding(.trailing, 12)
+            .padding(.vertical, 10)
+        }
+        .padding(.leading, 12)
+        .frame(width: 420)
+        .fixedSize(horizontal: false, vertical: true)
+        // Single glass surface: hudFallbackBackground already applies the
+        // sanctioned liquid-glass background (or a solid fallback when
+        // transparency is reduced). A second glass layer here doubles the
+        // backdrop sampling cost and draws a visible inner edge.
+        .hudFallbackBackground(cornerRadius: 14)
+        .overlay(alignment: .bottom) {
+            if !notification.isPersistent {
+                HUDNotificationProgress(
+                    color: notification.iconColor,
+                    remaining: progressRemaining
+                )
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(
+                    Color.white.opacity(0.18),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: notification.iconColor.opacity(0.12), radius: 12, x: 0, y: 6)
+        .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
     }
 }
 

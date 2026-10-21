@@ -63,31 +63,7 @@ struct PreviewActionsView: View {
             HapticFeedbackManager.shared.selection()
             showEditsCapturedPopover.toggle()
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "pencil.and.outline")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.green)
-                
-                Text("\(editsCapturedCount)")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.green)
-                    .numericTextTransition(animationValue: editsCapturedCount)
-                Text(editsCapturedCount == 1 ? "edit" : "edits")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.green.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.green.opacity(0.2), lineWidth: 1)
-                    )
-            )
-            .scaleEffect(editsPulse ? 1.08 : (isHoveringEditsCaptured ? 1.02 : 1.0))
-            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: editsPulse)
+            editsBadgeLabel
         }
         .buttonStyle(.plain)
         .onHover { hovering in
@@ -260,6 +236,34 @@ struct PreviewActionsView: View {
         .accessibilityLabel("Apply this \(mode.gerund) plan to your files")
         .accessibilityHint(mode == .renameOnly ? "This action renames files and can be undone from history" : "This action moves files and is not easily undone")
     }
+
+    private var editsBadgeLabel: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "pencil.and.outline")
+                .font(.system(size: 10))
+                .foregroundStyle(.green)
+
+            Text("\(editsCapturedCount)")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.green)
+                .numericTextTransition(animationValue: editsCapturedCount)
+            Text(editsCapturedCount == 1 ? "edit" : "edits")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.green.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .scaleEffect(editsPulse ? 1.08 : (isHoveringEditsCaptured ? 1.02 : 1.0))
+        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: editsPulse)
+    }
 }
 
 // MARK: - Progress Actions View (shown during organization)
@@ -376,33 +380,37 @@ private struct PreviewProgressControls: View {
                 .numericTextTransition(animationValue: progress)
                 .help("Organization progress")
 
-            Button(action: onCancel) {
-                HStack(spacing: 4) {
-                    Image(systemName: "xmark.octagon.fill")
-                        .font(.caption)
-                    Text("Stop")
-                        .font(.caption.weight(.medium))
-                }
-                .foregroundColor(.red)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(Color.red.opacity(0.1))
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(Color.red.opacity(0.3), lineWidth: 1)
-                        )
-                )
-                .contentShape(Capsule(style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut(.cancelAction)
-            .keyboardShortcut(".", modifiers: .command)
-            .accessibilityIdentifier("CancelOrganizationProgressButton")
-            .accessibilityLabel("Stop organization")
-            .accessibilityHint("Press Command+Period to stop the organization")
+            cancelButton
         }
+    }
+
+    private var cancelButton: some View {
+        Button(action: onCancel) {
+            HStack(spacing: 4) {
+                Image(systemName: "xmark.octagon.fill")
+                    .font(.caption)
+                Text("Stop")
+                    .font(.caption.weight(.medium))
+            }
+            .foregroundColor(.red)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.red.opacity(0.1))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                    )
+            )
+            .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut(.cancelAction)
+        .keyboardShortcut(".", modifiers: .command)
+        .accessibilityIdentifier("CancelOrganizationProgressButton")
+        .accessibilityLabel("Stop organization")
+        .accessibilityHint("Press Command+Period to stop the organization")
     }
 }
 
