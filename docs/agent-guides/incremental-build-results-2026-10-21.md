@@ -1,5 +1,7 @@
 # Incremental compilation measurements, October 21, 2026
 
+For the final repeated before/after comparison, see [Repeated build-speed comparison](build-speed-comparison-2026-10-21.md). Sections below retain earlier intermediate measurements; the Findings and limits section predates the module split.
+
 Measured on Apple Swift 6.2.4, arm64, Debug, macOS 15 deployment target. Most probe rows were captured at `afb6a1e4`; the final command-menu row was captured at `9eb0cb3c` after reverting the Help extraction. These are local compiler measurements, not hosted CI or runtime validation.
 
 ## Method
