@@ -181,11 +181,10 @@ struct DirectorySelectionView: View {
         .accessibilityLabel("Organization mode")
     }
 
-    private var dropZone: some View {
+    private var dropZoneContent: some View {
         let dropZoneHeight: CGFloat = settingsViewModel.config.enableSmartRename ? 140 : 150
-        let dropZoneCornerRadius: CGFloat = 16
         let folderAccent = SortyDesignSystem.Colors.resolvedAccent
-        let dropZoneContent = VStack(spacing: 14) {
+        return VStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(isTargeted ? folderAccent.opacity(0.16) : folderAccent.opacity(0.08))
@@ -208,7 +207,10 @@ struct DirectorySelectionView: View {
                 .numericTextTransition(animationValue: isTargeted)
         }
         .frame(width: 220, height: dropZoneHeight)
+    }
 
+    private var dropZone: some View {
+        let dropZoneCornerRadius: CGFloat = 16
         return Button {
             HapticFeedbackManager.shared.tap()
             selectDirectory()
