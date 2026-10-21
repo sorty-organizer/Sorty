@@ -68,6 +68,7 @@ var packageProducts: [Product] = [
     .library(name: "SortyFS", targets: ["SortyFS"]),
     .library(name: "SortyOrganizer", targets: ["SortyOrganizer"]),
     .library(name: "SortyCore", targets: ["SortyCore"]),
+    .library(name: "SortyUI", targets: ["SortyUI"]),
     .library(
         name: "SortyLib",
         targets: ["SortyLib"]),
@@ -122,9 +123,19 @@ var packageTargets: [Target] = [
         swiftSettings: sortyLibSwiftSettings,
         linkerSettings: sortyLinkerSettings
     ),
+    // SortyLib is split into several UI modules so editing one view only
+    // re-emits that module's interface instead of all 69k lines of SwiftUI.
+    // SortyUI holds shared components and AppState; SortyLib is the app shell.
+    .target(
+        name: "SortyUI",
+        dependencies: ["SortyCore"] + sortyLibDependencies,
+        path: "Sources/SortyUI",
+        swiftSettings: sortyLibSwiftSettings,
+        linkerSettings: sortyLinkerSettings
+    ),
     .target(
         name: "SortyLib",
-        dependencies: ["SortyCore"] + sortyLibDependencies,
+        dependencies: ["SortyCore", "SortyUI"] + sortyLibDependencies,
         path: "Sources/SortyLib",
         resources: [
             // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation
