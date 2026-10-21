@@ -202,6 +202,9 @@ Use `make build-profile` for a separate profiling cache, or
 large SwiftUI expressions into views with explicit inputs when diagnostics
 identify a hotspot. Moving code to another file alone does not prove faster builds.
 
+The [October 21 incremental measurements](incremental-build-results-2026-10-21.md)
+record the view splits, type-checking results, per-file timings, and remaining regressions.
+
 Hosted caches separate dependency downloads, incremental outputs, and Xcode's
 compilation result store. Dependencies use manifest/lockfile keys and are saved
 only after successful compilation. Completed output snapshots include the toolchain, workspace path, commit, and
