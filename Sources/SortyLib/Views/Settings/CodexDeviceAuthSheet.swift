@@ -99,38 +99,7 @@ struct CodexDeviceAuthSheet: View {
             }
 
             CodexDeviceAuthStep(number: 3, title: "Paste this device code when OpenAI asks for it:") {
-                Button(action: onCopyCode) {
-                    HStack(spacing: 12) {
-                        Text(userCode)
-                            .font(.title2.monospaced().weight(.bold))
-                            .tracking(3)
-                            .frame(minWidth: 190, alignment: .leading)
-
-                        Spacer(minLength: 10)
-
-                        Label(isCodeCopied ? "Copied" : "Copy", systemImage: isCodeCopied ? "checkmark.circle.fill" : "doc.on.doc")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(isCodeCopied ? .green : .secondary)
-                            .symbolReplaceTransition(animationValue: isCodeCopied)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(isCodeCopied ? Color.green.opacity(0.10) : Color.clear)
-                }
-                .systemLiquidGlassBackground(cornerRadius: 12)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(isCodeCopied ? Color.green.opacity(0.42) : Color.primary.opacity(0.08), lineWidth: 1)
-                }
-                .scaleEffect(isCodeCopied && !reduceMotion ? 1.015 : 1)
-                .disabled(session?.userCode == nil)
-                .help("Copy device code")
-                .accessibilityLabel(isCodeCopied ? "Device code copied" : "Copy device code")
+                deviceCodeButton
             }
 
             CodexDeviceAuthStep(number: 4, title: "Continue to finish approval.") {
@@ -143,6 +112,45 @@ struct CodexDeviceAuthSheet: View {
                 )
             }
         }
+    }
+
+    private var deviceCodeLabel: some View {
+        HStack(spacing: 12) {
+            Text(userCode)
+                .font(.title2.monospaced().weight(.bold))
+                .tracking(3)
+                .frame(minWidth: 190, alignment: .leading)
+
+            Spacer(minLength: 10)
+
+            Label(isCodeCopied ? "Copied" : "Copy", systemImage: isCodeCopied ? "checkmark.circle.fill" : "doc.on.doc")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isCodeCopied ? .green : .secondary)
+                .symbolReplaceTransition(animationValue: isCodeCopied)
+        }
+        .frame(maxWidth: .infinity, minHeight: 44)
+    }
+
+    private var deviceCodeButton: some View {
+        Button(action: onCopyCode) {
+            deviceCodeLabel
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(isCodeCopied ? Color.green.opacity(0.10) : Color.clear)
+        }
+        .systemLiquidGlassBackground(cornerRadius: 12)
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(isCodeCopied ? Color.green.opacity(0.42) : Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .scaleEffect(isCodeCopied && !reduceMotion ? 1.015 : 1)
+        .disabled(session?.userCode == nil)
+        .help("Copy device code")
+        .accessibilityLabel(isCodeCopied ? "Device code copied" : "Copy device code")
     }
 }
 

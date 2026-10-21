@@ -254,15 +254,19 @@ struct PreviewActionsView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.green.opacity(0.1))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.green.opacity(0.2), lineWidth: 1)
-                )
+            editsBadgeBackground
         )
         .scaleEffect(editsPulse ? 1.08 : (isHoveringEditsCaptured ? 1.02 : 1.0))
         .animation(.spring(response: 0.25, dampingFraction: 0.6), value: editsPulse)
+    }
+
+    private var editsBadgeBackground: some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(Color.green.opacity(0.1))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.green.opacity(0.2), lineWidth: 1)
+            )
     }
 }
 
@@ -386,24 +390,7 @@ private struct PreviewProgressControls: View {
 
     private var cancelButton: some View {
         Button(action: onCancel) {
-            HStack(spacing: 4) {
-                Image(systemName: "xmark.octagon.fill")
-                    .font(.caption)
-                Text("Stop")
-                    .font(.caption.weight(.medium))
-            }
-            .foregroundColor(.red)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(Color.red.opacity(0.1))
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(Color.red.opacity(0.3), lineWidth: 1)
-                    )
-            )
-            .contentShape(Capsule(style: .continuous))
+            cancelButtonLabel
         }
         .buttonStyle(.plain)
         .keyboardShortcut(.cancelAction)
@@ -411,6 +398,27 @@ private struct PreviewProgressControls: View {
         .accessibilityIdentifier("CancelOrganizationProgressButton")
         .accessibilityLabel("Stop organization")
         .accessibilityHint("Press Command+Period to stop the organization")
+    }
+
+    private var cancelButtonLabel: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "xmark.octagon.fill")
+                .font(.caption)
+            Text("Stop")
+                .font(.caption.weight(.medium))
+        }
+        .foregroundColor(.red)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.red.opacity(0.1))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .contentShape(Capsule(style: .continuous))
     }
 }
 

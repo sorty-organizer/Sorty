@@ -164,35 +164,7 @@ extension SkillSetupView {
     private var reviewStep: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 16) {
-                    Label("Install location", systemImage: "folder").font(headingFont)
-                    PrivacySensitivePathText(path: installer.destinationURL.path)
-                        .font(supportingFont.monospaced())
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Divider()
-                    ForEach(SkillImportOption.Section.allCases, id: \.self) { section in
-                        let rows = selectedOptions.filter { $0.section == section }
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Label(section.rawValue, systemImage: section.icon).font(headingFont)
-                                Spacer()
-                                Text(rows.isEmpty ? "None selected" : "\(rows.count) selected")
-                                    .contentTransition(reduceMotion ? .identity : .numericText(value: Double(rows.count)))
-                                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: rows.count)
-                                    .font(supportingFont).foregroundStyle(.secondary)
-                            }
-                            if !rows.isEmpty {
-                                Text(rows.map(\.title).joined(separator: ", "))
-                                    .font(supportingFont).foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(18)
-                .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
+                reviewSummary
                 Text(installer.state == .conflict
                      ? "A different Sorty skill is already here. You'll be asked to confirm its replacement."
                      : selected.isEmpty
@@ -250,5 +222,37 @@ extension SkillSetupView {
         }
         .frame(maxWidth: 600)
         .padding(.vertical, 8)
+    }
+
+    private var reviewSummary: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label("Install location", systemImage: "folder").font(headingFont)
+            PrivacySensitivePathText(path: installer.destinationURL.path)
+                .font(supportingFont.monospaced())
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            Divider()
+            ForEach(SkillImportOption.Section.allCases, id: \.self) { section in
+                let rows = selectedOptions.filter { $0.section == section }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Label(section.rawValue, systemImage: section.icon).font(headingFont)
+                        Spacer()
+                        Text(rows.isEmpty ? "None selected" : "\(rows.count) selected")
+                            .contentTransition(reduceMotion ? .identity : .numericText(value: Double(rows.count)))
+                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: rows.count)
+                            .font(supportingFont).foregroundStyle(.secondary)
+                    }
+                    if !rows.isEmpty {
+                        Text(rows.map(\.title).joined(separator: ", "))
+                            .font(supportingFont).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
     }
 }

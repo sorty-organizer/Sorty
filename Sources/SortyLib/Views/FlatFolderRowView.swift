@@ -102,34 +102,7 @@ struct FlatFolderRowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                FlatFolderRowHeaderContent(
-                    folderName: suggestion.folderName,
-                    fileCount: fileCount,
-                    isExpanded: isExpanded,
-                    isDropTarget: isDropTarget,
-                    reduceMotion: reduceMotion
-                )
-
-                if isStorageDestination {
-                    storageLocationDropdown
-                }
-
-                if !folderTags.isEmpty {
-                    TagDotsView(tags: folderTags)
-                }
-
-                if let comment = folderComment, !comment.isEmpty {
-                    CommentBubbleButton(comment: comment)
-                }
-                
-                Spacer()
-                
-                LiquidGlassReasoningButton(
-                    suggestion: suggestion,
-                    learningsManager: learningsManager
-                )
-            }
+            folderHeader
             .padding(.leading, CGFloat(depth * 16))
             .padding(.vertical, 4)
             .contentShape(Rectangle())
@@ -268,6 +241,37 @@ struct FlatFolderRowView: View {
             onPlanChanged()
         case .failure(let error):
             storageLocationPickerErrorMessage = error.localizedDescription
+        }
+    }
+
+    private var folderHeader: some View {
+        HStack {
+            FlatFolderRowHeaderContent(
+                folderName: suggestion.folderName,
+                fileCount: fileCount,
+                isExpanded: isExpanded,
+                isDropTarget: isDropTarget,
+                reduceMotion: reduceMotion
+            )
+
+            if isStorageDestination {
+                storageLocationDropdown
+            }
+
+            if !folderTags.isEmpty {
+                TagDotsView(tags: folderTags)
+            }
+
+            if let comment = folderComment, !comment.isEmpty {
+                CommentBubbleButton(comment: comment)
+            }
+
+            Spacer()
+
+            LiquidGlassReasoningButton(
+                suggestion: suggestion,
+                learningsManager: learningsManager
+            )
         }
     }
 }

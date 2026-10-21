@@ -72,47 +72,148 @@ public struct ProviderSelectionStepView: View {
     }
 
     public var body: some View {
+        providerContent
+        .onAppear {
+            synchronizeInputDrafts()
+            hasAppeared = true
+            scheduleInitialProviderRefresh()
+        }
+        .onChange(of: settingsViewModel.config.provider) { _, newProvider in
+            taskController.testDebounceTask?.cancel()
+            taskController.connectionTestTask?.cancel()
+            taskController.testDebounceTask = nil
+            taskController.connectionTestTask = nil
+            taskController.initialProviderRefreshTask?.cancel()
+            taskController.initialProviderRefreshTask = nil
+            taskController.apiKeyCommitTask?.cancel()
+            taskController.apiURLCommitTask?.cancel()
+            taskController.apiKeyCommitTask = nil
+            taskController.apiURLCommitTask = nil
+            synchronizeInputDrafts()
+            if newProvider == .openAI {
+                codexAuth.checkStatus()
+            }
+            if newProvider == .appleFoundationModel {
+                settingsViewModel.refreshAppleModelStatus()
+            }
+        }
+        .onChange(of: settingsViewModel.config.openCodeAuthSources) { _, _ in
+            resetConnectionVerification()
+        }
+        .onChange(of: settingsViewModel.config.apiKey) { _, apiKey in
+            if settingsViewModel.config.usesConnectedOpenCodeCredentials(for: settingsViewModel.config.provider) {
+                resetConnectionVerification()
+            } else {
+                scheduleConnectionTest()
+            }
+            guard taskController.apiKeyCommitTask == nil else { return }
+            let value = apiKey ?? ""
+            if apiKeyDraft != value {
+                apiKeyDraft = value
+            }
+        }
+        .onDisappear {
+            commitInputDrafts()
+            taskController.initialProviderRefreshTask?.cancel()
+            taskController.initialProviderRefreshTask = nil
+            taskController.apiKeyCommitTask?.cancel()
+            taskController.apiKeyCommitTask = nil
+            taskController.apiURLCommitTask?.cancel()
+            taskController.apiURLCommitTask = nil
+            taskController.testDebounceTask?.cancel()
+            taskController.testDebounceTask = nil
+            taskController.connectionTestTask?.cancel()
+            taskController.connectionTestTask = nil
+            taskController.codexTerminalResetTask?.cancel()
+            taskController.codexTerminalResetTask = nil
+            taskController.codexVerifyResetTask?.cancel()
+            taskController.codexVerifyResetTask = nil
+        }
+        .task(id: readinessInputs) {
+            let inputs = readinessInputs
+            let snapshot = await Task.detached(priority: .utility) {
+                Self.resolveReadiness(from: inputs)
+            }.value
+            guard !Task.isCancelled else { return }
+            if readinessSnapshot != snapshot {
+                readinessSnapshot = snapshot
+            }
+            onSetupStatusChange?(snapshot.setupStatus)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Provider Selection Step")
+        .modelSelectionOverlay(
+            isPresented: $isShowingModelPopover,
+            currentProvider: settingsViewModel.config.provider,
+            currentModel: settingsViewModel.config.model,
+            contextMessage: "Choose the provider and model Sorty will use for organization.",
+            reasoningEffortForModel: { provider, model in
+                settingsViewModel.config.reasoningEffort(for: provider, model: model)
+            },
+            onSelectReasoningEffort: { provider, model, effort in
+                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
+            },
+            onSelect: { provider, model, authMethod in
+                commitInputDrafts()
+                settingsViewModel.config.provider = provider
+                settingsViewModel.config.model = model
+                if provider == .openAI, supportsSubscriptionAuthUI, let desired = authMethod {
+                    if desired != settingsViewModel.config.authMethod(for: .openAI) {
+                        setAuthMethod(desired)
+                    }
+                }
+            },
+            isSubscriptionSelected: settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) == .accountSignIn
+        )
+    }
+
+
+    private var providerIntroduction: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 14) {
+                ProviderLogoView(provider: settingsViewModel.config.provider, size: 54)
+                    .padding(12)
+                    .systemLiquidGlassBackground(cornerRadius: 18)
+
+                Text("Choose your AI")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+
+                Text("Sorty sends file names and metadata to the provider you pick. File contents stay on your Mac unless you enable Deep Scan.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    PrivacyFeatureRow(icon: "doc.text", text: "File names and metadata sent to selected AI provider")
+                    PrivacyFeatureRow(icon: "folder", text: "File contents stay local (unless Deep Scan is enabled)")
+                    PrivacyFeatureRow(icon: "arrow.uturn.backward", text: "All changes are reversible")
+                    PrivacyFeatureRow(icon: "server.rack", text: "Local and on-device options available")
+                }
+                .padding(.top, 8)
+            }
+            .frame(maxWidth: 350)
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(x: hasAppeared ? 0 : -20)
+            .animation(
+                reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.1),
+                value: hasAppeared
+            )
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.leading, 72)
+    }
+
+    @ViewBuilder
+    private var providerContent: some View {
         let setupStatus = readinessSnapshot.setupStatus
         let canTest = readinessSnapshot.canTestConnection
 
         HStack(spacing: 34) {
-            VStack(alignment: .leading, spacing: 22) {
-                Spacer()
-
-                VStack(alignment: .leading, spacing: 14) {
-                    ProviderLogoView(provider: settingsViewModel.config.provider, size: 54)
-                        .padding(12)
-                        .systemLiquidGlassBackground(cornerRadius: 18)
-
-                    Text("Choose your AI")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-
-                    Text("Sorty sends file names and metadata to the provider you pick. File contents stay on your Mac unless you enable Deep Scan.")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        PrivacyFeatureRow(icon: "doc.text", text: "File names and metadata sent to selected AI provider")
-                        PrivacyFeatureRow(icon: "folder", text: "File contents stay local (unless Deep Scan is enabled)")
-                        PrivacyFeatureRow(icon: "arrow.uturn.backward", text: "All changes are reversible")
-                        PrivacyFeatureRow(icon: "server.rack", text: "Local and on-device options available")
-                    }
-                    .padding(.top, 8)
-                }
-                .frame(maxWidth: 350)
-                .opacity(hasAppeared ? 1 : 0)
-                .offset(x: hasAppeared ? 0 : -20)
-                .animation(
-                    reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.1),
-                    value: hasAppeared
-                )
-
-                Spacer()
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.leading, 72)
-
+            providerIntroduction
             // This pane can exceed the minimum onboarding height for providers
             // with multi-step setup. Keep overflow local to the pane so the
             // whole-step layout still receives a finite height proposal.
@@ -209,100 +310,7 @@ public struct ProviderSelectionStepView: View {
                 value: settingsViewModel.config.provider
             )
         }
-        .onAppear {
-            synchronizeInputDrafts()
-            hasAppeared = true
-            scheduleInitialProviderRefresh()
-        }
-        .onChange(of: settingsViewModel.config.provider) { _, newProvider in
-            taskController.testDebounceTask?.cancel()
-            taskController.connectionTestTask?.cancel()
-            taskController.testDebounceTask = nil
-            taskController.connectionTestTask = nil
-            taskController.initialProviderRefreshTask?.cancel()
-            taskController.initialProviderRefreshTask = nil
-            taskController.apiKeyCommitTask?.cancel()
-            taskController.apiURLCommitTask?.cancel()
-            taskController.apiKeyCommitTask = nil
-            taskController.apiURLCommitTask = nil
-            synchronizeInputDrafts()
-            if newProvider == .openAI {
-                codexAuth.checkStatus()
-            }
-            if newProvider == .appleFoundationModel {
-                settingsViewModel.refreshAppleModelStatus()
-            }
-        }
-        .onChange(of: settingsViewModel.config.openCodeAuthSources) { _, _ in
-            resetConnectionVerification()
-        }
-        .onChange(of: settingsViewModel.config.apiKey) { _, apiKey in
-            if settingsViewModel.config.usesConnectedOpenCodeCredentials(for: settingsViewModel.config.provider) {
-                resetConnectionVerification()
-            } else {
-                scheduleConnectionTest()
-            }
-            guard taskController.apiKeyCommitTask == nil else { return }
-            let value = apiKey ?? ""
-            if apiKeyDraft != value {
-                apiKeyDraft = value
-            }
-        }
-        .onDisappear {
-            commitInputDrafts()
-            taskController.initialProviderRefreshTask?.cancel()
-            taskController.initialProviderRefreshTask = nil
-            taskController.apiKeyCommitTask?.cancel()
-            taskController.apiKeyCommitTask = nil
-            taskController.apiURLCommitTask?.cancel()
-            taskController.apiURLCommitTask = nil
-            taskController.testDebounceTask?.cancel()
-            taskController.testDebounceTask = nil
-            taskController.connectionTestTask?.cancel()
-            taskController.connectionTestTask = nil
-            taskController.codexTerminalResetTask?.cancel()
-            taskController.codexTerminalResetTask = nil
-            taskController.codexVerifyResetTask?.cancel()
-            taskController.codexVerifyResetTask = nil
-        }
-        .task(id: readinessInputs) {
-            let inputs = readinessInputs
-            let snapshot = await Task.detached(priority: .utility) {
-                Self.resolveReadiness(from: inputs)
-            }.value
-            guard !Task.isCancelled else { return }
-            if readinessSnapshot != snapshot {
-                readinessSnapshot = snapshot
-            }
-            onSetupStatusChange?(snapshot.setupStatus)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Provider Selection Step")
-        .modelSelectionOverlay(
-            isPresented: $isShowingModelPopover,
-            currentProvider: settingsViewModel.config.provider,
-            currentModel: settingsViewModel.config.model,
-            contextMessage: "Choose the provider and model Sorty will use for organization.",
-            reasoningEffortForModel: { provider, model in
-                settingsViewModel.config.reasoningEffort(for: provider, model: model)
-            },
-            onSelectReasoningEffort: { provider, model, effort in
-                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
-            },
-            onSelect: { provider, model, authMethod in
-                commitInputDrafts()
-                settingsViewModel.config.provider = provider
-                settingsViewModel.config.model = model
-                if provider == .openAI, supportsSubscriptionAuthUI, let desired = authMethod {
-                    if desired != settingsViewModel.config.authMethod(for: .openAI) {
-                        setAuthMethod(desired)
-                    }
-                }
-            },
-            isSubscriptionSelected: settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) == .accountSignIn
-        )
     }
-
 }
 // MARK: - Preview
 

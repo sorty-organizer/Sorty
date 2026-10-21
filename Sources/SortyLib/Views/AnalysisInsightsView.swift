@@ -36,136 +36,7 @@ struct InsightHistorySection: View {
                     viewState.isExpanded.toggle()
                 }
             } label: {
-                HStack(spacing: 8) {
-                    if isActive {
-                        BreatheWaveformIcon()
-                    } else {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.callout)
-                            .foregroundStyle(.green)
-                    }
-
-                    Text(headerTitle)
-                        .font(.callout)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.primary)
-                        .numericTextTransition(
-                            animationValue: headerTitle,
-                            animation: .easeInOut(duration: 0.28)
-                        )
-
-                    Spacer()
-
-                    let insightCount = insights.history.count
-                    if insightCount > 0 {
-                        Text("\(insightCount)")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
-                            .numericTextTransition(animationValue: insightCount)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(SortyDesignSystem.Colors.resolvedAccent))
-                    }
-
-                    if FeatureFlags.privacyModeEnabled && !hidePrivacyWarning {
-                        Button {
-                            showPrivacyWarning.toggle()
-                        } label: {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Privacy warning for live AI insights")
-                        .accessibilityIdentifier("LiveInsightsPrivacyWarningButton")
-                        .popover(isPresented: $showPrivacyWarning, arrowEdge: .top) {
-                            VStack(alignment: .leading, spacing: 10) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .foregroundStyle(.orange)
-                                    Text("Privacy Warning")
-                                        .font(.headline)
-
-                                    Spacer()
-
-                                    Button {
-                                        hidePrivacyWarning = true
-                                        showPrivacyWarning = false
-                                    } label: {
-                                        Image(systemName: "xmark")
-                                    }
-                                    .buttonStyle(.plain)
-                                    .frame(width: 24, height: 24)
-                                    .contentShape(Rectangle())
-                                    .accessibilityLabel("Dismiss privacy warning")
-                                    .accessibilityIdentifier("DismissLiveInsightsPrivacyWarningButton")
-                                }
-
-                                Text(
-                                    "Sorty masks username path segments in streamed text, but model-generated names can still appear before full parsing."
-                                )
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-
-                                Button("Never show again") {
-                                    hidePrivacyWarning = true
-                                    showPrivacyWarning = false
-                                }
-                                .accessibilityIdentifier("HideLiveInsightsPrivacyWarningButton")
-                            }
-                            .padding(12)
-                            .frame(width: 280)
-                            .systemLiquidGlassPopover(cornerRadius: 12)
-                        }
-                    }
-
-                    if debugModeEnabled {
-                        Button {
-                            withAnimation(.spring()) {
-                                viewState.showDebugStream.toggle()
-                            }
-                        } label: {
-                            Image(
-                                systemName: viewState.showDebugStream ? "terminal.fill" : "terminal"
-                            )
-                            .font(.caption)
-                            .foregroundStyle(
-                                viewState.showDebugStream ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!liveInsightsEnabled)
-                        .opacity(liveInsightsEnabled ? 1 : 0.45)
-                        .help(
-                            liveInsightsEnabled
-                                ? "Toggle Streaming Mode preview"
-                                : "Enable Live Insights to preview Streaming Mode output")
-                    }
-
-                    Image(systemName: "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(viewState.isExpanded ? 0 : -90))
-                        .animation(
-                            .spring(response: 0.3, dampingFraction: 0.8),
-                            value: viewState.isExpanded)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.08),
-                                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.03),
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                )
+                insightsHeader
             }
             .buttonStyle(.plain)
             .contentShape(RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16))
@@ -603,4 +474,137 @@ struct InsightHistorySection: View {
                 ? "AI response preview hidden in Privacy Mode" : "AI response preview")
     }
 
+
+    private var insightsHeader: some View {
+        HStack(spacing: 8) {
+            if isActive {
+                BreatheWaveformIcon()
+            } else {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.green)
+            }
+
+            Text(headerTitle)
+                .font(.callout)
+                .fontWeight(.medium)
+                .foregroundStyle(.primary)
+                .numericTextTransition(
+                    animationValue: headerTitle,
+                    animation: .easeInOut(duration: 0.28)
+                )
+
+            Spacer()
+
+            let insightCount = insights.history.count
+            if insightCount > 0 {
+                Text("\(insightCount)")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.white)
+                    .numericTextTransition(animationValue: insightCount)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(SortyDesignSystem.Colors.resolvedAccent))
+            }
+
+            if FeatureFlags.privacyModeEnabled && !hidePrivacyWarning {
+                Button {
+                    showPrivacyWarning.toggle()
+                } label: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                .buttonStyle(.plain)
+                .help("Privacy warning for live AI insights")
+                .accessibilityIdentifier("LiveInsightsPrivacyWarningButton")
+                .popover(isPresented: $showPrivacyWarning, arrowEdge: .top) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                            Text("Privacy Warning")
+                                .font(.headline)
+
+                            Spacer()
+
+                            Button {
+                                hidePrivacyWarning = true
+                                showPrivacyWarning = false
+                            } label: {
+                                Image(systemName: "xmark")
+                            }
+                            .buttonStyle(.plain)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                            .accessibilityLabel("Dismiss privacy warning")
+                            .accessibilityIdentifier("DismissLiveInsightsPrivacyWarningButton")
+                        }
+
+                        Text(
+                            "Sorty masks username path segments in streamed text, but model-generated names can still appear before full parsing."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                        Button("Never show again") {
+                            hidePrivacyWarning = true
+                            showPrivacyWarning = false
+                        }
+                        .accessibilityIdentifier("HideLiveInsightsPrivacyWarningButton")
+                    }
+                    .padding(12)
+                    .frame(width: 280)
+                    .systemLiquidGlassPopover(cornerRadius: 12)
+                }
+            }
+
+            if debugModeEnabled {
+                Button {
+                    withAnimation(.spring()) {
+                        viewState.showDebugStream.toggle()
+                    }
+                } label: {
+                    Image(
+                        systemName: viewState.showDebugStream ? "terminal.fill" : "terminal"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(
+                        viewState.showDebugStream ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
+                }
+                .buttonStyle(.plain)
+                .disabled(!liveInsightsEnabled)
+                .opacity(liveInsightsEnabled ? 1 : 0.45)
+                .help(
+                    liveInsightsEnabled
+                        ? "Toggle Streaming Mode preview"
+                        : "Enable Live Insights to preview Streaming Mode output")
+            }
+
+            Image(systemName: "chevron.down")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .rotationEffect(.degrees(viewState.isExpanded ? 0 : -90))
+                .animation(
+                    .spring(response: 0.3, dampingFraction: 0.8),
+                    value: viewState.isExpanded)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.08),
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.03),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+        )
+    }
 }

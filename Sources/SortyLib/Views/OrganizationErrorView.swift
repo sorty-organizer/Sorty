@@ -299,78 +299,7 @@ struct ErrorView: View {
             }
 
             HStack(spacing: 12) {
-                if canResume && category == .network && isTimeoutError {
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        onResume()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 9, weight: .semibold))
-                            Text("Continue \(settingsViewModel.config.mode.displayName)")
-                                .font(.caption.bold())
-                        }
-                    }
-                    .buttonStyle(.tintedPill(.accentColor, size: .small))
-                    .help("Continue from the last completed part of this organization")
-                    .accessibilityIdentifier("ErrorContinueOrganizationButton")
-                }
-
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    animateActionFeedback(.cancel)
-                    onCancel()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: showsCancelCircle ? "xmark.circle.fill" : "xmark")
-                            .font(.system(size: 10, weight: .semibold))
-                            .contentTransition(.symbolEffect(.replace))
-                            .transaction { transaction in
-                                if reduceMotion {
-                                    transaction.disablesAnimations = true
-                                }
-                            }
-                        Text("Cancel")
-                            .font(.caption.bold())
-                    }
-                }
-                .buttonStyle(.tintedPill(.red, size: .small))
-                .scaleEffect(activeActionFeedback == .cancel ? 1.04 : 1.0)
-                .help("Return to folder selection")
-                .accessibilityIdentifier("ErrorBackToFolderPickerButton")
-                .onHover { hovering in
-                    withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
-                        isHoveringCancel = hovering
-                    }
-                }
-
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    animateActionFeedback(.retry)
-                    if !reduceMotion {
-                        retryAnimationTrigger += 1
-                    }
-                    showRetryOptions = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 10, weight: .semibold))
-                            .symbolEffect(.rotate, options: .speed(1.5), value: retryAnimationTrigger)
-                        Text("Retry")
-                            .font(.caption.bold())
-                    }
-                }
-                .buttonStyle(.tintedPill(.accentColor, size: .small))
-                .scaleEffect(activeActionFeedback == .retry ? 1.04 : 1.0)
-                .help("Choose how to retry this organization")
-                .accessibilityIdentifier("ErrorTryAgainButton")
-                .modelSelectorTriggerBounds()
-                .onHover { hovering in
-                    if hovering && !reduceMotion {
-                        retryAnimationTrigger += 1
-                    }
-                }
-
+                retryActions
                 if category == .network && isTimeoutError {
                     Button {
                         HapticFeedbackManager.shared.tap()
@@ -640,6 +569,81 @@ struct ErrorView: View {
             guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
                 activeActionFeedback = nil
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var retryActions: some View {
+        if canResume && category == .network && isTimeoutError {
+            Button {
+                HapticFeedbackManager.shared.tap()
+                onResume()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text("Continue \(settingsViewModel.config.mode.displayName)")
+                        .font(.caption.bold())
+                }
+            }
+            .buttonStyle(.tintedPill(.accentColor, size: .small))
+            .help("Continue from the last completed part of this organization")
+            .accessibilityIdentifier("ErrorContinueOrganizationButton")
+        }
+
+        Button {
+            HapticFeedbackManager.shared.tap()
+            animateActionFeedback(.cancel)
+            onCancel()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: showsCancelCircle ? "xmark.circle.fill" : "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .contentTransition(.symbolEffect(.replace))
+                    .transaction { transaction in
+                        if reduceMotion {
+                            transaction.disablesAnimations = true
+                        }
+                    }
+                Text("Cancel")
+                    .font(.caption.bold())
+            }
+        }
+        .buttonStyle(.tintedPill(.red, size: .small))
+        .scaleEffect(activeActionFeedback == .cancel ? 1.04 : 1.0)
+        .help("Return to folder selection")
+        .accessibilityIdentifier("ErrorBackToFolderPickerButton")
+        .onHover { hovering in
+            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                isHoveringCancel = hovering
+            }
+        }
+
+        Button {
+            HapticFeedbackManager.shared.tap()
+            animateActionFeedback(.retry)
+            if !reduceMotion {
+                retryAnimationTrigger += 1
+            }
+            showRetryOptions = true
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 10, weight: .semibold))
+                    .symbolEffect(.rotate, options: .speed(1.5), value: retryAnimationTrigger)
+                Text("Retry")
+                    .font(.caption.bold())
+            }
+        }
+        .buttonStyle(.tintedPill(.accentColor, size: .small))
+        .scaleEffect(activeActionFeedback == .retry ? 1.04 : 1.0)
+        .help("Choose how to retry this organization")
+        .accessibilityIdentifier("ErrorTryAgainButton")
+        .modelSelectorTriggerBounds()
+        .onHover { hovering in
+            if hovering && !reduceMotion {
+                retryAnimationTrigger += 1
             }
         }
     }

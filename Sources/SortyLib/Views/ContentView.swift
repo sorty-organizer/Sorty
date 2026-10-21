@@ -109,70 +109,7 @@ public struct ContentView: View {
     // Bound navigation to the window proposal so a page's ideal size cannot
     // push sidebar rows and workflow controls outside the visible window.
     private var navigationContent: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            // Sidebar
-            List(selection: Binding(
-                get: { appState.currentView },
-                set: { newValue in
-                    if let newValue = newValue {
-                        guard newValue != appState.currentView else { return }
-                        previousView = appState.currentView
-                        HapticFeedbackManager.shared.selection()
-                        appState.navigatedFromSettings = false
-                        appState.clearNavigationReturnRoute()
-                        appState.currentView = newValue
-                    }
-                }
-            )) {
-                ForEach(Array(sidebarItems.enumerated()), id: \.element.id) { index, item in
-                    NavigationLink(value: item.view) {
-                        sidebarRow(item: item, commandNumber: index + 1)
-                    }
-                    .accessibilityIdentifier(item.accessibilityIdentifier)
-                    .accessibilityHint(Text(LocalizedStringKey(item.accessibilityHint)))
-                    .help(String(localized: String.LocalizationValue(item.helpText)))
-                }
-            }
-            .navigationTitle("Sorty")
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
-        } detail: {
-            // Render the selected page in the same update as the sidebar selection.
-            contentView(for: appState.currentView)
-                .accessibilityIdentifier(contentAccessibilityIdentifier(for: appState.currentView))
-            .toolbar {
-                // Keep unavailable actions out of the native toolbar rather
-                // than creating toolbar items whose content is empty.
-                if let returnRoute = appState.navigationReturnRoute,
-                   returnRoute.destination == appState.currentView {
-                    ToolbarItem(placement: .navigation) {
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            appState.clearNavigationReturnRoute()
-                            appState.currentView = returnRoute.returnView
-                        } label: {
-                            Label("Back", systemImage: "chevron.left")
-                        }
-                        .accessibilityIdentifier("RelatedViewReturnButton")
-                        .accessibilityLabel("Return to previous view")
-                    }
-                } else if appState.navigatedFromSettings,
-                          let prev = previousView,
-                          prev != appState.currentView {
-                    ToolbarItem(placement: .navigation) {
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            appState.navigatedFromSettings = false
-                            appState.currentView = prev
-                        } label: {
-                            Label("Back", systemImage: "chevron.left")
-                        }
-                        .accessibilityIdentifier("SettingsReturnButton")
-                        .accessibilityLabel("Return to previous view")
-                    }
-                }
-            }
-        }
+        navigationSplitView
         .navigationSplitViewStyle(.balanced)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Main Navigation")
@@ -412,6 +349,77 @@ public struct ContentView: View {
         }
 
         appState.showDirectoryPicker = false
+    }
+
+    private var navigationSidebar: some View {
+        List(selection: Binding(
+            get: { appState.currentView },
+            set: { newValue in
+                if let newValue = newValue {
+                    guard newValue != appState.currentView else { return }
+                    previousView = appState.currentView
+                    HapticFeedbackManager.shared.selection()
+                    appState.navigatedFromSettings = false
+                    appState.clearNavigationReturnRoute()
+                    appState.currentView = newValue
+                }
+            }
+        )) {
+            ForEach(Array(sidebarItems.enumerated()), id: \.element.id) { index, item in
+                NavigationLink(value: item.view) {
+                    sidebarRow(item: item, commandNumber: index + 1)
+                }
+                .accessibilityIdentifier(item.accessibilityIdentifier)
+                .accessibilityHint(Text(LocalizedStringKey(item.accessibilityHint)))
+                .help(String(localized: String.LocalizationValue(item.helpText)))
+            }
+        }
+        .navigationTitle("Sorty")
+        .listStyle(.sidebar)
+        .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
+    }
+
+    private var navigationSplitView: some View {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            // Sidebar
+            navigationSidebar
+        } detail: {
+            // Render the selected page in the same update as the sidebar selection.
+            contentView(for: appState.currentView)
+                .accessibilityIdentifier(contentAccessibilityIdentifier(for: appState.currentView))
+            .toolbar {
+                // Keep unavailable actions out of the native toolbar rather
+                // than creating toolbar items whose content is empty.
+                if let returnRoute = appState.navigationReturnRoute,
+                   returnRoute.destination == appState.currentView {
+                    ToolbarItem(placement: .navigation) {
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            appState.clearNavigationReturnRoute()
+                            appState.currentView = returnRoute.returnView
+                        } label: {
+                            Label("Back", systemImage: "chevron.left")
+                        }
+                        .accessibilityIdentifier("RelatedViewReturnButton")
+                        .accessibilityLabel("Return to previous view")
+                    }
+                } else if appState.navigatedFromSettings,
+                          let prev = previousView,
+                          prev != appState.currentView {
+                    ToolbarItem(placement: .navigation) {
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            appState.navigatedFromSettings = false
+                            appState.currentView = prev
+                        } label: {
+                            Label("Back", systemImage: "chevron.left")
+                        }
+                        .accessibilityIdentifier("SettingsReturnButton")
+                        .accessibilityLabel("Return to previous view")
+                    }
+                }
+            }
+        }
     }
 }
 

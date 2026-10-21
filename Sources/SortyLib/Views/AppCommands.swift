@@ -483,42 +483,7 @@ public struct SortyCommands: Commands {
         }
 
         // Organize menu
-        CommandMenu("Organize") {
-            Button("Start Organization", systemImage: "play.circle") {
-                appState?.startOrganization()
-            }
-            .keyboardShortcut("r", modifiers: .command)
-            .disabled(!(appState?.canStartOrganization ?? false))
-
-            Button("Regenerate Organization", systemImage: "arrow.clockwise") {
-                appState?.regenerateOrganization()
-            }
-            .keyboardShortcut("r", modifiers: [.command, .shift])
-            .disabled(!(appState?.canRegenerateOrganization ?? false))
-
-            Divider()
-
-            Button("Apply Changes", systemImage: "checkmark.circle.fill") {
-                appState?.applyChanges()
-            }
-            .keyboardShortcut("a", modifiers: [.command, .shift])
-            .disabled(!(appState?.canApply ?? false))
-
-            Button("Preview Changes", systemImage: "eye") {
-                appState?.previewChanges()
-            }
-            .keyboardShortcut("p", modifiers: [.command, .shift])
-            .disabled(!(appState?.hasCurrentPlan ?? false))
-
-            Divider()
-
-            Button("Cancel", systemImage: "xmark.circle") {
-                appState?.cancelOperation()
-            }
-            .keyboardShortcut(.escape, modifiers: [])
-            .disabled(!(appState?.isOperationInProgress ?? false))
-        }
-
+        organizationCommands
         // Learnings menu
         CommandMenu("Learnings") {
             Button("Open Dashboard", systemImage: "chart.bar") {
@@ -549,38 +514,7 @@ public struct SortyCommands: Commands {
         }
 
         // History menu
-        CommandMenu("History") {
-            Button("Open History", systemImage: "clock") {
-                appState?.currentView = .history
-            }
-            .disabled(appState == nil)
-
-            Divider()
-
-            Menu("Export History", systemImage: "square.and.arrow.up") {
-                Button("As CSV") {
-                    appState?.exportHistory(format: .csv)
-                }
-
-                Button("As JSON") {
-                    appState?.exportHistory(format: .json)
-                }
-            }
-            .disabled(appState == nil)
-
-            Button("Import History", systemImage: "square.and.arrow.down") {
-                appState?.importHistory()
-            }
-            .disabled(appState == nil)
-
-            Divider()
-
-            Button("Clear History", systemImage: "trash") {
-                appState?.clearHistoryWithConfirmation()
-            }
-            .disabled(appState == nil)
-        }
-
+        historyCommands
         CommandGroup(replacing: .help) {
             Button("Accreditations", systemImage: "rosette") {
                 appState?.showAccreditations(entryPoint: .help)
@@ -646,6 +580,78 @@ public struct SortyCommands: Commands {
 
     private static func commandKeyEquivalent(for index: Int) -> KeyEquivalent {
         KeyEquivalent(Character("\(index + 1)"))
+    }
+
+    private var organizationCommands: some Commands {
+        CommandMenu("Organize") {
+            Button("Start Organization", systemImage: "play.circle") {
+                appState?.startOrganization()
+            }
+            .keyboardShortcut("r", modifiers: .command)
+            .disabled(!(appState?.canStartOrganization ?? false))
+
+            Button("Regenerate Organization", systemImage: "arrow.clockwise") {
+                appState?.regenerateOrganization()
+            }
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+            .disabled(!(appState?.canRegenerateOrganization ?? false))
+
+            Divider()
+
+            Button("Apply Changes", systemImage: "checkmark.circle.fill") {
+                appState?.applyChanges()
+            }
+            .keyboardShortcut("a", modifiers: [.command, .shift])
+            .disabled(!(appState?.canApply ?? false))
+
+            Button("Preview Changes", systemImage: "eye") {
+                appState?.previewChanges()
+            }
+            .keyboardShortcut("p", modifiers: [.command, .shift])
+            .disabled(!(appState?.hasCurrentPlan ?? false))
+
+            Divider()
+
+            Button("Cancel", systemImage: "xmark.circle") {
+                appState?.cancelOperation()
+            }
+            .keyboardShortcut(.escape, modifiers: [])
+            .disabled(!(appState?.isOperationInProgress ?? false))
+        }
+    }
+
+    private var historyCommands: some Commands {
+        CommandMenu("History") {
+            Button("Open History", systemImage: "clock") {
+                appState?.currentView = .history
+            }
+            .disabled(appState == nil)
+
+            Divider()
+
+            Menu("Export History", systemImage: "square.and.arrow.up") {
+                Button("As CSV") {
+                    appState?.exportHistory(format: .csv)
+                }
+
+                Button("As JSON") {
+                    appState?.exportHistory(format: .json)
+                }
+            }
+            .disabled(appState == nil)
+
+            Button("Import History", systemImage: "square.and.arrow.down") {
+                appState?.importHistory()
+            }
+            .disabled(appState == nil)
+
+            Divider()
+
+            Button("Clear History", systemImage: "trash") {
+                appState?.clearHistoryWithConfirmation()
+            }
+            .disabled(appState == nil)
+        }
     }
 }
 

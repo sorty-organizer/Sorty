@@ -69,78 +69,7 @@ struct ExclusionRuleRow: View {
                 .background((rule.isEnabled ? colorForType(rule.type) : .secondary).opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(exclusionTitle)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(rule.isEnabled ? .primary : .secondary)
-
-                    if rule.isBuiltIn {
-                        Text("Built-in")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.blue.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
-                    } else if rule.isAIGenerated == true {
-                        Text("AI-created")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.purple.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
-                    }
-
-                    if isGroupedCondition {
-                        Text(groupSize > 1 ? "Group of \(groupSize)" : "Grouped")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.orange.opacity(0.12))
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
-                            .help("Every condition in this group must match before an item is excluded.")
-                            .accessibilityLabel(
-                                "Part of a group of \(max(groupSize, 1)) conditions that must all match"
-                            )
-                    }
-
-                    if let validationIssue = rule.patternValidationIssue {
-                        Label("Invalid pattern", systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.red)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(Color.red.opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
-                            .help(validationIssue)
-                            .accessibilityLabel("Invalid pattern. \(validationIssue)")
-                    }
-
-                }
-
-                HStack(spacing: 6) {
-                    Text(isFolderExclusion ? "Folder" : rule.type.friendlyName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    if !isFolderExclusion,
-                       let description = rule.description,
-                       !description.isEmpty {
-                        Text("•")
-                            .foregroundStyle(.secondary)
-                        Text(LocalizedStringKey(description))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-
-            }
-
+            ruleDescription
             Spacer()
 
             if settingsViewModel.config.showStatsForNerds {
@@ -278,6 +207,80 @@ struct ExclusionRuleRow: View {
             return .purple
         case .customScript:
             return .green
+        }
+    }
+
+    private var ruleDescription: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(exclusionTitle)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(rule.isEnabled ? .primary : .secondary)
+
+                if rule.isBuiltIn {
+                    Text("Built-in")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.blue.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                } else if rule.isAIGenerated == true {
+                    Text("AI-created")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.purple.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+
+                if isGroupedCondition {
+                    Text(groupSize > 1 ? "Group of \(groupSize)" : "Grouped")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.orange.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .help("Every condition in this group must match before an item is excluded.")
+                        .accessibilityLabel(
+                            "Part of a group of \(max(groupSize, 1)) conditions that must all match"
+                        )
+                }
+
+                if let validationIssue = rule.patternValidationIssue {
+                    Label("Invalid pattern", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.red.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .help(validationIssue)
+                        .accessibilityLabel("Invalid pattern. \(validationIssue)")
+                }
+
+            }
+
+            HStack(spacing: 6) {
+                Text(isFolderExclusion ? "Folder" : rule.type.friendlyName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if !isFolderExclusion,
+                   let description = rule.description,
+                   !description.isEmpty {
+                    Text("•")
+                        .foregroundStyle(.secondary)
+                    Text(LocalizedStringKey(description))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
         }
     }
 }

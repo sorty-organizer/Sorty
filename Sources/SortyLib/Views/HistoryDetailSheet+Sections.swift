@@ -44,20 +44,7 @@ extension HistoryDetailSheet {
                     ScrollView([.horizontal, .vertical], showsIndicators: true) {
                         VStack(alignment: .leading, spacing: 0) {
                             ForEach(Array(responseLines.enumerated()), id: \.offset) { _, line in
-                                Text(line.isEmpty ? " " : line)
-                                    .scrollTransition(
-                                        topLeading: .identity,
-                                        bottomTrailing: reduceMotion
-                                            ? .identity
-                                            : .interactive(timingCurve: .easeInOut)
-                                                .threshold(.visible(0.18)),
-                                        axis: .vertical
-                                    ) { content, phase in
-                                        content
-                                            .opacity(phase == .bottomTrailing ? 0 : 1)
-                                            .blur(radius: phase == .bottomTrailing ? 1.5 : 0)
-                                            .offset(y: phase == .bottomTrailing ? 6 : 0)
-                                    }
+                                rawResponseLine(line)
                             }
                         }
                         .font(.system(.caption, design: .monospaced))
@@ -393,5 +380,22 @@ extension HistoryDetailSheet {
             }
             isProcessing = false
         }
+    }
+
+    private func rawResponseLine(_ line: String) -> some View {
+        Text(line.isEmpty ? " " : line)
+            .scrollTransition(
+                topLeading: .identity,
+                bottomTrailing: reduceMotion
+                    ? .identity
+                    : .interactive(timingCurve: .easeInOut)
+                        .threshold(.visible(0.18)),
+                axis: .vertical
+            ) { content, phase in
+                content
+                    .opacity(phase == .bottomTrailing ? 0 : 1)
+                    .blur(radius: phase == .bottomTrailing ? 1.5 : 0)
+                    .offset(y: phase == .bottomTrailing ? 6 : 0)
+            }
     }
 }

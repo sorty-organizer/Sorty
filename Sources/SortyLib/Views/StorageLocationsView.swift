@@ -62,83 +62,7 @@ struct StorageLocationConfigView: View {
                     // Description Section
                     SettingsCard(title: "Description for Sorty", icon: "text.bubble", color: .purple) {
                         VStack(alignment: .leading, spacing: 8) {
-                            ZStack(alignment: .topLeading) {
-                                SubmittableTextEditor(
-                                    text: $description,
-                                    isFocused: $isDescriptionFocused,
-                                    selectedRange: $descriptionSelection,
-                                    onAcceptSuggestion: acceptCurrentDescriptionSuggestion,
-                                    onSubmit: save
-                                )
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 2)
-
-                                if description.isEmpty {
-                                    HStack(alignment: .top, spacing: 10) {
-                                        Text(currentDescriptionSuggestion)
-                                            .font(.body)
-                                            .foregroundStyle(.tertiary)
-                                            .lineLimit(2)
-                                            .numericTextTransition(
-                                                animationValue: descriptionSuggestionIndex
-                                            )
-
-                                        Spacer(minLength: 0)
-
-                                        Text("Tab")
-                                            .font(
-                                                .system(
-                                                    size: 10,
-                                                    weight: .semibold,
-                                                    design: .rounded
-                                                )
-                                            )
-                                            .foregroundStyle(.secondary)
-                                            .padding(.horizontal, 7)
-                                            .padding(.vertical, 3)
-                                            .background(
-                                                Color.secondary.opacity(0.10),
-                                                in: RoundedRectangle(cornerRadius: 5)
-                                            )
-                                            .accessibilityHidden(true)
-                                    }
-                                    .padding(.leading, 18)
-                                    .padding(.trailing, 10)
-                                    .padding(.vertical, 9)
-                                    .allowsHitTesting(false)
-                                    .task(id: shouldCycleDescriptionSuggestions) {
-                                        guard shouldCycleDescriptionSuggestions else { return }
-                                        while !Task.isCancelled {
-                                            try? await Task.sleep(for: .seconds(8))
-                                            guard !Task.isCancelled,
-                                                  shouldCycleDescriptionSuggestions else { return }
-                                            descriptionSuggestionIndex =
-                                                (descriptionSuggestionIndex + 1)
-                                                % descriptionSuggestions.count
-                                        }
-                                    }
-                                }
-                            }
-                                .frame(height: 80)
-                                .frame(maxWidth: .infinity)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color(NSColor.textBackgroundColor))
-                                )
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-
-                                    FocusedInstructionBeamBorder(active: isDescriptionFocused)
-                                }
-                                .accessibilityIdentifier("StorageLocationDescriptionTextField")
-                                .accessibilityLabel("Description for Sorty")
-                                .accessibilityHint(
-                                    description.isEmpty
-                                        ? "Press Tab to use the suggested description, Command+Enter to save, or Enter for a new line"
-                                        : "Press Command+Enter to save, or Enter for a new line"
-                                )
-                            
+                            descriptionEditor
                             Text("Describe what types of files belong here. Sorty uses this to decide which files to move to this location.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -256,6 +180,85 @@ struct StorageLocationConfigView: View {
         }
         .padding()
         .systemLiquidGlassBackground(cornerRadius: 12)
+    }
+
+    private var descriptionEditor: some View {
+        ZStack(alignment: .topLeading) {
+            SubmittableTextEditor(
+                text: $description,
+                isFocused: $isDescriptionFocused,
+                selectedRange: $descriptionSelection,
+                onAcceptSuggestion: acceptCurrentDescriptionSuggestion,
+                onSubmit: save
+            )
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+
+            if description.isEmpty {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(currentDescriptionSuggestion)
+                        .font(.body)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(2)
+                        .numericTextTransition(
+                            animationValue: descriptionSuggestionIndex
+                        )
+
+                    Spacer(minLength: 0)
+
+                    Text("Tab")
+                        .font(
+                            .system(
+                                size: 10,
+                                weight: .semibold,
+                                design: .rounded
+                            )
+                        )
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(
+                            Color.secondary.opacity(0.10),
+                            in: RoundedRectangle(cornerRadius: 5)
+                        )
+                        .accessibilityHidden(true)
+                }
+                .padding(.leading, 18)
+                .padding(.trailing, 10)
+                .padding(.vertical, 9)
+                .allowsHitTesting(false)
+                .task(id: shouldCycleDescriptionSuggestions) {
+                    guard shouldCycleDescriptionSuggestions else { return }
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .seconds(8))
+                        guard !Task.isCancelled,
+                              shouldCycleDescriptionSuggestions else { return }
+                        descriptionSuggestionIndex =
+                            (descriptionSuggestionIndex + 1)
+                            % descriptionSuggestions.count
+                    }
+                }
+            }
+        }
+            .frame(height: 80)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(NSColor.textBackgroundColor))
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+
+                FocusedInstructionBeamBorder(active: isDescriptionFocused)
+            }
+            .accessibilityIdentifier("StorageLocationDescriptionTextField")
+            .accessibilityLabel("Description for Sorty")
+            .accessibilityHint(
+                description.isEmpty
+                    ? "Press Tab to use the suggested description, Command+Enter to save, or Enter for a new line"
+                    : "Press Command+Enter to save, or Enter for a new line"
+            )
     }
 }
 

@@ -108,29 +108,7 @@ struct HistoryDuplicateGroupRow: View {
                     highlightedFileID = group.file.id
                 }
             } label: {
-                HStack(spacing: 6) {
-                    FileThumbnailView(url: URL(fileURLWithPath: group.file.path), size: CGSize(width: 20, height: 20))
-                    Text(group.file.displayName)
-                        .font(.callout)
-                        .fontWeight(highlightedFileID == group.file.id ? .semibold : .medium)
-                        .foregroundStyle(highlightedFileID == group.file.id ? .primary : .primary)
-                        .lineLimit(1)
-                    Spacer()
-                    Text("\(group.duplicateCount + 1) copies")
-                        .font(.caption2)
-                        .foregroundStyle(.white)
-                        .numericTextTransition(animationValue: group.duplicateCount)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(.red))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(4)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(highlightedFileID == group.file.id ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : Color.clear)
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 6))
+                primaryFileLabel
             }
             .buttonStyle(.plain)
             .contextMenu {
@@ -190,6 +168,32 @@ struct HistoryDuplicateGroupRow: View {
         } label: {
             Label("Move to Trash", systemImage: "trash")
         }
+    }
+
+    private var primaryFileLabel: some View {
+        HStack(spacing: 6) {
+            FileThumbnailView(url: URL(fileURLWithPath: group.file.path), size: CGSize(width: 20, height: 20))
+            Text(group.file.displayName)
+                .font(.callout)
+                .fontWeight(highlightedFileID == group.file.id ? .semibold : .medium)
+                .foregroundStyle(highlightedFileID == group.file.id ? .primary : .primary)
+                .lineLimit(1)
+            Spacer()
+            Text("\(group.duplicateCount + 1) copies")
+                .font(.caption2)
+                .foregroundStyle(.white)
+                .numericTextTransition(animationValue: group.duplicateCount)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(.red))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(highlightedFileID == group.file.id ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : Color.clear)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 

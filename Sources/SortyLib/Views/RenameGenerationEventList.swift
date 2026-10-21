@@ -16,25 +16,7 @@ struct RenameGenerationEventList: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(indexedEvents, id: \.element.id) { index, event in
-                        RenameGenerationRow(
-                            originalName: event.originalName,
-                            suggestedName: event.suggestedName,
-                            filePath: event.filePath,
-                            isDirectory: event.isDirectory,
-                            isActive: activeEventID == event.id,
-                            isRevealed: event.isRevealed,
-                            isMostRecent: index == events.indices.last
-                        )
-                        .id(event.id)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .bottom).combined(with: .opacity),
-                            removal: .opacity
-                        ))
-                    }
-                }
-                .padding(.vertical, 1)
+                eventRows
             }
             .onHover { hovering in
                 shouldFollowLatest = !hovering
@@ -46,5 +28,27 @@ struct RenameGenerationEventList: View {
                 }
             }
         }
+    }
+
+    private var eventRows: some View {
+        VStack(spacing: 8) {
+            ForEach(indexedEvents, id: \.element.id) { index, event in
+                RenameGenerationRow(
+                    originalName: event.originalName,
+                    suggestedName: event.suggestedName,
+                    filePath: event.filePath,
+                    isDirectory: event.isDirectory,
+                    isActive: activeEventID == event.id,
+                    isRevealed: event.isRevealed,
+                    isMostRecent: index == events.indices.last
+                )
+                .id(event.id)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .opacity
+                ))
+            }
+        }
+        .padding(.vertical, 1)
     }
 }

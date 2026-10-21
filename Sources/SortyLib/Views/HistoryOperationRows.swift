@@ -64,22 +64,7 @@ struct OperationRowView: View {
                     .font(.caption)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(fileName)
-                    .font(.caption)
-                    .lineLimit(1)
-                HStack(spacing: 4) {
-                    Text(operationLabel)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                    if let folder = destinationFolder {
-                        Text("→ \(folder)")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-            }
-
+            operationDescription
             Spacer()
 
             if isUndoing {
@@ -103,7 +88,7 @@ struct OperationRowView: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isUndone ? Color.green.opacity(0.05) : isFailed ? Color.red.opacity(0.05) : Color.secondary.opacity(0.05))
+                .fill(operationBackgroundColor)
         )
         .opacity(isUndone ? 0.7 : 1.0)
         .scaleEffect(isHovered ? 1.01 : 1.0)
@@ -113,6 +98,28 @@ struct OperationRowView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(operationLabel) \(fileName)\(isUndone ? ", undone" : "")\(isFailed ? ", failed" : "")")
+    }
+
+    private var operationBackgroundColor: Color {
+        isUndone ? Color.green.opacity(0.05) : isFailed ? Color.red.opacity(0.05) : Color.secondary.opacity(0.05)
+    }
+
+    private var operationDescription: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(fileName)
+                .font(.caption)
+                .lineLimit(1)
+            HStack(spacing: 4) {
+                Text(operationLabel)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                if let folder = destinationFolder {
+                    Text("→ \(folder)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
     }
 }
 
