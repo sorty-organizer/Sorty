@@ -4,17 +4,22 @@ import SwiftUI
 import UserNotifications
 import Permiso
 
-struct PermissionEducationView: View {
+package struct PermissionEducationView: View {
     @SortyHotReload private var hotReload
     let pages: [PermissionType]
     let onFinish: () -> Void
     @State private var currentPage = 0
 
+    package init(pages: [PermissionType], onFinish: @escaping () -> Void) {
+        self.pages = pages
+        self.onFinish = onFinish
+    }
+
     private var page: PermissionType {
         pages[min(currentPage, max(pages.count - 1, 0))]
     }
 
-    var body: some View {
+    package var body: some View {
         ZStack(alignment: .bottom) {
             educationPage(page)
                 .id(page.id)
@@ -140,7 +145,7 @@ struct PermissionEducationView: View {
     }
 }
 
-struct AutomationPermissionRecoveryView: View {
+package struct AutomationPermissionRecoveryView: View {
     @SortyHotReload private var hotReload
     let onFinish: () -> Void
     private let resetCommand = "tccutil reset AppleEvents com.sorty.app"
@@ -148,7 +153,11 @@ struct AutomationPermissionRecoveryView: View {
     private var hasCopiedResetCommand: Bool { resetCommandCopyFeedback.isCopied }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
+    package init(onFinish: @escaping () -> Void) {
+        self.onFinish = onFinish
+    }
+
+    package var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Label("Sorty isn't listed", systemImage: "exclamationmark.triangle.fill")
                 .font(.title3.weight(.semibold))

@@ -56,12 +56,17 @@ struct OnboardingWindowChromeSnapshot: @unchecked Sendable {
     }
 }
 
-struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
+package struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
     @SortyHotReload private var hotReload
     let preserveWindowPosition: Bool
     let onConfigured: () -> Void
 
-    func makeNSView(context: Context) -> NSView {
+    package init(preserveWindowPosition: Bool, onConfigured: @escaping () -> Void) {
+        self.preserveWindowPosition = preserveWindowPosition
+        self.onConfigured = onConfigured
+    }
+
+    package func makeNSView(context: Context) -> NSView {
         let view = WindowAttachedView()
         view.onWindowAttached = { window in
             context.coordinator.configure(window: window, preserveWindowPosition: preserveWindowPosition)
@@ -70,7 +75,7 @@ struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
+    package func updateNSView(_ nsView: NSView, context: Context) {
         // Window attachment is handled once by WindowAttachedView. Ordinary
         // SwiftUI updates must not enqueue window work or configuration state.
     }
@@ -83,12 +88,12 @@ struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         }
     }
 
-    func makeCoordinator() -> Coordinator {
+    package func makeCoordinator() -> Coordinator {
         Coordinator()
     }
 
     @MainActor
-    final class Coordinator {
+    package final class Coordinator {
         private weak var configuredWindow: NSWindow?
         private var originalTitleVisibility: NSWindow.TitleVisibility?
         private var originalTitlebarAppearsTransparent: Bool?

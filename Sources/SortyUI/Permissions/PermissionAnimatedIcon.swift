@@ -3,7 +3,7 @@ import SwiftUI
 import UserNotifications
 import Permiso
 
-struct PermissionAnimatedIcon: View {
+package struct PermissionAnimatedIcon: View {
     @SortyHotReload private var hotReload
     let type: PermissionType
     let state: PermissionState
@@ -18,12 +18,24 @@ struct PermissionAnimatedIcon: View {
     @State private var bellRotation = 0.0
     @State private var bellRingTask: Task<Void, Never>?
 
+    package init(
+        type: PermissionType,
+        state: PermissionState,
+        grantAnimationTrigger: Int,
+        size: CGFloat = 23
+    ) {
+        self.type = type
+        self.state = state
+        self.grantAnimationTrigger = grantAnimationTrigger
+        self.size = size
+    }
+
     private var isReady: Bool {
         state == .granted || state == .restartRequired
     }
 
     @ViewBuilder
-    var body: some View {
+    package var body: some View {
         Group {
             switch type {
             case .filesAndFolders:

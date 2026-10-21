@@ -5,11 +5,11 @@ import Beam
 
 // How cache size is measured and cleared. Kept in one place so the tile's
 // displayed size and the Clear action always cover the same locations.
-enum CacheMaintenance {
+package enum CacheMaintenance {
     /// Filename prefixes for Sorty-owned items in the shared temporary directory.
     static let ownedTemporaryPrefixes = ["sorty-", "Sorty_", "SortyNotificationIcon-"]
 
-    static func cacheDirectories(
+    package static func cacheDirectories(
         fileManager: FileManager = .default,
         bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sorty.app",
         cachesDirectory: URL? = nil,
@@ -52,7 +52,7 @@ enum CacheMaintenance {
         }
     }
 
-    static func totalSize(
+    package static func totalSize(
         of directories: [URL],
         fileManager: FileManager = .default,
         temporaryDirectory: URL? = nil
@@ -71,7 +71,7 @@ enum CacheMaintenance {
     /// Removes cached data and recreates the roots so later writers never hit a missing directory.
     /// Deletes directory contents item-by-item so one locked file can't block everything else.
     @discardableResult
-    static func clear(
+    package static func clear(
         fileManager: FileManager = .default,
         bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sorty.app",
         cachesDirectory: URL? = nil,

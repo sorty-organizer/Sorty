@@ -166,18 +166,18 @@ private struct LiquidSurface: ViewModifier {
     }
 }
 
-struct UserStatsSnapshot {
-    let sessions: Int
-    let filesOrganized: Int
+package struct UserStatsSnapshot {
+    package let sessions: Int
+    package let filesOrganized: Int
     let foldersCreated: Int
-    let successRate: Double
-    let activeDays: Int
+    package let successRate: Double
+    package let activeDays: Int
 
-    var successRatePercent: Int {
+    package var successRatePercent: Int {
         Int((successRate * 100).rounded())
     }
 
-    static func load(userDefaults: UserDefaults = .standard, storageDirectory: URL? = nil) -> UserStatsSnapshot {
+    package static func load(userDefaults: UserDefaults = .standard, storageDirectory: URL? = nil) -> UserStatsSnapshot {
         let entries = OrganizationHistory.loadPersistedEntries(
             userDefaults: userDefaults,
             storageDirectory: storageDirectory

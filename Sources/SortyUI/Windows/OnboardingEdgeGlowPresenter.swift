@@ -6,16 +6,21 @@ import SwiftUI
 import UniformTypeIdentifiers
 import os
 
-struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
+package struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
     @SortyHotReload private var hotReload
     let isVisible: Bool
     var strength = 0.55
 
-    func makeCoordinator() -> Coordinator {
+    package init(isVisible: Bool, strength: Double = 0.55) {
+        self.isVisible = isVisible
+        self.strength = strength
+    }
+
+    package func makeCoordinator() -> Coordinator {
         Coordinator()
     }
 
-    func makeNSView(context: Context) -> NSView {
+    package func makeNSView(context: Context) -> NSView {
         let view = ScreenTrackingView()
         view.onWindowChanged = { window in
             context.coordinator.attach(to: window)
@@ -28,7 +33,7 @@ struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
+    package func updateNSView(_ nsView: NSView, context: Context) {
         context.coordinator.setStrength(strength)
         context.coordinator.setVisible(isVisible)
         DispatchQueue.main.async {
@@ -36,12 +41,12 @@ struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         }
     }
 
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+    package static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
         coordinator.dismiss()
     }
 
     @MainActor
-    final class Coordinator {
+    package final class Coordinator {
         private weak var hostWindow: NSWindow?
         private var glowPanel: NSPanel?
         private var observers: [NSObjectProtocol] = []

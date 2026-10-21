@@ -6,17 +6,22 @@ import SwiftUI
 import UniformTypeIdentifiers
 import os
 
-struct OnboardingBottomGradient: NSViewRepresentable {
+package struct OnboardingBottomGradient: NSViewRepresentable {
     @SortyHotReload private var hotReload
     /// 0 = gradient hugs the bottom edge, 1 = gradient reaches near the top.
     var progress: Double = 0
     var showsBaseColor = true
 
-    func makeNSView(context: Context) -> RetainedOnboardingBottomGradientView {
+    package init(progress: Double = 0, showsBaseColor: Bool = true) {
+        self.progress = progress
+        self.showsBaseColor = showsBaseColor
+    }
+
+    package func makeNSView(context: Context) -> RetainedOnboardingBottomGradientView {
         RetainedOnboardingBottomGradientView()
     }
 
-    func updateNSView(_ nsView: RetainedOnboardingBottomGradientView, context: Context) {
+    package func updateNSView(_ nsView: RetainedOnboardingBottomGradientView, context: Context) {
         nsView.update(
             progress: progress,
             showsBaseColor: showsBaseColor,
@@ -29,7 +34,7 @@ struct OnboardingBottomGradient: NSViewRepresentable {
 /// Retains the full-window color field as three gradient layers. Step changes
 /// animate only layer colors and geometry instead of asking a SwiftUI Canvas to
 /// redraw the entire window throughout every transition.
-final class RetainedOnboardingBottomGradientView: NSView {
+package final class RetainedOnboardingBottomGradientView: NSView {
     private static let transitionDuration: CFTimeInterval = 0.65
 
     private let accentGradient = CAGradientLayer()
@@ -67,7 +72,7 @@ final class RetainedOnboardingBottomGradientView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func layout() {
+    package override func layout() {
         super.layout()
         guard bounds != lastLayoutBounds else { return }
         lastLayoutBounds = bounds
@@ -228,9 +233,11 @@ final class RetainedOnboardingBottomGradientView: NSView {
     }
 }
 
-struct OnboardingNavigationBackdrop: View {
+package struct OnboardingNavigationBackdrop: View {
     @SortyHotReload private var hotReload
-    var body: some View {
+
+    package init() {}
+    package var body: some View {
         LinearGradient(
             colors: [
                 Color(NSColor.windowBackgroundColor).opacity(0),

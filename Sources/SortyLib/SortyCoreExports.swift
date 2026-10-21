@@ -5,3 +5,5 @@
 @_exported import SortyRulesUI
 @_exported import SortyDuplicatesUI
 @_exported import SortyWatchedFoldersUI
+@_exported import SortySettingsUI
+@_exported import SortyOnboardingUI

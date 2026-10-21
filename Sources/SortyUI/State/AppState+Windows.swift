@@ -4,7 +4,7 @@ import Combine
 import AppKit
 
 // MARK: - Auxiliary Windows
-// These build SortyLib views, so they live above SortyUI where AppState is declared.
+// Each method opens (or refocuses) one auxiliary window hosting its SwiftUI view.
 extension AppState {
     public func showAbout() {
         // If window already exists and is visible, just bring it to front

@@ -4,13 +4,13 @@ import SwiftUI
 import UserNotifications
 import Permiso
 
-enum PermissionType: String, CaseIterable, Identifiable, Sendable {
+package enum PermissionType: String, CaseIterable, Identifiable, Sendable {
     case filesAndFolders = "Files & Folders"
     case fullDiskAccess = "Full Disk Access"
     case automation = "Automation"
     case notifications = "Notifications"
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
     var icon: String {
         switch self {
@@ -30,7 +30,7 @@ enum PermissionType: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    func description(for state: PermissionState) -> String {
+    package func description(for state: PermissionState) -> String {
         if self == .fullDiskAccess, state == .restartRequired {
             return "Full Disk Access is on. Restart Sorty to use it."
         }
@@ -38,7 +38,7 @@ enum PermissionType: String, CaseIterable, Identifiable, Sendable {
         return description
     }
 
-    var color: Color {
+    package var color: Color {
         switch self {
         case .filesAndFolders: return .blue
         case .fullDiskAccess: return .green
@@ -86,7 +86,7 @@ enum PermissionType: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var compactActionTitle: String {
+    package var compactActionTitle: String {
         switch self {
         case .filesAndFolders:
             return "Choose Folder"
@@ -100,7 +100,7 @@ enum PermissionType: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum PermissionState: Sendable, Equatable {
+package enum PermissionState: Sendable, Equatable {
     case unknown
     case pending
     case granted
@@ -117,7 +117,7 @@ enum PermissionState: Sendable, Equatable {
         }
     }
 
-    func title(for type: PermissionType) -> String {
+    package func title(for type: PermissionType) -> String {
         guard self == .pending else { return title }
 
         switch type {
@@ -132,7 +132,7 @@ enum PermissionState: Sendable, Equatable {
         }
     }
 
-    var symbol: String {
+    package var symbol: String {
         switch self {
         case .unknown: return "circle"
         case .pending: return "arrow.clockwise"
@@ -142,7 +142,7 @@ enum PermissionState: Sendable, Equatable {
         }
     }
 
-    var tint: Color {
+    package var tint: Color {
         switch self {
         case .unknown: return .secondary
         case .pending: return .orange

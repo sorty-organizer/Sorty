@@ -3,10 +3,10 @@ import SwiftUI
 import UserNotifications
 import Permiso
 
-enum SystemPermissionRevoker {
-    typealias Result = TCCPermissionResetter.Result
+package enum SystemPermissionRevoker {
+    package typealias Result = TCCPermissionResetter.Result
 
-    static func revoke(
+    package static func revoke(
         _ type: PermissionType,
         bundleIdentifier: String
     ) async -> Result {

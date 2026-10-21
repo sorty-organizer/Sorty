@@ -29,7 +29,7 @@ enum SettingsPageTransition {
     }
 }
 
-struct SettingsView: View {
+package struct SettingsView: View {
     @SortyHotReload private var hotReload
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
@@ -40,6 +40,8 @@ struct SettingsView: View {
     @State private var searchText = ""
     @StateObject private var windowLinkHoverState = WindowLinkHoverState()
 
+    package init() {}
+
     private var trimmedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -48,7 +50,7 @@ struct SettingsView: View {
         !trimmedSearchText.isEmpty
     }
 
-    var body: some View {
+    package var body: some View {
         trackedSettingsLayout
         .onChange(of: appState.selectedSettingsSection) { _, newSection in
             if let section = newSection, section != selectedCategory {

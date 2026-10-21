@@ -3,15 +3,20 @@ import AppKit
 import SwiftUI
 
 /// Matches the native capsule selector used by History filters.
-struct ProviderAuthenticationControl: NSViewRepresentable {
+package struct ProviderAuthenticationControl: NSViewRepresentable {
     let methods: [ProviderAuthMethod]
     @Binding var selection: ProviderAuthMethod
 
-    func makeCoordinator() -> Coordinator {
+    package init(methods: [ProviderAuthMethod], selection: Binding<ProviderAuthMethod>) {
+        self.methods = methods
+        self._selection = selection
+    }
+
+    package func makeCoordinator() -> Coordinator {
         Coordinator(methods: methods, selection: $selection)
     }
 
-    func makeNSView(context: Context) -> NSSegmentedControl {
+    package func makeNSView(context: Context) -> NSSegmentedControl {
         let control = NSSegmentedControl(
             labels: methods.map(\.displayName),
             trackingMode: .selectOne,
@@ -35,7 +40,7 @@ struct ProviderAuthenticationControl: NSViewRepresentable {
         return control
     }
 
-    func updateNSView(_ control: NSSegmentedControl, context: Context) {
+    package func updateNSView(_ control: NSSegmentedControl, context: Context) {
         context.coordinator.methods = methods
         context.coordinator.selection = $selection
         control.segmentCount = methods.count
@@ -46,7 +51,7 @@ struct ProviderAuthenticationControl: NSViewRepresentable {
     }
 
     @MainActor
-    final class Coordinator: NSObject {
+    package final class Coordinator: NSObject {
         var methods: [ProviderAuthMethod]
         var selection: Binding<ProviderAuthMethod>
 

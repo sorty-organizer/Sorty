@@ -6,7 +6,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import os
 
-struct SortyEnergyScanIcon: View {
+package struct SortyEnergyScanIcon: View {
     @SortyHotReload private var hotReload
     let image: NSImage
     let size: CGFloat
@@ -18,7 +18,23 @@ struct SortyEnergyScanIcon: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
 
-    var body: some View {
+    package init(
+        image: NSImage,
+        size: CGFloat,
+        cornerRadius: CGFloat,
+        startDelay: TimeInterval = 0.8,
+        sweepDuration: TimeInterval = 2.8,
+        repeats: Bool = false
+    ) {
+        self.image = image
+        self.size = size
+        self.cornerRadius = cornerRadius
+        self.startDelay = startDelay
+        self.sweepDuration = sweepDuration
+        self.repeats = repeats
+    }
+
+    package var body: some View {
         RetainedEnergyScanIcon(
             image: image,
             size: size,

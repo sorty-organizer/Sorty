@@ -4,7 +4,7 @@ import SwiftUI
 
 
 /// Uses the same compact status panel and actions as the subscription sign-in UI.
-struct OpenCodeCredentialLinkView: View {
+package struct OpenCodeCredentialLinkView: View {
     @ObservedObject var viewModel: SettingsViewModel
     var onWillImport: () -> Void = {}
     @State private var isChecking = false
@@ -14,6 +14,11 @@ struct OpenCodeCredentialLinkView: View {
     @State private var refreshID = UUID()
     @State private var loginScriptURL: URL?
 
+    package init(viewModel: SettingsViewModel, onWillImport: @escaping () -> Void = {}) {
+        self._viewModel = ObservedObject(wrappedValue: viewModel)
+        self.onWillImport = onWillImport
+    }
+
     private var isConnected: Bool {
         viewModel.config.usesConnectedOpenCodeCredentials(for: viewModel.config.provider)
             && viewModel.config.apiKey != nil
@@ -22,7 +27,7 @@ struct OpenCodeCredentialLinkView: View {
         viewModel.hasLoadedPersistedState && !viewModel.isConfiguredCredentialHydrating
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: isConnected ? "checkmark.circle.fill" : "person.crop.circle.badge.checkmark")

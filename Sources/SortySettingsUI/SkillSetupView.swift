@@ -6,13 +6,15 @@ import QuartzCore
 import SwiftUI
 
 /// Presents the existing skill importer before the original app onboarding.
-struct SkillOnboardingView: View {
+package struct SkillOnboardingView: View {
     @EnvironmentObject var appState: AppState
     @StateObject var installer = CodexSkillInstaller()
     @State var isCheckingSkill = false
     @State var errorMessage: String?
 
-    var body: some View {
+    package init() {}
+
+    package var body: some View {
         SkillSetupView(
             installer: installer,
             onClose: appState.continueWithAppAfterSkillIntroduction,
