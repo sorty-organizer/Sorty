@@ -49,7 +49,15 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     /// Converts the shared prompt into the protocol required by this OpenCode model.
     func makeCompletionRequest(url: URL, headers: [String: String], body: [String: Any]) throws -> URLRequest {
         let format = config.provider.openCodeAPIFormat(for: config.model)
+        let streaming = body["stream"] as? Bool ?? false
+        func openCodeURL() throws -> URL {
+            guard let endpoint = config.provider.openCodeEndpoint(for: config.model, streaming: streaming) else {
+                throw AIClientError.invalidURL
+            }
+            return endpoint
+        }
         guard usesNativeOpenCodeCompletion else {
+            let url = format == nil ? url : try openCodeURL()
             var payload = body
             if (config.provider == .openAI && url.host == "api.openai.com") || config.provider == .openRouter,
                let messages = body["messages"] as? [[String: Any]],
@@ -72,9 +80,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             }
             return try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: payload)
         }
-        let base = url.deletingLastPathComponent().deletingLastPathComponent()
         let messages = body["messages"] as? [[String: Any]] ?? []
-        let streaming = body["stream"] as? Bool ?? false
         let maxTokens = body["max_tokens"] as? Int ?? resolvedMaxTokens()
         if format == .responses {
             let input: [[String: Any]] = messages.map { message in
@@ -102,7 +108,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             // out because native endpoints manage reasoning themselves.
             if let temperature = body["temperature"] { payload["temperature"] = temperature }
             return try AIRequestSupport.makeJSONRequest(
-                url: base.appendingPathComponent("responses"), headers: headers, body: payload
+                url: try openCodeURL(), headers: headers, body: payload
             )
         }
 
@@ -135,14 +141,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         if let temperature = body["temperature"] { generation["temperature"] = temperature }
         var payload: [String: Any] = ["contents": contents, "generationConfig": generation]
         if !systemParts.isEmpty { payload["systemInstruction"] = ["parts": systemParts] }
-        let method = streaming ? "streamGenerateContent" : "generateContent"
-        let endpoint = base.appendingPathComponent("models").appendingPathComponent("\(config.model):\(method)")
-        guard var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else {
-            throw AIClientError.invalidURL
-        }
-        if streaming { components.queryItems = [URLQueryItem(name: "alt", value: "sse")] }
-        guard let endpointURL = components.url else { throw AIClientError.invalidURL }
-        return try AIRequestSupport.makeJSONRequest(url: endpointURL, headers: headers, body: payload)
+        return try AIRequestSupport.makeJSONRequest(url: try openCodeURL(), headers: headers, body: payload)
     }
 
     /// Normalize native output without exposing reasoning text as organization JSON.

@@ -49,7 +49,7 @@ final class MultimodalRequestFormatTests: XCTestCase {
         let text = try await client.generateText(prompt: "Hello", systemPrompt: nil)
         XCTAssertEqual(text, "OK")
         let request = try XCTUnwrap(MockHTTPURLProtocol.lastRequest)
-        XCTAssertEqual(request.url?.absoluteString, "https://opencode.ai/zen/go/v1/messages")
+        XCTAssertEqual(request.url?.absoluteString, "https://opencode.ai/inference/go/anthropic/v1/messages")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer go-test-key")
         XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "Sorty/1.0")
         let session = try XCTUnwrap(request.value(forHTTPHeaderField: "x-opencode-session"))
@@ -66,6 +66,9 @@ final class MultimodalRequestFormatTests: XCTestCase {
         XCTAssertEqual(AIProvider.openCodeZen.openCodeAPIFormat(for: " CLAUDE-SONNET-4-6 "), .messages)
         XCTAssertEqual(AIProvider.openCodeGo.openCodeAPIFormat(for: "gpt-6-luna"), .responses)
         XCTAssertEqual(AIProvider.openCodeZen.openCodeAPIFormat(for: "gemini-3.1-pro"), .gemini)
+        XCTAssertEqual(AIProvider.openCodeGo.openCodeAPIFormat(for: "minimax-m3"), .messages)
+        XCTAssertEqual(AIProvider.openCodeGo.openCodeAPIFormat(for: "minimax-m2.7"), .chatCompletions)
+        XCTAssertEqual(AIProvider.openCodeZen.openCodeAPIFormat(for: "muse-wonder-1.0"), .responses)
     }
 
     func testOpenCodeResponsesRequestAndTextExtraction() async throws {
@@ -79,7 +82,7 @@ final class MultimodalRequestFormatTests: XCTestCase {
         let text = try await client.generateText(prompt: "Hello", systemPrompt: "Be concise")
         XCTAssertEqual(text, "OK")
         let request = try XCTUnwrap(MockHTTPURLProtocol.lastRequest)
-        XCTAssertEqual(request.url?.absoluteString, "https://opencode.ai/zen/v1/responses")
+        XCTAssertEqual(request.url?.absoluteString, "https://opencode.ai/inference/openai/v1/responses")
         let body = try request.jsonBody()
         XCTAssertNil(body["messages"])
         XCTAssertEqual(body["temperature"] as? Double, AIConfig.generationTemperature)
@@ -159,7 +162,7 @@ final class MultimodalRequestFormatTests: XCTestCase {
                     ]]
                 ], "max_tokens": 512, "stream": true
             ])
-        XCTAssertEqual(request.url?.path, "/zen/v1/models/gemini-3.1-pro:streamGenerateContent")
+        XCTAssertEqual(request.url?.path, "/inference/google/v1beta/models/gemini-3.1-pro:streamGenerateContent")
         XCTAssertEqual(request.url?.query, "alt=sse")
         let body = try request.jsonBody()
         XCTAssertNotNil(body["systemInstruction"])
@@ -225,7 +228,7 @@ final class MultimodalRequestFormatTests: XCTestCase {
 
         _ = try await client.analyze(files: files)
         let request = try XCTUnwrap(MockHTTPURLProtocol.lastRequest)
-        XCTAssertEqual(request.url?.absoluteString, "https://opencode.ai/zen/go/v1/chat/completions")
+        XCTAssertEqual(request.url?.absoluteString, "https://opencode.ai/inference/go/openai/v1/chat/completions")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
         XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "Sorty/1.0")
         XCTAssertNotNil(request.value(forHTTPHeaderField: "x-opencode-session"))

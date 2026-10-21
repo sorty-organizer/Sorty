@@ -18,9 +18,8 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
 
     private func messagesURL() throws -> URL {
         guard isOpenCode else { return URL(string: "https://api.anthropic.com/v1/messages")! }
-        let base = try AIRequestSupport.requireAPIURL(from: config)
-        return try AIRequestSupport.openAIChatCompletionsURL(from: base)
-            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("messages")
+        guard let url = config.provider.openCodeEndpoint(for: config.model) else { throw AIClientError.invalidURL }
+        return url
     }
     private static let modelsURL = URL(string: "https://api.anthropic.com/v1/models")!
     

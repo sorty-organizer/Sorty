@@ -425,25 +425,53 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         guard self == .openCodeZen || self == .openCodeGo else { return nil }
         let id = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if id.hasPrefix("jev-") { return .systemOne }
-        if id.hasPrefix("gpt-") || id.hasPrefix("grok-") || id.hasPrefix("muse-spark-") {
+        if id.hasPrefix("gpt-") || id.hasPrefix("grok-") || id.hasPrefix("muse-") {
             return .responses
         }
         if id.hasPrefix("gemini-") { return .gemini }
         if id.hasPrefix("claude-") || openCodeMessagesModelIDs.contains(id)
-            || (self == .openCodeGo && (id.hasPrefix("qwen") || id.hasPrefix("minimax-"))) {
+            || (self == .openCodeGo && id.hasPrefix("qwen")) {
             return .messages
         }
         return .chatCompletions
     }
 
-    /// Qwen models using Messages on Zen; Go routes the whole Qwen family there.
+    /// Non-Claude models served through Messages; Go also routes all Qwen there.
     private var openCodeMessagesModelIDs: [String] {
         switch self {
         case .openCodeZen:
             // Messages-only on Zen; qwen3.8-max stays because it is chat.
             return ["qwen3.8-flash", "qwen3.7-max", "qwen3.7-plus", "qwen3.6-plus", "qwen3.5-plus"]
-        case .openCodeGo, .unavailableProvider, .openAI, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini, .appleFoundationModel:
+        case .openCodeGo:
+            // Other MiniMax models on Go use Chat Completions.
+            return ["minimax-m3"]
+        case .unavailableProvider, .openAI, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini, .appleFoundationModel:
             return []
+        }
+    }
+
+    /// The protocol-specific inference endpoint for an OpenCode model. The
+    /// legacy `/zen/...` completion paths reject Bearer auth for Messages and
+    /// Gemini, so completions always use `/inference/...`. Model lists stay
+    /// on `defaultAPIURL`, the only path that serves `/models`.
+    public func openCodeEndpoint(for model: String, streaming: Bool = false) -> URL? {
+        let root: String
+        switch self {
+        case .openCodeZen: root = "https://opencode.ai/inference"
+        case .openCodeGo: root = "https://opencode.ai/inference/go"
+        default: return nil
+        }
+        let id = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch openCodeAPIFormat(for: id) {
+        case .chatCompletions: return URL(string: root + "/openai/v1/chat/completions")
+        case .responses: return URL(string: root + "/openai/v1/responses")
+        case .messages: return URL(string: root + "/anthropic/v1/messages")
+        case .gemini:
+            guard var components = URLComponents(string: root + "/google/v1beta/models") else { return nil }
+            components.path += "/\(id):\(streaming ? "streamGenerateContent" : "generateContent")"
+            if streaming { components.queryItems = [URLQueryItem(name: "alt", value: "sse")] }
+            return components.url
+        case .systemOne, nil: return nil
         }
     }
 

@@ -56,9 +56,16 @@ automation overrides also show an error instead of selecting a default model.
 
 The model picker includes the live catalog's Chat Completions, Messages,
 Responses, and Gemini models. The client routes each model using OpenCode's
-plan-specific endpoint table. Qwen3.8 Max and MiniMax use Chat Completions on
-Zen but Messages on Go. GPT, Grok, and Muse use Responses; Claude uses
-Messages; Gemini uses its native generateContent API. Streaming requests use
+plan-specific endpoint table. Qwen3.8 Max and MiniMax M3 use Chat Completions on
+Zen but Messages on Go; other Go MiniMax models stay on Chat Completions. GPT,
+Grok, and Muse use Responses; Claude uses Messages; Gemini uses its native
+generateContent API.
+
+Completions go to `https://opencode.ai/inference[/go]/{openai,anthropic,google}/...`
+(`AIProvider.openCodeEndpoint(for:streaming:)`). The legacy `/zen/v1/messages`
+and `/zen/v1/models/<id>:generateContent` paths reject Bearer auth with
+"Missing API key", and Go has no legacy Gemini path. Model lists still use
+`/zen/v1/models` and `/zen/go/v1/models`; the `/inference/.../models` paths 404. Streaming requests use
 the corresponding native events and exclude reasoning text from output JSON.
 
 Jev models remain excluded because their SystemOne protocol is not supported.
