@@ -3,3 +3,5 @@
 @_exported import SortyPreviewUI
 @_exported import SortyHistoryUI
 @_exported import SortyRulesUI
+@_exported import SortyDuplicatesUI
+@_exported import SortyWatchedFoldersUI

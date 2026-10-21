@@ -69,6 +69,8 @@ var packageProducts: [Product] = [
     .library(name: "SortyOrganizer", targets: ["SortyOrganizer"]),
     .library(name: "SortyCore", targets: ["SortyCore"]),
     .library(name: "SortyUI", targets: ["SortyUI"]),
+    .library(name: "SortyWatchedFoldersUI", targets: ["SortyWatchedFoldersUI"]),
+    .library(name: "SortyDuplicatesUI", targets: ["SortyDuplicatesUI"]),
     .library(name: "SortyRulesUI", targets: ["SortyRulesUI"]),
     .library(name: "SortyHistoryUI", targets: ["SortyHistoryUI"]),
     .library(name: "SortyPreviewUI", targets: ["SortyPreviewUI"]),
@@ -158,8 +160,22 @@ var packageTargets: [Target] = [
         linkerSettings: sortyLinkerSettings
     ),
     .target(
+        name: "SortyDuplicatesUI",
+        dependencies: ["SortyUI"] + sortyLibDependencies,
+        path: "Sources/SortyDuplicatesUI",
+        swiftSettings: sortyLibSwiftSettings,
+        linkerSettings: sortyLinkerSettings
+    ),
+    .target(
+        name: "SortyWatchedFoldersUI",
+        dependencies: ["SortyUI", "SortyHistoryUI"] + sortyLibDependencies,
+        path: "Sources/SortyWatchedFoldersUI",
+        swiftSettings: sortyLibSwiftSettings,
+        linkerSettings: sortyLinkerSettings
+    ),
+    .target(
         name: "SortyLib",
-        dependencies: ["SortyCore", "SortyUI", "SortyPreviewUI", "SortyHistoryUI", "SortyRulesUI"] + sortyLibDependencies,
+        dependencies: ["SortyCore", "SortyUI", "SortyPreviewUI", "SortyHistoryUI", "SortyRulesUI", "SortyDuplicatesUI", "SortyWatchedFoldersUI"] + sortyLibDependencies,
         path: "Sources/SortyLib",
         resources: [
             // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation

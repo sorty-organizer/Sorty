@@ -11,7 +11,7 @@ import Foundation
 import SwiftUI
 import Beam
 
-struct DuplicatesView: View {
+package struct DuplicatesView: View {
     @SortyHotReload var hotReload
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var detectionManager: DuplicateDetectionManager
@@ -29,6 +29,8 @@ struct DuplicatesView: View {
     @State var capturedDirectory: URL?
     @State var currentScanID = UUID()
     @State var semanticScanProgress: String?
+
+    package init() {}
 
     // Derived directory: Use local if set, otherwise fallback to global
     var effectiveDirectory: URL? {
@@ -57,7 +59,7 @@ struct DuplicatesView: View {
         return progress
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             if effectiveDirectory == nil {
                 // Base page: Workspace-Health-style layout

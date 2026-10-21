@@ -48,7 +48,7 @@ final class WatchedFoldersTicker: ObservableObject {
     }
 }
 
-struct WatchedFoldersView: View {
+package struct WatchedFoldersView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
@@ -57,7 +57,9 @@ struct WatchedFoldersView: View {
     @State private var selectedFolderForEdit: WatchedFolder?
     @State private var isDropTargeted = false
 
-    var body: some View {
+    package init() {}
+
+    package var body: some View {
         VStack(spacing: 0) {
             if watchedFoldersManager.folders.isEmpty {
                 ZStack(alignment: .topLeading) {
