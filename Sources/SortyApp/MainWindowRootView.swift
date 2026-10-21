@@ -303,7 +303,10 @@ struct MainWindowRootView: View {
             .onChange(of: launchRequest?.id) { _, _ in
                 processLaunchRequestIfNeeded()
             }
-            .onChange(of: settingsViewModel.config) { _, newConfig in
+            .onChange(of: settingsViewModel.config) { oldConfig, newConfig in
+                if oldConfig.provider != newConfig.provider {
+                    windowSession.appState.clearSetupRepairState()
+                }
                 Task { @MainActor in
                     await windowSession.applyConfiguration(newConfig)
                 }

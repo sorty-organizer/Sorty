@@ -101,6 +101,11 @@ Settings credential hydration uses detached Keychain reads on a cache miss and
 rejects results after provider changes, edits, or reset. Preserve that path rather
 than adding another detached wrapper.
 
+Switching providers clears the previous provider's persisted setup-repair state
+and dismisses its HUD in each open window. The organize screen uses the current
+provider's setup validation message when configuration is incomplete. This does
+not add a launch-time connection check.
+
 Apple Intelligence availability probes also run on the concurrent executor.
 Settings hydration schedules a coalesced status refresh without waiting for the
 system model service. Provider screens use the same refresh path, and only the

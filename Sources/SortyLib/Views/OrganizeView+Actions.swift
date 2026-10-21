@@ -339,12 +339,11 @@ extension OrganizeView {
     }
 
     var activeSetupRepairMessage: String? {
+        if isProviderStateReadyForValidation, !providerSetupStatus.isReady {
+            return providerSetupStatus.message
+        }
         if appState.requiresSetupRepair {
             return appState.setupRepairMessage ?? providerSetupStatus.message
-        }
-        guard isProviderStateReadyForValidation else { return nil }
-        if !providerSetupStatus.isReady {
-            return providerSetupStatus.message
         }
         return nil
     }
