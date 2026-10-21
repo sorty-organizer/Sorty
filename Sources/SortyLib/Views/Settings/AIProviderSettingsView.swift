@@ -10,44 +10,44 @@ import AppKit
 import SwiftUI
 
 struct AIProviderSettingsView: View {
-    @SortyHotReload private var hotReload
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @EnvironmentObject private var appState: AppState
+    @SortyHotReload var hotReload
+    @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @EnvironmentObject var appState: AppState
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
 
-    @State private var testConnectionStatus: String?
-    @State private var testConnectionDetails: String?
-    @State private var isTestingConnection = false
-    @State private var connectionTestID: UUID?
-    @State private var hasCopiedCode = false
-    @State private var hasCopiedConnectionError = false
-    @State private var showModelPicker = false
-    @State private var isHoveringUsername = false
-    @State private var isHoveringCodexEmail = false
-    @State private var isDetailsExpanded = false
-    @State private var isInternetAccessBlocked = false
-    @State private var isHoveringInternetSettings = false
-    @State private var isHoveringCopyError = false
-    @State private var isHoveringCodexTerminalButton = false
-    @State private var codexTerminalButtonState: CodexActionVisualState = .idle
-    @State private var codexTerminalResetTask: Task<Void, Never>?
-    @State private var codexDeviceAuthDismissTask: Task<Void, Never>?
-    @StateObject private var deviceCodeCopyFeedback = CopyFeedback()
-    @State private var isShowingCodexDeviceAuth = false
-    @State private var connectionSuccessResetTask: Task<Void, Never>?
-    @State private var connectionTestTask: Task<Void, Never>?
+    @State var testConnectionStatus: String?
+    @State var testConnectionDetails: String?
+    @State var isTestingConnection = false
+    @State var connectionTestID: UUID?
+    @State var hasCopiedCode = false
+    @State var hasCopiedConnectionError = false
+    @State var showModelPicker = false
+    @State var isHoveringUsername = false
+    @State var isHoveringCodexEmail = false
+    @State var isDetailsExpanded = false
+    @State var isInternetAccessBlocked = false
+    @State var isHoveringInternetSettings = false
+    @State var isHoveringCopyError = false
+    @State var isHoveringCodexTerminalButton = false
+    @State var codexTerminalButtonState: CodexActionVisualState = .idle
+    @State var codexTerminalResetTask: Task<Void, Never>?
+    @State var codexDeviceAuthDismissTask: Task<Void, Never>?
+    @StateObject var deviceCodeCopyFeedback = CopyFeedback()
+    @State var isShowingCodexDeviceAuth = false
+    @State var connectionSuccessResetTask: Task<Void, Never>?
+    @State var connectionTestTask: Task<Void, Never>?
 
-    private var isConnectionSuccessful: Bool {
+    var isConnectionSuccessful: Bool {
         testConnectionStatus?.contains("Success") == true
     }
 
-    private var isConnectionFailed: Bool {
+    var isConnectionFailed: Bool {
         guard let status = testConnectionStatus else { return false }
         return !isConnectionSuccessful && !status.isEmpty
     }
 
-    private let providerColumns = Array(
+    let providerColumns = Array(
         repeating: GridItem(.flexible(minimum: 160), spacing: 10),
         count: 3
     )
@@ -56,7 +56,7 @@ struct AIProviderSettingsView: View {
         deviceAuthPresentation
     }
 
-    private var providerSelectionSection: some View {
+    var providerSelectionSection: some View {
         SettingsCard(title: "Select Provider", icon: "cpu", color: .purple) {
             LazyVGrid(columns: providerColumns, alignment: .leading, spacing: 10) {
                 ForEach(AIProvider.userSelectableProviders.filter { $0 != .openCodeGo }, id: \.self) { provider in
@@ -75,7 +75,7 @@ struct AIProviderSettingsView: View {
         .settingsFocusable(.providerSelect)
     }
 
-    private var sections: some View {
+    var sections: some View {
         VStack(spacing: 16) {
             providerSelectionSection
 
@@ -99,7 +99,7 @@ struct AIProviderSettingsView: View {
         }
     }
 
-    private var modelSelectionPresentation: some View {
+    var modelSelectionPresentation: some View {
         sections
         .onAppear {
             if viewModel.config.provider == .openAI {
@@ -139,7 +139,7 @@ struct AIProviderSettingsView: View {
         )
     }
 
-    private var deviceAuthPresentation: some View {
+    var deviceAuthPresentation: some View {
         modelSelectionPresentation
         .sheet(isPresented: $isShowingCodexDeviceAuth) {
             CodexDeviceAuthSheet(
@@ -183,7 +183,7 @@ struct AIProviderSettingsView: View {
         }
     }
 
-    private var apiConfigSection: some View {
+    var apiConfigSection: some View {
         SettingsCard(title: "API Configuration", icon: "key", color: .orange) {
             VStack(alignment: .leading, spacing: 12) {
                 if [.openCodeZen, .openCodeGo].contains(viewModel.config.provider) {
@@ -248,11 +248,11 @@ struct AIProviderSettingsView: View {
         .settingsFocusable(.providerConfiguration)
     }
 
-    private var supportsSubscriptionAuthUI: Bool {
+    var supportsSubscriptionAuthUI: Bool {
         FeatureFlags.subscriptionAuthEnabled && viewModel.config.provider.supportsSubscriptionAuth
     }
 
-    private func selectProvider(_ provider: AIProvider) {
+    func selectProvider(_ provider: AIProvider) {
         withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.85)) {
             viewModel.config.provider = provider
             if let defaultURL = provider.defaultAPIURL {
@@ -263,14 +263,14 @@ struct AIProviderSettingsView: View {
         }
     }
 
-    private var selectedAuthMethod: Binding<ProviderAuthMethod> {
+    var selectedAuthMethod: Binding<ProviderAuthMethod> {
         Binding(
             get: { viewModel.config.authMethod(for: viewModel.config.provider) },
             set: { setAuthMethod($0) }
         )
     }
 
-    private func setAuthMethod(_ method: ProviderAuthMethod) {
+    func setAuthMethod(_ method: ProviderAuthMethod) {
         var nextConfig = viewModel.config
         let provider = nextConfig.provider
         nextConfig.setAuthMethod(method, for: provider)
@@ -281,944 +281,20 @@ struct AIProviderSettingsView: View {
         HapticFeedbackManager.shared.selection()
     }
 
-    private var authenticationTransitionAnimation: Animation {
+    var authenticationTransitionAnimation: Animation {
         reduceMotion
             ? .easeInOut(duration: 0.16)
             : .spring(response: 0.4, dampingFraction: 0.82)
     }
 
-    private var authenticationPanelTransition: AnyTransition {
+    var authenticationPanelTransition: AnyTransition {
         reduceMotion
             ? .opacity
             : .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
     }
 
-    @ViewBuilder
-    private var openAIAuthenticationSection: some View {
-        if supportsSubscriptionAuthUI {
-            VStack(alignment: .leading, spacing: 10) {
-                ProviderAuthenticationControl(
-                    methods: viewModel.config.provider.supportedAuthMethods,
-                    selection: selectedAuthMethod
-                )
-                .frame(maxWidth: .infinity)
-
-                switch viewModel.config.authMethod(for: .openAI) {
-                case .apiKey, .manualSessionToken:
-                    apiKeySection
-                        .transition(authenticationPanelTransition)
-                case .accountSignIn:
-                    codexSubscriptionSection
-                        .transition(authenticationPanelTransition)
-                }
-            }
-        } else {
-            apiKeySection
-        }
-    }
-
-    private var apiKeySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if [.openCodeZen, .openCodeGo].contains(viewModel.config.provider) {
-                OpenCodeCredentialLinkView(viewModel: viewModel)
-                    .id(viewModel.config.provider)
-            }
-            if viewModel.config.provider == .ollama {
-                // Sorty never stores or sends an Ollama credential, so a key
-                // field that silently drops the value would mislead users.
-                Text("Ollama runs without an API key. Sorty doesn't send credentials to Ollama, so protect remote servers at the network layer.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else if !viewModel.config.usesConnectedOpenCodeCredentials(for: viewModel.config.provider) {
-                SettingsSecureField(
-                    title: "API Key",
-                    text: Binding(
-                        get: { viewModel.config.apiKey ?? "" },
-                        set: { viewModel.updateAPIKey($0) }
-                    ),
-                    isOptional: !viewModel.config.requiresAPIKey
-                )
-            }
-
-            if !viewModel.config.usesConnectedOpenCodeCredentials(for: viewModel.config.provider),
-               let url = viewModel.config.provider.apiKeyURL {
-                HStack(spacing: 4) {
-                    Text(viewModel.config.provider == .ollama ? "Find Ollama models at" : "Get your API key from")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .numericTextTransition(
-                            animationValue: viewModel.config.provider
-                        )
-                    Link(destination: url) {
-                        Text(viewModel.config.provider.apiKeyLinkLabel)
-                            .font(.caption)
-                            .underline()
-                    }
-                    .trackHoveredURL(url)
-                }
-            } else if !viewModel.config.usesConnectedOpenCodeCredentials(for: viewModel.config.provider) {
-                Text(viewModel.config.provider.apiKeyHelpText)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
-
-    private var codexSubscriptionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if codexAuth.isAuthenticated {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.green)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Codex subscription ready")
-                            .font(.subheadline.weight(.semibold))
-                        Text(codexAuth.accountEmail ?? "Signed in via Codex CLI")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringCodexEmail) ? 4 : 0)
-                            .animation(.spring(), value: isHoveringCodexEmail)
-                            .onHover { hovering in
-                                isHoveringCodexEmail = hovering
-                            }
-                    }
-
-                    Spacer()
-
-                    Button("Sign Out") {
-                        codexAuth.signOut()
-                    }
-                    .buttonStyle(.sortyBordered)
-                    .controlSize(.small)
-                }
-                .padding(10)
-                .background(Color.green.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            } else {
-                Text("Use your ChatGPT subscription for OpenAI inference through Codex CLI device authorization.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Button {
-                    startCodexDeviceAuth()
-                    isShowingCodexDeviceAuth = true
-                } label: {
-                    Label(codexDeviceAuthButtonTitle, systemImage: codexDeviceAuthButtonSymbol)
-                }
-                .buttonStyle(.sortyBordered)
-                .controlSize(.small)
-                .accessibilityIdentifier("CodexDeviceAuthButton")
-                .onHover { hovering in isHoveringCodexTerminalButton = hovering }
-
-                if !codexAuth.isCodexInstalled {
-                    Label("Codex CLI not detected", systemImage: "xmark.circle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-
-                if let error = codexAuth.authError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-        .task {
-            await autoVerifyCodexSignInLoop()
-        }
-    }
-
-    private var codexDeviceAuthButtonTitle: String {
-        switch codexTerminalButtonState {
-        case .idle:
-            return "Authenticate ChatGPT Subscription"
-        case .activating:
-            return "Starting Authorization..."
-        case .success:
-            return "Authorization Started"
-        case .failure:
-            return "Could Not Start Authorization"
-        }
-    }
-
-    private var codexDeviceAuthButtonSymbol: String {
-        switch codexTerminalButtonState {
-        case .idle:
-            return "person.crop.circle.badge.checkmark"
-        case .activating:
-            return "arrow.triangle.2.circlepath"
-        case .success:
-            return "checkmark.circle.fill"
-        case .failure:
-            return "xmark.circle.fill"
-        }
-    }
-
-    private var appleConfigSection: some View {
-        SettingsCard(title: "Apple Models", icon: "apple.logo", color: .gray) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Model")
-                            .font(.subheadline)
-                        Text("Runs privately on this Mac")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    ModelSelectorCompactButton(
-                        provider: .appleFoundationModel,
-                        label: selectedModelDisplay,
-                        onTap: { showModelPicker = true }
-                    )
-                    .modelSelectorTriggerBounds()
-                }
-
-                if !viewModel.isAppleModelAvailable {
-                    Divider()
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(.blue)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("On-device model unavailable")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                            Text(viewModel.appleModelStatus)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .numericTextTransition(
-                                    animationValue: viewModel.appleModelStatus
-                                )
-                        }
-                    }
-                }
-            }
-        }
-        .settingsFocusable(.providerConfiguration)
-    }
-
-    private var selectedModelDisplay: String {
-        viewModel.config.model.isEmpty ? "Choose model" : viewModel.config.model
-    }
-
-    private var connectionSection: some View {
-        SettingsCard(title: "Connection", icon: "network", color: .blue) {
-            VStack(alignment: .leading, spacing: 12) {
-                if [.openAICompatible, .ollama].contains(viewModel.config.provider) {
-                    HStack {
-                        Spacer()
-                        Toggle(isOn: $viewModel.config.requiresAPIKey) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Requires API Key")
-                                    .font(.subheadline)
-                                Text("Disable for local endpoints without auth")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .toggleStyle(.switch)
-                        .fixedSize()
-                        Spacer()
-                    }
-
-                    Divider()
-                }
-
-                VStack(spacing: 12) {
-                    Button(action: testConnection) {
-                        HStack(spacing: 6) {
-                            if isTestingConnection {
-                                BouncingSpinner(size: 12, color: .primary)
-                            } else if isConnectionSuccessful {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .contentTransition(.symbolEffect(.replace))
-                            } else if isConnectionFailed {
-                                Image(
-                                    systemName: isInternetAccessBlocked
-                                        ? "network.slash" : "xmark.circle.fill"
-                                )
-                                .contentTransition(.symbolEffect(.replace))
-                            } else {
-                                Image(systemName: "network")
-                                    .contentTransition(.symbolEffect(.replace))
-                            }
-                            Text(connectionButtonTitle)
-                        }
-                        .animation(
-                            reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78),
-                            value: connectionButtonTitle
-                        )
-                    }
-                    .buttonStyle(.sortyBordered(intent: connectionButtonIntent))
-                    .animation(
-                        reduceMotion ? nil : .easeInOut(duration: 0.2),
-                        value: connectionButtonIntent
-                    )
-                    .settingsFocusable(
-                        .providerTestConnection,
-                        shape: Capsule(style: .continuous),
-                        horizontalRingPadding: 4,
-                        verticalRingPadding: 4
-                    )
-                    .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
-                    .accessibilityLabel(connectionButtonTitle)
-
-                    if let status = testConnectionStatus, isConnectionFailed {
-                        VStack(alignment: .center, spacing: 8) {
-                            HStack(alignment: .center, spacing: 6) {
-                                Text(status.replacingOccurrences(of: "Error: ", with: ""))
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(isInternetAccessBlocked ? .orange : .red)
-                                    .multilineTextAlignment(.center)
-                                    .frame(maxWidth: 560)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .textSelection(.enabled)
-
-                                copyConnectionErrorButton(status: status)
-                            }
-                            .fixedSize(horizontal: true, vertical: false)
-                            .frame(maxWidth: 700, alignment: .center)
-
-                            if let details = testConnectionDetails, !details.isEmpty {
-                                VStack(spacing: 6) {
-                                    Button {
-                                        HapticFeedbackManager.shared.selection()
-                                        withAnimation(
-                                            reduceMotion
-                                                ? nil
-                                                : .spring(response: 0.30, dampingFraction: 0.78)
-                                        ) {
-                                            isDetailsExpanded.toggle()
-                                        }
-                                    } label: {
-                                        HStack {
-                                            Text(
-                                                isInternetAccessBlocked
-                                                    ? "Why this is blocked"
-                                                    : "Technical Details"
-                                            )
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-
-                                            Spacer()
-
-                                            Image(
-                                                systemName: isDetailsExpanded
-                                                    ? "chevron.up"
-                                                    : "chevron.down"
-                                            )
-                                            .font(.caption2.bold())
-                                            .foregroundStyle(.secondary)
-                                            .contentTransition(.symbolEffect(.replace))
-                                        }
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityIdentifier("ProviderConnectionDetailsDisclosure")
-
-                                    if isDetailsExpanded {
-                                        Text(details)
-                                            .font(.system(.caption, design: .monospaced))
-                                            .padding(10)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .background(Color.secondary.opacity(0.1))
-                                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                                            .fixedSize(horizontal: false, vertical: true)
-                                            .textSelection(.enabled)
-                                            .transition(.move(edge: .top).combined(with: .opacity))
-                                    }
-                                }
-                                .frame(maxWidth: 620)
-                            }
-
-                            if isInternetAccessBlocked {
-                                Button {
-                                    HapticFeedbackManager.shared.tap()
-                                    appState.openSettingsWindow(
-                                        section: .permissions,
-                                        focusTarget: .privacyBlockInternet
-                                    )
-                                    appState.navigatedFromSettings = true
-                                } label: {
-                                    Label(
-                                        "Open Internet Settings",
-                                        systemImage: isHoveringInternetSettings ? "arrow.up.right" : "network"
-                                    )
-                                    .font(.caption.bold())
-                                    .contentTransition(.symbolEffect(.replace))
-                                }
-                                .buttonStyle(.tintedPill(.orange, size: .small))
-                                .help("Open Privacy & Permissions settings and focus Block Internet Connections")
-                                .accessibilityHint(
-                                    "Opens the setting that prevents Sorty from contacting cloud providers"
-                                )
-                                .accessibilityIdentifier("ProviderOpenInternetSettingsButton")
-                                .onHover { hovering in
-                                    withAnimation(
-                                        reduceMotion
-                                            ? nil
-                                            : .spring(response: 0.24, dampingFraction: 0.82)
-                                    ) {
-                                        isHoveringInternetSettings = hovering
-                                    }
-                                }
-                            }
-                        }
-                        .font(.subheadline)
-                        .frame(maxWidth: 620, alignment: .center)
-                        .transition(.scale.combined(with: .opacity))
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-            }
-        }
-        .settingsFocusable(.providerConnection)
-    }
-
-    private var connectionButtonTitle: String {
-        if isTestingConnection {
-            return "Testing…"
-        }
-        if isConnectionSuccessful {
-            return "Connected"
-        }
-        if isConnectionFailed {
-            return isInternetAccessBlocked ? "Internet Blocked" : "Connection Failed"
-        }
-        return "Test Connection"
-    }
-
-    private var connectionButtonIntent: SortyButtonIntent {
-        if isConnectionSuccessful {
-            return .success
-        }
-        if isConnectionFailed {
-            return isInternetAccessBlocked ? .warning : .destructive
-        }
-        return .secondary
-    }
-
-    private func copyConnectionErrorButton(status: String) -> some View {
-        Button {
-            let pb = NSPasteboard.general
-            pb.clearContents()
-            pb.setString(status.replacingOccurrences(of: "Error: ", with: ""), forType: .string)
-            HapticFeedbackManager.shared.tap()
-            hasCopiedConnectionError = true
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 1_250_000_000)
-                guard !Task.isCancelled else { return }
-                hasCopiedConnectionError = false
-            }
-        } label: {
-            Image(systemName: hasCopiedConnectionError ? "checkmark" : "doc.on.doc")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(
-                    hasCopiedConnectionError ? .green : isHoveringCopyError ? .primary : .secondary
-                )
-                .contentTransition(.symbolEffect(.replace))
-                .scaleEffect(isHoveringCopyError && !reduceMotion ? 1.12 : 1)
-                .opacity(isHoveringCopyError ? 1 : 0.75)
-                .animation(
-                    reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.75),
-                    value: isHoveringCopyError
-                )
-        }
-        .buttonStyle(.plain)
-        .help(hasCopiedConnectionError ? "Copied error message" : "Copy error message")
-        .accessibilityLabel("Copy error message")
-        .accessibilityValue(hasCopiedConnectionError ? "Copied" : "")
-        .onHover { hovering in
-            isHoveringCopyError = hovering
-        }
-    }
-
-    private func testConnection() {
-        HapticFeedbackManager.shared.tap()
-        connectionSuccessResetTask?.cancel()
-        connectionSuccessResetTask = nil
-        connectionTestTask?.cancel()
-        connectionTestTask = nil
-        isTestingConnection = true
-        testConnectionStatus = nil
-        testConnectionDetails = nil
-        isDetailsExpanded = false
-        isInternetAccessBlocked = false
-        hasCopiedConnectionError = false
-        let testedConfig = viewModel.config
-        let testID = UUID()
-        connectionTestID = testID
-        let shouldAnimate = !reduceMotion
-
-        connectionTestTask = Task {
-            do {
-                try await viewModel.testConnection()
-                await MainActor.run {
-                    guard connectionTestID == testID, viewModel.config == testedConfig else { return }
-                    HapticFeedbackManager.shared.success()
-                    withAnimation(
-                        shouldAnimate ? .spring(response: 0.4, dampingFraction: 0.7) : nil
-                    ) {
-                        testConnectionStatus = "Success: Connection test passed"
-                        testConnectionDetails = nil
-                    }
-                    clearSetupRepairIfProviderIsUsable(testedConfig: testedConfig)
-                    scheduleConnectionSuccessReset()
-                }
-            } catch let decodingError as DecodingError {
-                let context: String
-                switch decodingError {
-                case .dataCorrupted(let ctx):
-                    context = ctx.debugDescription
-                case .keyNotFound(let key, _):
-                    context = "Missing key: \(key.stringValue)"
-                case .typeMismatch(let type, _):
-                    context = "Type mismatch for: \(type)"
-                case .valueNotFound(let type, _):
-                    context = "Missing value for: \(type)"
-                @unknown default:
-                    context = decodingError.localizedDescription
-                }
-                await MainActor.run {
-                    guard connectionTestID == testID, viewModel.config == testedConfig else { return }
-                    HapticFeedbackManager.shared.error()
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        testConnectionStatus = "Error: Invalid response format"
-                        testConnectionDetails = "The API endpoint may be incorrect or the service returned unexpected data.\n\nDetails: \(context)"
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    guard connectionTestID == testID, viewModel.config == testedConfig else { return }
-                    HapticFeedbackManager.shared.error()
-                    var details: String? = nil
-                    if let aiError = error as? AIClientError {
-                        details = aiError.failureReason
-                        isInternetAccessBlocked = aiError.isInternetAccessBlocked
-                    } else {
-                        details = (error as NSError).localizedFailureReason ?? (error as NSError).localizedRecoverySuggestion
-                    }
-
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        if isInternetAccessBlocked {
-                            testConnectionStatus = """
-                            Error: Sorty can’t connect to \(testedConfig.provider.displayName) while Block Internet Connections is on.
-                            """
-                        } else {
-                            testConnectionStatus = "Error: \(error.localizedDescription)"
-                        }
-                        testConnectionDetails = details
-                    }
-                }
-            }
-            await MainActor.run {
-                guard connectionTestID == testID else { return }
-                connectionTestID = nil
-                isTestingConnection = false
-                connectionTestTask = nil
-            }
-        }
-    }
-
-    @MainActor
-    private func resetConnectionTestState() {
-        connectionTestID = nil
-        connectionTestTask?.cancel()
-        connectionTestTask = nil
-        connectionSuccessResetTask?.cancel()
-        connectionSuccessResetTask = nil
-        isTestingConnection = false
-        testConnectionStatus = nil
-        testConnectionDetails = nil
-        isDetailsExpanded = false
-        isInternetAccessBlocked = false
-        hasCopiedConnectionError = false
-        isHoveringCopyError = false
-    }
-
-    @MainActor
-    private func scheduleConnectionSuccessReset() {
-        connectionSuccessResetTask?.cancel()
-        connectionSuccessResetTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
-            guard !Task.isCancelled else { return }
-            HapticFeedbackManager.shared.selection()
-            withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.78)) {
-                testConnectionStatus = nil
-                testConnectionDetails = nil
-                isDetailsExpanded = false
-                isInternetAccessBlocked = false
-                hasCopiedConnectionError = false
-            }
-            connectionSuccessResetTask = nil
-        }
-    }
-
-    @MainActor
-    private func clearSetupRepairIfProviderIsUsable(testedConfig: AIConfig) {
-        guard viewModel.config == testedConfig else { return }
-
-        let providerStatus = OnboardingSetupValidator.providerStatus(
-            context: ProviderSetupContext(
-                config: testedConfig,
-                isCodexAuthenticated: codexAuth.isAuthenticated,
-                isCodexInstalled: codexAuth.isCodexInstalled,
-                isAppleFoundationModelAvailable: viewModel.isAppleModelAvailable,
-                appleFoundationModelStatus: viewModel.appleModelStatus
-            )
-        )
-        guard providerStatus.isReady else { return }
-
-        appState.clearSetupRepairState()
-    }
-
-    private func autoVerifyCodexSignInLoop() async {
-        // Bounded exponential backoff (2s, 4s, 8s, 16s, then 30s cap,
-        // ~10 tries) instead of an unbounded fixed 2s poll that keeps
-        // process spawns churning while the panel sits open.
-        var attempt = 0
-        while !Task.isCancelled {
-            let becameAuthenticated = await MainActor.run {
-                verifyCodexSignInStatus()
-            }
-
-            if becameAuthenticated {
-                await MainActor.run {
-                    handleCodexDeviceAuthSuccess()
-                }
-            }
-
-            let shouldContinue = await MainActor.run {
-                viewModel.config.provider == .openAI
-                    && viewModel.config.authMethod(for: .openAI) == .accountSignIn
-                    && !codexAuth.isAuthenticated
-            }
-            if !shouldContinue {
-                break
-            }
-
-            attempt += 1
-            guard attempt < 10 else { break }
-            let backoffNanoseconds = min(UInt64(2_000_000_000) << (attempt - 1), 30_000_000_000)
-            try? await Task.sleep(nanoseconds: backoffNanoseconds)
-        }
-    }
-
-    @MainActor
-    @discardableResult
-    private func verifyCodexSignInStatus() -> Bool {
-        let wasAuthenticated = codexAuth.isAuthenticated
-        codexAuth.checkStatus()
-        if codexAuth.isAuthenticated && !wasAuthenticated {
-            viewModel.updateAvailableModels(force: true)
-            return true
-        }
-        return false
-    }
-
-    @MainActor
-    private func startCodexDeviceAuth() {
-        HapticFeedbackManager.shared.tap()
-        codexTerminalButtonState = .activating
-        codexAuth.startDeviceAuth()
-
-        if codexAuth.authError == nil {
-            codexTerminalButtonState = .success
-        } else {
-            codexTerminalButtonState = .failure
-            HapticFeedbackManager.shared.error()
-        }
-
-        scheduleCodexTerminalButtonReset()
-    }
-
-    @MainActor
-    private func openChatGPTSecuritySettings() {
-        HapticFeedbackManager.shared.tap()
-        let targetToggle = "Enable device code authorization for Codex"
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(targetToggle, forType: .string)
-
-        if let url = URL(string: "https://chatgpt.com/#settings/Security") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    @MainActor
-    private func openCodexDeviceAuthorization() {
-        HapticFeedbackManager.shared.tap()
-        let url = codexAuth.deviceAuthSession?.verificationURL
-            ?? URL(string: "https://auth.openai.com/activate")
-        if let url {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    @MainActor
-    private func copyCodexDeviceCode() {
-        guard let code = codexAuth.deviceAuthSession?.userCode else { return }
-        deviceCodeCopyFeedback.copy(code, duration: .milliseconds(1250),
-            animation: reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.72),
-            resetAnimation: reduceMotion ? nil : .easeOut(duration: 0.18))
-    }
-
-    @MainActor
-    private func scheduleCodexTerminalButtonReset() {
-        codexTerminalResetTask?.cancel()
-        codexTerminalResetTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_400_000_000)
-            guard !Task.isCancelled else { return }
-            guard codexAuth.deviceAuthSession?.status != .authorized else { return }
-            codexTerminalButtonState = .idle
-            codexTerminalResetTask = nil
-        }
-    }
-
-    @MainActor
-    private func handleCodexDeviceAuthSuccess() {
-        guard isShowingCodexDeviceAuth else { return }
-
-        codexTerminalButtonState = .success
-        viewModel.updateAvailableModels(force: true)
-        HapticFeedbackManager.shared.success()
-
-        codexDeviceAuthDismissTask?.cancel()
-        codexDeviceAuthDismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 650_000_000)
-            guard !Task.isCancelled else { return }
-            guard codexAuth.isAuthenticated || codexAuth.deviceAuthSession?.status == .authorized else { return }
-            isShowingCodexDeviceAuth = false
-            codexDeviceAuthDismissTask = nil
-        }
-    }
 }
 
-private struct CodexDeviceAuthSheet: View {
-    @SortyHotReload private var hotReload
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    let session: CodexDeviceAuthSession?
-    let isCodexInstalled: Bool
-    let authError: String?
-    let onStart: () -> Void
-    let onCancel: () -> Void
-    let onOpenSettings: () -> Void
-    let onOpenDeviceAuthorization: () -> Void
-    let onCopyCode: () -> Void
-    let isCodeCopied: Bool
-
-    private var userCode: String {
-        session?.userCode ?? "---- -----"
-    }
-
-    private var isWaiting: Bool {
-        switch session?.status {
-        case .starting, .waiting:
-            return true
-        default:
-            return false
-        }
-    }
-
-    var body: some View {
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: 14) {
-                content
-            }
-        } else {
-            content
-        }
-    }
-
-    private var content: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Reauthenticate ChatGPT Subscription")
-                        .font(.title2.weight(.bold))
-                    Text("Reauthenticate to keep using your ChatGPT subscription for OpenAI inference.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                Button(action: onCancel) {
-                    Image(systemName: "xmark")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close")
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                CodexDeviceAuthStep(number: 1, title: "Enable device code authorization for Codex.") {
-                    Button(action: onOpenSettings) {
-                        Label("Open ChatGPT Settings", systemImage: "arrow.up.right.square")
-                    }
-                    .buttonStyle(.sortyBordered)
-                    .controlSize(.small)
-                }
-
-                CodexDeviceAuthStep(number: 2, title: "Open the OpenAI device authorization page.") {
-                    Button(action: onOpenDeviceAuthorization) {
-                        Label("Open device authorization", systemImage: "arrow.up.right.square")
-                    }
-                    .buttonStyle(.sortyBordered)
-                    .controlSize(.small)
-                }
-
-                CodexDeviceAuthStep(number: 3, title: "Paste this device code when OpenAI asks for it:") {
-                    Button(action: onCopyCode) {
-                        HStack(spacing: 12) {
-                            Text(userCode)
-                                .font(.title2.monospaced().weight(.bold))
-                                .tracking(3)
-                                .frame(minWidth: 190, alignment: .leading)
-
-                            Spacer(minLength: 10)
-
-                            Label(isCodeCopied ? "Copied" : "Copy", systemImage: isCodeCopied ? "checkmark.circle.fill" : "doc.on.doc")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(isCodeCopied ? .green : .secondary)
-                                .symbolReplaceTransition(animationValue: isCodeCopied)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(isCodeCopied ? Color.green.opacity(0.10) : Color.clear)
-                    }
-                    .systemLiquidGlassBackground(cornerRadius: 12)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(isCodeCopied ? Color.green.opacity(0.42) : Color.primary.opacity(0.08), lineWidth: 1)
-                    }
-                    .scaleEffect(isCodeCopied && !reduceMotion ? 1.015 : 1)
-                    .disabled(session?.userCode == nil)
-                    .help("Copy device code")
-                    .accessibilityLabel(isCodeCopied ? "Device code copied" : "Copy device code")
-                }
-
-                CodexDeviceAuthStep(number: 4, title: "Continue to finish approval.") {
-                    CodexDeviceAuthStatusView(
-                        session: session,
-                        isCodexInstalled: isCodexInstalled,
-                        authError: authError,
-                        isWaiting: isWaiting,
-                        onStart: onStart
-                    )
-                }
-            }
-
-            Text("Keep this dialog open while Sorty waits for approval.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Spacer()
-                Button("Cancel", action: onCancel)
-                    .buttonStyle(.sortyBordered)
-            }
-        }
-        .padding(28)
-        .onAppear {
-            if session == nil {
-                onStart()
-            }
-        }
-    }
-}
-
-private struct CodexDeviceAuthStep<Content: View>: View {
-    @SortyHotReload private var hotReload
-    let number: Int
-    let title: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            Text("\(number)")
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(.primary)
-                .frame(width: 32, height: 32)
-                .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
-                .clipShape(Circle())
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text(LocalizedStringKey(title))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                content
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(14)
-        .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
-    }
-}
-
-private struct CodexDeviceAuthStatusView: View {
-    @SortyHotReload private var hotReload
-    let session: CodexDeviceAuthSession?
-    let isCodexInstalled: Bool
-    let authError: String?
-    let isWaiting: Bool
-    let onStart: () -> Void
-
-    var body: some View {
-        VStack(spacing: 8) {
-            switch session?.status {
-            case .authorized:
-                Label("Authorization complete", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-            case .failed(let message):
-                Label(message, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                    .multilineTextAlignment(.center)
-                Button("Try Again", action: onStart)
-                    .buttonStyle(.sortyBordered)
-                    .controlSize(.small)
-            default:
-                HStack(spacing: 8) {
-                    BouncingSpinner(size: 14, color: .primary)
-                    Text(isWaiting ? "Waiting for authorization" : "Starting authorization")
-                        .font(.subheadline.weight(.semibold))
-                        .numericTextTransition(animationValue: isWaiting)
-                }
-                Text("Refreshing automatically")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if !isCodexInstalled {
-                Text("Codex CLI is required. Install with: npm i -g @openai/codex")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            } else if let authError {
-                Text(authError)
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
-        .padding(.horizontal, 14)
-        .systemLiquidGlassBackground(cornerRadius: 12)
-    }
-}
 
 #Preview {
     let codexAuthManager = CodexCLIAuthManager()
@@ -1229,233 +305,3 @@ private struct CodexDeviceAuthStatusView: View {
         .frame(width: 500, height: 600)
 }
 
-/// Uses the same compact status panel and actions as the subscription sign-in UI.
-struct OpenCodeCredentialLinkView: View {
-    @ObservedObject var viewModel: SettingsViewModel
-    var onWillImport: () -> Void = {}
-    @State private var isChecking = false
-    @State private var isOpeningSignIn = false
-    @State private var awaitingSignIn = false
-    @State private var errorMessage: String?
-    @State private var refreshID = UUID()
-    @State private var loginScriptURL: URL?
-
-    private var isConnected: Bool {
-        viewModel.config.usesConnectedOpenCodeCredentials(for: viewModel.config.provider)
-            && viewModel.config.apiKey != nil
-    }
-    private var canCheck: Bool {
-        viewModel.hasLoadedPersistedState && !viewModel.isConfiguredCredentialHydrating
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: isConnected ? "checkmark.circle.fill" : "person.crop.circle.badge.checkmark")
-                    .font(.title3)
-                    .foregroundStyle(isConnected ? Color.green : Color.secondary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(isConnected ? "Connected to \(viewModel.config.provider.displayName)" : "Connect with OpenCode")
-                        .accessibilityIdentifier("OpenCodeConnectionStatus")
-                        .font(.subheadline.weight(.semibold))
-                    Text(isConnected ? "Using your OpenCode credentials" : "Choose Zen or Go in OpenCode to connect this plan.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
-            HStack(spacing: 8) {
-                if !isConnected {
-                    Button {
-                        onWillImport()
-                        errorMessage = nil
-                        isOpeningSignIn = true
-                        HapticFeedbackManager.shared.tap()
-                    } label: {
-                        Label("Sign in with OpenCode", systemImage: "arrow.up.right.square")
-                    }
-                    .buttonStyle(.sortyBordered)
-                    .disabled(isOpeningSignIn || !canCheck)
-                    .accessibilityIdentifier("OpenCodeSignInButton")
-                }
-                Button {
-                    onWillImport()
-                    isChecking = true
-                    errorMessage = nil
-                    HapticFeedbackManager.shared.tap()
-                } label: {
-                    Label(isChecking ? "Checking…" : "Refresh status", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.sortyBordered)
-                .disabled(isChecking || !canCheck)
-                .accessibilityIdentifier("importOpenCodeCredentials")
-
-                if viewModel.config.openCodeAuthSource(for: viewModel.config.provider) != .apiKey {
-                    Button("Use API key") {
-                        awaitingSignIn = false
-                        viewModel.useManualOpenCodeAPIKey()
-                        errorMessage = nil
-                        HapticFeedbackManager.shared.selection()
-                    }
-                    .buttonStyle(.sortyBordered)
-                    .accessibilityIdentifier("OpenCodeManualAPIKeyButton")
-                }
-            }
-            .controlSize(.small)
-            if awaitingSignIn && !isConnected {
-                Label("Finish connecting in OpenCode. Sorty will update automatically.", systemImage: "clock")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if let errorMessage {
-                Label(errorMessage, systemImage: "exclamationmark.circle")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if !isConnected {
-                Link("Get an OpenCode API key", destination: URL(string: "https://opencode.ai/auth")!)
-                    .accessibilityIdentifier("OpenCodeAPIKeyLink")
-                    .font(.caption)
-                    .trackHoveredURL(URL(string: "https://opencode.ai/auth")!)
-                Text("Website sign-in alone does not connect Sorty. Connect your plan in OpenCode, or enter its API key.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(10)
-        .background((isConnected ? Color.green : Color.secondary).opacity(isConnected ? 0.08 : 0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .task(id: "\(canCheck)-\(refreshID)") {
-            if canCheck { await viewModel.refreshOpenCodeCredentials() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            refreshID = UUID()
-        }
-        .task(id: isChecking) {
-            guard isChecking else { return }
-            defer { isChecking = false }
-            do {
-                try await viewModel.importOpenCodeCredentials()
-                HapticFeedbackManager.shared.success()
-            } catch {
-                guard !Task.isCancelled else { return }
-                errorMessage = error.localizedDescription
-                HapticFeedbackManager.shared.error()
-            }
-        }
-        .task(id: isOpeningSignIn) {
-            guard isOpeningSignIn else { return }
-            defer { isOpeningSignIn = false }
-            guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else {
-                errorMessage = NetworkPrivacyPolicy.blockedMessage
-                return
-            }
-            do {
-                let script = try await Task.detached(priority: .utility) {
-                    try OpenCodeCredentials.prepareLoginScript()
-                }.value
-                guard !Task.isCancelled else {
-                    try? FileManager.default.removeItem(at: script.deletingLastPathComponent())
-                    return
-                }
-                if NSWorkspace.shared.open(script) {
-                    loginScriptURL = script
-                    awaitingSignIn = true
-                } else {
-                    try? FileManager.default.removeItem(at: script.deletingLastPathComponent())
-                    errorMessage = "Could not open Terminal. Run opencode auth login, then refresh status."
-                }
-            } catch {
-                errorMessage = (error as? OpenCodeCredentials.ImportError)?.localizedDescription
-                    ?? "Could not start OpenCode sign-in. Run opencode auth login, then refresh status."
-            }
-        }
-        .task(id: awaitingSignIn) {
-            guard awaitingSignIn else { return }
-            let script = loginScriptURL
-            defer {
-                if let script {
-                    try? FileManager.default.removeItem(at: script.deletingLastPathComponent())
-                }
-                loginScriptURL = nil
-            }
-            // Bounded polling exists only while an explicitly started login is
-            // pending. View disappearance or manual-key selection cancels it.
-            for _ in 0..<150 {
-                do { try await Task.sleep(for: .seconds(2)) } catch { return }
-                await viewModel.refreshOpenCodeCredentials(allowsManualSource: true)
-                if isConnected {
-                    awaitingSignIn = false
-                    HapticFeedbackManager.shared.success()
-                    return
-                }
-            }
-            awaitingSignIn = false
-        }
-    }
-}
-
-/// Matches the native capsule selector used by History filters.
-struct ProviderAuthenticationControl: NSViewRepresentable {
-    let methods: [ProviderAuthMethod]
-    @Binding var selection: ProviderAuthMethod
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(methods: methods, selection: $selection)
-    }
-
-    func makeNSView(context: Context) -> NSSegmentedControl {
-        let control = NSSegmentedControl(
-            labels: methods.map(\.displayName),
-            trackingMode: .selectOne,
-            target: context.coordinator,
-            action: #selector(Coordinator.selectionChanged(_:))
-        )
-        control.font = .systemFont(ofSize: 11, weight: .medium)
-        control.setAccessibilityLabel("Authentication")
-        control.setAccessibilityIdentifier("ProviderAuthenticationPicker")
-        if #available(macOS 26.0, *) {
-            control.controlSize = .extraLarge
-            control.borderShape = .capsule
-        } else {
-            control.controlSize = .large
-        }
-        // Adopt the public tabs role when the project moves to the macOS 27 SDK.
-        if control.responds(to: NSSelectorFromString("setRole:")) {
-            control.setValue(1, forKey: "role")
-        }
-        control.segmentDistribution = .fillEqually
-        return control
-    }
-
-    func updateNSView(_ control: NSSegmentedControl, context: Context) {
-        context.coordinator.methods = methods
-        context.coordinator.selection = $selection
-        control.segmentCount = methods.count
-        for (index, method) in methods.enumerated() {
-            control.setLabel(method.displayName, forSegment: index)
-        }
-        control.selectedSegment = methods.firstIndex(of: selection) ?? -1
-    }
-
-    @MainActor
-    final class Coordinator: NSObject {
-        var methods: [ProviderAuthMethod]
-        var selection: Binding<ProviderAuthMethod>
-
-        init(methods: [ProviderAuthMethod], selection: Binding<ProviderAuthMethod>) {
-            self.methods = methods
-            self.selection = selection
-        }
-
-        @objc func selectionChanged(_ sender: NSSegmentedControl) {
-            guard methods.indices.contains(sender.selectedSegment) else { return }
-            let method = methods[sender.selectedSegment]
-            guard selection.wrappedValue != method else { return }
-            selection.wrappedValue = method
-            HapticFeedbackManager.shared.selection()
-        }
-    }
-}
