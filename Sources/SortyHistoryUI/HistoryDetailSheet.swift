@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-struct HistoryDetailSheet: View {
+package struct HistoryDetailSheet: View {
     @SortyHotReload var hotReload
     let entry: OrganizationHistoryEntry
     @Binding var isProcessing: Bool
@@ -32,6 +32,18 @@ struct HistoryDetailSheet: View {
     @EnvironmentObject var learningsManager: LearningsManager
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
+    package init(
+        entry: OrganizationHistoryEntry,
+        isProcessing: Binding<Bool>,
+        onAction: @escaping (String) -> Void,
+        onDismiss: @escaping () -> Void
+    ) {
+        self.entry = entry
+        self._isProcessing = isProcessing
+        self.onAction = onAction
+        self.onDismiss = onDismiss
+    }
+
     var currentEntry: OrganizationHistoryEntry {
         guard var loadedEntry else {
             return organizer.history.entries.first { $0.id == entry.id } ?? entry
@@ -44,7 +56,7 @@ struct HistoryDetailSheet: View {
         return loadedEntry
     }
 
-    var body: some View {
+    package var body: some View {
         NavigationStack {
             ScrollViewReader { scrollProxy in
                 ScrollView {

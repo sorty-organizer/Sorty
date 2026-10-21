@@ -119,7 +119,7 @@ private enum HistorySnapshotCache {
     }
 }
 
-struct HistoryView: View {
+package struct HistoryView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var organizer: FolderOrganizer
@@ -144,6 +144,8 @@ struct HistoryView: View {
     @State private var impactSummary = HistoryImpactSummary()
     @State private var displayedEntryCount = 50
     private let pageSize = 50
+
+    package init() {}
 
     private var hasFilteredEntries: Bool {
         !filteredChronologicalEntries.isEmpty
@@ -221,7 +223,7 @@ struct HistoryView: View {
         )
     }
 
-    enum HistoryFilter: String, CaseIterable, Identifiable, Sendable {
+    package enum HistoryFilter: String, CaseIterable, Identifiable, Sendable {
         case all = "All"
         case undoable = "Undoable"
         case failed = "Failed"
@@ -230,7 +232,7 @@ struct HistoryView: View {
         case manual = "Manual"
         case watched = "Watched"
 
-        var id: String { rawValue }
+        package var id: String { rawValue }
 
         var detailedLabel: String {
             switch self {
@@ -251,7 +253,7 @@ struct HistoryView: View {
             }
         }
 
-        func includes(
+        package func includes(
             status: OrganizationStatus,
             source: OrganizationEntrySource,
             isUndone: Bool = false,
@@ -272,7 +274,7 @@ struct HistoryView: View {
         }
     }
 
-    var body: some View {
+    package var body: some View {
         Group {
             if cachedEntries.count > 1 {
                 content
