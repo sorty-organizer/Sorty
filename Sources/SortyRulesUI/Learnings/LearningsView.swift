@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 
 // MARK: - Main View
 
-struct LearningsView: View {
+package struct LearningsView: View {
     @SortyHotReload var hotReload
     @EnvironmentObject var manager: LearningsManager
     @EnvironmentObject var appState: AppState
@@ -27,6 +27,8 @@ struct LearningsView: View {
     @State var pendingControlAction: PendingControlAction?
     @State var selectedLearningRecordsCategory: LearningRecordsCategory?
     @AppStorage("learnings.activePatternsExpanded") var isActivePatternsExpanded = true
+
+    package init() {}
 
     enum PendingControlAction: Equatable {
         case withdrawConsent
@@ -147,7 +149,7 @@ struct LearningsView: View {
         var id: String { label }
     }
 
-    var body: some View {
+    package var body: some View {
         ZStack {
             if !manager.consentManager.hasConsented {
                 onboardingView

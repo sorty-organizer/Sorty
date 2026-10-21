@@ -8,7 +8,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct ExclusionRulesView: View {
+package struct ExclusionRulesView: View {
     @SortyHotReload var hotReload
     @EnvironmentObject var rulesManager: ExclusionRulesManager
     @EnvironmentObject var appState: AppState
@@ -125,6 +125,10 @@ struct ExclusionRulesView: View {
         "Exclude video files larger than 1 GB",
     ]
 
+    package init(injectedAIClient: (any AIClientProtocol)? = nil) {
+        self.injectedAIClient = injectedAIClient
+    }
+
     var naturalLanguageSuggestion: String {
         naturalLanguageExceptionSuggestions[naturalLanguageSuggestionIndex]
     }
@@ -133,7 +137,7 @@ struct ExclusionRulesView: View {
         !newNLException.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    var body: some View {
+    package var body: some View {
         Group {
             if rulesManager.rules.count > 1 {
                 content
