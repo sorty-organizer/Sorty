@@ -89,44 +89,7 @@ struct FlatUnorganizedFileRowView: View {
     @State private var isDragging = false
 
     var body: some View {
-        rowContent
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(backgroundColor)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isHighlighted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.3) : Color.clear, lineWidth: 1)
-        )
-        .contentShape(Rectangle())
-        .contextMenu {
-            Button {
-                NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
-            } label: {
-                Label("Open", systemImage: "arrow.up.right.square")
-            }
-            
-            Button {
-                NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
-            } label: {
-                Label("Reveal in Finder", systemImage: "folder")
-            }
-
-            if !moveDestinations.isEmpty {
-                Menu("Move to Folder") {
-                    ForEach(moveDestinations) { destination in
-                        Button(destination.name) {
-                            store.moveFile(fileID: file.id, toFolderID: destination.id)
-                            onPlanChanged()
-                        }
-                    }
-                }
-            }
-        }
+        contextualRow
         .onTapGesture(count: 2) {
             NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
         }
@@ -185,4 +148,45 @@ struct FlatUnorganizedFileRowView: View {
         isHighlighted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : (isDragging ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
     }
 
+
+    private var contextualRow: some View {
+        rowContent
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(backgroundColor)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isHighlighted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.3) : Color.clear, lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button {
+                NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
+            } label: {
+                Label("Open", systemImage: "arrow.up.right.square")
+            }
+
+            Button {
+                NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+            }
+
+            if !moveDestinations.isEmpty {
+                Menu("Move to Folder") {
+                    ForEach(moveDestinations) { destination in
+                        Button(destination.name) {
+                            store.moveFile(fileID: file.id, toFolderID: destination.id)
+                            onPlanChanged()
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

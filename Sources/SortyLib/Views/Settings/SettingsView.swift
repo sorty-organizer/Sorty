@@ -49,40 +49,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ScrollView {
-                settingsSidebar
-            }
-            .frame(width: 224)
-            .background(Color(NSColor.windowBackgroundColor))
-            .animatedAppearance(delay: 0.03)
-            Divider()
-            contentView
-                .animatedAppearance(delay: 0.08)
-        }
-        .overlay {
-            WindowLinkHoverPillOverlay(hoverState: windowLinkHoverState)
-        }
-        .navigationTitle("Settings")
-        .searchable(text: $searchText, prompt: "Search settings")
-        .environment(\.windowLinkHoverUpdate) { hovering, url, sourceID in
-            MainActor.assumeIsolated {
-                windowLinkHoverState.setHovering(hovering, url: url, sourceID: sourceID)
-            }
-        }
-        .onAppear {
-            if let section = appState.selectedSettingsSection {
-                selectedCategory = section
-            }
-            captureSettingsScreen(selectedCategory)
-        }
-        .onChange(of: selectedCategory) { _, category in
-            captureSettingsScreen(category)
-        }
-        .onChange(of: analytics.consent) { _, consent in
-            guard consent == .granted else { return }
-            captureSettingsScreen(selectedCategory, source: "consent")
-        }
+        trackedSettingsLayout
         .onChange(of: appState.selectedSettingsSection) { _, newSection in
             if let section = newSection, section != selectedCategory {
                 // Cards and header controls animate locally. Animating this
@@ -519,6 +486,47 @@ struct SettingsView: View {
                     proxy.scrollTo(target.rawValue, anchor: .center)
                 }
             }
+        }
+    }
+
+    private var settingsLayout: some View {
+        HStack(spacing: 0) {
+            ScrollView {
+                settingsSidebar
+            }
+            .frame(width: 224)
+            .background(Color(NSColor.windowBackgroundColor))
+            .animatedAppearance(delay: 0.03)
+            Divider()
+            contentView
+                .animatedAppearance(delay: 0.08)
+        }
+    }
+
+    private var trackedSettingsLayout: some View {
+        settingsLayout
+        .overlay {
+            WindowLinkHoverPillOverlay(hoverState: windowLinkHoverState)
+        }
+        .navigationTitle("Settings")
+        .searchable(text: $searchText, prompt: "Search settings")
+        .environment(\.windowLinkHoverUpdate) { hovering, url, sourceID in
+            MainActor.assumeIsolated {
+                windowLinkHoverState.setHovering(hovering, url: url, sourceID: sourceID)
+            }
+        }
+        .onAppear {
+            if let section = appState.selectedSettingsSection {
+                selectedCategory = section
+            }
+            captureSettingsScreen(selectedCategory)
+        }
+        .onChange(of: selectedCategory) { _, category in
+            captureSettingsScreen(category)
+        }
+        .onChange(of: analytics.consent) { _, consent in
+            guard consent == .granted else { return }
+            captureSettingsScreen(selectedCategory, source: "consent")
         }
     }
 }
