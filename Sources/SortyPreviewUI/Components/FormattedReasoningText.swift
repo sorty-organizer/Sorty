@@ -7,13 +7,27 @@
 
 import SwiftUI
 
-struct FormattedReasoningText: View {
+package struct FormattedReasoningText: View {
     @SortyHotReload private var hotReload
     let text: String
     var font: Font = .callout
     var secondaryFont: Font = .caption
     var foregroundStyle: Color = .primary
     var showSectionIcons: Bool = true
+
+    package init(
+        text: String,
+        font: Font = .callout,
+        secondaryFont: Font = .caption,
+        foregroundStyle: Color = .primary,
+        showSectionIcons: Bool = true
+    ) {
+        self.text = text
+        self.font = font
+        self.secondaryFont = secondaryFont
+        self.foregroundStyle = foregroundStyle
+        self.showSectionIcons = showSectionIcons
+    }
 
     private var displayText: String {
         FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(text) : text
@@ -23,7 +37,7 @@ struct FormattedReasoningText: View {
         parseReasoning(displayText)
     }
 
-    var body: some View {
+    package var body: some View {
         let renderedSegments = segments
 
         if renderedSegments.count <= 1 {

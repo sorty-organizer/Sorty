@@ -24,7 +24,7 @@ public struct DuplicateInfo: Identifiable, Hashable, Sendable {
         self.similarity = similarity
     }
 
-    init(file: FileItem, sharedGroup: [FileItem], isExactMatch: Bool = true, similarity: Double = 1.0) {
+    package init(file: FileItem, sharedGroup: [FileItem], isExactMatch: Bool = true, similarity: Double = 1.0) {
         self.id = file.id
         self.file = file
         self.groupFiles = sharedGroup
@@ -46,7 +46,7 @@ public struct DuplicateInfo: Identifiable, Hashable, Sendable {
     }
 }
 
-struct LiquidGlassDuplicateButton: View {
+package struct LiquidGlassDuplicateButton: View {
     @SortyHotReload private var hotReload
     let duplicateInfo: DuplicateInfo
     var onFileSelected: ((FileItem) -> Void)? = nil
@@ -59,7 +59,7 @@ struct LiquidGlassDuplicateButton: View {
         self.onFileSelected = onFileSelected
     }
 
-    init(duplicateInfo: DuplicateInfo, highlightedFileID: Binding<UUID?>) {
+    package init(duplicateInfo: DuplicateInfo, highlightedFileID: Binding<UUID?>) {
         self.duplicateInfo = duplicateInfo
         self.onFileSelected = { selectedFile in
             highlightedFileID.wrappedValue = selectedFile.id
@@ -70,7 +70,7 @@ struct LiquidGlassDuplicateButton: View {
         duplicateInfo.isExactMatch ? .red : .orange
     }
 
-    var body: some View {
+    package var body: some View {
         Button {
             showPopover.toggle()
         } label: {

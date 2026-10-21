@@ -7,12 +7,17 @@
 
 import SwiftUI
 
-struct LiquidGlassReasoningButton: View {
+package struct LiquidGlassReasoningButton: View {
     @SortyHotReload private var hotReload
     let suggestion: FolderSuggestion
     var learningsManager: LearningsManager?
 
     @State private var showPopover = false
+
+    package init(suggestion: FolderSuggestion, learningsManager: LearningsManager? = nil) {
+        self.suggestion = suggestion
+        self.learningsManager = learningsManager
+    }
 
     private var matchedRule: InferredRule? {
         guard let ruleId = suggestion.ruleId,
@@ -28,7 +33,7 @@ struct LiquidGlassReasoningButton: View {
         matchedRule != nil
     }
 
-    var body: some View {
+    package var body: some View {
         if hasContent {
             Button {
                 showPopover.toggle()

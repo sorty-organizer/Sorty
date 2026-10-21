@@ -69,6 +69,7 @@ var packageProducts: [Product] = [
     .library(name: "SortyOrganizer", targets: ["SortyOrganizer"]),
     .library(name: "SortyCore", targets: ["SortyCore"]),
     .library(name: "SortyUI", targets: ["SortyUI"]),
+    .library(name: "SortyPreviewUI", targets: ["SortyPreviewUI"]),
     .library(
         name: "SortyLib",
         targets: ["SortyLib"]),
@@ -134,8 +135,15 @@ var packageTargets: [Target] = [
         linkerSettings: sortyLinkerSettings
     ),
     .target(
+        name: "SortyPreviewUI",
+        dependencies: ["SortyUI"] + sortyLibDependencies,
+        path: "Sources/SortyPreviewUI",
+        swiftSettings: sortyLibSwiftSettings,
+        linkerSettings: sortyLinkerSettings
+    ),
+    .target(
         name: "SortyLib",
-        dependencies: ["SortyCore", "SortyUI"] + sortyLibDependencies,
+        dependencies: ["SortyCore", "SortyUI", "SortyPreviewUI"] + sortyLibDependencies,
         path: "Sources/SortyLib",
         resources: [
             // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation

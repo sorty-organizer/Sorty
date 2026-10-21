@@ -5,12 +5,16 @@
 
 import SwiftUI
 
-struct CommentBubbleButton: View {
+package struct CommentBubbleButton: View {
     @SortyHotReload private var hotReload
     let comment: String
     @State private var showPopover = false
 
-    var body: some View {
+    package init(comment: String) {
+        self.comment = comment
+    }
+
+    package var body: some View {
         Button {
             showPopover.toggle()
         } label: {

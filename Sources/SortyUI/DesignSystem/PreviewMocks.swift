@@ -191,7 +191,7 @@ public enum PreviewMocks {
 
 extension AppState {
     @MainActor
-    static var preview: AppState {
+    package static var preview: AppState {
         let state = AppState()
         state.hasCompletedOnboarding = true
         state.selectedDirectory = URL(fileURLWithPath: "/Users/user/Downloads")
@@ -201,7 +201,7 @@ extension AppState {
 
 extension SettingsViewModel {
     @MainActor
-    static var preview: SettingsViewModel {
+    package static var preview: SettingsViewModel {
         let vm = SettingsViewModel()
         return vm
     }
@@ -209,7 +209,7 @@ extension SettingsViewModel {
 
 extension FolderOrganizer {
     @MainActor
-    static var preview: FolderOrganizer {
+    package static var preview: FolderOrganizer {
         let organizer = FolderOrganizer()
         organizer.currentPlan = PreviewMocks.makeOrganizationPlan()
         return organizer
@@ -218,7 +218,7 @@ extension FolderOrganizer {
 
 extension ExclusionRulesManager {
     @MainActor
-    static var preview: ExclusionRulesManager {
+    package static var preview: ExclusionRulesManager {
         let manager = ExclusionRulesManager()
         // Add mock rules via the public API
         for rule in PreviewMocks.makeExclusionRules() {
@@ -230,28 +230,28 @@ extension ExclusionRulesManager {
 
 extension ExtensionListener {
     @MainActor
-    static var preview: ExtensionListener {
+    package static var preview: ExtensionListener {
         ExtensionListener()
     }
 }
 
 extension PersonaManager {
     @MainActor
-    static var preview: PersonaManager {
+    package static var preview: PersonaManager {
         PersonaManager()
     }
 }
 
 extension LearningsManager {
     @MainActor
-    static var preview: LearningsManager {
+    package static var preview: LearningsManager {
         LearningsManager()
     }
 }
 
 extension CustomPersonaStore {
     @MainActor
-    static var preview: CustomPersonaStore {
+    package static var preview: CustomPersonaStore {
         CustomPersonaStore()
     }
 }

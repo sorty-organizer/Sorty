@@ -5,12 +5,16 @@
 
 import SwiftUI
 
-struct TagDotsView: View {
+package struct TagDotsView: View {
     @SortyHotReload private var hotReload
     let tags: [String]
 
     @State private var isShowingHoverPopover = false
     @FocusState private var isKeyboardFocused: Bool
+
+    package init(tags: [String]) {
+        self.tags = tags
+    }
 
     private var colorTags: [(String, Color)] {
         tags.compactMap { tag -> (String, Color)? in
@@ -24,7 +28,7 @@ struct TagDotsView: View {
         return (descriptiveTags.isEmpty ? tags : descriptiveTags).joined(separator: ", ")
     }
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 3) {
             ForEach(colorTags.prefix(3), id: \.0) { _, color in
                 Circle()

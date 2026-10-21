@@ -5,12 +5,16 @@ import UniformTypeIdentifiers
 
 // MARK: - Preview handoff
 
-struct PreviewHandoffView: View {
+package struct PreviewHandoffView: View {
     @SortyHotReload private var hotReload
     let mode: OrganizationMode
     @State private var appeared = false
 
-    var body: some View {
+    package init(mode: OrganizationMode) {
+        self.mode = mode
+    }
+
+    package var body: some View {
         VStack(spacing: 12) {
             ZStack {
                 Circle()

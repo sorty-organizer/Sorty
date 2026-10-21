@@ -23,13 +23,23 @@ private struct LearningsInsightRow {
     }
 }
 
-struct LiquidGlassLearningsButton: View {
+package struct LiquidGlassLearningsButton: View {
     @SortyHotReload private var hotReload
     let file: FileItem
     let suggestion: FolderSuggestion
     var learningsManager: LearningsManager? = nil
 
     @State private var showPopover = false
+
+    package init(
+        file: FileItem,
+        suggestion: FolderSuggestion,
+        learningsManager: LearningsManager? = nil
+    ) {
+        self.file = file
+        self.suggestion = suggestion
+        self.learningsManager = learningsManager
+    }
 
     private var attribution: FileLearningsAttribution {
         FileLearningsAttributionResolver.resolve(
@@ -45,7 +55,7 @@ struct LiquidGlassLearningsButton: View {
             : file.displayName
     }
 
-    var body: some View {
+    package var body: some View {
         let resolvedAttribution = attribution
         let rows = resolvedAttribution.items.map(LearningsInsightRow.init(item:))
 

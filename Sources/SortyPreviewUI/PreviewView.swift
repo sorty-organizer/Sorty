@@ -8,7 +8,7 @@
 
 import SwiftUI
 
-struct PreviewView: View {
+package struct PreviewView: View {
     @SortyHotReload private var hotReload
     let plan: OrganizationPlan
     let baseURL: URL
@@ -46,7 +46,7 @@ struct PreviewView: View {
         )
     }
 
-    static func planForApply(
+    package static func planForApply(
         editablePlan: OrganizationPlan,
         history: [OrganizationPlan],
         viewingHistoryIndex: Int?
@@ -93,7 +93,7 @@ struct PreviewView: View {
         return .none
     }
     
-    init(
+    package init(
         plan: OrganizationPlan,
         baseURL: URL,
         onReturnToStart: (() -> Void)? = nil,
@@ -107,7 +107,7 @@ struct PreviewView: View {
         _memoizedRenameCount = State(initialValue: plan.suggestions.reduce(0) { $0 + $1.renameCount })
     }
     
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             PreviewHeaderView(
                 version: displayedPlan.version,

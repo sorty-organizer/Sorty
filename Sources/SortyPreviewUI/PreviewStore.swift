@@ -6,13 +6,13 @@ import AppKit
 
 // MARK: - Flattened Row Model
 
-struct FlattenedRow: Identifiable, Equatable {
-    let id: String
+package struct FlattenedRow: Identifiable, Equatable {
+    package let id: String
     let depth: Int
-    let type: RowType
+    package let type: RowType
     let isExpanded: Bool
 
-    enum RowType: Equatable {
+    package enum RowType: Equatable {
         case folder(FolderSuggestion)
         case file(FileItem, parentFolderID: UUID)
         case unorganizedHeader
@@ -20,14 +20,14 @@ struct FlattenedRow: Identifiable, Equatable {
         case remainingFiles(count: Int)
     }
     
-    static func == (lhs: FlattenedRow, rhs: FlattenedRow) -> Bool {
+    package static func == (lhs: FlattenedRow, rhs: FlattenedRow) -> Bool {
         lhs.id == rhs.id && lhs.depth == rhs.depth && lhs.isExpanded == rhs.isExpanded && lhs.type == rhs.type
     }
 }
 
-struct PreviewMoveDestination: Identifiable, Equatable {
-    let id: UUID
-    let name: String
+package struct PreviewMoveDestination: Identifiable, Equatable {
+    package let id: UUID
+    package let name: String
 }
 
 enum PreviewRowPresentation: Equatable {
@@ -59,18 +59,18 @@ enum PreviewRowPresentation: Equatable {
 // MARK: - Preview Store
 
 @MainActor
-class PreviewStore: ObservableObject {
+package class PreviewStore: ObservableObject {
     private static let automaticExpansionFileLimit = 2_000
     private static let renderedFilesPerSectionLimit = 500
-    static let unorganizedSectionID = "unorganized-header"
+    package static let unorganizedSectionID = "unorganized-header"
 
-    @Published private(set) var flattenedRows: [FlattenedRow] = []
-    @Published private(set) var plan: OrganizationPlan
+    @Published package private(set) var flattenedRows: [FlattenedRow] = []
+    @Published package private(set) var plan: OrganizationPlan
     @Published var expandedFolders: Set<String> = []
     @Published var highlightedFileID: UUID? = nil
     
     /// Pre-computed rename mappings to avoid expensive lookups during rendering
-    @Published private(set) var renameMappings: [UUID: FileRenameMapping] = [:]
+    @Published package private(set) var renameMappings: [UUID: FileRenameMapping] = [:]
     
     @Published private(set) var tagMappings: [UUID: [String]] = [:]
     @Published private(set) var folderTagMappings: [UUID: [String]] = [:]
@@ -111,9 +111,9 @@ class PreviewStore: ObservableObject {
     private let throttleInterval: TimeInterval = 0.2 // 200ms
     
     /// Weak reference to learnings manager for recording user actions in the preview
-    weak var learningsManager: LearningsManager?
+    package weak var learningsManager: LearningsManager?
     
-    init(plan: OrganizationPlan) {
+    package init(plan: OrganizationPlan) {
         self.plan = plan
         cachedMoveDestinations = Self.collectMoveDestinations(from: plan.suggestions)
         expandAllFolders()
@@ -122,7 +122,7 @@ class PreviewStore: ObservableObject {
         throttledTotalFileCount = plan.totalFiles
     }
     
-    func updatePlan(_ newPlan: OrganizationPlan) {
+    package func updatePlan(_ newPlan: OrganizationPlan) {
         guard newPlan != plan else { return }
 
         // Identity and version are the normal revision signal. Equality keeps
@@ -543,7 +543,7 @@ class PreviewStore: ObservableObject {
         }
     }
     
-    func toggleFolder(id: String) {
+    package func toggleFolder(id: String) {
         let wasExpanded = expandedFolders.contains(id)
         if wasExpanded {
             expandedFolders.remove(id)
@@ -611,7 +611,7 @@ class PreviewStore: ObservableObject {
         return nil
     }
 
-    var moveDestinations: [PreviewMoveDestination] {
+    package var moveDestinations: [PreviewMoveDestination] {
         cachedMoveDestinations
     }
 
@@ -628,7 +628,7 @@ class PreviewStore: ObservableObject {
         return collect(folders, parentPath: "")
     }
     
-    func moveFileToUnorganized(fileID: UUID) {
+    package func moveFileToUnorganized(fileID: UUID) {
         guard let file = findFile(by: fileID) else { return }
         
         // Record rejection before mutating the plan
@@ -661,7 +661,7 @@ class PreviewStore: ObservableObject {
         return plan.suggestions.lazy.compactMap(find).first
     }
     
-    func updateRename(fileID: UUID, folderID: UUID, newName: String) {
+    package func updateRename(fileID: UUID, folderID: UUID, newName: String) {
         // Record rename edit before mutating the plan
         if let file = findFile(by: fileID),
            let mapping = renameMappings[fileID], mapping.hasRename {
@@ -686,7 +686,7 @@ class PreviewStore: ObservableObject {
         }
     }
     
-    func rejectRename(fileID: UUID, folderID: UUID) {
+    package func rejectRename(fileID: UUID, folderID: UUID) {
         // Record rename rejection before mutating the plan
         if let file = findFile(by: fileID),
            let mapping = renameMappings[fileID], mapping.hasRename {
@@ -711,7 +711,7 @@ class PreviewStore: ObservableObject {
         }
     }
 
-    func setRenameSelected(fileID: UUID, folderID: UUID, isSelected: Bool) {
+    package func setRenameSelected(fileID: UUID, folderID: UUID, isSelected: Bool) {
         var updatedPlan = plan
         for i in 0..<updatedPlan.suggestions.count {
             guard updatedPlan.suggestions[i].id == folderID else { continue }
