@@ -68,6 +68,9 @@ and `/zen/v1/models/<id>:generateContent` paths reject Bearer auth with
 `/zen/v1/models` and `/zen/go/v1/models`; the `/inference/.../models` paths 404. Streaming requests use
 the corresponding native events and exclude reasoning text from output JSON.
 
+The model picker's **Free** toggle and badge use `AIProvider.isOpenCodeFreeModel`:
+the catalog has no pricing, so free means a `-free` suffix or Zen's `big-pickle`.
+
 Jev models remain excluded because their SystemOne protocol is not supported.
 Unknown model IDs retain the chat-completions path. Catalog caches from the
 old chat-only implementation are discarded once so they cannot hide newly
