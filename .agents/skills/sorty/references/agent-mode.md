@@ -34,7 +34,7 @@ Write UTF-8 JSON with this shape:
 }
 ```
 
-`source` paths must resolve inside `source_root`. Relative destinations resolve inside that root. Absolute destinations are allowed for a user-selected storage location, but the helper still refuses collisions. Keep `tags` empty in agent mode because Finder tag mutation belongs to native Sorty. Existing tags and other extended attributes move with the file.
+`source` paths must resolve inside `source_root`. Relative destinations resolve inside that root. Absolute destinations are allowed for a user-selected storage location, but the helper still refuses collisions. Keep `tags` empty in plans. Existing tags and other extended attributes move with the file. To change tags, apply the moves first, then run `sorty_tags.py` on the final paths as described in [without-app.md](without-app.md).
 
 Modes enforce intent:
 
@@ -69,4 +69,4 @@ Rollback never deletes an occupied original path and never overwrites. It record
 
 `duplicates` groups regular files by size, then confirms byte equality with SHA-256. Treat hard links as one stored object and report their paths without proposing deletion. A duplicate report is evidence, not deletion authorization. Save it as a plan whose `operations` array is empty and whose `duplicate_groups` copies the helper's groups, so the user can review it later.
 
-Do not call filename, size, date, perceptual, embedding, or model similarity an exact duplicate. Route semantic duplicates to native Sorty.
+Do not call filename, size, date, perceptual, embedding, or model similarity an exact duplicate. Prefer native Sorty for semantic duplicate review. Without it, list likely matches in `warnings` with the evidence, as judgment calls, and never plan deletions from them.

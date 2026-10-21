@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Read settings exported by the Sorty app into this installed skill."""
+"""Read and update this skill's preferences, with or without settings imported from the Sorty app."""
 
 import argparse
+import fnmatch
 import json
-import tempfile
 import os
 import sys
+import tempfile
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 STATE_DIR = Path(os.environ.get("SORTY_SKILL_STATE_DIR", str(
@@ -54,10 +57,27 @@ def validate_preferences(values):
             raise ValueError(f"Invalid agent preference: {key}")
 
 
+def validate_agent_lists(document):
+    exclusions = document.get("exclusions", [])
+    if not isinstance(exclusions, list) or not all(isinstance(value, str) and value.strip() for value in exclusions):
+        raise ValueError("Agent exclusions must be an array of nonempty glob strings")
+    learnings = document.get("learnings", [])
+    if not isinstance(learnings, list) or not all(
+        isinstance(item, dict) and isinstance(item.get("id"), str) and isinstance(item.get("text"), str) and item["text"].strip()
+        for item in learnings
+    ):
+        raise ValueError("Agent learnings must be an array of objects with id and text")
+
+
 def load_profile():
     profile = read_document(PROFILE_PATH)
-    overrides = read_document(overrides_path()).get("preferences", {})
+    document = read_document(overrides_path())
+    overrides = document.get("preferences", {})
     validate_preferences(overrides)
+    validate_agent_lists(document)
+    # Agent-managed lists work without the app and sit beside imported data.
+    profile["agentExclusions"] = document.get("exclusions", [])
+    profile["agentLearnings"] = document.get("learnings", [])
     preferences = profile.setdefault("preferences", {})
     if not isinstance(preferences, dict):
         raise ValueError("Imported preferences must be an object")
@@ -72,19 +92,14 @@ def load_profile():
     return profile
 
 
-def update_preference(key, value=None):
+def read_overrides():
+    document = read_document(overrides_path()) or {"version": 1, "preferences": {}}
+    validate_agent_lists(document)
+    return document
+
+
+def write_overrides(document):
     path = overrides_path()
-    document = read_document(path) or {"version": 1, "preferences": {}}
-    values = document.setdefault("preferences", {})
-    validate_preferences(values)
-    # Validate the key even when removing an override.
-    validate_preferences({key: value if value is not None else (
-        next(iter(CHOICES[key])) if key in CHOICES else False if key == "openFolderAfterOrganization" else "unset"
-    )})
-    if value is None:
-        values.pop(key, None)
-    else:
-        values[key] = value
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(prefix=".agent-preferences-", dir=path.parent)
     try:
@@ -97,8 +112,60 @@ def update_preference(key, value=None):
             os.unlink(temporary)
 
 
+def update_preference(key, value=None):
+    document = read_overrides()
+    values = document.setdefault("preferences", {})
+    validate_preferences(values)
+    # Validate the key even when removing an override.
+    validate_preferences({key: value if value is not None else (
+        next(iter(CHOICES[key])) if key in CHOICES else False if key == "openFolderAfterOrganization" else "unset"
+    )})
+    if value is None:
+        values.pop(key, None)
+    else:
+        values[key] = value
+    write_overrides(document)
+
+
+def update_exclusion(pattern, remove=False):
+    """Add or remove an agent exclusion glob; used when the user has no app-managed rules."""
+    document = read_overrides()
+    patterns = document.setdefault("exclusions", [])
+    pattern = pattern.strip()
+    if not pattern:
+        raise ValueError("Exclusion pattern must be nonempty")
+    if remove:
+        if pattern not in patterns:
+            raise ValueError(f"No agent exclusion: {pattern}")
+        patterns.remove(pattern)
+    elif pattern not in patterns:
+        patterns.append(pattern)
+    write_overrides(document)
+
+
+def update_learning(text=None, remove_id=None):
+    """Record a lasting organization lesson, or remove one by id."""
+    document = read_overrides()
+    learnings = document.setdefault("learnings", [])
+    if remove_id is not None:
+        remaining = [item for item in learnings if item["id"] != remove_id]
+        if len(remaining) == len(learnings):
+            raise ValueError(f"No agent learning: {remove_id}")
+        document["learnings"] = remaining
+    else:
+        if not text or not text.strip():
+            raise ValueError("Learning text must be nonempty")
+        learnings.append({
+            "id": uuid.uuid4().hex[:8], "text": text.strip(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    write_overrides(document)
+
+
 def exclusion_checker():
-    rules = [rule for rule in load_profile().get("exclusions", []) if rule.get("isEnabled", True)]
+    profile = load_profile()
+    rules = [rule for rule in profile.get("exclusions", []) if rule.get("isEnabled", True)]
+    agent_globs = profile.get("agentExclusions", [])
     supported = {"File Extension", "File Name", "Folder Name", "Path Contains", "Hidden Files", "System Files"}
     for rule in rules:
         if rule.get("type") not in supported:
@@ -127,7 +194,15 @@ def exclusion_checker():
         else:
             result = any(value in str(path) for value in (".DS_Store", "Thumbs.db", "desktop.ini", ".Spotlight-V100", ".Trashes", ".fseventsd", ".TemporaryItems"))
         return not result if rule.get("negated", False) else result
+    def agent_excluded(path):
+        # Globs with a slash match the absolute path; others match the item name.
+        return any(
+            fnmatch.fnmatch(str(path) if "/" in pattern else path.name, pattern)
+            for pattern in agent_globs
+        )
     def excluded(path):
+        if agent_excluded(path):
+            return True
         groups = {}
         for rule in rules:
             group = rule.get("conditionGroupID")
@@ -148,6 +223,12 @@ def main():
     setter.add_argument("value")
     unsetter = commands.add_parser("unset")
     unsetter.add_argument("key", choices=sorted(set(CHOICES) | TEXT_KEYS | {"openFolderAfterOrganization"}))
+    exclude = commands.add_parser("exclude")
+    exclude.add_argument("action", choices=["add", "remove"])
+    exclude.add_argument("pattern")
+    learn = commands.add_parser("learn")
+    learn.add_argument("action", choices=["add", "remove"])
+    learn.add_argument("value", help="Learning text to add, or the id to remove")
     args = parser.parse_args()
     try:
         if args.command == "set":
@@ -159,6 +240,13 @@ def main():
             update_preference(args.key, value)
         elif args.command == "unset":
             update_preference(args.key)
+        elif args.command == "exclude":
+            update_exclusion(args.pattern, remove=args.action == "remove")
+        elif args.command == "learn":
+            if args.action == "add":
+                update_learning(text=args.value)
+            else:
+                update_learning(remove_id=args.value)
         print(json.dumps(load_profile(), indent=2))
     except (ValueError, OSError) as error:
         parser.exit(1, f"{error}\n")

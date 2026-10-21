@@ -555,7 +555,7 @@ def guarded_move(source: Path, destination: Path) -> str:
     return "verified-copy"
 
 
-def apply_plan(plan_path: Path, state_dir: Path) -> dict[str, Any]:
+def apply_plan(plan_path: Path, state_dir: Path, origin: str = "agent") -> dict[str, Any]:
     plan = load_plan(plan_path)
     root, mode, operations, errors = resolve_plan(plan)
     if errors:
@@ -565,7 +565,7 @@ def apply_plan(plan_path: Path, state_dir: Path) -> dict[str, Any]:
     append_journal(journal, {
         "record": "header", "version": PLAN_VERSION, "apply_id": apply_id,
         "created_at": now(), "source_root": str(root), "mode": mode,
-        "plan": str(canonical(plan_path)),
+        "plan": str(canonical(plan_path)), "origin": origin,
     })
     completed = 0
     for index, operation in enumerate(operations):
@@ -630,6 +630,39 @@ def rollback(journal: Path) -> dict[str, Any]:
     return {"status": status_value, "restored": restored_count, "errors": errors, "journal": str(journal)}
 
 
+def history(state_dir: Path, limit: int) -> dict[str, Any]:
+    """Summarize recent apply journals, newest first, so rollback works without the app's History."""
+    directory = canonical(state_dir) / "journals"
+    journals = sorted(directory.glob("*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True) if directory.is_dir() else []
+    entries: list[dict[str, Any]] = []
+    for journal in journals[:limit]:
+        try:
+            rows = read_journal(journal)
+        except SortyError as error:
+            entries.append({"journal": str(journal), "status": "unreadable", "error": str(error)})
+            continue
+        header = next((row for row in rows if row.get("record") == "header"), {})
+        summary = next((row for row in rows if row.get("record") == "summary"), None)
+        statuses: dict[str, str] = {}
+        for row in rows:
+            if row.get("record") == "operation":
+                statuses[row["operation_id"]] = row["status"]
+        rollbacks = [row for row in rows if row.get("record") == "rollback"]
+        entries.append({
+            "journal": str(journal),
+            "created_at": header.get("created_at"),
+            "source_root": header.get("source_root"),
+            "mode": header.get("mode"),
+            "origin": header.get("origin", "agent"),
+            "status": summary["status"] if summary else "incomplete",
+            "completed": sum(1 for value in statuses.values() if value == "completed"),
+            "restored": sum(1 for value in statuses.values() if value == "restored"),
+            "pending": sum(1 for value in statuses.values() if value == "pending"),
+            "rolled_back": rollbacks[-1]["status"] if rollbacks else None,
+        })
+    return {"state_dir": str(canonical(state_dir)), "journals": entries}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -651,6 +684,9 @@ def build_parser() -> argparse.ArgumentParser:
     apply_parser.add_argument("--state-dir", type=Path, default=DEFAULT_STATE_DIR)
     rollback_parser = subparsers.add_parser("rollback")
     rollback_parser.add_argument("journal", type=Path)
+    history_parser = subparsers.add_parser("history")
+    history_parser.add_argument("--state-dir", type=Path, default=DEFAULT_STATE_DIR)
+    history_parser.add_argument("--limit", type=int, default=20)
     return parser
 
 
@@ -670,6 +706,8 @@ def main() -> int:
             return 0 if result["valid"] else 2
         elif arguments.command == "apply":
             result = apply_plan(arguments.plan, arguments.state_dir)
+        elif arguments.command == "history":
+            result = history(arguments.state_dir, arguments.limit)
         else:
             result = rollback(arguments.journal)
             emit(result)
