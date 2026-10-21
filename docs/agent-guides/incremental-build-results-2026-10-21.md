@@ -184,6 +184,39 @@ The slower samples included relinking. These samples do not isolate linker time 
 | SortyOrganizer/FolderOrganizer+Run.swift | No separate file | 0.77s |
 | SortyLearnings/LearningsManager.swift | 1.94s | 1.92s |
 
+## Module split (supersedes the floor above)
+
+File splitting stalled at about 3.2s because every SortyLib edit re-ran SortyLib's emit-module job. Per-job stats (`-stats-output-dir`) for a comment edit in a 27-line SortyLib file showed 0.15s compiling the file and 2.49s emitting the module, 1.7s of it declaration type checking across 69k lines. Emit time scales with module size (SortyCore, 16k lines: 0.61s), and comment or body edits do not cascade into downstream modules. `-no-emit-module-separately` (merge-modules) is not an option: on Swift 6.2.4 it fails on SwiftUI opaque `body` types.
+
+SortyLib was therefore split into `SortyUI` (shared components, AppState, auxiliary windows, 21k lines), seven feature modules (preview 5.8k, history 4.8k, rules 5.1k, duplicates 2.5k, watched folders 2.3k, settings 8.7k, onboarding 7.7k), and a SortyLib shell (11.3k) that re-exports them. Same probe and flags as above:
+
+| File | Module | Before split | After split |
+| --- | --- | ---: | ---: |
+| `OptimizedPreviewTree.swift` | SortyPreviewUI | 3.19s | 0.76s |
+| `PermissionsSettingsView.swift` | SortySettingsUI | 3.23s | 1.11s |
+| `TroubleshootingSettingsView.swift` | SortySettingsUI | 3.65s | 0.93s |
+| `SkillSetupView.swift` | SortySettingsUI | 3.21s | 0.97s |
+| `AIProviderSettingsView.swift` | SortySettingsUI | 3.28s | 0.96s |
+| `ExclusionRulesView.swift` | SortyRulesUI | 3.23s | 1.09s |
+| `LearningsView.swift` | SortyRulesUI | 3.27s | 0.98s |
+| `WatchedFoldersView.swift` | SortyWatchedFoldersUI | 3.25s | 0.82s |
+| `HistoryDetailSheet.swift` | SortyHistoryUI | 3.30s | 0.82s |
+| `DuplicatesView.swift` | SortyDuplicatesUI | 3.29s | 0.79s |
+| `ProviderSelectionStepView.swift` | SortyOnboardingUI | 3.27s | 1.02s |
+| `CompletionStepView.swift` | SortyOnboardingUI | 3.27s | 0.93s |
+| `PermissionsStepView.swift` | SortyOnboardingUI | 3.27s | 0.91s |
+| `OnboardingView.swift` | SortyOnboardingUI | 6.81s | 1.26s |
+| `ReadyToOrganizeView.swift` | SortyLib | 4.94s | 0.95s |
+| `OrganizationCompleteView.swift` | SortyLib | 3.22s | 0.96s |
+| `OrganizeView.swift` | SortyLib | 3.48s | 0.94s |
+| `AppCommands.swift` | SortyLib | 3.31s | 0.94s |
+| `AnalysisStreamPreview.swift` | SortyLib | 3.38s | 0.93s |
+| `GlassyBackButton.swift` | SortyUI | ~3.4s | 1.46s |
+| `AppState.swift` | SortyUI | — | 1.45s |
+| `ModelSelector.swift` | SortyUI | — | 2.18s |
+
+SortyUI is now the largest module, so its edits pay the most emit time; if it grows, split it the same way rather than adding features to it.
+
 ## Findings and limits
 
 The 2s SortyLib rebuild target was not reached. The original 19 SwiftUI files had a cross-file median of 3.48s before and about 3.3s after. This is a median across files, not repeated trials of one edit. The 117 successor/refactored files in the main pass had a median of 3.30s and a range of 3.20–4.68s. TimelineView and PersonaPickerView were measured separately after that pass.
