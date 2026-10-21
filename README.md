@@ -153,170 +153,78 @@ New installations use the version-independent [`Sorty.zip`](https://github.com/s
 
 ## Project Structure
 
-- `Sources/SortyLib/`: Shared product logic, services, models, and SwiftUI views.
-- `Sources/SortyApp/`: Main macOS application entry and navigation.
-- `Sources/SortyFinderSync/`: Finder Sync extension entry point.
-- `Sources/SortyWidgets/`: WidgetKit extension and shared widget surfaces.
-- `Tests/SortyTests/`: Unit and integration tests.
-- `Tests/SortyUITests/`: macOS UI and accessibility tests.
-- `website/`: Public Next.js website and current product screenshots.
-- `scripts/`: Build and automation scripts.
+| Location | Responsibility |
+|----------|----------------|
+| `Sources/SortyApp/` | SwiftUI lifecycle, windows, and background coordination |
+| `Sources/SortyLib/` | App shell, organize flow, navigation, commands, and resources; re-exports the UI modules |
+| `Sources/SortyUI/` | Shared SwiftUI components, `AppState`, and auxiliary windows |
+| `Sources/Sorty*UI/` | Feature views in `SortyPreviewUI`, `SortyHistoryUI`, `SortyRulesUI`, `SortyDuplicatesUI`, `SortyWatchedFoldersUI`, `SortySettingsUI`, and `SortyOnboardingUI` |
+| `Sources/SortyCore/` | Shared managers, view models, app services, and adapters for lower modules |
+| `Sources/SortyOrganizer/` | `FolderOrganizer`, plan validation, and organization workflow |
+| `Sources/SortyAI/` | Provider clients, prompts, model catalog, and response parsing |
+| `Sources/SortyLearnings/` | Preference learning, profile storage, observation, and local rule inference |
+| `Sources/SortyFS/` | Directory scanning, content and vision analysis, file operations, duplicates, and watching |
+| `Sources/SortyModels/` | Data models, history, undo operations, and widget snapshots |
+| `Sources/SortyFileSystem/` | File naming, hashing, and path primitives |
+| `Sources/SortyFinderSync/`, `Sources/SortyWidgets/` | Finder Sync and WidgetKit extensions |
+| `Sources/SortyQuality/`, `Sources/SortyQualitySupport/` | Organization quality CLI and support library |
+| `Tests/SortyTests/`, `Tests/SortyUITests/` | Unit, integration, UI, and accessibility tests |
+| `website/`, `scripts/` | Public Next.js website and build/automation scripts |
 
 ## Architecture
 
+Sorty uses SwiftUI with MVVM and services. `SortyApp` creates shared managers and injects them into the view hierarchy. `SortyLib` composes the app shell from shared and feature UI modules. Feature modules compile separately so editing one view does not rebuild every SwiftUI module.
+
+### Module dependencies
+
+Arrows point from a module to its dependencies. The diagram shows the main layers; `Package.swift` lists all direct dependencies.
+
+```mermaid
+flowchart TD
+    App[SortyApp] --> Shell[SortyLib]
+    Shell --> Features["Feature UI modules<br/>Preview, History, Rules, Duplicates,<br/>Watched Folders, Settings, Onboarding"]
+    Shell --> UI["SortyUI<br/>Shared views and AppState"]
+    Features --> UI
+    UI --> Core["SortyCore<br/>Managers, services, and adapters"]
+    Core --> Organizer["SortyOrganizer<br/>Workflow and validation"]
+    Organizer --> AI["SortyAI<br/>Clients and prompts"]
+    Organizer --> Learnings["SortyLearnings<br/>Preferences and rules"]
+    Organizer --> FS["SortyFS<br/>Scanning and file operations"]
+    Learnings --> AI
+    AI --> Models["SortyModels<br/>Plans, history, and undo"]
+    Learnings --> Models
+    FS --> Models
+    Models --> Paths["SortyFileSystem<br/>File and path primitives"]
+    Widgets[SortyWidgets] --> Models
+```
+
+Each feature UI module depends on `SortyUI`. `SortyHistoryUI` also depends on `SortyPreviewUI`, and `SortyWatchedFoldersUI` depends on `SortyHistoryUI`. Shared views belong in `SortyUI`; cross-module implementation uses `package` access.
+
+`SortyCore` connects lower modules to app services through injected hooks and adapters for Keychain, logging, analytics, notifications, and Finder integration. `SortyModels` depends only on `SortyFileSystem`; provider clients and network details stay in `SortyAI`.
+
+### Organization flow
+
+Finder actions, `sorty://` deeplinks, App Intents, menu bar actions, and watched-folder automation feed the app's organization workflow.
+
 ```mermaid
 flowchart LR
-    subgraph EntryPoints["Entry Points"]
-        User["User"]
-        Finder["Finder right-click<br/>SortyFinderSync"]
-        Shortcuts["Shortcuts and App Intents<br/>sorty:// deeplinks"]
-        WatchEvents["Watched folders<br/>FSEvents and schedules"]
-        MenuBar["Menu bar extra<br/>global shortcuts"]
-        Widgets["Widgets<br/>SortyWidgetSnapshotStore"]
-    end
-
-    subgraph AppShell["App Shell - Sources/SortyApp"]
-        SortyApp["SortyApp<br/>SwiftUI scenes"]
-        MainWindow["MainWindowRootView<br/>ContentView navigation"]
-        Coordinator["AppCoordinator<br/>background automation"]
-        ExtensionListener["ExtensionListener"]
-        DeeplinkHandler["DeeplinkHandler"]
-        WidgetSync["SortyWidgetSyncManager"]
-    end
-
-    subgraph StateAndSettings["Shared State and Managers"]
-        AppState["AppState"]
-        Settings["SettingsViewModel<br/>AIConfig"]
-        Personas["PersonaManager<br/>CustomPersonaStore"]
-        WatchedFolders["WatchedFoldersManager"]
-        Storage["StorageLocationsManager"]
-        Exclusions["ExclusionRulesManager"]
-        Notifications["NotificationManager<br/>HUD and native alerts"]
-        ModelCatalog["ModelCatalog"]
-        Auth["Keychain and auth managers<br/>ProviderAuthResolver"]
-    end
-
-    subgraph OrganizePipeline["Organization Pipeline - Sources/SortyLib"]
-        FolderOrganizer["FolderOrganizer<br/>idle -> scanning -> organizing -> ready -> applying -> completed"]
-        Scanner["DirectoryScanner"]
-        Content["ContentAnalyzer"]
-        Vision["VisionAnalyzer<br/>ImageVisionAnalyzer"]
-        PromptContext["PromptContextHelper<br/>directory and folder context"]
-        PromptBuilder["PromptBuilder<br/>system and user prompts"]
-        AIClientFactory["AIClientFactory"]
-        AIClient["AIClientProtocol"]
-        ResponseParser["ResponseParser"]
-        Plan["OrganizationPlan"]
-        Preview["PreviewManager<br/>PreviewView"]
-    end
-
-    subgraph AIProviders["AI Providers"]
-        OpenAI["OpenAI-compatible<br/>OpenAI, Groq, OpenRouter, Gemini, Ollama"]
-        Anthropic["Anthropic"]
-        OpenCode["OpenCode Zen and Go"]
-        Codex["Codex subscription"]
-        AppleFM["Apple Foundation Models"]
-    end
-
-    subgraph ApplyAndSafety["Apply, Safety, and Recovery"]
-        Normalizer["StorageDestinationNormalizer"]
-        Validator["FileOrganizationValidator"]
-        Duplicates["DuplicateDetector<br/>SemanticDuplicateDetector"]
-        FileSystem["FileSystemManager<br/>create, move, tag, restore"]
-        History["OrganizationHistory<br/>analytics and rollback"]
-        Conflicts["Conflict resolution"]
-    end
-
-    subgraph Learning["Learnings System"]
-        LearningsManager["LearningsManager"]
-        ContinuousLearning["ContinuousLearningObserver"]
-        FSMonitor["LearningsFSMonitor"]
-        RuleEngines["LocalRuleInferenceEngine"]
-        LearningsProfile["LearningsProfile<br/>rules, examples, corrections"]
-    end
-
-    subgraph Persistence["Persistence and System Integration"]
-        Defaults["UserDefaults and AppStorage"]
-        AppGroup["App group IPC<br/>group.com.sorty.app"]
-        Bookmarks["Security-scoped bookmarks"]
-        Keychain["Keychain"]
-        Sparkle["SparkleUpdateManager"]
-    end
-
-    subgraph FeatureSurfaces["Feature Surfaces"]
-        OrganizeView["Organize and preview"]
-        WatchedFoldersView["Watched folders"]
-        DuplicatesView["DuplicatesView"]
-        LearningsView["LearningsView"]
-        SettingsView["Settings"]
-        HistoryView["History"]
-    end
-
-    User --> SortyApp
-    Finder --> ExtensionListener
-    ExtensionListener --> MainWindow
-    Shortcuts --> DeeplinkHandler
-    DeeplinkHandler --> MainWindow
-    WatchEvents --> Coordinator
-    MenuBar --> MainWindow
-    Widgets --> WidgetSync
-
-    SortyApp --> MainWindow
-    SortyApp --> Coordinator
-    MainWindow --> AppState
-    MainWindow --> FeatureSurfaces
-    FeatureSurfaces --> FolderOrganizer
-    FeatureSurfaces --> StateAndSettings
-
-    Coordinator --> WatchedFolders
-    Coordinator --> FolderOrganizer
-    Coordinator --> Notifications
-    WidgetSync --> AppGroup
-
-    FolderOrganizer --> Scanner
-    Scanner --> Content
-    Content --> Vision
-    FolderOrganizer --> PromptContext
-    FolderOrganizer --> PromptBuilder
-    PromptBuilder --> LearningsProfile
-    PromptBuilder --> AIClientFactory
-    AIClientFactory --> Settings
-    AIClientFactory --> Auth
-    AIClientFactory --> ModelCatalog
-    AIClientFactory --> AIClient
-    AIClient --> OpenAI
-    AIClient --> Anthropic
-    AIClient --> OpenCode
-    AIClient --> Codex
-    AIClient --> AppleFM
-    AIClient --> ResponseParser
-    ResponseParser --> Plan
-    Plan --> Normalizer
-    Normalizer --> Validator
-    Validator --> Preview
-    Preview --> FileSystem
-    FileSystem --> Duplicates
-    FileSystem --> History
-    FileSystem --> Conflicts
-
-    History --> ContinuousLearning
-    Coordinator --> ContinuousLearning
-    FSMonitor --> ContinuousLearning
-    ContinuousLearning --> LearningsManager
-    LearningsManager --> RuleEngines
-    RuleEngines --> LearningsProfile
-    LearningsProfile --> PromptBuilder
-
-    Settings --> Defaults
-    Personas --> Defaults
-    WatchedFolders --> Defaults
-    Storage --> Defaults
-    Exclusions --> Defaults
-    WatchedFolders --> Bookmarks
-    Auth --> Keychain
-    ExtensionListener --> AppGroup
-    Sparkle --> SortyApp
+    Action[User or automation] --> State[View model or manager]
+    State --> Organizer[FolderOrganizer]
+    Organizer --> Scan["SortyFS<br/>Scan and analyze"]
+    Scan --> Request["SortyAI<br/>Build prompt and call provider"]
+    Learnings[Learnings context] --> Request
+    Request --> Plan[OrganizationPlan]
+    Plan --> Validate[Validate plan]
+    Validate --> Preview[Preview]
+    Preview --> Apply["SortyFS<br/>Apply file operations"]
+    Apply --> History[History and undo]
 ```
+
+`FolderOrganizer` owns the state sequence `idle → scanning → organizing → ready → applying → completed`, including cancellation and error handling. AI clients implement `AIClientProtocol` and register with `AIClientFactory`.
+
+Persistence uses files, `UserDefaults`/`@AppStorage`, security-scoped bookmarks, and Keychain. Finder and widget integration share data through the app group `group.com.sorty.app`; widgets read snapshots defined in `SortyModels`.
+
+See the [architecture guide](docs/agent-guides/architecture.md) for implementation patterns and [startup performance guide](docs/agent-guides/startup-performance.md) for deferred loading rules.
 
 ## Contributing
 

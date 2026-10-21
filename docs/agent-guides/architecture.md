@@ -19,7 +19,9 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | **SortyFS** | `Sources/SortyFS/` | Scanning, content analysis, file operations, and folder watching; depends on `SortyFileSystem` + `SortyModels` |
 | **SortyOrganizer** | `Sources/SortyOrganizer/` | Organization workflow and state machine; depends on the lower file, model, AI, learning, and file service targets |
 | **SortyCore** | `Sources/SortyCore/` | Shared app logic and service adapters; depends on `SortyOrganizer`, `SortyLearnings`, `SortyFS`, and their lower layers |
-| **SortyLib** | `Sources/SortyLib/` | SwiftUI views, view helpers, and app resources; depends on `SortyCore` |
+| **SortyUI** | `Sources/SortyUI/` | Shared SwiftUI components, `AppState`, and auxiliary windows; depends on `SortyCore` |
+| **Feature UI modules** | `Sources/SortyPreviewUI/`, `Sources/SortyHistoryUI/`, `Sources/SortyRulesUI/`, `Sources/SortyDuplicatesUI/`, `Sources/SortyWatchedFoldersUI/`, `Sources/SortySettingsUI/`, `Sources/SortyOnboardingUI/` | Feature views; each depends on `SortyUI`. History also depends on Preview, and Watched Folders on History |
+| **SortyLib** | `Sources/SortyLib/` | App shell, organize flow, navigation, commands, and resources; depends on Core and re-exports all UI modules |
 | **SortyFinderSync** | `Sources/SortyFinderSync/` | Finder Sync extension |
 | **SortyWidgets** | `Sources/SortyWidgets/` | WidgetKit extension embedded by the Xcode app target; links only `SortyModels` |
 
@@ -32,12 +34,14 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | `SortyLearnings/` | Preference learning, profile storage, rule inference, and observation; Core injects Keychain, telemetry, and session locking |
 | `SortyFS/` | File operations, scanning, duplicate detection, vision analysis, and folder watching; Core injects duplicate scan telemetry |
 | `SortyOrganizer/` | `FolderOrganizer` state machine and plan validation; Core injects persisted logging, analytics, reliability, notifications, Keychain, and Finder integration |
-| `SortyLib/Views/` | SwiftUI views |
+| `SortyLib/Views/` | App shell and organize flow views |
+| `SortyUI/` | Shared components, `AppState`, and auxiliary windows |
+| `Sorty*UI/` | Views owned by each feature module |
 | `SortyCore/ViewModels/` | View models |
 | `SortyCore/Managers/` | `@MainActor ObservableObject` state managers |
 | `SortyCore/Utilities/` | Keychain, logging, deeplinks, security |
 | `SortyFileSystem/` | File naming, hashing, and path helpers used by `SortyCore` |
-| `SortyCore/DesignSystem/` | Shared design tokens; view helpers remain in `SortyLib` |
+| `SortyCore/DesignSystem/` | Shared design tokens; shared view helpers live in `SortyUI` |
 | `SortyCore/FinderExtension/` | Finder extension IPC helpers |
 | `SortyCore/Analytics/` | `AnalyticsManager` (PostHog) and `ReliabilityManager` (Sentry); consent UI is in `SortyLib` |
 | `SortyCore/Services/` | App services |
