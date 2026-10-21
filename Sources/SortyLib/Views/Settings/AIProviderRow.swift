@@ -38,55 +38,11 @@ struct AIProviderRow: View {
             // otherwise the card selects Zen; plan switching lives in the plan picker.
             action(isOpenCodeCard && selectedProvider == .openCodeGo ? .openCodeGo : provider)
         } label: {
-            HStack(alignment: .center, spacing: 8) {
-                ProviderLogoView(provider: logoProvider, size: 17)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(provider.brandColor.opacity(isSelected ? 0.16 : 0.1))
-                    )
-                    .overlay(alignment: .bottomTrailing) {
-                        if isSelected {
-                            ZStack {
-                                Circle()
-                                    .fill(provider.brandColor)
-
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(.background)
-                            }
-                            .frame(width: 14, height: 14)
-                            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
-                            .offset(x: 2, y: 2)
-                            .accessibilityHidden(true)
-                        }
-                    }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(isOpenCodeCard ? "OpenCode" : provider.selectorTitle)
-                        .font(.subheadline.weight(isSelected ? .semibold : .medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.88)
-
-                    Text(isOpenCodeCard ? "Zen or Go" : provider.selectorDescription)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.88)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .layoutPriority(1)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
-            .blur(radius: isBlockedByInternetPrivacy ? 2 : 0)
-            .contentShape(Rectangle())
+            rowLabel
         }
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isSelected ? provider.brandColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025)))
+                .fill(backgroundColor)
         )
         .contentShape(Rectangle())
         .overlay(
@@ -114,6 +70,58 @@ struct AIProviderRow: View {
                     .accessibilityHidden(true)
             }
         }
+    }
+
+    private var rowLabel: some View {
+        HStack(alignment: .center, spacing: 8) {
+            ProviderLogoView(provider: logoProvider, size: 17)
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(provider.brandColor.opacity(isSelected ? 0.16 : 0.1))
+                )
+                .overlay(alignment: .bottomTrailing) {
+                    if isSelected {
+                        ZStack {
+                            Circle()
+                                .fill(provider.brandColor)
+
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.background)
+                        }
+                        .frame(width: 14, height: 14)
+                        .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
+                        .offset(x: 2, y: 2)
+                        .accessibilityHidden(true)
+                    }
+                }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(isOpenCodeCard ? "OpenCode" : provider.selectorTitle)
+                    .font(.subheadline.weight(isSelected ? .semibold : .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.88)
+
+                Text(isOpenCodeCard ? "Zen or Go" : provider.selectorDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.88)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+        .blur(radius: isBlockedByInternetPrivacy ? 2 : 0)
+        .contentShape(Rectangle())
+    }
+
+    private var backgroundColor: Color {
+        isSelected ? provider.brandColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025))
     }
 }
 
