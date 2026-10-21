@@ -74,7 +74,7 @@ struct ModelSelectorRow: View {
 /// A compact, menu-picker-sized trigger that shows the current selection and
 /// opens the model selection popover. Use in settings rows where the
 /// full-width `ModelSelectorRow` would be too heavy.
-struct ModelSelectorCompactButton: View {
+package struct ModelSelectorCompactButton: View {
     @SortyHotReload private var hotReload
     let provider: AIProvider
     let label: String
@@ -82,7 +82,13 @@ struct ModelSelectorCompactButton: View {
 
     @State private var isHovering = false
 
-    var body: some View {
+    package init(provider: AIProvider, label: String, onTap: @escaping () -> Void) {
+        self.provider = provider
+        self.label = label
+        self.onTap = onTap
+    }
+
+    package var body: some View {
         Button {
             HapticFeedbackManager.shared.light()
             onTap()
@@ -138,11 +144,11 @@ private struct ModelSelectionTriggerBoundsPreferenceKey: PreferenceKey {
 }
 
 extension View {
-    func modelSelectorTriggerBounds() -> some View {
+    package func modelSelectorTriggerBounds() -> some View {
         anchorPreference(key: ModelSelectionTriggerBoundsPreferenceKey.self, value: .bounds) { $0 }
     }
 
-    func modelSelectionOverlay(
+    package func modelSelectionOverlay(
         isPresented: Binding<Bool>,
         currentProvider: AIProvider,
         currentModel: String,

@@ -8,12 +8,17 @@
 import AppKit
 import SwiftUI
 
-struct OrganizationResultView: View {
+package struct OrganizationResultView: View {
     @SortyHotReload private var hotReload
     let stats: GenerationStats
     var duplicatesFound: Int = 0
+
+    package init(stats: GenerationStats, duplicatesFound: Int = 0) {
+        self.stats = stats
+        self.duplicatesFound = duplicatesFound
+    }
     
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             GenerationStatsView(stats: stats, duplicatesFound: duplicatesFound)
         }
@@ -357,7 +362,7 @@ public struct NerdStatPillExpanded: View {
     }
 }
 
-struct NerdStatCard: View {
+package struct NerdStatCard: View {
     @SortyHotReload private var hotReload
     let icon: String
     let iconColor: Color
@@ -365,8 +370,24 @@ struct NerdStatCard: View {
     let value: String
     let unit: String?
     let description: String
+
+    package init(
+        icon: String,
+        iconColor: Color,
+        title: String,
+        value: String,
+        unit: String?,
+        description: String
+    ) {
+        self.icon = icon
+        self.iconColor = iconColor
+        self.title = title
+        self.value = value
+        self.unit = unit
+        self.description = description
+    }
     
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: icon)

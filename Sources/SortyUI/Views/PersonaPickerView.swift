@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct PersonaPickerView: View {
+package struct PersonaPickerView: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var personaManager: PersonaManager
@@ -29,7 +29,9 @@ struct PersonaPickerView: View {
     @StateObject private var promptPolisher = PersonaGenerator()
     @FocusState private var focusedField: PersonaEditableField?
 
-    var body: some View {
+    package init() {}
+
+    package var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Default Organization Persona")
@@ -713,13 +715,15 @@ struct PersonaButton: View {
 }
 
 /// Compact inline picker for the ready-to-organize screen
-struct CompactPersonaPicker: View {
+package struct CompactPersonaPicker: View {
     @SortyHotReload private var hotReload
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customStore: CustomPersonaStore
     @State private var isHovering = false
 
-    var body: some View {
+    package init() {}
+
+    package var body: some View {
         Menu {
             Section("Built-in") {
                 ForEach(PersonaType.allCases, id: \.self) { persona in

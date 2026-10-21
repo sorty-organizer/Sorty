@@ -3,7 +3,7 @@ import AppKit
 import SwiftUI
 import Combine
 
-struct SavedPromptsSheet: View {
+package struct SavedPromptsSheet: View {
     @SortyHotReload private var hotReload
     @ObservedObject var steeringManager: SteeringPromptManager
     let settingsConfig: AIConfig
@@ -14,7 +14,7 @@ struct SavedPromptsSheet: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
 
-    init(
+    package init(
         steeringManager: SteeringPromptManager,
         settingsConfig: AIConfig,
         onApplyPrompt: @escaping (String) -> Void
@@ -25,7 +25,7 @@ struct SavedPromptsSheet: View {
         _isEmptyStateVisible = State(initialValue: steeringManager.prompts.isEmpty)
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {

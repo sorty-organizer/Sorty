@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import SwiftUI
 
-struct FocusedInstructionBeamBorder: View {
+package struct FocusedInstructionBeamBorder: View {
     @SortyHotReload private var hotReload
     let active: Bool
     var cornerRadius: CGFloat = 10
@@ -13,7 +13,13 @@ struct FocusedInstructionBeamBorder: View {
     @State private var isAppActive = NSApp.isActive
     @State private var isWindowVisible = true
 
-    var body: some View {
+    package init(active: Bool, cornerRadius: CGFloat = 10, duration: TimeInterval = 1.96) {
+        self.active = active
+        self.cornerRadius = cornerRadius
+        self.duration = duration
+    }
+
+    package var body: some View {
         SwiftUI.TimelineView(
             .animation(
                 minimumInterval: 1.0 / 30.0,
@@ -61,7 +67,7 @@ struct FocusedInstructionBeamBorder: View {
 // MARK: - Custom Text Editor with Enter to Submit
 
 /// A TextEditor that treats Cmd+Enter as submit and Enter as new line
-struct RotatingInstructionSuggestionEditor: View {
+package struct RotatingInstructionSuggestionEditor: View {
     @Binding var text: String
     @Binding var isFocused: Bool
     @Binding var selectedRange: NSRange
@@ -73,6 +79,20 @@ struct RotatingInstructionSuggestionEditor: View {
     @Environment(\.controlActiveState) private var controlActiveState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+
+    package init(
+        text: Binding<String>,
+        isFocused: Binding<Bool>,
+        selectedRange: Binding<NSRange>,
+        suggestions: [String],
+        onSubmit: @escaping () -> Void
+    ) {
+        self._text = text
+        self._isFocused = isFocused
+        self._selectedRange = selectedRange
+        self.suggestions = suggestions
+        self.onSubmit = onSubmit
+    }
 
     private struct SuggestionCycleID: Equatable {
         let suggestions: [String]
@@ -87,7 +107,7 @@ struct RotatingInstructionSuggestionEditor: View {
         suggestions.isEmpty ? "" : suggestions[suggestionIndex % suggestions.count]
     }
 
-    var body: some View {
+    package var body: some View {
         ZStack(alignment: .topLeading) {
             SubmittableTextEditor(
                 text: $text,
@@ -168,7 +188,7 @@ private struct SendableEventMonitorToken: @unchecked Sendable {
     let value: Any
 }
 
-struct SubmittableTextEditor: NSViewRepresentable {
+package struct SubmittableTextEditor: NSViewRepresentable {
     @SortyHotReload private var hotReload
     @Binding var text: String
     var isFocused: Binding<Bool>?
@@ -176,7 +196,7 @@ struct SubmittableTextEditor: NSViewRepresentable {
     var onAcceptSuggestion: (() -> Bool)?
     var onSubmit: () -> Void
 
-    init(
+    package init(
         text: Binding<String>,
         isFocused: Binding<Bool>? = nil,
         selectedRange: Binding<NSRange>? = nil,
@@ -190,7 +210,7 @@ struct SubmittableTextEditor: NSViewRepresentable {
         self.onSubmit = onSubmit
     }
 
-    func makeNSView(context: Context) -> NSScrollView {
+    package func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
         guard let textView = scrollView.documentView as? NSTextView else {
             return scrollView
@@ -258,7 +278,7 @@ struct SubmittableTextEditor: NSViewRepresentable {
         return scrollView
     }
 
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+    package func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
 
         if textView.string != text {
@@ -280,7 +300,7 @@ struct SubmittableTextEditor: NSViewRepresentable {
         context.coordinator.updateSelectedRange(from: textView)
     }
 
-    func makeCoordinator() -> Coordinator {
+    package func makeCoordinator() -> Coordinator {
         Coordinator(
             text: $text,
             isFocused: isFocused,
@@ -291,7 +311,7 @@ struct SubmittableTextEditor: NSViewRepresentable {
     }
 
     @MainActor
-    class Coordinator: NSObject, NSTextViewDelegate {
+    package class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var isFocused: Binding<Bool>?
         var selectedRange: Binding<NSRange>?
@@ -332,17 +352,17 @@ struct SubmittableTextEditor: NSViewRepresentable {
             }
         }
 
-        func textDidChange(_ notification: Notification) {
+        package func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             text.wrappedValue = textView.string
             updateSelectedRange(from: textView)
         }
 
-        func textDidBeginEditing(_ notification: Notification) {
+        package func textDidBeginEditing(_ notification: Notification) {
             isFocused?.wrappedValue = true
         }
 
-        func textDidEndEditing(_ notification: Notification) {
+        package func textDidEndEditing(_ notification: Notification) {
             isFocused?.wrappedValue = false
         }
 
@@ -364,9 +384,9 @@ struct SubmittableTextEditor: NSViewRepresentable {
     }
 }
 
-enum InstructionSuggestionCatalog {
+package enum InstructionSuggestionCatalog {
     @MainActor
-    static func suggestions(
+    package static func suggestions(
         for mode: OrganizationMode,
         personaManager: PersonaManager,
         customPersonaStore: CustomPersonaStore

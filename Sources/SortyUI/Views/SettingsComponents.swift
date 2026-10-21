@@ -17,7 +17,7 @@ private struct SettingsFocusDismissActionKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    var settingsFocusTarget: SettingsFocusTarget? {
+    package var settingsFocusTarget: SettingsFocusTarget? {
         get { self[SettingsFocusTargetKey.self] }
         set { self[SettingsFocusTargetKey.self] = newValue }
     }
@@ -130,7 +130,7 @@ private struct SortyFocusHighlightModifier<FocusShape: InsettableShape>: ViewMod
 
 /// Settings sidebar row styled like System Settings: a filled glyph on a
 /// colored rounded tile, primary label, and a neutral selection capsule.
-struct SidebarButton: View {
+package struct SidebarButton: View {
     @SortyHotReload private var hotReload
     let title: String
     let icon: String
@@ -140,7 +140,21 @@ struct SidebarButton: View {
 
     @State private var isHovering = false
 
-    var body: some View {
+    package init(
+        title: String,
+        icon: String,
+        color: Color,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.icon = icon
+        self.color = color
+        self.isSelected = isSelected
+        self.action = action
+    }
+
+    package var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
@@ -177,7 +191,7 @@ struct SidebarButton: View {
     }
 }
 
-struct SettingsCard<Content: View>: View {
+package struct SettingsCard<Content: View>: View {
     @SortyHotReload private var hotReload
     let title: String
     let icon: String
@@ -187,7 +201,7 @@ struct SettingsCard<Content: View>: View {
     let headerAccessory: AnyView?
     @ViewBuilder let content: Content
 
-    init(
+    package init(
         title: String,
         icon: String,
         color: Color,
@@ -204,7 +218,7 @@ struct SettingsCard<Content: View>: View {
         self.content = content()
     }
 
-    init<HeaderAccessory: View>(
+    package init<HeaderAccessory: View>(
         title: String,
         icon: String,
         color: Color,
@@ -222,7 +236,7 @@ struct SettingsCard<Content: View>: View {
         self.content = content()
     }
     
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: isExpanded == nil ? 12 : 0) {
             if let isExpanded {
                 Button {
@@ -316,13 +330,19 @@ struct SettingsCard<Content: View>: View {
     }
 }
 
-struct SettingsTextField: View {
+package struct SettingsTextField: View {
     @SortyHotReload private var hotReload
     let title: String
     @Binding var text: String
     var placeholder: String = ""
+
+    package init(title: String, text: Binding<String>, placeholder: String = "") {
+        self.title = title
+        self._text = text
+        self.placeholder = placeholder
+    }
     
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(LocalizedStringKey(title))
                 .font(.subheadline)
@@ -332,7 +352,7 @@ struct SettingsTextField: View {
     }
 }
 
-struct SettingsSecureField: View {
+package struct SettingsSecureField: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -341,8 +361,14 @@ struct SettingsSecureField: View {
     var isOptional: Bool = false
     
     @State private var isShowingText = false
+
+    package init(title: String, text: Binding<String>, isOptional: Bool = false) {
+        self.title = title
+        self._text = text
+        self.isOptional = isOptional
+    }
     
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(LocalizedStringKey(title))
@@ -398,7 +424,7 @@ struct SettingsSecureField: View {
     }
 }
 
-struct SettingsToggle: View {
+package struct SettingsToggle: View {
     @SortyHotReload private var hotReload
     @Binding var isOn: Bool
     let title: String
@@ -406,8 +432,24 @@ struct SettingsToggle: View {
     var previewAction: (() -> Void)? = nil
     var previewIcon: String = "speaker.wave.2.fill"
     var focusTarget: SettingsFocusTarget? = nil
+
+    package init(
+        isOn: Binding<Bool>,
+        title: String,
+        description: String? = nil,
+        previewAction: (() -> Void)? = nil,
+        previewIcon: String = "speaker.wave.2.fill",
+        focusTarget: SettingsFocusTarget? = nil
+    ) {
+        self._isOn = isOn
+        self.title = title
+        self.description = description
+        self.previewAction = previewAction
+        self.previewIcon = previewIcon
+        self.focusTarget = focusTarget
+    }
     
-    var body: some View {
+    package var body: some View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(LocalizedStringKey(title))
@@ -463,14 +505,14 @@ struct SettingsToggle: View {
 }
 
 /// Centers a dependent setting's control beside its title and description beneath a divider.
-struct SettingsSubsettingRow<Control: View>: View {
+package struct SettingsSubsettingRow<Control: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     let description: String?
     let focusTarget: SettingsFocusTarget?
     @ViewBuilder let control: Control
 
-    init(
+    package init(
         title: String,
         description: String? = nil,
         focusTarget: SettingsFocusTarget? = nil,
@@ -482,7 +524,7 @@ struct SettingsSubsettingRow<Control: View>: View {
         self.control = control()
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             Divider()
                 .padding(.trailing, 8)
@@ -526,7 +568,7 @@ struct SettingsSubsettingRow<Control: View>: View {
 }
 
 extension View {
-    func sortyFocusHighlight<FocusShape: InsettableShape>(
+    package func sortyFocusHighlight<FocusShape: InsettableShape>(
         isActive: Bool,
         shape: FocusShape,
         horizontalRingPadding: CGFloat = 0,
@@ -542,24 +584,24 @@ extension View {
         )
     }
 
-    func settingsFocusTarget(_ target: SettingsFocusTarget?) -> some View {
+    package func settingsFocusTarget(_ target: SettingsFocusTarget?) -> some View {
         environment(\.settingsFocusTarget, target)
     }
 
-    func settingsFocusDismissAction(
+    package func settingsFocusDismissAction(
         _ action: @escaping @MainActor (SettingsFocusTarget) -> Void
     ) -> some View {
         environment(\.settingsFocusDismissAction, action)
     }
 
-    func settingsFocusable(_ target: SettingsFocusTarget) -> some View {
+    package func settingsFocusable(_ target: SettingsFocusTarget) -> some View {
         settingsFocusable(
             target,
             shape: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
     }
 
-    func settingsFocusable<FocusShape: InsettableShape>(
+    package func settingsFocusable<FocusShape: InsettableShape>(
         _ target: SettingsFocusTarget,
         shape: FocusShape,
         horizontalRingPadding: CGFloat = 0,
@@ -584,7 +626,7 @@ extension View {
         }
     }
 
-    func settingsFocusableSetting(_ target: SettingsFocusTarget) -> some View {
+    package func settingsFocusableSetting(_ target: SettingsFocusTarget) -> some View {
         settingsFocusable(
             target,
             shape: RoundedRectangle(cornerRadius: 10, style: .continuous),
@@ -605,17 +647,29 @@ extension View {
 
 /// Native capsule segmented selector shared by Settings pickers, matching the
 /// History filters. Callers own haptics through their selection binding.
-struct CapsuleSegmentedControl: NSViewRepresentable {
+package struct CapsuleSegmentedControl: NSViewRepresentable {
     let accessibilityLabel: String
     let accessibilityIdentifier: String
     let labels: [String]
     @Binding var selectedIndex: Int
 
-    func makeCoordinator() -> Coordinator {
+    package init(
+        accessibilityLabel: String,
+        accessibilityIdentifier: String,
+        labels: [String],
+        selectedIndex: Binding<Int>
+    ) {
+        self.accessibilityLabel = accessibilityLabel
+        self.accessibilityIdentifier = accessibilityIdentifier
+        self.labels = labels
+        self._selectedIndex = selectedIndex
+    }
+
+    package func makeCoordinator() -> Coordinator {
         Coordinator(selectedIndex: $selectedIndex)
     }
 
-    func makeNSView(context: Context) -> NSSegmentedControl {
+    package func makeNSView(context: Context) -> NSSegmentedControl {
         let control = NSSegmentedControl(
             labels: labels,
             trackingMode: .selectOne,
@@ -639,7 +693,7 @@ struct CapsuleSegmentedControl: NSViewRepresentable {
         return control
     }
 
-    func updateNSView(_ control: NSSegmentedControl, context: Context) {
+    package func updateNSView(_ control: NSSegmentedControl, context: Context) {
         context.coordinator.selectedIndex = $selectedIndex
         control.segmentCount = labels.count
         for (index, label) in labels.enumerated() {
@@ -649,7 +703,7 @@ struct CapsuleSegmentedControl: NSViewRepresentable {
     }
 
     @MainActor
-    final class Coordinator: NSObject {
+    package final class Coordinator: NSObject {
         var selectedIndex: Binding<Int>
 
         init(selectedIndex: Binding<Int>) {
