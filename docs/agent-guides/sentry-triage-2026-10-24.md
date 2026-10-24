@@ -1,0 +1,54 @@
+# Sentry hang triage, 24 October 2026
+
+## SORTY-MACOS-3H
+
+The supplied Sentry report records one hang of at least 2,000 ms in production
+Sorty 1.3.0, build 20261004162224, at 2026-10-23 16:47:11.621 UTC.
+The event identifier shown in the report is `362b5852`, and its trace ID is
+`067544aff0534865ad9c4c0ebd1d8136`. This triage uses the pasted report and local
+source history; the full Sentry event was not retrieved.
+
+The sampled main thread is evaluating `DirectorySelectionView.dropZone`.
+Line 254 in the local `v1.3.0` tag is `.buttonStyle(.plain)`. This identifies
+the sampled rendering location, but does not establish that the button style
+caused the delay. The supplied stack has collapsed framework frames and does
+not include the other threads or a time profile.
+
+The device is an 8 GiB M1 MacBook Air running macOS 15.8.1. Sentry reports
+68.8 MiB free memory and 163.3 MiB app memory usage. Low free memory is a
+diagnostic lead, not proof of memory pressure, paging, or an app memory leak.
+The app had been running for about 90 minutes, so this is not evidence of a
+launch hang. Other hang issues appear in the same trace; their relationship
+to this event remains unknown. The handled-error entries shown in the report
+precede the hang and do not establish a causal link.
+
+## Source review
+
+The current view, its release version, drop-zone modifier, workflow container,
+accent lookup, icon sweep, window visibility reader, and Beam lifecycle were
+reviewed. No synchronous file scan, network request, or wait was found in the
+drop-zone view construction. The folder picker runs in a button action, while
+dragged items load through an item-provider callback. Neither action appears in
+the supplied stack. The drop-zone glass branch requires macOS 26 and therefore
+does not apply to this macOS 15 event.
+
+The shared icon highlight is a single appearance animation. The Browse button's
+Beam already gates activity on presentation, Reduce Motion, window visibility,
+and control activation. These observations do not rule out rendering costs or
+framework problems, but do not demonstrate a defect that warrants changing
+these effects. Later view-expression extraction on main is a compilation
+refactor, not a verified fix for this hang.
+
+## Next evidence
+
+Obtain the full event JSON, including every main-thread frame, other threads,
+and available breadcrumbs, then compare the adjacent hang events in this trace.
+Look for a repeated expensive call path or a blocking dependency before choosing
+a code change. If reproducible, capture the same interaction with Instruments
+Time Profiler and hang analysis, and inspect memory pressure and paging during
+the interval. Apple's [hang analysis guide](https://developer.apple.com/documentation/xcode/understanding-hangs-in-your-app)
+explains how main-run-loop work affects responsiveness.
+
+No runtime fix is claimed. No build, tests, or computer-use verification was
+performed for this documentation-only triage. Keep the issue unresolved until
+the cause and remediation are supported by further evidence.
