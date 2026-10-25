@@ -174,6 +174,11 @@ enum AIRequestSupport {
         }
 
         let path = components.path
+        if path.hasSuffix("/v1beta/openai") {
+            components.path += "/models"
+            return try ensureURL(components)
+        }
+
         if path.hasSuffix("/chat/completions") {
             components.path = String(path.dropLast("/chat/completions".count)) + "/models"
             return try ensureURL(components)

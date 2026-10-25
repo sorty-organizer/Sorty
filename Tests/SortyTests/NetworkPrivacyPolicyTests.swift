@@ -130,15 +130,16 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
         XCTAssertNoThrow(try AIRequestSupport.makeJSONRequest(url: local, method: "GET"))
     }
 
-    func testGeminiOpenAICompatibleChatEndpointDoesNotDuplicateVersionPath() throws {
-        let url = try AIRequestSupport.openAIChatCompletionsURL(
-            from: "https://generativelanguage.googleapis.com/v1beta/openai"
-        )
-
-        XCTAssertEqual(
-            url.absoluteString,
-            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
-        )
+    func testGeminiModelsEndpointDoesNotDuplicateVersionPath() throws {
+        let baseURL = try XCTUnwrap(AIProvider.gemini.defaultAPIURL)
+        for apiURL in [baseURL, baseURL + "/", baseURL + "/chat/completions"] {
+            let url = try AIRequestSupport.openAIModelsURL(from: apiURL)
+            XCTAssertEqual(
+                url.absoluteString,
+                "https://generativelanguage.googleapis.com/v1beta/openai/models",
+                apiURL
+            )
+        }
     }
 
     func testSessionDelegateBlocksRedirectFromLoopbackToRemoteHost() throws {
