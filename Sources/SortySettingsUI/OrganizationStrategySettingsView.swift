@@ -369,18 +369,7 @@ struct OrganizationStrategySettingsView: View {
             .settingsFocusableSetting(.strategyMaxFilenameLength)
 
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 22, weight: .medium))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.purple)
-                    .frame(width: 44, height: 44)
-                    .background(
-                        Color.purple.opacity(0.12),
-                        in: RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    )
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Example filename")
                         .font(.subheadline.weight(.medium))
 
@@ -394,7 +383,8 @@ struct OrganizationStrategySettingsView: View {
                         )
                 }
             }
-            .padding(12)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
             .overlay {

@@ -374,13 +374,12 @@ struct PersonaGeneratorView: View {
 
         // A hidden copy of the answer sizes the card to 1–3 lines; the
         // TextEditor fills that space and scrolls anything longer.
-        return ZStack(alignment: .topLeading) {
-            Text(answer.isEmpty ? " " : answer)
-                .lineLimit(1...3)
-                .padding(.horizontal, 5)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .hidden()
-
+        return Text(answer.isEmpty ? " " : answer)
+            .lineLimit(1...3)
+            .padding(.horizontal, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hidden()
+            .overlay(alignment: .topLeading) {
             Text(showsPlaceholder ? "Or type exactly what you want…" : "")
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 5)
@@ -400,7 +399,7 @@ struct PersonaGeneratorView: View {
                     return .handled
                 }
                 .accessibilityLabel("Custom answer")
-        }
+            }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
