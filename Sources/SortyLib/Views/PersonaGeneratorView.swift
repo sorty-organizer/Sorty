@@ -233,11 +233,14 @@ struct PersonaGeneratorView: View {
                 Button {
                     startHoning()
                 } label: {
-                    if isLoadingQuestions {
-                        SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
-                    } else {
-                        Text("Next")
-                    }
+                    // Keep "Next" laid out so the button doesn't shrink while loading.
+                    Text("Next")
+                        .opacity(isLoadingQuestions ? 0 : 1)
+                        .overlay {
+                            if isLoadingQuestions {
+                                SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
+                            }
+                        }
                 }
                 .buttonStyle(.sortyProminent)
                 .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoadingQuestions)
@@ -312,16 +315,19 @@ struct PersonaGeneratorView: View {
             Spacer()
             
             HStack {
-                if currentQuestionIndex > 0 {
-                    Button("Back") {
-                        focusedCustomAnswerQuestionID = nil
-                        HapticFeedbackManager.shared.selection()
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
+                Button("Back") {
+                    focusedCustomAnswerQuestionID = nil
+                    HapticFeedbackManager.shared.selection()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
+                        if currentQuestionIndex > 0 {
                             currentQuestionIndex -= 1
+                        } else {
+                            isHoning = false
                         }
                     }
-                    .buttonStyle(.sortyBordered)
                 }
+                .buttonStyle(.sortyBordered)
+                .disabled(generator.isGenerating)
                 
                 Spacer()
                 
@@ -377,6 +383,7 @@ struct PersonaGeneratorView: View {
                 .focused($focusedCustomAnswerQuestionID, equals: question.id)
                 .textFieldStyle(.plain)
                 .lineLimit(1...4)
+                .fixedSize(horizontal: false, vertical: true)
                 .onSubmit {
                     guard answers[question.id] != nil else { return }
                     advance(from: question)
@@ -386,6 +393,7 @@ struct PersonaGeneratorView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
         .background(
             RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .fill(hasAnswer ? accent.opacity(0.11) : Color(nsColor: .controlBackgroundColor))
