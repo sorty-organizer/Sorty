@@ -372,22 +372,32 @@ struct PersonaGeneratorView: View {
         let showsPlaceholder = answer.isEmpty && !isFocused
         let accent = SortyDesignSystem.Colors.resolvedAccent
 
+        // A hidden copy of the answer sizes the card to 1–3 lines; the
+        // TextEditor fills that space and scrolls anything longer.
         return ZStack(alignment: .topLeading) {
+            Text(answer.isEmpty ? " " : answer)
+                .lineLimit(1...3)
+                .padding(.horizontal, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .hidden()
+
             Text(showsPlaceholder ? "Or type exactly what you want…" : "")
                 .foregroundStyle(.secondary)
+                .padding(.horizontal, 5)
                 .allowsHitTesting(false)
                 .contentTransition(reduceMotion ? .opacity : .numericText())
                 .animation(reduceMotion ? .easeOut(duration: 0.12) : .default, value: showsPlaceholder)
 
-            TextField("", text: customAnswerBinding(for: question), axis: .vertical)
+            TextEditor(text: customAnswerBinding(for: question))
+                .font(.body)
+                .scrollContentBackground(.hidden)
+                .scrollIndicators(.automatic)
                 .focused($focusedCustomAnswerQuestionID, equals: question.id)
-                .textFieldStyle(.plain)
-                .lineLimit(1...3)
-                .fixedSize(horizontal: false, vertical: true)
-                .clipped()
-                .onSubmit {
-                    guard answers[question.id] != nil else { return }
-                    advance(from: question)
+                .onKeyPress(.return, phases: .down) { press in
+                    // Shift-Return inserts a newline; plain Return advances.
+                    guard !press.modifiers.contains(.shift) else { return .ignored }
+                    if answers[question.id] != nil { advance(from: question) }
+                    return .handled
                 }
                 .accessibilityLabel("Custom answer")
         }
