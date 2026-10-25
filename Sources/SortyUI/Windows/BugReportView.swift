@@ -12,7 +12,8 @@ public struct BugReportView: View {
     @State private var description = ""
     @FocusState private var isDescriptionFocused: Bool
     @State private var area: BugReportArea = .organize
-    @State private var sendToSentry = false
+    /// The user's choice; kept while internet is blocked so it returns when unblocked.
+    @State private var wantsSentry = false
     @State private var sentryEventID: String?
     @State private var errorMessage: String?
 
@@ -25,6 +26,10 @@ public struct BugReportView: View {
     /// used; hiding it keeps the window honest about what is available.
     private var showsSentryOption: Bool {
         analytics.consent == .granted
+    }
+
+    private var sendToSentry: Bool {
+        wantsSentry && canSubmitBugFeedback
     }
 
     private var canSubmitBugFeedback: Bool {
@@ -85,12 +90,12 @@ public struct BugReportView: View {
                 }
 
             if showsSentryOption {
-                Toggle("Also send this description to Sentry (anonymous)", isOn: $sendToSentry)
+                Toggle("Also send this description to Sentry (anonymous)", isOn: Binding(
+                    get: { sendToSentry },
+                    set: { wantsSentry = $0 }
+                ))
                     .disabled(!canSubmitBugFeedback)
                     .accessibilityIdentifier("SendBugReportToSentryToggle")
-                    .onChange(of: canSubmitBugFeedback, initial: true) { _, canSubmit in
-                        if !canSubmit { sendToSentry = false }
-                    }
 
                 if sendToSentry {
                     VStack(alignment: .leading, spacing: 12) {
@@ -241,7 +246,7 @@ public struct BugReportView: View {
                 return
             }
             sentryEventID = eventID
-            sendToSentry = false // Retrying GitHub must not send a duplicate report.
+            wantsSentry = false // Retrying GitHub must not send a duplicate report.
             NotificationManager.shared.showHUDInfo(
                 title: "Report queued for Sentry",
                 message: "Your bug description is linked to this report.",
