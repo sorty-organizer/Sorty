@@ -122,7 +122,9 @@ export default function PrivacyPolicyPage() {
         </p>
         <p>
           When enabled, the App sends a random anonymous installation
-          identifier, app and macOS versions, named screen visits, feature and
+          identifier, app and macOS versions, the country from your Mac&apos;s
+          Region setting (never your IP address or precise location), a
+          once-per-day activity marker, named screen visits, feature and
           sub-feature actions, a small allowlist of important button actions,
           coarse count and duration buckets, workflow outcomes, and sanitized
           errors. Crash reports may include exception types, signal names,

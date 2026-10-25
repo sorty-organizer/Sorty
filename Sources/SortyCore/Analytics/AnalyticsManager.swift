@@ -148,8 +148,8 @@ public final class AnalyticsManager: ObservableObject {
             sessionProperties["stage"] = "main_window_appeared"
         }
         capture(
-            event: "app:session_started",
-            properties: sessionProperties
+            event: AnalyticsEventName.appOpened,
+            properties: sessionProperties.merging(["event_category": "session"]) { current, _ in current }
         )
         flushPendingCaptures()
     }
@@ -191,6 +191,7 @@ public final class AnalyticsManager: ObservableObject {
         ReliabilityManager.shared.stopAndClear()
         stopAndClear()
         defaults.removeObject(forKey: Self.consentDefaultsKey)
+        defaults.removeObject(forKey: Self.lastActiveDayDefaultsKey)
         consent = .undecided
     }
 
@@ -227,7 +228,11 @@ public final class AnalyticsManager: ObservableObject {
         ]
         properties["section"] = section
         properties["previous_screen"] = previousScreen
-        capture(event: "app:screen_viewed", properties: properties)
+        // PostHog's native screen event, so screens show up by name in
+        // Product Analytics and paths without custom breakdowns.
+        properties["$screen_name"] = AnalyticsEventName.screenName(screen: screen, section: section)
+        properties["event_category"] = "screen"
+        capture(event: "$screen", properties: properties)
     }
 
     public func captureFeature(
@@ -238,8 +243,9 @@ public final class AnalyticsManager: ObservableObject {
         properties: [String: Any] = [:]
     ) {
         capture(
-            event: "app:feature_used",
+            event: AnalyticsEventName.feature(subfeature: subfeature, action: action, outcome: outcome),
             properties: properties.merging([
+                "event_category": "feature",
                 "feature": feature,
                 "subfeature": subfeature,
                 "action": action,
@@ -255,8 +261,9 @@ public final class AnalyticsManager: ObservableObject {
         properties: [String: Any] = [:]
     ) {
         capture(
-            event: "app:workflow_progressed",
+            event: AnalyticsEventName.workflow(workflow: workflow, stage: stage, outcome: outcome),
             properties: properties.merging([
+                "event_category": "workflow",
                 "workflow": workflow,
                 "stage": stage,
                 "outcome": outcome,
@@ -270,8 +277,9 @@ public final class AnalyticsManager: ObservableObject {
         feature: String
     ) {
         capture(
-            event: "app:important_button_clicked",
+            event: AnalyticsEventName.buttonClicked(button),
             properties: [
+                "event_category": "button",
                 "button": button,
                 "screen": screen,
                 "feature": feature,
@@ -284,12 +292,16 @@ public final class AnalyticsManager: ObservableObject {
         isEnabled: Bool,
         section: String = "settings"
     ) {
-        captureFeature(
-            feature: "settings",
-            subfeature: section,
-            action: "toggle_changed",
-            outcome: isEnabled ? "enabled" : "disabled",
-            properties: ["control": control]
+        capture(
+            event: AnalyticsEventName.settingChanged,
+            properties: [
+                "event_category": "feature",
+                "feature": "settings",
+                "subfeature": section,
+                "action": "toggle_changed",
+                "outcome": isEnabled ? "enabled" : "disabled",
+                "control": control,
+            ]
         )
     }
 
@@ -405,12 +417,53 @@ public final class AnalyticsManager: ObservableObject {
     }
 
     private func send(event: String, properties: [String: Any]) {
+        sendDailyActiveIfNeeded()
+        PostHogSDK.shared.capture(event, properties: commonProperties(properties))
+    }
+
+    /// Sends one `Daily Active` event per local calendar day, so DAU/WAU/MAU
+    /// are "unique users of Daily Active" even when Sorty stays open past
+    /// midnight without being relaunched.
+    private func sendDailyActiveIfNeeded() {
+        let today = Self.dayFormatter.string(from: Date())
+        guard defaults.string(forKey: Self.lastActiveDayDefaultsKey) != today else { return }
+        defaults.set(today, forKey: Self.lastActiveDayDefaultsKey)
+        PostHogSDK.shared.capture(
+            AnalyticsEventName.dailyActive,
+            properties: commonProperties(["event_category": "session"])
+        )
+    }
+
+    private func commonProperties(_ properties: [String: Any]) -> [String: Any] {
         var safeProperties = properties
         safeProperties["platform_surface"] = "mac_app"
         safeProperties["is_internal"] = InternalTelemetry.isEnabled
+        // Country comes from the Mac's Region setting, never from the IP
+        // address, so PostHog GeoIP (city, coordinates) stays disabled.
+        safeProperties["country_code"] = Self.countryCode()
         safeProperties["$geoip_disable"] = true
-        PostHogSDK.shared.capture(event, properties: safeProperties)
+        return safeProperties
     }
+
+    nonisolated static func countryCode(locale: Locale = .current) -> String {
+        guard let region = locale.region?.identifier,
+              region.count == 2,
+              region.allSatisfy({ $0.isASCII && $0.isLetter })
+        else {
+            return "unknown"
+        }
+        return region.uppercased()
+    }
+
+    private static let lastActiveDayDefaultsKey = "analyticsLastActiveDay"
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 
     private func stopAndClear() {
         experimentalFeatures = []
@@ -564,14 +617,15 @@ public final class AnalyticsManager: ObservableObject {
     }
 
     private nonisolated static func sanitized(event: PostHogEvent) -> PostHogEvent? {
-        let allowedEvents: Set<String> = [
-            "app:session_started",
-            "app:screen_viewed",
-            "app:feature_used",
-            "app:workflow_progressed",
-            "app:important_button_clicked",
-        ]
-        guard allowedEvents.contains(event.event) else { return nil }
+        // Event names are generated by `AnalyticsEventName` from bounded
+        // identifiers; anything else (SDK autocapture, stray events) is dropped.
+        let allowedCategories: Set<String> = ["session", "screen", "feature", "workflow", "button"]
+        guard let category = event.properties["event_category"] as? String,
+              allowedCategories.contains(category),
+              event.event == "$screen" || AnalyticsEventName.isValid(event.event)
+        else {
+            return nil
+        }
 
         let allowedProperties: Set<String> = [
             "$app_build",
@@ -583,15 +637,18 @@ public final class AnalyticsManager: ObservableObject {
             "$os_name",
             "$os_version",
             "$process_person_profile",
+            "$screen_name",
             "$session_id",
             "action",
             "ai_duration_ms",
             "button",
             "control",
             "count_bucket",
+            "country_code",
             "duration_bucket",
             "duration_ms",
             "entry_source",
+            "event_category",
             "feature",
             "has_custom_instructions",
             "is_internal",
@@ -667,6 +724,62 @@ public final class AnalyticsManager: ObservableObject {
         return result
     }
 
+}
+
+/// Human-readable PostHog event names built from the bounded snake_case
+/// identifiers call sites already pass, e.g. `organize` + `plan_ready` becomes
+/// `Organize Plan Ready`. The raw identifiers stay on the event as properties.
+enum AnalyticsEventName {
+    static let appOpened = "App Opened"
+    static let dailyActive = "Daily Active"
+    static let settingChanged = "Setting Changed"
+
+    private static let notableOutcomes: Set<String> = ["failed", "cancelled", "empty", "unavailable"]
+
+    static func workflow(workflow: String, stage: String, outcome: String) -> String {
+        withOutcome(titled(workflow) + " " + titled(stage), outcome: outcome)
+    }
+
+    static func feature(subfeature: String, action: String, outcome: String) -> String {
+        let subject = titled(subfeature)
+        // Drop action words that repeat the subject ("Custom Personas" +
+        // "persona_selected" reads as "Custom Personas Selected").
+        let singular: (Substring) -> Substring = { $0.hasSuffix("s") ? $0.dropLast() : $0 }
+        let subjectWords = Set(subject.split(separator: " ").map(singular))
+        let verb = titled(action)
+            .split(separator: " ")
+            .filter { !subjectWords.contains(singular($0)) }
+            .joined(separator: " ")
+        return withOutcome(verb.isEmpty ? subject : "\(subject) \(verb)", outcome: outcome)
+    }
+
+    static func buttonClicked(_ button: String) -> String {
+        titled(button) + " Clicked"
+    }
+
+    static func screenName(screen: String, section: String?) -> String {
+        guard let section, !section.isEmpty, section != screen else { return titled(screen) }
+        return titled(screen) + " › " + titled(section)
+    }
+
+    static func isValid(_ name: String) -> Bool {
+        !name.isEmpty && name.count <= 80 && name.allSatisfy {
+            ($0.isASCII && ($0.isLetter || $0.isNumber)) || $0 == " "
+        }
+    }
+
+    private static func withOutcome(_ name: String, outcome: String) -> String {
+        let suffix = titled(outcome)
+        guard notableOutcomes.contains(outcome), !name.hasSuffix(suffix) else { return name }
+        return name + " " + suffix
+    }
+
+    private static func titled(_ identifier: String) -> String {
+        identifier
+            .split(whereSeparator: { !($0.isASCII && ($0.isLetter || $0.isNumber)) })
+            .map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
+            .joined(separator: " ")
+    }
 }
 
 private struct BufferedAnalyticsCapture {
