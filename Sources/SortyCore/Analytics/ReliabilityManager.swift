@@ -484,10 +484,12 @@ public final class ReliabilityManager {
             return nil
         }
 
-        // Each report is its own warning-level issue: Sentry marks info events
-        // low priority and only alerts on new issues, so grouping or info level
-        // hides every report after the first from the default issue feed.
-        let event = Event(level: .warning)
+        // Each report is its own error-level issue. Sentry derives priority from
+        // level (error = high, warning = medium, info = low) and the default
+        // alert rule only notifies on new high-priority issues, so any lower
+        // level, or grouping reports together, means nobody gets notified.
+        // Filter on the `event_kind:user_feedback` tag to separate them from crashes.
+        let event = Event(level: .error)
         event.message = SentryMessage(formatted: kind == .bug
             ? "User bug report: \(area.displayName)"
             : "User feedback: \(kind.displayName)")
