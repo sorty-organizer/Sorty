@@ -257,6 +257,13 @@ struct OrganizationStrategySettingsView: View {
             .labelsHidden()
             .settingsFocusableSetting(.strategyNamingTemplate)
 
+            if viewModel.config.selectedNamingPresetId == nil {
+                Text("No naming template. Sorty uses the options below and any additional instructions.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Divider()
 
             filenameOptions
@@ -505,6 +512,20 @@ struct OrganizationStrategySettingsView: View {
                     }
 
                     HStack {
+                        Button("Cancel") {
+                            showNamingInput = false
+                            namingPreferenceInput = ""
+                            namingReferenceFolderURL = nil
+                        }
+                        .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
+
+                        Spacer()
+
+                        if namingGenerator.isGenerating {
+                            SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
+                                .padding(.leading, 4)
+                        }
+
                         Button("Generate") {
                             Task {
                                 do {
@@ -530,20 +551,6 @@ struct OrganizationStrategySettingsView: View {
                                 && namingReferenceFolderURL == nil)
                                 || namingGenerator.isGenerating
                         )
-
-                        if namingGenerator.isGenerating {
-                            SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
-                                .padding(.leading, 4)
-                        }
-
-                        Spacer()
-
-                        Button("Cancel") {
-                            showNamingInput = false
-                            namingPreferenceInput = ""
-                            namingReferenceFolderURL = nil
-                        }
-                        .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
                     }
 
                     if let error = namingGenerator.error {
