@@ -132,3 +132,13 @@ only this thread's four source/test patches. It did not create a branch or
 worktree, modify the other work, launch the app, or exercise a real AI account.
 The same run compiled the app target, including the menu-bar change. This is
 source/build evidence, not a production hang reproduction or hosted CI result.
+
+[Blacksmith Swift CI 40159141663](https://github.com/sorty-organizer/Sorty/actions/runs/40159141663)
+for `6edffc6c` passed secret scanning, cache checks, fuzzing, test compilation,
+and the app build. The test step failed in the unchanged
+`WindowSessionTests.testSettingsSectionRoutingAppliesExpectedViewAndFocus`:
+the table expects watched-folder aliases to select `.rules`, while the current
+router selects `.automation`. Both the router and those expectations predate
+this commit. The new regeneration tests did not fail. Full hosted CI is red,
+and pre-release validation was skipped. The unrelated routing test was left
+unchanged.
