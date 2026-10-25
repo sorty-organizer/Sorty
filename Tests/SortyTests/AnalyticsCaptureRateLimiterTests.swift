@@ -106,6 +106,55 @@ final class ReliabilityErrorDiagnosticsTests: XCTestCase {
         XCTAssertFalse(String(describing: ReliabilityManager.errorDiagnostics(failure)).contains("/private/"))
     }
 
+    func testFaultSeparatesSortyBugsFromProviderAndSetupFailures() {
+        let cases: [(Error, ReliabilityFault)] = [
+            (AIClientError.apiError(statusCode: 413, message: ""), .sorty),
+            (AIClientError.apiError(statusCode: 503, message: ""), .aiProvider),
+            (AIClientError.apiError(statusCode: 429, message: "insufficient quota"), .aiProvider),
+            (AIClientError.apiError(statusCode: 401, message: ""), .setup),
+            (AIClientError.apiError(statusCode: 404, message: ""), .setup),
+            (AIClientError.jsonDecodingError(context: "private response"), .aiOutput),
+            (AIClientError.networkError(URLError(.timedOut)), .network),
+            (FileSystemError.diskFull(path: "/private/file", underlyingErrno: nil), .system),
+            (OrganizationError.noCurrentPlan, .sorty),
+            (NSError(domain: "com.example", code: 1), .unknown),
+        ]
+        for (failure, expected) in cases {
+            XCTAssertEqual(ReliabilityManager.classify(failure).fault, expected, "\(failure)")
+        }
+    }
+
+    func testIssueTitleIsReadableAndBuiltOnlyFromIdentifiers() {
+        let title = ReliabilityManager.issueTitle(
+            feature: "organize",
+            operation: "generate_plan",
+            classification: ReliabilityManager.classify(
+                AIClientError.apiError(statusCode: 413, message: "private-file-name")
+            )
+        )
+        XCTAssertEqual(title.type, "SortyError")
+        XCTAssertEqual(title.value, "Organize › Generate plan — HTTP 413 (request too large)")
+    }
+
+    func testEventKindRecognizesSDKHangsCrashesAndWatchdogTerminations() {
+        XCTAssertEqual(
+            ReliabilityEventKind.inferred(exceptionTypes: ["App Hanging"], isFatal: false, hasUnhandledException: false),
+            .hang
+        )
+        XCTAssertEqual(
+            ReliabilityEventKind.inferred(exceptionTypes: ["App Hang Fully Blocked"], isFatal: false, hasUnhandledException: false),
+            .hang
+        )
+        XCTAssertEqual(
+            ReliabilityEventKind.inferred(exceptionTypes: ["WatchdogTermination"], isFatal: true, hasUnhandledException: false),
+            .watchdogTermination
+        )
+        XCTAssertEqual(
+            ReliabilityEventKind.inferred(exceptionTypes: ["EXC_BAD_ACCESS"], isFatal: true, hasUnhandledException: true),
+            .crash
+        )
+    }
+
     func testPartialApplyFailureIsClassifiedWithoutPrivateDetails() {
         let failure = FileSystemError.partialApplyFailure(
             operations: [], underlyingDescription: "private filename and provider response"

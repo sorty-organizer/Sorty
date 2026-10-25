@@ -22,7 +22,38 @@ Filter PostHog events and dashboards on the event property `is_internal = false`
 
 ## Event taxonomy
 
-Handled macOS errors are grouped in Sentry by sanitized feature, operation, category, and cause. AI and organization failures use typed causes, separating HTTP status codes, exhausted quota, missing credentials, malformed responses, and invalid plans. Handled events attach the capture-time stack and a versioned diagnostic dictionary containing valid HTTP status codes, allowlisted system error domains and numeric codes, or a fixed decoding-failure kind. Stack traces identify the reporting path, not necessarily the original throw site. Error payloads, arbitrary domains, decoding keys and paths, and provider response bodies stay local. Reported severity sets the Sentry event level. Model catalog refresh operations include the provider name. These fields contain no credentials or provider responses, and they let a failed model list stay separate from an unrelated network timeout.
+Handled macOS errors are grouped in Sentry by sanitized feature, operation, category, and cause. AI and organization failures use typed causes, separating HTTP status codes, exhausted quota, missing credentials, malformed responses, and invalid plans. Handled events attach the capture-time stack and a versioned diagnostic dictionary containing valid HTTP status codes, allowlisted system error domains and numeric codes, or a fixed decoding-failure kind. Stack traces identify the reporting path, not necessarily the original throw site. Error payloads, arbitrary domains, decoding keys and paths, and provider response bodies stay local. Model catalog refresh operations include the provider name. These fields contain no credentials or provider responses, and they let a failed model list stay separate from an unrelated network timeout.
+
+### Reading the Sentry issue stream
+
+Every handled error is a readable issue built only from those fixed identifiers, with the fault as the type, then feature › operation — cause:
+
+```
+SortyError: Organize › Generate plan — HTTP 413 (request too large)
+AIProviderError: Model catalog › Refresh provider groq — HTTP 503 (service unavailable)
+```
+
+The issue's culprit is `feature.operation`. Each event carries these tags:
+
+| Tag | Values | Use |
+| --- | --- | --- |
+| `event_kind` | `handled_error`, `crash`, `hang`, `watchdog_termination`, `diagnostic_report`, `user_feedback`, `other` | Split the stream. SDK crashes and hangs are tagged in `beforeSend`. |
+| `fault` | `sorty`, `ai_provider`, `ai_output`, `setup`, `network`, `system`, `unknown` | Who most likely needs to act. Only `sorty` and `unknown` usually need a code change. |
+| `feature`, `operation` | Bounded snake_case identifiers | Where the failure was reported. |
+| `error_category`, `error_cause` | Fixed classifier values | Exact cause, such as `http_413` or `json_decoding_failed`. |
+| `recoverable` | `true`, `false` | Whether the workflow could continue. |
+
+Level follows fault. Handled errors with fault `sorty` or `unknown`, and any unrecoverable error, are `error`. Provider, AI-output, setup, network, and system failures are `warning`. They are still captured; filter them out with `level:error`. Diagnostic-report markers and bug reports are `info`, grouped into one issue per marker and one per bug-report area (`User bug report: Organize`).
+
+Useful saved searches for `environment:production`:
+
+- Likely Sorty bugs: `is:unresolved event_kind:handled_error fault:[sorty,unknown]`
+- Crashes: `is:unresolved event_kind:[crash,watchdog_termination]`
+- Hangs: `is:unresolved event_kind:hang`
+- Provider health: `event_kind:handled_error fault:[ai_provider,ai_output,network]`
+- User reports: `event_kind:user_feedback` plus the Feedback view
+
+Handled-error fingerprints start with `sorty.handled_error.v2`. Builds through 1.3.0 sent these errors without an exception or message, so Sentry lists them as `<unlabeled event>`. Use their `error_cause` tag. Those issues stop receiving events once users update.
 
 | Event | Surface | Purpose |
 |---|---|---|

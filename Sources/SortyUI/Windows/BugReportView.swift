@@ -116,7 +116,7 @@ public struct BugReportView: View {
                                     sentryExcludedRow("Name, email, or attachments")
                                 }
                                 GridRow {
-                                    sentryListRow("Linked event sorty.user_bug_report")
+                                    sentryListRow("A linked \"User bug report\" event")
                                     sentryExcludedRow("File names, paths, or contents")
                                 }
                                 GridRow {

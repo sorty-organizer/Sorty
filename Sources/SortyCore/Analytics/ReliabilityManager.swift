@@ -111,6 +111,9 @@ public final class ReliabilityManager {
             options.enableLogs = true
             options.enableMetrics = true
             options.tracesSampleRate = tracesSampleRate
+            options.beforeSend = { event in
+                ReliabilityEventKind.tag(event)
+            }
 
             SentrySDK.start(options: options)
             await MainActor.run {
@@ -184,11 +187,17 @@ public final class ReliabilityManager {
         }
     }
 
+    /// Reports a handled error as a readable, sanitized Sentry issue.
+    /// Call it at the workflow boundary that gave up on `error`; `feature` and
+    /// `operation` must be fixed snake_case identifiers, never user data.
+    /// The issue title reads like `AIProviderError: Organize › Generate plan
+    /// — HTTP 503 (service unavailable)`, and the `fault` tag says who most
+    /// likely needs to act. Only failures that point at Sorty itself, or that
+    /// cannot be recovered from, are reported at error level.
     public func capture(
         error: Error,
         feature: String,
         operation: String,
-        severity: String = "error",
         recoverable: Bool = true
     ) {
         guard isActive,
@@ -201,29 +210,24 @@ public final class ReliabilityManager {
         }
 
         let classification = Self.classify(error)
-        let sanitizedError = SanitizedReliabilityError(
-            category: classification.category,
-            cause: classification.cause,
-            operation: Self.boundedIdentifier(operation, fallback: "unknown_operation")
-        )
         let safeFeature = Self.boundedIdentifier(feature, fallback: "unknown_feature")
         let safeOperation = Self.boundedIdentifier(
             operation,
             fallback: "unknown_operation"
         )
+        let level = Self.level(for: classification, recoverable: recoverable)
+        let attributes: [String: Any] = [
+            "platform_surface": "mac_app",
+            "is_internal": InternalTelemetry.isEnabled,
+            "feature": safeFeature,
+            "operation": safeOperation,
+            "error_category": classification.category,
+            "error_cause": classification.cause,
+            "fault": classification.fault.rawValue,
+            "recoverable": recoverable,
+        ]
 
-        SentrySDK.logger.error(
-            "sorty.reliability.handled_error",
-            attributes: [
-                "platform_surface": "mac_app",
-                "is_internal": InternalTelemetry.isEnabled,
-                "feature": safeFeature,
-                "operation": safeOperation,
-                "error_category": classification.category,
-                "error_cause": classification.cause,
-                "recoverable": recoverable,
-            ]
-        )
+        SentrySDK.logger.error("sorty.reliability.handled_error", attributes: attributes)
         SentrySDK.metrics.count(
             key: "sorty.app.handled_error",
             attributes: [
@@ -232,21 +236,32 @@ public final class ReliabilityManager {
                 "feature": safeFeature,
                 "operation": safeOperation,
                 "error_category": classification.category,
+                "fault": classification.fault.rawValue,
                 "recoverable": recoverable,
             ]
         )
 
-        let event = Event(error: sanitizedError as NSError)
-        event.message = SentryMessage(formatted: "\(safeFeature).\(safeOperation): \(classification.category).\(classification.cause)")
+        // Build the exception explicitly. `Event(error:)` is not converted
+        // into an exception by `capture(event:)`, which is what left these
+        // issues titled "<unlabeled event>".
+        let title = Self.issueTitle(
+            feature: safeFeature,
+            operation: safeOperation,
+            classification: classification
+        )
+        let exception = Exception(value: title.value, type: title.type)
+        let mechanism = Mechanism(type: "sorty.handled_error")
+        mechanism.handled = true
+        exception.mechanism = mechanism
+
+        let event = Event(level: level)
+        event.exceptions = [exception]
+        event.transaction = "\(safeFeature).\(safeOperation)"
         event.extra = Self.errorDiagnostics(error)
-        switch severity {
-        case "warning": event.level = .warning
-        case "info": event.level = .info
-        case "fatal": event.level = .fatal
-        default: event.level = .error
-        }
+        // The version prefix starts clean issues instead of merging into the
+        // unlabeled ones still arriving from 1.3.0.
         event.fingerprint = [
-            "sorty.handled_error",
+            "sorty.handled_error.v2",
             safeFeature,
             safeOperation,
             classification.category,
@@ -254,21 +269,12 @@ public final class ReliabilityManager {
         ]
         SentrySDK.capture(event: event) { scope in
             scope.setTag(value: "mac_app", key: "platform_surface")
-            scope.setTag(
-                value: safeFeature,
-                key: "feature"
-            )
-            scope.setTag(
-                value: safeOperation,
-                key: "operation"
-            )
+            scope.setTag(value: ReliabilityEventKind.handledError.rawValue, key: ReliabilityEventKind.tagKey)
+            scope.setTag(value: safeFeature, key: "feature")
+            scope.setTag(value: safeOperation, key: "operation")
             scope.setTag(value: classification.category, key: "error_category")
             scope.setTag(value: classification.cause, key: "error_cause")
-            scope.setTag(value: classification.type, key: "error_type")
-            scope.setTag(
-                value: Self.boundedIdentifier(severity, fallback: "error"),
-                key: "severity"
-            )
+            scope.setTag(value: classification.fault.rawValue, key: "fault")
             scope.setTag(value: recoverable ? "true" : "false", key: "recoverable")
         }
     }
@@ -283,10 +289,12 @@ public final class ReliabilityManager {
             return nil
         }
 
-        let eventID = SentrySDK.capture(
-            message: "sorty.diagnostic_report.generated"
-        ) { scope in
+        let event = Event(level: .info)
+        event.message = SentryMessage(formatted: "Diagnostic report generated")
+        event.fingerprint = ["sorty.diagnostic_report"]
+        let eventID = SentrySDK.capture(event: event) { scope in
             scope.setTag(value: "mac_app", key: "platform_surface")
+            scope.setTag(value: ReliabilityEventKind.diagnosticReport.rawValue, key: ReliabilityEventKind.tagKey)
             scope.setTag(value: "diagnostic_report", key: "feature")
             scope.setTag(value: "generated", key: "operation")
             scope.setTag(value: reportID, key: "diagnostic_report_id")
@@ -312,8 +320,13 @@ public final class ReliabilityManager {
             return nil
         }
 
-        let eventID = SentrySDK.capture(message: "sorty.user_bug_report") { scope in
+        // One issue per area keeps reports findable without one issue per report.
+        let event = Event(level: .info)
+        event.message = SentryMessage(formatted: "User bug report: \(area.displayName)")
+        event.fingerprint = ["sorty.user_bug_report", area.rawValue]
+        let eventID = SentrySDK.capture(event: event) { scope in
             scope.setTag(value: "mac_app", key: "platform_surface")
+            scope.setTag(value: ReliabilityEventKind.userFeedback.rawValue, key: ReliabilityEventKind.tagKey)
             scope.setTag(value: "user_feedback", key: "feature")
             scope.setTag(value: "report_bug", key: "operation")
             scope.setTag(value: area.rawValue, key: "report_area")
@@ -515,30 +528,30 @@ public final class ReliabilityManager {
         if let aiError = error as? AIClientError {
             switch aiError {
             case .missingAPIURL:
-                return .init(category: "configuration", cause: "missing_api_url", type: "provider_error")
+                return .init(category: "configuration", cause: "missing_api_url")
             case .missingAPIKey:
-                return .init(category: "authentication", cause: "missing_api_key", type: "provider_error")
+                return .init(category: "authentication", cause: "missing_api_key")
             case .invalidURL:
-                return .init(category: "configuration", cause: "invalid_api_url", type: "provider_error")
+                return .init(category: "configuration", cause: "invalid_api_url")
             case .invalidResponse:
-                return .init(category: "validation", cause: "invalid_response", type: "provider_error")
+                return .init(category: "validation", cause: "invalid_response")
             case .invalidResponseFormat:
-                return .init(category: "validation", cause: "invalid_response_format", type: "provider_error")
+                return .init(category: "validation", cause: "invalid_response_format")
             case .jsonDecodingError:
-                return .init(category: "validation", cause: "json_decoding_failed", type: "provider_error")
+                return .init(category: "validation", cause: "json_decoding_failed")
             case .internetAccessBlocked:
-                return .init(category: "network", cause: "privacy_mode_blocked", type: "provider_error")
+                return .init(category: "network", cause: "privacy_mode_blocked")
             case .networkError(let underlying):
                 let classification = classify(underlying)
                 if classification.category == "unknown" {
-                    return .init(category: "network", cause: "connection_failed", type: "provider_error")
+                    return .init(category: "network", cause: "connection_failed")
                 }
                 return classification
             case .apiError(let statusCode, _):
                 let cause = aiError.isQuotaExhausted ? "quota_exhausted"
                     : ((100...599).contains(statusCode) ? "http_\(statusCode)" : "invalid_http_status")
                 let category = (statusCode == 401 || statusCode == 403) ? "authentication" : "provider"
-                return .init(category: category, cause: cause, type: "provider_error")
+                return .init(category: category, cause: cause)
             }
         }
         if let organizationError = error as? OrganizationError {
@@ -552,10 +565,10 @@ public final class ReliabilityManager {
             case .cancelled: category = "cancellation"; cause = "cancelled"
             case .revertAlreadyInProgress: category = "workflow"; cause = "revert_in_progress"
             }
-            return .init(category: category, cause: cause, type: "organization_error")
+            return .init(category: category, cause: cause)
         }
         if error is DecodingError {
-            return .init(category: "validation", cause: "decoding_failed", type: "decoding_error")
+            return .init(category: "validation", cause: "decoding_failed")
         }
 
         if let fileError = error as? FileSystemError {
@@ -573,7 +586,7 @@ public final class ReliabilityManager {
             case .crossVolumeCopyVerificationFailed: cause = "copy_verification_failed"
             case .destinationEscapesBaseDirectory: cause = "destination_outside_base"
             }
-            return .init(category: "filesystem", cause: cause, type: "filesystem_error")
+            return .init(category: "filesystem", cause: cause)
         }
 
         let nsError = error as NSError
@@ -582,13 +595,13 @@ public final class ReliabilityManager {
         if let catalogError = error as? ModelCatalogError {
             switch catalogError {
             case .invalidURL:
-                return .init(category: "configuration", cause: "invalid_model_url", type: "provider_error")
+                return .init(category: "configuration", cause: "invalid_model_url")
             case .fetchFailed:
-                return .init(category: "provider", cause: "model_list_failed", type: "provider_error")
+                return .init(category: "provider", cause: "model_list_failed")
             case .decodingFailed:
-                return .init(category: "validation", cause: "invalid_model_list", type: "provider_error")
+                return .init(category: "validation", cause: "invalid_model_list")
             case .privacyModeBlocked:
-                return .init(category: "network", cause: "privacy_mode_blocked", type: "provider_error")
+                return .init(category: "network", cause: "privacy_mode_blocked")
             }
         }
 
@@ -596,13 +609,12 @@ public final class ReliabilityManager {
             || description.contains("timed out")
             || description.contains("timeout")
         {
-            return .init(category: "network", cause: "timeout", type: "url_error")
+            return .init(category: "network", cause: "timeout")
         }
         if nsError.domain == NSURLErrorDomain {
             return .init(
                 category: "network",
-                cause: "connection_failed",
-                type: "url_error"
+                cause: "connection_failed"
             )
         }
         if nsError.domain == NSPOSIXErrorDomain || nsError.domain == NSCocoaErrorDomain {
@@ -612,14 +624,12 @@ public final class ReliabilityManager {
             {
                 return .init(
                     category: "permission",
-                    cause: "access_denied",
-                    type: "filesystem_error"
+                    cause: "access_denied"
                 )
             }
             return .init(
                 category: "filesystem",
-                cause: "file_operation_failed",
-                type: "filesystem_error"
+                cause: "file_operation_failed"
             )
         }
         if description.contains("api key")
@@ -628,15 +638,13 @@ public final class ReliabilityManager {
         {
             return .init(
                 category: "authentication",
-                cause: "credentials_rejected",
-                type: "provider_error"
+                cause: "credentials_rejected"
             )
         }
         if description.contains("configuration") || description.contains("not configured") {
             return .init(
                 category: "configuration",
-                cause: "missing_or_invalid_configuration",
-                type: "configuration_error"
+                cause: "missing_or_invalid_configuration"
             )
         }
         if description.contains("validation")
@@ -645,15 +653,13 @@ public final class ReliabilityManager {
         {
             return .init(
                 category: "validation",
-                cause: "invalid_data",
-                type: "validation_error"
+                cause: "invalid_data"
             )
         }
 
         return .init(
             category: "unknown",
-            cause: "unclassified",
-            type: "application_error"
+            cause: "unclassified"
         )
     }
 
@@ -697,6 +703,84 @@ public final class ReliabilityManager {
             }
         }
         return diagnostics
+    }
+
+    /// Sorty bugs, unknown failures, and unrecoverable errors are errors;
+    /// provider, network, setup, and system failures are warnings.
+    static func level(
+        for classification: ReliabilityErrorClassification,
+        recoverable: Bool
+    ) -> SentryLevel {
+        guard recoverable else { return .error }
+        switch classification.fault {
+        case .sorty, .unknown: return .error
+        case .aiProvider, .aiOutput, .setup, .network, .system: return .warning
+        }
+    }
+
+    /// Readable exception type and value for the Sentry issue title, built
+    /// only from bounded identifiers, for example
+    /// `SortyError: Organize › Generate plan — HTTP 413 (request too large)`.
+    static func issueTitle(
+        feature: String,
+        operation: String,
+        classification: ReliabilityErrorClassification
+    ) -> (type: String, value: String) {
+        let value = "\(humanized(feature)) › \(humanized(operation)) — \(causeLabel(classification.cause))"
+        return (classification.fault.exceptionType, value)
+    }
+
+    static func causeLabel(_ cause: String) -> String {
+        if cause.hasPrefix("http_"), let status = Int(cause.dropFirst(5)) {
+            let reasons = [
+                400: "bad request", 401: "unauthorized", 403: "forbidden",
+                404: "not found", 408: "request timeout", 409: "conflict",
+                413: "request too large", 422: "unprocessable request",
+                429: "rate limited", 500: "server error", 502: "bad gateway",
+                503: "service unavailable", 504: "gateway timeout", 529: "overloaded",
+            ]
+            return reasons[status].map { "HTTP \(status) (\($0))" } ?? "HTTP \(status)"
+        }
+        let labels = [
+            "missing_api_url": "no API URL configured",
+            "missing_api_key": "no API key configured",
+            "invalid_api_url": "invalid API URL",
+            "invalid_response": "invalid response",
+            "invalid_response_format": "response in an unexpected format",
+            "json_decoding_failed": "response was not valid JSON",
+            "connection_failed": "connection failed",
+            "timeout": "request timed out",
+            "quota_exhausted": "quota exhausted",
+            "invalid_http_status": "invalid HTTP status",
+            "client_not_configured": "no AI provider configured",
+            "missing_plan": "no current plan",
+            "plan_directory_mismatch": "plan belongs to a different folder",
+            "file_move_failed": "file move failed",
+            "revert_in_progress": "undo already in progress",
+            "decoding_failed": "stored data could not be decoded",
+            "access_denied": "access denied",
+            "read_only_filesystem": "read-only volume",
+            "quota_exceeded": "disk quota exceeded",
+            "unique_name_exhausted": "no unique file name available",
+            "partial_failure": "some file operations failed",
+            "partial_apply_failure": "some moves failed during apply",
+            "prevalidation_failed": "pre-apply validation failed",
+            "copy_verification_failed": "cross-volume copy verification failed",
+            "destination_outside_base": "destination outside the chosen folder",
+            "invalid_model_url": "invalid model list URL",
+            "model_list_failed": "model list request failed",
+            "invalid_model_list": "model list could not be read",
+            "credentials_rejected": "credentials rejected",
+            "missing_or_invalid_configuration": "missing or invalid configuration",
+            "unclassified": "unclassified error",
+        ]
+        return labels[cause] ?? cause.replacingOccurrences(of: "_", with: " ")
+    }
+
+    /// `refresh_provider_openai` → `Refresh provider openai`.
+    private static func humanized(_ identifier: String) -> String {
+        let words = identifier.replacingOccurrences(of: "_", with: " ")
+        return words.prefix(1).uppercased() + words.dropFirst()
     }
 
     private static func boundedIdentifier(_ value: String, fallback: String) -> String {
@@ -746,18 +830,129 @@ struct ReliabilityCaptureRateLimiter {
 struct ReliabilityErrorClassification: Sendable {
     let category: String
     let cause: String
-    let type: String
+
+    var fault: ReliabilityFault {
+        ReliabilityFault(category: category, cause: cause)
+    }
 }
 
-private struct SanitizedReliabilityError: LocalizedError, CustomNSError {
-    let category: String
-    let cause: String
-    let operation: String
+/// Who most likely has to act on a handled error. Sent as the `fault` tag so
+/// Sentry can separate Sorty bugs from provider outages and user setup.
+enum ReliabilityFault: String, Sendable {
+    /// Likely a Sorty defect: invalid requests, bad plans, failed moves.
+    case sorty
+    /// The AI service failed: outages, rate limits, exhausted quota.
+    case aiProvider = "ai_provider"
+    /// The model answered, but with unusable output such as invalid JSON.
+    case aiOutput = "ai_output"
+    /// The user's provider setup: missing keys, rejected credentials, bad URLs.
+    case setup
+    /// Connectivity: timeouts and unreachable hosts, including local servers.
+    case network
+    /// The Mac itself: permissions, full disks, missing files.
+    case system
+    case unknown
 
-    static var errorDomain: String { "com.sorty.app.reliability" }
-    var errorCode: Int { 1 }
-    var errorDescription: String? { "\(category):\(cause):\(operation)" }
-    var errorUserInfo: [String: Any] {
-        [NSLocalizedDescriptionKey: errorDescription ?? "handled_error"]
+    init(category: String, cause: String) {
+        switch category {
+        case "configuration", "authentication":
+            self = .setup
+        case "network":
+            self = .network
+        case "permission":
+            self = .system
+        case "filesystem":
+            let environmental: Set = [
+                "file_not_found", "access_denied", "disk_full",
+                "read_only_filesystem", "quota_exceeded",
+            ]
+            self = environmental.contains(cause) ? .system : .sorty
+        case "provider":
+            if let status = Int(cause.replacingOccurrences(of: "http_", with: "")),
+               cause.hasPrefix("http_") {
+                switch status {
+                case 404: self = .setup
+                case 408, 429, 500...599: self = .aiProvider
+                default: self = .sorty
+                }
+            } else {
+                self = .aiProvider
+            }
+        case "validation":
+            switch cause {
+            case "invalid_response", "invalid_response_format", "json_decoding_failed":
+                self = .aiOutput
+            case "invalid_model_list":
+                self = .aiProvider
+            default:
+                self = .sorty
+            }
+        case "workflow", "cancellation":
+            self = .sorty
+        default:
+            self = .unknown
+        }
+    }
+
+    /// Exception type shown as the Sentry issue title prefix.
+    var exceptionType: String {
+        switch self {
+        case .sorty: "SortyError"
+        case .aiProvider: "AIProviderError"
+        case .aiOutput: "AIResponseError"
+        case .setup: "SetupError"
+        case .network: "NetworkError"
+        case .system: "SystemError"
+        case .unknown: "UnclassifiedError"
+        }
+    }
+}
+
+/// Broad kind of every Sentry event, sent as the `event_kind` tag so the
+/// issue stream can be split into crashes, hangs, handled errors, and reports.
+enum ReliabilityEventKind: String, Sendable {
+    case handledError = "handled_error"
+    case crash
+    case hang
+    case watchdogTermination = "watchdog_termination"
+    case diagnosticReport = "diagnostic_report"
+    case userFeedback = "user_feedback"
+    case other
+
+    static let tagKey = "event_kind"
+
+    /// Classifies events the SDK creates itself (crashes, hangs, watchdog
+    /// terminations). Sorty's own captures set the tag explicitly.
+    static func inferred(
+        exceptionTypes: [String],
+        isFatal: Bool,
+        hasUnhandledException: Bool
+    ) -> Self {
+        let types = exceptionTypes.map { $0.lowercased() }
+        if types.contains(where: { $0.contains("watchdogtermination") }) {
+            return .watchdogTermination
+        }
+        if types.contains(where: { $0.contains("app hang") }) {
+            return .hang
+        }
+        if isFatal || hasUnhandledException {
+            return .crash
+        }
+        return .other
+    }
+
+    /// `beforeSend` hook: adds `event_kind` when a capture did not set it.
+    static func tag(_ event: Event) -> Event {
+        guard event.tags?[tagKey] == nil else { return event }
+        let exceptions = event.exceptions ?? []
+        let kind = inferred(
+            exceptionTypes: exceptions.compactMap(\.type),
+            isFatal: event.level == .fatal,
+            hasUnhandledException: exceptions.contains { $0.mechanism?.handled?.boolValue == false }
+        )
+        var tags = event.tags ?? [:]
+        tags[tagKey] = kind.rawValue
+        event.tags = tags
+        return event
     }
 }
