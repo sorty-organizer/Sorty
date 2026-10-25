@@ -463,10 +463,12 @@ public final class ReliabilityManager {
             return nil
         }
 
-        // One issue per area keeps reports findable without one issue per report.
-        let event = Event(level: .info)
+        // Each report is its own warning-level issue: Sentry marks info events
+        // low priority and only alerts on new issues, so grouping or info level
+        // hides every report after the first from the default issue feed.
+        let event = Event(level: .warning)
         event.message = SentryMessage(formatted: "User bug report: \(area.displayName)")
-        event.fingerprint = ["sorty.user_bug_report", area.rawValue]
+        event.fingerprint = ["sorty.user_bug_report", area.rawValue, UUID().uuidString]
         let eventID = SentrySDK.capture(event: event) { scope in
             scope.setTag(value: "mac_app", key: "platform_surface")
             scope.setTag(value: ReliabilityEventKind.userFeedback.rawValue, key: ReliabilityEventKind.tagKey)
