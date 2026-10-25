@@ -349,9 +349,9 @@ struct PermissionsSettingsView: View {
             isShowingAccessInfo.toggle()
         } label: {
             Image(systemName: "info.circle")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
-                .frame(width: 28, height: 28)
+                .frame(width: 18, height: 18)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -457,7 +457,7 @@ struct PermissionsSettingsView: View {
     private func permissionNote(icon: String, text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.green)
                 .frame(width: 16)
                 .accessibilityHidden(true)
