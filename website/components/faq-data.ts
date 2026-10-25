@@ -12,7 +12,7 @@ export const FAQS = [
   {
     id: 'file-uploads',
     q: 'Are my files uploaded anywhere?',
-    a: 'File names and metadata go directly to your chosen AI provider. Deep Scan also shares file content when enabled. Use a local model to keep AI analysis on your Mac. Sorty has no developer-operated file-processing server.',
+    a: 'File names and metadata go directly to your chosen AI provider. Deep Scan also shares file content when enabled. Use a local model to keep AI analysis on your Mac. Sorty does not run a file processing server of its own.',
   },
   {
     id: 'ai-providers',
