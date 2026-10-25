@@ -253,7 +253,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .unavailableProvider:
             return ""
         case .openAI:
-            return "gpt-5.4-mini"
+            return "gpt-6-luna"
         case .openCodeZen:
             return "glm-5.3"
         case .openCodeGo:
@@ -445,7 +445,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .unavailableProvider:
             return []
         case .openAI:
-            return ["gpt-6-luna", "gpt-6-astra", "gpt-6.1-sol", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.2"]
+            return ["gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.2"]
         case .anthropic:
             return ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5"]
         case .gemini:

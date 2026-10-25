@@ -17,9 +17,18 @@ public enum CostCalculator {
     // Ordered from most specific to more general pattern matches.
     private static let pricingPatterns: [(pattern: String, pricing: ModelPricing)] = [
         // OpenAI (2026-era model family)
-        ("gpt-5.4-mini", ModelPricing(inputPrice: 0.40, outputPrice: 1.60)),
-        ("gpt-5.4-nano", ModelPricing(inputPrice: 0.08, outputPrice: 0.32)),
-        ("gpt-5.4", ModelPricing(inputPrice: 2.50, outputPrice: 10.00)),
+        ("gpt-6-luna", ModelPricing(inputPrice: 0.10, outputPrice: 0.50)),
+        ("gpt-6-astra", ModelPricing(inputPrice: 10.00, outputPrice: 50.00)),
+        ("gpt-6.1-sol", ModelPricing(inputPrice: 2.00, outputPrice: 10.00)),
+        ("gpt-6-sol", ModelPricing(inputPrice: 2.00, outputPrice: 10.00)),
+        ("gpt-5.6-luna", ModelPricing(inputPrice: 0.20, outputPrice: 1.20)),
+        ("gpt-5.6-terra", ModelPricing(inputPrice: 2.00, outputPrice: 12.00)),
+        ("gpt-5.6-sol", ModelPricing(inputPrice: 4.00, outputPrice: 20.00)),
+        ("gpt-5.5", ModelPricing(inputPrice: 5.00, outputPrice: 30.00)),
+        ("gpt-5.4-mini", ModelPricing(inputPrice: 0.75, outputPrice: 4.50)),
+        ("gpt-5.4-nano", ModelPricing(inputPrice: 0.20, outputPrice: 1.25)),
+        ("gpt-5.4", ModelPricing(inputPrice: 2.50, outputPrice: 15.00)),
+        ("gpt-5.2", ModelPricing(inputPrice: 1.75, outputPrice: 14.00)),
         ("gpt-5-mini", ModelPricing(inputPrice: 0.40, outputPrice: 1.60)),
         ("gpt-5-nano", ModelPricing(inputPrice: 0.08, outputPrice: 0.32)),
         ("gpt-5", ModelPricing(inputPrice: 2.50, outputPrice: 10.00)),
@@ -35,6 +44,9 @@ public enum CostCalculator {
         ("claude-fable-5-1", ModelPricing(inputPrice: 10.00, outputPrice: 50.00)),
         ("claude-opus-5-5", ModelPricing(inputPrice: 4.00, outputPrice: 20.00)),
         ("claude-sonnet-5-5", ModelPricing(inputPrice: 2.00, outputPrice: 10.00)),
+        // Prompts over 100K tokens cost $0.50 / $2.50; estimates use the base tier.
+        ("claude-haiku-5-5", ModelPricing(inputPrice: 0.10, outputPrice: 0.50)),
+        ("claude-haiku-5.5", ModelPricing(inputPrice: 0.10, outputPrice: 0.50)),
         ("claude-opus-4-6", ModelPricing(inputPrice: 15.00, outputPrice: 75.00)),
         ("claude-opus-4.6", ModelPricing(inputPrice: 15.00, outputPrice: 75.00)),
         ("claude-opus-4", ModelPricing(inputPrice: 15.00, outputPrice: 75.00)),
