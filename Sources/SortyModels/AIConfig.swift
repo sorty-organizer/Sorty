@@ -259,15 +259,15 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openCodeGo:
             return "glm-5.3"
         case .groq:
-            return "openai/gpt-oss-120b"
+            return "openai/gpt-oss-20b"
         case .openAICompatible:
             return "gpt-5.4-mini"
         case .openRouter:
-            return "anthropic/claude-sonnet-4.6"
+            return "anthropic/claude-haiku-5.5"
         case .ollama:
             return "llama3.1"
         case .anthropic:
-            return "claude-sonnet-4-6"
+            return "claude-haiku-5-5"
         case .gemini:
             // 2.5 models only serve keys that used them before, so new keys 404.
             return "gemini-3.5-flash-lite"
@@ -445,25 +445,25 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .unavailableProvider:
             return []
         case .openAI:
-            return ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2", "gpt-5-mini", "gpt-5-nano", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini"]
+            return ["gpt-6-luna", "gpt-6-astra", "gpt-6.1-sol", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.2"]
         case .anthropic:
-            return ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5", "claude-haiku-4-5-20251001", "claude-sonnet-4", "claude-opus-4"]
+            return ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5"]
         case .gemini:
             return ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
         case .groq:
-            return ["meta-llama/llama-4-scout-17b-16e-instruct", "llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"]
+            return ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
         case .openRouter:
-            return ["anthropic/claude-sonnet-4.6", "openai/gpt-5.4-mini", "openai/gpt-4o", "google/gemini-2.5-pro", "google/gemini-2.5-flash", "meta-llama/llama-4-scout-17b-16e-instruct"]
+            return ["anthropic/claude-haiku-5.5", "anthropic/claude-sonnet-4.6", "anthropic/claude-opus-5.5", "openai/gpt-5.4-mini", "google/gemini-2.5-pro", "google/gemini-2.5-flash", "meta-llama/llama-4-scout"]
         case .ollama:
             return ["llava", "llama3.2-vision", "qwen2.5vl", "gemma3", "llama4", "moondream", "llama3.1"]
         case .openCodeZen:
             // Offline defaults across the supported OpenCode protocols.
-            return ["gpt-6-luna", "grok-4.7", "qwen3.8-max", "minimax-m3", "glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "deepseek-v4-flash-free", "minimax-m2.7", "big-pickle", "space-bunny-free", "longcat-2.5-preview-free", "mimo-v2.6-flash-free", "mimo-v2.5-free", "ling-3.0-flash-fin-free", "nemotron-3-ultra-free", "nemotron-3.5-lightning-free", "claude-sonnet-4-6", "gemini-3.1-pro", "qwen3.8-flash"]
+            return ["gpt-6-luna", "grok-4.7", "qwen3.8-max", "minimax-m3", "glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4.1-flash-free", "minimax-m2.7", "big-pickle", "longcat-2.5-preview-free", "mimo-v2.6-flash-free", "nemotron-3-ultra-free", "nemotron-3.5-lightning-free", "claude-sonnet-4-6", "claude-haiku-5-5", "gemini-3.1-pro", "qwen3.8-flash"]
         case .openCodeGo:
             // Go routes Qwen and MiniMax through Messages.
-            return ["gpt-6-luna", "grok-4.7", "qwen3.8-max", "minimax-m3", "glm-5.3", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-5", "kimi-k3", "kimi-k2.7-code", "kimi-k2.6", "kimi-k2.5", "longcat-2.0", "deepseek-v4.1-flash", "deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp", "mimo-v2.6-flash", "mimo-v2.6-pro", "mimo-v2.5", "mimo-v2.5-pro", "hy4-preview", "hy3", "space-bunny-free", "longcat-2.5-preview-free", "qwen3.8-flash", "minimax-m2.7"]
+            return ["gpt-6-luna", "grok-4.7", "qwen3.8-max", "minimax-m3", "minimax-m3.1-flash", "glm-5.3", "glm-5.3-flash", "glm-5.2", "kimi-k3", "kimi-k2.7-code", "longcat-2.0", "deepseek-v4.1-flash", "deepseek-v4-pro", "mimo-v2.6-flash", "mimo-v2.6-pro", "mimo-v2.5", "mimo-v2.5-pro", "hy4-preview", "hy3", "longcat-2.5-preview-free", "claude-haiku-5-5"]
         case .openAICompatible:
-            return ["gpt-5.4-mini", "gpt-5.4", "gpt-4.1", "gpt-4o"]
+            return ["gpt-5.4-mini", "gpt-5.4", "gpt-5.2", "gpt-oss-20b"]
         case .appleFoundationModel:
             return [Self.appleFoundationModelName]
         }
