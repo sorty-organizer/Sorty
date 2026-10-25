@@ -210,8 +210,13 @@ public struct BugReportView: View {
             }
 
             if sendToSentry {
-                Toggle("Also open a public GitHub issue", isOn: $wantsGitHub)
-                    .accessibilityIdentifier("BugReportAlsoGitHubToggle")
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Also post on GitHub", isOn: $wantsGitHub)
+                        .accessibilityIdentifier("BugReportAlsoGitHubToggle")
+                    Text("Opens a prefilled issue in your browser so others can follow along. Anyone can see it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             VStack(alignment: .leading, spacing: 2) {
