@@ -201,21 +201,24 @@ package struct PersonaPickerView: View {
 
     /// Shown when no custom personas exist so Settings always offers a way to create one.
     private var customPersonasEmptyState: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: "sparkles")
-                .font(.caption.weight(.semibold))
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "person.crop.circle.badge.plus")
+                .font(.system(size: 22, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.purple)
-                .frame(width: 28, height: 28)
-                .background(.purple.opacity(0.12), in: Circle())
+                .frame(width: 44, height: 44)
+                .background(
+                    Color.purple.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                )
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("No custom personas yet")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Make Sorty organize your way")
+                    .font(.subheadline.weight(.medium))
                 Text("Describe how you work and Sorty generates a persona with its own folder rules.")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.primary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -227,17 +230,14 @@ package struct PersonaPickerView: View {
             .buttonStyle(.sortyBordered(intent: .primary, size: .small))
             .accessibilityIdentifier("SettingsCreateCustomPersonaButton")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
+        .padding(12)
+        .background {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(NSColor.controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(.purple.opacity(isHoveringEmptyState ? 0.3 : 0.16), lineWidth: 1)
-        )
+                .strokeBorder(
+                    Color.secondary.opacity(isHoveringEmptyState ? 0.45 : 0.25),
+                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                )
+        }
         .contentShape(Rectangle())
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
