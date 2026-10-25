@@ -1243,8 +1243,29 @@ public class AppState: ObservableObject {
     public func regenerateOrganization() {
         guard canRegenerateOrganization, let organizer = organizer else { return }
         Task {
-            try? await organizer.regeneratePreview()
+            do {
+                try await regenerateCurrentPreview()
+            } catch is CancellationError {
+                return
+            } catch {
+                organizer.state = .error(error)
+            }
         }
+    }
+
+    /// Restored previews configure their AI client on the first explicit request.
+    public func regenerateCurrentPreview() async throws {
+        guard canRegenerateOrganization, let organizer,
+              let planID = organizer.currentPlan?.id else { return }
+        let directory = organizer.currentDirectory
+        if let directory {
+            try await prepareForManualOrganization(at: directory)
+        }
+        try Task.checkCancellation()
+        guard self.organizer === organizer, canRegenerateOrganization,
+              organizer.currentPlan?.id == planID,
+              organizer.currentDirectory == directory else { throw CancellationError() }
+        try await organizer.regeneratePreview()
     }
 
     public func applyChanges() {

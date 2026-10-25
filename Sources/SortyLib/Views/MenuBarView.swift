@@ -125,10 +125,13 @@ public struct MenuBarLabel: View {
     @EnvironmentObject private var controller: MenuBarController
     @AppStorage(MenuBarIconPreferences.preferenceKey, store: MenuBarIconPreferences.defaults)
     private var usesAppleNativeStyle = false
-    @State private var image = NSImage(
+    // State's initial value is evaluated on every struct initialization, even
+    // when SwiftUI retains the existing state. Resolve the fallback only once.
+    private static let placeholderImage = NSImage(
         systemSymbolName: "sparkles",
         accessibilityDescription: "Sorty"
     ) ?? NSImage()
+    @State private var image = placeholderImage
 
     public init() {}
 

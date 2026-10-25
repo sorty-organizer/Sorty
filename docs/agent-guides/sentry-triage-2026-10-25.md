@@ -38,9 +38,10 @@ All latest production events reviewed since 8 October came from
 | [2R](https://sorty-z1.sentry.io/issues/7786668619/), [2V](https://sorty-z1.sentry.io/issues/7786771508/) | Invalid generated JSON. Existing events lack provider/model and decoding detail needed to distinguish causes. Keep open. |
 | [2G](https://sorty-z1.sentry.io/issues/7772815841/), [2W](https://sorty-z1.sentry.io/issues/7786783210/) | HTTP 400/404 without the failing provider/model or safe reason. The Gemini feedback identifies a separate setup defect; do not assume every 404 has that cause. |
 | [2F](https://sorty-z1.sentry.io/issues/7772736705/), [2E](https://sorty-z1.sentry.io/issues/7772715813/), [2H](https://sorty-z1.sentry.io/issues/7772824312/), [3G](https://sorty-z1.sentry.io/issues/7804585544/) | Timeout, local Ollama connection failure, exhausted quota, and provider HTTP 503. These identify failed dependencies, not an established app defect. |
-| [3M](https://sorty-z1.sentry.io/issues/7809724264/) | Preview regeneration without a configured AI client. Investigate restoration and first-use preparation; no causal startup change is established by the captured stack alone. |
+| [3M](https://sorty-z1.sentry.io/issues/7809724264/) | Preview regeneration skipped first-use preparation. The preview button and menu command now prepare the client through AppState before regeneration. See follow-up below. |
 | [3H](https://sorty-z1.sentry.io/issues/7809612745/), [23](https://sorty-z1.sentry.io/issues/7751822643/) | Window-system waits and SwiftUI samples; see the existing 24 October triage. No safe new hang fix follows from these samples. |
-| [3E](https://sorty-z1.sentry.io/issues/7799772394/), [3F](https://sorty-z1.sentry.io/issues/7799784986/), [P](https://sorty-z1.sentry.io/issues/7646141334/) and older hangs | Keep open pending a representative trace and post-fix release evidence. Prior duplicate-scan mitigations are documented in the 13 October triage. |
+| [3F](https://sorty-z1.sentry.io/issues/7799784986/) | Fallback SF Symbol construction inside `MenuBarLabel.init`. Cache the fallback once instead of resolving it on every view initialization. This removes repeated work on the sampled path; it does not establish the cause of the entire hang interval. |
+| [3E](https://sorty-z1.sentry.io/issues/7799772394/), [P](https://sorty-z1.sentry.io/issues/7646141334/) and older hangs | Keep open pending a representative trace and post-fix release evidence. Prior duplicate-scan mitigations are documented in the 13 October triage. |
 | [2J](https://sorty-z1.sentry.io/issues/7780212160/), [2N](https://sorty-z1.sentry.io/issues/7783850830/), [2S](https://sorty-z1.sentry.io/issues/7786696259/), [2X](https://sorty-z1.sentry.io/issues/7786796652/), [2K](https://sorty-z1.sentry.io/issues/7783847930/), [2M](https://sorty-z1.sentry.io/issues/7783848052/) | Prior toolbar, display-name, async-open, apply-diagnostic, and duplicate-reporting fixes remain on main. No newer build evidence establishes resolution. |
 | [2T](https://sorty-z1.sentry.io/issues/7786706059/) | Expected diagnostic-export marker. |
 
@@ -54,3 +55,80 @@ No Sentry issues were resolved or muted. No local builds, tests, or computer-use
 verification were run for the small URL fix, per repository instructions.
 The regression test is added but unexecuted; no hosted CI or runtime pass is
 claimed. Existing uncommitted 24 October triage notes were preserved.
+
+## Root-cause follow-up
+
+Refreshed the production query, which returned 46 unresolved issue groups, and
+retrieved their latest complete events. No newer production build was present
+in the reviewed recent groups. The feedback review above remains separate from
+this error-group query.
+
+### Regeneration without a client
+
+The captured error identifies `performRegeneratePreview`'s missing-client
+guard. Current source supplies a concrete route to that failure: restoring a
+ready preview deliberately creates no AI client, and both the preview button
+and menu command previously called the organizer directly. The Organize action
+already used first-use preparation, but regeneration bypassed it.
+
+Both regeneration controls now use `AppState.regenerateCurrentPreview()`. It
+prepares the current directory, checks cancellation, then verifies that the
+organizer, plan, and directory still match before starting regeneration. Menu
+failures now reach the same error state instead of being discarded by `try?`.
+No authentication or client creation was added to launch.
+
+The regression reproduces `clientNotConfigured` with preparation omitted. It
+also covers replacement of a preview during preparation. This proves the source
+defect and repair, without claiming that restoration was the original user's
+exact sequence.
+
+### Menu-bar image construction
+
+[3F event 6fb047da314f4a9f8bdbd85e6cafc0c4](https://sorty-z1.sentry.io/issues/7799784986/events/6fb047da314f4a9f8bdbd85e6cafc0c4/)
+samples `MenuBarLabel.init`, `NSImage` symbol construction, and CoreUI glyph
+resolution. `@State` retains its storage, but its initial-value expression still
+runs when the enclosing view struct is initialized. The label now shares one
+fallback image. Activity-driven asynchronous PNG loading and accessibility
+labels remain unchanged.
+
+The adjacent 3E and P samples share that trace and show SwiftUI menu construction
+and native save-panel setup. No duplicate-hash workers appear in these events.
+Their 8 GiB Mac has little reported free memory, but the snapshots do not prove
+memory pressure or identify why framework calls were slow. Caching removes
+repeated work; a system trace is still needed before declaring the hang fixed.
+
+### Remaining evidence limits
+
+- 2R/2V and 2G/2W have no request provider/model, response structure, or safe
+  provider reason in their retained contexts or lifecycle breadcrumbs. Their
+  error statuses and sampled reporting stacks cannot identify a unique cause.
+- 23/3H show WindowServer waits and SwiftUI work. Changing the sampled button
+  style would not address an established root cause.
+- The latest P sample waits while AppKit initializes a native save panel. It
+  does not identify an expensive Sorty caller. Moving AppKit UI construction to
+  a worker would violate its threading contract.
+- 24's older Keychain hang originated in the Learnings view's synchronous cold
+  profile load. The current view awaits the asynchronous loader. The event does
+  not test that newer path.
+- Network outages, a stopped local server, exhausted provider quota, and provider
+  HTTP 503 require dependency recovery. Retry handling already exists; endless
+  retries would not remove those causes.
+
+These groups stay unresolved. A new release containing the source fixes, followed
+by recurrence monitoring and targeted system traces, is required to assess
+production recovery. No release or Sentry status change was performed.
+
+### Validation
+
+The follow-up changes affect first-use lifecycle behavior, so focused regression
+checks were run. With preparation omitted, the new regeneration regression
+failed with `clientNotConfigured`. With the fix present, five focused tests
+passed: first-use regeneration, preview replacement during preparation, existing
+regeneration cancellation, and the two Gemini URL checks.
+
+Concurrent uncommitted work initially prevented the fixed test build. The
+passing run used a temporary `git archive` source export containing HEAD plus
+only this thread's four source/test patches. It did not create a branch or
+worktree, modify the other work, launch the app, or exercise a real AI account.
+The same run compiled the app target, including the menu-bar change. This is
+source/build evidence, not a production hang reproduction or hosted CI result.

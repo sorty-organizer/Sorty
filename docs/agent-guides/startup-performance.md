@@ -113,6 +113,12 @@ result is published on the main actor.
 
 Manual and Learnings AI clients are configured on first use. The automation organizer and its client exist only while at least one watched folder is active. Sparkle starts after 45 seconds of idle startup time and only when its persisted daily interval has elapsed; PostHog feature flags, Finder menu-action verification, and the initial widget snapshot are similarly deferred. Finder runtime monitoring may start earlier because it only observes the extension heartbeat. Safe Finder registration maintenance runs with the deferred menu-action setup after 30 seconds. It coalesces requests and limits registration attempts to once every five minutes without restarting Finder, staging app copies, or changing signing.
 
+Regenerating a restored preview is also a first-use operation. The preview
+button and menu command must use `AppState.regenerateCurrentPreview()` so setup
+repair and client configuration finish before regeneration. Recheck the preview
+identity and directory after preparation, since the user can navigate or replace
+the plan while configuration awaits.
+
 Security-scoped bookmark creation for a newly selected manual folder runs at utility priority. Publication rechecks the selected URL so a result for an earlier selection cannot replace the current folder's bookmark.
 
 `SortyAppDelegate` resolves the app-group container for the build auto-close monitor off the main thread after `applicationDidFinishLaunching`. `containerURL(forSecurityApplicationGroupIdentifier:)` consults the container manager and must not run in the delegate initializer.

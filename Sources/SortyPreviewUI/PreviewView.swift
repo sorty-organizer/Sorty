@@ -366,7 +366,7 @@ package struct PreviewView: View {
         }
         Task {
             do {
-                try await organizer.regeneratePreview()
+                try await appState.regenerateCurrentPreview()
             } catch is CancellationError {
                 return
             } catch {
