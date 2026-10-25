@@ -368,22 +368,25 @@ struct OrganizationStrategySettingsView: View {
             }
             .settingsFocusableSetting(.strategyMaxFilenameLength)
 
-            HStack(spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
                 Image(systemName: "sparkles")
-                    .font(.caption.weight(.semibold))
+                    .font(.system(size: 22, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.purple)
-                    .frame(width: 28, height: 28)
-                    .background(.purple.opacity(0.12), in: Circle())
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Color.purple.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    )
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text("Example filename")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.tertiary)
+                        .font(.subheadline.weight(.medium))
 
                     Text(viewModel.config.renameNamingOptions.exampleFilename)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.primary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .numericTextTransition(
@@ -391,17 +394,15 @@ struct OrganizationStrategySettingsView: View {
                         )
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
+            .background {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(NSColor.controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(.purple.opacity(0.16), lineWidth: 1)
-            )
+                    .strokeBorder(
+                        Color.secondary.opacity(0.25),
+                        style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                    )
+            }
             .accessibilityElement(children: .combine)
         }
         .settingsFocusableSetting(.strategyNamingOptions)
