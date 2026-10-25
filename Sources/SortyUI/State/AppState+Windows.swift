@@ -63,7 +63,10 @@ extension AppState {
             backing: .buffered,
             defer: false
         )
-        window.contentView = NSHostingView(rootView: view)
+        // Size the window to the view so it grows with the text box and panels.
+        let hostingView = NSHostingView(rootView: view)
+        hostingView.sizingOptions = [.preferredContentSize]
+        window.contentView = hostingView
         window.title = "Send Feedback"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true

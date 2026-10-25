@@ -11,12 +11,15 @@ public struct BugReportView: View {
     @ObservedObject private var analytics = AnalyticsManager.shared
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @State private var description = ""
-    @FocusState private var isDescriptionFocused: Bool
     @State private var area: BugReportArea = .organize
     @State private var kind: FeedbackKind = .bug
     @State private var email = ""
     @State private var attachments: [URL] = []
     @State private var isDropTargeted = false
+    @State private var isTextDropTargeted = false
+    @State private var textHeight: CGFloat = 88
+
+    private var showsDropZone: Bool { isDropTargeted || isTextDropTargeted }
     @AppStorage("bugReportIncludeDiagnostics") private var includeDiagnostics = true
     /// The user's choice; kept while internet is blocked so it returns when unblocked.
     @State private var wantsSentry = false
@@ -75,16 +78,24 @@ public struct BugReportView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 ZStack(alignment: .topLeading) {
-                    TextEditor(text: $description)
-                        .focused($isDescriptionFocused)
-                        .font(.body)
-                        .scrollContentBackground(.hidden)
-                        .accessibilityIdentifier("BugReportDescription")
-                        .onChange(of: description) { _, newValue in
-                            if newValue.count > 2_000 {
-                                description = String(newValue.prefix(2_000))
+                    FeedbackTextView(
+                        text: $description,
+                        contentHeight: $textHeight,
+                        isDropTargeted: $isTextDropTargeted,
+                        onDropFiles: { addAttachments($0) },
+                        onDropImage: { data, ext in
+                            if let url = Self.saveDroppedImage(data, ext: ext, name: "Image") {
+                                addAttachments([url])
                             }
                         }
+                    )
+                    .frame(height: min(max(textHeight, 88), 200))
+                    .accessibilityIdentifier("BugReportDescription")
+                    .onChange(of: description) { _, newValue in
+                        if newValue.count > 2_000 {
+                            description = String(newValue.prefix(2_000))
+                        }
+                    }
                     if description.isEmpty {
                         Text(placeholder)
                             .font(.body)
@@ -130,18 +141,23 @@ public struct BugReportView: View {
                 }
             }
             .padding(10)
-            .frame(maxHeight: .infinity)
             .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay {
                 RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(
-                        isDropTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.2),
-                        lineWidth: isDropTargeted ? 2 : 1
-                    )
+                    .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
             }
-            .background(TextViewDropPassthrough())
-            .animation(.easeInOut(duration: 0.12), value: isDropTargeted)
+            .overlay {
+                if showsDropZone {
+                    FeedbackDropZone(
+                        isFull: attachments.count >= Self.maxAttachments,
+                        remaining: Self.maxAttachments - attachments.count
+                    )
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.15), value: showsDropZone)
+            .animation(.easeInOut(duration: 0.15), value: textHeight)
             .onDrop(of: [.fileURL, .image], isTargeted: $isDropTargeted) { providers in
                 handleDrop(providers)
             }
@@ -218,14 +234,14 @@ public struct BugReportView: View {
             }
         }
         .padding(24)
-        .frame(width: 560, height: showsSentryOption ? 620 : 520, alignment: .top)
+        .frame(width: 560, alignment: .top)
+        .fixedSize(horizontal: false, vertical: true)
         .animation(
             reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.32, dampingFraction: 0.86),
             value: sendToSentry
         )
         .animation(.easeInOut(duration: 0.15), value: attachments)
         .modifier(WindowGlassBackground())
-        .onAppear { isDescriptionFocused = true }
         .accessibilityIdentifier("BugReportView")
     }
 
@@ -257,18 +273,29 @@ public struct BugReportView: View {
                 let name = provider.suggestedName ?? "Image"
                 provider.loadDataRepresentation(forTypeIdentifier: typeID) { data, _ in
                     guard let data else { return }
-                    let dir = FileManager.default.temporaryDirectory
-                        .appendingPathComponent("SortyFeedback-\(UUID().uuidString)", isDirectory: true)
-                    let url = dir.appendingPathComponent(name).appendingPathExtension(ext)
-                    do {
-                        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                        try data.write(to: url)
-                    } catch { return }
-                    Task { @MainActor in addAttachments([url]) }
+                    Task { @MainActor in
+                        if let url = Self.saveDroppedImage(data, ext: ext, name: name) {
+                            addAttachments([url])
+                        }
+                    }
                 }
             }
         }
         return accepted
+    }
+
+    /// Writes dragged image data (no backing file) to a unique temp file.
+    private static func saveDroppedImage(_ data: Data, ext: String, name: String) -> URL? {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SortyFeedback-\(UUID().uuidString)", isDirectory: true)
+        let url = dir.appendingPathComponent(name).appendingPathExtension(ext)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try data.write(to: url)
+            return url
+        } catch {
+            return nil
+        }
     }
 
     /// Adds files while keeping the count and total size within Sentry's limits.
@@ -449,29 +476,165 @@ private struct AttachmentChip: View {
     }
 }
 
-/// Stops the description's NSTextView from claiming drags, so dropped files
-/// and images reach the box's `onDrop` and become attachments instead of
-/// pasted paths. Typing and pasting text are unaffected.
-private struct TextViewDropPassthrough: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { Probe() }
-    func updateNSView(_ nsView: NSView, context: Context) {
-        (nsView as? Probe)?.unregisterTextViews()
+/// Overlay shown while a drag hovers anywhere over the feedback box.
+private struct FeedbackDropZone: View {
+    let isFull: Bool
+    let remaining: Int
+
+    var body: some View {
+        let accent = isFull ? Color.secondary : SortyDesignSystem.Colors.resolvedAccent
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(NSColor.windowBackgroundColor).opacity(0.92))
+            RoundedRectangle(cornerRadius: 10)
+                .fill(accent.opacity(0.08))
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+            VStack(spacing: 6) {
+                Image(systemName: isFull ? "nosign" : "arrow.down.doc.fill")
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(accent)
+                Text(isFull ? "Attachment limit reached" : "Drop to attach")
+                    .font(.headline)
+                Text(isFull ? "Remove a file to add another." : "Images or files · \(remaining) more, up to 20 MB total")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Plain-text editor that grows with its content, scrolls past its max height,
+/// and turns dropped files or images into attachments instead of inserted text.
+private struct FeedbackTextView: NSViewRepresentable {
+    @Binding var text: String
+    @Binding var contentHeight: CGFloat
+    @Binding var isDropTargeted: Bool
+    let onDropFiles: ([URL]) -> Void
+    let onDropImage: (Data, String) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+
+        let textView = DropTextView()
+        textView.coordinator = context.coordinator
+        textView.delegate = context.coordinator
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.allowsUndo = true
+        textView.drawsBackground = false
+        textView.font = .preferredFont(forTextStyle: .body)
+        textView.textContainerInset = .zero
+        textView.textContainer?.lineFragmentPadding = 5
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.string = text
+        scrollView.documentView = textView
+        DispatchQueue.main.async {
+            textView.window?.makeFirstResponder(textView)
+            context.coordinator.measure(textView)
+        }
+        return scrollView
     }
 
-    final class Probe: NSView {
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            DispatchQueue.main.async { [weak self] in self?.unregisterTextViews() }
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        context.coordinator.parent = self
+        guard let textView = scrollView.documentView as? NSTextView,
+              textView.string != text else { return }
+        textView.string = text
+        context.coordinator.measure(textView)
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: FeedbackTextView
+
+        init(_ parent: FeedbackTextView) { self.parent = parent }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            parent.text = textView.string
+            measure(textView)
         }
 
-        func unregisterTextViews() {
-            guard let root = window?.contentView else { return }
-            Self.textViews(in: root).forEach { $0.unregisterDraggedTypes() }
+        func measure(_ textView: NSTextView) {
+            guard let container = textView.textContainer,
+                  let layout = textView.layoutManager else { return }
+            layout.ensureLayout(for: container)
+            let height = ceil(layout.usedRect(for: container).height)
+            if abs(height - parent.contentHeight) > 0.5 {
+                parent.contentHeight = height
+            }
         }
 
-        private static func textViews(in view: NSView) -> [NSTextView] {
-            let own = (view as? NSTextView).map { [$0] } ?? []
-            return own + view.subviews.flatMap(textViews(in:))
+        func setTargeted(_ targeted: Bool) {
+            if parent.isDropTargeted != targeted { parent.isDropTargeted = targeted }
+        }
+    }
+
+    final class DropTextView: NSTextView {
+        weak var coordinator: Coordinator?
+
+        private static let imageTypes: [NSPasteboard.PasteboardType] = [.png, .tiff]
+
+        override var acceptableDragTypes: [NSPasteboard.PasteboardType] {
+            super.acceptableDragTypes + [.fileURL] + Self.imageTypes
+        }
+
+        private func isAttachmentDrag(_ info: NSDraggingInfo) -> Bool {
+            let pasteboard = info.draggingPasteboard
+            return pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+                || pasteboard.availableType(from: Self.imageTypes) != nil
+        }
+
+        override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+            guard isAttachmentDrag(sender) else { return super.draggingEntered(sender) }
+            coordinator?.setTargeted(true)
+            return .copy
+        }
+
+        override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+            isAttachmentDrag(sender) ? .copy : super.draggingUpdated(sender)
+        }
+
+        override func draggingExited(_ sender: NSDraggingInfo?) {
+            coordinator?.setTargeted(false)
+            super.draggingExited(sender)
+        }
+
+        override func draggingEnded(_ sender: NSDraggingInfo) {
+            coordinator?.setTargeted(false)
+            super.draggingEnded(sender)
+        }
+
+        override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+            guard isAttachmentDrag(sender) else { return super.performDragOperation(sender) }
+            coordinator?.setTargeted(false)
+            let pasteboard = sender.draggingPasteboard
+            if let urls = pasteboard.readObjects(
+                forClasses: [NSURL.self],
+                options: [.urlReadingFileURLsOnly: true]
+            ) as? [URL], !urls.isEmpty {
+                coordinator?.parent.onDropFiles(urls)
+            } else if let data = pasteboard.data(forType: .png) {
+                coordinator?.parent.onDropImage(data, "png")
+            } else if let data = pasteboard.data(forType: .tiff),
+                      let png = NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:]) {
+                coordinator?.parent.onDropImage(png, "png")
+            }
+            HapticFeedbackManager.shared.success()
+            return true
         }
     }
 }
