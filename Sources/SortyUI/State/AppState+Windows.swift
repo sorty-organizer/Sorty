@@ -7,8 +7,8 @@ import AppKit
 // Each method opens (or refocuses) one auxiliary window hosting its SwiftUI view.
 extension AppState {
     public func showAbout() {
-        // If window already exists and is visible, just bring it to front
-        if let existingWindow = aboutWindowController?.window, existingWindow.isVisible {
+        // Reuse the retained window, including after it has been closed.
+        if let existingWindow = aboutWindowController?.window {
             existingWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return

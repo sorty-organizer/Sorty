@@ -507,7 +507,7 @@ private enum AboutAppIconVariant: String, CaseIterable {
 private enum AboutIconImageNormalizer {
     /// Ignore soft source-image shadows when measuring each icon's visual size.
     /// The carousel adds one consistent shadow after normalization.
-    private static let artworkAlphaThreshold: CGFloat = 0.5
+    private static let artworkAlphaThreshold: UInt8 = 128
 
     static func normalized(_ image: NSImage, opticalScale: CGFloat) -> NSImage {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
@@ -540,9 +540,23 @@ private enum AboutIconImageNormalizer {
     }
 
     private static func visibleBounds(in image: CGImage) -> CGRect? {
-        let bitmap = NSBitmapImageRep(cgImage: image)
-        let width = bitmap.pixelsWide
-        let height = bitmap.pixelsHigh
+        let width = image.width
+        let height = image.height
+        // Read alpha bytes directly instead of creating an NSColor for every pixel
+        // while the About window is being constructed.
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width,
+            space: nil,
+            bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue
+        ), let data = context.data else {
+            return nil
+        }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let alpha = data.assumingMemoryBound(to: UInt8.self)
         var minX = width
         var minY = height
         var maxX = -1
@@ -550,7 +564,7 @@ private enum AboutIconImageNormalizer {
 
         for y in 0..<height {
             for x in 0..<width where
-                (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) >= artworkAlphaThreshold
+                alpha[y * context.bytesPerRow + x] >= artworkAlphaThreshold
             {
                 minX = min(minX, x)
                 minY = min(minY, y)

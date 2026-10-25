@@ -54,6 +54,11 @@ The loaders are idempotent. A second caller awaits the existing task. Bookmark r
 
 ## Threading rules
 
+The About window is retained and reused after closing. Its icon normalization
+scans an alpha-only bitmap directly; avoid per-pixel AppKit color conversion on
+this synchronous window-opening path. This removes avoidable work but does not
+establish a measured improvement in window visibility or input latency.
+
 Main-window toolbar items must contain a visible control. Omit unavailable Back
 items in the toolbar builder instead of returning `EmptyView()` from an item, and
 do not add empty items to force toolbar creation. Sentry issue
