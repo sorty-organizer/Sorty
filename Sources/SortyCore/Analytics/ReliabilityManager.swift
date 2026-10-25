@@ -635,13 +635,11 @@ public final class ReliabilityManager {
     }
 
     private static var environmentName: String {
-        if InternalTelemetry.isEnabled {
-            return "internal"
-        }
+        // Debug builds are always internal too; keep them under "development".
         #if DEBUG
         return "development"
         #else
-        return "production"
+        return InternalTelemetry.isEnabled ? "internal" : "production"
         #endif
     }
 
