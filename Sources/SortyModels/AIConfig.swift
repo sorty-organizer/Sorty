@@ -269,7 +269,8 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .anthropic:
             return "claude-sonnet-4-6"
         case .gemini:
-            return "gemini-2.5-flash"
+            // 2.5 models only serve keys that used them before, so new keys 404.
+            return "gemini-3.5-flash-lite"
         case .appleFoundationModel:
             return Self.appleFoundationModelName
         }
@@ -448,7 +449,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .anthropic:
             return ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5", "claude-haiku-4-5-20251001", "claude-sonnet-4", "claude-opus-4"]
         case .gemini:
-            return ["gemini-3.1-pro", "gemini-3-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
+            return ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
         case .groq:
             return ["meta-llama/llama-4-scout-17b-16e-instruct", "llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"]
         case .openRouter:
