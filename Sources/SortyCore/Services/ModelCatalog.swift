@@ -1022,12 +1022,13 @@ public final class ModelCatalog: ObservableObject {
     
     private func anthropicFallbackModels() -> [ModelInfo] {
         let models = [
+            "claude-haiku-5-5",
+            "claude-sonnet-5-5",
+            "claude-opus-5-5",
+            "claude-fable-5-1",
             "claude-sonnet-4-6",
             "claude-opus-4-6",
-            "claude-haiku-4-5",
-            "claude-haiku-4-5-20251001",
-            "claude-sonnet-4",
-            "claude-opus-4"
+            "claude-haiku-4-5"
         ]
         return models.map { ModelInfo(id: $0, displayName: $0, provider: .anthropic) }
     }
@@ -1369,27 +1370,24 @@ public final class ModelCatalog: ObservableObject {
     /// Known models that support vision (multimodal)
     private static let knownVisionModels: Set<String> = [
         // OpenAI - GPT models
-        "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano",
-        "gpt-5.2", "gpt-5-mini", "gpt-5-nano", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-vision-preview",
-        "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+        "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna",
+        "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.5-pro",
+        "gpt-5.4", "gpt-5.4-pro", "gpt-5.4-mini", "gpt-5.4-nano",
+        "gpt-5.2", "gpt-5.2-pro", "gpt-5-mini", "gpt-5-nano", "gpt-4o", "gpt-4o-mini",
+        "gpt-4.1", "gpt-4.1-mini",
         // OpenAI - Reasoning models with vision
-        "o1", "o3", "o4-mini",
-        // Anthropic - Legacy naming
-        "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-latest", "claude-3-5-haiku-20241022",
-        "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307",
-        // Anthropic - New naming (claude-sonnet-4, claude-opus-4, etc.)
-        "claude-sonnet-4", "claude-opus-4", "claude-haiku-4.5",
-        "claude-sonnet-4.5", "claude-opus-4.5", "claude-sonnet-4.6", "claude-opus-4.6",
-        "claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5", "claude-haiku-4-5-20251001",
+        "o3",
+        // Anthropic - Current and still-served legacy models
+        "claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5",
+        "claude-fable-5", "claude-opus-5", "claude-sonnet-5",
+        "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5",
+        "claude-sonnet-4-6", "claude-haiku-4-5",
         // Gemini
         "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite",
         "gemini-3.1-pro", "gemini-3-flash", "gemini-3.1-flash-lite",
         "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite",
         "gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash-exp",
-        "gemini-2.0-flash", "gemini-2.0-pro",
-        // Groq
-        "llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview",
-        "meta-llama/llama-4-scout-17b-16e-instruct", "llama-4-scout-17b-16e-instruct"
+        "gemini-2.0-flash", "gemini-2.0-pro"
     ]
 
     /// General vision keywords used across providers
