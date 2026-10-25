@@ -19,6 +19,7 @@ public struct BugReportView: View {
     @State private var isDropTargeted = false
     @State private var isTextDropTargeted = false
     @State private var textHeight: CGFloat = 88
+    @State private var textController = FeedbackTextController()
 
     private var showsDropZone: Bool { isDropTargeted || isTextDropTargeted }
     @AppStorage("bugReportIncludeDiagnostics") private var includeDiagnostics = true
@@ -90,6 +91,7 @@ public struct BugReportView: View {
             VStack(alignment: .leading, spacing: 0) {
                 ZStack(alignment: .topLeading) {
                     FeedbackTextView(
+                        controller: textController,
                         text: $description,
                         contentHeight: $textHeight,
                         isDropTargeted: $isTextDropTargeted,
@@ -143,6 +145,18 @@ public struct BugReportView: View {
                         ? "Files are sent with your report."
                         : "Files are revealed in Finder so you can drag them into the GitHub issue.")
                     .accessibilityIdentifier("BugReportAttachFilesButton")
+                    Divider()
+                        .frame(height: 14)
+                    FormatButton(symbol: "list.bullet", help: "Bulleted list (⌘⇧8)") {
+                        textController.toggleList(numbered: false)
+                    }
+                    .keyboardShortcut("8", modifiers: [.command, .shift])
+                    .accessibilityIdentifier("BugReportBulletListButton")
+                    FormatButton(symbol: "list.number", help: "Numbered list (⌘⇧7)") {
+                        textController.toggleList(numbered: true)
+                    }
+                    .keyboardShortcut("7", modifiers: [.command, .shift])
+                    .accessibilityIdentifier("BugReportNumberedListButton")
                     Spacer()
                     Text("\(description.count)/2,000")
                         .font(.caption.monospacedDigit())
@@ -586,6 +600,7 @@ private struct FeedbackDropZone: View {
 /// Plain-text editor that grows with its content, scrolls past its max height,
 /// and turns dropped files or images into attachments instead of inserted text.
 private struct FeedbackTextView: NSViewRepresentable {
+    let controller: FeedbackTextController
     @Binding var text: String
     @Binding var contentHeight: CGFloat
     @Binding var isDropTargeted: Bool
@@ -603,6 +618,7 @@ private struct FeedbackTextView: NSViewRepresentable {
 
         let textView = DropTextView()
         textView.coordinator = context.coordinator
+        controller.textView = textView
         textView.delegate = context.coordinator
         textView.isRichText = false
         textView.importsGraphics = false
@@ -638,6 +654,21 @@ private struct FeedbackTextView: NSViewRepresentable {
         var parent: FeedbackTextView
 
         init(_ parent: FeedbackTextView) { self.parent = parent }
+
+        /// Return continues a list (or ends it on an empty item); Tab and
+        /// Shift-Tab indent and outdent list items.
+        func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            switch selector {
+            case #selector(NSResponder.insertNewline(_:)):
+                return FeedbackListEditing.continueList(in: textView)
+            case #selector(NSResponder.insertTab(_:)):
+                return FeedbackListEditing.indent(in: textView, outdent: false)
+            case #selector(NSResponder.insertBacktab(_:)):
+                return FeedbackListEditing.indent(in: textView, outdent: true)
+            default:
+                return false
+            }
+        }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
@@ -713,5 +744,138 @@ private struct FeedbackTextView: NSViewRepresentable {
             HapticFeedbackManager.shared.success()
             return true
         }
+    }
+}
+
+/// Lets the SwiftUI toolbar reach the AppKit text view for list commands.
+@MainActor
+final class FeedbackTextController {
+    weak var textView: NSTextView?
+
+    func toggleList(numbered: Bool) {
+        guard let textView else { return }
+        textView.window?.makeFirstResponder(textView)
+        FeedbackListEditing.toggleList(in: textView, numbered: numbered)
+        HapticFeedbackManager.shared.selection()
+    }
+}
+
+/// Markdown-style list editing (`- ` and `1. `), kept as plain text so the
+/// report reads the same in Sentry and renders as lists on GitHub.
+@MainActor
+enum FeedbackListEditing {
+    private struct ListPrefix {
+        let indent: String
+        let marker: String // "- " or "12. "
+        var number: Int? { Int(marker.dropLast(2)) }
+        var full: String { indent + marker }
+    }
+
+    private static func prefix(of line: String) -> ListPrefix? {
+        let indent = String(line.prefix { $0 == " " })
+        let rest = line.dropFirst(indent.count)
+        for bullet in ["- ", "* ", "• "] where rest.hasPrefix(bullet) {
+            return ListPrefix(indent: indent, marker: bullet)
+        }
+        let digits = rest.prefix { $0.isNumber }
+        if !digits.isEmpty, digits.count <= 3, rest.dropFirst(digits.count).hasPrefix(". ") {
+            return ListPrefix(indent: indent, marker: digits + ". ")
+        }
+        return nil
+    }
+
+    private static func replace(_ range: NSRange, with text: String, in textView: NSTextView) {
+        guard textView.shouldChangeText(in: range, replacementString: text) else { return }
+        textView.textStorage?.replaceCharacters(in: range, with: text)
+        textView.didChangeText()
+    }
+
+    static func continueList(in textView: NSTextView) -> Bool {
+        let string = textView.string as NSString
+        let selection = textView.selectedRange()
+        let lineRange = string.lineRange(for: NSRange(location: selection.location, length: 0))
+        let line = string.substring(with: lineRange).trimmingCharacters(in: .newlines)
+        guard let prefix = prefix(of: line) else { return false }
+
+        if line == prefix.full || line == prefix.full.trimmingCharacters(in: .whitespaces) {
+            // Empty item: end the list instead of adding another marker.
+            let contentRange = NSRange(location: lineRange.location, length: (line as NSString).length)
+            replace(contentRange, with: "", in: textView)
+            return true
+        }
+        let marker = prefix.number.map { "\($0 + 1). " } ?? prefix.marker
+        textView.insertText("\n" + prefix.indent + marker, replacementRange: selection)
+        return true
+    }
+
+    static func indent(in textView: NSTextView, outdent: Bool) -> Bool {
+        let string = textView.string as NSString
+        let lineRange = string.lineRange(for: NSRange(location: textView.selectedRange().location, length: 0))
+        let line = string.substring(with: lineRange)
+        guard prefix(of: line) != nil else { return false }
+        if outdent {
+            let spaces = min(line.prefix { $0 == " " }.count, 2)
+            guard spaces > 0 else { return true }
+            replace(NSRange(location: lineRange.location, length: spaces), with: "", in: textView)
+        } else {
+            replace(NSRange(location: lineRange.location, length: 0), with: "  ", in: textView)
+        }
+        return true
+    }
+
+    /// Adds list markers to every selected line, or removes them when all
+    /// lines already use that list style.
+    static func toggleList(in textView: NSTextView, numbered: Bool) {
+        let string = textView.string as NSString
+        let selection = textView.selectedRange()
+        let linesRange = string.lineRange(for: selection)
+        var lines = string.substring(with: linesRange).components(separatedBy: "\n")
+        let trailingNewline = lines.last == "" && lines.count > 1
+        if trailingNewline { lines.removeLast() }
+
+        let allMatch = lines.allSatisfy { line in
+            guard let prefix = prefix(of: line) else { return false }
+            return (prefix.number != nil) == numbered
+        }
+        var counter = 0
+        let rewritten = lines.map { line -> String in
+            let existing = prefix(of: line)
+            let body = existing.map { String(line.dropFirst($0.full.count)) } ?? line
+            let indent = existing?.indent ?? ""
+            if allMatch { return indent + body }
+            counter += 1
+            return indent + (numbered ? "\(counter). " : "- ") + body
+        }
+        let replacement = rewritten.joined(separator: "\n") + (trailingNewline ? "\n" : "")
+        replace(linesRange, with: replacement, in: textView)
+        let caret = linesRange.location + (replacement as NSString).length - (trailingNewline ? 1 : 0)
+        textView.setSelectedRange(selection.length == 0 && lines.count == 1
+            ? NSRange(location: caret, length: 0)
+            : NSRange(location: linesRange.location, length: (replacement as NSString).length))
+    }
+}
+
+private struct FormatButton: View {
+    let symbol: String
+    let help: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .frame(width: 24, height: 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Color.secondary.opacity(isHovered ? 0.15 : 0))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .help(help)
+        .accessibilityLabel(help)
+        .onHover { isHovered = $0 }
+        .animation(.easeInOut(duration: 0.12), value: isHovered)
     }
 }
