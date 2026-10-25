@@ -1,14 +1,7 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
-import {
-  ArrowDownToLine,
-  ArrowUpRight,
-  BadgeCheck,
-  Images,
-  MessageCircle,
-  ShieldCheck,
-} from 'lucide-react'
+import { ArrowUpRight, ChatCircle, DownloadSimple, Fingerprint, Images, SealCheck } from '@phosphor-icons/react/ssr'
 import { GithubIcon } from '@/components/github-icon'
 import { PageStructuredData } from '@/components/page-structured-data'
 import { Reveal } from '@/components/reveal'
@@ -125,7 +118,7 @@ function DownloadLink({ href, label }: { href: string; label: string }) {
       data-analytics-location="press"
       data-analytics-target={label}
     >
-      <ArrowDownToLine className="size-4" />
+      <DownloadSimple className="size-4" />
       {label}
     </a>
   )
@@ -133,7 +126,7 @@ function DownloadLink({ href, label }: { href: string; label: string }) {
 
 export default function PressPage() {
   return (
-    <main className="relative min-h-screen overflow-x-clip">
+    <main id="main" className="relative min-h-dvh overflow-x-clip">
       <PageStructuredData
         name="Sorty press kit"
         description={PAGE_DESCRIPTION}
@@ -156,7 +149,7 @@ export default function PressPage() {
         />
         <Reveal immediate animateOnEnter className="mx-auto max-w-4xl text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-            <BadgeCheck className="size-3.5" />
+            <SealCheck className="size-3.5" />
             Official press resources
           </span>
           <h1 className="mt-6 text-balance text-5xl font-semibold tracking-tight sm:text-6xl">
@@ -283,7 +276,7 @@ export default function PressPage() {
                           data-analytics-location="press"
                           data-analytics-target={screenshot.title}
                         >
-                          <ArrowDownToLine className="size-4" />
+                          <DownloadSimple className="size-4" />
                         </a>
                       </div>
                     </article>
@@ -343,7 +336,7 @@ export default function PressPage() {
                     'radial-gradient(560px 240px at 50% 0%, color-mix(in oklch, var(--brand) 20%, transparent), transparent 72%)',
                 }}
               />
-              <ShieldCheck className="mx-auto size-8 text-primary" />
+              <Fingerprint className="mx-auto size-8 text-primary" />
               <h2 id="press-contact-heading" className="mt-4 text-3xl font-semibold tracking-tight">
                 Need something else?
               </h2>
@@ -356,7 +349,7 @@ export default function PressPage() {
                   href="mailto:shirish.pothi.27@gmail.com"
                   className="group inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background shadow-sm transition-[transform,box-shadow,opacity] duration-200 ease-out hover:-translate-y-0.5 hover:scale-[1.02] hover:opacity-90 hover:shadow-lg active:translate-y-0 active:scale-[0.98]"
                 >
-                  <MessageCircle className="size-4 transition-transform duration-200 ease-out group-hover:scale-110" />
+                  <ChatCircle className="size-4 transition-transform duration-200 ease-out group-hover:scale-110" />
                   Contact the developer
                   <ArrowUpRight className="size-3.5 transition-transform duration-200 ease-out group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                 </a>

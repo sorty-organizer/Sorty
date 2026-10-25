@@ -1,11 +1,5 @@
 import type { Metadata } from 'next'
-import {
-  ArrowUpRight,
-  FolderGit2,
-  ShieldCheck,
-  Sparkles,
-} from 'lucide-react'
-import { DiaGradient } from '@/components/dia-gradient'
+import { ArrowUpRight, Fingerprint, GitBranch, Sparkle } from '@phosphor-icons/react/ssr'
 import { Reveal } from '@/components/reveal'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteNav } from '@/components/site-nav'
@@ -53,22 +47,22 @@ const RELEASES = [
       'Organize files through a conversation in your agent. Import selected Sorty preferences and Learnings, or continue with the native app. This release also adds OpenCode providers, icon styles, and a DMG installer.',
     highlights: [
       {
-        icon: Sparkles,
+        icon: Sparkle,
         title: 'Sorty in your agent',
         body: 'Set up the skill for Codex, Claude Code, OpenCode, Pi, or a custom folder. Organize, rename, find exact duplicates, and restore recorded moves without keeping the app installed.',
       },
       {
-        icon: ShieldCheck,
+        icon: Fingerprint,
         title: 'Choose what to import',
         body: 'Share selected preferences, exclusions, saved folders, and Learnings. Credentials, bookmarks, consent, and app history stay in the app.',
       },
       {
-        icon: FolderGit2,
+        icon: GitBranch,
         title: 'Keep the app when you need it',
         body: 'Continue with App keeps native Finder integration and background watching available. New icon styles and a drag-to-install DMG join this release.',
       },
       {
-        icon: ShieldCheck,
+        icon: Fingerprint,
         title: 'File operation fixes',
         body: 'Organization and undo guard missing or replaced files. Cross-volume copies preserve edited sources, and concurrent AI batches keep their streams separate.',
       },
@@ -83,22 +77,22 @@ const RELEASES = [
       'This maintenance update brings a refreshed app icon, faster launch, lower idle CPU use, more efficient large-folder planning, and fixes across organization, Finder, permissions, and AI providers.',
     highlights: [
       {
-        icon: Sparkles,
+        icon: Sparkle,
         title: 'Faster launch',
         body: 'Median time to the first window fell from 2,262 ms to 1,127 ms in a same-machine Release A/B test.',
       },
       {
-        icon: FolderGit2,
+        icon: GitBranch,
         title: 'Less background work',
         body: 'Settled idle CPU fell from a 51.4% mean to 0% in a 60-second visible-window test. Hidden timelines, scans, and Finder checks also do less work.',
       },
       {
-        icon: Sparkles,
+        icon: Sparkle,
         title: 'Faster large-folder planning',
         body: 'A 1,000-file deep-scan prompt fell from 132,059 tokens to 11,961, and preparation time fell from 12.1 ms to 5.0 ms.',
       },
       {
-        icon: ShieldCheck,
+        icon: Fingerprint,
         title: 'Refreshed icon and reliability fixes',
         body: 'The main Sorty app icon has new release artwork. Fixes also cover organization, undo, Finder actions, permission recovery, provider errors, and stale status.',
       },
@@ -413,7 +407,7 @@ function versionAnchor(version: string) {
 
 export default function ChangelogPage() {
   return (
-    <main className="relative min-h-screen overflow-x-clip">
+    <main id="main" className="relative min-h-dvh overflow-x-clip">
       <PageStructuredData
         name="Sorty changelog"
         description="Latest Sorty releases, improvements, and fixes."
@@ -424,16 +418,6 @@ export default function ChangelogPage() {
       <SiteNav />
 
       <section className="relative isolate overflow-hidden px-4 pb-16 pt-32 sm:pb-24 sm:pt-40">
-        <div className="pointer-events-none absolute inset-x-[-25vw] top-[-18vh] -z-10 h-[68vh] opacity-80 [mask-image:radial-gradient(ellipse_at_top,black_0%,black_42%,transparent_72%)]">
-          <DiaGradient
-            blur={18}
-            peak={0.92}
-            valley={0.5}
-            strength={0.62}
-          />
-        </div>
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_24%,oklch(0.66_0.2_12_/_0.22),transparent_26%),radial-gradient(circle_at_82%_18%,oklch(0.68_0.16_250_/_0.18),transparent_30%),linear-gradient(180deg,transparent_0%,var(--background)_88%)]" />
-
         <div className="mx-auto max-w-5xl">
           <Reveal immediate animateOnEnter className="max-w-3xl">
             <p className="text-sm font-medium text-primary">Changelog</p>
@@ -462,7 +446,7 @@ export default function ChangelogPage() {
                   aria-hidden
                   className="absolute left-0 top-3 flex size-8 items-center justify-center rounded-full border border-primary/40 bg-background shadow-[0_0_30px_-8px_oklch(0.62_0.19_256_/_0.8)] md:size-12"
                 >
-                  <Sparkles className="size-4 text-primary md:size-5" />
+                  <Sparkle className="size-4 text-primary md:size-5" />
                 </span>
 
                 <article

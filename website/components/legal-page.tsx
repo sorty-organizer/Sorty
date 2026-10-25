@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { ShieldCheck } from 'lucide-react'
+import { Fingerprint } from '@phosphor-icons/react/ssr'
 import { Reveal } from '@/components/reveal'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
@@ -29,7 +29,7 @@ export function LegalPage({
   children,
 }: LegalPageProps) {
   return (
-    <main className="relative min-h-screen overflow-x-clip">
+    <main id="main" className="relative min-h-dvh overflow-x-clip">
       <SiteNav />
       <section className="relative px-4 pt-36 pb-12 sm:pt-44">
         <div
@@ -75,7 +75,7 @@ export function LegalPage({
                   }}
                 />
                 <span className="inline-flex items-center gap-2 rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary">
-                  <ShieldCheck className="size-3.5" />
+                  <Fingerprint className="size-3.5" />
                   The short version
                 </span>
                 <p className="mt-4 text-pretty text-base leading-relaxed text-foreground/90">

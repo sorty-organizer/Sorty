@@ -1,15 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import {
-  ArrowRight,
-  Check,
-  CircleDotDashed,
-  Download,
-  ExternalLink,
-  Minus,
-  Scale,
-  Sparkles,
-} from 'lucide-react'
+import { ArrowRight, ArrowSquareOut, Check, CircleDashed, DownloadSimple, Minus, Scales, Sparkle } from '@phosphor-icons/react/ssr'
 import {
   COMPARISON_PRODUCTS,
   COMPARISON_ROWS,
@@ -67,7 +58,7 @@ function StatusIcon({ cell }: { cell: ComparisonCell }) {
         className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-amber-300/15 text-amber-200"
         aria-label="Partially supported or different workflow"
       >
-        <CircleDotDashed className="size-3.5" aria-hidden="true" />
+        <CircleDashed className="size-3.5" aria-hidden="true" />
       </span>
     )
   }
@@ -129,29 +120,21 @@ export function ComparisonPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-x-clip">
+    <main id="main" className="relative min-h-dvh overflow-x-clip">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
       <SiteNav />
 
-      <section className="page-section relative isolate px-4 pb-20 pt-32 sm:pt-44">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[38rem]"
-          style={{
-            background:
-              'radial-gradient(850px 460px at 50% 0%, color-mix(in oklch, var(--brand) 24%, transparent), transparent 72%)',
-          }}
-        />
+      <section className="relative isolate px-4 pb-20 pt-32 sm:pt-44">
         <Reveal immediate animateOnEnter className="mx-auto max-w-5xl text-center">
           <span className="mx-auto flex size-12 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-primary shadow-xl shadow-black/30">
-            <Scale className="size-6" />
+            <Scales className="size-6" />
           </span>
           <p className="mt-5 text-sm font-medium text-primary">Mac file organizer comparison</p>
           <h1 className="mx-auto mt-4 max-w-4xl text-balance text-4xl font-semibold leading-[1.04] tracking-tight sm:text-6xl">
-            <span className="highlight-pill inline-flex items-center gap-2 rounded-2xl px-2.5 py-1 align-middle sm:gap-3">
+            <span className="inline-flex items-center gap-2 align-middle sm:gap-3">
               <Image
                 src={sitePath('/favicon.png')}
                 alt=""
@@ -198,7 +181,7 @@ export function ComparisonPage() {
           <div className="mx-auto mt-9 max-w-3xl rounded-3xl border border-primary/30 bg-primary/8 p-6 text-left backdrop-blur-xl">
             <div className="flex items-start gap-4">
               <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                <Sparkles className="size-5" />
+                <Sparkle className="size-5" />
               </span>
               <div>
                 <h2 className="font-semibold">Why Sorty stands out</h2>
@@ -214,7 +197,7 @@ export function ComparisonPage() {
         </Reveal>
       </section>
 
-      <section className="section-seam border-y border-border bg-card/20 px-4 py-20" aria-labelledby="comparison-table-heading">
+      <section className="border-y border-border bg-card/20 px-4 py-20" aria-labelledby="comparison-table-heading">
         <Reveal className="mx-auto max-w-6xl">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
@@ -262,7 +245,7 @@ export function ComparisonPage() {
                         <span>
                           <span className="flex items-center gap-1.5 font-semibold">
                             {product.name}
-                            <ExternalLink className="size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                            <ArrowSquareOut className="size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                           </span>
                           {product.id === 'sorty' && (
                             <span className="mt-1 block text-xs font-medium text-primary">Review-first AI</span>
@@ -311,7 +294,7 @@ export function ComparisonPage() {
         </Reveal>
       </section>
 
-      <section className="section-seam px-4 py-24" aria-labelledby="which-organizer-heading">
+      <section className="px-4 py-24" aria-labelledby="which-organizer-heading">
         <div className="mx-auto max-w-5xl">
           <Reveal className="text-center">
             <p className="text-sm font-medium text-primary">Decision guide</p>
@@ -373,8 +356,8 @@ export function ComparisonPage() {
               href={DOWNLOAD_URL}
               className="btn-download inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium"
             >
-              <Download className="size-4" />
-              Download for Mac
+              <DownloadSimple className="size-4" />
+              DownloadSimple for Mac
             </a>
             <Link
               href="/#how-it-works"
