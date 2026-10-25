@@ -39,126 +39,52 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
   --color-brand: var(--brand);
   --color-brand-bright: var(--brand-bright);
+  --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-:root {
-  color-scheme: dark;
-  --background: oklch(0.16 0.004 260);
-  --foreground: oklch(0.97 0.003 250);
-  --card: oklch(0.205 0.005 260);
-  --card-foreground: oklch(0.97 0.003 250);
-  --popover: oklch(0.205 0.005 260);
-  --popover-foreground: oklch(0.97 0.003 250);
-  --primary: oklch(0.62 0.19 256);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.26 0.006 260);
-  --secondary-foreground: oklch(0.97 0.003 250);
-  --muted: oklch(0.26 0.006 260);
-  --muted-foreground: oklch(0.66 0.006 260);
-  --accent: oklch(0.62 0.19 256);
-  --accent-foreground: oklch(0.99 0 0);
-  --destructive: oklch(0.62 0.21 25);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.62 0.19 256);
-  --chart-1: oklch(0.62 0.19 256);
-  --chart-2: oklch(0.7 0.13 230);
-  --chart-3: oklch(0.55 0.12 270);
-  --chart-4: oklch(0.66 0.006 260);
-  --chart-5: oklch(0.4 0.006 260);
-  --radius: 0.9rem;
-  --sidebar: oklch(0.205 0.005 260);
-  --sidebar-foreground: oklch(0.97 0.003 250);
-  --sidebar-primary: oklch(0.62 0.19 256);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.26 0.006 260);
-  --sidebar-accent-foreground: oklch(0.97 0.003 250);
-  --sidebar-border: oklch(1 0 0 / 9%);
-  --sidebar-ring: oklch(0.62 0.19 256);
-  /* Apple-style brand blues used for the primary CTA + highlight */
-  --brand: oklch(0.62 0.19 256);
-  --brand-bright: oklch(0.7 0.16 240);
-}
-
+/* One flat dark palette and one accent. Surfaces step through the approved
+   neutrals (#000, #181818, #1F1F1F, #272727) instead of tinted grays. */
+:root,
 .dark {
   color-scheme: dark;
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not(.light) {
-    color-scheme: dark;
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
-  }
+  --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+  --background: #000000;
+  --foreground: #f5f5f5;
+  --card: #181818;
+  --card-foreground: #f5f5f5;
+  --popover: #181818;
+  --popover-foreground: #f5f5f5;
+  --primary: #5b8def;
+  --primary-foreground: #ffffff;
+  --secondary: #1f1f1f;
+  --secondary-foreground: #f5f5f5;
+  --muted: #1f1f1f;
+  --muted-foreground: #a3a3a3;
+  --accent: #272727;
+  --accent-foreground: #f5f5f5;
+  --destructive: #e5534b;
+  --border: rgb(255 255 255 / 8%);
+  --input: rgb(255 255 255 / 12%);
+  --ring: #5b8def;
+  --chart-1: #5b8def;
+  --chart-2: #a3a3a3;
+  --chart-3: #6b6b6b;
+  --chart-4: #313131;
+  --chart-5: #272727;
+  --radius: 0.75rem;
+  --sidebar: #181818;
+  --sidebar-foreground: #f5f5f5;
+  --sidebar-primary: #5b8def;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1f1f1f;
+  --sidebar-accent-foreground: #f5f5f5;
+  --sidebar-border: rgb(255 255 255 / 8%);
+  --sidebar-ring: #5b8def;
+  /* The single accent. Kept under 80% saturation so it sits with the neutrals. */
+  --brand: #5b8def;
+  --brand-bright: #7aa3f2;
 }
 
 @layer base {
@@ -178,55 +104,96 @@
     overscroll-behavior-y: none;
     scroll-behavior: smooth;
   }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p,
+  li,
+  dd {
+    text-wrap: pretty;
+  }
 }
 
-/* Full-height page sections without scroll snapping. Native scrolling keeps
-   trackpad, wheel, touch, and keyboard motion smooth and uninterrupted. */
-.page-section {
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+/* Static film grain over the whole page. It is one fixed, non interactive
+   layer, so it adds texture without repainting on scroll. */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* A static highlight keeps the glass depth without sampling and blurring the
-   moving page behind every card. */
+/* Hero headline gradient: the one gradient on the site, and only on text. */
+.hero-heading {
+  background-image: linear-gradient(90deg, #ffffff, #9b9b9b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Raised surface: flat fill plus a 1px inner edge highlight. */
 .glass-surface {
-  background-image: linear-gradient(
-    145deg,
-    oklch(1 0 0 / 5%),
-    transparent 48%
-  );
-  box-shadow: 0 1px 0 oklch(1 0 0 / 6%) inset;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 5%) inset;
 }
 
-/* Keep scroll reveals cheap and stable. Animating blur across large cards can
-   flash as the browser promotes and repaints each glass layer. */
+/* Scroll reveal: a heavy fade up, driven once by RevealObserver. */
 .reveal {
-  opacity: 0.82;
-  transform: translateY(10px);
+  opacity: 0;
+  filter: blur(12px);
+  transform: translateY(4rem);
   transition:
-    opacity 0.36s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.36s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 0.9s var(--ease-fluid),
+    filter 0.9s var(--ease-fluid),
+    transform 0.9s var(--ease-fluid);
 }
 .reveal.is-visible {
   opacity: 1;
+  filter: blur(0);
   transform: translateY(0);
+}
+@media (scripting: none) {
+  .reveal {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+  .tagline-word {
+    color: var(--foreground);
+  }
 }
 
 /* Immediate page content starts in its entrance state before the first paint,
    so it moves into place exactly once instead of pulsing backward. */
 @starting-style {
   .reveal.reveal-on-enter.is-visible {
-    opacity: 0.85;
-    transform: translateY(8px);
+    opacity: 0;
+    filter: blur(12px);
+    transform: translateY(4rem);
   }
+}
+
+/* Tagline words light up one at a time as they cross the trigger line. */
+.tagline-word {
+  color: rgb(245 245 245 / 30%);
+  transition: color 0.7s var(--ease-fluid);
+}
+.tagline-word.is-lit {
+  color: var(--foreground);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .reveal {
     opacity: 1;
+    filter: none;
     transform: none;
+    transition: none;
+  }
+  .tagline-word {
+    color: var(--foreground);
     transition: none;
   }
   html {
@@ -234,434 +201,29 @@
   }
 }
 
-/* The glow uses a painted gradient instead of a large live blur. Transform and
-   opacity can stay on the compositor while preserving the ambient motion. */
-@keyframes hero-glow-float {
-  0%, 100% {
-    opacity: 0.48;
-    transform: translateX(-50%) translateY(0) scale(1);
-  }
-  50% {
-    opacity: 0.72;
-    transform: translateX(-50%) translateY(-18px) scale(1.04);
-  }
-}
-.hero-glow {
-  background: radial-gradient(
-    ellipse at center,
-    color-mix(in oklch, var(--brand) 38%, transparent) 0%,
-    color-mix(in oklch, var(--brand-bright) 16%, transparent) 42%,
-    transparent 72%
-  );
-  opacity: 0.58;
-  transform: translateX(-50%);
-}
-@media (hover: hover) and (pointer: fine) {
-  .hero-glow {
-    animation: hero-glow-float 10s ease-in-out infinite;
-  }
-}
-
-/* Apple-style bright blue download button */
+/* Primary action: flat accent fill, lifts on hover, presses on click. */
 .btn-download {
-  position: relative;
-  z-index: 1;
-  overflow: hidden;
-  background-image: linear-gradient(
-    180deg,
-    var(--brand-bright) 0%,
-    var(--brand) 100%
-  );
-  color: oklch(0.99 0 0);
-  box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 35%) inset,
-    0 0 0 1px oklch(1 0 0 / 14%) inset,
-    0 10px 30px -8px oklch(0.62 0.19 256 / 60%);
-  transition: box-shadow 0.3s ease;
-}
-.btn-download::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: -20%;
-  width: 68%;
-  height: 62%;
-  pointer-events: none;
-  transform: translateX(-50%);
-  border-radius: 9999px;
-  background:
-    radial-gradient(
-      ellipse at top,
-      oklch(1 0 0 / 92%) 0%,
-      oklch(0.92 0.05 245 / 54%) 38%,
-      transparent 72%
-    );
-  mix-blend-mode: screen;
-  opacity: 0.68;
-  filter:
-    brightness(1)
-    drop-shadow(0 2px 4px oklch(0.95 0.04 245 / 0%));
+  background-color: var(--brand);
+  color: #ffffff;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 18%) inset;
   transition:
-    opacity 0.35s ease,
-    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-    filter 0.4s ease;
+    background-color 0.3s var(--ease-fluid),
+    transform 0.3s var(--ease-fluid);
 }
-.btn-download::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  transform: translateX(-112%) skewX(-16deg);
-  border-radius: inherit;
-  background: linear-gradient(
-    100deg,
-    transparent 18%,
-    oklch(1 0 0 / 34%) 44%,
-    transparent 70%
-  );
-  mix-blend-mode: screen;
-  opacity: 0;
-}
-.btn-download > * {
-  position: relative;
-  z-index: 1;
-}
-.btn-download:hover,
-.btn-download:focus-visible {
-  box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 50%) inset,
-    0 0 0 1px oklch(1 0 0 / 24%) inset,
-    0 0 0 3px oklch(0.74 0.16 244 / 14%),
-    0 14px 36px -10px oklch(0.62 0.19 256 / 78%);
-}
-.btn-download:focus-visible {
-  outline: 2px solid oklch(0.74 0.16 244 / 85%);
-  outline-offset: 3px;
-}
-.btn-download:hover::before,
-.btn-download:focus-visible::before {
-  opacity: 1;
-  filter:
-    brightness(1.3)
-    drop-shadow(0 4px 8px oklch(0.95 0.04 245 / 42%));
-  transform: translateX(-50%) scale(1.2, 1.3);
-}
-.btn-download:hover::after {
-  animation: download-button-sheen 0.72s cubic-bezier(0.2, 0.8, 0.2, 1);
+.btn-download:hover {
+  background-color: var(--brand-bright);
+  transform: translateY(-1px);
 }
 .btn-download:active {
-  box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 28%) inset,
-    0 8px 24px -10px oklch(0.62 0.19 256 / 55%);
+  transform: scale(0.98);
 }
-.btn-download:active::before {
-  opacity: 0.62;
-}
-.btn-support {
-  position: relative;
-  z-index: 1;
-  overflow: hidden;
-  background-image: linear-gradient(
-    180deg,
-    oklch(0.72 0.19 11) 0%,
-    oklch(0.61 0.23 17) 100%
-  );
-  color: oklch(0.99 0 0);
-  box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 35%) inset,
-    0 0 0 1px oklch(1 0 0 / 14%) inset,
-    0 10px 30px -8px oklch(0.61 0.23 17 / 60%);
-  transition: box-shadow 0.3s ease;
-}
-.btn-support::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: -20%;
-  width: 68%;
-  height: 62%;
-  pointer-events: none;
-  transform: translateX(-50%);
-  border-radius: 9999px;
-  background:
-    radial-gradient(
-      ellipse at top,
-      oklch(1 0 0 / 70%) 0%,
-      oklch(0.94 0.08 12 / 38%) 36%,
-      transparent 72%
-    );
-  mix-blend-mode: screen;
-  opacity: 0.68;
-  transition:
-    opacity 0.3s ease,
-    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-    filter 0.3s ease;
-}
-.btn-support > * {
-  position: relative;
-  z-index: 1;
-}
-.btn-support:hover,
-.btn-support:focus-visible {
-  box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 50%) inset,
-    0 0 0 1px oklch(1 0 0 / 24%) inset,
-    0 0 0 3px oklch(0.72 0.19 11 / 16%),
-    0 14px 36px -10px oklch(0.61 0.23 17 / 78%);
-}
-.btn-support:focus-visible {
-  outline: 2px solid oklch(0.78 0.16 12 / 85%);
+.btn-download:focus-visible {
+  outline: 2px solid var(--brand-bright);
   outline-offset: 3px;
 }
-.btn-support:hover::before,
-.btn-support:focus-visible::before {
-  opacity: 1;
-  filter: brightness(1.2);
-  transform: translateX(-50%) scale(1.14, 1.22);
-}
-.btn-support:active {
-  box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 28%) inset,
-    0 8px 24px -10px oklch(0.61 0.23 17 / 55%);
-}
-.btn-support:active::before {
-  opacity: 0.62;
-}
-.support-heart-icon {
-  fill: transparent;
-  stroke: currentColor;
-  transform-origin: 50% 58%;
-  transition:
-    fill 0.18s ease,
-    color 0.18s ease,
-    filter 0.18s ease;
-}
-.btn-support:hover .support-heart-icon,
-.btn-support:focus-visible .support-heart-icon {
-  color: oklch(0.67 0.25 24);
-  fill: currentColor;
-  filter: drop-shadow(0 0 7px oklch(0.67 0.25 24 / 70%));
-  animation: support-heart-beat 0.82s ease-in-out infinite;
-}
-.download-intent-shell {
-  --download-intent: 0;
-  position: relative;
-  display: inline-flex;
-  border-radius: 9999px;
-}
-.download-intent-shell::before {
-  content: "";
-  position: absolute;
-  inset: -9px -12px;
-  pointer-events: none;
-  border-radius: inherit;
-  background:
-    radial-gradient(
-      closest-side,
-      oklch(0.74 0.16 244 / 28%),
-      oklch(0.62 0.19 256 / 12%) 58%,
-      transparent 100%
-    );
-  filter: blur(8px);
-  opacity: var(--download-intent);
-  transition: opacity 0.18s ease;
-}
-.download-intent-shell:has(.btn-download:hover)::before,
-.download-intent-shell:has(.btn-download:focus-visible)::before {
-  opacity: 1;
-}
-.mac-heading-lockup {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 0.02em;
-  margin-right: 0.02em;
-  vertical-align: -0.2em;
-}
-.mac-heading-icon {
-  display: inline-block;
-  width: 1.05em;
-  height: 1.05em;
-  flex: 0 0 auto;
-  object-fit: contain;
-  transform: rotate(6deg);
-}
-.hero-copy-sorty-icon {
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  margin-inline-end: 0.08em;
-  border-radius: 0.22em;
-  vertical-align: -0.14em;
-  transform: rotate(-4deg);
-  filter: drop-shadow(0 2px 4px oklch(0.62 0.19 256 / 20%));
-}
-.hero-screenshot-card {
-  transform-origin: 50% 18%;
-  transform: perspective(900px) rotateX(4deg);
-}
-@keyframes hero-screenshot-settle {
-  from {
-    transform: perspective(900px) rotateX(12deg) scale(0.99);
-  }
-  to {
-    transform: perspective(900px) rotateX(0deg) scale(1);
-  }
-}
-@supports (animation-timeline: view()) {
-  .hero-screenshot-card {
-    animation: hero-screenshot-settle linear both;
-    animation-timeline: view();
-    animation-range: entry 0% cover 42%;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .download-intent-shell::before {
-    opacity: 0;
-    transition: none;
-  }
-  .hero-glow,
-  .hero-screenshot-card {
-    animation: none;
-    transform: none;
-  }
-}
 
-/* The footer keeps its rise effect, but the browser now transforms one cached
-   SVG layer. No scroll listener or per-frame React work is involved. */
-.dia-gradient {
-  height: 100%;
-  width: 100%;
-  transform-origin: bottom;
-}
-@keyframes dia-gradient-rise {
-  from {
-    opacity: 0.72;
-    transform: scaleY(0.82);
-  }
-  to {
-    opacity: 1;
-    transform: scaleY(1);
-  }
-}
-@supports (animation-timeline: view()) {
-  .dia-gradient-scroll {
-    animation: dia-gradient-rise linear both;
-    animation-timeline: view(block);
-    animation-range: entry 0% entry 90%;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dia-gradient-scroll {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-}
-.download-beam {
-  position: relative;
-  isolation: isolate;
-  display: inline-flex;
-  overflow: hidden;
-  padding: 1px;
-  border-radius: 9999px;
-  transform: translateZ(0);
-  will-change: transform;
-  transition: transform 0.3s ease;
-}
-@keyframes download-beam-spin {
-  to {
-    transform: rotate(1turn);
-  }
-}
-.download-beam::before {
-  content: '';
-  position: absolute;
-  inset: -250% -40%;
-  z-index: -1;
-  pointer-events: none;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0 34%,
-    oklch(0.82 0.13 226 / 92%) 43%,
-    oklch(0.7 0.18 256 / 85%) 49%,
-    transparent 58% 100%
-  );
-}
-@media (hover: hover) and (pointer: fine) {
-  .download-beam::before {
-    animation: download-beam-spin 2.4s linear infinite;
-    will-change: transform;
-  }
-}
-.how-step-beam {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  padding: 1px;
-  border-radius: 1.5rem;
-  background: var(--border);
-  transform: translateZ(0);
-}
-.how-step-beam::before {
-  content: '';
-  position: absolute;
-  inset: -250% -40%;
-  z-index: 0;
-  pointer-events: none;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0 34%,
-    oklch(0.82 0.13 226 / 92%) 43%,
-    oklch(0.7 0.18 256 / 85%) 49%,
-    transparent 58% 100%
-  );
-  animation: how-step-beam-spin 2.4s linear infinite;
-  will-change: transform;
-}
-@keyframes how-step-beam-spin {
-  to {
-    transform: rotate(1turn);
-  }
-}
-.how-step-beam > div {
-  border-color: transparent;
-  background: var(--card);
-}
-.how-step-beam:hover > div,
-.how-step-beam:focus-within > div {
-  border-color: transparent;
-  background: color-mix(in oklch, var(--card) 96%, white);
-}
-.download-beam:hover,
-.download-beam:has(.btn-download:focus-visible) {
-  transform: translateY(-1px) translateZ(0);
-}
-.download-beam:active {
-  transform: translateY(0) translateZ(0);
-  transition-duration: 0.12s;
-}
-.download-beam > .btn-download {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-}
-.download-apple-mark {
-  display: inline-grid;
-  width: 1.0625rem;
-  height: 1.0625rem;
-  flex: 0 0 1.0625rem;
-  place-items: center;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
-  font-size: 1.0625rem;
-  font-synthesis: none;
-  line-height: 1;
-  transform: translateY(-0.01em) translateZ(0);
-  backface-visibility: hidden;
-  contain: layout paint;
-  will-change: transform;
-}
 .download-modal-backdrop {
-  animation: download-modal-backdrop-in 0.2s ease-out;
+  animation: download-modal-backdrop-in 0.2s var(--ease-fluid);
 }
 .download-modal-panel {
   animation: download-modal-panel-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
@@ -676,10 +238,10 @@
   pointer-events: none;
   border-radius: 0.75rem;
   box-shadow:
-    0 0 0 1px oklch(0.62 0.19 256 / 32%),
-    0 0 30px -8px oklch(0.62 0.19 256 / 70%);
+    0 0 0 1px rgb(91 141 239 / 32%),
+    0 0 30px -8px rgb(91 141 239 / 70%);
   opacity: 0;
-  transition: opacity 0.45s ease;
+  transition: opacity 0.45s var(--ease-fluid);
 }
 .copy-command-row.is-copied::after {
   opacity: 1;
@@ -692,9 +254,9 @@
   will-change: transform;
   transition:
     transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-    background-color 0.25s ease,
-    color 0.25s ease,
-    box-shadow 0.3s ease;
+    background-color 0.25s var(--ease-fluid),
+    color 0.25s var(--ease-fluid),
+    box-shadow 0.3s var(--ease-fluid);
 }
 .copy-command-button:hover {
   transform: translateY(-1px) scale(1.04) translateZ(0);
@@ -705,9 +267,9 @@
   transition-duration: 0.1s;
 }
 .copy-command-button.is-copied {
-  --copy-glow: oklch(0.62 0.19 256 / 85%);
+  --copy-glow: rgb(91 141 239 / 85%);
   box-shadow:
-    0 0 0 1px oklch(0.62 0.19 256 / 40%),
+    0 0 0 1px rgb(91 141 239 / 40%),
     0 0 22px -4px var(--copy-glow);
   animation: copy-command-pop 0.45s cubic-bezier(0.22, 1.4, 0.36, 1);
 }
@@ -724,7 +286,7 @@
   opacity: 0;
   transform: translateY(0.5rem) scale(0.92);
   transition:
-    opacity 0.15s ease,
+    opacity 0.15s var(--ease-fluid),
     transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .copy-command-label.is-visible {
@@ -749,7 +311,7 @@
   opacity: 0;
 }
 .copy-command-button.is-copied .copy-command-shine {
-  animation: copy-command-shine 0.7s ease-out 0.1s;
+  animation: copy-command-shine 0.7s var(--ease-fluid) 0.1s;
 }
 /* AI prompt pill buttons reuse the copy-command motion language: a springy pop
    on the button, a rotating check swap, a sheen sweep, and a status line that
@@ -761,9 +323,9 @@
   will-change: transform;
   transition:
     transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-    background-color 0.25s ease,
-    border-color 0.25s ease,
-    box-shadow 0.3s ease;
+    background-color 0.25s var(--ease-fluid),
+    border-color 0.25s var(--ease-fluid),
+    box-shadow 0.3s var(--ease-fluid);
 }
 .ai-prompt-button:hover {
   transform: translateY(-1px) translateZ(0);
@@ -773,11 +335,11 @@
   transition-duration: 0.1s;
 }
 .ai-prompt-button.is-copied {
-  border-color: oklch(0.62 0.19 256 / 45%);
-  background-color: oklch(0.62 0.19 256 / 14%);
+  border-color: rgb(91 141 239 / 45%);
+  background-color: rgb(91 141 239 / 14%);
   box-shadow:
-    0 0 0 1px oklch(0.62 0.19 256 / 30%),
-    0 0 22px -6px oklch(0.62 0.19 256 / 70%);
+    0 0 0 1px rgb(91 141 239 / 30%),
+    0 0 22px -6px rgb(91 141 239 / 70%);
   animation: ai-prompt-pop 0.45s cubic-bezier(0.22, 1.4, 0.36, 1);
 }
 .ai-prompt-icon {
@@ -794,7 +356,7 @@
   width: 1rem;
   height: 1rem;
   transition:
-    opacity 0.18s ease,
+    opacity 0.18s var(--ease-fluid),
     transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .ai-prompt-icon-copy {
@@ -829,7 +391,7 @@
   opacity: 0;
 }
 .ai-prompt-button.is-copied .ai-prompt-shine {
-  animation: ai-prompt-shine 0.7s ease-out 0.1s;
+  animation: ai-prompt-shine 0.7s var(--ease-fluid) 0.1s;
 }
 .ai-prompt-status {
   animation: ai-prompt-status-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -882,53 +444,23 @@
     transform: translateY(0);
   }
 }
-.modal-action-highlight::before {
-  content: "";
-  position: absolute;
-  top: -45%;
-  left: 50%;
-  z-index: 0;
-  width: 72%;
-  height: 90%;
-  pointer-events: none;
-  border-radius: 9999px;
-  background: radial-gradient(
-    ellipse at top,
-    oklch(1 0 0 / 64%) 0%,
-    oklch(1 0 0 / 18%) 42%,
-    transparent 74%
-  );
-  mix-blend-mode: screen;
-  opacity: 0.3;
-  transform: translateX(-50%) scale(0.9);
-  transition:
-    opacity 0.25s ease,
-    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.modal-action-highlight:hover::before,
-.modal-action-highlight:focus-visible::before {
-  opacity: 0.92;
-  transform: translateX(-50%) scale(1.22, 1.3);
-}
 .release-feature-card {
   box-shadow:
     0 1px 0 oklch(1 0 0 / 8%) inset,
-    0 28px 70px -38px oklch(0.62 0.19 256 / 42%),
+    0 28px 70px -38px rgb(91 141 239 / 42%),
     0 24px 64px -46px oklch(0.68 0.16 155 / 35%);
-  transition: box-shadow 0.4s ease, border-color 0.4s ease;
+  transition: box-shadow 0.4s var(--ease-fluid), border-color 0.4s var(--ease-fluid);
 }
 .release-feature-card:hover {
   border-color: oklch(0.68 0.16 250 / 42%);
   box-shadow:
     0 1px 0 oklch(1 0 0 / 12%) inset,
-    0 30px 76px -34px oklch(0.62 0.19 256 / 55%),
+    0 30px 76px -34px rgb(91 141 239 / 55%),
     0 24px 68px -40px oklch(0.68 0.16 155 / 40%);
 }
 .release-metrics-card {
   background:
-    radial-gradient(circle at 15% 10%, oklch(0.68 0.16 250 / 18%), transparent 48%),
-    radial-gradient(circle at 85% 90%, oklch(0.7 0.15 155 / 16%), transparent 50%),
-    oklch(1 0 0 / 3%);
+    #181818;
   box-shadow:
     0 1px 0 oklch(1 0 0 / 10%) inset,
     0 0 36px -20px oklch(0.64 0.18 245 / 75%);
@@ -958,38 +490,6 @@
   }
   .release-chart-fill {
     animation: none;
-  }
-}
-@keyframes download-button-sheen {
-  0% {
-    opacity: 0;
-    transform: translateX(-112%) skewX(-16deg);
-  }
-  18%,
-  58% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateX(112%) skewX(-16deg);
-  }
-}
-@keyframes support-heart-beat {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  18% {
-    transform: scale(1.22);
-  }
-  34% {
-    transform: scale(0.96);
-  }
-  50% {
-    transform: scale(1.14);
-  }
-  66% {
-    transform: scale(1);
   }
 }
 @keyframes download-modal-backdrop-in {
@@ -1048,44 +548,18 @@
     transform: translateX(130%) skewX(-18deg);
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .btn-download {
-    transition:
-      box-shadow 0.2s ease,
-      filter 0.2s ease;
+    transition: background-color 0.2s var(--ease-fluid);
   }
-  .download-beam,
-  .download-beam:hover,
-  .download-beam:has(.btn-download:focus-visible),
-  .download-beam:active {
+  .btn-download:hover,
+  .btn-download:active {
     transform: none;
-    transition: none;
-  }
-  .download-beam::before,
-  .how-step-beam::before,
-  .highlight-pill::after {
-    animation: none;
-  }
-  .btn-download:hover::before,
-  .btn-download:focus-visible::before,
-  .btn-support:hover::before,
-  .btn-support:focus-visible::before,
-  .modal-action-highlight:hover::before,
-  .modal-action-highlight:focus-visible::before {
-    transform: translateX(-50%);
-  }
-  .btn-download:hover::after {
-    animation: none;
-  }
-  .btn-support:hover .support-heart-icon,
-  .btn-support:focus-visible .support-heart-icon {
-    animation: none;
   }
   .download-modal-backdrop,
   .download-modal-panel,
-  .ai-prompt-status {
-    animation: none;
-  }
+  .ai-prompt-status,
   .copy-command-button.is-copied,
   .copy-command-label.is-copied .copy-command-check,
   .copy-command-button.is-copied .copy-command-shine,
@@ -1104,8 +578,7 @@
   .ai-prompt-button,
   .ai-prompt-icon-copy,
   .ai-prompt-icon-check,
-  .ai-prompt-status,
-  .modal-action-highlight::before {
+  .ai-prompt-status {
     transition: none;
   }
   .copy-command-button:hover,
@@ -1114,96 +587,6 @@
   .ai-prompt-button:active {
     transform: translateZ(0);
   }
-}
-
-/* Gradient highlight for the hero keyword */
-@keyframes highlight-shimmer {
-  0%, 55% {
-    transform: translateX(0) skewX(-18deg);
-  }
-  78%, 100% {
-    transform: translateX(520%) skewX(-18deg);
-  }
-}
-.highlight-pill {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  background-image: linear-gradient(
-    100deg,
-    var(--brand) 0%,
-    var(--brand-bright) 45%,
-    var(--brand) 90%
-  );
-  background-size: 200% 100%;
-  color: var(--primary-foreground);
-  box-shadow:
-    0 1px 0 0 oklch(1 0 0 / 25%) inset,
-    0 14px 34px -10px oklch(0.62 0.19 256 / 65%);
-}
-/* Clip the shimmer without changing the inline text baseline. */
-.highlight-pill.hero-keyword {
-  overflow: clip;
-  vertical-align: baseline;
-}
-.highlight-pill::after {
-  content: '';
-  position: absolute;
-  inset-block: -30%;
-  left: -32%;
-  width: 24%;
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    oklch(1 0 0 / 38%),
-    transparent
-  );
-  transform: translateX(520%) skewX(-18deg);
-}
-@media (hover: hover) and (pointer: fine) {
-  .highlight-pill::after {
-    animation: highlight-shimmer 6s ease-in-out infinite;
-    will-change: transform;
-  }
-}
-/* Soft blurred dividers between sections */
-.section-seam {
-  position: relative;
-}
-.section-seam::before {
-  content: '';
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  height: 140px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklch, var(--background) 70%, transparent) 0%,
-    transparent 100%
-  );
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  mask-image: linear-gradient(180deg, #000 0%, transparent 100%);
-  pointer-events: none;
-  z-index: 0;
-}
-.section-seam::after {
-  content: '';
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
-  height: 120px;
-  background: linear-gradient(
-    0deg,
-    color-mix(in oklch, var(--background) 78%, transparent) 0%,
-    transparent 100%
-  );
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  mask-image: linear-gradient(0deg, #000 0%, transparent 100%);
-  pointer-events: none;
-  z-index: 0;
 }
 
 /* Fine pointers use the drawn overlay exclusively; touch keeps native selection. */
