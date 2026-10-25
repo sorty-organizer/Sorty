@@ -551,7 +551,7 @@ private enum AboutIconImageNormalizer {
             bitsPerComponent: 8,
             bytesPerRow: width,
             space: nil,
-            bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.alphaOnly.rawValue)
         ), let data = context.data else {
             return nil
         }
