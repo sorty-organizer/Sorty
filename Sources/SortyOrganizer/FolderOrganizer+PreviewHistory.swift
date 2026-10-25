@@ -79,6 +79,9 @@ extension FolderOrganizer {
 
     private func performRegeneratePreview(allFiles: [FileItem], basePlan: OrganizationPlan) async throws {
         let currentPlan = basePlan
+        let requestContext = (aiClient?.config ?? aiConfig).map {
+            AIRequestDiagnosticContext(config: $0, fileCount: allFiles.count)
+        }
 
         // Reset streaming state
         await MainActor.run {
@@ -244,7 +247,8 @@ extension FolderOrganizer {
             OrganizerServices.capture(
                 error: error,
                 feature: "organize",
-                operation: "regenerate_preview"
+                operation: "regenerate_preview",
+                requestContext: requestContext
             )
             throw error
         }

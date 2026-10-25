@@ -182,6 +182,16 @@ class SortyTests: XCTestCase {
 
     @MainActor
     func testOutputLimitFailureSplitsBatchAndPreservesSuccessfulResults() async throws {
+        mockClient = MockAIClient(config: AIConfig(provider: .gemini, apiKey: "test-key", model: "test-model"))
+        let previousReporter = OrganizerServices.requestReporter
+        defer { OrganizerServices.requestReporter = previousReporter }
+        var requests: [UUID: [OrganizerServices.RequestOutcome]] = [:]
+        var maximumDepth = 0
+        OrganizerServices.requestReporter = { id, context, outcome, _, depth, _, _ in
+            requests[id, default: []].append(outcome)
+            maximumDepth = max(maximumDepth, depth)
+            XCTAssertEqual(context.provider, .gemini)
+        }
         // Requires more than five splits, including batches below eight files.
         for index in 0..<65 {
             let fileURL = tempDirectory.appendingPathComponent("adaptive-\(index).txt")
@@ -212,6 +222,9 @@ class SortyTests: XCTestCase {
         XCTAssertEqual(plannedPaths.count, 65)
         XCTAssertEqual(Set(plannedPaths).count, 65)
         XCTAssertEqual(folderOrganizer.currentPlan?.suggestions.count, 1)
+        XCTAssertGreaterThan(maximumDepth, 5)
+        XCTAssertEqual(requests.values.filter { $0.last == .succeeded }.count, 65)
+        XCTAssertTrue(requests.values.allSatisfy { $0 == [.started, .succeeded] || $0 == [.started, .splitRetry] })
     }
 
     @MainActor

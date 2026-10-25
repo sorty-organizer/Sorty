@@ -222,6 +222,7 @@ public final class AnalyticsManager: ObservableObject {
         source: String = "navigation",
         previousScreen: String? = nil
     ) {
+        ReliabilityManager.shared.recordScreen(screen)
         var properties: [String: Any] = [
             "screen": screen,
             "source": source,
@@ -260,6 +261,7 @@ public final class AnalyticsManager: ObservableObject {
         outcome: String,
         properties: [String: Any] = [:]
     ) {
+        ReliabilityManager.shared.recordWorkflow(workflow: workflow, stage: stage, outcome: outcome)
         capture(
             event: AnalyticsEventName.workflow(workflow: workflow, stage: stage, outcome: outcome),
             properties: properties.merging([

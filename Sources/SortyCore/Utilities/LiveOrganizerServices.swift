@@ -22,9 +22,16 @@ public enum LiveOrganizerServices {
         OrganizerServices.bucketCount = { AnalyticsManager.countBucket($0) }
         OrganizerServices.describeDuration = { AnalyticsManager.durationProperties($0) }
         OrganizerServices.describeGeneration = { AnalyticsManager.generationDurationProperties($0) }
-        OrganizerServices.errorReporter = { error, feature, operation, recoverable in
+        OrganizerServices.errorReporter = { error, feature, operation, recoverable, requestContext in
             ReliabilityManager.shared.capture(
-                error: error, feature: feature, operation: operation, recoverable: recoverable
+                error: error, feature: feature, operation: operation, recoverable: recoverable,
+                requestContext: requestContext
+            )
+        }
+        OrganizerServices.requestReporter = { requestID, context, outcome, batch, depth, elapsed, error in
+            ReliabilityManager.shared.recordAIRequest(
+                requestID: requestID, context: context, outcome: outcome.rawValue, batch: batch,
+                adaptiveDepth: depth, elapsed: elapsed, error: error
             )
         }
         OrganizerServices.spanStarter = { name, operation, feature in

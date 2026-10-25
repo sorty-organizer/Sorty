@@ -37,6 +37,9 @@ public final class ReliabilityManager {
     private var isStarting = false
     private var startupGeneration: UInt64 = 0
     private var captureRateLimiter = ReliabilityCaptureRateLimiter()
+    private var breadcrumbRateLimiter = AnalyticsCaptureRateLimiter(
+        maximumEventsPerMinute: 120, maximumEventsPerProcess: 2_000
+    )
     private var launchSpan: ReliabilitySpan?
 
     public var diagnosticSummary: [String: Any] {
@@ -198,7 +201,8 @@ public final class ReliabilityManager {
         error: Error,
         feature: String,
         operation: String,
-        recoverable: Bool = true
+        recoverable: Bool = true,
+        requestContext: AIRequestDiagnosticContext? = nil
     ) {
         guard isActive,
               consent == .granted,
@@ -216,6 +220,7 @@ public final class ReliabilityManager {
             fallback: "unknown_operation"
         )
         let level = Self.level(for: classification, recoverable: recoverable)
+        let requestDetails = requestContext.map(Self.requestDiagnostics) ?? [:]
         let attributes: [String: Any] = [
             "platform_surface": "mac_app",
             "is_internal": InternalTelemetry.isEnabled,
@@ -225,7 +230,7 @@ public final class ReliabilityManager {
             "error_cause": classification.cause,
             "fault": classification.fault.rawValue,
             "recoverable": recoverable,
-        ]
+        ].merging(requestDetails) { current, _ in current }
 
         SentrySDK.logger.error("sorty.reliability.handled_error", attributes: attributes)
         SentrySDK.metrics.count(
@@ -257,7 +262,7 @@ public final class ReliabilityManager {
         let event = Event(level: level)
         event.exceptions = [exception]
         event.transaction = "\(safeFeature).\(safeOperation)"
-        event.extra = Self.errorDiagnostics(error)
+        event.extra = Self.errorDiagnostics(error).merging(requestDetails) { current, _ in current }
         // The version prefix starts clean issues instead of merging into the
         // unlabeled ones still arriving from 1.3.0.
         event.fingerprint = [
@@ -276,7 +281,86 @@ public final class ReliabilityManager {
             scope.setTag(value: classification.cause, key: "error_cause")
             scope.setTag(value: classification.fault.rawValue, key: "fault")
             scope.setTag(value: recoverable ? "true" : "false", key: "recoverable")
+            if let requestContext {
+                scope.setTag(value: requestContext.provider.rawValue, key: "ai_provider")
+                scope.setTag(value: requestContext.endpointKind.rawValue, key: "endpoint_kind")
+            }
         }
+    }
+
+    /// Breadcrumbs give native hangs the recent app workload without enabling
+    /// automatic network, file, interaction, or console collection.
+    public func recordWorkflow(workflow: String, stage: String, outcome: String) {
+        guard let data = Self.workflowDiagnostics(workflow: workflow, stage: stage, outcome: outcome) else { return }
+        addBreadcrumb(category: "sorty.workflow", data: data)
+    }
+
+    public func recordScreen(_ screen: String) {
+        guard let data = Self.screenDiagnostics(screen) else { return }
+        addBreadcrumb(category: "sorty.navigation", data: data)
+    }
+
+    static func screenDiagnostics(_ screen: String) -> [String: Any]? {
+        let screens: Set = ["organize", "history", "duplicates", "exclusions", "watched_folders", "learnings", "settings"]
+        let sections: Set = ["general", "ai_provider", "analysis_and_naming", "organize_rules", "automation", "deeplinks", "finder_integration", "notifications", "permissions", "advanced", "troubleshooting", "help_and_support", "experimental"]
+        guard screens.contains(screen) || (screen.hasPrefix("settings_") && sections.contains(String(screen.dropFirst(9)))) else { return nil }
+        return ["screen": screen]
+    }
+
+    func recordAIRequest(
+        requestID: UUID, context: AIRequestDiagnosticContext, outcome: String,
+        batch: Int, adaptiveDepth: Int, elapsed: TimeInterval, error: Error?
+    ) {
+        var data = Self.requestDiagnostics(context)
+        data["request_id"] = requestID.uuidString
+        data["outcome"] = ["started", "succeeded", "failed", "split_retry"].contains(outcome) ? outcome : "unknown"
+        data["batch_index"] = min(max(batch, 0), 1_000_000)
+        data["adaptive_depth"] = min(max(adaptiveDepth, 0), 9)
+        data["duration_ms"] = elapsed.isFinite ? Int(min(max(elapsed, 0), 3_600) * 1_000) : 0
+        if let error, !Self.shouldIgnore(error) {
+            let classification = Self.classify(error)
+            data["error_cause"] = classification.cause
+            data.merge(Self.errorDiagnostics(error)) { current, _ in current }
+        }
+        addBreadcrumb(category: "sorty.ai_request", data: data)
+    }
+
+    private func addBreadcrumb(category: String, data: [String: Any]) {
+        guard isActive, consent == .granted,
+              !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
+              breadcrumbRateLimiter.shouldCapture() else { return }
+        let breadcrumb = Breadcrumb(level: .info, category: category)
+        breadcrumb.data = data
+        SentrySDK.addBreadcrumb(breadcrumb)
+    }
+
+    static func requestDiagnostics(_ context: AIRequestDiagnosticContext) -> [String: Any] {
+        var data: [String: Any] = [
+            "ai_provider": context.provider.rawValue,
+            "configured_authentication": context.authentication.rawValue,
+            "organization_mode": context.mode.rawValue,
+            "streaming_enabled": context.streaming,
+            "vision_enabled": context.visionEnabled,
+            "endpoint_kind": context.endpointKind.rawValue,
+            "model_family": context.modelFamily,
+            "configured_timeout_seconds": context.timeoutSeconds,
+            "output_token_limit": context.outputTokenLimit,
+        ]
+        if let count = context.fileCount {
+            data["file_count_bucket"] = AnalyticsManager.countBucket(count)
+        }
+        if let count = context.attachmentCount {
+            data["attachment_count_bucket"] = AnalyticsManager.countBucket(count)
+        }
+        return data
+    }
+
+    static func workflowDiagnostics(workflow: String, stage: String, outcome: String) -> [String: Any]? {
+        let workflows: Set = ["organize", "apply", "regenerate", "undo", "duplicate_scan", "app_launch", "model_catalog", "learnings_profile"]
+        let stages: Set = ["started", "preparing", "scanning", "scan_completed", "plan_generation", "plan_ready", "apply", "applied", "apply_started", "restore", "loaded", "completed", "main_window_appeared", "window_ready", "cancel_requested", "cancelled", "failed", "finished"]
+        let outcomes: Set = ["started", "success", "completed", "failed", "cancelled", "empty", "skipped"]
+        guard workflows.contains(workflow), stages.contains(stage), outcomes.contains(outcome) else { return nil }
+        return ["workflow": workflow, "stage": stage, "outcome": outcome]
     }
 
     @discardableResult
@@ -390,6 +474,7 @@ public final class ReliabilityManager {
             SentrySDK.close()
         }
         captureRateLimiter.reset()
+        breadcrumbRateLimiter.reset()
         try? FileManager.default.removeItem(at: Self.cacheDirectory)
     }
 
@@ -666,11 +751,27 @@ public final class ReliabilityManager {
     /// Keep diagnostics numeric or allowlisted. Never serialize NSError userInfo,
     /// decoding contexts, provider bodies, or arbitrary error domains.
     static func errorDiagnostics(_ error: Error) -> [String: Any] {
-        var diagnostics: [String: Any] = ["diagnostics_version": 1]
+        var diagnostics: [String: Any] = ["diagnostics_version": 2]
         var underlying = error
         if let aiError = error as? AIClientError {
             if case .apiError(let statusCode, let message) = aiError, (100...599).contains(statusCode) {
                 diagnostics["http_status"] = statusCode
+                // Only recognize fixed provider codes, never their message,
+                // parameter value, request ID, or arbitrary JSON properties.
+                if message.utf8.count <= 65_536,
+                   let data = message.data(using: .utf8),
+                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let payload = object["error"] as? [String: Any] {
+                    let allowedCodes: Set = [
+                        "model_not_found", "unsupported_parameter", "unsupported_value",
+                        "invalid_api_key", "insufficient_quota", "context_length_exceeded",
+                        "invalid_request_error", "authentication_error", "rate_limit_error",
+                        "overloaded_error", "NOT_FOUND", "INVALID_ARGUMENT", "RESOURCE_EXHAUSTED",
+                    ]
+                    let code = ["code", "type", "status"].compactMap { payload[$0] as? String }
+                        .first { allowedCodes.contains($0) }
+                    diagnostics["provider_error_code"] = code
+                }
                 if statusCode == 413 {
                     // Only fixed hints leave the device. A 413 can also be
                     // synthesized locally for model context/output limits.
@@ -684,6 +785,25 @@ public final class ReliabilityManager {
                     } else {
                         diagnostics["limit_hint"] = "unknown"
                     }
+                }
+            }
+            if case .jsonDecodingError(let context) = aiError {
+                let knownFailures = [
+                    "Invalid JSON response from AI": "invalid_json",
+                    "Response missing required fields": "missing_required_fields",
+                    "Referenced file not found in original list": "unknown_file_reference",
+                    "Empty response from AI": "empty_response",
+                ]
+                if let failure = knownFailures[context] {
+                    diagnostics["decoding_failure"] = failure
+                } else if context.hasPrefix("HTTP 200 contained no completion text (") {
+                    diagnostics["decoding_failure"] = "empty_completion"
+                } else if context == "The provider returned a JSON value that was not a chat-completion object." {
+                    diagnostics["decoding_failure"] = "invalid_envelope"
+                } else if context == "The model stream ended before its completion event." {
+                    diagnostics["decoding_failure"] = "incomplete_stream"
+                } else {
+                    diagnostics["decoding_failure"] = "unknown"
                 }
             }
             if case .networkError(let wrapped) = aiError { underlying = wrapped }

@@ -31,8 +31,14 @@ public enum OrganizerServices {
     public static var bucketCount: (Int) -> String = { _ in "unknown" }
     public static var describeDuration: (TimeInterval) -> [String: Any] = { _ in [:] }
     public static var describeGeneration: (GenerationStats?) -> [String: Any] = { _ in [:] }
-    public static var errorReporter: (any Error, String, String, Bool) -> Void =
-        { _, _, _, _ in }
+    public static var errorReporter: (any Error, String, String, Bool, AIRequestDiagnosticContext?) -> Void =
+        { _, _, _, _, _ in }
+    public enum RequestOutcome: String, Sendable {
+        case started, succeeded, failed
+        case splitRetry = "split_retry"
+    }
+    public static var requestReporter: (UUID, AIRequestDiagnosticContext, RequestOutcome, Int, Int, TimeInterval, (any Error)?) -> Void =
+        { _, _, _, _, _, _, _ in }
     public static var spanStarter: (String, String, String) -> OrganizerSpan? =
         { _, _, _ in nil }
     public static var previewReporter: (String, String?, UUID?, UUID?) -> Void =
@@ -76,9 +82,17 @@ public enum OrganizerServices {
         error: any Error,
         feature: String,
         operation: String,
-        recoverable: Bool = true
+        recoverable: Bool = true,
+        requestContext: AIRequestDiagnosticContext? = nil
     ) {
-        errorReporter(error, feature, operation, recoverable)
+        errorReporter(error, feature, operation, recoverable, requestContext)
+    }
+
+    public static func recordRequest(
+        id: UUID, context: AIRequestDiagnosticContext, outcome: RequestOutcome,
+        batch: Int, adaptiveDepth: Int, elapsed: TimeInterval, error: (any Error)? = nil
+    ) {
+        requestReporter(id, context, outcome, batch, adaptiveDepth, elapsed, error)
     }
 
     public static func startSpan(

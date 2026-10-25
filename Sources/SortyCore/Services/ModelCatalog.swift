@@ -360,7 +360,8 @@ public final class ModelCatalog: ObservableObject {
             ReliabilityManager.shared.capture(
                 error: error,
                 feature: "model_catalog",
-                operation: "refresh_provider_\(provider.rawValue)"
+                operation: "refresh_provider_\(provider.rawValue)",
+                requestContext: config.map { AIRequestDiagnosticContext(config: $0) }
             )
         }
     }

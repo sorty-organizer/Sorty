@@ -52,6 +52,74 @@ final class ReliabilityCaptureRateLimiterTests: XCTestCase {
 
 @MainActor
 final class ReliabilityErrorDiagnosticsTests: XCTestCase {
+    func testRequestContextRetainsSafeFactsWithoutConfigurationSecrets() {
+        let secret = "private-customer-model-and-api-key"
+        var config = AIConfig(
+            provider: .openAICompatible, apiURL: "https://private.example/\(secret)?key=\(secret)",
+            apiKey: secret, model: secret, requestTimeout: 75, maxTokens: 2048,
+            enableStreaming: true, enableVision: false
+        )
+        let context = AIRequestDiagnosticContext(config: config, fileCount: 350, attachmentCount: 0)
+        config.provider = .gemini
+        let data = ReliabilityManager.requestDiagnostics(context)
+
+        XCTAssertEqual(data["ai_provider"] as? String, AIProvider.openAICompatible.rawValue)
+        XCTAssertEqual(data["endpoint_kind"] as? String, "custom")
+        XCTAssertEqual(data["model_family"] as? String, "other")
+        XCTAssertEqual(data["configured_timeout_seconds"] as? Int, 75)
+        XCTAssertEqual(data["output_token_limit"] as? Int, 2048)
+        XCTAssertFalse(String(describing: data).contains(secret))
+        XCTAssertFalse(String(reflecting: context).contains(secret))
+        XCTAssertFalse(String(describing: data).contains("private.example"))
+    }
+
+    func testRequestContextDistinguishesProviderLocalAndOnDeviceEndpoints() {
+        let cases: [(AIProvider, String?, AIRequestDiagnosticContext.EndpointKind)] = [
+            (.gemini, AIProvider.gemini.defaultAPIURL, .provider),
+            (.ollama, "http://localhost:11434", .local),
+            (.openAICompatible, "http://[::1]:8080/v1", .local),
+            (.openAI, "https://proxy.example/v1", .custom),
+            (.appleFoundationModel, nil, .onDevice),
+        ]
+        for (provider, url, expected) in cases {
+            let config = AIConfig(provider: provider, apiURL: url, model: "customer-model")
+            XCTAssertEqual(AIRequestDiagnosticContext(config: config).endpointKind, expected)
+        }
+    }
+
+    func testProviderCodesAndDecodingHintsDoNotForwardUntrustedContent() {
+        let message = #"{"error":{"code":"model_not_found","message":"private-file secret-token","param":"private-param"}}"#
+        let data = ReliabilityManager.errorDiagnostics(AIClientError.apiError(statusCode: 404, message: message))
+        XCTAssertEqual(data["provider_error_code"] as? String, "model_not_found")
+        XCTAssertFalse(String(describing: data).contains("private"))
+        XCTAssertFalse(String(describing: data).contains("secret-token"))
+        let unknown = ReliabilityManager.errorDiagnostics(AIClientError.apiError(
+            statusCode: 400, message: #"{"error":{"code":"private-secret-code"}}"#
+        ))
+        XCTAssertNil(unknown["provider_error_code"])
+        let cases = [
+            ("Invalid JSON response from AI", "invalid_json"),
+            ("Response missing required fields", "missing_required_fields"),
+            ("HTTP 200 contained no completion text (private-response)", "empty_completion"),
+            ("The model stream ended before its completion event.", "incomplete_stream"),
+            ("private-response", "unknown"),
+        ]
+        for (context, expected) in cases {
+            let diagnostics = ReliabilityManager.errorDiagnostics(AIClientError.jsonDecodingError(context: context))
+            XCTAssertEqual(diagnostics["decoding_failure"] as? String, expected)
+            XCTAssertFalse(String(describing: diagnostics).contains("private-response"))
+        }
+    }
+
+    func testBreadcrumbsRejectUnknownWorkflowAndScreenValues() {
+        XCTAssertNotNil(ReliabilityManager.workflowDiagnostics(workflow: "duplicate_scan", stage: "scanning", outcome: "started"))
+        XCTAssertNil(ReliabilityManager.workflowDiagnostics(workflow: "private-folder", stage: "scanning", outcome: "started"))
+        XCTAssertNil(ReliabilityManager.workflowDiagnostics(workflow: "organize", stage: "private-stage", outcome: "started"))
+        XCTAssertNil(ReliabilityManager.workflowDiagnostics(workflow: "organize", stage: "started", outcome: "private-outcome"))
+        XCTAssertNotNil(ReliabilityManager.screenDiagnostics("settings_ai_provider"))
+        XCTAssertNil(ReliabilityManager.screenDiagnostics("settings_private-customer"))
+    }
+
     func testProviderStatusAndQuotaHaveDistinctCausesWithoutResponseBody() {
         let body = "private response with a filename and credential"
         let failure = AIClientError.apiError(statusCode: 503, message: body)

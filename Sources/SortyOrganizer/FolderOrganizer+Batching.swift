@@ -222,6 +222,16 @@ extension FolderOrganizer {
             throw CancellationError()
         }
 
+        let requestID = UUID()
+        let context = AIRequestDiagnosticContext(
+            config: job.client.config, fileCount: job.files.count, attachmentCount: job.batchImages.count
+        )
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        await OrganizerServices.recordRequest(
+            id: requestID, context: context, outcome: .started,
+            batch: job.batchIndex, adaptiveDepth: adaptiveDepth, elapsed: 0
+        )
+
         do {
             await job.streamChannel.beginRequest(files: job.files)
             if job.batchImages.isEmpty {
@@ -230,6 +240,10 @@ extension FolderOrganizer {
                     customInstructions: job.requestInstructions,
                     personaPrompt: job.personaPrompt,
                     temperature: job.temperature
+                )
+                await OrganizerServices.recordRequest(
+                    id: requestID, context: context, outcome: .succeeded, batch: job.batchIndex,
+                    adaptiveDepth: adaptiveDepth, elapsed: ProcessInfo.processInfo.systemUptime - startedAt
                 )
                 return [plan]
             }
@@ -240,13 +254,24 @@ extension FolderOrganizer {
                 personaPrompt: job.personaPrompt,
                 temperature: job.temperature
             )
+            await OrganizerServices.recordRequest(
+                id: requestID, context: context, outcome: .succeeded, batch: job.batchIndex,
+                adaptiveDepth: adaptiveDepth, elapsed: ProcessInfo.processInfo.systemUptime - startedAt
+            )
             return [plan]
         } catch {
             if job.cancellationRequested || Task.isCancelled {
                 throw CancellationError()
             }
-            guard adaptiveDepth < maxAdaptiveDepth,
-                  Self.shouldSplitAnalysisBatch(after: error, fileCount: job.files.count) else {
+            if Self.isCancellationError(error) { throw error }
+            let willSplit = adaptiveDepth < maxAdaptiveDepth &&
+                Self.shouldSplitAnalysisBatch(after: error, fileCount: job.files.count)
+            await OrganizerServices.recordRequest(
+                id: requestID, context: context, outcome: willSplit ? .splitRetry : .failed,
+                batch: job.batchIndex, adaptiveDepth: adaptiveDepth,
+                elapsed: ProcessInfo.processInfo.systemUptime - startedAt, error: error
+            )
+            guard willSplit else {
                 throw error
             }
 

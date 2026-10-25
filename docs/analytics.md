@@ -55,6 +55,71 @@ Useful saved searches for `environment:production`:
 
 Handled-error fingerprints start with `sorty.handled_error.v2`. Builds through 1.3.0 sent these errors without an exception or message, so Sentry lists them as `<unlabeled event>`. Use their `error_cause` tag. Those issues stop receiving events once users update.
 
+### Root-cause context
+
+The readable exception titles, fault classification, levels, and v2 fingerprints
+remain the error style. Diagnostic details live in event extras and breadcrumbs;
+successful or retried requests do not create additional issues.
+
+Generation, same-configuration preview regeneration, and configured model-catalog refresh errors
+can include an immutable `AIRequestDiagnosticContext`. This snapshot discards
+credentials, prompts, model IDs, endpoint URLs, and file metadata when created.
+It reports only the following facts:
+
+| Field | Meaning |
+| --- | --- |
+| `ai_provider` | Selected provider enum, also available as an event tag. |
+| `endpoint_kind` | `provider`, `local`, `custom`, or `on_device`, also an event tag. It never contains a host or path. |
+| `model_family` | `gpt`, `claude`, `gemini`, `llama`, `qwen`, `deepseek`, or `other`. Exact model names stay local. |
+| `configured_authentication` | Configured auth-method enum. It does not probe credentials or establish that authentication succeeded. |
+| `organization_mode` | Organize or rename mode. |
+| `streaming_enabled`, `vision_enabled` | Configuration switches, not proof that images were attached. |
+| `configured_timeout_seconds`, `output_token_limit` | Bounded configured request budgets. |
+| `file_count_bucket`, `attachment_count_bucket` | Existing count buckets. Attachment counts are available on batch breadcrumbs. |
+
+Event extras describe the initial workflow configuration. Batch breadcrumbs
+describe each actual batch client's configuration, including adaptive halves.
+Model-catalog calls without a supplied configuration omit the request snapshot.
+The provider remains identifiable in their operation name.
+
+Diagnostics version 2 recognizes a fixed allowlist of structured provider error
+codes, such as `model_not_found`, `unsupported_parameter`, and
+`context_length_exceeded`. Unknown codes, messages, parameter values, request
+IDs, and response fields are discarded. JSON failures get fixed hints for
+invalid JSON, missing fields, unknown file references, empty completions,
+invalid envelopes, and incomplete streams when the client retains a recognized
+internal reason. Other decoding contexts become `unknown`. These hints do not
+change fault classification or grouping.
+
+Sentry breadcrumbs add recent context to later errors, native crashes, and hangs:
+
+- `sorty.ai_request` records `started`, `succeeded`, `split_retry`, or `failed`,
+  with a random ID for that one batch attempt, batch index, adaptive depth,
+  monotonic elapsed milliseconds, request facts, and sanitized error causes.
+  Pair the ID's start and terminal entries when examining concurrent batches.
+  These describe adaptive batch retries; they do not count transport retries
+  hidden inside a client. Expected cancellation produces no failure breadcrumb.
+- `sorty.workflow` records allowlisted workflow, stage, and outcome triples,
+  including duplicate scanning and manual organization stages.
+- `sorty.navigation` records only known main screens and Settings section names.
+
+All three categories require active Sentry, granted analytics consent, and
+internet access under the privacy policy. A separate budget of 120 breadcrumbs
+per minute and 2,000 per process prevents them from consuming the handled-error
+capture budget. Sentry's bounded breadcrumb history and this rate limit can
+truncate a long or retry-heavy workflow. Missing terminal entries alone do not
+prove that a request hung. Context from different windows can coexist in the
+same process history. No per-file or per-stream-token breadcrumb is emitted.
+
+Use `ai_provider:gemini endpoint_kind:provider` alongside the existing event-kind
+and fault filters, then inspect diagnostic extras and preceding request entries.
+For HTTP 404, distinguish a recognized `model_not_found` code from a custom
+endpoint or a model-list failure. For JSON errors, inspect the decoding hint,
+streaming setting, and adaptive retries. For hangs, use recent navigation and
+workflow entries to identify the workload before collecting a system trace.
+This context assists diagnosis; it does not turn a sampled stack into proof of
+causation or supply details missing from older builds.
+
 | Event | Surface | Purpose |
 |---|---|---|
 | `$pageview` | Website | Visits to each public route, using a stable page name, sanitized path, and previous public route |

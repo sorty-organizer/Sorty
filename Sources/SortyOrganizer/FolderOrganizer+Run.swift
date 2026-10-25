@@ -120,12 +120,15 @@ extension FolderOrganizer {
 
     private func performOrganization(directory: URL, customPrompt: String?, temperature: Double?, runToken: UInt64) async throws {
         let analyticsStartedAt = Date()
+        let diagnosticConfig = aiClient?.config ?? aiConfig
+        var diagnosticFileCount: Int?
         guard aiClient != nil else {
             let error = OrganizationError.clientNotConfigured
             OrganizerServices.capture(
                 error: error,
                 feature: "organize",
-                operation: "generate_plan"
+                operation: "generate_plan",
+                requestContext: diagnosticConfig.map { AIRequestDiagnosticContext(config: $0) }
             )
             throw error
         }
@@ -140,6 +143,7 @@ extension FolderOrganizer {
             currentDirectory = directory
 
             let files = try await scanPhase(directory: directory)
+            diagnosticFileCount = files.count
 
             if files.isEmpty {
                 stopTimeoutTimer()
@@ -272,7 +276,8 @@ extension FolderOrganizer {
             OrganizerServices.capture(
                 error: error,
                 feature: "organize",
-                operation: "generate_plan"
+                operation: "generate_plan",
+                requestContext: diagnosticConfig.map { AIRequestDiagnosticContext(config: $0, fileCount: diagnosticFileCount) }
             )
             throw error
         }

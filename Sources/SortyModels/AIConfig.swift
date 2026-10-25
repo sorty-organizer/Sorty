@@ -9,6 +9,54 @@ import Foundation
 import SwiftUI
 import SortyFileSystem
 
+/// Immutable request facts for reliability reporting. Retains no credentials,
+/// model IDs, URLs, prompts, or file metadata from the source configuration.
+public struct AIRequestDiagnosticContext: Sendable {
+    public enum EndpointKind: String, Sendable {
+        case provider, local, custom
+        case onDevice = "on_device"
+    }
+
+    public let provider: AIProvider
+    public let authentication: ProviderAuthMethod
+    public let mode: OrganizationMode
+    public let streaming: Bool
+    public let visionEnabled: Bool
+    public let endpointKind: EndpointKind
+    public let modelFamily: String
+    public let timeoutSeconds: Int
+    public let outputTokenLimit: Int
+    public let fileCount: Int?
+    public let attachmentCount: Int?
+
+    public init(config: AIConfig, fileCount: Int? = nil, attachmentCount: Int? = nil) {
+        provider = config.provider
+        authentication = config.authMethod(for: config.provider)
+        mode = config.mode
+        streaming = config.enableStreaming
+        visionEnabled = config.enableVision
+        let model = config.model.lowercased().split(separator: "/").last.map(String.init) ?? ""
+        modelFamily = ["gpt", "claude", "gemini", "llama", "qwen", "deepseek"]
+            .first { model.hasPrefix($0) } ?? "other"
+        let host = config.apiURL.flatMap(URL.init(string:))?.host?.lowercased()
+        let providerHost = config.provider.defaultAPIURL.flatMap(URL.init(string:))?.host?.lowercased()
+        if config.provider == .appleFoundationModel {
+            endpointKind = .onDevice
+        } else if let host, ["localhost", "127.0.0.1", "::1", "[::1]"].contains(host) {
+            endpointKind = .local
+        } else if let host, host == providerHost {
+            endpointKind = .provider
+        } else {
+            endpointKind = .custom
+        }
+        timeoutSeconds = config.requestTimeout.isFinite
+            ? Int(min(max(config.requestTimeout, 0), 3_600)) : 0
+        outputTokenLimit = min(max(config.maxTokens ?? config.provider.defaultOrganizeMaxTokens, 0), 1_000_000)
+        self.fileCount = fileCount.map { min(max($0, 0), 1_000_000) }
+        self.attachmentCount = attachmentCount.map { min(max($0, 0), 1_000_000) }
+    }
+}
+
 public enum ProviderAuthMethod: String, Codable, CaseIterable, Sendable {
     case apiKey = "api_key"
     case accountSignIn = "account_sign_in"
