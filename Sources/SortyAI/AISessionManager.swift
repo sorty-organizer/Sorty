@@ -9,6 +9,34 @@
 import Foundation
 import Combine
 
+/// Keeps a pooled connection usable until its last caller releases it.
+/// Removing it from the pool prevents reuse without racing request creation.
+public final class AISession: Sendable {
+    private let session: URLSession
+
+    init(_ session: URLSession) {
+        self.session = session
+    }
+
+    public func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        defer { withExtendedLifetime(self) {} }
+        return try await session.data(for: request)
+    }
+
+    public func bytes(for request: URLRequest) async throws -> (URLSession.AsyncBytes, URLResponse) {
+        defer { withExtendedLifetime(self) {} }
+        return try await session.bytes(for: request)
+    }
+
+    deinit {
+        // Active streaming tasks may outlive the handle. Let them finish.
+        let session = session
+        Task.detached(priority: .utility) {
+            session.finishTasksAndInvalidate()
+        }
+    }
+}
+
 /// Manages shared URLSession instances for AI providers
 @MainActor
 public class AISessionManager: ObservableObject {
@@ -26,7 +54,7 @@ public class AISessionManager: ObservableObject {
         }
 
         private let lock = NSLock()
-        private var sessions: [AIProvider: URLSession] = [:]
+        private var sessions: [AIProvider: AISession] = [:]
         private var signatures: [AIProvider: Signature] = [:]
         private var lastUsed: [AIProvider: Date] = [:]
 
@@ -35,7 +63,7 @@ public class AISessionManager: ObservableObject {
             requestTimeout: TimeInterval,
             resourceTimeout: TimeInterval,
             apiURL: String?
-        ) -> URLSession {
+        ) -> AISession {
             let signature = Signature(
                 requestTimeout: requestTimeout,
                 resourceTimeout: resourceTimeout,
@@ -47,12 +75,9 @@ public class AISessionManager: ObservableObject {
                 lock.unlock()
                 return existing
             }
-            let retired = sessions.removeValue(forKey: provider)
+            sessions.removeValue(forKey: provider)
             signatures.removeValue(forKey: provider)
             lock.unlock()
-            if let retired {
-                AISessionManager.retireDetached(retired)
-            }
 
             let sessionConfig = Self.makeConfiguration(
                 requestTimeout: requestTimeout,
@@ -60,11 +85,11 @@ public class AISessionManager: ObservableObject {
                 provider: provider,
                 apiURL: apiURL
             )
-            let session = NetworkPrivacyPolicy.makeSession(configuration: sessionConfig)
+            let session = AISession(NetworkPrivacyPolicy.makeSession(configuration: sessionConfig))
             lock.lock()
-            // A concurrent caller may have populated while we built; keep the
-            // newest and retire ours instead of leaking either.
-            if sessions[provider] == nil {
+            // A concurrent caller may have populated while we built; reuse it
+            // only when its configuration matches this request.
+            if sessions[provider] == nil || signatures[provider] != signature {
                 sessions[provider] = session
                 signatures[provider] = signature
                 lock.unlock()
@@ -72,11 +97,10 @@ public class AISessionManager: ObservableObject {
             }
             let winner = sessions[provider]
             lock.unlock()
-            AISessionManager.retireDetached(session)
             return winner!
         }
 
-        func removeSession(for provider: AIProvider) -> URLSession? {
+        func removeSession(for provider: AIProvider) -> AISession? {
             lock.lock()
             defer { lock.unlock() }
             signatures.removeValue(forKey: provider)
@@ -84,7 +108,7 @@ public class AISessionManager: ObservableObject {
             return sessions.removeValue(forKey: provider)
         }
 
-        func removeAllSessions() -> [URLSession] {
+        func removeAllSessions() -> [AISession] {
             lock.lock()
             defer { lock.unlock() }
             let retired = Array(sessions.values)
@@ -220,9 +244,9 @@ public class AISessionManager: ObservableObject {
     
     // MARK: - Session Management
     
-    /// Get or create a URLSession for a provider. Storage lives in the
+    /// Get or create an owned session for a provider. Storage lives in the
     /// non-MainActor store; only logging happens here on the MainActor.
-    public func session(for provider: AIProvider, config: AIConfig) -> URLSession {
+    public func session(for provider: AIProvider, config: AIConfig) -> AISession {
         let session = store.pooledSession(
             for: provider,
             requestTimeout: config.requestTimeout,
@@ -429,8 +453,7 @@ public class AISessionManager: ObservableObject {
     }
 
     private func invalidateInternal(provider: AIProvider) {
-        if let retired = store.removeSession(for: provider) {
-            Self.retireDetached(retired)
+        if store.removeSession(for: provider) != nil {
             ModelLog.log("Removed session for \(provider.displayName)", category: "AISessionManager")
         }
 
@@ -442,10 +465,7 @@ public class AISessionManager: ObservableObject {
 
     /// Invalidate all sessions
     public func invalidateAll() {
-        let retiredSessions = store.removeAllSessions()
-        for session in retiredSessions {
-            Self.retireDetached(session)
-        }
+        _ = store.removeAllSessions()
         isPrewarmed = false
         cleanupTask?.cancel()
         cleanupTask = nil
@@ -479,17 +499,6 @@ public class AISessionManager: ObservableObject {
             self.cleanupTask = nil
             self.cleanupStaleSessions()
             self.scheduleCleanup()
-        }
-    }
-
-    /// Stops pooling immediately, then gives freshly returned callers one
-    /// suspension point to create their task before the session rejects work.
-    /// Detached (never MainActor): invalidating a session must not bounce
-    /// through the main thread.
-    nonisolated private static func retireDetached(_ session: URLSession) {
-        Task.detached(priority: .utility) {
-            await Task.yield()
-            session.finishTasksAndInvalidate()
         }
     }
 

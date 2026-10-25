@@ -109,9 +109,9 @@ enum AIRequestSupport {
     }
     nonisolated(unsafe) static var sessionOverride: (@Sendable (AIConfig) async -> URLSession)?
 
-    static func session(for config: AIConfig) async -> URLSession {
+    static func session(for config: AIConfig) async -> AISession {
         if let sessionOverride {
-            return await sessionOverride(config)
+            return AISession(await sessionOverride(config))
         }
         return await AISessionManager.shared.session(for: config.provider, config: config)
     }
