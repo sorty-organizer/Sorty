@@ -34,6 +34,16 @@ public extension FocusedValues {
 
 public struct SortyCommands: Commands {
     @FocusedValue(\.appState) private var appState
+    @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
+
+    /// Release update checks need the network; debug builds rebuild locally.
+    private var isUpdateCheckBlocked: Bool {
+        #if DEBUG
+        false
+        #else
+        internetPrivacyModeEnabled
+        #endif
+    }
 
     private var sidebarItems: [SidebarNavigationItem] {
         SidebarNavigationItem.mainItems
@@ -51,7 +61,7 @@ public struct SortyCommands: Commands {
             Button("Check for Updates...", systemImage: "arrow.triangle.2.circlepath") {
                 appState?.checkForUpdatesInteractive()
             }
-            .disabled(appState == nil)
+            .disabled(appState == nil || isUpdateCheckBlocked)
         }
 
         CommandGroup(replacing: .appSettings) {

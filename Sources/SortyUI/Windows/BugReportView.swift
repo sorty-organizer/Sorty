@@ -88,6 +88,9 @@ public struct BugReportView: View {
                 Toggle("Also send this description to Sentry (anonymous)", isOn: $sendToSentry)
                     .disabled(!canSubmitBugFeedback)
                     .accessibilityIdentifier("SendBugReportToSentryToggle")
+                    .onChange(of: canSubmitBugFeedback, initial: true) { _, canSubmit in
+                        if !canSubmit { sendToSentry = false }
+                    }
 
                 if sendToSentry {
                     VStack(alignment: .leading, spacing: 12) {
