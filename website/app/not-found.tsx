@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { ArrowLeft, MagnifyingGlass } from '@phosphor-icons/react'
+import { ArrowLeft, FolderSearch } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { FileIconField } from '@/components/file-icon-field'
 import { SortyLogo } from '@/components/sorty-logo'
@@ -46,7 +46,7 @@ export default function NotFound() {
   }
 
   return (
-    <main id="main" className="relative min-h-dvh overflow-hidden bg-background text-foreground">
+    <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_25%,oklch(0.62_0.19_256_/_0.22),transparent_32%),linear-gradient(180deg,oklch(0.16_0.004_260),oklch(0.08_0_0))]" />
       <FileIconField
         collapseTarget={target}
@@ -71,7 +71,7 @@ export default function NotFound() {
           className="mb-8 flex size-16 items-center justify-center rounded-2xl border border-white/12 bg-white/8 shadow-2xl shadow-black/40 backdrop-blur-xl"
           data-file-bounce
         >
-          <MagnifyingGlass className="size-8 text-sky-200" strokeWidth={1.7} />
+          <FolderSearch className="size-8 text-sky-200" strokeWidth={1.7} />
         </div>
 
         <p

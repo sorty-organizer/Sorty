@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Copy, DownloadSimple, TerminalWindow, X } from '@phosphor-icons/react'
+import { Check, Copy, Download, Terminal, X } from 'lucide-react'
 import type { AnchorHTMLAttributes, ReactNode } from 'react'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -36,10 +36,16 @@ export function DownloadButton({
 }: DownloadButtonProps) {
   const [showNotice, setShowNotice] = useState(false)
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>('idle')
+  const intentShellRef = useRef<HTMLSpanElement>(null)
   const copyFeedbackTimeout = useRef<number | null>(null)
   const modalPanelRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
   const descriptionId = useId()
+
+  const widthClassName = className
+    ?.split(/\s+/)
+    .filter((token) => /^(?:\w+:)*w-/.test(token))
+    .join(' ')
 
   const dismissDownloadNotice = useCallback(
     (source: 'backdrop' | 'close_button' | 'done_button' | 'escape_key') => {
@@ -82,6 +88,60 @@ export function DownloadButton({
       if (copyFeedbackTimeout.current !== null) {
         window.clearTimeout(copyFeedbackTimeout.current)
       }
+    }
+  }, [])
+
+  useEffect(() => {
+    const shell = intentShellRef.current
+    if (!shell || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return
+    }
+
+    let frame = 0
+    let pointerX = 0
+    let pointerY = 0
+
+    const updateIntent = () => {
+      frame = 0
+      const rect = shell.getBoundingClientRect()
+      const dx = Math.max(rect.left - pointerX, 0, pointerX - rect.right)
+      const dy = Math.max(rect.top - pointerY, 0, pointerY - rect.bottom)
+      const distance = Math.hypot(dx, dy)
+      const intent = Math.max(0, 1 - distance / 180) ** 2
+
+      shell.style.setProperty('--download-intent', intent.toFixed(3))
+    }
+
+    const scheduleIntent = (event: PointerEvent) => {
+      pointerX = event.clientX
+      pointerY = event.clientY
+
+      if (!frame) {
+        frame = window.requestAnimationFrame(updateIntent)
+      }
+    }
+
+    const resetIntent = () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+        frame = 0
+      }
+
+      shell.style.setProperty('--download-intent', '0')
+    }
+
+    window.addEventListener('pointermove', scheduleIntent, { passive: true })
+    window.addEventListener('pointerleave', resetIntent)
+    window.addEventListener('blur', resetIntent)
+
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+      }
+
+      window.removeEventListener('pointermove', scheduleIntent)
+      window.removeEventListener('pointerleave', resetIntent)
+      window.removeEventListener('blur', resetIntent)
     }
   }, [])
 
@@ -183,7 +243,7 @@ export function DownloadButton({
     typeof document !== 'undefined' &&
     createPortal(
       <div
-        className="download-modal-backdrop fixed inset-0 z-[100] grid place-items-end bg-black/60 p-3 backdrop-blur-md sm:place-items-center sm:p-6"
+        className="download-modal-backdrop fixed inset-0 z-[100] grid place-items-end bg-black/45 p-3 backdrop-blur-md sm:place-items-center sm:p-6"
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) {
             dismissDownloadNotice('backdrop')
@@ -197,12 +257,21 @@ export function DownloadButton({
           aria-labelledby={titleId}
           aria-describedby={descriptionId}
           tabIndex={-1}
-          className="download-modal-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-[480px] overflow-x-hidden overflow-y-auto rounded-3xl border border-white/10 bg-card text-left shadow-2xl shadow-black outline-none sm:max-h-[calc(100dvh-3rem)]"
+          className="download-modal-panel relative max-h-[calc(100dvh-1.5rem)] w-full max-w-[480px] overflow-x-hidden overflow-y-auto rounded-[1.75rem] border border-white/15 bg-background/95 text-left shadow-2xl shadow-black/55 outline-none backdrop-blur-2xl sm:max-h-[calc(100dvh-3rem)]"
         >
-          <div className="relative p-4 sm:p-6">
-            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-4">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-brand text-white">
-                <DownloadSimple className="size-5" />
+          <div
+            aria-hidden
+            className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/70 to-transparent"
+          />
+          <div
+            aria-hidden
+            className="absolute -right-20 -top-24 size-56 rounded-full bg-primary/20 blur-3xl"
+          />
+
+          <div className="relative p-4 sm:p-5">
+            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3.5">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-brand text-white shadow-lg shadow-brand/30">
+                <Download className="size-5" />
               </div>
 
               <div className="min-w-0">
@@ -214,7 +283,7 @@ export function DownloadButton({
                 </p>
                 <p
                   id={descriptionId}
-                  className="mt-1 max-w-sm text-sm text-muted-foreground"
+                  className="mt-1 max-w-[36ch] text-sm leading-snug text-muted-foreground"
                 >
                   Open Sorty.zip, move Sorty.app to Applications, then run this
                   Terminal command if macOS blocks the app.
@@ -224,21 +293,21 @@ export function DownloadButton({
               <button
                 type="button"
                 onClick={() => dismissDownloadNotice('close_button')}
-                className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors duration-300 ease-fluid hover:bg-secondary hover:text-foreground"
+                className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                 aria-label="Dismiss download notice"
               >
                 <X className="size-4" />
               </button>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-border bg-secondary p-2">
-              <div className="flex items-center gap-2 px-2 pb-2 pt-1 text-xs font-medium text-muted-foreground">
-                <TerminalWindow className="size-4" />
+            <div className="mt-4 rounded-2xl border border-border bg-secondary/55 p-2 shadow-inner shadow-black/20">
+              <div className="flex items-center gap-2 px-2 pb-2 pt-1 text-[11px] font-medium text-muted-foreground">
+                <Terminal className="size-3.5" />
                 Terminal
               </div>
               <div
                 className={cn(
-                  'copy-command-row grid gap-2 rounded-lg border border-white/10 bg-background p-2 transition-colors duration-300 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center',
+                  'copy-command-row grid gap-2 rounded-xl border border-white/10 bg-background/70 p-2 transition-colors duration-300 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center',
                   copySucceeded && 'is-copied border-brand/45',
                   copyFailed && 'border-destructive/55',
                 )}
@@ -250,7 +319,7 @@ export function DownloadButton({
                   type="button"
                   onClick={() => void copyCommand()}
                   className={cn(
-                    'copy-command-button grid h-8 min-w-20 shrink-0 place-items-center rounded-sm px-3 text-xs font-medium',
+                    'copy-command-button grid h-8 min-w-[72px] shrink-0 place-items-center rounded-lg px-2.5 text-xs font-medium',
                     copySucceeded && 'is-copied gap-1.5 bg-brand text-white',
                     copyFailed && 'is-failed gap-1.5 bg-destructive text-white',
                     copyFeedback === 'idle' &&
@@ -272,7 +341,7 @@ export function DownloadButton({
                       copyFeedback === 'idle' && 'is-visible',
                     )}
                   >
-                    <Copy className="size-4" />
+                    <Copy className="size-3.5" />
                     Copy
                   </span>
                   <span
@@ -282,7 +351,7 @@ export function DownloadButton({
                       copySucceeded && 'is-visible is-copied',
                     )}
                   >
-                    <Check className="copy-command-check size-4" />
+                    <Check className="copy-command-check size-3.5" />
                     Copied
                   </span>
                   <span
@@ -292,7 +361,7 @@ export function DownloadButton({
                       copyFailed && 'is-visible',
                     )}
                   >
-                    <X className="size-4" />
+                    <X className="size-3.5" />
                     Retry
                   </span>
                 </button>
@@ -315,9 +384,9 @@ export function DownloadButton({
               <button
                 type="button"
                 onClick={() => dismissDownloadNotice('done_button')}
-                className="justify-self-start rounded-lg bg-secondary px-3 py-2 text-sm font-semibold text-foreground transition-[background-color,transform] duration-300 ease-fluid hover:bg-accent active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-ring sm:justify-self-end"
+                className="modal-action-highlight relative justify-self-start overflow-hidden rounded-full border border-border bg-secondary/55 px-4 py-2 text-xs font-medium text-foreground transition-colors hover:bg-secondary sm:justify-self-end"
               >
-                Done
+                <span className="relative z-10">Done</span>
               </button>
             </div>
           </div>
@@ -328,21 +397,28 @@ export function DownloadButton({
 
   return (
     <>
-      <a
-        href={href}
-        onClick={(event) => {
-          onClick?.(event)
-
-          if (!event.defaultPrevented) {
-            showDownloadNotice()
-          }
-        }}
-        className={cn('btn-download inline-flex items-center', className)}
-        data-webmcp-download
-        {...props}
+      <span
+        ref={intentShellRef}
+        className={cn('download-intent-shell', widthClassName)}
       >
-        {children}
-      </a>
+        <div className={cn('download-beam', widthClassName)}>
+          <a
+            href={href}
+            onClick={(event) => {
+              onClick?.(event)
+
+              if (!event.defaultPrevented) {
+                showDownloadNotice()
+              }
+            }}
+            className={cn('btn-download flex items-center rounded-full', className)}
+            data-webmcp-download
+            {...props}
+          >
+            {children}
+          </a>
+        </div>
+      </span>
 
       {notice}
     </>

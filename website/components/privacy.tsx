@@ -1,75 +1,112 @@
-import { Fingerprint, HardDrives, Key, Vault } from '@phosphor-icons/react/ssr'
+import { Lock, ShieldOff, Server, KeyRound, EyeOff } from 'lucide-react'
 import { Reveal } from '@/components/reveal'
-import { GITHUB_URL } from '@/lib/site-metadata'
+
+const GITHUB_URL = 'https://github.com/sorty-organizer/Sorty'
 
 const POINTS = [
   {
-    icon: Vault,
-    title: 'No Sorty server in the middle',
-    body: 'Sorty has no file processing backend. File names and metadata go straight from your Mac to the AI provider you picked. Deep Scan adds file contents only when you turn it on.',
+    icon: ShieldOff,
+    title: 'Optional analytics',
+    body: 'Sorty has no file-processing backend and never sends us file names, paths, contents, prompts, provider responses, or API keys. Anonymous app analytics and crash reports only start if you explicitly allow them, and a denial is never reported.',
   },
   {
-    icon: HardDrives,
-    title: 'Run the AI on your Mac',
-    body: 'Use Ollama or Apple Foundation Models and the organization workflow stays local. Block Internet Connections can enforce that choice.',
+    icon: EyeOff,
+    title: 'Choose who processes your files',
+    body: 'Sorty sends file names and metadata directly to your chosen AI provider. Enable Deep Scan to include file contents.',
   },
   {
-    icon: Fingerprint,
-    title: 'Analytics stay off unless you allow them',
-    body: 'Anonymous app analytics and crash reports only start after you opt in. We never receive file names, paths, contents, prompts, provider responses, or API keys.',
+    icon: Server,
+    title: 'Run AI locally',
+    body: 'Use Ollama or Apple Foundation Models, keep anonymous analytics off, and your organization workflow stays on your Mac. Block Internet Connections can enforce that choice.',
   },
   {
-    icon: Key,
-    title: 'You choose which folders it can open',
-    body: 'Grant access folder by folder. Sorty saves that permission so you can reopen the same folders later.',
+    icon: KeyRound,
+    title: 'Choose which folders to organize',
+    body: 'Grant Sorty access to the folders you want to organize. It saves that permission so you can reopen them later.',
   },
 ]
 
 export function Privacy() {
   return (
-    <section id="privacy" className="scroll-mt-24 px-4 py-24">
-      <div className="mx-auto grid max-w-6xl gap-12 md:grid-cols-12">
-        <Reveal className="md:col-span-5">
-          <div className="md:sticky md:top-32">
-            <p className="text-sm font-medium text-primary">Privacy</p>
-            <h2 className="mt-4 text-4xl font-semibold tracking-tight">
-              Your files go where you send them, and nowhere else
-            </h2>
-            <p className="mt-4 text-base text-muted-foreground">
-              Sorty is{' '}
-              <a
-                href={GITHUB_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium text-foreground underline decoration-white/30 underline-offset-4 transition-colors duration-300 ease-fluid hover:decoration-white"
-                data-analytics-action="source_opened"
-                data-analytics-component="text_link"
-                data-analytics-location="privacy"
-                data-analytics-target="github"
-              >
-                open source
-              </a>{' '}
-              under the GPL v3, so you can read exactly how it handles your data.
+    <section
+      id="privacy"
+      className="section-seam page-section px-4 py-20 sm:py-28"
+    >
+      <div className="mx-auto max-w-5xl">
+        <Reveal className="mx-auto max-w-2xl text-center">
+          <p className="text-sm font-medium text-primary">Privacy</p>
+          <h2 className="mt-3 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+            Your choice of AI. Your data.
+          </h2>
+          <p className="mt-4 text-pretty text-muted-foreground">
+            Use a local model to keep analysis on your Mac, or send file
+            information directly to a cloud provider you choose.
+          </p>
+        </Reveal>
+
+        {/* headline emphasis banner */}
+        <Reveal delay={80} className="mt-12">
+          <div className="glass-surface relative overflow-hidden rounded-3xl border border-primary/30 bg-card/75 p-6 text-center sm:p-8">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 -z-10"
+              style={{
+                background:
+                  'radial-gradient(600px 220px at 50% 0%, color-mix(in oklch, var(--brand) 22%, transparent), transparent 70%)',
+              }}
+            />
+            <span className="inline-flex items-center gap-2 rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary">
+              <Lock className="size-3.5" />
+              No Sorty server sees your files
+            </span>
+            <p className="mx-auto mt-4 max-w-2xl text-balance text-lg font-medium leading-relaxed sm:text-xl">
+              File names and metadata go to your selected AI provider.
+              <span className="text-primary"> Deep Scan</span> adds file contents
+              when enabled. Sorty does not route that data through its developers.
             </p>
           </div>
         </Reveal>
 
-        <ul className="space-y-4 md:col-span-7">
-          {POINTS.map((point, i) => (
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {POINTS.map((p, i) => (
             <Reveal
-              key={point.title}
-              as="li"
-              delay={i * 100}
-              className="glass-surface flex gap-4 rounded-2xl bg-card p-6"
+              key={p.title}
+              delay={(i % 2) * 80}
+              className="glass-surface rounded-3xl border border-border bg-card/70 p-6 transition-colors hover:border-primary/40"
             >
-              <point.icon className="mt-1 size-6 shrink-0 text-primary" aria-hidden />
-              <div>
-                <h3 className="text-lg font-semibold">{point.title}</h3>
-                <p className="mt-2 text-base text-muted-foreground">{point.body}</p>
+              <div className="flex items-start gap-4">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                  <p.icon className="size-5" />
+                </span>
+                <div>
+                  <h3 className="text-lg font-medium">{p.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {p.body}
+                  </p>
+                </div>
               </div>
             </Reveal>
           ))}
-        </ul>
+        </div>
+
+        <Reveal className="mt-6">
+          <p className="glass-surface rounded-3xl border border-border bg-card/60 p-5 text-center text-sm text-muted-foreground">
+            Sorty is{' '}
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
+              data-analytics-action="source_opened"
+              data-analytics-component="text_link"
+              data-analytics-location="privacy"
+              data-analytics-target="github"
+            >
+              open source
+            </a>{' '}
+            under the GPL v3. Read the code to check how it handles your data.
+          </p>
+        </Reveal>
       </div>
     </section>
   )

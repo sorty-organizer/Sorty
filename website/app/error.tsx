@@ -21,7 +21,7 @@ export default function ErrorPage({
   }, [error])
 
   return (
-    <main id="main" className="grid min-h-dvh place-items-center px-6 text-center">
+    <main className="grid min-h-screen place-items-center px-6 text-center">
       <div className="max-w-md">
         <p className="text-sm font-medium text-primary">Something went wrong</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight">

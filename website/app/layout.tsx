@@ -73,7 +73,7 @@ export const metadata: Metadata = {
         url: OG_IMAGE_PATH,
         width: 1102,
         height: 754,
-        alt: 'The Sorty app showing an AI generated organization plan for a Downloads folder.',
+        alt: 'The Sorty app showing an AI-generated organization plan for a Downloads folder.',
       },
     ],
   },
@@ -99,7 +99,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   colorScheme: 'dark',
-  themeColor: '#000000',
+  themeColor: '#0b0c10',
 }
 
 export default function RootLayout({
@@ -113,13 +113,6 @@ export default function RootLayout({
       className={`dark ${geistSans.variable} ${geistMono.variable} bg-background`}
     >
       <body className="font-sans antialiased">
-        <a
-          href="#main"
-          className="fixed left-4 top-4 z-[70] -translate-y-24 rounded-lg bg-foreground px-3 py-2 text-sm font-semibold text-background transition-transform duration-300 ease-fluid focus-visible:translate-y-0"
-        >
-          Skip to content
-        </a>
-        <div aria-hidden className="grain" />
         <AnalyticsProvider>
           <RouteScrollReset />
           <RevealObserver />
