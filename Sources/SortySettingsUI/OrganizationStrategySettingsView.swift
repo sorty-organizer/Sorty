@@ -257,12 +257,10 @@ struct OrganizationStrategySettingsView: View {
             .labelsHidden()
             .settingsFocusableSetting(.strategyNamingTemplate)
 
-            if viewModel.config.selectedNamingPresetId == nil {
-                Text("No naming template. Sorty uses the options below and any additional instructions.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text("Naming template the AI follows when renaming files. Choose None to rely only on the options and instructions below.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             Divider()
 
