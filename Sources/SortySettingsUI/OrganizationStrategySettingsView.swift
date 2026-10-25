@@ -265,27 +265,6 @@ struct OrganizationStrategySettingsView: View {
             Divider()
 
             filenameOptions
-            // Preview of selected preset instructions
-            if let selectedId = viewModel.config.selectedNamingPresetId,
-               let selectedPreset = presetManager.preset(for: selectedId),
-               !selectedPreset.instructions.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(selectedPreset.instructions)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .numericTextTransition(
-                            animationValue: selectedPreset.instructions
-                        )
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
-                        )
-                }
-            }
 
             // Action buttons for custom presets
             if let selectedId = viewModel.config.selectedNamingPresetId,
