@@ -3,7 +3,8 @@ import UniformTypeIdentifiers
 import Combine
 import AppKit
 
-/// Collects one bug description for a GitHub draft and optional Sentry feedback.
+/// Collects one piece of feedback (bug, idea, praise, other) for a GitHub
+/// draft and, when analytics are allowed, an optional Sentry report.
 public struct BugReportView: View {
     private let onClose: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -12,6 +13,10 @@ public struct BugReportView: View {
     @State private var description = ""
     @FocusState private var isDescriptionFocused: Bool
     @State private var area: BugReportArea = .organize
+    @State private var kind: FeedbackKind = .bug
+    @State private var email = ""
+    @State private var attachments: [URL] = []
+    @AppStorage("bugReportIncludeDiagnostics") private var includeDiagnostics = true
     /// The user's choice; kept while internet is blocked so it returns when unblocked.
     @State private var wantsSentry = false
     @State private var sentryEventID: String?
@@ -39,139 +44,148 @@ public struct BugReportView: View {
         return ReliabilityManager.shared.canSubmitBugFeedback
     }
 
+    private static let maxAttachments = 5
+    private static let maxAttachmentBytes = 20 * 1_024 * 1_024
+
+    private var placeholder: String {
+        switch kind {
+        case .bug: "What happened, and what did you expect?"
+        case .idea: "What would make Sorty better for you?"
+        case .praise: "What do you love? We read every one."
+        case .other: "What's on your mind?"
+        }
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                Image(systemName: "ladybug.fill")
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                    .frame(width: 32)
-                    .accessibilityHidden(true)
+            Text("Send feedback")
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Report a bug")
-                        .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    Text("Describe the problem, then review your GitHub issue draft.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                ForEach(FeedbackKind.allCases, id: \.self) { option in
+                    FeedbackKindChip(title: option.displayName, isSelected: kind == option) {
+                        guard kind != option else { return }
+                        kind = option
+                        HapticFeedbackManager.shared.selection()
+                    }
+                    .accessibilityIdentifier("FeedbackKind_\(option.rawValue)")
                 }
             }
 
-            HStack(alignment: .firstTextBaseline) {
-                Text("What happened?")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text("\(description.count)/2,000")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .numericTextTransition(animationValue: description.count)
-            }
-            TextEditor(text: $description)
-                .focused($isDescriptionFocused)
-                .font(.body)
-                .frame(height: showsSentryOption ? (sendToSentry ? 100 : 340) : 180)
-                .padding(4)
-                .background(Color(NSColor.controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
-                    FocusedInstructionBeamBorder(
-                        active: !isDescriptionFocused,
-                        cornerRadius: 8,
-                        duration: 6
-                    )
-                }
-                .accessibilityIdentifier("BugReportDescription")
-                .onChange(of: description) { _, newValue in
-                    if newValue.count > 2_000 {
-                        description = String(newValue.prefix(2_000))
+            VStack(alignment: .leading, spacing: 0) {
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $description)
+                        .focused($isDescriptionFocused)
+                        .font(.body)
+                        .scrollContentBackground(.hidden)
+                        .accessibilityIdentifier("BugReportDescription")
+                        .onChange(of: description) { _, newValue in
+                            if newValue.count > 2_000 {
+                                description = String(newValue.prefix(2_000))
+                            }
+                        }
+                    if description.isEmpty {
+                        Text(placeholder)
+                            .font(.body)
+                            .foregroundStyle(.tertiary)
+                            .padding(.leading, 5)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                     }
                 }
 
+                if !attachments.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(attachments, id: \.self) { url in
+                                AttachmentChip(name: url.lastPathComponent) {
+                                    attachments.removeAll { $0 == url }
+                                    HapticFeedbackManager.shared.light()
+                                }
+                            }
+                        }
+                    }
+                    .padding(.bottom, 6)
+                    .transition(.opacity)
+                }
+
+                HStack {
+                    Button {
+                        pickAttachments()
+                    } label: {
+                        Label("Attach files", systemImage: "paperclip")
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(attachments.count >= Self.maxAttachments)
+                    .help(sendToSentry
+                        ? "Files are sent with your report."
+                        : "Files are revealed in Finder so you can drag them into the GitHub issue.")
+                    .accessibilityIdentifier("BugReportAttachFilesButton")
+                    Spacer()
+                    Text("\(description.count)/2,000")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .numericTextTransition(animationValue: description.count)
+                }
+            }
+            .padding(10)
+            .frame(maxHeight: .infinity)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
+            }
+            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                handleDrop(providers)
+            }
+
             if showsSentryOption {
-                Toggle("Also send this description to Sentry (anonymous)", isOn: Binding(
+                Toggle("Also send to Sorty's developers via Sentry", isOn: Binding(
                     get: { sendToSentry },
                     set: { wantsSentry = $0 }
                 ))
-                    .disabled(!canSubmitBugFeedback)
-                    .accessibilityIdentifier("SendBugReportToSentryToggle")
+                .disabled(!canSubmitBugFeedback)
+                .accessibilityIdentifier("SendBugReportToSentryToggle")
 
                 if sendToSentry {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Area")
-                            .font(.subheadline.weight(.semibold))
-
-                        BugReportAreaControl(selection: $area)
-                            .frame(maxWidth: .infinity, minHeight: 40)
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Anonymous. No account, name, or email. Sentry discards IP addresses and builds no profile.")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-
-                            // One grid, not two stacks, so each row stays level even
-                            // when a label wraps to a second line.
-                            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 5) {
-                                GridRow {
-                                    Text("Sent to Sentry")
-                                        .font(.caption.weight(.semibold))
-                                    Text("Never sent")
-                                        .font(.caption.weight(.semibold))
-                                }
-                                GridRow {
-                                    sentryListRow("The description text you typed")
-                                    sentryExcludedRow("Name, email, or attachments")
-                                }
-                                GridRow {
-                                    sentryListRow("A linked \"User bug report\" event")
-                                    sentryExcludedRow("File names, paths, or contents")
-                                }
-                                GridRow {
-                                    sentryListRow("Sorty version, build, release channel")
-                                    sentryExcludedRow("Prompts, AI responses, or API keys")
-                                }
-                                GridRow {
-                                    sentryListRow("macOS version and chip type")
-                                    sentryExcludedRow("Screenshots, logs, or raw error text")
-                                }
-                                GridRow {
-                                    Text("Chosen area: \(area.displayName)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .gridCellColumns(2)
+                    VStack(alignment: .leading, spacing: 10) {
+                        if kind == .bug {
+                            Picker("Area", selection: $area) {
+                                ForEach(BugReportArea.allCases, id: \.self) { area in
+                                    Text(area.displayName).tag(area)
                                 }
                             }
-                            .accessibilityIdentifier("BugReportSentryDetails")
-
-                            Text("Check your text for private details before you send it. GitHub opens in your browser as a separate public issue.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            .pickerStyle(.menu)
+                            .fixedSize()
+                            .accessibilityIdentifier("BugReportAreaPicker")
                         }
-                        .padding(12)
-                        .background(Color.secondary.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 10)
-                                .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
-                        }
-                        .accessibilityIdentifier("BugReportSentryTransparency")
+                        TextField("Email, if you'd like a reply", text: $email)
+                            .textFieldStyle(.roundedBorder)
+                            .textContentType(.emailAddress)
+                            .accessibilityIdentifier("BugReportEmailField")
+                        Text("Your text, attachments, and email (if given) go to Sentry. Nothing else is identified; IP addresses are discarded.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .transition(
-                        reduceMotion
-                            ? .opacity
-                            : .asymmetric(
-                                insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),
-                                removal: .opacity
-                            )
-                    )
+                    .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+                    .accessibilityIdentifier("BugReportSentryTransparency")
                 }
 
                 if !canSubmitBugFeedback {
-                    Text("Sentry sharing stays off while Block Internet Connections is on. Turn it off in Settings, Privacy & Permissions to share with Sentry.")
+                    Text("Sentry sharing stays off while Block Internet Connections is on.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle("Include diagnostics", isOn: $includeDiagnostics)
+                    .accessibilityIdentifier("BugReportIncludeDiagnosticsToggle")
+                Text("Sorty version, macOS version, and chip type. No file names, paths, or contents.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             if let errorMessage {
@@ -181,55 +195,77 @@ public struct BugReportView: View {
                     .accessibilityAddTraits(.isStaticText)
             }
 
-            if !sendToSentry {
-                Spacer(minLength: 0)
-            }
-
             HStack {
+                Text(ReliabilityManager.diagnosticsSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .textSelection(.enabled)
                 Spacer()
                 Button("Cancel") { onClose() }
                     .buttonStyle(.sortyBordered)
                     .keyboardShortcut(.cancelAction)
-                Button("Open GitHub Issue") { openIssue() }
+                Button(sendToSentry ? "Send" : "Open GitHub Issue") { openIssue() }
                     .buttonStyle(.sortyProminent)
                     .keyboardShortcut(.defaultAction)
                     .accessibilityIdentifier("OpenGitHubBugIssueButton")
             }
         }
         .padding(24)
-        .frame(width: 520, height: showsSentryOption ? 660 : 440, alignment: .top)
+        .frame(width: 560, height: showsSentryOption ? 620 : 520, alignment: .top)
         .animation(
             reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.32, dampingFraction: 0.86),
             value: sendToSentry
         )
+        .animation(.easeInOut(duration: 0.15), value: attachments)
         .modifier(WindowGlassBackground())
+        .onAppear { isDescriptionFocused = true }
         .accessibilityIdentifier("BugReportView")
     }
 
-    private func sentryListRow(_ text: String) -> some View {
-        Label {
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        } icon: {
-            Image(systemName: "checkmark")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.green)
-                .accessibilityHidden(true)
-        }
+    private func pickAttachments() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.message = "Choose screenshots or files to attach."
+        guard panel.runModal() == .OK else { return }
+        addAttachments(panel.urls)
     }
 
-    private func sentryExcludedRow(_ text: String) -> some View {
-        Label {
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        } icon: {
-            Image(systemName: "xmark")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.red)
-                .accessibilityHidden(true)
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        var accepted = false
+        for provider in providers where provider.canLoadObject(ofClass: URL.self) {
+            accepted = true
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                Task { @MainActor in addAttachments([url]) }
+            }
         }
+        return accepted
+    }
+
+    /// Adds files while keeping the count and total size within Sentry's limits.
+    private func addAttachments(_ urls: [URL]) {
+        var total = attachments.reduce(0) { $0 + Self.fileSize($1) }
+        for url in urls where !attachments.contains(url) {
+            guard !url.hasDirectoryPath else { continue }
+            guard attachments.count < Self.maxAttachments else {
+                errorMessage = "You can attach up to \(Self.maxAttachments) files."
+                break
+            }
+            let size = Self.fileSize(url)
+            guard total + size <= Self.maxAttachmentBytes else {
+                errorMessage = "Attachments are limited to 20 MB in total."
+                continue
+            }
+            total += size
+            attachments.append(url)
+        }
+        HapticFeedbackManager.shared.light()
+    }
+
+    private static func fileSize(_ url: URL) -> Int {
+        (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
     }
 
     private func openIssue() {
@@ -240,7 +276,11 @@ public struct BugReportView: View {
         if sendToSentry, showsSentryOption, !comment.isEmpty {
             guard let eventID = ReliabilityManager.shared.submitBugFeedback(
                 comment,
-                area: area
+                area: area,
+                kind: kind,
+                email: email,
+                attachmentURLs: attachments,
+                includeDiagnostics: includeDiagnostics
             ) else {
                 errorMessage = "Sentry is unavailable. Turn off Sentry sharing to continue with GitHub."
                 return
@@ -248,8 +288,8 @@ public struct BugReportView: View {
             sentryEventID = eventID
             wantsSentry = false // Retrying GitHub must not send a duplicate report.
             NotificationManager.shared.showHUDInfo(
-                title: "Report queued for Sentry",
-                message: "Your bug description is linked to this report.",
+                title: "Feedback sent",
+                message: "Thanks. Your report reached Sorty's developers.",
                 icon: "checkmark.seal.fill",
                 iconColor: .mint,
                 identifier: "bug-report-sentry-success"
@@ -259,16 +299,41 @@ public struct BugReportView: View {
         }
 
         var components = URLComponents(string: "https://github.com/sorty-organizer/Sorty/issues/new")!
-        if comment.isEmpty {
+        if comment.isEmpty && kind == .bug && !includeDiagnostics {
             components.queryItems = [URLQueryItem(name: "template", value: "bug_report.md")]
         } else {
-            var body = "## Bug description\n\n\(comment)\n\n## Steps to reproduce\n\n## Expected behavior\n\n## Actual behavior\n"
+            var body: String
+            switch kind {
+            case .bug:
+                body = "## Bug description\n\n\(comment)\n\n## Steps to reproduce\n\n## Expected behavior\n\n## Actual behavior\n"
+            case .idea:
+                body = "## Idea\n\n\(comment)\n\n## Why it would help\n"
+            case .praise, .other:
+                body = "\(comment)\n"
+            }
+            if !attachments.isEmpty {
+                body += "\n## Attachments\n\n<!-- Drag the files revealed in Finder here. -->\n"
+            }
+            if includeDiagnostics {
+                body += "\n## Environment\n\n\(ReliabilityManager.diagnosticsSummary)\n"
+            }
             if let sentryEventID {
                 body += "\nSentry event ID: `\(sentryEventID)`\n"
             }
+            let prefix: String = switch kind {
+            case .bug: "[BUG] "
+            case .idea: "[IDEA] "
+            case .praise, .other: "[FEEDBACK] "
+            }
+            let label: String = switch kind {
+            case .bug: "bug"
+            case .idea: "enhancement"
+            case .praise, .other: "feedback"
+            }
             components.queryItems = [
-                URLQueryItem(name: "title", value: "[BUG] "),
+                URLQueryItem(name: "title", value: prefix),
                 URLQueryItem(name: "body", value: body),
+                URLQueryItem(name: "labels", value: label),
             ]
         }
 
@@ -295,78 +360,64 @@ public struct BugReportView: View {
             errorMessage = "GitHub could not open. Try again."
             return
         }
+        if !attachments.isEmpty {
+            NSWorkspace.shared.activateFileViewerSelecting(attachments)
+        }
         HapticFeedbackManager.shared.tap()
         onClose()
     }
 }
 
-private struct BugReportAreaControl: NSViewRepresentable {
-    @Binding var selection: BugReportArea
+private struct FeedbackKindChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isHovered = false
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(selection: $selection)
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                .background(
+                    Capsule().fill(isSelected
+                        ? SortyDesignSystem.Colors.resolvedAccent
+                        : Color.secondary.opacity(isHovered ? 0.18 : 0.1))
+                )
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(.easeInOut(duration: 0.12), value: isHovered)
+        .animation(.easeInOut(duration: 0.15), value: isSelected)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
+}
 
-    func makeNSView(context: Context) -> NSSegmentedControl {
-        let areas = BugReportArea.allCases
-        let symbols = ["folder", "square.on.square", "sparkles", "gearshape"]
-        let configuration = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
-        let images = symbols.map { symbol in
-            let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) ?? NSImage()
-            let configured = image.withSymbolConfiguration(configuration) ?? image
-            configured.isTemplate = true
-            return configured
+private struct AttachmentChip: View {
+    let name: String
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "doc")
+                .accessibilityHidden(true)
+            Text(name)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 140)
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove \(name)")
         }
-        let control = NSSegmentedControl(
-            images: images,
-            trackingMode: .selectOne,
-            target: context.coordinator,
-            action: #selector(Coordinator.areaChanged(_:))
-        )
-        control.font = .systemFont(ofSize: 11, weight: .medium)
-        control.setAccessibilityLabel("Bug report area")
-        control.setAccessibilityIdentifier("BugReportAreaPicker")
-        control.segmentDistribution = .fillEqually
-
-        if #available(macOS 26.0, *) {
-            control.controlSize = .extraLarge
-            control.borderShape = .capsule
-        } else {
-            control.controlSize = .large
-        }
-        if control.responds(to: NSSelectorFromString("setRole:")) {
-            control.setValue(1, forKey: "role") // NSSegmentedControlRoleTabs
-        }
-
-        for (index, area) in areas.enumerated() {
-            control.setLabel(area.displayName, forSegment: index)
-            control.setImageScaling(.scaleNone, forSegment: index)
-            control.setToolTip(area.displayName, forSegment: index)
-        }
-        return control
-    }
-
-    func updateNSView(_ nsView: NSSegmentedControl, context: Context) {
-        context.coordinator.selection = $selection
-        nsView.selectedSegment = BugReportArea.allCases.firstIndex(of: selection) ?? 0
-    }
-
-    @MainActor
-    final class Coordinator: NSObject {
-        var selection: Binding<BugReportArea>
-
-        init(selection: Binding<BugReportArea>) {
-            self.selection = selection
-        }
-
-        @objc
-        func areaChanged(_ sender: NSSegmentedControl) {
-            let areas = BugReportArea.allCases
-            guard areas.indices.contains(sender.selectedSegment) else { return }
-            let area = areas[sender.selectedSegment]
-            guard area != selection.wrappedValue else { return }
-            selection.wrappedValue = area
-            HapticFeedbackManager.shared.selection()
-        }
+        .font(.caption)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(Color.secondary.opacity(0.12)))
     }
 }

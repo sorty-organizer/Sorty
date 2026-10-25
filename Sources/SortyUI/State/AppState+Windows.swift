@@ -58,13 +58,13 @@ extension AppState {
         // The analytics-off window stays compact because that panel is hidden.
         let showsSentryOption = AnalyticsManager.shared.consent == .granted
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: showsSentryOption ? 660 : 440),
+            contentRect: NSRect(x: 0, y: 0, width: 560, height: showsSentryOption ? 620 : 520),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.contentView = NSHostingView(rootView: view)
-        window.title = "Report a Bug"
+        window.title = "Send Feedback"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false

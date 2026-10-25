@@ -25,6 +25,23 @@ public enum BugReportArea: String, CaseIterable, Sendable {
     }
 }
 
+/// What kind of feedback the user is sending; drives copy, GitHub labels, and Sentry tags.
+public enum FeedbackKind: String, CaseIterable, Sendable {
+    case bug
+    case idea
+    case praise
+    case other
+
+    public var displayName: String {
+        switch self {
+        case .bug: "Something's broken"
+        case .idea: "An idea"
+        case .praise: "I love it"
+        case .other: "Other"
+        }
+    }
+}
+
 @MainActor
 public final class ReliabilityManager {
     public static let shared = ReliabilityManager()
@@ -446,13 +463,17 @@ public final class ReliabilityManager {
     }
 
     /// Links explicitly submitted bug text to a bounded Sentry event.
-    /// Beyond the description, the event carries only anonymous environment
-    /// tags (chosen area, Sorty release, macOS version, chip type) so support
-    /// can tell releases and OS versions apart. No identity, files, prompts, or logs.
+    /// Beyond the description, the event carries the feedback kind, chosen area,
+    /// and (when `includeDiagnostics`) macOS version and chip type. A reply email
+    /// and files are sent only when the user typed or attached them explicitly.
     @discardableResult
     public func submitBugFeedback(
         _ message: String,
-        area: BugReportArea
+        area: BugReportArea,
+        kind: FeedbackKind = .bug,
+        email: String? = nil,
+        attachmentURLs: [URL] = [],
+        includeDiagnostics: Bool = true
     ) -> String? {
         let comment = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSubmitBugFeedback,
@@ -467,25 +488,35 @@ public final class ReliabilityManager {
         // low priority and only alerts on new issues, so grouping or info level
         // hides every report after the first from the default issue feed.
         let event = Event(level: .warning)
-        event.message = SentryMessage(formatted: "User bug report: \(area.displayName)")
-        event.fingerprint = ["sorty.user_bug_report", area.rawValue, UUID().uuidString]
+        event.message = SentryMessage(formatted: kind == .bug
+            ? "User bug report: \(area.displayName)"
+            : "User feedback: \(kind.displayName)")
+        event.fingerprint = ["sorty.user_bug_report", kind.rawValue, area.rawValue, UUID().uuidString]
         let eventID = SentrySDK.capture(event: event) { scope in
             scope.setTag(value: "mac_app", key: "platform_surface")
             scope.setTag(value: ReliabilityEventKind.userFeedback.rawValue, key: ReliabilityEventKind.tagKey)
             scope.setTag(value: "user_feedback", key: "feature")
             scope.setTag(value: "report_bug", key: "operation")
-            scope.setTag(value: area.rawValue, key: "report_area")
-            scope.setTag(value: Self.operatingSystemVersion, key: "os_version")
-            scope.setTag(value: Self.deviceArchitecture, key: "device_arch")
+            scope.setTag(value: kind.rawValue, key: "feedback_kind")
+            if kind == .bug {
+                scope.setTag(value: area.rawValue, key: "report_area")
+            }
+            if includeDiagnostics {
+                scope.setTag(value: Self.operatingSystemVersion, key: "os_version")
+                scope.setTag(value: Self.deviceArchitecture, key: "device_arch")
+            }
         }
         guard eventID != .empty else { return nil }
 
+        let trimmedEmail = email?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let attachments = attachmentURLs.compactMap { Attachment(path: $0.path) }
         let feedback = SentryFeedback(
             message: comment,
             name: nil,
-            email: nil,
+            email: trimmedEmail?.isEmpty == false ? trimmedEmail : nil,
             source: .custom,
-            associatedEventId: eventID
+            associatedEventId: eventID,
+            attachments: attachments.isEmpty ? nil : attachments
         )
         SentrySDK.capture(feedback: feedback)
         return eventID.sentryIdString
@@ -546,6 +577,11 @@ public final class ReliabilityManager {
 
     private static var releaseName: String {
         "com.sorty.app@\(versionNumber)+\(buildNumber)"
+    }
+
+    /// One-line environment summary shown in the feedback window and GitHub drafts.
+    public static var diagnosticsSummary: String {
+        "Sorty \(versionNumber) (\(buildNumber)) · macOS \(operatingSystemVersion) · \(deviceArchitecture)"
     }
 
     /// Bounded macOS version for bug-report tags, such as "15.2.0".
