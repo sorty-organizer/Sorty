@@ -42,6 +42,14 @@ package struct PersonaPickerView: View {
 
             builtInPersonaGrid
 
+            if selectedCustomPersona == nil {
+                Text(personaManager.selectedPersona.description)
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.6))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .animation(.easeInOut, value: personaManager.selectedPersona)
+            }
+
             Divider()
 
             customPersonasHeader
@@ -96,14 +104,6 @@ package struct PersonaPickerView: View {
                     .buttonStyle(.borderless)
                     .accessibilityIdentifier("CustomPersonasToggle")
                 }
-            }
-
-            if selectedCustomPersona == nil {
-                Text(personaManager.selectedPersona.description)
-                    .font(.caption2)
-                    .foregroundColor(.secondary.opacity(0.6))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .animation(.easeInOut, value: personaManager.selectedPersona)
             }
 
             Divider()
