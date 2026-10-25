@@ -176,7 +176,7 @@ public struct BugReportView: View {
                 if sendToSentry {
                     VStack(alignment: .leading, spacing: 10) {
                         if kind == .bug {
-                            Picker("Area", selection: $area) {
+                            Picker("Where did it happen?", selection: $area) {
                                 ForEach(BugReportArea.allCases, id: \.self) { area in
                                     Text(area.displayName).tag(area)
                                 }
