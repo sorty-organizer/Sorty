@@ -23,7 +23,8 @@ public struct BugReportView: View {
     private var showsDropZone: Bool { isDropTargeted || isTextDropTargeted }
     @AppStorage("bugReportIncludeDiagnostics") private var includeDiagnostics = true
     /// The user's choice; kept while internet is blocked so it returns when unblocked.
-    @State private var wantsSentry = false
+    @State private var wantsSentry = true
+    @State private var wantsGitHub = false
     @State private var sentryEventID: String?
     @State private var errorMessage: String?
 
@@ -40,6 +41,15 @@ public struct BugReportView: View {
 
     private var sendToSentry: Bool {
         wantsSentry && canSubmitBugFeedback
+    }
+
+    /// GitHub is opt-in, but becomes the only route when Sentry can't be used.
+    private var opensGitHub: Bool {
+        wantsGitHub || !sendToSentry
+    }
+
+    private var trimmedDescription: String {
+        description.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var canSubmitBugFeedback: Bool {
@@ -162,7 +172,7 @@ public struct BugReportView: View {
             }
 
             if showsSentryOption {
-                Toggle("Also send to Sorty's developers via Sentry", isOn: Binding(
+                Toggle("Send to Sorty's developers", isOn: Binding(
                     get: { sendToSentry },
                     set: { wantsSentry = $0 }
                 ))
@@ -201,6 +211,11 @@ public struct BugReportView: View {
                 }
             }
 
+            if sendToSentry {
+                Toggle("Also open a public GitHub issue", isOn: $wantsGitHub)
+                    .accessibilityIdentifier("BugReportAlsoGitHubToggle")
+            }
+
             VStack(alignment: .leading, spacing: 2) {
                 Toggle("Include diagnostics", isOn: $includeDiagnostics)
                     .accessibilityIdentifier("BugReportIncludeDiagnosticsToggle")
@@ -223,6 +238,7 @@ public struct BugReportView: View {
                     .keyboardShortcut(.cancelAction)
                 Button(sendToSentry ? "Send" : "Open GitHub Issue") { openIssue() }
                     .buttonStyle(.sortyProminent)
+                    .disabled(sendToSentry && !wantsGitHub && trimmedDescription.isEmpty)
                     .keyboardShortcut(.defaultAction)
                     .accessibilityIdentifier("OpenGitHubBugIssueButton")
             }
@@ -234,6 +250,7 @@ public struct BugReportView: View {
             reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.32, dampingFraction: 0.86),
             value: sendToSentry
         )
+        .animation(.easeInOut(duration: 0.15), value: wantsGitHub)
         .animation(.easeInOut(duration: 0.15), value: attachments)
         .modifier(WindowGlassBackground())
         .accessibilityIdentifier("BugReportView")
@@ -331,8 +348,30 @@ public struct BugReportView: View {
         (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
     }
 
+    /// Product analytics for the submit: kind, destinations, and counts only, never the text.
+    private func captureSubmit(outcome: String, sentry: Bool) {
+        var properties: [String: Any] = [
+            "feedback_kind": kind.rawValue,
+            "sent_to_sentry": sentry,
+            "opened_github": opensGitHub,
+            "attachment_count": attachments.count,
+            "include_diagnostics": includeDiagnostics,
+            "has_email": !email.trimmingCharacters(in: .whitespaces).isEmpty,
+        ]
+        if kind == .bug {
+            properties["report_area"] = area.rawValue
+        }
+        AnalyticsManager.shared.captureFeature(
+            feature: "feedback",
+            subfeature: kind.rawValue,
+            action: "submit",
+            outcome: outcome,
+            properties: properties
+        )
+    }
+
     private func openIssue() {
-        let comment = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let comment = trimmedDescription
         var didSubmitToSentry = false
         // An empty description opens the bare GitHub template below. There
         // is no text to send, so Sentry is skipped instead of failing.
@@ -345,7 +384,8 @@ public struct BugReportView: View {
                 attachmentURLs: attachments,
                 includeDiagnostics: includeDiagnostics
             ) else {
-                errorMessage = "Sentry is unavailable. Turn off Sentry sharing to continue with GitHub."
+                errorMessage = "Sentry is unavailable right now. Turn off sending to developers to use GitHub instead."
+                captureSubmit(outcome: "failed", sentry: true)
                 return
             }
             sentryEventID = eventID
@@ -359,6 +399,11 @@ public struct BugReportView: View {
             )
             HapticFeedbackManager.shared.success()
             didSubmitToSentry = true
+        }
+        captureSubmit(outcome: "sent", sentry: didSubmitToSentry)
+        guard opensGitHub else {
+            onClose()
+            return
         }
 
         var components = URLComponents(string: "https://github.com/sorty-organizer/Sorty/issues/new")!
