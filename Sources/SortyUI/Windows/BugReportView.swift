@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import Combine
 import AppKit
+import QuickLookThumbnailing
 
 /// Collects one piece of feedback (bug, idea, praise, other) for a GitHub
 /// draft and, when analytics are allowed, an optional Sentry report.
@@ -48,7 +49,6 @@ public struct BugReportView: View {
         return ReliabilityManager.shared.canSubmitBugFeedback
     }
 
-    private static let maxAttachments = 5
     private static let maxAttachmentBytes = 20 * 1_024 * 1_024
 
     private var placeholder: String {
@@ -110,7 +110,7 @@ public struct BugReportView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(attachments, id: \.self) { url in
-                                AttachmentChip(name: url.lastPathComponent) {
+                                AttachmentChip(url: url) {
                                     attachments.removeAll { $0 == url }
                                     HapticFeedbackManager.shared.light()
                                 }
@@ -128,7 +128,6 @@ public struct BugReportView: View {
                         Label("Attach files", systemImage: "paperclip")
                     }
                     .buttonStyle(.borderless)
-                    .disabled(attachments.count >= Self.maxAttachments)
                     .help(sendToSentry
                         ? "Files are sent with your report."
                         : "Files are revealed in Finder so you can drag them into the GitHub issue.")
@@ -150,8 +149,8 @@ public struct BugReportView: View {
             .overlay {
                 if showsDropZone {
                     FeedbackDropZone(
-                        isFull: attachments.count >= Self.maxAttachments,
-                        remaining: Self.maxAttachments - attachments.count
+                        isFull: remainingAttachmentBytes <= 0,
+                        remainingBytes: remainingAttachmentBytes
                     )
                     .transition(.opacity)
                 }
@@ -296,21 +295,36 @@ public struct BugReportView: View {
     /// Adds files while keeping the count and total size within Sentry's limits.
     private func addAttachments(_ urls: [URL]) {
         var total = attachments.reduce(0) { $0 + Self.fileSize($1) }
-        for url in urls where !attachments.contains(url) {
-            guard !url.hasDirectoryPath else { continue }
-            guard attachments.count < Self.maxAttachments else {
-                errorMessage = "You can attach up to \(Self.maxAttachments) files."
-                break
+        var skippedDuplicate = false
+        errorMessage = nil
+        for url in urls where !url.hasDirectoryPath {
+            // Same path, or same bytes under another name (an image dropped twice
+            // gets a fresh temp file each time), is the same attachment.
+            if attachments.contains(where: { $0 == url || Self.sameContents($0, url) }) {
+                skippedDuplicate = true
+                continue
             }
             let size = Self.fileSize(url)
             guard total + size <= Self.maxAttachmentBytes else {
-                errorMessage = "Attachments are limited to 20 MB in total."
+                errorMessage = "\(url.lastPathComponent) doesn't fit. Attachments are limited to 20 MB in total."
                 continue
             }
             total += size
             attachments.append(url)
         }
+        if skippedDuplicate, errorMessage == nil {
+            errorMessage = "That file is already attached."
+        }
         HapticFeedbackManager.shared.light()
+    }
+
+    private var remainingAttachmentBytes: Int {
+        Self.maxAttachmentBytes - attachments.reduce(0) { $0 + Self.fileSize($1) }
+    }
+
+    private static func sameContents(_ lhs: URL, _ rhs: URL) -> Bool {
+        fileSize(lhs) == fileSize(rhs)
+            && FileManager.default.contentsEqual(atPath: lhs.path, andPath: rhs.path)
     }
 
     private static func fileSize(_ url: URL) -> Int {
@@ -445,36 +459,65 @@ private struct FeedbackKindChip: View {
     }
 }
 
+/// Removable chip showing a Quick Look thumbnail (or file icon) and name.
 private struct AttachmentChip: View {
-    let name: String
+    let url: URL
     let onRemove: () -> Void
+    @State private var thumbnail: NSImage?
+    @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "doc")
+        HStack(spacing: 6) {
+            Image(nsImage: thumbnail ?? NSWorkspace.shared.icon(forFile: url.path))
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 28, height: 28)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
                 .accessibilityHidden(true)
-            Text(name)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: 140)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(url.lastPathComponent)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 130, alignment: .leading)
+                Text(ByteCountFormatter.string(
+                    fromByteCount: Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0),
+                    countStyle: .file
+                ))
+                .foregroundStyle(.secondary)
+            }
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isHovered ? .primary : .secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Remove \(name)")
+            .accessibilityLabel("Remove \(url.lastPathComponent)")
         }
         .font(.caption)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Capsule().fill(Color.secondary.opacity(0.12)))
+        .padding(4)
+        .padding(.trailing, 4)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(isHovered ? 0.18 : 0.12)))
+        .onHover { isHovered = $0 }
+        .animation(.easeInOut(duration: 0.12), value: isHovered)
+        .help(url.path)
+        .task(id: url) {
+            let scale = NSScreen.main?.backingScaleFactor ?? 2
+            let request = QLThumbnailGenerator.Request(
+                fileAt: url,
+                size: CGSize(width: 28, height: 28),
+                scale: scale,
+                representationTypes: .thumbnail
+            )
+            if let representation = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request) {
+                thumbnail = representation.nsImage
+            }
+        }
     }
 }
 
 /// Overlay shown while a drag hovers anywhere over the feedback box.
 private struct FeedbackDropZone: View {
     let isFull: Bool
-    let remaining: Int
+    let remainingBytes: Int
 
     var body: some View {
         let accent = isFull ? Color.secondary : SortyDesignSystem.Colors.resolvedAccent
@@ -489,9 +532,11 @@ private struct FeedbackDropZone: View {
                 Image(systemName: isFull ? "nosign" : "arrow.down.doc.fill")
                     .font(.system(size: 26, weight: .medium))
                     .foregroundStyle(accent)
-                Text(isFull ? "Attachment limit reached" : "Drop to attach")
+                Text(isFull ? "20 MB limit reached" : "Drop to attach")
                     .font(.headline)
-                Text(isFull ? "Remove a file to add another." : "Images or files · \(remaining) more, up to 20 MB total")
+                Text(isFull
+                    ? "Remove a file to add another."
+                    : "Images or files · \(ByteCountFormatter.string(fromByteCount: Int64(remainingBytes), countStyle: .file)) left")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
