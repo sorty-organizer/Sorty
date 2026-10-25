@@ -433,7 +433,7 @@ struct PermissionsSettingsView: View {
                 .font(.system(size: 10, weight: .bold))
                 .contentTransition(.symbolEffect(.replace))
             }
-            .foregroundStyle(hoveredAccessInfoAction == action ? .primary : .secondary)
+            .foregroundStyle(.primary)
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, minHeight: 34)
             .background(
