@@ -514,7 +514,7 @@ public final class ReliabilityManager {
         let event = Event(level: .error)
         event.message = SentryMessage(formatted: kind == .bug
             ? "User bug report: \(area.displayName)"
-            : "User feedback: \(kind.displayName)")
+            : "User feedback (\(kind.displayName)): \(area.displayName)")
         event.fingerprint = ["sorty.user_bug_report", kind.rawValue, area.rawValue, UUID().uuidString]
         let eventID = SentrySDK.capture(event: event) { scope in
             scope.setTag(value: "mac_app", key: "platform_surface")
@@ -522,9 +522,7 @@ public final class ReliabilityManager {
             scope.setTag(value: "user_feedback", key: "feature")
             scope.setTag(value: "report_bug", key: "operation")
             scope.setTag(value: kind.rawValue, key: "feedback_kind")
-            if kind == .bug {
-                scope.setTag(value: area.rawValue, key: "report_area")
-            }
+            scope.setTag(value: area.rawValue, key: "report_area")
             if includeDiagnostics {
                 scope.setTag(value: Self.operatingSystemVersion, key: "os_version")
                 scope.setTag(value: Self.deviceArchitecture, key: "device_arch")

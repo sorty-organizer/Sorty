@@ -175,16 +175,15 @@ public struct BugReportView: View {
             if showsSentryOption {
                 if sendToSentry {
                     VStack(alignment: .leading, spacing: 10) {
-                        if kind == .bug {
-                            Picker("Where did it happen?", selection: $area) {
-                                ForEach(BugReportArea.allCases, id: \.self) { area in
-                                    Text(area.displayName).tag(area)
-                                }
+                        // Shown for every kind so switching kinds never changes the layout.
+                        Picker("Feature", selection: $area) {
+                            ForEach(BugReportArea.allCases, id: \.self) { area in
+                                Text(area.displayName).tag(area)
                             }
-                            .pickerStyle(.menu)
-                            .fixedSize()
-                            .accessibilityIdentifier("BugReportAreaPicker")
                         }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .accessibilityIdentifier("BugReportAreaPicker")
                         TextField("Email, if you'd like a reply", text: $email)
                             .textFieldStyle(.roundedBorder)
                             .textContentType(.emailAddress)
@@ -344,17 +343,15 @@ public struct BugReportView: View {
 
     /// Product analytics for the submit: kind, destinations, and counts only, never the text.
     private func captureSubmit(outcome: String, sentry: Bool) {
-        var properties: [String: Any] = [
+        let properties: [String: Any] = [
             "feedback_kind": kind.rawValue,
             "sent_to_sentry": sentry,
             "opened_github": opensGitHub,
             "attachment_count": attachments.count,
             "include_diagnostics": includeDiagnostics,
             "has_email": !email.trimmingCharacters(in: .whitespaces).isEmpty,
+            "report_area": area.rawValue,
         ]
-        if kind == .bug {
-            properties["report_area"] = area.rawValue
-        }
         AnalyticsManager.shared.captureFeature(
             feature: "feedback",
             subfeature: kind.rawValue,
