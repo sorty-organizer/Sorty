@@ -55,14 +55,14 @@ struct PermissionsSettingsView: View {
 
     private var analyticsEnabled: Binding<Bool> {
         Binding(
-            get: { analytics.consent == .granted },
+            get: { analytics.consent == .granted && !internetPrivacyModeEnabled },
             set: { analytics.setConsent($0 ? .granted : .denied) }
         )
     }
 
     private var analyticsDescription: String {
-        if analytics.consent == .granted, internetPrivacyModeEnabled {
-            return "Allowed, but paused while Block Internet Connections is on"
+        if internetPrivacyModeEnabled {
+            return "Off while Block Internet Connections is on"
         }
         return "Share anonymous feature usage and sanitized reliability data; never file names, paths, contents, prompts, or AI responses"
     }
@@ -100,6 +100,8 @@ struct PermissionsSettingsView: View {
                     description: analyticsDescription,
                     focusTarget: .privacyAnalytics
                 )
+                .disabled(internetPrivacyModeEnabled)
+                .animation(.easeInOut(duration: 0.2), value: internetPrivacyModeEnabled)
                 .accessibilityIdentifier("AnonymousAnalyticsToggle")
             }
         }
