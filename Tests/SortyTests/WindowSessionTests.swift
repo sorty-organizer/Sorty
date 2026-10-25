@@ -175,8 +175,8 @@ final class WindowSessionTests: XCTestCase {
         // previously applied selection.
         let rows: [(String?, SettingsCategory?)] = [
             ("provider", .provider),
-            ("watched", .rules),
-            ("watched-folders", .rules),
+            ("watched", .automation),
+            ("watched-folders", .automation),
             ("storage", .rules),
             ("storage-locations", .rules),
             ("totally-unknown-section", nil),

@@ -184,7 +184,7 @@ class AppStateTests: XCTestCase {
 
         nextLaunch.showOnboarding()
         let restartedSetup = AppState(userDefaults: testDefaults, currentVersion: "1.4.0")
-        XCTAssertFalse(restartedSetup.hasCompletedSkillIntroduction)
+        XCTAssertTrue(restartedSetup.hasCompletedSkillIntroduction, "Restarting app setup must not replay the skill introduction.")
         XCTAssertFalse(restartedSetup.hasCompletedOnboarding)
     }
     
