@@ -9,18 +9,40 @@ import Foundation
 @preconcurrency import Sentry
 import SortyFS
 
+/// Product area a bug report is about; one per feature module so Sentry
+/// reports can be filtered by `report_area`.
 public enum BugReportArea: String, CaseIterable, Sendable {
     case organize
+    case preview
+    case history
+    case rules
     case duplicates
+    case watchedFolders = "watched_folders"
     case aiSetup = "ai_setup"
+    case learnings
+    case finderExtension = "finder_extension"
+    case widgets
+    case onboarding
     case settings
+    case performance
+    case other
 
     public var displayName: String {
         switch self {
-        case .organize: "Organize"
+        case .organize: "Organizing a folder"
+        case .preview: "Preview and apply"
+        case .history: "History and undo"
+        case .rules: "Rules"
         case .duplicates: "Duplicates"
-        case .aiSetup: "AI setup"
+        case .watchedFolders: "Watched folders"
+        case .aiSetup: "AI providers and models"
+        case .learnings: "Learnings and personas"
+        case .finderExtension: "Finder extension"
+        case .widgets: "Widgets"
+        case .onboarding: "Onboarding"
         case .settings: "Settings"
+        case .performance: "Speed, crashes, or freezes"
+        case .other: "Something else"
         }
     }
 }

@@ -23,8 +23,9 @@ public struct BugReportView: View {
     private var showsDropZone: Bool { isDropTargeted || isTextDropTargeted }
     @AppStorage("bugReportIncludeDiagnostics") private var includeDiagnostics = true
     /// The user's choice; kept while internet is blocked so it returns when unblocked.
-    @State private var wantsSentry = true
     @State private var wantsGitHub = false
+    /// Set after Sentry succeeds (no duplicate on a GitHub retry) or fails (fall back to GitHub).
+    @State private var skipsSentry = false
     @State private var sentryEventID: String?
     @State private var errorMessage: String?
 
@@ -40,7 +41,7 @@ public struct BugReportView: View {
     }
 
     private var sendToSentry: Bool {
-        wantsSentry && canSubmitBugFeedback
+        canSubmitBugFeedback && !skipsSentry
     }
 
     /// GitHub is opt-in, but becomes the only route when Sentry can't be used.
@@ -172,13 +173,6 @@ public struct BugReportView: View {
             }
 
             if showsSentryOption {
-                Toggle("Send to Sorty's developers", isOn: Binding(
-                    get: { sendToSentry },
-                    set: { wantsSentry = $0 }
-                ))
-                .disabled(!canSubmitBugFeedback)
-                .accessibilityIdentifier("SendBugReportToSentryToggle")
-
                 if sendToSentry {
                     VStack(alignment: .leading, spacing: 10) {
                         if kind == .bug {
@@ -195,7 +189,7 @@ public struct BugReportView: View {
                             .textFieldStyle(.roundedBorder)
                             .textContentType(.emailAddress)
                             .accessibilityIdentifier("BugReportEmailField")
-                        Text("Your text, attachments, and email (if given) go to Sentry. Nothing else is identified; IP addresses are discarded.")
+                        Text("Your text, attachments, and email (if given) go to Sorty's developers via Sentry. Nothing else is identified; IP addresses are discarded.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -205,7 +199,7 @@ public struct BugReportView: View {
                 }
 
                 if !canSubmitBugFeedback {
-                    Text("Sentry sharing stays off while Block Internet Connections is on.")
+                    Text("Block Internet Connections is on, so feedback can only go to GitHub.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -384,12 +378,13 @@ public struct BugReportView: View {
                 attachmentURLs: attachments,
                 includeDiagnostics: includeDiagnostics
             ) else {
-                errorMessage = "Sentry is unavailable right now. Turn off sending to developers to use GitHub instead."
+                errorMessage = "Couldn't reach Sorty's developers. Press Open GitHub Issue to report it there instead."
+                skipsSentry = true
                 captureSubmit(outcome: "failed", sentry: true)
                 return
             }
             sentryEventID = eventID
-            wantsSentry = false // Retrying GitHub must not send a duplicate report.
+            skipsSentry = true // Retrying GitHub must not send a duplicate report.
             NotificationManager.shared.showHUDInfo(
                 title: "Feedback sent",
                 message: "Thanks. Your report reached Sorty's developers.",
