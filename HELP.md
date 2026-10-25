@@ -453,10 +453,10 @@ Sorty provides a comprehensive menu bar with commands organized into logical gro
 | Command | Shortcut | Description |
 |---------|----------|-------------|
 | Sorty Help | ⌘? | Open this help documentation |
-| Delete All Usage Data | — | Remove Safe Deletion and usage history |
+| Restart Onboarding... | — | Reopen app setup without the skill introduction |
 | GitHub Repository | — | Open Sorty's GitHub page |
-| About Sorty | — | View app version and credits |
-| Check for Updates... | — | Check for new versions of Sorty |
+| Report Bug | — | Open the bug report form |
+| Uninstall Sorty... | — | Open the uninstall confirmation |
 
 ---
 
@@ -493,7 +493,7 @@ Updates may include:
 
 ### Automatic Notifications
 
-Sorty periodically checks for updates in the background and will notify you when a new version is available. You can always manually check via the Help menu.
+Sorty periodically checks for updates in the background and will notify you when a new version is available. You can always manually check via **Sorty → Check for Updates...**.
 
 ### Update Check Troubleshooting
 
@@ -619,7 +619,6 @@ data clears the local analytics queue and consent preference.
 
 ### Clearing Data
 
-- **Help → Delete All Usage Data**: Removes Safe Deletion history
 - **Reset Settings**: Restores all settings to defaults
 
 ---

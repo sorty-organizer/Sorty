@@ -69,8 +69,8 @@ its key-view loop. Removing the empty items is a targeted mitigation; the event
 does not include the underlying exception reason, and the affected OS still needs
 runtime validation.
 
-Help > Restart Onboarding opens the skill introduction first. Continue with App
-then opens the main app and records onboarding completion, including on fresh installs.
+Help > Restart Onboarding opens app setup directly, skipping the skill introduction.
+On fresh installs, Continue with App opens the main app and records onboarding completion.
 The skill introduction also appears once for users upgrading from app-only setup.
 Its installer is lightweight; agent detection and preference hydration start in
 view tasks, after the interface mounts. Restarting preserves the current window position and

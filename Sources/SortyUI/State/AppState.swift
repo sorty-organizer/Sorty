@@ -637,7 +637,7 @@ public class AppState: ObservableObject {
         }
     }
     
-    /// Show the onboarding flow again (for revisiting setup)
+    /// Reopen app setup without replaying the skill introduction.
     public func showOnboarding() {
         // Replace the root before onboarding configures the shared window.
         // Suppress the root crossfade while it changes that shared window.
@@ -647,7 +647,7 @@ public class AppState: ObservableObject {
             clearSetupRepairState()
             isRestartingOnboarding = true
             showDirectoryPicker = false
-            hasCompletedSkillIntroduction = false
+            hasCompletedSkillIntroduction = true
             hasCompletedOnboarding = false
         }
     }
