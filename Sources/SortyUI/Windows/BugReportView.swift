@@ -218,11 +218,6 @@ public struct BugReportView: View {
             }
 
             HStack {
-                Text(ReliabilityManager.diagnosticsSummary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .textSelection(.enabled)
                 Spacer()
                 Button("Cancel") { onClose() }
                     .buttonStyle(.sortyBordered)
