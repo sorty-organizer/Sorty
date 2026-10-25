@@ -1264,7 +1264,20 @@ public struct RenameNamingOptions: Codable, Sendable, Equatable {
             datePolicy: datePolicy
         )
 
-        let formatted: [String] = candidates.compactMap { candidate in
+        // Mirror the date policy so the preview reflects the Dates picker.
+        let datePrefix = "2026-03-19 "
+        let datedCandidates = candidates.map { candidate -> (source: String, original: String) in
+            let undated = candidate.source.hasPrefix(datePrefix)
+                ? String(candidate.source.dropFirst(datePrefix.count))
+                : candidate.source
+            switch datePolicy {
+            case .never: return (undated, candidate.original)
+            case .whenFound: return candidate
+            case .alwaysWhenReliable: return (datePrefix + undated, candidate.original)
+            }
+        }
+
+        let formatted: [String] = datedCandidates.compactMap { candidate in
             FilenameNormalizer.normalize(
                 candidate.source,
                 originalFilename: candidate.original,

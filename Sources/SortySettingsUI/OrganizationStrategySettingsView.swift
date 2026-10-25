@@ -317,7 +317,7 @@ struct OrganizationStrategySettingsView: View {
     }
 
     private var filenameOptions: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 Picker("Separator", selection: $viewModel.config.renameNamingOptions.separator) {
                     ForEach(RenameSeparatorPreference.allCases, id: \.self) { separator in
@@ -336,16 +336,17 @@ struct OrganizationStrategySettingsView: View {
                 .pickerStyle(.menu)
                 .tint(.primary)
                 .settingsFocusableSetting(.strategyNamingCase)
-            }
 
-            Picker("Dates", selection: $viewModel.config.renameNamingOptions.datePolicy) {
-                ForEach(RenameDatePolicy.allCases, id: \.self) { policy in
-                    Text(policy.displayName).tag(policy)
+                Picker("Dates", selection: $viewModel.config.renameNamingOptions.datePolicy) {
+                    ForEach(RenameDatePolicy.allCases, id: \.self) { policy in
+                        Text(policy.displayName).tag(policy)
+                    }
                 }
+                .pickerStyle(.menu)
+                .tint(.primary)
+                .settingsFocusableSetting(.strategyNamingDatePolicy)
             }
-            .pickerStyle(.menu)
-            .tint(.primary)
-            .settingsFocusableSetting(.strategyNamingDatePolicy)
+            .fixedSize()
 
             HStack {
                 Text("Max Length")
@@ -367,6 +368,7 @@ struct OrganizationStrategySettingsView: View {
                     .frame(width: 32, alignment: .trailing)
             }
             .settingsFocusableSetting(.strategyMaxFilenameLength)
+            .padding(.top, 2)
 
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -379,7 +381,7 @@ struct OrganizationStrategySettingsView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .numericTextTransition(
-                            animationValue: viewModel.config.renameNamingOptions.maxFilenameLength
+                            animationValue: viewModel.config.renameNamingOptions.exampleFilename
                         )
                 }
             }
