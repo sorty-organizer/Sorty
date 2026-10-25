@@ -11,6 +11,7 @@ final class AnalyticsEventNameTests: XCTestCase {
         XCTAssertEqual(AnalyticsEventName.feature(subfeature: "custom_personas", action: "persona_selected", outcome: "success"), "Custom Personas Selected")
         XCTAssertEqual(AnalyticsEventName.buttonClicked("apply_changes"), "Apply Changes Clicked")
         XCTAssertEqual(AnalyticsEventName.screenName(screen: "settings", section: "advanced"), "Settings › Advanced")
+        XCTAssertEqual(AnalyticsEventName.screenName(screen: "settings_ai_provider", section: "ai_provider"), "Settings › AI Provider")
     }
 
     func testValidationRejectsUnboundedNames() {

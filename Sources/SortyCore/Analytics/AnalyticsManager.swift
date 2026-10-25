@@ -222,7 +222,6 @@ public final class AnalyticsManager: ObservableObject {
         source: String = "navigation",
         previousScreen: String? = nil
     ) {
-        ReliabilityManager.shared.recordScreen(screen)
         var properties: [String: Any] = [
             "screen": screen,
             "source": source,
@@ -261,7 +260,6 @@ public final class AnalyticsManager: ObservableObject {
         outcome: String,
         properties: [String: Any] = [:]
     ) {
-        ReliabilityManager.shared.recordWorkflow(workflow: workflow, stage: stage, outcome: outcome)
         capture(
             event: AnalyticsEventName.workflow(workflow: workflow, stage: stage, outcome: outcome),
             properties: properties.merging([
@@ -761,7 +759,10 @@ enum AnalyticsEventName {
 
     static func screenName(screen: String, section: String?) -> String {
         guard let section, !section.isEmpty, section != screen else { return titled(screen) }
-        return titled(screen) + " › " + titled(section)
+        // Settings screens repeat their section ("settings_ai_provider" +
+        // "ai_provider"); show that as "Settings › AI Provider".
+        let parent = screen.hasSuffix("_" + section) ? String(screen.dropLast(section.count + 1)) : screen
+        return titled(parent) + " › " + titled(section)
     }
 
     static func isValid(_ name: String) -> Bool {
@@ -779,7 +780,7 @@ enum AnalyticsEventName {
     private static func titled(_ identifier: String) -> String {
         identifier
             .split(whereSeparator: { !($0.isASCII && ($0.isLetter || $0.isNumber)) })
-            .map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
+            .map { $0.lowercased() == "ai" ? "AI" : $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
             .joined(separator: " ")
     }
 }
