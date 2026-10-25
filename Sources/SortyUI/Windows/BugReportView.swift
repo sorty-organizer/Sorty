@@ -17,6 +17,7 @@ public struct BugReportView: View {
     @State private var email = ""
     @State private var attachments: [URL] = []
     @State private var isDropTargeted = false
+    @State private var revealedForGitHub = false
     @State private var isTextDropTargeted = false
     @State private var textHeight: CGFloat = 88
 
@@ -124,6 +125,7 @@ public struct BugReportView: View {
                             ForEach(attachments, id: \.self) { url in
                                 AttachmentChip(url: url) {
                                     attachments.removeAll { $0 == url }
+                                    Self.discardStaged(url)
                                     HapticFeedbackManager.shared.light()
                                 }
                             }
@@ -257,6 +259,11 @@ public struct BugReportView: View {
         .animation(.easeInOut(duration: 0.18), value: trimmedDescription.isEmpty)
         .animation(.easeInOut(duration: 0.15), value: attachments)
         .modifier(WindowGlassBackground())
+        .onAppear { Self.sweepStaleStaging() }
+        .onDisappear {
+            // Sentry already holds the bytes; only a GitHub drag still needs the files.
+            if !revealedForGitHub { attachments.forEach(Self.discardStaged) }
+        }
         .accessibilityIdentifier("BugReportView")
     }
 
@@ -301,8 +308,7 @@ public struct BugReportView: View {
 
     /// Writes dragged image data (no backing file) to a unique temp file.
     private static func saveDroppedImage(_ data: Data, ext: String, name: String) -> URL? {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("SortyFeedback-\(UUID().uuidString)", isDirectory: true)
+        let dir = stagingRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let url = dir.appendingPathComponent(name).appendingPathExtension(ext)
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -323,6 +329,7 @@ public struct BugReportView: View {
             // gets a fresh temp file each time), is the same attachment.
             if attachments.contains(where: { $0 == url || Self.sameContents($0, url) }) {
                 skippedDuplicate = true
+                if !attachments.contains(url) { Self.discardStaged(url) }
                 continue
             }
             let size = Self.fileSize(url)
@@ -343,14 +350,42 @@ public struct BugReportView: View {
         HapticFeedbackManager.shared.light()
     }
 
+    /// Every staged copy lives in its own folder under here, so cleanup is a folder delete.
+    private static let stagingRoot = FileManager.default.temporaryDirectory
+        .appendingPathComponent("SortyFeedback", isDirectory: true)
+
+    private static func isStaged(_ url: URL) -> Bool {
+        url.standardizedFileURL.path.hasPrefix(stagingRoot.standardizedFileURL.path + "/")
+    }
+
+    /// Deletes a staged copy's folder; originals the user picked are never touched.
+    private static func discardStaged(_ url: URL) {
+        guard isStaged(url) else { return }
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    }
+
+    /// Removes staging folders left by earlier windows. Copies revealed for a
+    /// GitHub drag are kept for an hour so the drag can still finish.
+    private static func sweepStaleStaging() {
+        let fm = FileManager.default
+        let cutoff = Date().addingTimeInterval(-3_600)
+        let folders = (try? fm.contentsOfDirectory(
+            at: stagingRoot,
+            includingPropertiesForKeys: [.creationDateKey]
+        )) ?? []
+        for folder in folders {
+            let created = (try? folder.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+            if created < cutoff { try? fm.removeItem(at: folder) }
+        }
+    }
+
     /// Copies an added file into Sorty's temp folder while the sandbox grant
     /// from the drop or open panel is still valid, so sending later can read it.
     private static func stagedCopy(of url: URL) -> URL? {
-        let temp = FileManager.default.temporaryDirectory
-        if url.path.hasPrefix(temp.path) { return url }
+        if isStaged(url) { return url }
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        let dir = temp.appendingPathComponent("SortyFeedback-\(UUID().uuidString)", isDirectory: true)
+        let dir = stagingRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let copy = dir.appendingPathComponent(url.lastPathComponent)
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -497,6 +532,7 @@ public struct BugReportView: View {
             return
         }
         if !attachments.isEmpty {
+            revealedForGitHub = true
             NSWorkspace.shared.activateFileViewerSelecting(attachments)
         }
         HapticFeedbackManager.shared.tap()
