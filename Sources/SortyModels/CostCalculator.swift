@@ -32,6 +32,9 @@ public enum CostCalculator {
         ("gpt-3.5-turbo", ModelPricing(inputPrice: 0.50, outputPrice: 1.50)),
 
         // Anthropic
+        ("claude-fable-5-1", ModelPricing(inputPrice: 10.00, outputPrice: 50.00)),
+        ("claude-opus-5-5", ModelPricing(inputPrice: 4.00, outputPrice: 20.00)),
+        ("claude-sonnet-5-5", ModelPricing(inputPrice: 2.00, outputPrice: 10.00)),
         ("claude-opus-4-6", ModelPricing(inputPrice: 15.00, outputPrice: 75.00)),
         ("claude-opus-4.6", ModelPricing(inputPrice: 15.00, outputPrice: 75.00)),
         ("claude-opus-4", ModelPricing(inputPrice: 15.00, outputPrice: 75.00)),
