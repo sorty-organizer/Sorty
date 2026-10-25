@@ -382,8 +382,9 @@ struct PersonaGeneratorView: View {
             TextField("", text: customAnswerBinding(for: question), axis: .vertical)
                 .focused($focusedCustomAnswerQuestionID, equals: question.id)
                 .textFieldStyle(.plain)
-                .lineLimit(1...4)
+                .lineLimit(1...3)
                 .fixedSize(horizontal: false, vertical: true)
+                .clipped()
                 .onSubmit {
                     guard answers[question.id] != nil else { return }
                     advance(from: question)
