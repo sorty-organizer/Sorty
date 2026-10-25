@@ -167,3 +167,42 @@ The follow-up production CLI inventory contained no event newer than
 25 October at 00:21:24 UTC. This is an error-list snapshot, not a complete feedback
 inventory. No Sentry status was changed in this follow-up. The added diagnostics
 require a shipped build and new events; they cannot enrich historical reports.
+
+## Inventory refresh after handoff
+
+The authenticated API refresh returned 95 unresolved macOS groups, 21 ignored
+macOS groups, and three unresolved website groups. Pagination reported no further
+pages. These are issue inventories, not counts of confirmed defects. The newest
+unresolved event remains 2Q at 25 October 00:21:24 UTC. The newest ignored event
+is 2D at 00:21:58 UTC, still from production build `20261004162224`.
+
+The handled-error groups discussed above, including 2D, 2R, 3M, and 3D, are now
+ignored in Sentry. This refresh did not change their status. Ignoring a group
+does not verify its repair; include ignored groups in subsequent release checks.
+The earlier descriptions of groups staying unresolved describe their status at
+the time of that review.
+
+Retrieved the latest events for all five feedback groups, including the ignored
+[26](https://sorty-z1.sentry.io/issues/7757533070/) and
+[27](https://sorty-z1.sentry.io/issues/7757547428/). Those two contain only brief
+messages without a defect description or reproduction steps. Gemini's 3K and
+the broad crash reports 2B/25 are unchanged. No new feedback defect was found.
+
+The older [22](https://sorty-z1.sentry.io/issues/7750814180/) crash records a
+missing `Sorty_SortyLib` resource bundle in build 2263. Current resource loading
+in the What's New and internet-access views explicitly avoids the trapping
+`Bundle.module` accessor. The retained stack has unsymbolicated app frames, so
+it does not identify which accessor ran or prove that current packaging repairs
+the original failure. No new patch or production recovery is claimed.
+[1T](https://sorty-z1.sentry.io/issues/7700431340/) records AppKit constraint
+layout recursion in build 1864, with no identified app frame. The 3C event is
+unchanged from the icon-update crash already reviewed on 16 October. Several
+older crash-event retrievals were unavailable, including an HTTP 404 from a
+latest-event endpoint, limiting
+further diagnosis from retained data.
+
+For the WindowServer waits in 23/3H, the remaining useful evidence is a system
+trace captured during recurrence, covering Sorty and WindowServer scheduling
+alongside memory pressure and paging. The current snapshots cannot establish
+the cause. No speculative view change, release, Sentry status mutation, build,
+test, or computer-use verification was performed during this refresh.
