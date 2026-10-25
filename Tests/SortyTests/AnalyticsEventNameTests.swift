@@ -14,6 +14,26 @@ final class AnalyticsEventNameTests: XCTestCase {
         XCTAssertEqual(AnalyticsEventName.screenName(screen: "settings_ai_provider", section: "ai_provider"), "Settings › AI Provider")
     }
 
+    func testAppLifecycleNames() {
+        XCTAssertEqual(AnalyticsEventName.workflow(workflow: "app", stage: "deleted", outcome: "success"), "App Deleted")
+        XCTAssertEqual(AnalyticsEventName.workflow(workflow: "app", stage: "moved", outcome: "success"), "App Moved")
+        XCTAssertEqual(AnalyticsEventName.workflow(workflow: "app", stage: "move", outcome: "failed"), "App Move Failed")
+        XCTAssertEqual(AnalyticsEventName.workflow(workflow: "app", stage: "move", outcome: "cancelled"), "App Move Cancelled")
+    }
+
+    func testMoveFailureClassification() {
+        XCTAssertEqual(AppRelocationService.classifyMoveFailure("execution error: User canceled. (-128)"), .cancelled)
+        guard case let .failed(_, reason) = AppRelocationService.classifyMoveFailure("execution error: The administrator user name or password was incorrect. (-60007)") else {
+            return XCTFail("expected failure")
+        }
+        XCTAssertEqual(reason, "not_authorized")
+        guard case let .failed(message, other) = AppRelocationService.classifyMoveFailure("") else {
+            return XCTFail("expected failure")
+        }
+        XCTAssertEqual(other, "script_failed")
+        XCTAssertFalse(message.isEmpty)
+    }
+
     func testValidationRejectsUnboundedNames() {
         XCTAssertTrue(AnalyticsEventName.isValid("Organize Plan Ready"))
         XCTAssertFalse(AnalyticsEventName.isValid("app:feature_used"))

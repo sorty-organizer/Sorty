@@ -1503,6 +1503,14 @@ public class AppState: ObservableObject {
 
     private func uninstallSorty() {
         Task { @MainActor in
+            // The uninstaller removes the analytics queue, so send first.
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "app",
+                stage: "deleted",
+                outcome: "success",
+                properties: ["source": "uninstall_command"]
+            )
+            await AnalyticsManager.shared.flushBeforeExit()
             let report = await Task.detached(priority: .userInitiated) {
                 SortyUninstaller.run()
             }.value
@@ -1516,6 +1524,15 @@ public class AppState: ObservableObject {
             NSApp.terminate(nil)
         } else {
             HapticFeedbackManager.shared.error()
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "app",
+                stage: "delete",
+                outcome: "failed",
+                properties: [
+                    "source": "uninstall_command",
+                    "count_bucket": AnalyticsManager.countBucket(report.blockingFailureDescriptions.count),
+                ]
+            )
             let failedItems = report.blockingFailureDescriptions.joined(separator: ", ")
             let detail = failedItems.isEmpty
                 ? "macOS couldn't schedule deletion of the app."

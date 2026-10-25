@@ -3,6 +3,14 @@ import Foundation
 /// App relocation + launch-path helpers owned by SortyLib so SortyApp stays
 /// as entry/window glue. App glue calls these; provider auth/network details
 /// stay inside the client layer per AGENTS.md.
+public enum AppMoveResult: Equatable, Sendable {
+    case moved
+    /// The user dismissed the administrator password prompt.
+    case cancelled
+    /// `reason` is a fixed analytics identifier; `message` is shown to the user only.
+    case failed(message: String, reason: String)
+}
+
 @MainActor
 public enum AppRelocationService {
     public static let applicationsPath = "/Applications"
@@ -65,9 +73,9 @@ public enum AppRelocationService {
     }
 
     /// Authorization can wait for user input; never block the app's main thread.
-    public static func move(source: URL, destination: URL) async -> String? {
+    public static func move(source: URL, destination: URL) async -> AppMoveResult {
         let script = moveScript(source: source, destination: destination)
-        return await Task.detached(priority: .userInitiated) { () -> String? in
+        return await Task.detached(priority: .userInitiated) { () -> AppMoveResult in
             let process = Process()
             let errors = Pipe()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript", isDirectory: false)
@@ -78,14 +86,33 @@ public enum AppRelocationService {
                 try process.run()
                 let errorData = errors.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
-                guard process.terminationStatus != 0 else { return nil }
-                let message = String(decoding: errorData, as: UTF8.self)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                return message.isEmpty ? "Move Sorty to Applications in Finder, then reopen it." : message
+                guard process.terminationStatus != 0 else { return .moved }
+                let output = String(decoding: errorData, as: UTF8.self)
+                return classifyMoveFailure(output)
             } catch {
-                return error.localizedDescription
+                return .failed(message: error.localizedDescription, reason: "launch_failed")
             }
         }.value
+    }
+
+    /// Maps osascript's stderr to a result. Cancelling the password prompt is
+    /// AppleScript error -128 and must not be reported as a failure.
+    nonisolated static func classifyMoveFailure(_ output: String) -> AppMoveResult {
+        let output = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        if output.contains("(-128)") { return .cancelled }
+        let fallback = "Move Sorty to Applications in Finder, then reopen it."
+        let reason: String
+        if output.contains("(-60005)") || output.contains("(-60007)") {
+            reason = "not_authorized"
+        } else if output.localizedCaseInsensitiveContains("Operation not permitted")
+            || output.localizedCaseInsensitiveContains("Permission denied") {
+            reason = "permission_denied"
+        } else if output.localizedCaseInsensitiveContains("No such file") {
+            reason = "source_missing"
+        } else {
+            reason = "script_failed"
+        }
+        return .failed(message: output.isEmpty ? fallback : output, reason: reason)
     }
 
     /// Waits for this instance to exit, then opens the moved copy. Opening

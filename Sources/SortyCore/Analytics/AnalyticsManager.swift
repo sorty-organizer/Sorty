@@ -222,6 +222,7 @@ public final class AnalyticsManager: ObservableObject {
         source: String = "navigation",
         previousScreen: String? = nil
     ) {
+        ReliabilityManager.shared.recordScreen(screen)
         var properties: [String: Any] = [
             "screen": screen,
             "source": source,
@@ -260,6 +261,7 @@ public final class AnalyticsManager: ObservableObject {
         outcome: String,
         properties: [String: Any] = [:]
     ) {
+        ReliabilityManager.shared.recordWorkflow(workflow: workflow, stage: stage, outcome: outcome)
         capture(
             event: AnalyticsEventName.workflow(workflow: workflow, stage: stage, outcome: outcome),
             properties: properties.merging([
@@ -269,6 +271,15 @@ public final class AnalyticsManager: ObservableObject {
                 "outcome": outcome,
             ]) { current, _ in current }
         )
+    }
+
+    /// Sends queued events and gives them a moment to upload. Use right
+    /// before Sorty quits or deletes itself, when the on-disk queue would
+    /// otherwise be lost or not retried until a next launch.
+    public func flushBeforeExit() async {
+        guard canCapture else { return }
+        PostHogSDK.shared.flush()
+        try? await Task.sleep(for: .milliseconds(1_500))
     }
 
     public func captureImportantButton(
@@ -648,6 +659,7 @@ public final class AnalyticsManager: ObservableObject {
             "duration_bucket",
             "duration_ms",
             "entry_source",
+            "failure_reason",
             "event_category",
             "feature",
             "has_custom_instructions",

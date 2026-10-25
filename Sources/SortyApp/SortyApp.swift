@@ -274,6 +274,14 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 
     private func finishExternalUninstall(movedApplicationURL: URL?) async -> Bool {
         #if canImport(SortyLib)
+            // The uninstaller removes the analytics queue, so send first.
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "app",
+                stage: "deleted",
+                outcome: "success",
+                properties: ["source": "moved_to_trash"]
+            )
+            await AnalyticsManager.shared.flushBeforeExit()
             guard let report = await Task.detached(priority: .userInitiated, operation: {
                 SortyUninstaller.runAfterExternalApplicationRemoval(
                     movedApplicationURL: movedApplicationURL
@@ -289,6 +297,15 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
             let detail = failedItems.isEmpty
                 ? "macOS couldn't finish removing Sorty."
                 : "Sorty couldn't remove its \(failedItems)."
+            AnalyticsManager.shared.captureWorkflow(
+                workflow: "app",
+                stage: "delete",
+                outcome: "failed",
+                properties: [
+                    "source": "moved_to_trash",
+                    "count_bucket": AnalyticsManager.countBucket(report.blockingFailureDescriptions.count),
+                ]
+            )
             let alert = NSAlert()
             alert.alertStyle = .critical
             alert.messageText = "Sorty Could Not Finish Uninstalling"
@@ -532,6 +549,7 @@ private enum ApplicationMover {
             guard UserDefaults.standard.bool(forKey: onboardingCompletionKey) else { return }
             guard !AppRelocationService.isInApplicationsFolder(AppRelocationService.originalBundleURL()) else { return }
             SortyAppLog.log("SortyMove: showing suggestion HUD")
+            AnalyticsManager.shared.captureWorkflow(workflow: "app", stage: "move_suggested", outcome: "started")
             suggestMoveToApplications()
         }
     }
@@ -575,11 +593,13 @@ private enum ApplicationMover {
                         systemImage: "clock"
                     ) {
                         HapticFeedbackManager.shared.tap()
+                        AnalyticsManager.shared.captureWorkflow(workflow: "app", stage: "move_not_now", outcome: "success")
                         NotificationManager.shared.dismissHUD(identifier: suggestionIdentifier)
                     },
                     HUDNotificationAction(title: "Don't Ask Again") {
                         HapticFeedbackManager.shared.selection()
                         UserDefaults.standard.set(true, forKey: suggestionDismissalKey)
+                        AnalyticsManager.shared.captureWorkflow(workflow: "app", stage: "move_dismissed", outcome: "success")
                         NotificationManager.shared.dismissHUD(identifier: suggestionIdentifier)
                     },
                 ]
@@ -604,16 +624,29 @@ private enum ApplicationMover {
         // Gatekeeper translocation (which would re-trigger this prompt).
         Task {
             defer { isMoving = false }
-            if let error = await AppRelocationService.move(source: sourceURL, destination: destinationURL) {
+            let analytics = AnalyticsManager.shared
+            analytics.captureWorkflow(workflow: "app", stage: "move_started", outcome: "started")
+            switch await AppRelocationService.move(source: sourceURL, destination: destinationURL) {
+            case .moved:
+                analytics.captureWorkflow(workflow: "app", stage: "moved", outcome: "success")
+                await analytics.flushBeforeExit()
+                relaunch(at: destinationURL)
+                quitImmediately()
+            case .cancelled:
+                analytics.captureWorkflow(workflow: "app", stage: "move", outcome: "cancelled")
+            case let .failed(message, reason):
+                analytics.captureWorkflow(
+                    workflow: "app",
+                    stage: "move",
+                    outcome: "failed",
+                    properties: ["failure_reason": reason]
+                )
                 let alert = NSAlert()
                 alert.alertStyle = .warning
                 alert.messageText = "Sorty couldn’t be moved"
-                alert.informativeText = error
+                alert.informativeText = message
                 alert.runModal()
-                return
             }
-            relaunch(at: destinationURL)
-            quitImmediately()
         }
     }
 
