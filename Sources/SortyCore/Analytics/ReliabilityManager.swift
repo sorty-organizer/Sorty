@@ -295,6 +295,65 @@ public final class ReliabilityManager {
         addBreadcrumb(category: "sorty.workflow", data: data)
     }
 
+    /// Mirrors the PostHog `App Moved` / `App Deleted` family into Sentry:
+    /// every stage becomes a breadcrumb and a `sorty.app.lifecycle` metric,
+    /// and failures become a handled-error issue titled like
+    /// `AppLifecycleError: App › Move to Applications — not_authorized`.
+    public func recordAppLifecycle(stage: String, outcome: String, reason: String?, source: String?) {
+        guard isActive, consent == .granted, !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else { return }
+        let safeStage = Self.boundedIdentifier(stage, fallback: "unknown")
+        let safeOutcome = Self.boundedIdentifier(outcome, fallback: "unknown")
+        var data: [String: Any] = ["stage": safeStage, "outcome": safeOutcome]
+        data["failure_reason"] = reason.map { Self.boundedIdentifier($0, fallback: "unknown") }
+        data["source"] = source.map { Self.boundedIdentifier($0, fallback: "unknown") }
+        addBreadcrumb(category: "sorty.app_lifecycle", data: data)
+        SentrySDK.metrics.count(
+            key: "sorty.app.lifecycle",
+            attributes: [
+                "platform_surface": "mac_app",
+                "is_internal": InternalTelemetry.isEnabled,
+                "stage": safeStage,
+                "outcome": safeOutcome,
+            ]
+        )
+
+        guard safeOutcome == "failed", captureRateLimiter.shouldCapture() else { return }
+        let isMove = safeStage.hasPrefix("move")
+        let operation = isMove ? "move_to_applications" : "uninstall"
+        let cause = (data["failure_reason"] as? String) ?? "unknown"
+        let fault: ReliabilityFault = ["not_authorized", "permission_denied", "source_missing"].contains(cause) ? .setup : .unknown
+        let exception = Exception(
+            value: "App › \(isMove ? "Move to Applications" : "Uninstall") — \(cause)",
+            type: "AppLifecycleError"
+        )
+        let mechanism = Mechanism(type: "sorty.handled_error")
+        mechanism.handled = true
+        exception.mechanism = mechanism
+        let event = Event(level: fault == .setup ? .warning : .error)
+        event.exceptions = [exception]
+        event.transaction = "app.\(operation)"
+        event.extra = data
+        event.fingerprint = ["sorty.handled_error.v2", "app", operation, "app_lifecycle", cause]
+        SentrySDK.capture(event: event) { scope in
+            scope.setTag(value: "mac_app", key: "platform_surface")
+            scope.setTag(value: ReliabilityEventKind.handledError.rawValue, key: ReliabilityEventKind.tagKey)
+            scope.setTag(value: "app", key: "feature")
+            scope.setTag(value: operation, key: "operation")
+            scope.setTag(value: "app_lifecycle", key: "error_category")
+            scope.setTag(value: cause, key: "error_cause")
+            scope.setTag(value: fault.rawValue, key: "fault")
+            scope.setTag(value: "true", key: "recoverable")
+        }
+    }
+
+    /// Uploads queued Sentry envelopes before Sorty quits or deletes itself.
+    public func flushBeforeExit() async {
+        guard isActive else { return }
+        await Task.detached(priority: .userInitiated) {
+            SentrySDK.flush(timeout: 1.5)
+        }.value
+    }
+
     public func recordScreen(_ screen: String) {
         guard let data = Self.screenDiagnostics(screen) else { return }
         addBreadcrumb(category: "sorty.navigation", data: data)

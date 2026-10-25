@@ -262,6 +262,14 @@ public final class AnalyticsManager: ObservableObject {
         properties: [String: Any] = [:]
     ) {
         ReliabilityManager.shared.recordWorkflow(workflow: workflow, stage: stage, outcome: outcome)
+        if workflow == "app" {
+            ReliabilityManager.shared.recordAppLifecycle(
+                stage: stage,
+                outcome: outcome,
+                reason: properties["failure_reason"] as? String,
+                source: properties["source"] as? String
+            )
+        }
         capture(
             event: AnalyticsEventName.workflow(workflow: workflow, stage: stage, outcome: outcome),
             properties: properties.merging([
@@ -277,9 +285,11 @@ public final class AnalyticsManager: ObservableObject {
     /// before Sorty quits or deletes itself, when the on-disk queue would
     /// otherwise be lost or not retried until a next launch.
     public func flushBeforeExit() async {
-        guard canCapture else { return }
-        PostHogSDK.shared.flush()
-        try? await Task.sleep(for: .milliseconds(1_500))
+        if canCapture {
+            PostHogSDK.shared.flush()
+        }
+        // Sentry's flush blocks for up to 1.5s, which also covers PostHog's upload.
+        await ReliabilityManager.shared.flushBeforeExit()
     }
 
     public func captureImportantButton(
