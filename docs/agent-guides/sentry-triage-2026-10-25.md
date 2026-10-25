@@ -142,3 +142,28 @@ router selects `.automation`. Both the router and those expectations predate
 this commit. The new regeneration tests did not fail. Full hosted CI is red,
 and pre-release validation was skipped. The unrelated routing test was left
 unchanged.
+
+## Diagnostic logging follow-up
+
+Commit `e44c4c6e` adds a typed, privacy-filtered request snapshot to handled
+errors, model-list failures, and batch breadcrumbs. It records provider and
+endpoint category, request settings, file/attachment counts, and adaptive retry
+depth. Fixed allowlists retain safe provider codes and decoding hints. Raw model
+IDs, custom endpoint URLs, credentials, filenames, prompts, and response bodies
+are excluded. Workflow and navigation breadcrumbs add activity context to future
+hang reports. The readable titles, fault taxonomy, severity mapping, and
+`sorty.handled_error.v2` grouping remain unchanged.
+
+All 15 focused checks passed against an isolated source export, covering privacy,
+error classification, retry breadcrumbs, and cancellation.
+[Blacksmith Swift CI 40160552764](https://github.com/sorty-organizer/Sorty/actions/runs/40160552764)
+passed secret scanning, fuzzing, test compilation, and the app build. Its test
+step failed only in the same unchanged settings-routing test described above,
+with two `.automation` versus `.rules` assertion failures. Full hosted CI remains
+red; pre-release validation was skipped. No additional local verification was
+run for this documentation update.
+
+The follow-up production CLI inventory contained no event newer than
+25 October at 00:21:24 UTC. This is an error-list snapshot, not a complete feedback
+inventory. No Sentry status was changed in this follow-up. The added diagnostics
+require a shipped build and new events; they cannot enrich historical reports.
