@@ -25,6 +25,7 @@ package struct PersonaPickerView: View {
     @State private var localIcon: String = "star.fill"
     @State private var showingInstructionsInfo: Bool = false
     @State private var isCustomExpanded: Bool = false
+    @State private var isHoveringEmptyState = false
     @State private var polishError: String?
     @StateObject private var promptPolisher = PersonaGenerator()
     @FocusState private var focusedField: PersonaEditableField?
@@ -40,25 +41,15 @@ package struct PersonaPickerView: View {
             }
 
             builtInPersonaGrid
-            if !customStore.customPersonas.isEmpty {
-                Divider()
 
-                HStack {
-                    Text("Custom Personas")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+            Divider()
 
-                    Spacer()
+            customPersonasHeader
 
-                    Button(action: {
-                        appState.personaGeneratorPresentationContext = .settings
-                    }) {
-                        Label("Generate Custom Persona", systemImage: "sparkles")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.borderless)
-                }
-
+            if customStore.customPersonas.isEmpty {
+                customPersonasEmptyState
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            } else {
                 LazyVGrid(columns: personaGridColumns, spacing: 8) {
                     ForEach(visibleCustomPersonas) { custom in
                         CustomPersonaButton(
@@ -165,6 +156,7 @@ package struct PersonaPickerView: View {
         .onChange(of: customStore.customPersonas) { _, _ in
             updateLocalPrompt()
         }
+        .animation(.spring(response: 0.3), value: customStore.customPersonas.isEmpty)
         .onChange(of: customStore.customPersonas.count) { _, count in
             if count <= collapsedCustomLimit {
                 isCustomExpanded = false
@@ -177,6 +169,87 @@ package struct PersonaPickerView: View {
         .onDisappear {
             saveChangesIfNeeded()
         }
+    }
+
+    private var customPersonasHeader: some View {
+        HStack(spacing: 6) {
+            Text("Custom Personas")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            if !customStore.customPersonas.isEmpty {
+                Text("\(customStore.customPersonas.count)")
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Color.secondary.opacity(0.12), in: Capsule())
+                    .numericTextTransition(animationValue: customStore.customPersonas.count)
+            }
+
+            Spacer()
+
+            if !customStore.customPersonas.isEmpty {
+                Button(action: openPersonaGenerator) {
+                    Label("New Persona", systemImage: "sparkles")
+                }
+                .buttonStyle(.sortyBordered(intent: .primary, size: .small))
+                .accessibilityIdentifier("SettingsNewCustomPersonaButton")
+            }
+        }
+    }
+
+    /// Shown when no custom personas exist so Settings always offers a way to create one.
+    private var customPersonasEmptyState: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "person.crop.circle.badge.plus")
+                .font(.system(size: 22, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.purple)
+                .frame(width: 44, height: 44)
+                .background(
+                    Color.purple.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Make Sorty organize your way")
+                    .font(.subheadline.weight(.medium))
+                Text("Describe how you work and Sorty generates a persona with its own folder rules.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: openPersonaGenerator) {
+                Label("Create Persona", systemImage: "sparkles")
+            }
+            .buttonStyle(.sortyBordered(intent: .primary, size: .small))
+            .accessibilityIdentifier("SettingsCreateCustomPersonaButton")
+        }
+        .padding(12)
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(
+                    Color.secondary.opacity(isHoveringEmptyState ? 0.45 : 0.25),
+                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                )
+        }
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHoveringEmptyState = hovering
+            }
+        }
+    }
+
+    private func openPersonaGenerator() {
+        HapticFeedbackManager.shared.tap()
+        saveChangesIfNeeded()
+        appState.personaGeneratorPresentationContext = .settings
     }
 
     private func dismissPersonaGenerationHighlight() {
