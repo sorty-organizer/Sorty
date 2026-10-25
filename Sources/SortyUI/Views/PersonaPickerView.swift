@@ -231,12 +231,10 @@ package struct PersonaPickerView: View {
             .accessibilityIdentifier("SettingsCreateCustomPersonaButton")
         }
         .padding(12)
-        .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(
-                    Color.secondary.opacity(isHoveringEmptyState ? 0.45 : 0.25),
-                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                )
+        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.purple.opacity(isHoveringEmptyState ? 0.3 : 0.14), lineWidth: 1)
         }
         .contentShape(Rectangle())
         .onHover { hovering in

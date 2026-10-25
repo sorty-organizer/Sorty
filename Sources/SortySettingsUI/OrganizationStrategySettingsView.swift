@@ -396,12 +396,10 @@ struct OrganizationStrategySettingsView: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(
-                        Color.secondary.opacity(0.25),
-                        style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                    )
+            .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.purple.opacity(0.14), lineWidth: 1)
             }
             .accessibilityElement(children: .combine)
         }
