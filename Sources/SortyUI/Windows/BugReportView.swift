@@ -353,11 +353,11 @@ public struct BugReportView: View {
     }
 
     /// Product analytics for the submit: kind, destinations, and counts only, never the text.
-    private func captureSubmit(outcome: String, sentry: Bool) {
+    private func captureSubmit(outcome: String, sentry: Bool, github: Bool) {
         let properties: [String: Any] = [
             "feedback_kind": kind.rawValue,
             "sent_to_sentry": sentry,
-            "opened_github": opensGitHub,
+            "opened_github": github,
             "attachment_count": attachments.count,
             "include_diagnostics": includeDiagnostics,
             "has_email": !email.trimmingCharacters(in: .whitespaces).isEmpty,
@@ -373,6 +373,9 @@ public struct BugReportView: View {
     }
 
     private func openIssue() {
+        // Decide before sending: a successful send sets `skipsSentry`, which
+        // would otherwise flip `opensGitHub` on and open GitHub uninvited.
+        let shouldOpenGitHub = opensGitHub
         let comment = trimmedDescription
         var didSubmitToSentry = false
         // An empty description opens the bare GitHub template below. There
@@ -388,7 +391,7 @@ public struct BugReportView: View {
             ) else {
                 errorMessage = "Couldn't reach Sorty's developers. Press Open GitHub Issue to report it there instead."
                 skipsSentry = true
-                captureSubmit(outcome: "failed", sentry: true)
+                captureSubmit(outcome: "failed", sentry: true, github: false)
                 return
             }
             sentryEventID = eventID
@@ -403,8 +406,8 @@ public struct BugReportView: View {
             HapticFeedbackManager.shared.success()
             didSubmitToSentry = true
         }
-        captureSubmit(outcome: "sent", sentry: didSubmitToSentry)
-        guard opensGitHub else {
+        captureSubmit(outcome: "sent", sentry: didSubmitToSentry, github: shouldOpenGitHub)
+        guard shouldOpenGitHub else {
             onClose()
             return
         }
