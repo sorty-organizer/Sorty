@@ -386,7 +386,7 @@ struct OrganizationStrategySettingsView: View {
 
                     Text(viewModel.config.renameNamingOptions.exampleFilename)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary.opacity(0.78))
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .numericTextTransition(

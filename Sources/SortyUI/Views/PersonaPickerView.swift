@@ -218,7 +218,7 @@ package struct PersonaPickerView: View {
                     .font(.subheadline.weight(.medium))
                 Text("Describe how you work and Sorty generates a persona with its own folder rules.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary.opacity(0.78))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -227,7 +227,7 @@ package struct PersonaPickerView: View {
             Button(action: openPersonaGenerator) {
                 Label("Create Persona", systemImage: "sparkles")
             }
-            .buttonStyle(.sortyBordered(intent: .primary, size: .small))
+            .buttonStyle(.sortyProminent(size: .small))
             .accessibilityIdentifier("SettingsCreateCustomPersonaButton")
         }
         .padding(12)
