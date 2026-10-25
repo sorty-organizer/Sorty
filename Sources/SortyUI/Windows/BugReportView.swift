@@ -22,7 +22,8 @@ public struct BugReportView: View {
     @State private var textController = FeedbackTextController()
 
     private var showsDropZone: Bool { isDropTargeted || isTextDropTargeted }
-    @AppStorage("bugReportIncludeDiagnostics") private var includeDiagnostics = true
+    /// On for every new report; a one-off opt-out shouldn't stick for later reports.
+    @State private var includeDiagnostics = true
     /// The user's choice; kept while internet is blocked so it returns when unblocked.
     @State private var wantsGitHub = false
     /// Set after Sentry succeeds (no duplicate on a GitHub retry) or fails (fall back to GitHub).
@@ -198,10 +199,14 @@ public struct BugReportView: View {
                         .pickerStyle(.menu)
                         .fixedSize()
                         .accessibilityIdentifier("BugReportAreaPicker")
-                        TextField("Email, if you'd like a reply", text: $email)
-                            .textFieldStyle(.roundedBorder)
-                            .textContentType(.emailAddress)
-                            .accessibilityIdentifier("BugReportEmailField")
+                        // Appears once there's something to reply to.
+                        if !trimmedDescription.isEmpty {
+                            TextField("Email, if you'd like a reply", text: $email)
+                                .textFieldStyle(.roundedBorder)
+                                .textContentType(.emailAddress)
+                                .accessibilityIdentifier("BugReportEmailField")
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
                         Text("Your text, attachments, and email (if given) go to Sorty's developers via Sentry. Nothing else is identified; IP addresses are discarded.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -258,6 +263,7 @@ public struct BugReportView: View {
             value: sendToSentry
         )
         .animation(.easeInOut(duration: 0.15), value: wantsGitHub)
+        .animation(.easeInOut(duration: 0.18), value: trimmedDescription.isEmpty)
         .animation(.easeInOut(duration: 0.15), value: attachments)
         .modifier(WindowGlassBackground())
         .accessibilityIdentifier("BugReportView")
