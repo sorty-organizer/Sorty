@@ -553,7 +553,22 @@ public final class ReliabilityManager {
             associatedEventId: eventID,
             attachments: attachments.isEmpty ? nil : attachments
         )
+        // The feedback item is its own issue (category Feedback) and has no
+        // per-capture scope API, so tag the shared scope just for this capture.
+        // Alert rules filter on these tags; without them feedback never notifies.
+        let feedbackTags = [
+            "feature": "user_feedback",
+            ReliabilityEventKind.tagKey: ReliabilityEventKind.userFeedback.rawValue,
+            "feedback_kind": kind.rawValue,
+            "report_area": area.rawValue,
+        ]
+        SentrySDK.configureScope { scope in
+            feedbackTags.forEach { scope.setTag(value: $1, key: $0) }
+        }
         SentrySDK.capture(feedback: feedback)
+        SentrySDK.configureScope { scope in
+            feedbackTags.keys.forEach { scope.removeTag(key: $0) }
+        }
         return eventID.sentryIdString
     }
 
