@@ -16,6 +16,7 @@ public struct BugReportView: View {
     @State private var kind: FeedbackKind = .bug
     @State private var email = ""
     @State private var attachments: [URL] = []
+    @State private var isDropTargeted = false
     @AppStorage("bugReportIncludeDiagnostics") private var includeDiagnostics = true
     /// The user's choice; kept while internet is blocked so it returns when unblocked.
     @State private var wantsSentry = false
@@ -134,9 +135,14 @@ public struct BugReportView: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay {
                 RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
+                    .strokeBorder(
+                        isDropTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.2),
+                        lineWidth: isDropTargeted ? 2 : 1
+                    )
             }
-            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            .background(TextViewDropPassthrough())
+            .animation(.easeInOut(duration: 0.12), value: isDropTargeted)
+            .onDrop(of: [.fileURL, .image], isTargeted: $isDropTargeted) { providers in
                 handleDrop(providers)
             }
 
@@ -232,13 +238,34 @@ public struct BugReportView: View {
         addAttachments(panel.urls)
     }
 
+    /// Accepts Finder files directly and saves raw image drags (browsers,
+    /// Photos, screenshots thumbnails) to a temp file so they attach the same way.
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         var accepted = false
-        for provider in providers where provider.canLoadObject(ofClass: URL.self) {
-            accepted = true
-            _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                guard let url else { return }
-                Task { @MainActor in addAttachments([url]) }
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                accepted = true
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url else { return }
+                    Task { @MainActor in addAttachments([url]) }
+                }
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+                accepted = true
+                let typeID = provider.registeredTypeIdentifiers
+                    .first { UTType($0)?.conforms(to: .image) == true } ?? UTType.png.identifier
+                let ext = UTType(typeID)?.preferredFilenameExtension ?? "png"
+                let name = provider.suggestedName ?? "Image"
+                provider.loadDataRepresentation(forTypeIdentifier: typeID) { data, _ in
+                    guard let data else { return }
+                    let dir = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("SortyFeedback-\(UUID().uuidString)", isDirectory: true)
+                    let url = dir.appendingPathComponent(name).appendingPathExtension(ext)
+                    do {
+                        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                        try data.write(to: url)
+                    } catch { return }
+                    Task { @MainActor in addAttachments([url]) }
+                }
             }
         }
         return accepted
@@ -419,5 +446,32 @@ private struct AttachmentChip: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(Capsule().fill(Color.secondary.opacity(0.12)))
+    }
+}
+
+/// Stops the description's NSTextView from claiming drags, so dropped files
+/// and images reach the box's `onDrop` and become attachments instead of
+/// pasted paths. Typing and pasting text are unaffected.
+private struct TextViewDropPassthrough: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { Probe() }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? Probe)?.unregisterTextViews()
+    }
+
+    final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            DispatchQueue.main.async { [weak self] in self?.unregisterTextViews() }
+        }
+
+        func unregisterTextViews() {
+            guard let root = window?.contentView else { return }
+            Self.textViews(in: root).forEach { $0.unregisterDraggedTypes() }
+        }
+
+        private static func textViews(in view: NSView) -> [NSTextView] {
+            let own = (view as? NSTextView).map { [$0] } ?? []
+            return own + view.subviews.flatMap(textViews(in:))
+        }
     }
 }
