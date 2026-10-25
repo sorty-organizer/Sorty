@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UniformTypeIdentifiers
 @preconcurrency import Sentry
 import SortyFS
 
@@ -531,7 +532,19 @@ public final class ReliabilityManager {
         guard eventID != .empty else { return nil }
 
         let trimmedEmail = email?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let attachments = attachmentURLs.compactMap { Attachment(path: $0.path) }
+        // Read the bytes now, inside the sandbox grant from the open panel or
+        // drop. `Attachment(path:)` reads later on Sentry's queue, where the
+        // sandbox can deny access and the file is silently dropped.
+        let attachments = attachmentURLs.compactMap { url -> Attachment? in
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return Attachment(
+                data: data,
+                filename: url.lastPathComponent,
+                contentType: UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
+            )
+        }
         let feedback = SentryFeedback(
             message: comment,
             name: nil,

@@ -330,13 +330,35 @@ public struct BugReportView: View {
                 errorMessage = "\(url.lastPathComponent) doesn't fit. Attachments are limited to 20 MB in total."
                 continue
             }
+            guard let copy = Self.stagedCopy(of: url) else {
+                errorMessage = "\(url.lastPathComponent) couldn't be read."
+                continue
+            }
             total += size
-            attachments.append(url)
+            attachments.append(copy)
         }
         if skippedDuplicate, errorMessage == nil {
             errorMessage = "That file is already attached."
         }
         HapticFeedbackManager.shared.light()
+    }
+
+    /// Copies an added file into Sorty's temp folder while the sandbox grant
+    /// from the drop or open panel is still valid, so sending later can read it.
+    private static func stagedCopy(of url: URL) -> URL? {
+        let temp = FileManager.default.temporaryDirectory
+        if url.path.hasPrefix(temp.path) { return url }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let dir = temp.appendingPathComponent("SortyFeedback-\(UUID().uuidString)", isDirectory: true)
+        let copy = dir.appendingPathComponent(url.lastPathComponent)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: url, to: copy)
+            return copy
+        } catch {
+            return nil
+        }
     }
 
     private var remainingAttachmentBytes: Int {
