@@ -361,26 +361,46 @@ struct PersonaGeneratorView: View {
 
     private func customAnswerField(for question: HoningQuestion) -> some View {
         let answer = customAnswers[question.id] ?? ""
-        let showsPlaceholder = answer.isEmpty
-            && focusedCustomAnswerQuestionID != question.id
+        let isFocused = focusedCustomAnswerQuestionID == question.id
+        let hasAnswer = !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let showsPlaceholder = answer.isEmpty && !isFocused
+        let accent = SortyDesignSystem.Colors.resolvedAccent
 
-        return ZStack(alignment: .leading) {
+        return ZStack(alignment: .topLeading) {
             Text(showsPlaceholder ? "Or type exactly what you want…" : "")
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 7)
                 .allowsHitTesting(false)
                 .contentTransition(reduceMotion ? .opacity : .numericText())
                 .animation(reduceMotion ? .easeOut(duration: 0.12) : .default, value: showsPlaceholder)
 
-            TextField("", text: customAnswerBinding(for: question))
+            TextField("", text: customAnswerBinding(for: question), axis: .vertical)
                 .focused($focusedCustomAnswerQuestionID, equals: question.id)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .lineLimit(1...4)
                 .onSubmit {
                     guard answers[question.id] != nil else { return }
                     advance(from: question)
                 }
                 .accessibilityLabel("Custom answer")
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(hasAnswer ? accent.opacity(0.11) : Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .strokeBorder(
+                    hasAnswer ? accent.opacity(0.82) : isFocused ? accent.opacity(0.5) : Color.secondary.opacity(0.18),
+                    lineWidth: hasAnswer ? 1.5 : 1
+                )
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { focusedCustomAnswerQuestionID = question.id }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isFocused)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: hasAnswer)
     }
 
     private func advance(from question: HoningQuestion) {
