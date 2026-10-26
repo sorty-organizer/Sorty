@@ -195,15 +195,27 @@ struct OnboardingOrbitField: NSViewRepresentable {
     }
 }
 
-/// Keeps every material-backed file chip mounted and updates only layer
-/// compositor keyframes. The display link runs only during hover transitions.
+/// Keeps every material-backed file chip mounted and updates only compositor
+/// state. Each chip's hosting view sits at a fixed frame inside a full-size
+/// wrapper, and all motion is applied through the wrapper layer's
+/// `sublayerTransform`. AppKit owns the `position` and `transform` of
+/// layer-backed views and resets them on its next geometry sync (the first
+/// layout pass, any `frame` assignment, hosting-view resizes); writing them
+/// directly made chips snap to the corner or lose their scale for a frame.
+/// Visibility goes through `alphaValue` for the same reason. The display link
+/// runs only during hover transitions.
 @MainActor
 final class OnboardingOrbitFieldView: NSView {
-    private static let interactionFrameRate: Float = 60
+    /// Matches ProMotion while the hover spring runs. The idle orbit already
+    /// animates at the display's rate on the compositor, so a 60 Hz spring
+    /// visibly halved the motion's frame rate the moment the pointer reached
+    /// Get Started. The link is paused outside those short springs.
+    private static let interactionFrameRate: Float = 120
     nonisolated private static let idleSampleRate = 60.0
     private static let springResponse = 0.48
     private static let springDamping = 0.90
 
+    private var wrappers: [UUID: OnboardingOrbitChipWrapper] = [:]
     private var hosts: [UUID: NSHostingView<OnboardingOrbitFileChip>] = [:]
     private var hostedIcons: [UUID: NSImage] = [:]
     private var hostSizes: [UUID: CGSize] = [:]
@@ -230,8 +242,8 @@ final class OnboardingOrbitFieldView: NSView {
 
     private var animationBounds: CGRect = .zero
     private var idlePreparationTask: Task<Void, Never>?
-    private var idlePaths: [UUID: CGPath] = [:]
-    private var positionAnimations: [UUID: CAKeyframeAnimation] = [:]
+    private var idleOffsets: [UUID: [CGPoint]] = [:]
+    private var translationAnimations: [UUID: CAKeyframeAnimation] = [:]
     private var rotationAnimations: [UUID: CAKeyframeAnimation] = [:]
 
     override var isFlipped: Bool { true }
@@ -277,6 +289,9 @@ final class OnboardingOrbitFieldView: NSView {
 
     override func layout() {
         super.layout()
+        for wrapper in wrappers.values where wrapper.frame != bounds {
+            wrapper.frame = bounds
+        }
         if idleAnimationStartedAt != nil, animationBounds != bounds {
             stopIdleAnimations(preservingPhase: true)
             updateMotionState()
@@ -343,22 +358,36 @@ final class OnboardingOrbitFieldView: NSView {
     private func installHosts(icons: [String: NSImage]) {
         for file in OnboardingOrbitFile.files where hosts[file.id] == nil {
             guard let icon = icons[file.ext] else { continue }
+            let wrapper = OnboardingOrbitChipWrapper(frame: bounds)
+            wrapper.alphaValue = 0
             let host = NSHostingView(rootView: OnboardingOrbitFileChip(file: file, icon: icon))
             host.wantsLayer = true
             host.layer?.masksToBounds = false
             host.layer?.shouldRasterize = true
             host.layer?.rasterizationScale = window?.backingScaleFactor ?? 2
-            host.alphaValue = 0
-            addSubview(host)
+            wrapper.addSubview(host)
+            addSubview(wrapper)
+            wrappers[file.id] = wrapper
             hosts[file.id] = host
             hostedIcons[file.id] = icon
-            hostSizes[file.id] = host.fittingSize
+            placeHost(host, for: file)
+        }
+    }
+
+    /// Centers the chip on the wrapper's origin, so the wrapper's
+    /// `sublayerTransform` rotates and scales it about its own center.
+    private func placeHost(_ host: NSHostingView<OnboardingOrbitFileChip>, for file: OnboardingOrbitFile) {
+        let size = host.fittingSize
+        hostSizes[file.id] = size
+        let frame = CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height)
+        if host.frame != frame {
+            host.frame = frame
         }
     }
 
     /// Cache each finished material card as one compositor surface. The cards'
     /// contents change only when their resolved file icons change, while their
-    /// position and transform animate continuously.
+    /// wrapper transforms animate continuously.
     private func updateHostRasterizationScale() {
         let scale = window?.backingScaleFactor ?? 2
         for host in hosts.values {
@@ -372,7 +401,7 @@ final class OnboardingOrbitFieldView: NSView {
             guard hostedIcons[file.id] !== icon, let host = hosts[file.id] else { continue }
             hostedIcons[file.id] = icon
             host.rootView = OnboardingOrbitFileChip(file: file, icon: icon)
-            hostSizes[file.id] = host.fittingSize
+            placeHost(host, for: file)
         }
     }
 
@@ -382,7 +411,7 @@ final class OnboardingOrbitFieldView: NSView {
 
         guard visible else {
             revealedFileIDs.removeAll()
-            hosts.values.forEach { $0.alphaValue = 0 }
+            wrappers.values.forEach { $0.alphaValue = 0 }
             return
         }
 
@@ -396,19 +425,13 @@ final class OnboardingOrbitFieldView: NSView {
     }
 
     private func reveal(file: OnboardingOrbitFile) {
-        guard let chipLayer = hosts[file.id]?.layer else { return }
+        guard let wrapper = wrappers[file.id] else { return }
         revealedFileIDs.insert(file.id)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        chipLayer.opacity = 1
-        CATransaction.commit()
-
-        let opacity = CABasicAnimation(keyPath: "opacity")
-        opacity.fromValue = 0
-        opacity.toValue = 1
-        opacity.duration = 0.7
-        opacity.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        chipLayer.add(opacity, forKey: "revealOpacity")
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = reduceMotion ? 0 : 0.7
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            wrapper.animator().alphaValue = 1
+        }
     }
 
     private func installDisplayLinkIfNeeded() {
@@ -418,7 +441,7 @@ final class OnboardingOrbitFieldView: NSView {
             selector: #selector(displayLinkDidFire(_:))
         )
         displayLink.preferredFrameRateRange = CAFrameRateRange(
-            minimum: 30,
+            minimum: 60,
             maximum: Self.interactionFrameRate,
             preferred: Self.interactionFrameRate
         )
@@ -474,7 +497,7 @@ final class OnboardingOrbitFieldView: NSView {
     }
 
     private func prepareIdleAnimationsIfNeeded() {
-        guard idlePaths.isEmpty, idlePreparationTask == nil else { return }
+        guard idleOffsets.isEmpty, idlePreparationTask == nil else { return }
         let files = OnboardingOrbitFile.files
         idlePreparationTask = Task { [weak self] in
             let preparation = Task.detached(priority: .userInitiated) {
@@ -488,11 +511,9 @@ final class OnboardingOrbitFieldView: NSView {
             guard !Task.isCancelled, let self else { return }
             idlePreparationTask = nil
             for sample in samples {
-                let path = CGMutablePath()
-                path.addLines(between: sample.positions)
-                idlePaths[sample.fileID] = path.copy()
+                idleOffsets[sample.fileID] = sample.positions
 
-                let rotation = CAKeyframeAnimation(keyPath: "transform.rotation.z")
+                let rotation = CAKeyframeAnimation(keyPath: "sublayerTransform.rotation.z")
                 rotation.values = sample.rotations.map { NSNumber(value: $0) }
                 rotation.duration = 2 * .pi / 0.7
                 rotation.repeatCount = .infinity
@@ -523,38 +544,44 @@ final class OnboardingOrbitFieldView: NSView {
     }
 
     private func startIdleAnimationsIfNeeded() {
-        guard idleAnimationStartedAt == nil, !bounds.isEmpty, !idlePaths.isEmpty else { return }
-        if animationBounds != bounds || positionAnimations.isEmpty {
+        guard idleAnimationStartedAt == nil, !bounds.isEmpty, !idleOffsets.isEmpty else { return }
+        if animationBounds != bounds || translationAnimations.isEmpty {
             animationBounds = bounds
             for file in OnboardingOrbitFile.files {
-                var translation = CGAffineTransform(translationX: bounds.midX, y: bounds.midY)
-                let animation = CAKeyframeAnimation(keyPath: "position")
-                animation.path = idlePaths[file.id]?.copy(using: &translation)
+                guard let offsets = idleOffsets[file.id] else { continue }
+                let anchor = chipAnchorOffset(for: file, scale: file.scale)
+                let animation = CAKeyframeAnimation(keyPath: "sublayerTransform.translation")
+                animation.values = offsets.map {
+                    NSValue(size: CGSize(
+                        width: bounds.midX + $0.x + anchor.width,
+                        height: bounds.midY + $0.y + anchor.height
+                    ))
+                }
                 animation.duration = 2 * .pi / file.driftSpeed
                 animation.repeatCount = .infinity
                 animation.calculationMode = .linear
-                positionAnimations[file.id] = animation
+                translationAnimations[file.id] = animation
             }
         }
         let startedAt = CACurrentMediaTime()
         idleAnimationStartedAt = startedAt
         idleAnimationBasePhase = orbitPhase
 
-        // Install model positions and animations together to avoid a handoff snap.
+        // Install model transforms and animations together to avoid a handoff snap.
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         configureIdleBaseLayers()
         for file in OnboardingOrbitFile.files {
-            guard let chipLayer = hosts[file.id]?.layer,
-                  let position = positionAnimations[file.id],
+            guard let wrapperLayer = wrappers[file.id]?.layer,
+                  let translation = translationAnimations[file.id],
                   let rotation = rotationAnimations[file.id] else { continue }
-            let localStartTime = chipLayer.convertTime(startedAt, from: nil)
-            for animation in [position, rotation] {
+            let localStartTime = wrapperLayer.convertTime(startedAt, from: nil)
+            for animation in [translation, rotation] {
                 animation.beginTime = localStartTime
                 animation.timeOffset = orbitPhase.truncatingRemainder(dividingBy: animation.duration)
             }
-            chipLayer.add(position, forKey: "idlePosition")
-            chipLayer.add(rotation, forKey: "idleRotation")
+            wrapperLayer.add(translation, forKey: "idleTranslation")
+            wrapperLayer.add(rotation, forKey: "idleRotation")
         }
         CATransaction.commit()
     }
@@ -567,8 +594,8 @@ final class OnboardingOrbitFieldView: NSView {
         idleAnimationStartedAt = nil
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        for host in hosts.values {
-            Self.idleAnimationKeys.forEach { host.layer?.removeAnimation(forKey: $0) }
+        for wrapper in wrappers.values {
+            Self.idleAnimationKeys.forEach { wrapper.layer?.removeAnimation(forKey: $0) }
         }
         renderFrame()
         CATransaction.commit()
@@ -579,27 +606,46 @@ final class OnboardingOrbitFieldView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for file in OnboardingOrbitFile.files {
-            guard let host = hosts[file.id], let chipLayer = host.layer else { continue }
-            let fittingSize = hostSizes[file.id] ?? host.fittingSize
+            guard let wrapperLayer = wrappers[file.id]?.layer else { continue }
             let orbit = Self.orbitOffset(for: file, phase: idleAnimationBasePhase)
-            if host.bounds.size != fittingSize {
-                host.frame = CGRect(origin: .zero, size: fittingSize)
-            }
-            chipLayer.position = CGPoint(
-                x: bounds.midX + orbit.width,
-                y: bounds.midY + orbit.height
-            )
             let rotation = file.rotation
                 + sin(idleAnimationBasePhase * 0.7 + file.driftPhase) * 3
-            chipLayer.setAffineTransform(
-                CGAffineTransform(rotationAngle: rotation * .pi / 180)
-                    .scaledBy(x: file.scale, y: file.scale)
+            wrapperLayer.sublayerTransform = chipTransform(
+                for: file,
+                offset: orbit,
+                rotationDegrees: rotation,
+                scale: file.scale
             )
         }
         CATransaction.commit()
     }
 
-    private static let idleAnimationKeys = ["idlePosition", "idleRotation"]
+    private static let idleAnimationKeys = ["idleTranslation", "idleRotation"]
+
+    /// The orbit layout was tuned while chips were positioned by their corner.
+    /// Shifting the center by the scaled half size keeps every resting and
+    /// collapsed position where it was, while rotation now pivots on the
+    /// chip's center.
+    private func chipAnchorOffset(for file: OnboardingOrbitFile, scale: CGFloat) -> CGSize {
+        let size = hostSizes[file.id] ?? .zero
+        return CGSize(width: size.width / 2 * scale, height: size.height / 2 * scale)
+    }
+
+    private func chipTransform(
+        for file: OnboardingOrbitFile,
+        offset: CGSize,
+        rotationDegrees: Double,
+        scale: CGFloat
+    ) -> CATransform3D {
+        let anchor = chipAnchorOffset(for: file, scale: scale)
+        var transform = CATransform3DMakeTranslation(
+            bounds.midX + offset.width + anchor.width,
+            bounds.midY + offset.height + anchor.height,
+            0
+        )
+        transform = CATransform3DRotate(transform, rotationDegrees * .pi / 180, 0, 0, 1)
+        return CATransform3DScale(transform, scale, scale, 1)
+    }
 
     private func advanceCollapseSpring(delta: CFTimeInterval) {
         let displacement = collapseProgress - collapseTarget
@@ -625,8 +671,7 @@ final class OnboardingOrbitFieldView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for file in OnboardingOrbitFile.files {
-            guard let host = hosts[file.id], let chipLayer = host.layer else { continue }
-            let fittingSize = hostSizes[file.id] ?? host.fittingSize
+            guard let wrapper = wrappers[file.id], let wrapperLayer = wrapper.layer else { continue }
             let orbit = Self.orbitOffset(for: file, phase: phase)
             let collapse = CGSize(
                 width: collapseOrigin.width + file.collapseX * 0.65,
@@ -640,22 +685,21 @@ final class OnboardingOrbitFieldView: NSView {
                 width: orbit.width + travelX * t - travelY / travelLength * arc,
                 height: orbit.height + travelY * t + travelX / travelLength * arc
             )
-            let center = CGPoint(x: bounds.midX + offset.width, y: bounds.midY + offset.height)
-            if host.bounds.size != fittingSize {
-                host.frame = CGRect(origin: .zero, size: fittingSize)
-            }
-            chipLayer.position = center
-
             let rotation = (file.rotation + sin(phase * 0.7 + file.driftPhase) * 3)
                 * Double(1 - t)
             let scale = file.scale + (0.08 - file.scale) * t
-            chipLayer.setAffineTransform(
-                CGAffineTransform(rotationAngle: rotation * .pi / 180)
-                    .scaledBy(x: scale, y: scale)
+            wrapperLayer.sublayerTransform = chipTransform(
+                for: file,
+                offset: offset,
+                rotationDegrees: rotation,
+                scale: scale
             )
-            chipLayer.opacity = revealedFileIDs.contains(file.id)
-                ? Float(collapseOpacity)
-                : 0
+            // The reveal's animator already set the model alpha to 1, so an
+            // in-flight fade is untouched until the collapse changes opacity.
+            guard revealedFileIDs.contains(file.id) else { continue }
+            if abs(wrapper.alphaValue - collapseOpacity) > 0.001 {
+                wrapper.alphaValue = collapseOpacity
+            }
         }
         CATransaction.commit()
     }
@@ -673,4 +717,26 @@ final class OnboardingOrbitFieldView: NSView {
         )
     }
 
+}
+
+/// Full-size, flipped carrier for one chip. Its layer's `sublayerTransform`
+/// is the only animated geometry, which AppKit leaves alone.
+final class OnboardingOrbitChipWrapper: NSView {
+    override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = false
+        setAccessibilityElement(false)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
 }

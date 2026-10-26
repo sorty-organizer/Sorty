@@ -183,8 +183,23 @@ representable inputs must not rewrite the chips' base layers.
 Resolve every workspace icon into one immutable 46-point Retina bitmap before
 reveal. Shared, lazy multi-representation icons can change on their first moving draw.
 Prepare orbit and rotation samples off the main actor before reveal, then retain
-Core Animation paths and keyframes. Resume them using the current phase; resizing
-translates cached paths without resampling the orbit.
+Core Animation keyframes. Resume them using the current phase; resizing
+rebuilds translations from cached samples without resampling the orbit.
+Never write `position`, `transform`, or `frame`-derived geometry on a chip's
+own layer. AppKit owns those properties for layer-backed views and resets them
+on its next geometry sync, such as the first layout pass or any `frame`
+assignment, even to the same size. Its layers also anchor at `(0, 0)`.
+A standalone probe confirmed both behaviors. Each hosting view instead sits at a
+fixed frame centered on the origin of a full-size `OnboardingOrbitChipWrapper`.
+All motion goes through the wrapper layer's `sublayerTransform` and its
+`translation` and `rotation.z` keyframes, which AppKit leaves alone. Opacity goes
+through `alphaValue`. The chip center adds its scaled half size, so resting and
+collapsed positions match the earlier corner-anchored layout. The hover-spring
+display link runs at up to 120 Hz to match the compositor-driven idle orbit on
+ProMotion displays; at 60 Hz the motion visibly stepped as soon as the pointer
+reached Get Started. A headless harness running the real orbit source
+measured 236 alternate-frame position steps during hover with the 60 Hz link
+and none at 120 Hz. It stubs out the glass, so it does not cover rendering.
 The file centers spread 18 percent farther from the intro center. Cards follow
 continuous orbit and drift paths without bouncing off window edges or the
 icon, title, and button. Orbit and drift share a period so paths loop continuously.
