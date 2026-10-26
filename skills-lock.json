@@ -19,12 +19,6 @@
       "skillPath": "swift-accessibility-skill/SKILL.md",
       "computedHash": "cae7f6f35c9844fc28401f72252cdb32b4088e8ae212703e781bbe2663803ec9"
     },
-    "swift-concurrency-expert": {
-      "source": "Dimillian/Skills",
-      "sourceType": "github",
-      "skillPath": "swift-concurrency-expert/SKILL.md",
-      "computedHash": "638744d687dfc9fdde7a14f5496b053f409c7bc1b26c13a4a3c39cb0afb398f9"
-    },
     "swift-concurrency-pro": {
       "source": "twostraws/swift-concurrency-agent-skill",
       "sourceType": "github",
@@ -42,12 +36,6 @@
       "sourceType": "github",
       "skillPath": "swift-testing-pro/SKILL.md",
       "computedHash": "576d9b4705c76262095e2470e99bb9a89324ac4467e7ee54b7032697a8789b3d"
-    },
-    "swiftui-accessibility-auditor": {
-      "source": "rgmez/apple-accessibility-skills",
-      "sourceType": "github",
-      "skillPath": "skills/swiftui-accessibility-auditor/SKILL.md",
-      "computedHash": "a69ea029a49c78d73ff17fbbf15255358cf11629930f1999a251d7d21b925f74"
     },
     "swiftui-liquid-glass": {
       "source": "Dimillian/Skills",

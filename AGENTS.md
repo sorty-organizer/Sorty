@@ -31,3 +31,11 @@
 - If a rule here fights the task in front of you, say so loudly and get a human sign-off before breaking it.
 - Liquid-glass UI must use `systemLiquidGlassBackground(...)` and `.systemLiquidGlassPopover(cornerRadius: 12)` only; never fake it with materials, blur, gradients, or clear-popover hacks.
 - Feature flags: `defaults write com.sorty.app <key> -bool true`; detailed guides live in `docs/agent-guides/`.
+
+## Agent skill routing
+
+- Read applicable skills once per task, then load only references needed for the current change. Reread after a relevant change or lost context.
+- Use unslop for substantive writing and interface copy; use visuals when they clarify the answer. Ponytail commands are explicit-only and apply to one request.
+- Preserve native control types, visual identity, motion, and Reduce Motion behavior during refinement. Check the reported trigger when authorized and distinguish build, install, and runtime evidence.
+- Serialize shared-checkout Git writes and builds. Stage exact task paths, review the staged diff, and undo only the current task's changes.
+- Skill customizations and retained references are documented in [agent skill routing](docs/agent-guides/skill-routing.md).

@@ -24,7 +24,7 @@ Review process:
 1. If the project has strict-concurrency errors, map diagnostics to fixes using `references/diagnostics.md`.
 1. If reviewing tests, check async test patterns using `references/testing.md`.
 
-If doing a partial review, load only the relevant reference files.
+Load only references relevant to the requested code or diagnostics; the list above is a routing index, not a requirement to read every file.
 
 
 ## Core Instructions
@@ -122,3 +122,7 @@ End of example.
 - `references/bug-patterns.md` - Common concurrency failure modes and their fixes.
 - `references/diagnostics.md` - Strict-concurrency compiler errors, protocol conformance fixes, and likely remedies.
 - `references/testing.md` - Async test strategy with Swift Testing, race detection, avoiding timing-based tests.
+
+## Diagnostic migration references
+
+Preserved from Dimillian/Skills, formerly `swift-concurrency-expert`. For Swift 6.2 migration diagnostics, consult [Swift 6.2](references/migration/swift-6-2-concurrency.md), [approachable concurrency](references/migration/approachable-concurrency.md), or [SwiftUI concurrency](references/migration/swiftui-concurrency-tour-wwdc.md) only when the normal diagnostic reference leaves the relevant case unresolved. Compare target build settings and preserve cancellation and actor ownership.
