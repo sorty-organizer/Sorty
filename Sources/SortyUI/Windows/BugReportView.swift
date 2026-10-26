@@ -122,6 +122,7 @@ public struct BugReportView: View {
                     .onChange(of: description) { _, newValue in
                         if newValue.count > 2_000 {
                             description = String(newValue.prefix(2_000))
+                            HapticFeedbackManager.shared.error()
                         }
                     }
                     if description.isEmpty {
@@ -216,33 +217,31 @@ public struct BugReportView: View {
                 }
             }
 
-            if offersDiagnostics || sendToSentry {
-                VStack(alignment: .leading, spacing: 10) {
-                    if offersDiagnostics {
-                        FeedbackOptionToggle(
-                            title: "Include diagnostics",
-                            caption: "App and macOS versions, AI settings, and a scrubbed activity log. Never file names, contents, prompts, or keys.",
-                            isOn: $includeDiagnostics
-                        )
-                        .help("Helps reproduce the problem. Sends Sorty and macOS versions, display and power state, AI provider settings, and a log of recent app activity with private details removed. Never file names, paths, file contents, prompts, or API keys.")
-                        .accessibilityIdentifier("BugReportIncludeDiagnosticsToggle")
-                    }
-                    if offersDiagnostics && sendToSentry {
-                        Divider()
-                    }
-                    if sendToSentry {
-                        FeedbackOptionToggle(
-                            title: "Also post on GitHub",
-                            caption: "Opens a public, prefilled issue in your browser so others can follow along.",
-                            isOn: $wantsGitHub
-                        )
-                        .accessibilityIdentifier("BugReportAlsoGitHubToggle")
-                    }
+            VStack(alignment: .leading, spacing: 10) {
+                // Disabled rather than hidden for ideas and praise: removing the
+                // row resizes the window mid-animation when switching kinds.
+                FeedbackOptionToggle(
+                    title: "Include diagnostics",
+                    caption: "App and macOS versions, AI settings, and a scrubbed activity log. Never file names, contents, prompts, or keys.",
+                    isOn: offersDiagnostics ? $includeDiagnostics : .constant(false)
+                )
+                .disabled(!offersDiagnostics)
+                .help(offersDiagnostics
+                    ? "Helps reproduce the problem. Sends Sorty and macOS versions, display and power state, AI provider settings, and a log of recent app activity with private details removed. Never file names, paths, file contents, prompts, or API keys."
+                    : "Not needed for ideas or praise.")
+                .accessibilityIdentifier("BugReportIncludeDiagnosticsToggle")
+                if sendToSentry {
+                    Divider()
+                    FeedbackOptionToggle(
+                        title: "Also post on GitHub",
+                        caption: "Opens a public, prefilled issue in your browser so others can follow along.",
+                        isOn: $wantsGitHub
+                    )
+                    .accessibilityIdentifier("BugReportAlsoGitHubToggle")
                 }
-                .padding(12)
-                .feedbackCard()
-                .transition(.opacity)
             }
+            .padding(12)
+            .feedbackCard()
 
             if let errorMessage {
                 Text(errorMessage)
@@ -287,7 +286,10 @@ public struct BugReportView: View {
         .animation(.easeInOut(duration: 0.15), value: wantsGitHub)
         .animation(.easeInOut(duration: 0.18), value: trimmedDescription.isEmpty)
         .animation(.easeInOut(duration: 0.15), value: attachments)
-        .animation(.easeInOut(duration: 0.15), value: offersDiagnostics)
+        .onChange(of: area) { _, _ in HapticFeedbackManager.shared.selection() }
+        .onChange(of: errorMessage) { _, newValue in
+            if newValue != nil { HapticFeedbackManager.shared.error() }
+        }
         .modifier(WindowGlassBackground())
         .onAppear { Self.sweepStaleStaging() }
         .onDisappear {
@@ -377,7 +379,8 @@ public struct BugReportView: View {
         if skippedDuplicate, errorMessage == nil {
             errorMessage = "That file is already attached."
         }
-        HapticFeedbackManager.shared.light()
+        // Errors get their own haptic from the errorMessage observer.
+        if errorMessage == nil { HapticFeedbackManager.shared.light() }
     }
 
     /// Every staged copy lives in its own folder under here, so cleanup is a folder delete.
@@ -650,7 +653,11 @@ private struct FeedbackOptionToggle: View {
     @Binding var isOn: Bool
 
     var body: some View {
-        Toggle(isOn: $isOn) {
+        // Haptic in the setter so programmatic changes (switching kinds) stay silent.
+        Toggle(isOn: Binding(
+            get: { isOn },
+            set: { isOn = $0; HapticFeedbackManager.shared.selection() }
+        )) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                 Text(caption)
@@ -661,7 +668,6 @@ private struct FeedbackOptionToggle: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .toggleStyle(.checkbox)
-        .onChange(of: isOn) { _, _ in HapticFeedbackManager.shared.selection() }
     }
 }
 
@@ -743,8 +749,9 @@ private struct FeedbackDropZone: View {
                 Text(isFull
                     ? "Remove a file to add another."
                     : "Images or files · \(ByteCountFormatter.string(fromByteCount: Int64(remainingBytes), countStyle: .file)) left")
-                    .font(.caption)
+                    .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+                    .numericTextTransition(animationValue: remainingBytes)
             }
         }
         .allowsHitTesting(false)
