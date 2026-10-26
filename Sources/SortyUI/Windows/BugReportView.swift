@@ -253,7 +253,7 @@ public struct BugReportView: View {
             HStack(alignment: .center, spacing: 8) {
                 if sendToSentry {
                     Label {
-                        Text("Goes only to Sorty's developers, through Sentry. Anonymous unless you add an email, and we don't keep your IP address.")
+                        Text("Sent privately to Sorty's developers through Sentry. Reports are anonymous unless you include your email, and we never store your IP address.")
                             .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: "lock.fill")
