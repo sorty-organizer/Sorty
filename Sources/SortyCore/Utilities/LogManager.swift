@@ -103,10 +103,13 @@ public final class LogManager: @unchecked Sendable {
     // Cheap MainActor-bound reads stay on the main actor; every blocking
     // step (log scans, file writes, ditto zip) runs in writeReport off it,
     // so the UI never beachballs while a report is generated.
+    /// Pass `attachedToFeedback: true` when the ZIP rides along with a Sentry
+    /// bug report, so the report doesn't also file its own Sentry event.
     @MainActor
     public func generateDiagnosticReport(
         config: AIConfig,
-        at destinationURL: URL
+        at destinationURL: URL,
+        attachedToFeedback: Bool = false
     ) async throws -> DiagnosticReportResult {
         guard let logsDirectory else { throw DiagnosticReportError.unavailable }
         // Flush pending log writes without blocking the main actor: the
@@ -119,12 +122,15 @@ public final class LogManager: @unchecked Sendable {
             }
         }
         let reportID = UUID().uuidString.lowercased()
-        let sentryEventID = ReliabilityManager.shared.captureDiagnosticReport(reportID: reportID)
+        let sentryEventID = attachedToFeedback
+            ? nil
+            : ReliabilityManager.shared.captureDiagnosticReport(reportID: reportID)
 
         let overview = diagnosticOverview(
             config: config,
             reportID: reportID,
-            sentryEventID: sentryEventID
+            sentryEventID: sentryEventID,
+            attachedToFeedback: attachedToFeedback
         )
         let telemetry: String
         do {
@@ -222,7 +228,8 @@ public final class LogManager: @unchecked Sendable {
     private func diagnosticOverview(
         config: AIConfig,
         reportID: String,
-        sentryEventID: String?
+        sentryEventID: String?,
+        attachedToFeedback: Bool
     ) -> String {
         let process = ProcessInfo.processInfo
         let defaults = UserDefaults.standard
@@ -240,7 +247,7 @@ public final class LogManager: @unchecked Sendable {
         Sorty Diagnostic Report
         Generated: \(timestampFormatter.string(from: Date()))
         Diagnostic ID: \(reportID)
-        Sentry event: \(sentryEventID ?? "Not sent — reliability sharing is unavailable or disabled")
+        Sentry event: \(sentryEventID ?? (attachedToFeedback ? "Attached to a bug report" : "Not sent — reliability sharing is unavailable or disabled"))
 
         App
         - Version: \(BuildInfo.fullVersion)
@@ -259,6 +266,9 @@ public final class LogManager: @unchecked Sendable {
         - Disk free: \(Self.diskFreeBucket)
         - Full Disk Access: \(Self.yesNo(FullDiskAccessProbe.isGranted()))
         - Finder integration enabled: \(Self.yesNo(FeatureFlags.finderSyncEnabled))
+
+        Display and window system
+        \(ReliabilityManager.windowSystemContext().sorted { $0.key < $1.key }.map { "- \($0.key): \($0.value)" }.joined(separator: "\n"))
 
         AI configuration
         - Provider: \(config.provider.displayName)

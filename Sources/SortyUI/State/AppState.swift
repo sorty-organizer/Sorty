@@ -181,6 +181,8 @@ public class AppState: ObservableObject {
 
     // State derived from FolderOrganizer
     public weak var organizer: FolderOrganizer?
+    /// Live AI settings, read when a bug report attaches its diagnostic ZIP.
+    public weak var settingsViewModel: SettingsViewModel?
     public var calibrateAction: ((WatchedFolder) -> Void)?
     public var prepareManualOrganizationAction: ((URL) async throws -> Void)?
 

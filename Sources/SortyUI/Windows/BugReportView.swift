@@ -7,6 +7,7 @@ import QuickLookThumbnailing
 /// Collects one piece of feedback (bug, idea, praise, other) for a GitHub
 /// draft and, when analytics are allowed, an optional Sentry report.
 public struct BugReportView: View {
+    private let diagnosticConfig: () -> AIConfig?
     private let onClose: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var analytics = AnalyticsManager.shared
@@ -30,8 +31,12 @@ public struct BugReportView: View {
     @State private var skipsSentry = false
     @State private var sentryEventID: String?
     @State private var errorMessage: String?
+    @State private var isSending = false
 
-    public init(onClose: @escaping () -> Void) {
+    /// `diagnosticConfig` supplies the live AI settings for the diagnostic ZIP
+    /// attached to Sentry reports; return nil when no main window is open.
+    public init(diagnosticConfig: @escaping () -> AIConfig? = { nil }, onClose: @escaping () -> Void) {
+        self.diagnosticConfig = diagnosticConfig
         self.onClose = onClose
     }
 
@@ -49,6 +54,12 @@ public struct BugReportView: View {
     /// GitHub is opt-in, but becomes the only route when Sentry can't be used.
     private var opensGitHub: Bool {
         wantsGitHub || !sendToSentry
+    }
+
+    /// Diagnostics help fix bugs; ideas and praise don't need them, so those
+    /// kinds never collect or send any.
+    private var collectsDiagnostics: Bool {
+        kind == .bug && includeDiagnostics
     }
 
     private var trimmedDescription: String {
@@ -221,12 +232,14 @@ public struct BugReportView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                Toggle("Include diagnostics", isOn: $includeDiagnostics)
-                    .accessibilityIdentifier("BugReportIncludeDiagnosticsToggle")
-                Text("Sorty version, macOS version, and chip type. No file names, paths, or contents.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if kind == .bug {
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Include diagnostics", isOn: $includeDiagnostics)
+                        .accessibilityIdentifier("BugReportIncludeDiagnosticsToggle")
+                    Text("Sorty and macOS versions, display setup, AI settings, and a scrubbed log timeline. No file names, paths, or contents.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if let errorMessage {
@@ -241,9 +254,11 @@ public struct BugReportView: View {
                 Button("Cancel") { onClose() }
                     .buttonStyle(.sortyBordered)
                     .keyboardShortcut(.cancelAction)
-                Button(sendToSentry ? "Send" : "Open GitHub Issue") { openIssue() }
+                Button(isSending ? "Sending…" : (sendToSentry ? "Send" : "Open GitHub Issue")) {
+                    Task { await openIssue() }
+                }
                     .buttonStyle(.sortyProminent)
-                    .disabled(sendToSentry && !wantsGitHub && trimmedDescription.isEmpty)
+                    .disabled(isSending || (sendToSentry && !wantsGitHub && trimmedDescription.isEmpty))
                     .keyboardShortcut(.defaultAction)
                     .accessibilityIdentifier("OpenGitHubBugIssueButton")
             }
@@ -409,6 +424,30 @@ public struct BugReportView: View {
         (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
     }
 
+    /// Builds the same scrubbed ZIP as Settings › Troubleshooting in a temp
+    /// folder; the caller deletes the folder once Sentry has read the bytes.
+    /// Returns nil when no AI settings are available, generation fails, or the
+    /// ZIP doesn't fit beside the user's files (theirs win), so the report
+    /// still sends without it.
+    private func makeDiagnosticsZIP() async -> URL? {
+        guard let config = diagnosticConfig() else { return nil }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Sorty-BugReport-\(UUID().uuidString)", isDirectory: true)
+        let zip = directory.appendingPathComponent("Sorty-Diagnostic.zip")
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            _ = try await LogManager.shared.generateDiagnosticReport(config: config, at: zip, attachedToFeedback: true)
+            guard Self.fileSize(zip) <= remainingAttachmentBytes else {
+                try? FileManager.default.removeItem(at: directory)
+                return nil
+            }
+            return zip
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            return nil
+        }
+    }
+
     /// Product analytics for the submit: kind, destinations, and counts only, never the text.
     private func captureSubmit(outcome: String, sentry: Bool, github: Bool) {
         let properties: [String: Any] = [
@@ -416,7 +455,7 @@ public struct BugReportView: View {
             "sent_to_sentry": sentry,
             "opened_github": github,
             "attachment_count": attachments.count,
-            "include_diagnostics": includeDiagnostics,
+            "include_diagnostics": collectsDiagnostics,
             "has_email": !email.trimmingCharacters(in: .whitespaces).isEmpty,
             "report_area": area.rawValue,
         ]
@@ -429,7 +468,8 @@ public struct BugReportView: View {
         )
     }
 
-    private func openIssue() {
+    private func openIssue() async {
+        guard !isSending else { return }
         // Decide before sending: a successful send sets `skipsSentry`, which
         // would otherwise flip `opensGitHub` on and open GitHub uninvited.
         let shouldOpenGitHub = opensGitHub
@@ -438,13 +478,21 @@ public struct BugReportView: View {
         // An empty description opens the bare GitHub template below. There
         // is no text to send, so Sentry is skipped instead of failing.
         if sendToSentry, showsSentryOption, !comment.isEmpty {
+            isSending = true
+            let diagnosticsZIP = collectsDiagnostics ? await makeDiagnosticsZIP() : nil
+            isSending = false
+            defer {
+                if let diagnosticsZIP {
+                    try? FileManager.default.removeItem(at: diagnosticsZIP.deletingLastPathComponent())
+                }
+            }
             guard let eventID = ReliabilityManager.shared.submitBugFeedback(
                 comment,
                 area: area,
                 kind: kind,
                 email: email,
-                attachmentURLs: attachments,
-                includeDiagnostics: includeDiagnostics
+                attachmentURLs: attachments + (diagnosticsZIP.map { [$0] } ?? []),
+                includeDiagnostics: collectsDiagnostics
             ) else {
                 errorMessage = "Couldn't reach Sorty's developers. Press Open GitHub Issue to report it there instead."
                 skipsSentry = true
@@ -470,7 +518,7 @@ public struct BugReportView: View {
         }
 
         var components = URLComponents(string: "https://github.com/sorty-organizer/Sorty/issues/new")!
-        if comment.isEmpty && kind == .bug && !includeDiagnostics {
+        if comment.isEmpty && kind == .bug && !collectsDiagnostics {
             components.queryItems = [URLQueryItem(name: "template", value: "bug_report.md")]
         } else {
             var body: String
@@ -485,7 +533,7 @@ public struct BugReportView: View {
             if !attachments.isEmpty {
                 body += "\n## Attachments\n\n<!-- Drag the files revealed in Finder here. -->\n"
             }
-            if includeDiagnostics {
+            if collectsDiagnostics {
                 body += "\n## Environment\n\n\(ReliabilityManager.diagnosticsSummary)\n"
             }
             if let sentryEventID {

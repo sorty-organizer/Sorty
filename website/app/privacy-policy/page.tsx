@@ -115,10 +115,15 @@ export default function PrivacyPolicyPage() {
           The Report Bug form can also send the description you type to Sentry
           when you select its separate sharing option. This requires anonymous
           analytics consent and internet access. Sorty sends that text with an
-          associated app event ID, plus the area you choose, Sorty version,
-          macOS version, and chip type so support can reproduce the issue,
-          without your name, email, or attachments. Review the description for private details
-          first. The GitHub issue opens as a draft for you to submit separately.
+          associated app event ID and the area you choose. Your email and files
+          are sent only if you enter or attach them. For bug reports with
+          &quot;Include diagnostics&quot; on, Sorty also sends its version, macOS
+          version, chip type, display and power state, recent app activity, and
+          a diagnostic ZIP with AI settings and a scrubbed log timeline. These
+          never include file names, paths, file contents, prompts, or API keys.
+          Ideas and praise send no diagnostics. Review the description for
+          private details first. The GitHub issue opens as a draft for you to
+          submit separately.
         </p>
         <p>
           When enabled, the App sends a random anonymous installation

@@ -267,6 +267,7 @@ struct MainWindowRootView: View {
                     try await prepareManualOrganization(with: windowSession)
                     await coordinator?.beginManualOrganization(in: directory, sessionID: sessionID)
                 }
+                windowSession.appState.settingsViewModel = settingsViewModel
                 await windowSession.configureIfNeeded(
                     personaManager: personaManager,
                     customPersonaStore: customPersonaStore,

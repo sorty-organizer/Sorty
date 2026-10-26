@@ -51,9 +51,10 @@ extension AppState {
             return
         }
 
-        let view = BugReportView { [weak self] in
-            self?.bugReportWindowController?.close()
-        }
+        let view = BugReportView(
+            diagnosticConfig: { [weak self] in self?.settingsViewModel?.config },
+            onClose: { [weak self] in self?.bugReportWindowController?.close() }
+        )
         // Keep the window height steady while the Sentry panel opens.
         // The analytics-off window stays compact because that panel is hidden.
         let showsSentryOption = AnalyticsManager.shared.consent == .granted

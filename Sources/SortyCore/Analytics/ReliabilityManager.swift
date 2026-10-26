@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AppKit
 import UniformTypeIdentifiers
 @preconcurrency import Sentry
 import SortyFS
@@ -81,6 +82,7 @@ public final class ReliabilityManager {
         maximumEventsPerMinute: 120, maximumEventsPerProcess: 2_000
     )
     private var launchSpan: ReliabilitySpan?
+    private var windowSystemObservers: [NSObjectProtocol] = []
 
     public var diagnosticSummary: [String: Any] {
         [
@@ -199,6 +201,7 @@ public final class ReliabilityManager {
                 key: "is_internal"
             )
         }
+        observeWindowSystem()
         SentrySDK.logger.info(
             "sorty.reliability.started",
             attributes: telemetryAttributes
@@ -487,8 +490,10 @@ public final class ReliabilityManager {
 
     /// Links explicitly submitted bug text to a bounded Sentry event.
     /// Beyond the description, the event carries the feedback kind, chosen area,
-    /// and (when `includeDiagnostics`) macOS version and chip type. A reply email
-    /// and files are sent only when the user typed or attached them explicitly.
+    /// and (when `includeDiagnostics`) macOS version, chip type, and the current
+    /// `window_system` context and recent breadcrumbs; the caller attaches the
+    /// diagnostic ZIP. Without diagnostics both are stripped. A reply
+    /// email and files are sent only when the user typed or attached them.
     @discardableResult
     public func submitBugFeedback(
         _ message: String,
@@ -506,6 +511,8 @@ public final class ReliabilityManager {
         else {
             return nil
         }
+
+        if includeDiagnostics { refreshWindowSystemContext() }
 
         // Each report is its own error-level issue. Sentry derives priority from
         // level (error = high, warning = medium, info = low) and the default
@@ -527,6 +534,11 @@ public final class ReliabilityManager {
             if includeDiagnostics {
                 scope.setTag(value: Self.operatingSystemVersion, key: "os_version")
                 scope.setTag(value: Self.deviceArchitecture, key: "device_arch")
+            } else {
+                // No diagnostics: drop the app state that would otherwise ride
+                // along from the shared scope.
+                scope.removeContext(key: "window_system")
+                scope.clearBreadcrumbs()
             }
         }
         guard eventID != .empty else { return nil }
@@ -572,6 +584,63 @@ public final class ReliabilityManager {
         return eventID.sentryIdString
     }
 
+    /// Keeps the `window_system` context current so hangs and bug reports
+    /// show the display setup, accessibility display settings, and power state
+    /// that WindowServer stalls depend on. Refreshed on the changes that matter.
+    private func observeWindowSystem() {
+        refreshWindowSystemContext()
+        guard windowSystemObservers.isEmpty else { return }
+        let names: [(NotificationCenter, Notification.Name)] = [
+            (.default, NSApplication.didChangeScreenParametersNotification),
+            (.default, NSWindow.didBecomeKeyNotification),
+            (.default, ProcessInfo.thermalStateDidChangeNotification),
+            (.default, .NSProcessInfoPowerStateDidChange),
+            (NSWorkspace.shared.notificationCenter, NSWorkspace.accessibilityDisplayOptionsDidChangeNotification),
+        ]
+        windowSystemObservers = names.map { center, name in
+            center.addObserver(forName: name, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { ReliabilityManager.shared.refreshWindowSystemContext() }
+            }
+        }
+    }
+
+    private func refreshWindowSystemContext() {
+        guard isActive else { return }
+        let context = Self.windowSystemContext()
+        SentrySDK.configureScope { scope in
+            scope.setContext(value: context, key: "window_system")
+        }
+    }
+
+    /// Bounded counts, rates, and flags only: no window titles, display
+    /// names, or anything that identifies the user or their files.
+    static func windowSystemContext() -> [String: Any] {
+        let screens = NSScreen.screens
+        let workspace = NSWorkspace.shared
+        let process = ProcessInfo.processInfo
+        let windows = NSApp?.windows ?? []
+        let thermal: String = switch process.thermalState {
+        case .nominal: "nominal"
+        case .fair: "fair"
+        case .serious: "serious"
+        case .critical: "critical"
+        @unknown default: "unknown"
+        }
+        return [
+            "display_count": screens.count,
+            "max_refresh_rate_hz": screens.map(\.maximumFramesPerSecond).max() ?? 0,
+            "max_backing_scale": screens.map(\.backingScaleFactor).max() ?? 0,
+            "visible_window_count": min(windows.filter(\.isVisible).count, 100),
+            "app_active": NSApp?.isActive ?? false,
+            "reduce_motion": workspace.accessibilityDisplayShouldReduceMotion,
+            "reduce_transparency": workspace.accessibilityDisplayShouldReduceTransparency,
+            "increase_contrast": workspace.accessibilityDisplayShouldIncreaseContrast,
+            "low_power_mode": process.isLowPowerModeEnabled,
+            "thermal_state": thermal,
+            "physical_memory_gb": Int(process.physicalMemory / 1_073_741_824),
+        ]
+    }
+
     public func startSpan(
         name: String,
         operation: String,
@@ -608,6 +677,8 @@ public final class ReliabilityManager {
 
     public func stopAndClear() {
         launchSpan = nil
+        windowSystemObservers.forEach(NotificationCenter.default.removeObserver)
+        windowSystemObservers.removeAll()
         // Keep isStarting set so at most one Sentry setup is ever in flight.
         // The stale finish handler clears it once the in-flight setup is closed.
         startupGeneration &+= 1
