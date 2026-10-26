@@ -116,7 +116,8 @@ export default function PrivacyPolicyPage() {
           when you select its separate sharing option. This requires anonymous
           analytics consent and internet access. Sorty sends that text with an
           associated app event ID and the area you choose. Your email and files
-          are sent only if you enter or attach them. For bug reports with
+          are sent only if you enter or attach them. For bug reports and
+          &quot;Other&quot; reports with
           &quot;Include diagnostics&quot; on, Sorty also sends its version, macOS
           version, chip type, display and power state, recent app activity, and
           a diagnostic ZIP with AI settings and a scrubbed log timeline. These

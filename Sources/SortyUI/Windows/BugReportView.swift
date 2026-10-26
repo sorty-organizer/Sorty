@@ -56,10 +56,14 @@ public struct BugReportView: View {
         wantsGitHub || !sendToSentry
     }
 
-    /// Diagnostics help fix bugs; ideas and praise don't need them, so those
-    /// kinds never collect or send any.
+    /// Diagnostics help with bugs and open-ended reports; ideas and praise
+    /// don't need them, so those kinds never collect or send any.
+    private var offersDiagnostics: Bool {
+        kind == .bug || kind == .other
+    }
+
     private var collectsDiagnostics: Bool {
-        kind == .bug && includeDiagnostics
+        offersDiagnostics && includeDiagnostics
     }
 
     private var trimmedDescription: String {
@@ -232,11 +236,12 @@ public struct BugReportView: View {
                 }
             }
 
-            if kind == .bug {
+            if offersDiagnostics {
                 VStack(alignment: .leading, spacing: 2) {
                     Toggle("Include diagnostics", isOn: $includeDiagnostics)
                         .accessibilityIdentifier("BugReportIncludeDiagnosticsToggle")
-                    Text("Sorty and macOS versions, display setup, AI settings, and a scrubbed log timeline. No file names, paths, or contents.")
+                    Text("Helps reproduce the problem. Sends Sorty and macOS versions, display and power state, AI provider settings, and a log of recent app activity with private details removed. Never file names, paths, file contents, prompts, or API keys.")
+                        .fixedSize(horizontal: false, vertical: true)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
