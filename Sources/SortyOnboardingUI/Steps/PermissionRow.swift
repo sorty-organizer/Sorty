@@ -80,10 +80,12 @@ struct PermissionRow: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(rowStroke, lineWidth: state == .granted || grantFlash ? 1.2 : 1)
         )
-        .shadow(color: .black.opacity(colorScheme == .dark ? 0.12 : 0.05), radius: isHovering ? 12 : 7, x: 0, y: isHovering ? 6 : 3)
-        .scaleEffect(grantFlash ? 1.012 : (isHovering ? 1.006 : 1))
+        // Hover changes fill and stroke only. Scaling a glass row re-rasterizes
+        // its text, and animating shadow radius re-blurs it every frame.
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.12 : 0.05), radius: 8, x: 0, y: 4)
+        .scaleEffect(grantFlash ? 1.012 : 1)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: state)
-        .animation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.86), value: isHovering)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovering)
         .animation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82), value: grantFlash)
         .onHover { hovering in
             isHovering = hovering

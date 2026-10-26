@@ -15,7 +15,6 @@ struct PermissionActionButton: View {
     let style: Style
     let action: (CGRect?) -> Void
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var frameInScreen: CGRect = .zero
     @State private var isHovering = false
 
@@ -32,8 +31,6 @@ struct PermissionActionButton: View {
             ScreenFrameReader(frameInScreen: $frameInScreen)
                 .allowsHitTesting(false)
         )
-        .scaleEffect(isHovering && !reduceMotion ? 1.015 : 1)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovering)
         .onHover { hovering in
             if hovering && !isHovering {
                 HapticFeedbackManager.shared.selection()

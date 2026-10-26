@@ -88,10 +88,4 @@ extension OnboardingStep {
             return .valid
         }
     }
-
-    func validateAdvance(in context: OnboardingStepValidationContext) async
-        -> OnboardingStepValidationResult
-    {
-        synchronousValidation(in: context)
-    }
 }

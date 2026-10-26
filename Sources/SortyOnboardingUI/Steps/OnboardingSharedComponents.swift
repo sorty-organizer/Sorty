@@ -14,6 +14,7 @@ struct GeneratePersonaButton: View {
     let subtitle: String
     let action: () -> Void
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         style: Style = .expanded,
@@ -49,12 +50,12 @@ struct GeneratePersonaButton: View {
         .buttonStyle(.plain)
         .shadow(
             color: Color.black.opacity(isHovered ? shadowHoverOpacity : shadowOpacity),
-            radius: isHovered ? shadowHoverRadius : shadowRadius,
+            radius: shadowRadius,
             x: 0,
-            y: isHovered ? shadowHoverY : shadowY
+            y: shadowY
         )
         .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovered)
     }
 
     @ViewBuilder
@@ -117,9 +118,7 @@ struct GeneratePersonaButton: View {
     private var shadowOpacity: Double { style == .expanded ? 0.025 : 0.02 }
     private var shadowHoverOpacity: Double { style == .expanded ? 0.06 : 0.05 }
     private var shadowRadius: CGFloat { style == .expanded ? 7 : 5 }
-    private var shadowHoverRadius: CGFloat { style == .expanded ? 14 : 10 }
     private var shadowY: CGFloat { style == .expanded ? 3 : 2 }
-    private var shadowHoverY: CGFloat { style == .expanded ? 7 : 5 }
 }
 
 // MARK: - Capsule Badge
@@ -134,6 +133,6 @@ struct OnboardingCapsuleBadge: View {
             .foregroundStyle(.primary)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .systemLiquidGlassBackground(cornerRadius: 999)
+            .systemLiquidGlassBackground(cornerRadius: 999, interactive: false)
     }
 }

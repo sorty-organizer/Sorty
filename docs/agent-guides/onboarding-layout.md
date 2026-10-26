@@ -112,11 +112,14 @@ Prepare the flow hierarchy in a transaction with animations disabled, allow its
 finite layout to resolve, and then animate presentation properties such as
 opacity. Do not animate insertion of the step layout itself.
 
-Drive each entrance state from one animation boundary. Set `hasAppeared`
-directly when its panes already have value-scoped spring modifiers; wrapping
-that same mutation in `withAnimation` creates a second broad transaction and
-can animate unrelated work during the first render. Gate those local springs
-with Reduce Motion. The completion sequence follows this rule too: its
+Drive each entrance state from one animation boundary. The provider,
+permissions, and workflow steps have no entrance of their own: the page
+transition (or the intro dissolve for the provider step) is their only arrival
+motion. Per-column springs layered on top of the page slide made incoming
+columns invisible for the first 100 to 200 ms and then slide toward each other
+against the page's direction. Where a view does own value-scoped springs, set its
+trigger state directly; wrapping that mutation in `withAnimation` creates a
+second broad transaction. Gate those local springs with Reduce Motion. The completion sequence follows this rule too: its
 checkmark, copy, tips, and CTA own their staggered springs, while retained glow
 and particle layers own their motion, so their trigger states are assigned
 directly rather than wrapped in another animation transaction.
@@ -125,19 +128,40 @@ directly rather than wrapped in another animation transaction.
 
 Preserve the original page choreography: directional slides for setup pages,
 scale-and-fade for completion, and opacity dissolves for the intro and main app.
-Keep the navigation transaction so the footer and content allocation settle
+Setup slides follow the direction of travel. Forward pages enter from the
+trailing edge, and Back reverses both pages. `OnboardingStepTransition` reads
+the direction from the non-observable controller when each phase renders.
+A `@State` direction would leave the outgoing page with the transition it
+captured on its last render. Step changes use one `.smooth(duration: 0.34)`
+transaction, so the footer, progress rail, and content allocation settle
 together. Respect Reduce Motion. Reduce work during these animations without
 replacing their transitions or clipping the completion celebration.
+
+Advance validation is synchronous. Continue changes the step in the same event
+without an async hop, a spinner, or a transient disabled state; those flashed
+the button for one frame on every press. The footer button reads Continue on
+every step. Return triggers it (`.defaultAction`), and ⌘[ goes Back. Do not
+bind bare arrow keys: they take cursor movement away from the provider's text
+fields. Trackpad swipes over the footer still navigate. The progress rail fills
+each connector with a leading-anchored scale, pops completed steps to a
+checkmark, and slightly enlarges the current step.
 
 Commit analytics consent after the completion exit animation, and start provider
 verification after the main app dissolve so service work and repair-state updates
 do not compete with those animations.
 
-Keep screen-sized effects out of onboarding entirely. Do not place dimming,
-glow, blur, material, or other translucent panels across a monitor behind the
-onboarding window: windows underneath update as the cursor moves, forcing
-WindowServer to recompose that monitor-sized stack and starving the orbit's
-compositor frames even while Sorty's main thread is idle.
+Limit screen-sized effects to the intro's two auxiliary panels: the edge glow
+and the behind-window backdrop. Both are ordered out when the intro ends. Do not
+add more dimming, glow, blur, or material panels across a monitor. Windows
+underneath update as the cursor moves, so WindowServer must recompose a
+monitor-sized stack, which starves the orbit's compositor frames even while
+Sorty's main thread is idle. The edge glow is four retained `CAGradientLayer`s,
+with extra stops standing in for a blur. Never host it as SwiftUI content with
+`.blur`, because showing that panel rasterized and blurred a full display on the
+main thread in the middle of the icon spring. Both panels resize with
+`display: false` and skip unchanged frames. Full-window gradient layers use plain
+source-over blending; a `compositingFilter` such as `CIAdditionCompositing`
+forces an offscreen filter pass whenever anything above the layer changes.
 Retained-effect adapters also guard identical visibility, motion, and activity
 inputs; their stopped state is idempotent, so unrelated SwiftUI updates do not
 re-remove animations or rewrite layer opacity and phase.
@@ -310,7 +334,12 @@ workflow animation transaction. Selection managers guard identical values, and
 publish and persist only the selection fields that actually change; callers
 must not repeat state normalization the manager already performs.
 
-Use interactive Liquid Glass only for controls. Permission rows keep native
+Use interactive Liquid Glass only for controls. The provider configuration
+panel, provider logo tile, and capsule badges are containers or decoration, so
+they use `interactive: false`. Hover feedback on onboarding glass cards and rows
+changes fill, stroke, and shadow color only. Do not animate shadow radius or
+apply a hover scale to them: either re-blurs or re-rasterizes the glass and its
+text on every frame. Permission rows keep native
 regular glass but leave pointer-responsive glass to their contained buttons;
 the row's own hover, shadow, and context-menu behavior remain SwiftUI-driven.
 Permission action frame probes measure only during AppKit layout or actual

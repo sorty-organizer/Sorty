@@ -13,8 +13,6 @@ public struct WorkflowSelectionStepView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var hasAppeared = false
     
     public init() {}
     
@@ -51,12 +49,6 @@ public struct WorkflowSelectionStepView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .frame(maxWidth: 350)
-                .opacity(hasAppeared ? 1 : 0)
-                .offset(x: hasAppeared ? 0 : -20)
-                .animation(
-                    reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.1),
-                    value: hasAppeared
-                )
 
                 Spacer()
             }
@@ -70,17 +62,8 @@ public struct WorkflowSelectionStepView: View {
             .frame(maxWidth: .infinity)
             .frame(maxHeight: .infinity, alignment: .center)
             .padding(.trailing, 72)
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(x: hasAppeared ? 0 : 20)
-            .animation(
-                reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.2),
-                value: hasAppeared
-            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .onAppear {
-            hasAppeared = true
-        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Workflow Selection Step")
     }
@@ -301,14 +284,11 @@ struct OnboardingPersonaCard: View {
                 copyWorkflowText(persona.description)
             }
         }
-        .shadow(
-            color: shadowColor,
-            radius: isHovered || isSelected ? 14 : 7,
-            x: 0,
-            y: isHovered || isSelected ? 7 : 3
-        )
+        // Fixed geometry: hover and selection change only the shadow color,
+        // fill, and stroke, so the glass card never re-blurs a growing shadow.
+        .shadow(color: shadowColor, radius: 8, x: 0, y: 4)
         .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovered)
         .animation(
             reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7),
             value: isSelected
@@ -389,9 +369,9 @@ struct OnboardingCustomPersonaCard: View {
             )
             .shadow(
                 color: (isSelected ? selectionAccent : Color.black).opacity(isHovered || isSelected ? 0.14 : 0.025),
-                radius: isHovered || isSelected ? 16 : 7,
+                radius: 8,
                 x: 0,
-                y: isHovered || isSelected ? 8 : 3
+                y: 4
             )
             .contentShape(RoundedRectangle(cornerRadius: 18))
         }
@@ -438,7 +418,7 @@ struct OnboardingCustomPersonaCard: View {
             }
             isHovered = hovering
         }
-        .animation(.easeOut(duration: 0.18), value: isHovered)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isHovered)
         .animation(
             reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7),
             value: isSelected

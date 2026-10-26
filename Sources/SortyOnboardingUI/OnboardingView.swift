@@ -42,7 +42,6 @@ public struct OnboardingView: View {
     @State private var hasFilesAndFoldersPermission = false
     @State private var advanceValidationMessage: String?
     @State private var isShowingProviderSkipConfirmation = false
-    @State private var isAdvancing = false
     @State private var swipeController = OnboardingSwipeController()
     @State private var hasConfiguredWindowChrome = false
     @State private var isIntroVisible = true
@@ -235,13 +234,13 @@ public struct OnboardingView: View {
                 }
             }
                 .accessibilityFocused($isProviderStepAccessibilityFocused)
-                .transition(TransitionStyles.slideFromRight)
+                .transition(stepTransition)
         case .permissions:
             PermissionsStepView(hasRequiredPermissions: $hasFilesAndFoldersPermission)
-                .transition(TransitionStyles.slideFromRight)
+                .transition(stepTransition)
         case .workflow:
             WorkflowSelectionStepView()
-                .transition(TransitionStyles.slideFromRight)
+                .transition(stepTransition)
         case .completion:
             OnboardingCompletionDestination(
                 hasCompletedOnboarding: $hasCompletedOnboarding,
@@ -249,6 +248,16 @@ public struct OnboardingView: View {
             )
             .transition(TransitionStyles.scaleAndFade)
         }
+    }
+
+    /// Setup pages slide with the direction of travel. Each page owns no
+    /// separate entrance, so this transition is the only motion on arrival.
+    private var stepTransition: OnboardingStepTransition {
+        OnboardingStepTransition(controller: swipeController)
+    }
+
+    private var stepAnimation: Animation? {
+        reduceMotion ? nil : .smooth(duration: 0.34)
     }
 
     private func navigationControls(
@@ -273,8 +282,11 @@ public struct OnboardingView: View {
                         .frame(minWidth: 80)
                     }
                     .buttonStyle(.sortySecondary)
-                    .keyboardShortcut(.leftArrow, modifiers: [])
+                    // ⌘[ matches Finder and Safari. Bare arrow keys would
+                    // steal cursor movement from the provider's text fields.
+                    .keyboardShortcut("[", modifiers: .command)
                     .accessibilityIdentifier("OnboardingBackButton")
+                    .help("Back (⌘[)")
                     .opacity(backHidden ? 0 : 1)
                     .disabled(backHidden)
                     .allowsHitTesting(!backHidden)
@@ -289,21 +301,15 @@ public struct OnboardingView: View {
                                 navigateForwardFromControls()
                             } label: {
                                 HStack(spacing: 6) {
-                                    if isAdvancing {
-                                        BouncingSpinner(size: 10, color: .white)
-                                    }
-                                    Text(currentStep == .permissions ? "Continue" : "Next")
-                                        .numericTextTransition(animationValue: currentStep)
+                                    Text("Continue")
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 12, weight: .semibold))
                                 }
                             }
                             .buttonStyle(.sortyPrimary)
-                            .keyboardShortcut(.rightArrow, modifiers: [])
-                            .disabled(!canUseAdvanceButton(validation: validation) || isAdvancing)
-                            .opacity(
-                                canUseAdvanceButton(validation: validation) && !isAdvancing ? 1.0 : 0.5
-                            )
+                            .keyboardShortcut(.defaultAction)
+                            .disabled(!canUseAdvanceButton(validation: validation))
+                            .opacity(canUseAdvanceButton(validation: validation) ? 1.0 : 0.5)
                             .accessibilityIdentifier("OnboardingAdvanceButton")
                         }
                     }
@@ -332,6 +338,7 @@ public struct OnboardingView: View {
                     .multilineTextAlignment(.center)
                     .accessibilityIdentifier("OnboardingValidationMessage")
                     .padding(.bottom, 2)
+                    .transition(.opacity.combined(with: .offset(y: 4)))
             }
         }
     }
@@ -405,9 +412,7 @@ public struct OnboardingView: View {
     private func navigateToPreviousStep() {
         guard currentStep != OnboardingStep.allCases.first && currentStep != .completion else { return }
         HapticFeedbackManager.shared.selection()
-        withAnimation(reduceMotion ? nil : .pageTransition) {
-            currentStep = currentStep.previous
-        }
+        navigate(to: currentStep.previous, direction: .backward)
     }
 
     private func navigateForwardFromControls() {
@@ -421,35 +426,33 @@ public struct OnboardingView: View {
         }
     }
 
+    /// Validation is synchronous, so advancing changes the step in the same
+    /// event. An async hop here used to flip a spinner and dimmed button for
+    /// one frame on every press, right as the page transition began.
     private func attemptAdvance() {
-        guard !isAdvancing else { return }
-
         if currentStep == .provider, !providerSetupStatus.isReady {
             isShowingProviderSkipConfirmation = true
             return
         }
 
-        let validationContext = OnboardingStepValidationContext(
-            providerSetupStatus: providerSetupStatus,
-            hasRequiredPermissions: hasFilesAndFoldersPermission
-        )
-
-        Task { @MainActor in
-            isAdvancing = true
-            let validation = await currentStep.validateAdvance(in: validationContext)
-            isAdvancing = false
-
-            guard validation.canAdvance else {
+        let validation = currentStepValidation
+        guard validation.canAdvance else {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
                 advanceValidationMessage = validation.message
-                HapticFeedbackManager.shared.error()
-                return
             }
+            HapticFeedbackManager.shared.error()
+            return
+        }
 
-            advanceValidationMessage = nil
-            HapticFeedbackManager.shared.selection()
-            withAnimation(reduceMotion ? nil : .pageTransition) {
-                currentStep = currentStep.next
-            }
+        advanceValidationMessage = nil
+        HapticFeedbackManager.shared.selection()
+        navigate(to: currentStep.next, direction: .forward)
+    }
+
+    private func navigate(to step: OnboardingStep, direction: OnboardingNavigationDirection) {
+        swipeController.navigationDirection = direction
+        withAnimation(stepAnimation) {
+            currentStep = step
         }
     }
 
@@ -462,9 +465,7 @@ public struct OnboardingView: View {
     private func advancePastProviderSetup() {
         advanceValidationMessage = nil
         HapticFeedbackManager.shared.selection()
-        withAnimation(reduceMotion ? nil : .pageTransition) {
-            currentStep = currentStep.next
-        }
+        navigate(to: currentStep.next, direction: .forward)
     }
 
     private func installSwipeMonitorIfNeeded() {
@@ -540,6 +541,31 @@ public struct OnboardingView: View {
     }
 }
 
+private enum OnboardingNavigationDirection {
+    case forward
+    case backward
+}
+
+/// Forward enters from the trailing edge and exits leading; Back reverses
+/// both. The direction is read from the controller when each phase renders,
+/// so the outgoing page uses the current direction rather than the one
+/// captured when it was last drawn.
+private struct OnboardingStepTransition: Transition {
+    let controller: OnboardingSwipeController
+
+    func body(content: Content, phase: TransitionPhase) -> some View {
+        let sign: CGFloat = controller.navigationDirection == .forward ? 1 : -1
+        let offset: CGFloat = switch phase {
+        case .willAppear: 36 * sign
+        case .identity: 0
+        case .didDisappear: -36 * sign
+        }
+        content
+            .opacity(phase.isIdentity ? 1 : 0)
+            .offset(x: offset)
+    }
+}
+
 /// Holds event-monitor bookkeeping that has no visual representation. Keeping
 /// gesture deltas outside SwiftUI state prevents every trackpad event from
 /// invalidating the onboarding root and its active step hierarchy.
@@ -550,6 +576,7 @@ private final class OnboardingSwipeController {
     var isHoveringStepIndicator = false
     var accumulatedTranslation: CGFloat = 0
     var hasTriggeredGesture = false
+    var navigationDirection = OnboardingNavigationDirection.forward
 }
 
 /// Keeps AppState publications scoped to the completion destination instead

@@ -93,11 +93,19 @@ struct OnboardingProgressBar: View {
                 let step = activeSteps[index]
 
                 if index > 0 {
+                    // The accent fills along the connector in the direction
+                    // of travel; scale is a compositor transform, so the
+                    // sweep costs nothing during the page transition.
                     Capsule(style: .continuous)
-                        .fill(
-                            step.rawValue <= currentStep.rawValue
-                                ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.2)
-                        )
+                        .fill(Color.secondary.opacity(0.2))
+                        .overlay(alignment: .leading) {
+                            Capsule(style: .continuous)
+                                .fill(SortyDesignSystem.Colors.resolvedAccent)
+                                .scaleEffect(
+                                    x: step.rawValue <= currentStep.rawValue ? 1 : 0.001,
+                                    anchor: .leading
+                                )
+                        }
                         .frame(width: 56, height: 2)
                         .padding(.top, 11)
                 }
@@ -117,13 +125,16 @@ struct OnboardingProgressBar: View {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(.white)
+                                .transition(.scale(scale: 0.4).combined(with: .opacity))
                         } else {
                             Text("\(index + 1)")
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(
                                     step.rawValue <= currentStep.rawValue ? .white : .secondary)
+                                .transition(.opacity)
                         }
                     }
+                    .scaleEffect(step == currentStep ? 1.08 : 1)
 
                     Text(LocalizedStringKey(step.title))
                         .font(.caption2)

@@ -47,7 +47,6 @@ public struct ProviderSelectionStepView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @Environment(\.accessibilityReduceMotion) var reduceMotion
-    @State var hasAppeared = false
     @State var connectionStatus: ConnectionTestStatus = .idle
     @State var connectionError: String?
     @State var taskController = ProviderSelectionTaskController()
@@ -75,7 +74,6 @@ public struct ProviderSelectionStepView: View {
         providerContent
         .onAppear {
             synchronizeInputDrafts()
-            hasAppeared = true
             scheduleInitialProviderRefresh()
         }
         .onChange(of: settingsViewModel.config.provider) { _, newProvider in
@@ -175,7 +173,7 @@ public struct ProviderSelectionStepView: View {
             VStack(alignment: .leading, spacing: 14) {
                 ProviderLogoView(provider: settingsViewModel.config.provider, size: 54)
                     .padding(12)
-                    .systemLiquidGlassBackground(cornerRadius: 18)
+                    .systemLiquidGlassBackground(cornerRadius: 18, interactive: false)
 
                 Text("Choose your AI")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -194,12 +192,6 @@ public struct ProviderSelectionStepView: View {
                 .padding(.top, 8)
             }
             .frame(maxWidth: 350)
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(x: hasAppeared ? 0 : -20)
-            .animation(
-                reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.1),
-                value: hasAppeared
-            )
 
             Spacer()
         }
@@ -281,7 +273,9 @@ public struct ProviderSelectionStepView: View {
                             }
                         }
                         .padding(16)
-                        .systemLiquidGlassBackground(cornerRadius: 14)
+                        // A container, not a control: interactive glass here
+                        // tracked every pointer move across the form.
+                        .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
                         .frame(maxWidth: 430)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                         .accessibilityIdentifier("OnboardingProviderConfigurationPanel")
@@ -299,12 +293,6 @@ public struct ProviderSelectionStepView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.trailing, 72)
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(x: hasAppeared ? 0 : 20)
-            .animation(
-                reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.2),
-                value: hasAppeared
-            )
             .animation(
                 reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7),
                 value: settingsViewModel.config.provider

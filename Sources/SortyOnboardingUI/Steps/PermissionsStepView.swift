@@ -18,7 +18,6 @@ public struct PermissionsStepView: View {
     @EnvironmentObject private var appState: AppState
     private let assumeFilesPermissionForUITestsKey = "uitestAssumeFilesAndFoldersPermission"
     @Binding var hasRequiredPermissions: Bool
-    @State private var hasAppeared = false
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
     @State private var selectedEducationPermission: PermissionType?
     @State private var isFullDiskAccessConfirmationPresented = false
@@ -27,7 +26,6 @@ public struct PermissionsStepView: View {
     @State private var isShowingMissingAutomationRecovery = false
     @State private var pendingRemovalPermission: PermissionType?
     @State private var removalFailureMessage: String?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let notificationManager = NotificationManager.shared
     @State private var taskController = PermissionsTaskController()
 
@@ -66,12 +64,6 @@ public struct PermissionsStepView: View {
                     .padding(.top, 6)
                 }
                 .frame(maxWidth: 350)
-                .opacity(hasAppeared ? 1 : 0)
-                .offset(x: hasAppeared ? 0 : -20)
-                .animation(
-                    reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.8).delay(0.1),
-                    value: hasAppeared
-                )
 
                 Spacer()
             }
@@ -147,12 +139,6 @@ public struct PermissionsStepView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
             .padding(.trailing, 72)
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(x: hasAppeared ? 0 : 18)
-            .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.86).delay(0.12), value: hasAppeared)
-        }
-        .onAppear {
-            hasAppeared = true
         }
         .task {
             checkPermissions()
