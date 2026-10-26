@@ -28,6 +28,8 @@ Flags are defined in `Sources/SortyModels/FeatureFlags.swift`. Terminal keys use
 
 Local opt-in experiments, defined in `Sources/SortyModels/SortyLabs.swift` and toggled in Settings → Experimental → Sorty Labs. All default to off and work without analytics consent.
 
+The Labs switches remain visible when no remote experiments are available; the page does not show an empty-state message for the remote list.
+
 | Feature | Key | What it does |
 |---------|-----|--------------|
 | Routing Rules | `labs.routingRules` | A card on the Rules page turns a sentence into a saved rule (exclusion-style conditions plus a relative destination with `{YYYY}`, `{MM}`, `{DD}`, `{Month}`). The AI runs once, when the rule is written. During manual organize runs, matching files skip the AI and merge into the plan (`FolderOrganizer+Routing.swift`). Rename-only runs and watched folders ignore routing rules. |
