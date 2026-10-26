@@ -9,6 +9,10 @@ Preserve both `patchedDependencies` entries when updating dependencies, then
 regenerate the lockfile with `pnpm install --lockfile-only --ignore-scripts`.
 The GitHub Pages workflow validates and deploys website dependency updates.
 
+Keep shadcn on a release that supports Zod 4 while the Zod security override
+is present. Its stylesheet is imported by `app/globals.css`; forcing Zod 4
+onto older shadcn releases breaks their declared dependency contract.
+
 ## Local Preview
 
 ```bash
