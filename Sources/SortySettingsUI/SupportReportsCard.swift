@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import Beam
+import SortyFileSystem
 
 /// Privacy-safe support artifacts: a copyable Markdown summary for issues and a
 /// ZIP of logs and diagnostics for deeper investigation.
@@ -132,7 +133,7 @@ struct SupportReportsCard: View {
                 NSWorkspace.shared.activateFileViewerSelecting([destination])
             } catch {
                 HapticFeedbackManager.shared.error()
-                diagnosticReportError = error.localizedDescription
+                diagnosticReportError = error.userFacingMessage
             }
         }
     }

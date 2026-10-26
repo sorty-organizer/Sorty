@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import Beam
+import SortyFileSystem
 
 struct PersonaGeneratorView: View {
     @SortyHotReload private var hotReload
@@ -221,7 +222,7 @@ struct PersonaGeneratorView: View {
             .padding(.horizontal, 30)
             
             if let error = generator.error {
-                Text(error.localizedDescription).foregroundColor(.red).font(.caption).padding(.horizontal)
+                Text(error.userFacingMessage).foregroundColor(.red).font(.caption).padding(.horizontal)
             }
             
             HStack(spacing: 16) {
@@ -305,7 +306,7 @@ struct PersonaGeneratorView: View {
             .padding(.horizontal, 30)
 
             if let error = generator.error {
-                Label(error.localizedDescription, systemImage: "exclamationmark.triangle.fill")
+                Label(error.userFacingMessage, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.red)
                     .padding(.horizontal, 30)

@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import SortyFileSystem
 
 struct InternetAccessPolicyView: View {
     @SortyHotReload private var hotReload
@@ -292,7 +293,7 @@ private enum InternetAccessPolicyLoader {
             let policy = try decoder.decode(InternetAccessPolicyDocument.self, from: data)
             return .loaded(policy)
         } catch {
-            return .failed("Failed to parse policy file: \(error.localizedDescription)")
+            return .failed("Failed to parse policy file: \(error.userFacingMessage)")
         }
     }
 

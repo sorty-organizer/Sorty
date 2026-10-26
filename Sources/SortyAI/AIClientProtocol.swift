@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SortyFileSystem
 
 public enum AITextResponseFormat: Equatable, Sendable {
     case plain
@@ -117,7 +118,7 @@ public enum AIClientError: LocalizedError, Sendable {
             }
             return "API Error (\(statusCode)): \(getStatusExplanation(statusCode))"
         case .networkError(let error):
-            return "Connection Failed: \(redactPotentialKeys(error.localizedDescription))"
+            return "Connection Failed: \(redactPotentialKeys(error.userFacingMessage))"
         case .jsonDecodingError:
             return "Invalid Response: The server returned data in an unexpected format"
         }
@@ -142,7 +143,7 @@ public enum AIClientError: LocalizedError, Sendable {
             }
             return redactedRaw
         case .networkError(let error):
-            return redactPotentialKeys(error.localizedDescription)
+            return redactPotentialKeys(error.userFacingMessage)
         case .missingAPIKey:
             return "Please enter an API key in the settings or disable 'Requires API Key' for local models."
         case .invalidURL:

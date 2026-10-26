@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import Beam
+import SortyFileSystem
 
 struct TroubleshootingSettingsView: View {
     @SortyHotReload private var hotReload
@@ -354,7 +355,7 @@ struct TroubleshootingSettingsView: View {
             if let error = deletionErrors.first {
                 HapticFeedbackManager.shared.error()
                 NotificationManager.shared.showError(
-                    message: "Some cached data could not be cleared: \(error.localizedDescription)"
+                    message: "Some cached data could not be cleared: \(error.userFacingMessage)"
                 )
             } else {
                 HapticFeedbackManager.shared.success()

@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 #if canImport(SortyLib)
 import SortyLib
+import SortyFileSystem
 #endif
 
 struct MainWindowRootView: View {
@@ -613,7 +614,7 @@ struct MainWindowRootView: View {
                     throw CancellationError()
                 }
                 windowSession.appState.startSetupRepair(
-                    message: "Sorty could not verify \(testedConfig.provider.displayName): \(error.localizedDescription)"
+                    message: "Sorty could not verify \(testedConfig.provider.displayName): \(error.userFacingMessage)"
                 )
                 throw error
             }

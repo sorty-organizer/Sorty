@@ -3,6 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import Combine
 import AppKit
+import SortyFileSystem
 
 // MARK: - Flat Folder Row View
 
@@ -240,7 +241,7 @@ struct FlatFolderRowView: View {
             )
             onPlanChanged()
         case .failure(let error):
-            storageLocationPickerErrorMessage = error.localizedDescription
+            storageLocationPickerErrorMessage = error.userFacingMessage
         }
     }
 

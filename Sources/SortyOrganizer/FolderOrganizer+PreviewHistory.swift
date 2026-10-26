@@ -232,7 +232,7 @@ extension FolderOrganizer {
                     plan: nil,
                     success: false,
                     status: .failed,
-                    errorMessage: error.localizedDescription,
+                    errorMessage: error.userFacingMessage,
                     rawAIResponse: streamingContent.isEmpty ? nil : streamingContent
                 )
                 history.addEntry(failedEntry)
@@ -386,7 +386,7 @@ extension FolderOrganizer {
         } catch {
             await MainActor.run {
                 transition(to: .error(error), force: true)
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
             throw error
         }
@@ -533,7 +533,7 @@ extension FolderOrganizer {
                 // stuck in .applying; mirror the batch undo error transition.
                 await MainActor.run {
                     self.transition(to: .error(error), force: true)
-                    self.errorMessage = error.localizedDescription
+                    self.errorMessage = error.userFacingMessage
                 }
                 throw error
             }

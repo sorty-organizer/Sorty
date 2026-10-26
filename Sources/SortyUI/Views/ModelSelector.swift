@@ -7,6 +7,7 @@
 
 import AppKit
 import SwiftUI
+import SortyFileSystem
 
 /// Drops the window's AppKit first responder so an in-window overlay can take
 /// keyboard focus. Without this a focused `NSTextField`/`NSSecureTextField`
@@ -361,7 +362,7 @@ struct ModelSelectionPopover: View {
            !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return reason
         }
-        return error.localizedDescription
+        return error.userFacingMessage
     }
 
     /// Returns whether a model supports vision (for badge display)

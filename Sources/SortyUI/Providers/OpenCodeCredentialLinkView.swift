@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import SwiftUI
+import SortyFileSystem
 
 
 /// Uses the same compact status panel and actions as the subscription sign-in UI.
@@ -120,7 +121,7 @@ package struct OpenCodeCredentialLinkView: View {
                 HapticFeedbackManager.shared.success()
             } catch {
                 guard !Task.isCancelled else { return }
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
                 HapticFeedbackManager.shared.error()
             }
         }

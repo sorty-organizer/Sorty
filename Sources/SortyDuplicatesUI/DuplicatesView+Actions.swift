@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import SwiftUI
 import Beam
+import SortyFileSystem
 
 // MARK: - Actions
 extension DuplicatesView {
@@ -63,7 +64,7 @@ extension DuplicatesView {
                 }
             } catch {
                 if currentScanID == scanID, !Task.isCancelled {
-                    detectionManager.state = .failed(error.localizedDescription)
+                    detectionManager.state = .failed(error.userFacingMessage)
                     HapticFeedbackManager.shared.error()
                     DebugLogger.log("Duplicate scan failed: \(error)")
                     AnalyticsManager.shared.captureWorkflow(
@@ -211,7 +212,7 @@ extension DuplicatesView {
                 let recoveredSpace = files
                     .filter { movedPaths.contains($0.path) }
                     .reduce(0) { $0 + $1.size }
-                let errorMessage = error.localizedDescription
+                let errorMessage = error.userFacingMessage
                 let entry = OrganizationHistoryEntry(
                     directoryPath: effectiveDirectory?.path ?? "",
                     filesOrganized: 0,
@@ -227,7 +228,7 @@ extension DuplicatesView {
                 appState.organizer?.history.addEntry(entry)
             }
 
-            cleanupErrorMessage = error.localizedDescription
+            cleanupErrorMessage = error.userFacingMessage
             HapticFeedbackManager.shared.error()
             DebugLogger.log("Delete failed: \(error)")
             AnalyticsManager.shared.captureFeature(

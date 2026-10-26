@@ -8,6 +8,7 @@
 import Foundation
 import ServiceManagement
 import UserNotifications
+import SortyFileSystem
 
 public struct SortyUninstallReport: Equatable, Sendable {
     public let removedPaths: [String]
@@ -640,7 +641,7 @@ public enum SortyUninstaller {
                 }
                 return targets
             } catch {
-                accessFailures[url.path] = error.localizedDescription
+                accessFailures[url.path] = error.userFacingMessage
                 return []
             }
         })
@@ -671,7 +672,7 @@ public enum SortyUninstaller {
                             try fileManager.removeItem(at: item)
                             removed.append(item.path)
                         } catch {
-                            failed[item.path] = error.localizedDescription
+                            failed[item.path] = error.userFacingMessage
                         }
                     }
                 } else {
@@ -679,7 +680,7 @@ public enum SortyUninstaller {
                     removed.append(path)
                 }
             } catch {
-                failed[path] = error.localizedDescription
+                failed[path] = error.userFacingMessage
             }
         }
 

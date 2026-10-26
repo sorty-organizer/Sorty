@@ -4,6 +4,7 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import QuartzCore
 import SwiftUI
+import SortyFileSystem
 
 // MARK: - Actions
 extension SkillSetupView {
@@ -97,7 +98,7 @@ extension SkillSetupView {
                 exclusions: exclusions.rules, exceptions: exclusions.naturalLanguageExceptions,
                 folders: watchedFolders.folders, learnings: learnings.isLocked ? nil : learnings.currentProfile
             )
-        } catch { errorMessage = error.localizedDescription }
+        } catch { errorMessage = error.userFacingMessage }
     }
 
     func toggleAll() {
@@ -192,7 +193,7 @@ extension SkillSetupView {
             } catch is CancellationError {
                 return
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
                 HapticFeedbackManager.shared.error()
             }
         }

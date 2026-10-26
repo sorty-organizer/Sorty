@@ -7,6 +7,7 @@
 
 import AppKit
 import SwiftUI
+import SortyFileSystem
 
 struct OrganizationStrategySettingsView: View {
     @SortyHotReload private var hotReload
@@ -531,7 +532,7 @@ struct OrganizationStrategySettingsView: View {
                     }
 
                     if let error = namingGenerator.error {
-                        Text(error.localizedDescription)
+                        Text(error.userFacingMessage)
                             .font(.caption)
                             .foregroundColor(.red)
                     }

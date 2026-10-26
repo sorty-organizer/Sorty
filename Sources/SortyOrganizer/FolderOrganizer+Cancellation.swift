@@ -191,7 +191,7 @@ extension FolderOrganizer {
                 return description
             }
         }
-        return error.localizedDescription
+        return error.userFacingMessage
     }
 
     /// Bounded exponential backoff with jitter before a plan retry.

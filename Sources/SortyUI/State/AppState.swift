@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import Combine
 import AppKit
+import SortyFileSystem
 
 // MARK: - App State
 
@@ -1429,7 +1430,7 @@ public class AppState: ObservableObject {
         } catch {
             DebugLogger.log("Failed to export profile: \(error)")
             HapticFeedbackManager.shared.error()
-            learningsManager.error = "Export failed: \(error.localizedDescription)"
+            learningsManager.error = "Export failed: \(error.userFacingMessage)"
         }
     }
     
@@ -1605,7 +1606,7 @@ public class AppState: ObservableObject {
             if let failure = deletionFailures.first {
                 HapticFeedbackManager.shared.error()
                 NotificationManager.shared.showError(
-                    message: "Some Sorty data could not be deleted: \(failure.localizedDescription)",
+                    message: "Some Sorty data could not be deleted: \(failure.userFacingMessage)",
                     isCritical: true
                 )
             } else {

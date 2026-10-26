@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+import SortyFileSystem
 
 // MARK: - Actions
 extension OrganizeView {
@@ -241,7 +242,7 @@ extension OrganizeView {
                 throw CancellationError()
             }
             appState.startSetupRepair(
-                message: "Sorty could not verify \(testedConfig.provider.displayName): \(error.localizedDescription)"
+                message: "Sorty could not verify \(testedConfig.provider.displayName): \(error.userFacingMessage)"
             )
             throw error
         }

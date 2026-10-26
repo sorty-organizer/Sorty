@@ -1,4 +1,5 @@
 import SwiftUI
+import SortyFileSystem
 
 // MARK: - Connection
 extension ProviderSelectionStepView {
@@ -234,7 +235,7 @@ extension ProviderSelectionStepView {
                       taskController.connectionTestID == testID,
                       settingsViewModel.config == testedConfig else { return }
                 connectionStatus = .failed
-                connectionError = error.localizedDescription
+                connectionError = error.userFacingMessage
                 HapticFeedbackManager.shared.error()
             }
         }

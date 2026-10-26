@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import SwiftUI
+import SortyFileSystem
 
 struct ErrorView: View {
     @SortyHotReload private var hotReload
@@ -288,7 +289,7 @@ struct ErrorView: View {
                     .font(.title3)
                     .fontWeight(.semibold)
 
-                Text(error.localizedDescription)
+                Text(error.userFacingMessage)
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

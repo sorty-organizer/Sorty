@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SortyFileSystem
 
 package struct PersonaPickerView: View {
     @SortyHotReload private var hotReload
@@ -588,7 +589,7 @@ package struct PersonaPickerView: View {
                     identifier: "persona-prompt-polished"
                 )
             } catch {
-                polishError = error.localizedDescription
+                polishError = error.userFacingMessage
                 HapticFeedbackManager.shared.error()
             }
         }

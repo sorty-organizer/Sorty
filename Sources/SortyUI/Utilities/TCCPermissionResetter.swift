@@ -1,4 +1,5 @@
 import Foundation
+import SortyFileSystem
 
 package enum TCCPermissionResetter {
     package struct Result: Sendable {
@@ -61,7 +62,7 @@ package enum TCCPermissionResetter {
                 ? detail!
                 : "macOS couldn’t reset \(service)."
         } catch {
-            return "macOS couldn’t run the permission reset: \(error.localizedDescription)"
+            return "macOS couldn’t run the permission reset: \(error.userFacingMessage)"
         }
     }
 }

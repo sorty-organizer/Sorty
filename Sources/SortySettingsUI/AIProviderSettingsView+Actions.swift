@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import SwiftUI
+import SortyFileSystem
 
 // MARK: - Actions
 extension AIProviderSettingsView {
@@ -76,7 +77,7 @@ extension AIProviderSettingsView {
                             Error: Sorty can’t connect to \(testedConfig.provider.displayName) while Block Internet Connections is on.
                             """
                         } else {
-                            testConnectionStatus = "Error: \(error.localizedDescription)"
+                            testConnectionStatus = "Error: \(error.userFacingMessage)"
                         }
                         testConnectionDetails = details
                     }

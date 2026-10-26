@@ -11,6 +11,7 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import QuartzCore
 import SwiftUI
+import SortyFileSystem
 
 
 
@@ -318,7 +319,7 @@ public struct CompletionStepView: View {
                     } catch {
                         state.startSetupRepair(
                             message: "Sorty could not verify \(viewModel.config.provider.displayName). "
-                                + error.localizedDescription,
+                                + error.userFacingMessage,
                             navigateToSettings: false
                         )
                     }

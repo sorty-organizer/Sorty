@@ -95,7 +95,7 @@ public enum OrganizationState: Equatable, Sendable {
         case .completed:
             return "Completed"
         case .error(let error):
-            return "Error: \(error.localizedDescription)"
+            return "Error: \(error.userFacingMessage)"
         }
     }
 }

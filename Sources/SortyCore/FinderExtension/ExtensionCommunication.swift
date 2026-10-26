@@ -9,6 +9,7 @@
 import Foundation
 import AppKit
 import Darwin
+import SortyFileSystem
 
 /// Shares one expensive Finder registration probe between callers that ask at
 /// the same time, such as Settings and deferred Finder setup.
@@ -1956,7 +1957,7 @@ public struct ExtensionCommunication {
 
             return (true, "Organize Action installed. Right-click folders in Finder to use 'Organize with Sorty'.")
         } catch {
-            return (false, "Installation failed: \(error.localizedDescription)")
+            return (false, "Installation failed: \(error.userFacingMessage)")
         }
     }
 
@@ -2415,7 +2416,7 @@ public struct ExtensionCommunication {
             return (true, "Watch Action installed. Right-click folders in Finder to use 'Watch with Sorty'.")
 
         } catch {
-            return (false, "Installation failed: \(error.localizedDescription)")
+            return (false, "Installation failed: \(error.userFacingMessage)")
         }
     }
 
@@ -2703,7 +2704,7 @@ public struct ExtensionCommunication {
             return (true, "Exclude Action installed. Right-click any folder in Finder to use 'Exclude from Sorty'.")
 
         } catch {
-            return (false, "Installation failed: \(error.localizedDescription)")
+            return (false, "Installation failed: \(error.userFacingMessage)")
         }
     }
 
@@ -2987,7 +2988,7 @@ public struct ExtensionCommunication {
             return (true, "Preview Action installed! Right-click any folder in Finder to use 'Preview with Sorty'.")
 
         } catch {
-            return (false, "Installation failed: \(error.localizedDescription)")
+            return (false, "Installation failed: \(error.userFacingMessage)")
         }
     }
 

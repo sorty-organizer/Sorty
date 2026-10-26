@@ -10,6 +10,7 @@ import Foundation
 import Combine
 import LocalAuthentication
 import SwiftUI
+import SortyFileSystem
 
 @MainActor
 public class SecurityManager: ObservableObject {
@@ -130,12 +131,12 @@ public class SecurityManager: ObservableObject {
                 self.isUnlocked = false
                 return false
             default:
-                self.error = "Authentication failed: \(error.localizedDescription)"
+                self.error = "Authentication failed: \(error.userFacingMessage)"
                 self.isUnlocked = false
                 return false
             }
         } catch {
-            self.error = "Authentication failed: \(error.localizedDescription)"
+            self.error = "Authentication failed: \(error.userFacingMessage)"
             self.isUnlocked = false
             return false
         }
@@ -168,12 +169,12 @@ public class SecurityManager: ObservableObject {
             case .userCancel, .systemCancel, .appCancel:
                 self.error = "Authentication cancelled"
             default:
-                self.error = "Password authentication failed: \(error.localizedDescription)"
+                self.error = "Password authentication failed: \(error.userFacingMessage)"
             }
             self.isUnlocked = false
             return false
         } catch {
-            self.error = "Password authentication failed: \(error.localizedDescription)"
+            self.error = "Password authentication failed: \(error.userFacingMessage)"
             self.isUnlocked = false
             return false
         }

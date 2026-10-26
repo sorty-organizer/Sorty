@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import SwiftUI
+import SortyFileSystem
 
 struct ReadyToOrganizeView: View {
     @SortyHotReload var hotReload
@@ -211,12 +212,12 @@ struct ReadyToOrganizeView: View {
                     }
                 } catch {
                     HapticFeedbackManager.shared.error()
-                    addStorageLocationErrorMessage = error.localizedDescription
+                    addStorageLocationErrorMessage = error.userFacingMessage
                 }
             }
         case .failure(let error):
             HapticFeedbackManager.shared.error()
-            addStorageLocationErrorMessage = error.localizedDescription
+            addStorageLocationErrorMessage = error.userFacingMessage
         }
         suggestedLocationName = nil
     }

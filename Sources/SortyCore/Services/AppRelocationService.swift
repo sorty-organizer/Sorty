@@ -1,4 +1,5 @@
 import Foundation
+import SortyFileSystem
 
 /// App relocation + launch-path helpers owned by SortyLib so SortyApp stays
 /// as entry/window glue. App glue calls these; provider auth/network details
@@ -90,7 +91,7 @@ public enum AppRelocationService {
                 let output = String(decoding: errorData, as: UTF8.self)
                 return classifyMoveFailure(output)
             } catch {
-                return .failed(message: error.localizedDescription, reason: "launch_failed")
+                return .failed(message: error.userFacingMessage, reason: "launch_failed")
             }
         }.value
     }

@@ -1,4 +1,5 @@
 import SwiftUI
+import SortyFileSystem
 
 extension OrganizationCompleteView {
     func submitCompletionFeedback() {
@@ -81,7 +82,7 @@ extension OrganizationCompleteView {
                 }
             } catch {
                 await MainActor.run {
-                    let message = "Couldn't restore your files: \(error.localizedDescription)"
+                    let message = "Couldn't restore your files: \(error.userFacingMessage)"
                     withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
                         undoState = .failed
                     }
@@ -178,7 +179,7 @@ extension OrganizationCompleteView {
                 }
             } catch {
                 await MainActor.run {
-                    let message = "Couldn't reapply the organization: \(error.localizedDescription)"
+                    let message = "Couldn't reapply the organization: \(error.userFacingMessage)"
                     withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
                         undoState = .failed
                     }

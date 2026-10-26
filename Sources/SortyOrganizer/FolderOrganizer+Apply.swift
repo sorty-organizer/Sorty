@@ -415,7 +415,7 @@ extension FolderOrganizer {
                 status: wasCancelled && partialOperations == nil
                     ? .cancelled
                     : (partialOperations == nil ? .failed : .partiallyUndone),
-                errorMessage: wasCancelled ? "User cancelled the operation" : error.localizedDescription,
+                errorMessage: wasCancelled ? "User cancelled the operation" : error.userFacingMessage,
                 rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
                 operations: partialOperations,
                 source: source
@@ -499,7 +499,7 @@ extension FolderOrganizer {
         } catch {
             await MainActor.run {
                 transition(to: .error(error), force: true)
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
             throw error
         }
@@ -801,7 +801,7 @@ extension FolderOrganizer {
             stopTimeoutTimer()
             await MainActor.run {
                 transition(to: .error(error), force: true)
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
             OrganizerServices.captureWorkflow(
                 workflow: "regenerate",
