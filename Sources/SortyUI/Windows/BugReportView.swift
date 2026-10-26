@@ -169,12 +169,7 @@ public struct BugReportView: View {
                 }
             }
             .padding(10)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay {
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
-            }
+            .feedbackCard()
             .overlay {
                 if showsDropZone {
                     FeedbackDropZone(
@@ -192,7 +187,7 @@ public struct BugReportView: View {
 
             if showsSentryOption {
                 if sendToSentry {
-                    VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
                         // Shown for every kind so switching kinds never changes the layout.
                         Picker("Feature", selection: $area) {
                             ForEach(BugReportArea.allCases, id: \.self) { area in
@@ -208,15 +203,10 @@ public struct BugReportView: View {
                                 .textFieldStyle(.roundedBorder)
                                 .textContentType(.emailAddress)
                                 .accessibilityIdentifier("BugReportEmailField")
-                                .transition(.opacity.combined(with: .move(edge: .top)))
+                                .transition(.opacity)
                         }
-                        Text("Your text, attachments, and email (if given) go to Sorty's developers via Sentry. Nothing else is identified; IP addresses are discarded.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
-                    .accessibilityIdentifier("BugReportSentryTransparency")
                 }
 
                 if !canSubmitBugFeedback {
@@ -226,25 +216,32 @@ public struct BugReportView: View {
                 }
             }
 
-            if sendToSentry {
-                VStack(alignment: .leading, spacing: 2) {
-                    Toggle("Also post on GitHub", isOn: $wantsGitHub)
-                        .accessibilityIdentifier("BugReportAlsoGitHubToggle")
-                    Text("Opens a prefilled issue in your browser so others can follow along. Anyone can see it.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if offersDiagnostics {
-                VStack(alignment: .leading, spacing: 2) {
-                    Toggle("Include diagnostics", isOn: $includeDiagnostics)
+            if offersDiagnostics || sendToSentry {
+                VStack(alignment: .leading, spacing: 10) {
+                    if offersDiagnostics {
+                        FeedbackOptionToggle(
+                            title: "Include diagnostics",
+                            caption: "App and macOS versions, AI settings, and a scrubbed activity log. Never file names, contents, prompts, or keys.",
+                            isOn: $includeDiagnostics
+                        )
+                        .help("Helps reproduce the problem. Sends Sorty and macOS versions, display and power state, AI provider settings, and a log of recent app activity with private details removed. Never file names, paths, file contents, prompts, or API keys.")
                         .accessibilityIdentifier("BugReportIncludeDiagnosticsToggle")
-                    Text("Helps reproduce the problem. Sends Sorty and macOS versions, display and power state, AI provider settings, and a log of recent app activity with private details removed. Never file names, paths, file contents, prompts, or API keys.")
-                        .fixedSize(horizontal: false, vertical: true)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    }
+                    if offersDiagnostics && sendToSentry {
+                        Divider()
+                    }
+                    if sendToSentry {
+                        FeedbackOptionToggle(
+                            title: "Also post on GitHub",
+                            caption: "Opens a public, prefilled issue in your browser so others can follow along.",
+                            isOn: $wantsGitHub
+                        )
+                        .accessibilityIdentifier("BugReportAlsoGitHubToggle")
+                    }
                 }
+                .padding(12)
+                .feedbackCard()
+                .transition(.opacity)
             }
 
             if let errorMessage {
@@ -254,8 +251,20 @@ public struct BugReportView: View {
                     .accessibilityAddTraits(.isStaticText)
             }
 
-            HStack {
-                Spacer()
+            HStack(alignment: .center, spacing: 8) {
+                if sendToSentry {
+                    Label {
+                        Text("Sent privately to Sorty's developers via Sentry. Nothing identifies you unless you add an email; IP addresses are discarded.")
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "lock.fill")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("BugReportSentryTransparency")
+                    .transition(.opacity)
+                }
+                Spacer(minLength: 12)
                 Button("Cancel") { onClose() }
                     .buttonStyle(.sortyBordered)
                     .keyboardShortcut(.cancelAction)
@@ -278,6 +287,7 @@ public struct BugReportView: View {
         .animation(.easeInOut(duration: 0.15), value: wantsGitHub)
         .animation(.easeInOut(duration: 0.18), value: trimmedDescription.isEmpty)
         .animation(.easeInOut(duration: 0.15), value: attachments)
+        .animation(.easeInOut(duration: 0.15), value: offersDiagnostics)
         .modifier(WindowGlassBackground())
         .onAppear { Self.sweepStaleStaging() }
         .onDisappear {
@@ -618,6 +628,40 @@ private struct FeedbackKindChip: View {
         .animation(.easeInOut(duration: 0.12), value: isHovered)
         .animation(.easeInOut(duration: 0.15), value: isSelected)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+private extension View {
+    /// Inset surface shared by the message box and the options group.
+    func feedbackCard() -> some View {
+        background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
+            }
+    }
+}
+
+/// Checkbox whose caption sits under the title, aligned with it, and toggles on click too.
+private struct FeedbackOptionToggle: View {
+    let title: String
+    let caption: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(caption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .toggleStyle(.checkbox)
+        .onChange(of: isOn) { _, _ in HapticFeedbackManager.shared.selection() }
     }
 }
 
