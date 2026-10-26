@@ -222,7 +222,7 @@ public struct BugReportView: View {
                 // row resizes the window mid-animation when switching kinds.
                 FeedbackOptionToggle(
                     title: "Include diagnostics",
-                    caption: "App and macOS versions, AI settings, and a scrubbed activity log. Never file names, contents, prompts, or keys.",
+                    caption: "Includes app and macOS versions, AI settings, and a scrubbed activity log. Never includes file names or contents, prompts, or API keys.",
                     isOn: offersDiagnostics ? $includeDiagnostics : .constant(false)
                 )
                 .disabled(!offersDiagnostics)
@@ -253,7 +253,7 @@ public struct BugReportView: View {
             HStack(alignment: .center, spacing: 8) {
                 if sendToSentry {
                     Label {
-                        Text("Sent privately to Sorty's developers via Sentry. Nothing identifies you unless you add an email; IP addresses are discarded.")
+                        Text("Goes only to Sorty's developers, through Sentry. It stays anonymous unless you add an email, and your IP address isn't stored.")
                             .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: "lock.fill")
