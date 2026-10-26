@@ -59,8 +59,7 @@ package struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         func setStrength(_ strength: Double) {
             guard self.strength != strength else { return }
             self.strength = strength
-            (glowPanel?.contentView as? NSHostingView<OnboardingScreenEdgeGlow>)?.rootView =
-                OnboardingScreenEdgeGlow(strength: strength)
+            (glowPanel?.contentView as? OnboardingScreenEdgeGlowView)?.setStrength(strength)
         }
 
         func setVisible(_ isVisible: Bool) {
@@ -197,8 +196,7 @@ package struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                 .ignoresCycle,
                 .stationary
             ]
-            let glowView = NSHostingView(rootView: OnboardingScreenEdgeGlow(strength: strength))
-            glowView.sizingOptions = []
+            let glowView = OnboardingScreenEdgeGlowView(strength: strength)
             glowView.autoresizingMask = [.width, .height]
             panel.contentView = glowView
             return panel
@@ -213,7 +211,10 @@ package struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                 hidePanelImmediately()
                 return
             }
-            glowPanel?.setFrame(screen.frame, display: true)
+            // Layer-backed gradients need no synchronous redraw; displaying
+            // here would stall the reveal frame that orders the panel in.
+            guard glowPanel?.frame != screen.frame else { return }
+            glowPanel?.setFrame(screen.frame, display: false)
         }
 
         private func showPanelIfPossible() {

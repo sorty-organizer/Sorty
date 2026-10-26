@@ -31,7 +31,8 @@ package struct OnboardingBottomGradient: NSViewRepresentable {
     }
 }
 
-/// Retains the full-window color field as three gradient layers. Step changes
+/// Retains the full-window color field as three gradient layers with no
+/// compositing filters. Step changes
 /// animate only layer colors and geometry instead of asking a SwiftUI Canvas to
 /// redraw the entire window throughout every transition.
 package final class RetainedOnboardingBottomGradientView: NSView {
@@ -63,7 +64,10 @@ package final class RetainedOnboardingBottomGradientView: NSView {
         radialGlowGradient.startPoint = CGPoint(x: 0.5, y: 0.5)
         radialGlowGradient.endPoint = CGPoint(x: 1, y: 0.5)
         radialGlowGradient.locations = [0, 0.42, 1]
-        radialGlowGradient.compositingFilter = CIFilter(name: "CIAdditionCompositing")
+        // Plain source-over blending. A compositing filter on this
+        // window-sized layer forced an offscreen filter pass every time any
+        // onboarding content above it changed; the slightly higher glow
+        // opacities below stand in for the additive brightening.
         setAccessibilityElement(false)
     }
 
@@ -110,7 +114,7 @@ package final class RetainedOnboardingBottomGradientView: NSView {
         let intensity = 0.98 + completion * 0.28
         let bottomOpacity = isDark ? 0.42 : 0.20
         let midOpacity = isDark ? 0.22 : 0.10
-        let glowOpacity = isDark ? 0.28 : 0.12
+        let glowOpacity = isDark ? 0.34 : 0.14
         let accent = NSColor(SortyDesignSystem.Colors.resolvedAccent)
 
         layer?.backgroundColor = showsBaseColor
@@ -130,7 +134,7 @@ package final class RetainedOnboardingBottomGradientView: NSView {
         ]
         let radialColors = [
             accent.withAlphaComponent(glowOpacity * intensity).cgColor,
-            accent.withAlphaComponent((isDark ? 0.16 : 0.06) * intensity).cgColor,
+            accent.withAlphaComponent((isDark ? 0.19 : 0.07) * intensity).cgColor,
             accent.withAlphaComponent(0).cgColor
         ]
         let radialRadius = 680 + completion * 560

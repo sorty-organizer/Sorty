@@ -213,7 +213,11 @@ struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
                 return
             }
 
-            backdropPanel?.setFrame(screen.frame, display: true)
+            // The material composites on the window server; a synchronous
+            // display of a screen-sized view would stall this reveal frame.
+            if backdropPanel?.frame != screen.frame {
+                backdropPanel?.setFrame(screen.frame, display: false)
+            }
             backdropPanel?.order(.below, relativeTo: window.windowNumber)
             fadeInPanelIfNeeded()
         }
