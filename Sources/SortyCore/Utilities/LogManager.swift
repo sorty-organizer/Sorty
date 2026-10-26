@@ -138,7 +138,7 @@ public final class LogManager: @unchecked Sendable {
         } catch {
             throw DiagnosticReportError.unavailable
         }
-        let readme = privacyReadme
+        let readme = attachedToFeedback ? privacyReadme + recentIssuesReadme : privacyReadme
 
         do {
             try await Task.detached(priority: .userInitiated) {
@@ -147,7 +147,8 @@ public final class LogManager: @unchecked Sendable {
                     telemetry: telemetry,
                     readme: readme,
                     logsDirectory: logsDirectory,
-                    destinationURL: destinationURL
+                    destinationURL: destinationURL,
+                    includesRecentIssues: attachedToFeedback
                 )
             }.value
         } catch let reportError as DiagnosticReportError {
@@ -166,7 +167,8 @@ public final class LogManager: @unchecked Sendable {
         telemetry: String,
         readme: String,
         logsDirectory: URL,
-        destinationURL: URL
+        destinationURL: URL,
+        includesRecentIssues: Bool
     ) throws {
         let fileManager = FileManager.default
         let reportDirectory = fileManager.temporaryDirectory
@@ -195,6 +197,13 @@ public final class LogManager: @unchecked Sendable {
                 atomically: true,
                 encoding: .utf8
             )
+            if includesRecentIssues {
+                try recentIssues(in: logsDirectory, fileManager: fileManager).write(
+                    to: reportDirectory.appendingPathComponent("recent-issues.txt"),
+                    atomically: true,
+                    encoding: .utf8
+                )
+            }
             try readme.write(
                 to: reportDirectory.appendingPathComponent("README.txt"),
                 atomically: true,
@@ -415,6 +424,112 @@ public final class LogManager: @unchecked Sendable {
         return String(decoding: data, as: UTF8.self)
     }
 
+    /// Returns the scrubbed warning, error, and fault lines from the last 30
+    /// minutes exactly as a bug report attaches them, so the report form can
+    /// show users what will be sent before they send it.
+    public func recentIssuesPreview() async -> String {
+        guard let logsDirectory else { return Self.noRecentIssues }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            queue.async {
+                try? self.logFileHandle?.synchronize()
+                continuation.resume()
+            }
+        }
+        return await Task.detached(priority: .userInitiated) {
+            Self.recentIssues(in: logsDirectory)
+        }.value
+    }
+
+    private static let noRecentIssues = "No warnings or errors in the last 30 minutes."
+
+    /// Warning-and-above lines from the last 30 minutes (newest 80), each
+    /// passed through `scrubForReport`. Bug reports only; the Troubleshooting
+    /// ZIP stays message-free so it remains safe for public issues.
+    nonisolated static func recentIssues(
+        in directory: URL,
+        now: Date = Date(),
+        fileManager: FileManager = .default
+    ) -> String {
+        let files = ((try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )) ?? []).filter { $0.pathExtension == "log" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        guard let pattern = try? NSRegularExpression(
+            pattern: #"^\[([^\]]+)\] \[(WARNING|ERROR|FAULT)\] \[([A-Za-z0-9_. -]{1,64})\] (.*)$"#
+        ) else { return noRecentIssues }
+        let formatter = ISO8601DateFormatter()
+        let cutoff = now.addingTimeInterval(-30 * 60)
+        var lines: [String] = []
+
+        for file in files {
+            guard let contents = try? String(contentsOf: file, encoding: .utf8) else { continue }
+            contents.enumerateLines { line, _ in
+                let range = NSRange(line.startIndex..<line.endIndex, in: line)
+                guard let match = pattern.firstMatch(in: line, range: range),
+                      let timestampRange = Range(match.range(at: 1), in: line),
+                      let date = formatter.date(from: String(line[timestampRange])),
+                      date >= cutoff,
+                      let levelRange = Range(match.range(at: 2), in: line),
+                      let categoryRange = Range(match.range(at: 3), in: line),
+                      let messageRange = Range(match.range(at: 4), in: line)
+                else { return }
+                lines.append("[\(line[timestampRange])] [\(line[levelRange])] [\(line[categoryRange])] \(scrubForReport(String(line[messageRange])))")
+                if lines.count > 80 { lines.removeFirst() }
+            }
+        }
+        return lines.isEmpty ? noRecentIssues : lines.joined(separator: "\n")
+    }
+
+    /// Second scrub on top of `sanitize` (which already removed paths, keys,
+    /// and emails at write time) for text that leaves the Mac in a bug report.
+    /// Quoted text is where system errors put file and folder names
+    /// (`The file “Taxes.pdf” couldn’t be opened`), and bare `name.ext` tokens
+    /// cover the rest; context JSON keeps only numbers, booleans, and short
+    /// identifier-like strings such as provider names or error domains.
+    nonisolated static func scrubForReport(_ message: String) -> String {
+        let marker = " | Context: "
+        var text = message
+        var context = ""
+        if let markerRange = message.range(of: marker) {
+            text = String(message[..<markerRange.lowerBound])
+            context = marker + scrubContext(String(message[markerRange.upperBound...]))
+        }
+        for pattern in [#"“[^”]*”"#, #"‘[^’]*’"#, #""[^"]*""#] {
+            text = text.replacingOccurrences(of: pattern, with: "“[REDACTED]”", options: .regularExpression)
+        }
+        return redactFileNames(in: text) + context
+    }
+
+    private static let fileNamePattern = #"[^\s/\\"“”‘’()\[\]]+\.[A-Za-z][A-Za-z0-9]{0,6}\b"#
+
+    private static func redactFileNames(in text: String) -> String {
+        text.replacingOccurrences(of: fileNamePattern, with: "[REDACTED_NAME]", options: .regularExpression)
+    }
+
+    private static func scrubContext(_ json: String) -> String {
+        guard let data = json.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data)
+        else { return "[REDACTED]" }
+        func scrub(_ value: Any) -> Any {
+            switch value {
+            case let dictionary as [String: Any]:
+                return dictionary.mapValues(scrub)
+            case let array as [Any]:
+                return array.map(scrub)
+            case let string as String:
+                let isIdentifier = string.range(of: #"^[A-Za-z0-9_:-]{1,40}$"#, options: .regularExpression) != nil
+                return isIdentifier ? string : "[REDACTED]"
+            default:
+                return value
+            }
+        }
+        guard let scrubbed = try? JSONSerialization.data(withJSONObject: scrub(object), options: [.sortedKeys]) else {
+            return "[REDACTED]"
+        }
+        return String(decoding: scrubbed, as: UTF8.self)
+    }
+
     private static func diagnosticSignals(in message: String) -> [String] {
         let lowercased = message.lowercased()
         var signals: [String] = []
@@ -555,6 +670,16 @@ public final class LogManager: @unchecked Sendable {
         contains counts only, plus per-log-file sizes, time range, and a signal
         histogram. log-timeline.json preserves chronology and recognized
         failure signals while permanently discarding every raw log message.
+        """
+    }
+
+    private var recentIssuesReadme: String {
+        """
+
+
+        Bug reports also include recent-issues.txt: warning and error lines from
+        the last 30 minutes. Quoted text, file names, paths, keys, and emails
+        are replaced with [REDACTED] markers before the archive is built.
         """
     }
 

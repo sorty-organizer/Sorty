@@ -32,6 +32,7 @@ public struct BugReportView: View {
     @State private var sentryEventID: String?
     @State private var errorMessage: String?
     @State private var isSending = false
+    @State private var recentIssuesPreview: String?
 
     /// `diagnosticConfig` supplies the live AI settings for the diagnostic ZIP
     /// attached to Sentry reports; return nil when no main window is open.
@@ -220,11 +221,36 @@ public struct BugReportView: View {
             VStack(alignment: .leading, spacing: 10) {
                 // Disabled rather than hidden for ideas and praise: removing the
                 // row resizes the window mid-animation when switching kinds.
-                FeedbackOptionToggle(
-                    title: "Include diagnostics",
-                    caption: "Includes app and macOS versions, AI settings, and a scrubbed activity log. We never see your file names, file contents, prompts, or API keys.",
-                    isOn: offersDiagnostics ? $includeDiagnostics : .constant(false)
-                )
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    FeedbackOptionToggle(
+                        title: "Include diagnostics",
+                        caption: "Includes app and macOS versions, AI settings, and recent errors with private details removed. We never see your file names, file contents, prompts, or API keys.",
+                        isOn: offersDiagnostics ? $includeDiagnostics : .constant(false)
+                    )
+                    Button("Preview") {
+                        HapticFeedbackManager.shared.tap()
+                        Task { recentIssuesPreview = await LogManager.shared.recentIssuesPreview() }
+                    }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                    .disabled(!collectsDiagnostics)
+                    .help("Show the recent errors this report will include")
+                    .accessibilityIdentifier("BugReportPreviewDiagnosticsButton")
+                    .popover(isPresented: Binding(
+                        get: { recentIssuesPreview != nil },
+                        set: { if !$0 { recentIssuesPreview = nil } }
+                    ), arrowEdge: .trailing) {
+                        ScrollView {
+                            Text(recentIssuesPreview ?? "")
+                                .font(.system(.caption, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                        }
+                        .frame(width: 520, height: 280)
+                        .systemLiquidGlassPopover(cornerRadius: 12)
+                    }
+                }
                 .disabled(!offersDiagnostics)
                 .help(offersDiagnostics
                     ? "Helps reproduce the problem. Sends Sorty and macOS versions, display and power state, AI provider settings, and a log of recent app activity with private details removed. Never file names, paths, file contents, prompts, or API keys."
