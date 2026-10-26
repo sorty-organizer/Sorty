@@ -15,6 +15,8 @@ struct ExperimentalSettingsView: View {
 
     var body: some View {
         VStack(spacing: 12) {
+            SortyLabsCard()
+
             Group {
                 if analytics.isLoadingExperimentalFeatures {
                     loadingState
@@ -109,6 +111,69 @@ struct ExperimentalSettingsView: View {
         .animation(
             reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.45, dampingFraction: 0.82),
             value: hasAppeared
+        )
+    }
+}
+
+/// Local opt-in switches for experimental features. Unlike the PostHog list
+/// below it, these work offline and never depend on analytics consent.
+private struct SortyLabsCard: View {
+    @SortyHotReload private var hotReload
+    @AppStorage(SortyLabsFeature.routingRules.defaultsKey) private var routingRules = false
+    @AppStorage(SortyLabsFeature.downloadsInbox.defaultsKey) private var downloadsInbox = false
+    @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var expiringFiles = false
+    @AppStorage(SortyLabsFeature.projectDetection.defaultsKey) private var projectDetection = false
+    @AppStorage(ExpiringFilesManager.ageInDaysKey) private var expiringAgeInDays = ExpiringFilesManager.defaultAgeInDays
+
+    var body: some View {
+        SettingsCard(title: "Sorty Labs", icon: "flask", color: .indigo) {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(SortyLabsFeature.allCases) { feature in
+                    SettingsToggle(
+                        isOn: binding(for: feature),
+                        title: feature.title,
+                        description: feature.summary
+                    )
+                    .accessibilityIdentifier("LabsToggle-\(feature.rawValue)")
+
+                    if feature == .expiringFiles, expiringFiles {
+                        Stepper(value: $expiringAgeInDays, in: 1...365) {
+                            Text("Offer files older than \(expiringAgeInDays) days")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .numericTextTransition(animationValue: expiringAgeInDays)
+                        }
+                        .padding(.leading, 4)
+                        .accessibilityIdentifier("LabsExpiringAgeStepper")
+                    }
+
+                    if feature != SortyLabsFeature.allCases.last {
+                        Divider()
+                    }
+                }
+            }
+        }
+        .onChange(of: downloadsInbox) { _, _ in
+            DownloadsInboxManager.shared.refreshEnabledState()
+        }
+        .onChange(of: expiringFiles) { _, _ in
+            Task { await ExpiringFilesManager.shared.refresh() }
+        }
+    }
+
+    private func binding(for feature: SortyLabsFeature) -> Binding<Bool> {
+        let binding: Binding<Bool> = switch feature {
+        case .routingRules: $routingRules
+        case .downloadsInbox: $downloadsInbox
+        case .expiringFiles: $expiringFiles
+        case .projectDetection: $projectDetection
+        }
+        return Binding(
+            get: { binding.wrappedValue },
+            set: { newValue in
+                HapticFeedbackManager.shared.selection()
+                binding.wrappedValue = newValue
+            }
         )
     }
 }

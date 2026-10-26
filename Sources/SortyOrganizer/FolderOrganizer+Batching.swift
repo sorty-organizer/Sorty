@@ -550,7 +550,7 @@ extension FolderOrganizer {
         return updated
     }
 
-    nonisolated private static func mergeSuggestions(
+    nonisolated static func mergeSuggestions(
         _ incoming: [FolderSuggestion],
         into existing: inout [FolderSuggestion]
     ) {

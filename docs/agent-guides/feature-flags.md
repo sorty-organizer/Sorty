@@ -24,6 +24,17 @@ Flags are defined in `Sources/SortyModels/FeatureFlags.swift`. Terminal keys use
 | Subscription Auth | `subscriptionAuthEnabled` | `true` | Makes subscription-based auth methods available for supported AI providers |
 | Support the Developer | `supportDeveloperEnabled` | `true` | In-app links and buttons for supporting the developer; uses the sandbox-container commands below |
 
+### Sorty Labs
+
+Local opt-in experiments, defined in `Sources/SortyModels/SortyLabs.swift` and toggled in Settings → Experimental → Sorty Labs. All default to off and work without analytics consent.
+
+| Feature | Key | What it does |
+|---------|-----|--------------|
+| Routing Rules | `labs.routingRules` | A card on the Rules page turns a sentence into a saved rule (exclusion-style conditions plus a relative destination with `{YYYY}`, `{MM}`, `{DD}`, `{Month}`). The AI runs once, when the rule is written. During manual organize runs, matching files skip the AI and merge into the plan (`FolderOrganizer+Routing.swift`). Rename-only runs and watched folders ignore routing rules. |
+| Downloads Inbox | `labs.downloadsInbox` | `DownloadsInboxManager` watches `~/Downloads` with one vnode source and queues files added after the feature was turned on. The menu bar lists them with a suggested folder: a routing rule match, then a folder the user picked before for that extension, then a folder named for the kind of file inside Downloads. Return files the top item and ⌘Z undoes the last move. Moves never overwrite. |
+| Expiring Files | `labs.expiringFiles` | `ExpiringFilesManager` lists installers, archives and screenshots at the top level of Downloads, the Desktop and the screenshot folder once they are older than `labs.expiring.days` (default 14), plus files the user marked "Trash in 7 Days" in the inbox. The menu bar asks for review and moves approved files to the Trash. "Keep" stops a file from being offered again. |
+| Project Detection | `labs.projectDetection` | The organize scan skips folders that hold project markers (`.git`, `Package.swift`, `package.json`, `.xcodeproj` and similar; see `ProjectFolderDetector`), so their files are never moved. `ProjectClusterDetector` groups loose files that share a distinctive name word across two or more file kinds and asks the AI to keep each group in one folder. |
+
 ### Sorty Codex Skill
 
 The Sorty skill installer is a regular setting in Settings → Features → Sorty Skill. It is always available and does not require a feature flag or PostHog assignment. Setup installs the bundled skill and lets users choose which Sorty preferences to share. Existing installations can import updated settings, and removal or replacement requires confirmation.

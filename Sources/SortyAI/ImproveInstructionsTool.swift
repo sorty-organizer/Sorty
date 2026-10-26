@@ -519,3 +519,82 @@ private extension String {
         return value
     }
 }
+
+// MARK: - Routing Rules (Labs)
+
+public enum NaturalLanguageRoutingResolverError: LocalizedError, Sendable {
+    case missingDestination
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingDestination: "Say where matching files should go, like \"to Finance/Statements\"."
+        }
+    }
+}
+
+extension NaturalLanguageExclusionResolver {
+    /// The conditions and destination folder parsed from one routing sentence.
+    public struct RoutingResolution: Sendable {
+        public let conditions: [ExclusionRule]
+        public let destinationTemplate: String
+    }
+
+    /// Turns "anything from my bank goes to Finance/Statements/{YYYY}" into
+    /// structured conditions and a relative destination. The AI runs once,
+    /// when the rule is written; matching later is fully local.
+    public static func resolveRouting(
+        client: any AIClientProtocol,
+        description: String
+    ) async throws -> RoutingResolution {
+        try await EditorLinkedDebouncer.shared.debounce(key: "routing-resolver")
+        let response = try await AIRequestSupport.withNonEssentialRequest {
+            try await client.generateText(
+                prompt: "Build a routing rule for this request:\n<request>\(description)</request>",
+                systemPrompt: routingSystemPrompt,
+                responseFormat: .jsonObject
+            )
+        }
+        return try decodeRouting(from: response)
+    }
+
+    static func decodeRouting(from response: String) throws -> RoutingResolution {
+        guard let start = response.firstIndex(of: "{"),
+              let end = response.lastIndex(of: "}"),
+              start <= end,
+              let data = String(response[start...end]).data(using: .utf8),
+              let payload = try? JSONDecoder().decode(RoutingPayload.self, from: data)
+        else {
+            throw NaturalLanguageExclusionResolverError.invalidResponse
+        }
+        let destination = RoutingRule.sanitizedTemplate(payload.destination ?? "")
+        guard !destination.isEmpty else { throw NaturalLanguageRoutingResolverError.missingDestination }
+        let conditions = makeRules(from: payload.tools)
+        guard !conditions.isEmpty else { throw NaturalLanguageExclusionResolverError.noRules }
+        return RoutingResolution(conditions: conditions, destinationTemplate: destination)
+    }
+
+    private struct RoutingPayload: Decodable {
+        let tools: [Specification]
+        let destination: String?
+    }
+
+    private static let routingSystemPrompt = """
+    You turn a plain-language file routing request into a rule for Sorty, a macOS file organizer. Return one JSON object and no prose:
+    {"destination":"Finance/Statements/{YYYY}","tools":[{"kind":"...","group":"...","pattern":"...","category":"...","finderTag":"...","value":number,"unit":"...","comparison":"...","caseSensitive":false,"negated":false,"description":"..."}]}
+
+    destination: a folder path relative to the folder being organized, using "/" between levels. Never start it with "/" or "~" and never use "..". It may use {YYYY}, {MM}, {DD} or {Month}, filled from each file's creation date. Use them only when the request asks for dates in the path.
+
+    tools select which files the rule moves:
+    - file_category: Images, Videos, Audio, Documents, Archives, Code, Applications, Fonts, Databases
+    - file_extension: one extension without a leading dot
+    - file_name_contains: text contained in a file name
+    - folder_name: an exact folder name the file sits in
+    - file_size: larger or smaller than a value with KB, MB, GB, or TB
+    - creation_age and modification_age: older or newer than a value in seconds, minutes, hours, days, weeks, months, or years
+    - finder_tag: red, orange, yellow, green, blue, purple, gray
+    - path_contains: text anywhere in a path
+    - regex: a valid regular expression matched against the complete file name, only when simpler tools cannot express the request
+
+    Tools without a group are OR alternatives. Tools sharing one non-empty group string must all match. "Bank statements" with no named bank becomes OR'd file_name_contains tools for words such as "statement"; a named bank adds its name. Preserve explicit values exactly and never invent a threshold, extension, tag or category the request does not imply. Give every tool a short description.
+    """
+}

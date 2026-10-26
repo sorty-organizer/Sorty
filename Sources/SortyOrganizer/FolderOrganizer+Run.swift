@@ -177,22 +177,36 @@ extension FolderOrganizer {
             }
 
             let (filesWithHashes, duplicateContext) = try await duplicateDetectionPhase(files: files)
-            let (plan, instructions, personaPrompt, imagePayload) = try await aiAnalysisPhase(
-                files: filesWithHashes,
-                directory: directory,
-                customPrompt: customPrompt,
-                temperature: temperature,
-                duplicateContext: duplicateContext
-            )
-            let validatedPlan = try await validationPhase(
-                plan: plan,
-                files: filesWithHashes,
-                directory: directory,
-                instructions: instructions,
-                personaPrompt: personaPrompt,
-                temperature: temperature,
-                imagePayload: imagePayload
-            )
+            let routing = partitionFilesByRoutingRules(filesWithHashes)
+            let validatedPlan: OrganizationPlan
+            if routing.remaining.isEmpty {
+                // Every file matched a routing rule, so there is nothing to ask the AI.
+                validatedPlan = OrganizationPlan(
+                    suggestions: routing.suggestions,
+                    notes: "All \(routing.routedCount) files matched your routing rules."
+                )
+            } else {
+                if routing.routedCount > 0 {
+                    updateProgress(0.21, stage: "Routed \(routing.routedCount) files by your rules")
+                }
+                let (plan, instructions, personaPrompt, imagePayload) = try await aiAnalysisPhase(
+                    files: routing.remaining,
+                    directory: directory,
+                    customPrompt: customPrompt,
+                    temperature: temperature,
+                    duplicateContext: duplicateContext
+                )
+                let aiPlan = try await validationPhase(
+                    plan: plan,
+                    files: routing.remaining,
+                    directory: directory,
+                    instructions: instructions,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature,
+                    imagePayload: imagePayload
+                )
+                validatedPlan = Self.mergingRoutedSuggestions(routing.suggestions, into: aiPlan)
+            }
             handleLearningToolCall(
                 from: validatedPlan,
                 source: .manual,
@@ -225,7 +239,7 @@ extension FolderOrganizer {
                     learningExcluded: currentRunLearningExcluded
                 )
                 if !currentRunLearningExcluded {
-                    recordPlanRules(plan, observer: learningsObserver)
+                    recordPlanRules(validatedPlan, observer: learningsObserver)
                 }
             }
 
@@ -328,7 +342,9 @@ extension FolderOrganizer {
                 at: directory,
                 deepScan: usesDeepScan,
                 deepScanFileLimit: Self.deepScanFileLimit,
-                exclusionMatcher: exclusionMatcher
+                exclusionMatcher: exclusionMatcher,
+                protectsProjectFolders: SortyLabsFeature.projectDetection.isEnabled
+                    && aiConfig?.mode != .renameOnly
             )
         } catch {
             await scanner.setScanProgressCallback(nil)
@@ -424,6 +440,15 @@ extension FolderOrganizer {
 
         let isRenameOnly = aiConfig?.mode == .renameOnly
         instructions += exclusionInstructions(forRenameOnly: isRenameOnly)
+
+        if !isRenameOnly, SortyLabsFeature.projectDetection.isEnabled,
+           let projectContext = ProjectClusterDetector.promptContext(
+               clusters: ProjectClusterDetector.detect(in: files),
+               protectedProjectFolders: await scanner.lastProtectedProjectFolders
+           ) {
+            instructions += "\n\n" + projectContext
+            ModelLog.debug("Injected project cluster context into prompt")
+        }
 
         if let learnedContext = learningsManager?.generatePromptContext(forFolder: directory.path), !learnedContext.isEmpty {
             instructions += "\n\n" + learnedContext

@@ -15,6 +15,7 @@ package struct ExclusionRulesView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var learningsManager: LearningsManager
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @AppStorage(SortyLabsFeature.routingRules.defaultsKey) var isRoutingRulesEnabled = false
     @Environment(\.controlActiveState) var controlActiveState
     @Environment(\.scenePhase) var scenePhase
     /// Injected for tests (MockAIClient); defaults to the factory in production.
@@ -185,6 +186,11 @@ package struct ExclusionRulesView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 20) {
+                            if isRoutingRulesEnabled && !isSearching {
+                                RoutingRulesCard()
+                                    .animatedAppearance(delay: 0.02)
+                            }
+
                             // Grouped rules
                             ForEach(Array(groupedRules.enumerated()), id: \.1.0) { index, group in
                                 RuleGroupCard(

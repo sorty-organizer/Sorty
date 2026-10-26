@@ -140,6 +140,8 @@ package actor DirectoryScanner {
     package private(set) var lastScanWasDegraded = false
     /// Description of degradation that occurred
     package private(set) var degradationReason: String?
+    /// Project folders (relative paths) the last scan left intact.
+    package private(set) var lastProtectedProjectFolders: [String] = []
 
     /// Callback for deep scan progress updates
     private var deepScanProgressCallback: (@Sendable (_ current: Int, _ total: Int) -> Void)?
@@ -181,7 +183,8 @@ package actor DirectoryScanner {
         computeHashes: Bool = false,
         skipCloudPlaceholders: Bool = true,
         deepScanFileLimit: Int? = nil,
-        exclusionMatcher: ExclusionMatcher? = nil
+        exclusionMatcher: ExclusionMatcher? = nil,
+        protectsProjectFolders: Bool = false
     ) async throws -> [FileItem] {
         guard !isScanning else {
             throw ScannerError.alreadyScanning
@@ -195,6 +198,7 @@ package actor DirectoryScanner {
         lastScanWasDegraded = false
         degradationReason = nil
         deepScanAnalyzedCount = 0
+        lastProtectedProjectFolders = []
 
         // Lazy initialization of memory pressure monitoring
         if !isMonitoringSetup {
@@ -247,6 +251,7 @@ package actor DirectoryScanner {
             skipCloudPlaceholders: skipCloudPlaceholders,
             deepScanFileLimit: deepScanFileLimit,
             exclusionMatcher: exclusionMatcher,
+            protectsProjectFolders: protectsProjectFolders,
             files: &files
         )
 
@@ -750,6 +755,7 @@ package actor DirectoryScanner {
         skipCloudPlaceholders: Bool,
         deepScanFileLimit: Int?,
         exclusionMatcher: ExclusionMatcher?,
+        protectsProjectFolders: Bool,
         files: inout [FileItem]
     ) async throws {
         let cloudResourceKeys: [URLResourceKey] = [
@@ -848,6 +854,14 @@ package actor DirectoryScanner {
                     finderLabelNumber: finderLabelNumber
                 ) == true {
                     enumerator.skipDescendants()
+                } else if protectsProjectFolders,
+                          ProjectFolderDetector.isProjectRoot(fileURL, fileManager: fileManager) {
+                    // Moving files out of a repo or app project breaks it, so
+                    // the whole tree stays where it is.
+                    enumerator.skipDescendants()
+                    lastProtectedProjectFolders.append(
+                        Self.relativePath(for: fileURL, under: baseDirectoryURL)
+                    )
                 }
                 continue
             }
