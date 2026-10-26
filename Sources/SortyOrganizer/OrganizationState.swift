@@ -66,6 +66,19 @@ public enum OrganizationState: Equatable, Sendable {
         }
     }
 
+    /// Stage name with no error text, for failure logs that leave the Mac.
+    var stageName: String {
+        switch self {
+        case .idle: "idle"
+        case .scanning: "scanning"
+        case .organizing: "organizing"
+        case .ready: "ready"
+        case .applying: "applying"
+        case .completed: "completed"
+        case .error: "error"
+        }
+    }
+
     /// Human-readable description of the state
     public var description: String {
         switch self {

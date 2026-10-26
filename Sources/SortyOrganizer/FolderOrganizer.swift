@@ -509,6 +509,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let isValid = force || OrganizationState.canTransition(from: currentState, to: newState)
         
         if isValid {
+            // Bug reports attach recent error lines, so record where the
+            // workflow was and the error's type and code, not just its text.
+            if case .error(let error) = newState {
+                let nsError = error as NSError
+                OrganizerServices.log(
+                    "Organizer failed while \(currentState.stageName): \(type(of: error)) \(nsError.domain) code \(nsError.code): \(error.localizedDescription)",
+                    level: .error,
+                    category: "FolderOrganizer"
+                )
+            }
             state = newState
             return true
         } else {
