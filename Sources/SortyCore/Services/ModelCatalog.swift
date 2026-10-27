@@ -653,15 +653,31 @@ public final class ModelCatalog: ObservableObject {
         }
         
         struct OllamaTagsResponse: Decodable {
-            let models: [OllamaModel]
+            let models: [OllamaModel]?
         }
+        // Ollama sends both `name` and `model`; compatible servers (llama.cpp,
+        // LM Studio shims) may send only one, so accept either.
         struct OllamaModel: Decodable {
+            let name: String?
+            let model: String?
+            let modified_at: String?
+            let capabilities: [String]?
+        }
+        struct NamedOllamaModel {
             let name: String
             let modified_at: String?
             let capabilities: [String]?
         }
-        
-        let decoded = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
+
+        // A missing `models` array means another server answered on this address.
+        guard let tags = try? JSONDecoder().decode(OllamaTagsResponse.self, from: data),
+              let rawModels = tags.models else {
+            throw ModelCatalogError.unexpectedOllamaResponse
+        }
+        let models = rawModels.compactMap { model -> NamedOllamaModel? in
+            guard let name = model.name ?? model.model, !name.isEmpty else { return nil }
+            return NamedOllamaModel(name: name, modified_at: model.modified_at, capabilities: model.capabilities)
+        }
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
@@ -671,7 +687,7 @@ public final class ModelCatalog: ObservableObject {
         // repeat refreshes stay a single /api/tags call; /api/show runs only
         // for models with no cached or inline capabilities.
         var capabilityByModel: [String: [String]] = [:]
-        let tagModels = Array(decoded.models.prefix(40))
+        let tagModels = Array(models.prefix(40))
         for model in tagModels {
             if let capabilities = normalizedCapabilityTags(from: model.capabilities) {
                 capabilityByModel[model.name] = capabilities
@@ -712,7 +728,7 @@ public final class ModelCatalog: ObservableObject {
             }
         }
         
-        return decoded.models.map { model in
+        return models.map { model in
             let updatedAt = model.modified_at.flatMap { dateFormatter.date(from: $0) } ?? Date()
             return ModelInfo(
                 id: model.name,
@@ -1651,13 +1667,16 @@ public enum ModelCatalogError: Error, LocalizedError {
     case fetchFailed
     case decodingFailed
     case privacyModeBlocked
-    
+    case unexpectedOllamaResponse
+
     public var errorDescription: String? {
         switch self {
         case .invalidURL: return "Invalid URL for model API"
         case .fetchFailed: return "Failed to fetch models from provider"
         case .decodingFailed: return "Failed to decode model response"
         case .privacyModeBlocked: return NetworkPrivacyPolicy.blockedMessage
+        case .unexpectedOllamaResponse:
+            return "The server at this address didn't respond like Ollama. Check the Ollama URL in Settings."
         }
     }
 }

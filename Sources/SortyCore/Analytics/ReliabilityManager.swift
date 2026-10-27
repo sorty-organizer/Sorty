@@ -903,6 +903,8 @@ public final class ReliabilityManager {
                 return .init(category: "validation", cause: "invalid_model_list")
             case .privacyModeBlocked:
                 return .init(category: "network", cause: "privacy_mode_blocked")
+            case .unexpectedOllamaResponse:
+                return .init(category: "configuration", cause: "not_ollama_server")
             }
         }
 

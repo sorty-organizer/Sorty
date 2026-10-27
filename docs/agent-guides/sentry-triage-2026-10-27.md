@@ -14,6 +14,9 @@ the only matching source sites.
 | [3Z](https://sorty-z1.sentry.io/issues/7812089925/) | SIGPIPE on a thread inside `withCheckedThrowingContinuation` → `FileHandle.write` → `write`. | The only stdin writes in the app are Codex's prompt and model-list requests. If the CLI exits before reading, the write killed Sorty. Both input pipes now set `F_SETNOSIGPIPE`, so the write throws EPIPE into the existing error handling. |
 | [49](https://sorty-z1.sentry.io/issues/7814361344/) | Duplicates move to Trash failed with `NSCocoaErrorDomain` 3328 (`NSFeatureUnsupportedError`). | This usually means the volume has no Trash (a network share or some external disks). The failure is legitimate, but the alert said "Something went wrong." `userFacingMessage` now maps 3328 to a plain sentence, and partial-trash failures use that text instead of `localizedDescription`. Trashing is still refused on these volumes; no permanent-delete fallback was added. |
 
+| [40](https://sorty-z1.sentry.io/issues/7812105685/) | Main thread blocked in `NSSound.play` → `AVAudioPlayer.play` while CoreAudio waited to start the output device (HAL `StartAndWaitForState`). This typically happens when Bluetooth audio wakes up. | The three one-shot "Glass" sounds (completion notifications, onboarding reveal, skill setup) now go through `SoundEffectPlayer`, which creates and plays the sound on a serial background queue. The skill intro already starts `AVAudioPlayer` off the main thread. The onboarding soundtrack still starts on the main actor because it is timed to visual cues. |
+| [47](https://sorty-z1.sentry.io/issues/7814343781/) | Ollama `/api/tags` decoding hit `key_not_found`. The event has no response body. | Model entries accept `name` or `model`, since compatible servers may send only one, and skip entries with neither. A response without `models` now throws `unexpectedOllamaResponse` ("didn't respond like Ollama"), classified as configuration rather than decoding. |
+
 ## Already fixed
 
 [3Q](https://sorty-z1.sentry.io/issues/7811111842/) `Task created in a session
@@ -23,20 +26,6 @@ minutes later.
 
 ## Not patched
 
-- [40](https://sorty-z1.sentry.io/issues/7812105685/): main thread blocked
-  in `NSSound.play` while CoreAudio waited to start the output device (HAL
-  `StartAndWaitForState`), typically when a Bluetooth device wakes up. The
-  app frame is unsymbolicated, and three call sites play `NSSound` on the main actor
-  (`NotificationManager.playRetainedSound`,
-  `CompletionAudioController.playRevealAccent`, skill-setup completion).
-  `NSSound`'s thread safety is undocumented, so moving playback off the main
-  thread is not yet an established fix. Revisit if it recurs with a symbolicated
-  frame.
-- [47](https://sorty-z1.sentry.io/issues/7814343781/): Ollama `/api/tags`
-  decoding hit `key_not_found` on production 1.3.0. Real Ollama always returns
-  `models[].name`, so this most likely means a different server answering on
-  the configured address. The event has no response shape, so no decoder change
-  was made.
 - [44](https://sorty-z1.sentry.io/issues/7813445154/)/[45](https://sorty-z1.sentry.io/issues/7813445188/)
   (HTTP 501 from OpenAI and Codex model listing),
   [48](https://sorty-z1.sentry.io/issues/7814353393/) (HTTP 502 during
@@ -54,6 +43,6 @@ minutes later.
 
 ## Validation
 
-None of these runtime paths were exercised. The only check run was a
-standalone `swiftc` compile of the `F_SETNOSIGPIPE` call, which confirmed the
-flag reads back as set. No Sentry statuses were changed.
+None of these runtime paths were exercised. A standalone `swiftc` compile
+confirmed that `F_SETNOSIGPIPE` reads back as set, and `make dev` built the
+40/47 follow-up without errors. No Sentry statuses were changed.

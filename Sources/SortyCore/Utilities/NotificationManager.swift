@@ -783,12 +783,12 @@ public class NotificationManager: ObservableObject {
     /// completions and the Settings preview so both hear the same sound.
     public func playCompletionSoundIfEnabled() {
         guard settings.settings.playCompletionSound else { return }
-        Self.playRetainedSound(named: "Glass")
+        SoundEffectPlayer.play(named: "Glass")
     }
 
     /// Unconditional completion-sound demo for the Settings preview.
     public func previewCompletionSound() {
-        Self.playRetainedSound(named: "Glass")
+        SoundEffectPlayer.play(named: "Glass")
     }
     
     /// Request user attention (dock bounce)
@@ -1812,28 +1812,9 @@ public class NotificationManager: ObservableObject {
         }
     }
     
-    // Sounds started with NSSound.play() stop if the instance is released
-    // mid-playback, so hold each sound until it has finished playing.
-    // ponytail: unbounded array, fine at notification volume; cap if abused.
-    private static var retainedSounds: [NSSound] = []
-
-    private static func playRetainedSound(named name: String) {
-        guard let sound = NSSound(named: NSSound.Name(name)) else {
-            NSSound.beep()
-            return
-        }
-        retainedSounds.append(sound)
-        sound.play()
-        let releaseAfter = max(sound.duration + 0.5, 1.5)
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(releaseAfter))
-            retainedSounds.removeAll { $0 === sound }
-        }
-    }
-
     private func playHUDSound() {
         // Use a subtle glass sound if available, fallback to beep
-        Self.playRetainedSound(named: "Glass")
+        SoundEffectPlayer.play(named: "Glass")
     }
 
     func shouldPlayCompletionSound(for type: NotificationType) -> Bool {
@@ -1912,6 +1893,36 @@ public class NotificationManager: ObservableObject {
             let hours = Int(duration) / 3600
             let minutes = (Int(duration) % 3600) / 60
             return "\(hours)h \(minutes)m"
+        }
+    }
+}
+
+// MARK: - Sound Effects
+
+/// Plays short named system sounds (such as "Glass") without blocking the UI.
+/// Use this instead of calling `NSSound.play()` on the main actor. The first
+/// sound after the output device sleeps (for example, Bluetooth headphones)
+/// can block in CoreAudio for seconds.
+package enum SoundEffectPlayer {
+    private static let queue = DispatchQueue(label: "com.sorty.sound-effects", qos: .userInitiated)
+    // Sounds started with NSSound.play() stop if the instance is released
+    // mid-playback, so hold each sound until it has finished. Only touched on `queue`.
+    nonisolated(unsafe) private static var retainedSounds: [NSSound] = []
+
+    package static func play(named name: String, volume: Float = 1) {
+        queue.async {
+            guard let sound = NSSound(named: NSSound.Name(name)) else {
+                NSSound.beep()
+                return
+            }
+            sound.volume = volume
+            retainedSounds.append(sound)
+            sound.play()
+            let releaseAfter = max(sound.duration + 0.5, 1.5)
+            let soundID = ObjectIdentifier(sound)
+            queue.asyncAfter(deadline: .now() + releaseAfter) {
+                retainedSounds.removeAll { ObjectIdentifier($0) == soundID }
+            }
         }
     }
 }

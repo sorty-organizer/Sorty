@@ -11,14 +11,9 @@ import SwiftUI
 final class CompletionAudioController {
     static let shared = CompletionAudioController()
     private var player: AVAudioPlayer?
-    private var revealAccent: NSSound?
     private var fadeTask: Task<Void, Never>?
 
     func prepare() async {
-        if revealAccent == nil {
-            revealAccent = NSSound(named: "Glass")
-            revealAccent?.volume = 0.15
-        }
         guard player == nil else { return }
         guard let soundURL = resolvedSoundURL() else { return }
         let data = await Task.detached(priority: .utility) {
@@ -72,11 +67,7 @@ final class CompletionAudioController {
     }
 
     func playRevealAccent() {
-        if revealAccent == nil {
-            revealAccent = NSSound(named: "Glass")
-            revealAccent?.volume = 0.15
-        }
-        revealAccent?.play()
+        SoundEffectPlayer.play(named: "Glass", volume: 0.15)
     }
 
     func fadeOutAndStop(duration: TimeInterval) {

@@ -180,9 +180,8 @@ extension SkillSetupView {
                     try await ContinuousClock().sleep(until: importProgressDeadline)
                 }
                 AccessibilityNotification.Announcement("Your Sorty skill is ready").post()
-                if !isOnboarding, let sound = NSSound(named: "Glass") {
-                    sound.volume = 0.20
-                    sound.play()
+                if !isOnboarding {
+                    SoundEffectPlayer.play(named: "Glass", volume: 0.20)
                 }
                 // Reveal the ready page and dismiss progress in one animated update.
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
