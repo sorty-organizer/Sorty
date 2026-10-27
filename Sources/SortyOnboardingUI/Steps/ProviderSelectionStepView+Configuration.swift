@@ -238,7 +238,7 @@ extension ProviderSelectionStepView {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Step 2: Verify")
                         .font(.caption).fontWeight(.semibold)
-                    Text("We automatically verify that Codex CLI is installed and auth tokens are present. You can also run a manual verify anytime.")
+                    Text("After you sign in, Sorty checks for your Codex sign-in automatically. You can also verify now.")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
 
@@ -253,11 +253,14 @@ extension ProviderSelectionStepView {
                     action: manuallyVerifyCodexCLI
                 )
 
-                HStack(spacing: 8) {
-                    BouncingSpinner(size: 10, color: .secondary)
-                    Text("Automatic verification runs every few seconds while this panel is open.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                if isAutoVerifyingCodex {
+                    HStack(spacing: 8) {
+                        BouncingSpinner(size: 10, color: .secondary)
+                        Text("Waiting for Codex sign-in…")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .transition(.opacity)
                 }
 
                 if !codexAuth.isCodexInstalled {
@@ -273,9 +276,17 @@ extension ProviderSelectionStepView {
                 }
             }
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isAutoVerifyingCodex)
         .task(id: codexSignInAttempt) {
+            // Polling starts only after the Terminal sign-in so an idle panel
+            // spawns no `codex login status` processes.
             guard codexSignInAttempt > 0 else { return }
+            isAutoVerifyingCodex = true
             await autoVerifyCodexSignInLoop()
+            // A retry cancels this run after starting its own; leave its spinner up.
+            if !Task.isCancelled {
+                isAutoVerifyingCodex = false
+            }
         }
     }
 

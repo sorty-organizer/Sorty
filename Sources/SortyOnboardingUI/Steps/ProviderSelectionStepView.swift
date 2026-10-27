@@ -55,6 +55,8 @@ public struct ProviderSelectionStepView: View {
     @State var codexTerminalButtonState: CodexActionVisualState = .idle
     @State var codexVerifyButtonState: CodexActionVisualState = .idle
     @State var codexSignInAttempt = 0
+    /// True only while the post-sign-in verify loop runs, so the spinner never outlives it.
+    @State var isAutoVerifyingCodex = false
     @State var apiKeyDraft = ""
     @State var apiURLDraft = ""
     @State var readinessSnapshot = ProviderReadinessSnapshot.initial
