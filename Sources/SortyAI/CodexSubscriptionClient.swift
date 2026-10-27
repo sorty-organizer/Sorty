@@ -228,6 +228,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
 
         let inputPipe = Pipe()
         let outputPipe = Pipe()
+        Self.disableBrokenPipeSignal(inputPipe)
         process.standardInput = inputPipe
         process.standardOutput = outputPipe
         process.standardError = FileHandle.nullDevice
@@ -371,6 +372,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                 self.streamingDelegate?.didReceiveChunk(chunk)
             }
         }
+        Self.disableBrokenPipeSignal(inputPipe)
         process.standardInput = inputPipe
         process.standardOutput = outputPipe
         process.standardError = errorPipe
@@ -451,7 +453,11 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             }
             try Task.checkCancellation()
         } catch is CancellationError {
-            process.terminate()
+            // Cancellation can land before `process.run()`; terminating an
+            // unlaunched Process raises NSInvalidArgumentException.
+            if process.isRunning {
+                process.terminate()
+            }
             outputPipe.fileHandleForReading.readabilityHandler = nil
             errorPipe.fileHandleForReading.readabilityHandler = nil
             try? diagnosticsHandle.close()
@@ -465,7 +471,9 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             try? diagnosticsHandle.close()
             throw error
         } catch {
-            process.terminate()
+            if process.isRunning {
+                process.terminate()
+            }
             outputPipe.fileHandleForReading.readabilityHandler = nil
             errorPipe.fileHandleForReading.readabilityHandler = nil
             try? diagnosticsHandle.close()
@@ -755,6 +763,13 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
 
     /// How long a stopped CLI process gets to exit on SIGTERM before SIGKILL.
     private static let processTerminationGracePeriod: TimeInterval = 5
+
+    /// Makes writes to a CLI's stdin throw EPIPE instead of raising SIGPIPE,
+    /// which would kill Sorty when the CLI exits before reading its input.
+    /// Call before handing the pipe to a `Process`.
+    private nonisolated static func disableBrokenPipeSignal(_ pipe: Pipe) {
+        _ = fcntl(pipe.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+    }
 
     /// Stops a CLI process that may ignore SIGTERM: signal now, SIGKILL after a
     /// short grace period, then run `onEscalated` so the caller can unblock.

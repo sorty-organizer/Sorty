@@ -11,7 +11,7 @@ package struct PartialTrashFailure: LocalizedError {
     package let movedItems: [RestorableDuplicate]
 
     package var errorDescription: String? {
-        "Some duplicate files were moved to Trash before cleanup failed: \(underlyingError.localizedDescription)"
+        "Some duplicate files were moved to Trash before cleanup failed: \(underlyingError.userFacingMessage)"
     }
 }
 

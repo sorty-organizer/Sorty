@@ -102,6 +102,9 @@ enum UserFacingErrorText {
             return "The file is in use by another app."
         case NSFileReadCorruptFileError:
             return "The file is damaged or in an unexpected format."
+        case NSFeatureUnsupportedError:
+            // Most often trashItem on a network share or external disk without a Trash.
+            return "This disk doesn't support that action, such as moving items to the Trash."
         case NSUserCancelledError:
             return "Cancelled."
         default:
