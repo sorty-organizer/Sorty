@@ -22,9 +22,6 @@ public actor LocalRuleInferenceEngine {
     /// Minimum number of examples needed to infer a rule
     private let minExamplesForRule: Int = 2
     
-    /// Minimum confidence threshold for rule creation
-    private let minConfidenceThreshold: Double = 0.6
-    
     /// Weight multiplier for recent examples (last 7 days)
     private let recentWeightMultiplier: Double = 2.0
     

@@ -54,7 +54,6 @@ package struct WatchedFoldersView: View {
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var appState: AppState
     @State private var showingFolderPicker = false
-    @State private var selectedFolderForEdit: WatchedFolder?
     @State private var isDropTargeted = false
 
     package init() {}

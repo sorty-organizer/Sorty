@@ -27,8 +27,6 @@ struct AnalysisView: View {
     @State private var didShowTakingLongerHUD = false
     @State private var pendingModelSwitch: PendingModelSwitch?
     @State private var lastInsightCount = 0
-    @State private var lastMessageTier: MessageTier = .none
-    @State private var lastInsightPulseAt: Date = .distantPast
     @State private var liveRenameStreamEvents: [RenameStreamEvent] = []
     @State private var hasOrganizeStreamEvents = false
     @State private var liveOrganizingSuggestions: [FolderSuggestion] = []
