@@ -47,6 +47,15 @@ The four Quick Action installers now share an Info.plist renderer. Each caller s
 - Eight executable Swift comparisons covered all four original metadata templates and light/dark watch variants. All generated outputs matched the original UTF-8 bytes and parsed as property lists. The comparison caught and corrected an indentation mismatch before commit.
 - An independent source comparison confirmed the installation code outside the metadata extraction was unchanged. Swift parsing and diff checks passed. Finder runtime behavior remains unverified.
 
+## Onboarding notification callbacks
+
+Both screen-panel coordinators now use the existing `NotificationCenter.addMainActorObserver` helper for 19 callbacks. That helper registers on the main operation queue and schedules the supplied block in `Task { @MainActor in ... }`, matching the callbacks it replaces.
+
+- Net reduction: 84 production lines in this batch; 793 since baseline (0.56%).
+- Production total: 141,648 lines; 27,696 more lines must be removed to reach the target.
+- Compared all 19 registrations in order: notification names, object filters, weak captures, and invoked methods match. All source outside those registrations is identical. Swift parsing and diff checks passed.
+- Panel geometry, visibility, animation durations, Reduce Motion handling, observer removal, and dismissal code are unchanged. No new helper or runtime task was introduced. Hosted CI covers integration compilation; panel runtime behavior remains unverified.
+
 ## Next investigations
 
 These are candidates, not approved deletions or estimated savings:

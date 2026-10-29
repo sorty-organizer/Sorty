@@ -73,79 +73,35 @@ struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
 
             let center = NotificationCenter.default
             observers = [
-                center.addObserver(
-                    forName: NSWindow.didMoveNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.updatePanelFrame() }
+                center.addMainActorObserver(forName: NSWindow.didMoveNotification, object: window) { [weak self] in
+                    self?.updatePanelFrame()
                 },
-                center.addObserver(
-                    forName: NSWindow.didResizeNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.updatePanelFrame() }
+                center.addMainActorObserver(forName: NSWindow.didResizeNotification, object: window) { [weak self] in
+                    self?.updatePanelFrame()
                 },
-                center.addObserver(
-                    forName: NSWindow.didChangeScreenNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.updatePanelFrame() }
+                center.addMainActorObserver(forName: NSWindow.didChangeScreenNotification, object: window) { [weak self] in
+                    self?.updatePanelFrame()
                 },
-                center.addObserver(
-                    forName: NSWindow.willEnterFullScreenNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.hidePanelImmediately() }
+                center.addMainActorObserver(forName: NSWindow.willEnterFullScreenNotification, object: window) { [weak self] in
+                    self?.hidePanelImmediately()
                 },
-                center.addObserver(
-                    forName: NSWindow.didExitFullScreenNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.updatePanelFrame() }
+                center.addMainActorObserver(forName: NSWindow.didExitFullScreenNotification, object: window) { [weak self] in
+                    self?.updatePanelFrame()
                 },
-                center.addObserver(
-                    forName: NSWindow.didMiniaturizeNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.hidePanelImmediately() }
+                center.addMainActorObserver(forName: NSWindow.didMiniaturizeNotification, object: window) { [weak self] in
+                    self?.hidePanelImmediately()
                 },
-                center.addObserver(
-                    forName: NSWindow.didDeminiaturizeNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.updatePanelFrame() }
+                center.addMainActorObserver(forName: NSWindow.didDeminiaturizeNotification, object: window) { [weak self] in
+                    self?.updatePanelFrame()
                 },
-                center.addObserver(
-                    forName: NSWindow.willCloseNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.hostWillClose() }
+                center.addMainActorObserver(forName: NSWindow.willCloseNotification, object: window) { [weak self] in
+                    self?.hostWillClose()
                 },
-                center.addObserver(
-                    forName: NSApplication.didResignActiveNotification,
-                    object: nil,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in
-                        self?.hidePanelImmediately()
-                    }
+                center.addMainActorObserver(forName: NSApplication.didResignActiveNotification, object: nil) { [weak self] in
+                    self?.hidePanelImmediately()
                 },
-                center.addObserver(
-                    forName: NSApplication.didBecomeActiveNotification,
-                    object: nil,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in
-                        self?.updatePanelFrame()
-                    }
+                center.addMainActorObserver(forName: NSApplication.didBecomeActiveNotification, object: nil) { [weak self] in
+                    self?.updatePanelFrame()
                 }
             ]
 
