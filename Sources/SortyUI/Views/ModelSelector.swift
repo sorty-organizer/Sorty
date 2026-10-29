@@ -19,62 +19,10 @@ private func resignWindowFirstResponder() {
     window?.makeFirstResponder(nil)
 }
 
-// MARK: - Model Selector Row (Compact Display + Trigger)
-
-struct ModelSelectorRow: View {
-    @SortyHotReload private var hotReload
-    let provider: AIProvider
-    let model: String
-    let onTap: () -> Void
-    
-    var body: some View {
-        Button {
-            HapticFeedbackManager.shared.light()
-            onTap()
-        } label: {
-            HStack(spacing: 10) {
-                ProviderLogoView(provider: provider, size: 16)
-                    .frame(width: 20)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(provider.displayName)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .numericTextTransition(animationValue: provider)
-                    Text(model.isEmpty ? provider.defaultModel : model)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .lineLimit(1)
-                        .numericTextTransition(
-                            animationValue: model.isEmpty ? provider.defaultModel : model
-                        )
-                }
-
-                Spacer()
-
-                Text("Change")
-                    .font(.caption)
-                    .foregroundColor(.accentColor)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 // MARK: - Model Selector Compact Button (Inline Value + Trigger)
 
 /// A compact, menu-picker-sized trigger that shows the current selection and
-/// opens the model selection popover. Use in settings rows where the
-/// full-width `ModelSelectorRow` would be too heavy.
+/// opens the model selection popover for settings rows.
 package struct ModelSelectorCompactButton: View {
     @SortyHotReload private var hotReload
     let provider: AIProvider

@@ -91,3 +91,12 @@ These are candidates, not approved deletions or estimated savings:
 3. Review large modules for repeated implementation behind existing interfaces, starting with `LearningsManager`, `ExtensionCommunication`, and `FileSystemManager`. File size alone is not a reason to delete behavior or split files.
 
 For each larger cut, record the removed behavior-free duplication, net size change, affected contracts, and focused validation. Run the applicable Blacksmith checks for substantive batches. Preserve native controls, persistence, undo, file safety, extension packaging, and provider behavior. Any intentional feature removal needs a separate product decision.
+
+## Indexed dead-code review
+
+Removed an uncalled recursive organizer batching implementation, an unused preview progress snapshot and two unused preview helpers, an unused circular progress view and its private rendering helpers, and an unused model selector row. The active batch request and adaptive retry path, progress controls, circular loader, and model picker remain. Repository-wide caller searches confirmed the removed declarations had no outside callers.
+
+- Net reduction: 314 production lines in this batch; 1,238 since baseline (0.87%).
+- Production total: 141,203 lines; 27,251 more lines must be removed to reach the target.
+- An isolated Swift package rebuild and 44 existing streaming/preview tests passed. Both existing organizer cancellation tests also passed. These checks do not establish full app or Finder runtime behavior.
+- Periphery findings were reviewed rather than applied automatically. Retained framework callbacks, hot-reload properties, lifetime owners, and serialization fields. The index covers SPM; Xcode-only entry points require separate caller review. Hosted integration checks remain required.

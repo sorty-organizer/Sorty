@@ -54,11 +54,4 @@ struct OptimizedPreviewTree: View {
         }
     }
 
-    private func findFolderByID(_ id: UUID, in folder: FolderSuggestion) -> FolderSuggestion? {
-        if folder.id == id { return folder }
-        for sub in folder.subfolders {
-            if let found = findFolderByID(id, in: sub) { return found }
-        }
-        return nil
-    }
 }

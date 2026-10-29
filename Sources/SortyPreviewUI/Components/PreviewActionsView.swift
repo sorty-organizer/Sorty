@@ -272,17 +272,6 @@ struct PreviewActionsView: View {
 
 // MARK: - Progress Actions View (shown during organization)
 
-/// Lightweight progress snapshot. The progress view observes only these
-/// quantized values, never the full organizer, so organizer publishes that
-/// don't move progress can't retrigger the progress layout.
-struct PreviewProgressState: Equatable {
-    /// Whole percent points (0...100).
-    var percentPoints: Int
-    var stage: String
-    var estimatedTimeText: String?
-    var isAIWaiting: Bool
-}
-
 struct PreviewProgressView: View {
     @SortyHotReload private var hotReload
     let progress: Double
@@ -300,15 +289,6 @@ struct PreviewProgressView: View {
 
     private var progressPercentText: String {
         "\(Int((quantizedProgress * 100).rounded()))%"
-    }
-
-    var snapshot: PreviewProgressState {
-        PreviewProgressState(
-            percentPoints: Int((quantizedProgress * 100).rounded()),
-            stage: stage,
-            estimatedTimeText: estimatedTimeText,
-            isAIWaiting: isAIWaiting
-        )
     }
 
     var body: some View {

@@ -9,26 +9,6 @@ import SwiftUI
 
 // MARK: - Private helpers
 
-private struct SortyGradientRingSegment: View {
-    @SortyHotReload private var hotReload
-    let accent: Color
-    let lineWidth: CGFloat
-    let start: Double
-    let end: Double
-
-    var body: some View {
-        Circle()
-            .inset(by: lineWidth / 2)
-            .trim(from: start, to: end)
-            .stroke(
-                SortyBeamPalette.arcGradient(accent: accent),
-                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-            )
-            .rotationEffect(.degrees(-90))
-            .shadow(color: accent.opacity(0.24), radius: lineWidth * 1.25)
-    }
-}
-
 private enum SortyBeamPalette {
     static var trackFill: some ShapeStyle {
         Color.white.opacity(0.055)
@@ -54,18 +34,6 @@ private enum SortyBeamPalette {
         )
     }
 
-    static func arcGradient(accent: Color) -> AngularGradient {
-        AngularGradient(
-            stops: [
-                .init(color: .clear, location: 0.0),
-                .init(color: accent.opacity(0.24), location: 0.48),
-                .init(color: accent.opacity(0.70), location: 0.76),
-                .init(color: accent.opacity(0.94), location: 0.92),
-                .init(color: accent.opacity(0.98), location: 1.0),
-            ],
-            center: .center
-        )
-    }
 }
 
 // MARK: - SortyGradientProgressBar
@@ -210,88 +178,6 @@ package struct SortyGradientLoadingBar: View {
         }
         .frame(width: width, height: height)
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
-    }
-}
-
-// MARK: - SortyGradientCircularProgress
-
-struct SortyGradientCircularProgress: View {
-    @SortyHotReload private var hotReload
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.controlActiveState) private var controlActiveState
-    @Environment(\.scenePhase) private var scenePhase
-
-    let progress: Double
-    var accent: Color = SortyDesignSystem.Colors.resolvedAccent
-    var size: CGFloat = 80
-    var lineWidth: CGFloat = 8
-    var showsShimmer: Bool = false
-
-    @State private var animatedProgress: Double = 0
-    @State private var isWindowVisible = true
-
-    private var clampedProgress: Double {
-        min(max(progress, 0), 1)
-    }
-
-    private var shimmerPaused: Bool {
-        reduceMotion || reduceTransparency || !isWindowVisible
-            || controlActiveState == .inactive || scenePhase != .active || animatedProgress == 0
-    }
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .inset(by: lineWidth / 2)
-                .stroke(SortyBeamPalette.trackFill, lineWidth: lineWidth)
-
-            if animatedProgress > 0 {
-                SortyGradientRingSegment(
-                    accent: accent,
-                    lineWidth: lineWidth,
-                    start: 0,
-                    end: animatedProgress
-                )
-            }
-
-            if showsShimmer, !reduceTransparency {
-                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 15.0, paused: shimmerPaused)) { context in
-                    let elapsed = context.date.timeIntervalSinceReferenceDate
-                    let arcSpan = animatedProgress * 360
-                    let phase = (elapsed * 120).truncatingRemainder(
-                        dividingBy: arcSpan.isZero ? 360 : arcSpan)
-                    let shimmerCenter = phase / max(arcSpan, 1)
-                    let pulse = (sin(elapsed * 1.8) + 1) * 0.5
-                    let peakOpacity = 0.35 + (pulse * 0.25)
-                    let highlightWidth: Double = 0.12
-
-                    let trimStart = max(shimmerCenter - highlightWidth, 0) * animatedProgress
-                    let trimEnd = min(shimmerCenter + highlightWidth, 1) * animatedProgress
-
-                    Circle()
-                        .inset(by: lineWidth / 2)
-                        .trim(from: trimStart, to: trimEnd)
-                        .stroke(
-                            accent.opacity(peakOpacity),
-                            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                }
-            }
-        }
-        .frame(width: size, height: size)
-        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
-        .onAppear {
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.3)) {
-                animatedProgress = clampedProgress
-            }
-        }
-        .onChange(of: clampedProgress) { _, newValue in
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
-                animatedProgress = newValue
-            }
-        }
     }
 }
 
