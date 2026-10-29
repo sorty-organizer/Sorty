@@ -1679,6 +1679,60 @@ public struct ExtensionCommunication {
             .replacingOccurrences(of: "'", with: "&apos;")
     }
 
+    /// Render Finder service metadata while preserving each action's input and icon contract.
+    private static func quickActionInfoPlist(
+        title: String,
+        bundleIdentifier: String,
+        iconFile: String,
+        iconVersion: (key: String, value: String)? = nil,
+        foldersOnly: Bool = false
+    ) -> String {
+        let versionMetadata = iconVersion.map {
+            "<key>\($0.key)</key>\n    <string>\($0.value)</string>\n    "
+        } ?? ""
+        let fileTypes = "<string>public.folder</string>" + (foldersOnly
+            ? "" : "\n                <string>public.item</string>")
+        return """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleIdentifier</key>
+            <string>\(bundleIdentifier)</string>
+            <key>CFBundleName</key>
+            <string>\(title)</string>
+            <key>CFBundlePackageType</key>
+            <string>BNDL</string>
+            <key>CFBundleIconFile</key>
+            <string>\(iconFile)</string>
+            \(versionMetadata)<key>NSServices</key>
+            <array>
+                <dict>
+                    <key>NSMenuItem</key>
+                    <dict>
+                        <key>default</key>
+                        <string>\(title)</string>
+                    </dict>
+                    <key>NSIconName</key>
+                    <string>\(quickActionServiceIconName)</string>
+                    <key>NSMessage</key>
+                    <string>runWorkflowAsService</string>
+                    <key>NSRequiredContext</key>
+                    <dict>
+                        <key>NSApplicationIdentifier</key>
+                        <string>com.apple.finder</string>
+                    </dict>
+                    <key>NSSendFileTypes</key>
+                    <array>
+                        \(fileTypes)
+                    </array>
+                </dict>
+            </array>
+        </dict>
+        </plist>
+        """
+    }
+
     /// Keep Automator's action schema identical across the four Finder services.
     /// Preview retains its original action identifiers for existing workflows.
     private static func quickActionWorkflowPlist(shellCommand: String, isPreview: Bool = false) -> String {
@@ -1911,48 +1965,11 @@ public struct ExtensionCommunication {
             try replaceWorkflowDirectoryIfNeeded(workflowDir)
             try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
 
-            let infoPlist = """
-            <?xml version="1.0" encoding="UTF-8"?>
-            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-            <plist version="1.0">
-            <dict>
-                <key>CFBundleIdentifier</key>
-                <string>\(organizeQuickActionBundleIdentifier)</string>
-                <key>CFBundleName</key>
-                <string>Organize with Sorty</string>
-                <key>CFBundlePackageType</key>
-                <string>BNDL</string>
-                <key>CFBundleIconFile</key>
-                <string>\(quickActionServiceIconName)</string>
-                <key>\(organizeWorkflowIconVersionInfoKey)</key>
-                <string>\(organizeWorkflowIconVersion)</string>
-                <key>NSServices</key>
-                <array>
-                    <dict>
-                        <key>NSMenuItem</key>
-                        <dict>
-                            <key>default</key>
-                            <string>Organize with Sorty</string>
-                        </dict>
-                        <key>NSIconName</key>
-                        <string>\(quickActionServiceIconName)</string>
-                        <key>NSMessage</key>
-                        <string>runWorkflowAsService</string>
-                        <key>NSRequiredContext</key>
-                        <dict>
-                            <key>NSApplicationIdentifier</key>
-                            <string>com.apple.finder</string>
-                        </dict>
-                        <key>NSSendFileTypes</key>
-                        <array>
-                            <string>public.folder</string>
-                            <string>public.item</string>
-                        </array>
-                    </dict>
-                </array>
-            </dict>
-            </plist>
-            """
+            let infoPlist = quickActionInfoPlist(
+                title: "Organize with Sorty", bundleIdentifier: organizeQuickActionBundleIdentifier,
+                iconFile: quickActionServiceIconName,
+                iconVersion: (organizeWorkflowIconVersionInfoKey, organizeWorkflowIconVersion)
+            )
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """
@@ -2161,47 +2178,11 @@ public struct ExtensionCommunication {
             try replaceWorkflowDirectoryIfNeeded(workflowDir)
             try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
 
-            let infoPlist = """
-            <?xml version="1.0" encoding="UTF-8"?>
-            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-            <plist version="1.0">
-            <dict>
-                <key>CFBundleIdentifier</key>
-                <string>\(watchQuickActionBundleIdentifier)</string>
-                <key>CFBundleName</key>
-                <string>Watch with Sorty</string>
-                <key>CFBundlePackageType</key>
-                <string>BNDL</string>
-                <key>CFBundleIconFile</key>
-                <string>\(quickActionServiceIconName)</string>
-                <key>\(watchWorkflowIconVariantInfoKey)</key>
-                <string>\(currentWatchWorkflowIconVariant())</string>
-                <key>NSServices</key>
-                <array>
-                    <dict>
-                        <key>NSMenuItem</key>
-                        <dict>
-                            <key>default</key>
-                            <string>Watch with Sorty</string>
-                        </dict>
-                        <key>NSIconName</key>
-                        <string>\(quickActionServiceIconName)</string>
-                        <key>NSMessage</key>
-                        <string>runWorkflowAsService</string>
-                        <key>NSRequiredContext</key>
-                        <dict>
-                            <key>NSApplicationIdentifier</key>
-                            <string>com.apple.finder</string>
-                        </dict>
-                        <key>NSSendFileTypes</key>
-                        <array>
-                            <string>public.folder</string>
-                        </array>
-                    </dict>
-                </array>
-            </dict>
-            </plist>
-            """
+            let infoPlist = quickActionInfoPlist(
+                title: "Watch with Sorty", bundleIdentifier: watchQuickActionBundleIdentifier,
+                iconFile: quickActionServiceIconName,
+                iconVersion: (watchWorkflowIconVariantInfoKey, currentWatchWorkflowIconVariant()), foldersOnly: true
+            )
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """
@@ -2244,46 +2225,10 @@ public struct ExtensionCommunication {
             try replaceWorkflowDirectoryIfNeeded(workflowDir)
             try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
 
-            let infoPlist = """
-            <?xml version="1.0" encoding="UTF-8"?>
-            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-            <plist version="1.0">
-            <dict>
-                <key>CFBundleIdentifier</key>
-                <string>\(excludeQuickActionBundleIdentifier)</string>
-                <key>CFBundleName</key>
-                <string>Exclude from Sorty</string>
-                <key>CFBundlePackageType</key>
-                <string>BNDL</string>
-                <key>CFBundleIconFile</key>
-                <string>\(quickActionIconBaseName)</string>
-                <key>NSServices</key>
-                <array>
-                    <dict>
-                        <key>NSMenuItem</key>
-                        <dict>
-                            <key>default</key>
-                            <string>Exclude from Sorty</string>
-                        </dict>
-                        <key>NSIconName</key>
-                        <string>\(quickActionServiceIconName)</string>
-                        <key>NSMessage</key>
-                        <string>runWorkflowAsService</string>
-                        <key>NSRequiredContext</key>
-                        <dict>
-                            <key>NSApplicationIdentifier</key>
-                            <string>com.apple.finder</string>
-                        </dict>
-                        <key>NSSendFileTypes</key>
-                        <array>
-                            <string>public.folder</string>
-                            <string>public.item</string>
-                        </array>
-                    </dict>
-                </array>
-            </dict>
-            </plist>
-            """
+            let infoPlist = quickActionInfoPlist(
+                title: "Exclude from Sorty", bundleIdentifier: excludeQuickActionBundleIdentifier,
+                iconFile: quickActionIconBaseName
+            )
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """
@@ -2321,46 +2266,10 @@ public struct ExtensionCommunication {
             try replaceWorkflowDirectoryIfNeeded(workflowDir)
             try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
 
-            let infoPlist = """
-            <?xml version="1.0" encoding="UTF-8"?>
-            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-            <plist version="1.0">
-            <dict>
-                <key>CFBundleIdentifier</key>
-                <string>\(previewQuickActionBundleIdentifier)</string>
-                <key>CFBundleName</key>
-                <string>Preview with Sorty</string>
-                <key>CFBundlePackageType</key>
-                <string>BNDL</string>
-                <key>CFBundleIconFile</key>
-                <string>\(quickActionIconBaseName)</string>
-                <key>NSServices</key>
-                <array>
-                    <dict>
-                        <key>NSMenuItem</key>
-                        <dict>
-                            <key>default</key>
-                            <string>Preview with Sorty</string>
-                        </dict>
-                        <key>NSIconName</key>
-                        <string>\(quickActionServiceIconName)</string>
-                        <key>NSMessage</key>
-                        <string>runWorkflowAsService</string>
-                        <key>NSRequiredContext</key>
-                        <dict>
-                            <key>NSApplicationIdentifier</key>
-                            <string>com.apple.finder</string>
-                        </dict>
-                        <key>NSSendFileTypes</key>
-                        <array>
-                            <string>public.folder</string>
-                            <string>public.item</string>
-                        </array>
-                    </dict>
-                </array>
-            </dict>
-            </plist>
-            """
+            let infoPlist = quickActionInfoPlist(
+                title: "Preview with Sorty", bundleIdentifier: previewQuickActionBundleIdentifier,
+                iconFile: quickActionIconBaseName
+            )
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
             let shellCommand = """

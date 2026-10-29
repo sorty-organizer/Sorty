@@ -36,7 +36,16 @@ Replaced four copies of Automator's `document.wflow` XML with one private render
 - Net reduction: 612 production lines in this batch; 618 since baseline (0.43%).
 - Production total: 141,823 lines; 27,871 more lines must be removed to reach the target.
 - Executed the original and shared templates in Swift for all four action variants with seven shell-command inputs, including XML metacharacters, empty text, and multiline text. All 28 outputs matched byte-for-byte and parsed as property lists.
-- This verifies generated workflow contents, not Finder installation or runtime behavior. Hosted Swift CI is required for integration confidence.
+- This verifies generated workflow contents, not Finder installation or runtime behavior. [Hosted Swift CI](https://github.com/sorty-organizer/Sorty/actions/runs/40859665068) passed security checks, the app build, tests, and pre-release validation.
+
+## Finder service metadata consolidation
+
+The four Quick Action installers now share an Info.plist renderer. Each caller still selects its title, bundle identifier, icon, icon-version metadata, and accepted file types. Watch remains folder-only; Exclude and Preview retain their distinct bundle icon field.
+
+- Net reduction: 91 production lines in this batch; 709 since baseline (0.50%).
+- Production total: 141,732 lines; 27,780 more lines must be removed to reach the target.
+- Eight executable Swift comparisons covered all four original metadata templates and light/dark watch variants. All generated outputs matched the original UTF-8 bytes and parsed as property lists. The comparison caught and corrected an indentation mismatch before commit.
+- An independent source comparison confirmed the installation code outside the metadata extraction was unchanged. Swift parsing and diff checks passed. Finder runtime behavior remains unverified.
 
 ## Next investigations
 
