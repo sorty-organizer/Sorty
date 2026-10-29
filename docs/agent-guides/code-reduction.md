@@ -128,3 +128,11 @@ Codex text and image calls share response execution, parsing, and statistics. Pr
 
 - Net reduction: 39 production lines; 1,378 since baseline (0.97%). Production total: 141,063 lines; 27,111 remain to reach the target.
 - The final isolated rebuild and all 40 existing request-format and persona/provider tests passed. They cover captured text/image payloads, vision detail, OpenCode formats and headers, OpenRouter streaming and retry behavior, and Codex argument generation. Hosted integration validation remains required. These checks do not establish live provider behavior or a real Codex subprocess round trip.
+
+## Quick Action installation sequence
+
+The four Quick Action installers now share directory preparation, metadata and workflow writes, icon application, service refresh, and installation error handling. Each caller retains its workflow name, shell command, metadata, and success message. Exclude still removes its legacy workflow before replacing the current one; Watch still clears legacy service entries after icon installation; Preview retains its separate workflow identifiers. The metadata autoclosure preserves evaluation after directory creation, including Watch's current icon variant lookup.
+
+- Net reduction: 54 production lines; 1,432 since baseline (1.01%). Production total: 141,009 lines; 27,057 remain to reach the target.
+- Specialized the shared helper for all four callers and compared it with the original source. Filesystem operations, metadata expressions, shell literals, icon styles, success/error messages, and refresh ordering match. All surrounding source, including plist renderers and icon generation, also matches. Shell literal relocation performs no shell execution.
+- The isolated package rebuild and all 24 existing Finder integration status tests passed. Those tests cover diagnostics and registration status, not installation. Actual workflow installation, Finder menu visibility, and runtime execution remain unverified; hosted integration checks are required.

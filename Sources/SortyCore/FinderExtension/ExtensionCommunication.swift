@@ -1951,7 +1951,31 @@ public struct ExtensionCommunication {
 
     /// Install an "Organize with Sorty" Quick Action workflow to ~/Library/Services.
     public static func installQuickAction() -> (success: Bool, message: String) {
-        let workflowName = organizeQuickActionWorkflowName
+        let shellCommand = """
+        for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://organize?path=$encoded&source=finder"; done
+        """
+        return installWorkflow(
+            named: organizeQuickActionWorkflowName, shellCommand: shellCommand,
+            infoPlist: quickActionInfoPlist(
+                title: "Organize with Sorty", bundleIdentifier: organizeQuickActionBundleIdentifier,
+                iconFile: quickActionServiceIconName,
+                iconVersion: (organizeWorkflowIconVersionInfoKey, organizeWorkflowIconVersion)
+            ),
+            successMessage: "Organize Action installed. Right-click folders in Finder to use 'Organize with Sorty'."
+        )
+    }
+
+    /// Installs each workflow in the same order while retaining action-specific metadata and cleanup.
+    private static func installWorkflow(
+        named workflowName: String,
+        shellCommand: String,
+        infoPlist: @autoclosure () -> String,
+        successMessage: String,
+        style: QuickActionIconStyle = .organize,
+        isPreview: Bool = false,
+        legacyWorkflowName: String? = nil,
+        clearLegacyServiceEntries: Bool = false
+    ) -> (success: Bool, message: String) {
         guard let servicesDir = resolveServicesDirectoryForInstall() else {
             return (
                 false,
@@ -1962,26 +1986,24 @@ public struct ExtensionCommunication {
         let contentsDir = workflowDir.appendingPathComponent("Contents")
 
         do {
+            if let legacyWorkflowName {
+                let legacyWorkflowDir = servicesDir.appendingPathComponent(legacyWorkflowName)
+                if FileManager.default.fileExists(atPath: legacyWorkflowDir.path) {
+                    try FileManager.default.removeItem(at: legacyWorkflowDir)
+                }
+            }
             try replaceWorkflowDirectoryIfNeeded(workflowDir)
             try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
 
-            let infoPlist = quickActionInfoPlist(
-                title: "Organize with Sorty", bundleIdentifier: organizeQuickActionBundleIdentifier,
-                iconFile: quickActionServiceIconName,
-                iconVersion: (organizeWorkflowIconVersionInfoKey, organizeWorkflowIconVersion)
-            )
-            try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
+            try infoPlist().write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
 
-            let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://organize?path=$encoded&source=finder"; done
-            """
-
-            let workflowPlist = quickActionWorkflowPlist(shellCommand: shellCommand)
+            let workflowPlist = quickActionWorkflowPlist(shellCommand: shellCommand, isPreview: isPreview)
             try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
-            applyQuickActionIcon(workflowDir: workflowDir, contentsDir: contentsDir)
+            applyQuickActionIcon(workflowDir: workflowDir, contentsDir: contentsDir, style: style)
+            if clearLegacyServiceEntries { removeLegacyServiceStatusEntries() }
             refreshDynamicServicesRegistry()
 
-            return (true, "Organize Action installed. Right-click folders in Finder to use 'Organize with Sorty'.")
+            return (true, successMessage)
         } catch {
             return (false, "Installation failed: \(error.userFacingMessage)")
         }
@@ -2164,129 +2186,53 @@ public struct ExtensionCommunication {
 
     /// Install a "Watch with Sorty" Quick Action workflow to ~/Library/Services
     public static func installQuickWatchAction() -> (success: Bool, message: String) {
-        let workflowName = watchQuickActionWorkflowName
-        guard let servicesDir = resolveServicesDirectoryForInstall() else {
-            return (
-                false,
-                "Could not access ~/Library/Services. Click Install again and allow folder access when prompted."
-            )
-        }
-        let workflowDir = servicesDir.appendingPathComponent(workflowName)
-        let contentsDir = workflowDir.appendingPathComponent("Contents")
-
-        do {
-            try replaceWorkflowDirectoryIfNeeded(workflowDir)
-            try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
-
-            let infoPlist = quickActionInfoPlist(
+        let shellCommand = """
+        for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://watched?action=add&path=$encoded"; done
+        """
+        return installWorkflow(
+            named: watchQuickActionWorkflowName, shellCommand: shellCommand,
+            infoPlist: quickActionInfoPlist(
                 title: "Watch with Sorty", bundleIdentifier: watchQuickActionBundleIdentifier,
                 iconFile: quickActionServiceIconName,
                 iconVersion: (watchWorkflowIconVariantInfoKey, currentWatchWorkflowIconVariant()), foldersOnly: true
-            )
-            try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
-
-            let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://watched?action=add&path=$encoded"; done
-            """
-
-            let workflowPlist = quickActionWorkflowPlist(shellCommand: shellCommand)
-            try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
-            applyQuickActionIcon(workflowDir: workflowDir, contentsDir: contentsDir, style: .watch)
-
-            removeLegacyServiceStatusEntries()
-            refreshDynamicServicesRegistry()
-
-            return (true, "Watch Action installed. Right-click folders in Finder to use 'Watch with Sorty'.")
-
-        } catch {
-            return (false, "Installation failed: \(error.userFacingMessage)")
-        }
+            ),
+            successMessage: "Watch Action installed. Right-click folders in Finder to use 'Watch with Sorty'.",
+            style: .watch, clearLegacyServiceEntries: true
+        )
     }
 
     /// Install an "Exclude from Sorty" Quick Action workflow to ~/Library/Services
     public static func installQuickExcludeAction() -> (success: Bool, message: String) {
-        let workflowName = excludeQuickActionWorkflowName
-        guard let servicesDir = resolveServicesDirectoryForInstall() else {
-            return (
-                false,
-                "Could not access ~/Library/Services. Click Install again and allow folder access when prompted."
-            )
-        }
-        let workflowDir = servicesDir.appendingPathComponent(workflowName)
-        let contentsDir = workflowDir.appendingPathComponent("Contents")
-
-        do {
-            let legacyWorkflowDir = servicesDir.appendingPathComponent(
-                legacyExcludeQuickActionWorkflowName
-            )
-            if FileManager.default.fileExists(atPath: legacyWorkflowDir.path) {
-                try FileManager.default.removeItem(at: legacyWorkflowDir)
-            }
-            try replaceWorkflowDirectoryIfNeeded(workflowDir)
-            try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
-
-            let infoPlist = quickActionInfoPlist(
+        let shellCommand = """
+        for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://exclude?path=$encoded"; done
+        """
+        return installWorkflow(
+            named: excludeQuickActionWorkflowName, shellCommand: shellCommand,
+            infoPlist: quickActionInfoPlist(
                 title: "Exclude from Sorty", bundleIdentifier: excludeQuickActionBundleIdentifier,
                 iconFile: quickActionIconBaseName
-            )
-            try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
-
-            let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://exclude?path=$encoded"; done
-            """
-
-            let workflowPlist = quickActionWorkflowPlist(shellCommand: shellCommand)
-            try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
-            applyQuickActionIcon(workflowDir: workflowDir, contentsDir: contentsDir, style: .exclude)
-
-            refreshDynamicServicesRegistry()
-
-            return (true, "Exclude Action installed. Right-click any folder in Finder to use 'Exclude from Sorty'.")
-
-        } catch {
-            return (false, "Installation failed: \(error.userFacingMessage)")
-        }
+            ),
+            successMessage: "Exclude Action installed. Right-click any folder in Finder to use 'Exclude from Sorty'.",
+            style: .exclude, legacyWorkflowName: legacyExcludeQuickActionWorkflowName
+        )
     }
 
     // MARK: - Quick Preview Action Installation
 
     /// Install a "Preview with Sorty" Quick Action workflow to ~/Library/Services
     public static func installQuickPreviewAction() -> (success: Bool, message: String) {
-        let workflowName = previewQuickActionWorkflowName
-        guard let servicesDir = resolveServicesDirectoryForInstall() else {
-            return (
-                false,
-                "Could not access ~/Library/Services. Click Install again and allow folder access when prompted."
-            )
-        }
-        let workflowDir = servicesDir.appendingPathComponent(workflowName)
-        let contentsDir = workflowDir.appendingPathComponent("Contents")
-
-        do {
-            try replaceWorkflowDirectoryIfNeeded(workflowDir)
-            try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
-
-            let infoPlist = quickActionInfoPlist(
+        let shellCommand = """
+        for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://scan?path=$encoded&preview=true"; done
+        """
+        return installWorkflow(
+            named: previewQuickActionWorkflowName, shellCommand: shellCommand,
+            infoPlist: quickActionInfoPlist(
                 title: "Preview with Sorty", bundleIdentifier: previewQuickActionBundleIdentifier,
                 iconFile: quickActionIconBaseName
-            )
-            try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
-
-            let shellCommand = """
-            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://scan?path=$encoded&preview=true"; done
-            """
-
-            let workflowPlist = quickActionWorkflowPlist(shellCommand: shellCommand, isPreview: true)
-            try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
-            applyQuickActionIcon(workflowDir: workflowDir, contentsDir: contentsDir)
-
-            refreshDynamicServicesRegistry()
-
-            return (true, "Preview Action installed! Right-click any folder in Finder to use 'Preview with Sorty'.")
-
-        } catch {
-            return (false, "Installation failed: \(error.userFacingMessage)")
-        }
+            ),
+            successMessage: "Preview Action installed! Right-click any folder in Finder to use 'Preview with Sorty'.",
+            isPreview: true
+        )
     }
 
     /// Uninstall all Quick Action workflows
