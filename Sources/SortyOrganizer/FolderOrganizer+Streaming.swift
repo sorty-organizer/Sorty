@@ -392,7 +392,7 @@ extension FolderOrganizer {
 
     private func resolveScannedFilePathForMention(in text: String) -> String? {
         guard let fileName = Self.extractMentionedFileName(from: text) else { return nil }
-        return Self.resolveScannedFilePath(
+        return AIInsightExtractor.resolveScannedFilePath(
             for: fileName,
             scannedFilePathLookup: scannedFilePathLookup,
             currentDirectoryPath: currentDirectory?.path
@@ -427,24 +427,7 @@ extension FolderOrganizer {
         return nil
     }
 
-    nonisolated private static func resolveScannedFilePath(
-        for fileName: String,
-        scannedFilePathLookup: [String: [String]],
-        currentDirectoryPath: String?
-    ) -> String? {
-        let key = fileName.lowercased()
-        guard let matches = scannedFilePathLookup[key], !matches.isEmpty else { return nil }
 
-        if matches.count == 1 {
-            return matches[0]
-        }
-
-        if let currentDirectoryPath {
-            let preferred = matches.filter { $0.hasPrefix(currentDirectoryPath + "/") }
-            if preferred.count == 1 { return preferred[0] }
-        }
-        return nil
-    }
 
     nonisolated private static func normalizeFolderName(_ input: String) -> String {
         input

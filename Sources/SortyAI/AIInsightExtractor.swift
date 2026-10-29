@@ -91,7 +91,7 @@ public actor AIInsightExtractor {
                 let fileSection = String(object[filesRange])
                 if let fileName = extractLatestFileName(fromJSONFileSection: fileSection) {
                     let resolvedFileName = URL(fileURLWithPath: fileName).lastPathComponent
-                    let filePath = findScannedFilePath(
+                    let filePath = Self.resolveScannedFilePath(
                         for: resolvedFileName,
                         scannedFilePathLookup: scannedFilePathLookup,
                         currentDirectoryPath: currentDirectoryPath
@@ -242,7 +242,7 @@ public actor AIInsightExtractor {
                 guard isLikelyFileName(normalizedName) else { continue }
 
                 let fileName = URL(fileURLWithPath: normalizedName).lastPathComponent
-                let filePath = findScannedFilePath(for: fileName, scannedFilePathLookup: scannedFilePathLookup, currentDirectoryPath: currentDirectoryPath)
+                let filePath = Self.resolveScannedFilePath(for: fileName, scannedFilePathLookup: scannedFilePathLookup, currentDirectoryPath: currentDirectoryPath)
                 if filePath == nil, !isLikelyUnscannedFileName(fileName) {
                     continue
                 }
@@ -358,7 +358,9 @@ public actor AIInsightExtractor {
         return nil
     }
 
-    private func findScannedFilePath(
+    /// Resolves a filename only when one scanned path is unambiguous, using
+    /// the current directory to disambiguate duplicate basenames.
+    nonisolated package static func resolveScannedFilePath(
         for fileName: String,
         scannedFilePathLookup: [String: [String]],
         currentDirectoryPath: String?

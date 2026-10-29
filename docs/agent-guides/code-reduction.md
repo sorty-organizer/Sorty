@@ -178,3 +178,11 @@ Scan progress, persona generation, and the instruction editor now share the same
 - Net reduction: 38 production lines including the shared view; 1,722 since baseline (1.21%). Production total: 140,719 lines; 26,767 remain to reach the target.
 - Compared the shared drawing with all three original expressions after substituting each stroke width: gradient stops, RGBA values, locations, corner style, center, rotation, and stroke expressions match. Normalized source comparisons also confirm unchanged surrounding caller code.
 - The shared view belongs to the existing SPM UI target consumed by the local Xcode package. No local build, tests, or computer use for this small extraction under AGENTS.md. Hosted compilation of the final source and visual runtime acceptance remain outstanding.
+
+## Streaming filename resolution
+
+Organizer progress messages and extracted AI insights now use one scanned-filename resolver in `AIInsightExtractor`. It remains synchronous and nonisolated: callers pass the filename lookup and current directory rather than reading actor or organizer state inside the helper. Unique matches resolve directly; duplicate basenames resolve only when exactly one lies beneath the current directory; unresolved ambiguity still returns nil.
+
+- Net reduction: 15 production lines; 1,737 since baseline (1.22%). Production total: 140,704 lines; 26,752 remain to reach the target.
+- Compared both original resolver bodies after whitespace normalization; they match exactly. The shared body and call arguments remain the same. Kept filename normalization and validation separate because the two streaming paths have different accepted lengths and character policies.
+- No local build or tests for this small extraction under AGENTS.md. The retained `AIInsightExtractorTests.testDuplicateFilenameDoesNotPickArbitraryThumbnail` protects the collision behavior at the insight interface; it has not been rerun for this commit. Hosted compilation and tests of the final source remain required.
