@@ -225,29 +225,6 @@ public final class FinderAutomation {
         Task { _ = await execute(source: scriptSource, description: "select in Finder") }
     }
     
-    /// Reveal a single file or folder in Finder
-    public static func revealInFinder(url: URL) {
-        selectInFinder(urls: [url], reveal: true)
-    }
-    
-    /// Open a folder in a new Finder window
-    public static func openInNewFinderWindow(url: URL) {
-        guard checksEnabled else { return }
-        guard checkAutomationPermission() == .granted else { return }
-        
-        let scriptSource = """
-        with timeout of \(finderAutomationScriptTimeoutSeconds) seconds
-            tell application "Finder"
-                set targetFolder to POSIX file \(appleScriptStringLiteral(url.path)) as alias
-                make new Finder window to targetFolder
-                activate
-            end tell
-        end timeout
-        """
-        
-        Task { _ = await execute(source: scriptSource, description: "open Finder window") }
-    }
-
     // MARK: - Finder Refresh
     
     /// Refresh all Finder windows showing the specified path

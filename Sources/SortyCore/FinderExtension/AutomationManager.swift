@@ -162,18 +162,6 @@ public final class AutomationManager: ObservableObject {
         DebugLogger.log("Selected \(folderURLs.count) organized folders in Finder")
     }
     
-    /// Reveal a specific file or folder in Finder
-    public func revealInFinder(url: URL) {
-        guard automationStatus == .granted else { return }
-        FinderAutomation.revealInFinder(url: url)
-    }
-    
-    /// Open a folder in a new Finder window
-    public func openInNewFinderWindow(url: URL) {
-        guard automationStatus == .granted else { return }
-        FinderAutomation.openInNewFinderWindow(url: url)
-    }
-    
     /// Refresh Finder windows showing the organized path
     public func refreshFinder(at url: URL) {
         guard automationStatus == .granted else { return }

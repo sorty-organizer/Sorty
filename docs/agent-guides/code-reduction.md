@@ -136,3 +136,12 @@ The four Quick Action installers now share directory preparation, metadata and w
 - Net reduction: 54 production lines; 1,432 since baseline (1.01%). Production total: 141,009 lines; 27,057 remain to reach the target.
 - Specialized the shared helper for all four callers and compared it with the original source. Filesystem operations, metadata expressions, shell literals, icon styles, success/error messages, and refresh ordering match. All surrounding source, including plist renderers and icon generation, also matches. Shell literal relocation performs no shell execution.
 - The isolated package rebuild and all 24 existing Finder integration status tests passed. Those tests cover diagnostics and registration status, not installation. Actual workflow installation, Finder menu visibility, and runtime execution remain unverified; hosted integration checks are required.
+
+## Uncalled hashing, Finder, and notification entry points
+
+Removed the unused `DuplicateDetector.computeHashes` entry point; duplicate detection still uses its active bounded sample/full-hash pipeline, and directory scanning retains its own hashing option. Removed the unused Finder reveal/new-window methods and their `AutomationManager` wrappers; active selection and refresh remain. Removed unused legacy completion and batch-summary overloads; detailed notification cases and the live error convenience initializer remain.
+
+- Net reduction: 106 production lines; 1,538 since baseline (1.08%). Production total: 140,903 lines; 26,951 remain to reach the target.
+- Existing index findings plus repository-wide app, test, and documentation searches identify no callers for the deleted entry points. Finder wrappers only called the deleted Finder methods; the old batch-summary wrapper only called the deleted legacy constructor. No framework callbacks or protocol requirements were removed.
+- No local builds or tests for this minor dead-code deletion, per AGENTS.md. Hosted compilation is required to confirm the app and test consumers build. This does not establish compatibility for hypothetical external users of these public Swift declarations; Sorty's repository contains no such consumer.
+- Rejected a provider metadata table during review: it saved only 33 lines while making simple property lookups construct a larger value. It was discarded before committing.

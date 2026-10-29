@@ -435,59 +435,6 @@ public actor DuplicateDetector {
         )
     }
     
-    /// Compute hashes for files that don't have them.
-    ///
-    /// Reads run two at a time on `.utility` tasks (never serially on the
-    /// caller), progress reports are throttled to ~4 Hz, and cancellation
-    /// stops scheduling new reads.
-    public func computeHashes(for files: inout [FileItem], progressHandler: (@Sendable (Int, Int) -> Void)? = nil) async {
-        let missing = files.indices.filter { files[$0].sha256Hash == nil }
-        guard !missing.isEmpty else {
-            progressHandler?(files.count, files.count)
-            return
-        }
-
-        let total = files.count
-        var completed = total - missing.count
-        var lastReport = Date.distantPast
-
-        var next = 0
-        await withTaskGroup(of: (Int, String?).self) { group in
-            while next < min(maximumConcurrentHashers, missing.count) {
-                let fileIndex = missing[next]
-                next += 1
-                let path = files[fileIndex].path
-                group.addTask(priority: .utility) {
-                    (fileIndex, HashUtility.computeSHA256(for: URL(fileURLWithPath: path)))
-                }
-            }
-
-            while let (fileIndex, hash) = await group.next() {
-                if Task.isCancelled {
-                    group.cancelAll()
-                    break
-                }
-                files[fileIndex].sha256Hash = hash
-                completed += 1
-                let now = Date()
-                if now.timeIntervalSince(lastReport) >= 0.25 {
-                    lastReport = now
-                    progressHandler?(completed, total)
-                }
-
-                if next < missing.count {
-                    let nextFileIndex = missing[next]
-                    next += 1
-                    let path = files[nextFileIndex].path
-                    group.addTask(priority: .utility) {
-                        (nextFileIndex, HashUtility.computeSHA256(for: URL(fileURLWithPath: path)))
-                    }
-                }
-            }
-        }
-        progressHandler?(completed, total)
-    }
-    
     /// Builds the cache key from live filesystem metadata. Path, size, and
     /// modification date alone can be preserved across a file replacement, so
     /// the device/inode identity is included to keep stale digests out of

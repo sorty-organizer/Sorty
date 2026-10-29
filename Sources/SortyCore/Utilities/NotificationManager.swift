@@ -267,21 +267,8 @@ private final class NativeNotificationDelegate: NSObject, UNUserNotificationCent
         case watchedFolderStarted(fileCount: Int, folderName: String, folderPath: String)
         case info(title: String, message: String)
         
-        // Legacy initializers for backwards compatibility
-        public static func processingComplete(fileCount: Int, folderName: String) -> NotificationType {
-            return .processingComplete(fileCount: fileCount, folderName: folderName, folderPath: nil, canUndo: false, isAutomated: false)
-        }
-        
         public static func processingError(message: String, isCritical: Bool = false) -> NotificationType {
             return .processingError(message: message, folderPath: nil, isCritical: isCritical, canRetry: false, isAutomated: false)
-        }
-        
-        public static func batchSummary(processed: Int, errors: Int, duration: TimeInterval) -> NotificationType {
-            return .batchSummary(stats: BatchSummaryStats(
-                filesMoved: processed,
-                errorsEncountered: errors,
-                duration: duration
-            ), isAutomated: false)
         }
         
         var isCritical: Bool {
@@ -737,11 +724,6 @@ public class NotificationManager: ObservableObject {
         } else {
             show(type)
         }
-    }
-    
-    /// Show batch summary notification
-    public func showBatchSummary(processed: Int, errors: Int, duration: TimeInterval) {
-        show(.batchSummary(processed: processed, errors: errors, duration: duration))
     }
     
     /// Show batch summary notification with detailed stats
