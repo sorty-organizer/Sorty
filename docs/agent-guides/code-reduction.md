@@ -115,3 +115,7 @@ Four retained onboarding animation views now share `OnboardingLayerClock` for pa
 - Net reduction: 42 production lines, including the new helper; 1,339 since baseline (0.94%). Production total: 141,102 lines; 27,150 remain to reach the target.
 - Expanded and compared the shared operations with all four original methods: guards, timestamp reads, layer writes, and their order match. A normalized source comparison also confirmed all surrounding code matches after replacing call sites and the pause-state property.
 - The helper belongs to the existing SPM onboarding target, which the Xcode app consumes through its local package. No local build or tests for this small extraction under AGENTS.md. Hosted compilation is required; source equivalence does not establish animation appearance or frame timing at runtime.
+
+### Hosted validation status
+
+[The indexed deletion batch](https://github.com/sorty-organizer/Sorty/actions/runs/40863098068) passed security checks, compiled tests, and built the app. Its test run failed `DuplicateRestorationManagerTests.testRestoreDoesNotDependOnSurvivingDuplicate` with `trashedFileNotFound`. Both that test file and `DuplicateRestorationManager.swift` are unchanged from the reduction baseline. The test uses real macOS Trash; restore found the returned Trash path missing. The cause remains unproven, and the test is retained. [The layer-clock batch](https://github.com/sorty-organizer/Sorty/actions/runs/40863467037) is running hosted validation.
