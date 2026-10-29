@@ -498,12 +498,12 @@ struct PermissionsSettingsView: View {
                 animateGrant: animateNewGrants
             )
             updatePermissionState(
-                permissionState(for: automationManager.automationStatus),
+                PermissionState(automationStatus: automationManager.automationStatus),
                 for: .automation,
                 animateGrant: animateNewGrants
             )
             updatePermissionState(
-                notificationState(for: notificationManager.notificationPermissionStatus),
+                PermissionState(notificationStatus: notificationManager.notificationPermissionStatus),
                 for: .notifications,
                 animateGrant: animateNewGrants
             )
@@ -589,7 +589,7 @@ struct PermissionsSettingsView: View {
             await automationManager.requestAutomationPermissionCheck()
             guard !Task.isCancelled else { return }
             updatePermissionState(
-                permissionState(for: automationManager.automationStatus),
+                PermissionState(automationStatus: automationManager.automationStatus),
                 for: .automation
             )
             if automationManager.automationStatus == .denied {
@@ -617,7 +617,7 @@ struct PermissionsSettingsView: View {
             updatePermissionState(.pending, for: .notifications)
             let granted = await notificationManager.requestPermission()
             updatePermissionState(
-                notificationState(for: notificationManager.notificationPermissionStatus),
+                PermissionState(notificationStatus: notificationManager.notificationPermissionStatus),
                 for: .notifications
             )
 
@@ -770,30 +770,6 @@ struct PermissionsSettingsView: View {
         }
 
         return didOpenFullDiskAccessSettings ? .denied : .unknown
-    }
-
-    private func permissionState(for status: PermissionStatus) -> PermissionState {
-        switch status {
-        case .granted:
-            return .granted
-        case .denied:
-            return .denied
-        case .unknown:
-            return .unknown
-        }
-    }
-
-    private func notificationState(for status: UNAuthorizationStatus) -> PermissionState {
-        switch status {
-        case .authorized, .provisional:
-            return .granted
-        case .denied:
-            return .denied
-        case .notDetermined:
-            return .unknown
-        @unknown default:
-            return .unknown
-        }
     }
 
     private func openNotificationSettings(sourceFrameInScreen: CGRect? = nil) {

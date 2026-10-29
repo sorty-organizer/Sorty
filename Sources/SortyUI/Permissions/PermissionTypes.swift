@@ -3,6 +3,7 @@ import AVFoundation
 import SwiftUI
 import UserNotifications
 import Permiso
+import SortyCore
 
 package enum PermissionType: String, CaseIterable, Identifiable, Sendable {
     case filesAndFolders = "Files & Folders"
@@ -106,6 +107,23 @@ package enum PermissionState: Sendable, Equatable {
     case granted
     case restartRequired
     case denied
+
+    package init(automationStatus: PermissionStatus) {
+        switch automationStatus {
+        case .granted: self = .granted
+        case .denied: self = .denied
+        case .unknown: self = .unknown
+        }
+    }
+
+    package init(notificationStatus: UNAuthorizationStatus) {
+        switch notificationStatus {
+        case .authorized, .provisional: self = .granted
+        case .denied: self = .denied
+        case .notDetermined: self = .unknown
+        @unknown default: self = .unknown
+        }
+    }
 
     var title: String {
         switch self {

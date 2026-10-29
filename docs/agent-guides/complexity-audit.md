@@ -126,3 +126,29 @@ CLI instructions and replaced the removed nightly workflow's guide with
 
 The proposed 16,323-line and five-dependency reductions remain unverified.
 No build-speed or runtime-performance improvement is claimed.
+
+## Reduction pass, 29 October 2026
+
+Baseline: `076e984a`, with 142,471 physical lines in `Sources/**/*.swift`.
+A 20% production Swift reduction requires at least 28,495 net lines removed.
+Tests, documentation, vendored packages, and assets are outside this measure.
+
+The first pass searched declaration references across Sources and Tests and
+compared identical 20-line source blocks. It did not establish a large unused
+implementation. Methods with a single textual occurrence were framework
+callbacks; those remain. Reference counts alone do not establish reachability.
+
+Settings and onboarding now use shared PermissionState initializers instead
+of four local conversion functions. The mappings remain identical, including
+provisional notification authorization and the unknown-status fallback.
+This removes 30 net production lines (0.021% of the baseline). No features,
+persisted fields, tests, or dependencies were removed.
+
+Other repeated blocks include window observation, layer pause/resume, and
+bookmark restoration. These are candidates for further investigation, not
+approved deletion lists: their lifecycles and ownership need comparison.
+
+This minor refactor received source review only. Local builds, tests, and
+computer use were skipped under AGENTS.md. Hosted CI and runtime behavior
+remain unverified. The 20% target has not been reached, and zero regressions
+has not been established.

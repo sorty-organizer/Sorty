@@ -246,7 +246,7 @@ public struct PermissionsStepView: View {
             let hasVerifiedFilesAccess = assumesFilesPermission
                 || appState.hasFilesAndFoldersPermission()
             hasRequiredPermissions = hasVerifiedFilesAccess
-            let automationState = permissionState(for: automationManager.automationStatus)
+            let automationState = PermissionState(automationStatus: automationManager.automationStatus)
             let refreshedStates: [PermissionType: PermissionState] = [
                 .filesAndFolders: hasVerifiedFilesAccess ? .granted : .unknown,
                 .fullDiskAccess: fullDiskAccessState(
@@ -254,8 +254,8 @@ public struct PermissionsStepView: View {
                     didOpenSettings: didOpenFullDiskAccessSettings
                 ),
                 .automation: automationState,
-                .notifications: notificationState(
-                    for: notificationManager.notificationPermissionStatus
+                .notifications: PermissionState(
+                    notificationStatus: notificationManager.notificationPermissionStatus
                 )
             ]
 
@@ -287,8 +287,8 @@ public struct PermissionsStepView: View {
             taskController.automationPermissionTask = Task { @MainActor in
                 await automationManager.requestAutomationPermissionCheck()
                 guard !Task.isCancelled else { return }
-                permissionStates[.automation] = permissionState(
-                    for: automationManager.automationStatus
+                permissionStates[.automation] = PermissionState(
+                    automationStatus: automationManager.automationStatus
                 )
                 if automationManager.automationStatus == .denied {
                     automationManager.openAutomationSettings(
@@ -312,8 +312,8 @@ public struct PermissionsStepView: View {
                 permissionStates[.notifications] = .pending
 
                 let granted = await notificationManager.requestPermission()
-                permissionStates[.notifications] = notificationState(
-                    for: notificationManager.notificationPermissionStatus
+                permissionStates[.notifications] = PermissionState(
+                    notificationStatus: notificationManager.notificationPermissionStatus
                 )
 
                 if granted {
@@ -444,30 +444,6 @@ public struct PermissionsStepView: View {
                 }
                 HapticFeedbackManager.shared.success()
             }
-        }
-    }
-
-    private func permissionState(for status: PermissionStatus) -> PermissionState {
-        switch status {
-        case .granted:
-            return .granted
-        case .denied:
-            return .denied
-        case .unknown:
-            return .unknown
-        }
-    }
-
-    private func notificationState(for status: UNAuthorizationStatus) -> PermissionState {
-        switch status {
-        case .authorized, .provisional:
-            return .granted
-        case .denied:
-            return .denied
-        case .notDetermined:
-            return .unknown
-        @unknown default:
-            return .unknown
         }
     }
 
