@@ -36,7 +36,7 @@ Replaced four copies of Automator's `document.wflow` XML with one private render
 - Net reduction: 612 production lines in this batch; 618 since baseline (0.43%).
 - Production total: 141,823 lines; 27,871 more lines must be removed to reach the target.
 - Executed the original and shared templates in Swift for all four action variants with seven shell-command inputs, including XML metacharacters, empty text, and multiline text. All 28 outputs matched byte-for-byte and parsed as property lists.
-- This verifies generated workflow contents, not Finder installation or runtime behavior. [Hosted Swift CI](https://github.com/sorty-organizer/Sorty/actions/runs/40859665068) passed security checks, the app build, tests, and pre-release validation.
+- This verifies generated workflow contents, not Finder installation or runtime behavior. [Hosted Swift CI](https://github.com/sorty-organizer/Sorty/actions/runs/40859665068) passed security checks, the app build, and tests.
 
 ## Finder service metadata consolidation
 
@@ -55,6 +55,20 @@ Both screen-panel coordinators now use the existing `NotificationCenter.addMainA
 - Production total: 141,648 lines; 27,696 more lines must be removed to reach the target.
 - Compared all 19 registrations in order: notification names, object filters, weak captures, and invoked methods match. All source outside those registrations is identical. Swift parsing and diff checks passed.
 - Panel geometry, visibility, animation durations, Reduce Motion handling, observer removal, and dismissal code are unchanged. No new helper or runtime task was introduced. Hosted CI covers integration compilation; panel runtime behavior remains unverified.
+
+## Synthesized model encoders
+
+Removed redundant `encode(to:)` methods from `AIConfig`, `OrganizationPlan`, and `ResponseParser.FileEntry`. Their `Codable` conformances and complete CodingKeys enums remain, so Swift synthesizes their standard keyed encoders. Custom decoding, defaults, migrations, and the FileEntry snake-case wire keys are unchanged.
+
+- Net reduction: 68 production lines in this batch; 861 since baseline (0.60%).
+- Production total: 141,580 lines; 27,628 more lines must be removed to reach the target.
+- Audited all 59 removed keyed writes against stored properties and CodingKeys: every property is represented once with its existing key; optional values use the same omission behavior as synthesis.
+- Retained `AIProvider.encode(to:)` and `SavedSteeringPrompt.encode(to:)`; those are outside this keyed-struct cleanup, and the saved prompt CodingKeys includes a decode-only legacy key.
+- No local build or tests for this minor deletion, per AGENTS.md. Hosted integration checks are still required; source equivalence alone does not prove persistence compatibility at runtime.
+
+### Hosted CI follow-up
+
+[The metadata/observer batch](https://github.com/sorty-organizer/Sorty/actions/runs/40860414035) compiled tests and built the app, but failed `DuplicateRestorationManagerTests.testRestoreDuplicate` with `trashedFileNotFound`. Neither that test nor its production owner changed in the batch. The failed hosted job was rerun once to check repeatability; its outcome remains pending. Do not treat the batch as fully verified from its successful compilation.
 
 ## Next investigations
 

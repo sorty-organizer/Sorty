@@ -121,23 +121,6 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
         parseWarnings = try container.decodeIfPresent([String].self, forKey: .parseWarnings) ?? []
     }
 
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encodeIfPresent(sessionName, forKey: .sessionName)
-        try container.encode(suggestions, forKey: .suggestions)
-        try container.encode(unorganizedFiles, forKey: .unorganizedFiles)
-        try container.encode(unorganizedDetails, forKey: .unorganizedDetails)
-        try container.encode(notes, forKey: .notes)
-        try container.encode(timestamp, forKey: .timestamp)
-        try container.encode(version, forKey: .version)
-        try container.encodeIfPresent(generationStats, forKey: .generationStats)
-        try container.encodeIfPresent(qualityAssessment, forKey: .qualityAssessment)
-        try container.encodeIfPresent(learningToolCall, forKey: .learningToolCall)
-        try container.encode(isPartial, forKey: .isPartial)
-        try container.encode(needsReview, forKey: .needsReview)
-        try container.encode(parseWarnings, forKey: .parseWarnings)
-    }
     
     public var totalFiles: Int {
         suggestions.reduce(0) { $0 + $1.totalFileCount } + unorganizedFiles.count

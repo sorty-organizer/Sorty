@@ -316,15 +316,6 @@ struct ResponseParser {
             self.comment = comment
         }
 
-        func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(filename, forKey: .filename)
-            try container.encodeIfPresent(suggestedName, forKey: .suggestedName)
-            try container.encodeIfPresent(renameReason, forKey: .renameReason)
-            try container.encodeIfPresent(renameConfidence, forKey: .renameConfidence)
-            try container.encodeIfPresent(tags, forKey: .tags)
-            try container.encodeIfPresent(comment, forKey: .comment)
-        }
 
         // Support both simple string and object format
         init(from decoder: Decoder) throws {
