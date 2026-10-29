@@ -1,10 +1,6 @@
 import AppKit
-import CoreImage
-import CoreImage.CIFilterBuiltins
 import QuartzCore
 import SwiftUI
-import UniformTypeIdentifiers
-import os
 
 package struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
     @SortyHotReload private var hotReload
@@ -46,12 +42,7 @@ package struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
     }
 
     @MainActor
-    package final class Coordinator {
-        private weak var hostWindow: NSWindow?
-        private var glowPanel: NSPanel?
-        private var observers: [NSObjectProtocol] = []
-        private var pendingDismissal: DispatchWorkItem?
-        private var isHostClosing = false
+    package final class Coordinator: OnboardingScreenPanelLifecycle {
         private var isVisible = false
 
         private var strength = 0.55
@@ -59,7 +50,7 @@ package struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         func setStrength(_ strength: Double) {
             guard self.strength != strength else { return }
             self.strength = strength
-            (glowPanel?.contentView as? OnboardingScreenEdgeGlowView)?.setStrength(strength)
+            (panel?.contentView as? OnboardingScreenEdgeGlowView)?.setStrength(strength)
         }
 
         func setVisible(_ isVisible: Bool) {
@@ -82,8 +73,8 @@ package struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
                 return
             }
 
-            if glowPanel == nil {
-                glowPanel = makeGlowPanel()
+            if panel == nil {
+                panel = makeGlowPanel()
             }
 
             let center = NotificationCenter.default
@@ -118,21 +109,6 @@ package struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             ]
 
             showPanelIfPossible()
-        }
-
-        func dismiss() {
-            dismiss(immediately: isHostClosing)
-        }
-
-        private func hostWillClose() {
-            isHostClosing = true
-            dismiss(immediately: true)
-        }
-
-        private func dismiss(immediately: Bool) {
-            removeObservers()
-            dismissPanel(immediately: immediately)
-            hostWindow = nil
         }
 
         private func makeGlowPanel() -> NSPanel {
@@ -173,8 +149,8 @@ package struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
             }
             // Layer-backed gradients need no synchronous redraw; displaying
             // here would stall the reveal frame that orders the panel in.
-            guard glowPanel?.frame != screen.frame else { return }
-            glowPanel?.setFrame(screen.frame, display: false)
+            guard panel?.frame != screen.frame else { return }
+            panel?.setFrame(screen.frame, display: false)
         }
 
         private func showPanelIfPossible() {
@@ -194,48 +170,16 @@ package struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
         }
 
         private func fadeInPanelIfNeeded() {
-            guard let glowPanel, glowPanel.alphaValue == 0 else { return }
+            guard let panel, panel.alphaValue == 0 else { return }
             let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.8
-            glowPanel.orderFrontRegardless()
+            panel.orderFrontRegardless()
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = duration
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                glowPanel.animator().alphaValue = 1
+                panel.animator().alphaValue = 1
             }
         }
 
-        private func dismissPanel(immediately: Bool = false) {
-            guard let glowPanel else { return }
-            pendingDismissal?.cancel()
-            let duration = immediately || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.8
-
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = duration
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                glowPanel.animator().alphaValue = 0
-            }
-
-            let dismissal = DispatchWorkItem { [weak glowPanel] in
-                guard self.glowPanel === glowPanel else { return }
-                glowPanel?.orderOut(nil)
-                glowPanel?.close()
-                self.glowPanel = nil
-                self.pendingDismissal = nil
-            }
-            pendingDismissal = dismissal
-            DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: dismissal)
-        }
-
-        private func hidePanelImmediately() {
-            glowPanel?.orderOut(nil)
-            glowPanel?.alphaValue = 0
-        }
-
-        private func removeObservers() {
-            let center = NotificationCenter.default
-            observers.forEach(center.removeObserver)
-            observers.removeAll()
-        }
     }
 
     final class ScreenTrackingView: NSView {

@@ -195,3 +195,13 @@ Anthropic streaming, OpenAI streaming, and Codex responses now share full-plan p
 - The shared parser body matches the original Codex helper after parameter-name normalization. Reviewed Anthropic's equivalent branch and OpenAI's separate OpenRouter retry branch; error context is wrapped once, and completion is still signaled only after a plan exists.
 - Rejected a general provider streaming-loop merge: protocol-specific completion events, truncation policy, retry conditions, timing statistics, and delegate notification ownership differ. Similar loop structure does not establish equivalent behavior.
 - No local build or tests for this small extraction under AGENTS.md. Hosted compilation and tests of this final source remain required. [Hosted validation for the shared reference stroke](https://github.com/sorty-organizer/Sorty/actions/runs/40870528137) passed.
+
+## Onboarding screen-panel lifetime
+
+The edge-glow and backdrop coordinators share host-window, panel, observer, and pending-dismissal ownership through `OnboardingScreenPanelLifecycle`. Its final methods preserve observer removal, host-close handling, immediate hiding, and the existing fade-out/disposal sequence. Each coordinator retains its notification registrations, panel construction, geometry, ordering, visibility guards, and fade-in policy. Pending dismissal still retains the coordinator and checks panel identity before closing it.
+
+The backdrop presenter moved from `SortyOnboardingUI` into `SortyUI/Windows`, beside the edge-glow presenter. Swift rejects cross-module inheritance of a non-open class, so co-locating these window primitives keeps the base package-only. An explicit package initializer preserves the backdrop's visibility and opacity arguments. The onboarding caller is unchanged. Removed unused imports from both presenters.
+
+- Net reduction: 43 production lines, counting both the moved presenter and new base; 1,793 since baseline (1.26%). Production total: 140,648 lines; 26,696 remain to reach the target. Moving the file itself contributes no reduction.
+- All six original lifecycle methods match the shared methods after panel-name normalization. Source comparisons confirm unchanged remaining presentation code, allowing only the new package visibility, explicit initializer, and unused-import removal.
+- The initial build caught the cross-module inheritance restriction. After co-locating the presenters, the final `SortyOnboardingUI` target build passed, including `SortyUI`. This is compilation evidence, not runtime proof of panel ordering, fade timing, close/reopen behavior, or launch performance. No computer use was performed; hosted integration checks remain required.
