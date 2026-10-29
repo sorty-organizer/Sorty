@@ -145,8 +145,8 @@ struct OnboardingScreenBackdropBlurPresenter: NSViewRepresentable {
             ]
 
             // AppKit NSPanel cannot use the SwiftUI `systemLiquidGlassBackground`
-            // modifier, so this uses the same sanctioned behind-window material
-            // as `BehindWindowBackdropView` (the single allowed NSVisualEffectView bridge).
+            // modifier, so the fullscreen panel uses an AppKit behind-window
+            // material directly.
             let backdrop = NSVisualEffectView()
             backdrop.material = .underWindowBackground
             backdrop.blendingMode = .behindWindow

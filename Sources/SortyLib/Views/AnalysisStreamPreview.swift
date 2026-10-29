@@ -108,10 +108,6 @@ struct RenameGenerationSequenceView: View {
         events.last?.id
     }
 
-    static func makeEvents(from streamText: String, files: [FileItem]) -> [RenameStreamEvent] {
-        makeEvents(from: streamText, filesByName: fileLookup(from: files))
-    }
-
     static func makeEvents(from streamText: String, filesByName: [String: FileItem]) -> [RenameStreamEvent] {
         let parsed = Self.parseRenameEvents(from: streamText)
         let visibleEvents = Array(parsed.suffix(Self.maxVisibleRows))

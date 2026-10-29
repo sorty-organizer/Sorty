@@ -100,3 +100,10 @@ Removed an uncalled recursive organizer batching implementation, an unused previ
 - Production total: 141,203 lines; 27,251 more lines must be removed to reach the target.
 - An isolated Swift package rebuild and 44 existing streaming/preview tests passed. Both existing organizer cancellation tests also passed. These checks do not establish full app or Finder runtime behavior.
 - Periphery findings were reviewed rather than applied automatically. Retained framework callbacks, hot-reload properties, lifetime owners, and serialization fields. The index covers SPM; Xcode-only entry points require separate caller review. Hosted integration checks remain required.
+
+## Unused manifest and UI helpers
+
+Removed the unused synchronous batch-manifest wrapper, the unused rename-preview overload that accepted an array, and the unused behind-window SwiftUI modifier and private backdrop view. The organizer still builds batch manifests off-main; the rename preview still uses its cached filename lookup; the fullscreen onboarding panel still owns its AppKit backdrop. Updated comments that referenced the removed helpers.
+
+- Net reduction: 59 production lines; 1,297 since baseline (0.91%). Production total: 141,144 lines; 27,192 remain to reach the target.
+- Repository-wide searches and the existing index show no callers for these helpers. No local build or tests for this minor deletion, per AGENTS.md. The preceding substantive deletion batch has 46 passing focused tests and hosted CI queued; these results do not prove runtime behavior for this follow-up.

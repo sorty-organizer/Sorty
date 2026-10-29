@@ -570,20 +570,6 @@ package struct PromptBuilder {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Batch-scoped manifest so multi-batch folders don't repeat the full
-    /// 400-entry directory manifest on every 350-file request.
-    package static func buildBatchManifestContext(
-        baseDirectoryURL: URL,
-        batchFiles: [FileItem],
-        maxEntries: Int = 60
-    ) -> String? {
-        buildDirectoryManifestContext(
-            baseDirectoryURL: baseDirectoryURL,
-            files: batchFiles,
-            maxEntries: maxEntries
-        )
-    }
-
     /// Strips a previously injected full SOURCE FOLDER CONTEXT block so a
     /// smaller batch-scoped block can replace it without duplication.
     package static func strippingSourceFolderContext(from instructions: String) -> String {
@@ -1164,8 +1150,8 @@ package struct PromptBuilder {
         guard !files.isEmpty else { return nil }
 
         // Memoized by content hash: repeat organizes of the same scope reuse
-        // the manifest instead of rebuilding it per batch (diff-only upstream
-        // via strippingSourceFolderContext + buildBatchManifestContext).
+        // the manifest instead of rebuilding it. Multi-batch requests replace
+        // the full context with a smaller manifest built off-main.
         let cacheKey = manifestCacheKey(
             baseDirectoryURL: baseDirectoryURL,
             files: files,

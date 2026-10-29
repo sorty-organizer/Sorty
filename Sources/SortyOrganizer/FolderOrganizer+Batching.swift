@@ -151,8 +151,8 @@ extension FolderOrganizer {
             if let visionBaseDirectory,
                batchInstructions.contains("## SOURCE FOLDER CONTEXT") {
                 batchInstructions = PromptBuilder.strippingSourceFolderContext(from: batchInstructions)
-                // Same 60-entry batch manifest as buildBatchManifestContext,
-                // but built off-main (it stats directory resource values).
+                // Build the 60-entry batch manifest off-main because it reads
+                // directory resource values.
                 if let batchManifest = try await PromptBuilder.buildDirectoryManifestContextOffMain(
                     baseDirectoryURL: visionBaseDirectory,
                     files: batch,
