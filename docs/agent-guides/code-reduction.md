@@ -231,3 +231,12 @@ Replaced five default-based boolean switches with direct predicates: provider de
 - Net reduction: 23 production lines; 1,938 since baseline (1.36%). Production total: 140,503 lines; 26,551 remain to reach the target.
 - Source comparison checked each selected case set and whether it mapped to true or false, including the complement/default behavior. Both affected enums already support equality; no new conformance or helper was introduced.
 - No local build or tests for this minor expression simplification under AGENTS.md. Hosted compilation of the final source remains required. This small follow-up uses skip-ci so the preceding hosted run can finish.
+
+## Unused service bridges and wrappers
+
+Removed the unused organizer HUD helper, its callback hook, and Core's corresponding injection. Live HUD calls still use `NotificationManager` directly. Removed the unused private Finder reveal helper, public session-invalidation wrapper, login-status refresh wrapper, custom-persona name lookup, and `ExclusionMatcher.filterFiles` convenience. The active `ExclusionRulesManager.filterFiles` implementation remains, including usage tracking. Removed the now-unused SwiftUI imports from the organizer services and main organizer files.
+
+- Net reduction: 68 production lines; 2,006 since baseline (1.41%). Production total: 140,435 lines; 26,483 remain to reach the target.
+- Reviewed indexed findings against current app, test, and documentation references. The HUD hook was only assigned by its adapter and called by the removed helper. The Finder call used during apply still targets `OrganizerAutomation`; session changes still call `invalidateInternal`; active login observation and synchronization remain. No framework callbacks were removed.
+- Retained deferred-store hydration and generation safeguards: the custom-persona, naming, and steering stores have different merge/cleanup behavior, so introducing a common loading controller would add policy without a clear reduction.
+- No local build or tests for this minor unused-code deletion under AGENTS.md. Hosted compilation of the final source remains required. [Hosted validation of the preceding reference-directory branch simplification](https://github.com/sorty-organizer/Sorty/actions/runs/40873938903) passed.

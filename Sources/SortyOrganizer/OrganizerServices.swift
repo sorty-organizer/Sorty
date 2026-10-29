@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 import SortyModels
 import SortyLearnings
 
@@ -45,8 +44,6 @@ public enum OrganizerServices {
         { _, _, _, _ in }
     public static var errorNotification: (String, String?, Bool) -> Void =
         { _, _, _ in }
-    public static var hudReporter: (String, String, String, Color, String?) -> Void =
-        { _, _, _, _, _ in }
     public static var learningConcernReporter: (LearningExclusionConcern, String) -> Void =
         { _, _ in }
     public static var attentionRequester: () -> Void = {}
@@ -116,13 +113,4 @@ public enum OrganizerServices {
         errorNotification(message, folderPath, isCritical)
     }
 
-    public static func showHUDInfo(
-        title: String,
-        message: String,
-        icon: String,
-        iconColor: Color,
-        identifier: String?
-    ) {
-        hudReporter(title, message, icon, iconColor, identifier)
-    }
 }

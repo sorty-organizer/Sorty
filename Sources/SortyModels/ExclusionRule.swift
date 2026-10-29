@@ -580,17 +580,6 @@ public struct ExclusionMatcher: Sendable {
         }?.id
     }
 
-    public func filterFiles(_ files: [FileItem]) -> [FileItem] {
-        guard !rules.isEmpty else { return files }
-
-        var included: [FileItem] = []
-        included.reserveCapacity(min(files.count, 4_096))
-        for file in files where !shouldExclude(file) {
-            included.append(file)
-        }
-        return included
-    }
-
     public func shouldExclude(
         path: String,
         name: String,

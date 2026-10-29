@@ -232,9 +232,6 @@ public class CustomPersonaStore: ObservableObject {
         return nextIndex < customPersonas.endIndex ? customPersonas[nextIndex].id : nil
     }
     
-    public func persona(named name: String) -> CustomPersona? {
-        customPersonas.first { $0.name.lowercased() == name.lowercased() }
-    }
     
     private func savePersonas() {
         guard hasLoadedPersistedState else {

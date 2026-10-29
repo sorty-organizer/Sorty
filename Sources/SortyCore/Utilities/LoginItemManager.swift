@@ -113,26 +113,6 @@ public class LoginItemManager: ObservableObject {
 
     // MARK: - Status
 
-    /// Refreshes the current login item registration status from SMAppService.
-    public func refreshStatus() {
-        // Main App Status (Launch at Login)
-        let status = SMAppService.mainApp.status
-        // `.requiresApproval` is a registration awaiting System Settings
-        // approval, not an absent one; reporting it as enabled keeps the toggle
-        // aligned with the stored preference so a click can unregister it.
-        self.isLaunchAtLoginEnabled = (status == .enabled || status == .requiresApproval)
-        self.registrationStatus = Self.describe(status)
-
-        // Background Agent Status
-        // plist name must include the .plist extension per Apple documentation
-        let agent = SMAppService.agent(plistName: Self.backgroundAgentPlistName)
-        let aStatus = agent.status
-        self.isBackgroundAgentEnabled = (aStatus == .enabled)
-        self.agentStatus = Self.describe(aStatus)
-        
-        DebugLogger.log("Login Item status: Main App \(registrationStatus), Background Agent \(agentStatus)")
-    }
-    
     private nonisolated static func describe(_ status: SMAppService.Status) -> String {
         switch status {
         case .enabled: return "Enabled"

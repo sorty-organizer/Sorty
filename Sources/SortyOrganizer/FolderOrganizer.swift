@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import SwiftUI
 import Combine
 import SortyLearnings
 import SortyFileSystem
@@ -788,15 +787,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 self.isAIConfigured = false
             }
             throw error
-        }
-    }
-}
-
-// MARK: - Finder Refresh
-extension FolderOrganizer {
-    nonisolated private func refreshFinder(at url: URL) {
-        DispatchQueue.main.async {
-            NSWorkspace.shared.activateFileViewerSelecting([url])
         }
     }
 }

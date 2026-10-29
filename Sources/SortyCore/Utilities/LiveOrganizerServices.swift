@@ -51,12 +51,6 @@ public enum LiveOrganizerServices {
                 message: message, folderPath: folderPath, isCritical: isCritical
             )
         }
-        OrganizerServices.hudReporter = { title, message, icon, iconColor, identifier in
-            NotificationManager.shared.showHUDInfo(
-                title: title, message: message, icon: icon,
-                iconColor: iconColor, identifier: identifier
-            )
-        }
         OrganizerServices.learningConcernReporter = { concern, folderPath in
             let destination: DeeplinkDestination
             let actionTitle: String

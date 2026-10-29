@@ -446,12 +446,6 @@ public class AISessionManager: ObservableObject {
         return urls
     }
     
-    /// Invalidate session for a provider (e.g., after auth failure)
-    public func invalidate(provider: AIProvider) {
-        invalidateInternal(provider: provider)
-        scheduleCleanup()
-    }
-
     private func invalidateInternal(provider: AIProvider) {
         if store.removeSession(for: provider) != nil {
             ModelLog.log("Removed session for \(provider.displayName)", category: "AISessionManager")
