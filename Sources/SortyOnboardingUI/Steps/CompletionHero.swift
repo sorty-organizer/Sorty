@@ -117,7 +117,7 @@ final class RetainedCompletionHeroEffectsView: NSView {
     private let rippleLayers = (0..<3).map { _ in CAShapeLayer() }
     private var isVisible = false
     private var isAnimating = false
-    private var isPaused = false
+    private var animationClock = OnboardingLayerClock()
     private var lastReduceMotion: Bool?
     private var lastIsActive: Bool?
     private var lastLayoutBounds: CGRect?
@@ -218,9 +218,9 @@ final class RetainedCompletionHeroEffectsView: NSView {
 
         startAnimatingIfNeeded()
         if isActive {
-            resumeIfNeeded()
-        } else {
-            pauseIfNeeded()
+            animationClock.resume(layer)
+        } else if isAnimating {
+            animationClock.pause(layer)
         }
     }
 
@@ -257,29 +257,11 @@ final class RetainedCompletionHeroEffectsView: NSView {
     }
 
     private func stopAnimating() {
-        guard isAnimating || isPaused else { return }
-        resumeIfNeeded()
+        guard isAnimating || animationClock.isPaused else { return }
+        animationClock.resume(layer)
         isAnimating = false
         glowHost.layer?.removeAnimation(forKey: "completionGlowPulse")
         rippleLayers.forEach { $0.removeAllAnimations() }
-    }
-
-    private func pauseIfNeeded() {
-        guard isAnimating, !isPaused, let layer else { return }
-        let pausedTime = layer.convertTime(CACurrentMediaTime(), from: nil)
-        layer.speed = 0
-        layer.timeOffset = pausedTime
-        isPaused = true
-    }
-
-    private func resumeIfNeeded() {
-        guard isPaused, let layer else { return }
-        let pausedTime = layer.timeOffset
-        layer.speed = 1
-        layer.timeOffset = 0
-        layer.beginTime = 0
-        layer.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
-        isPaused = false
     }
 }
 

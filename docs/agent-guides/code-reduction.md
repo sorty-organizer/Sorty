@@ -107,3 +107,11 @@ Removed the unused synchronous batch-manifest wrapper, the unused rename-preview
 
 - Net reduction: 59 production lines; 1,297 since baseline (0.91%). Production total: 141,144 lines; 27,192 remain to reach the target.
 - Repository-wide searches and the existing index show no callers for these helpers. No local build or tests for this minor deletion, per AGENTS.md. The preceding substantive deletion batch has 46 passing focused tests and hosted CI queued; these results do not prove runtime behavior for this follow-up.
+
+## Onboarding layer clocks
+
+Four retained onboarding animation views now share `OnboardingLayerClock` for pause/resume state and Core Animation timing updates. Each view still owns its clock. Hero and particle views retain their `isAnimating` pause guard; intro and backdrop views retain their broader pause policy. Visibility, Reduce Motion, animation definitions, and teardown stay in their original owners.
+
+- Net reduction: 42 production lines, including the new helper; 1,339 since baseline (0.94%). Production total: 141,102 lines; 27,150 remain to reach the target.
+- Expanded and compared the shared operations with all four original methods: guards, timestamp reads, layer writes, and their order match. A normalized source comparison also confirmed all surrounding code matches after replacing call sites and the pause-state property.
+- The helper belongs to the existing SPM onboarding target, which the Xcode app consumes through its local package. No local build or tests for this small extraction under AGENTS.md. Hosted compilation is required; source equivalence does not establish animation appearance or frame timing at runtime.

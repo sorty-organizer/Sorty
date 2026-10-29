@@ -33,7 +33,7 @@ final class RetainedIntroGlowView: NSView {
     private let glowShapeLayer = CALayer()
     private let blurFilter = CIFilter.gaussianBlur()
     private var hasStartedReveal = false
-    private var isPaused = false
+    private var animationClock = OnboardingLayerClock()
     private var lastIsVisible: Bool?
     private var lastReduceMotion: Bool?
     private var lastIsActive: Bool?
@@ -118,9 +118,9 @@ final class RetainedIntroGlowView: NSView {
         }
 
         if isActive {
-            resumeIfNeeded()
+            animationClock.resume(layer)
         } else {
-            pauseIfNeeded()
+            animationClock.pause(layer)
         }
     }
 
@@ -164,23 +164,5 @@ final class RetainedIntroGlowView: NSView {
         glowLayer.opacity = 0
         blurFilter.radius = 16
         CATransaction.commit()
-    }
-
-    private func pauseIfNeeded() {
-        guard !isPaused, let layer else { return }
-        let pausedTime = layer.convertTime(CACurrentMediaTime(), from: nil)
-        layer.speed = 0
-        layer.timeOffset = pausedTime
-        isPaused = true
-    }
-
-    private func resumeIfNeeded() {
-        guard isPaused, let layer else { return }
-        let pausedTime = layer.timeOffset
-        layer.speed = 1
-        layer.timeOffset = 0
-        layer.beginTime = 0
-        layer.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
-        isPaused = false
     }
 }

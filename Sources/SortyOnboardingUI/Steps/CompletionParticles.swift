@@ -48,7 +48,7 @@ struct RetainedCompletionParticles: NSViewRepresentable {
 final class RetainedCompletionParticlesView: NSView {
     private let particleLayers = (0..<7).map { _ in CAShapeLayer() }
     private var isAnimating = false
-    private var isPaused = false
+    private var animationClock = OnboardingLayerClock()
     private var lastIsVisible: Bool?
     private var lastReduceMotion: Bool?
     private var lastIsActive: Bool?
@@ -98,9 +98,9 @@ final class RetainedCompletionParticlesView: NSView {
         }
 
         if isActive {
-            resumeIfNeeded()
-        } else {
-            pauseIfNeeded()
+            animationClock.resume(layer)
+        } else if isAnimating {
+            animationClock.pause(layer)
         }
     }
 
@@ -154,23 +154,7 @@ final class RetainedCompletionParticlesView: NSView {
         CATransaction.commit()
     }
 
-    private func pauseIfNeeded() {
-        guard isAnimating, !isPaused, let layer else { return }
-        let pausedTime = layer.convertTime(CACurrentMediaTime(), from: nil)
-        layer.speed = 0
-        layer.timeOffset = pausedTime
-        isPaused = true
-    }
 
-    private func resumeIfNeeded() {
-        guard isPaused, let layer else { return }
-        let pausedTime = layer.timeOffset
-        layer.speed = 1
-        layer.timeOffset = 0
-        layer.beginTime = 0
-        layer.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
-        isPaused = false
-    }
 
     private func seededParticleValue(index: Int, range: ClosedRange<Double>) -> Double {
         let value = Double((index * 53 + 17) % 101) / 100

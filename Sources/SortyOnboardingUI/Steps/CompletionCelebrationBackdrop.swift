@@ -57,7 +57,7 @@ final class RetainedCompletionCelebrationBlobView: NSView {
     private let coreShape = CALayer()
     private let coreBlur = CIFilter.gaussianBlur()
     private var isBreathing = false
-    private var isPaused = false
+    private var animationClock = OnboardingLayerClock()
     private var lastPhase: CompletionCelebrationPhase?
     private var lastExitTriggered: Bool?
     private var lastReduceMotion: Bool?
@@ -156,9 +156,9 @@ final class RetainedCompletionCelebrationBlobView: NSView {
         // restart the reveal/settle and invalidate the settled blur surfaces.
         guard celebrationChanged else {
             if isActive {
-                resumeIfNeeded()
+                animationClock.resume(layer)
             } else {
-                pauseIfNeeded()
+                animationClock.pause(layer)
             }
             return
         }
@@ -194,9 +194,9 @@ final class RetainedCompletionCelebrationBlobView: NSView {
         }
 
         if isActive {
-            resumeIfNeeded()
+            animationClock.resume(layer)
         } else {
-            pauseIfNeeded()
+            animationClock.pause(layer)
         }
     }
 
@@ -401,23 +401,5 @@ final class RetainedCompletionCelebrationBlobView: NSView {
         rasterizationTask = nil
         blobContainer.shouldRasterize = false
         coreContainer.shouldRasterize = false
-    }
-
-    private func pauseIfNeeded() {
-        guard !isPaused, let layer else { return }
-        let pausedTime = layer.convertTime(CACurrentMediaTime(), from: nil)
-        layer.speed = 0
-        layer.timeOffset = pausedTime
-        isPaused = true
-    }
-
-    private func resumeIfNeeded() {
-        guard isPaused, let layer else { return }
-        let pausedTime = layer.timeOffset
-        layer.speed = 1
-        layer.timeOffset = 0
-        layer.beginTime = 0
-        layer.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil) - pausedTime
-        isPaused = false
     }
 }
