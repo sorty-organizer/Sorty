@@ -61,29 +61,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             customInstructions: customInstructions,
             personaPrompt: personaPrompt
         )
-        let systemPrompt = prompts.system
-        let userPrompt = prompts.user
-        let prompt = Self.organizationPrompt(systemPrompt: systemPrompt, userPrompt: userPrompt)
-        let estimatedPromptTokens = PromptBuilder.estimateTokens(systemPrompt + userPrompt)
-        let start = Date()
-        let response = try await runCodex(
-            prompt: prompt,
-            imageFiles: [],
-            usesOrganizationSchema: true
-        )
-        let duration = Date().timeIntervalSince(start)
-
-        var plan = try parseOrganizationResponse(response, files: files)
-        plan.generationStats = SharedOrganizePipeline.makeStats(
-            config: config,
-            files: files,
-            duration: duration,
-            ttft: duration,
-            totalTokens: response.count / 4,
-            promptTokens: estimatedPromptTokens,
-            provider: AIProvider.openAI.displayName
-        )
-        return plan
+        return try await organizationPlan(files: files, prompts: prompts, imageFiles: [])
     }
 
     public func analyzeWithImages(
@@ -107,6 +85,16 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             personaPrompt: personaPrompt,
             analyzedImageFilenames: imageData.keys.sorted()
         )
+        return try await organizationPlan(files: files, prompts: prompts, imageFiles: imageFiles)
+    }
+
+    /// Runs the shared text/image response path while the caller retains any
+    /// temporary image files until parsing and statistics collection finish.
+    private func organizationPlan(
+        files: [FileItem],
+        prompts: (system: String, user: String, baseSystem: String),
+        imageFiles: [URL]
+    ) async throws -> OrganizationPlan {
         let systemPrompt = prompts.system
         let userPrompt = prompts.user
         let prompt = Self.organizationPrompt(systemPrompt: systemPrompt, userPrompt: userPrompt)

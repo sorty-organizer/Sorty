@@ -118,4 +118,13 @@ Four retained onboarding animation views now share `OnboardingLayerClock` for pa
 
 ### Hosted validation status
 
-[The indexed deletion batch](https://github.com/sorty-organizer/Sorty/actions/runs/40863098068) passed security checks, compiled tests, and built the app. Its test run failed `DuplicateRestorationManagerTests.testRestoreDoesNotDependOnSurvivingDuplicate` with `trashedFileNotFound`. Both that test file and `DuplicateRestorationManager.swift` are unchanged from the reduction baseline. The test uses real macOS Trash; restore found the returned Trash path missing. The cause remains unproven, and the test is retained. [The layer-clock batch](https://github.com/sorty-organizer/Sorty/actions/runs/40863467037) is running hosted validation.
+[The indexed deletion batch](https://github.com/sorty-organizer/Sorty/actions/runs/40863098068) passed security checks, compiled tests, and built the app. Its test run failed `DuplicateRestorationManagerTests.testRestoreDoesNotDependOnSurvivingDuplicate` with `trashedFileNotFound`. Both that test file and `DuplicateRestorationManager.swift` are unchanged from the reduction baseline. The test uses real macOS Trash; restore found the returned Trash path missing. The cause remains unproven, and the test is retained. [The layer-clock batch](https://github.com/sorty-organizer/Sorty/actions/runs/40863467037) passed hosted validation, including the app build and test suite. This successful later run does not establish the earlier Trash failure's cause.
+
+## Provider organization request paths
+
+OpenAI-compatible text and image organization now share prompt construction, request configuration, dispatch, and error reporting. Nil images retain string content and text-only error handling; an empty image dictionary retains multimodal content and image fallback handling. The vision-detail network probe still runs only for image calls. Existing URL/auth validation order, image ordering, request limits, structured-output settings, and OpenRouter fallback policies remain.
+
+Codex text and image calls share response execution, parsing, and statistics. Prompt construction stays in each caller, and temporary images remain owned by the image caller's defer until execution and parsing finish. The shared response body matches both original paths exactly.
+
+- Net reduction: 39 production lines; 1,378 since baseline (0.97%). Production total: 141,063 lines; 27,111 remain to reach the target.
+- The final isolated rebuild and all 40 existing request-format and persona/provider tests passed. They cover captured text/image payloads, vision detail, OpenCode formats and headers, OpenRouter streaming and retry behavior, and Codex argument generation. Hosted integration validation remains required. These checks do not establish live provider behavior or a real Codex subprocess round trip.

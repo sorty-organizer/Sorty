@@ -222,55 +222,28 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     }
     
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
-        let apiURL = try AIRequestSupport.requireAPIURL(from: config)
-        try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
-        let url = try AIRequestSupport.openAIChatCompletionsURL(from: apiURL)
-        
-        // Use custom system prompt if provided, otherwise use default
-        let prompts = SharedOrganizePipeline.buildPrompts(
-            config: config,
-            files: files,
-            customInstructions: customInstructions,
-            personaPrompt: personaPrompt
-        )
-        let systemPrompt = prompts.system
-        let userPrompt = prompts.user
-        let estimatedPromptTokens = PromptBuilder.estimateTokens(systemPrompt + userPrompt)
-        
-        // Build request body
-        var requestBody: [String: Any] = [
-            "model": config.model,
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": userPrompt]
-            ],
-            "temperature": resolvedTemperature(temperature)
-        ]
-        
-        // Always send a max_tokens bound so organize output cannot grow without limit.
-        requestBody["max_tokens"] = resolvedMaxTokens()
-        configureStructuredOrganizationOutput(in: &requestBody)
-
-        do {
-            return try await performOrganizationRequest(
-                url: url,
-                requestBody: requestBody,
-                files: files,
-                promptTokens: estimatedPromptTokens,
-                isMultimodal: false
-            )
-        } catch {
-            await notifyStreamingFailure(error)
-            throw error
-        }
+        try await analyzeOrganization(files: files, imageData: nil, customInstructions: customInstructions, personaPrompt: personaPrompt, temperature: temperature)
     }
-    
+
     public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+        try await analyzeOrganization(files: files, imageData: imageData, customInstructions: customInstructions, personaPrompt: personaPrompt, temperature: temperature)
+    }
+
+    /// Keeps text and image organization on the same prompt and request path.
+    /// Nil images preserve the text wire format; an empty image dictionary
+    /// still uses multimodal content and its existing fallback policy.
+    private func analyzeOrganization(
+        files: [FileItem],
+        imageData: [String: Data]?,
+        customInstructions: String?,
+        personaPrompt: String?,
+        temperature: Double?
+    ) async throws -> OrganizationPlan {
         let apiURL = try AIRequestSupport.requireAPIURL(from: config)
         try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
         let url = try AIRequestSupport.openAIChatCompletionsURL(from: apiURL)
 
-        let orderedImageNames = Self.orderedImageFilenames(from: imageData)
+        let orderedImageNames = imageData.map(Self.orderedImageFilenames) ?? []
         
         let prompts = SharedOrganizePipeline.buildPrompts(
             config: config,
@@ -289,9 +262,9 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         ]
 
         // Add images as cached base64 so retries never re-encode multi-MB data.
-        let visionDetail = AIRequestSupport.effectiveVisionDetail(for: config)
+        let visionDetail = imageData == nil ? "" : AIRequestSupport.effectiveVisionDetail(for: config)
         for name in orderedImageNames {
-            guard let data = imageData[name] else { continue }
+            guard let data = imageData?[name] else { continue }
             let base64 = ImageBase64Cache.shared.base64(for: name, data: data)
             contentArray.append([
                 "type": "image_url",
@@ -306,7 +279,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             "model": config.model,
             "messages": [
                 ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": contentArray]
+                ["role": "user", "content": imageData == nil ? userPrompt as Any : contentArray as Any]
             ],
             "temperature": resolvedTemperature(temperature)
         ]
@@ -320,9 +293,9 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 requestBody: requestBody,
                 files: files,
                 promptTokens: estimatedPromptTokens,
-                isMultimodal: true
+                isMultimodal: imageData != nil
             )
-        } catch where AIRequestSupport.isPayloadTooLarge(error) {
+        } catch where imageData != nil && AIRequestSupport.isPayloadTooLarge(error) {
             // Strip images first on 400/413/422 (payload too large or
             // unsupported media) instead of re-sending the same megabytes.
             ModelLog.log(
@@ -336,7 +309,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 personaPrompt: personaPrompt,
                 temperature: temperature
             )
-        } catch where config.provider == .openRouter && Self.shouldRetryOpenRouterWithoutImages(error) {
+        } catch where imageData != nil && config.provider == .openRouter && Self.shouldRetryOpenRouterWithoutImages(error) {
             ModelLog.log(
                 "OpenRouter could not complete the multimodal request; retrying once with file metadata only.",
                 level: .warning,
