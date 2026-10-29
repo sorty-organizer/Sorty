@@ -29,6 +29,15 @@ Net reduction: 6 production lines. Local builds and tests intentionally omitted 
 
 Retained `AppState.helpMenuHoverHapticsController`: its initializer installs observers, so absence of direct callers does not make it dead code. Retained `MessageTier`, which still drives the analysis display.
 
+## Finder workflow template consolidation
+
+Replaced four copies of Automator's `document.wflow` XML with one private renderer in `ExtensionCommunication`. The four public install functions retain their shell commands, Info.plist metadata, icon selection, service refresh order, and error handling. Preview keeps its distinct action UUIDs.
+
+- Net reduction: 612 production lines in this batch; 618 since baseline (0.43%).
+- Production total: 141,823 lines; 27,871 more lines must be removed to reach the target.
+- Executed the original and shared templates in Swift for all four action variants with seven shell-command inputs, including XML metacharacters, empty text, and multiline text. All 28 outputs matched byte-for-byte and parsed as property lists.
+- This verifies generated workflow contents, not Finder installation or runtime behavior. Hosted Swift CI is required for integration confidence.
+
 ## Next investigations
 
 These are candidates, not approved deletions or estimated savings:
