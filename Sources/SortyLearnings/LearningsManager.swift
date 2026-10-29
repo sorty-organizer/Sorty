@@ -3027,31 +3027,12 @@ public class LearningsManager: ObservableObject {
                     isAccessible: false
                 )
             }
-            if !SandboxEnvironment.isSandboxed {
-                // Outside the sandbox, security-scoped access is a no-op and
-                // startAccessingSecurityScopedResource() returns false for
-                // valid bookmarks. Resolve by path instead of marking every
-                // bookmarked directory inaccessible (matches
-                // WatchedFoldersManager and StorageLocationsManager).
-                var isDirectory = ObjCBool(false)
-                let exists = FileManager.default.fileExists(
-                    atPath: url.path, isDirectory: &isDirectory
-                ) && isDirectory.boolValue
-                let renewedBookmark = isStale ? try? url.bookmarkData(
-                    options: .withSecurityScope,
-                    includingResourceValuesForKeys: nil,
-                    relativeTo: nil
-                ) : nil
-                return ModelDirectoryBookmarkResult(
-                    id: snapshot.id,
-                    originalBookmark: bookmarkData,
-                    resolvedURL: url,
-                    renewedBookmark: renewedBookmark,
-                    didAccess: false,
-                    isAccessible: exists
-                )
-            }
-            guard url.startAccessingSecurityScopedResource() else {
+            // Unsandboxed reference directories resolve by path without
+            // acquiring a scope. Sandboxed directories must acquire one before
+            // checking existence or renewing a stale bookmark.
+            let requiresAccess = SandboxEnvironment.isSandboxed
+            let didAccess = requiresAccess && url.startAccessingSecurityScopedResource()
+            guard !requiresAccess || didAccess else {
                 return ModelDirectoryBookmarkResult(
                     id: snapshot.id,
                     originalBookmark: bookmarkData,
@@ -3074,7 +3055,7 @@ public class LearningsManager: ObservableObject {
                 originalBookmark: bookmarkData,
                 resolvedURL: url,
                 renewedBookmark: renewedBookmark,
-                didAccess: true,
+                didAccess: didAccess,
                 isAccessible: exists
             )
         }
