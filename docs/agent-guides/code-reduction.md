@@ -223,3 +223,11 @@ Reference-directory restoration now shares its directory existence check, stale-
 - Net reduction: 19 production lines; 1,915 since baseline (1.34%). Production total: 140,526 lines; 26,574 remain to reach the target.
 - An isolated native Foundation comparison matched all fields in 14 old/new scenarios: bookmarkless directories/files/missing paths, invalid data, valid directory/file bookmarks, and confirmed stale bookmarks under both sandbox-policy flag values. Acquired baseline and new scopes were balanced; the new implementation acquired three. Temporary fixtures were removed. These flag variations do not prove signed sandbox entitlement behavior.
 - The final `SortyLearnings` target build passed. No profile, Keychain, or app settings were modified by the comparison. [Hosted validation of the preceding storage/watched-folder restoration batch](https://github.com/sorty-organizer/Sorty/actions/runs/40873242941) passed. Hosted validation of this follow-up remains required.
+
+## Capability predicates
+
+Replaced five default-based boolean switches with direct predicates: provider deep-scan support, system-image use, color-logo use, subscription-auth support, and Codex subscription usability. Each predicate retains the same selected cases and the same default for every other case. Kept associated-value pattern switches and exhaustive capability decisions unchanged. No provider metadata or authentication probing changed.
+
+- Net reduction: 23 production lines; 1,938 since baseline (1.36%). Production total: 140,503 lines; 26,551 remain to reach the target.
+- Source comparison checked each selected case set and whether it mapped to true or false, including the complement/default behavior. Both affected enums already support equality; no new conformance or helper was introduced.
+- No local build or tests for this minor expression simplification under AGENTS.md. Hosted compilation of the final source remains required. This small follow-up uses skip-ci so the preceding hosted run can finish.

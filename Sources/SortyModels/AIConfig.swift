@@ -390,19 +390,11 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     /// Some providers (like Apple Foundation Model) have limited context windows
     /// that make deep scanning impractical or risky for stability.
     public var supportsDeepScan: Bool {
-        switch self {
-        case .appleFoundationModel:
-            return false
-        default:
-            return true
-        }
+        self != .appleFoundationModel
     }
 
     public var usesSystemImage: Bool {
-        switch self {
-        case .unavailableProvider, .openAICompatible, .appleFoundationModel: return true
-        default: return false
-        }
+        self == .unavailableProvider || self == .openAICompatible || self == .appleFoundationModel
     }
 
     public var brandColor: Color {
@@ -431,12 +423,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     }
 
     public var hasColorLogo: Bool {
-        switch self {
-        case .gemini, .openAI:
-            return true
-        default:
-            return false
-        }
+        self == .gemini || self == .openAI
     }
 
     /// Recommended models for this provider
@@ -564,12 +551,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     }
 
     public var supportsSubscriptionAuth: Bool {
-        switch self {
-        case .openAI:
-            return true
-        default:
-            return false
-        }
+        self == .openAI
     }
 
     public var supportedAuthMethods: [ProviderAuthMethod] {

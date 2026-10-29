@@ -46,12 +46,7 @@ public final class CodexCLIAuthManager: ObservableObject {
         case unavailable(String?)
 
         var isSubscriptionUsable: Bool {
-            switch self {
-            case .chatGPT, .accessToken:
-                return true
-            default:
-                return false
-            }
+            self == .chatGPT || self == .accessToken
         }
     }
 
