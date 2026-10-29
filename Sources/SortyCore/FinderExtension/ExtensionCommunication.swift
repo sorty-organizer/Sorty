@@ -113,17 +113,6 @@ public struct ExtensionCommunication {
     // rendering and writes across workflow installs and appearance refreshes.
     private static let quickActionIconLock = NSLock()
 
-    // MARK: - URL Scheme Handling
-
-    /// Generate a URL scheme command for organizing a given path
-    public static func urlForOrganizing(path: String) -> URL? {
-        var components = URLComponents()
-        components.scheme = "sorty"
-        components.host = "organize"
-        components.queryItems = [URLQueryItem(name: "path", value: path)]
-        return components.url
-    }
-
     // MARK: - Finder Extension Notifications
 
     @discardableResult

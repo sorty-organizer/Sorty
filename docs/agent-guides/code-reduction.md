@@ -240,3 +240,12 @@ Removed the unused organizer HUD helper, its callback hook, and Core's correspon
 - Reviewed indexed findings against current app, test, and documentation references. The HUD hook was only assigned by its adapter and called by the removed helper. The Finder call used during apply still targets `OrganizerAutomation`; session changes still call `invalidateInternal`; active login observation and synchronization remain. No framework callbacks were removed.
 - Retained deferred-store hydration and generation safeguards: the custom-persona, naming, and steering stores have different merge/cleanup behavior, so introducing a common loading controller would add policy without a clear reduction.
 - No local build or tests for this minor unused-code deletion under AGENTS.md. Hosted compilation of the final source remains required. [Hosted validation of the preceding reference-directory branch simplification](https://github.com/sorty-organizer/Sorty/actions/runs/40873938903) passed.
+
+## Unused constructors and forwarding helpers
+
+Removed unused explicit constructors for `LearningToolCall`, `PlanQualityAssessment`, and `PlanQualityIssue`. Stored fields, Codable conformances, legacy quality-kind cases, and computed interpretation remain. Active response/history decoding is unchanged; the deleted score-clamping constructor had no app or test caller. Removed an unused base64-cache clear method, Core's unused organize-URL helper, and two private app relocation forwarders. Active relocation calls already use `AppRelocationService` directly; Finder Sync retains its own URL builder.
+
+- Net reduction: 49 production lines; 2,055 since baseline (1.44%). Production total: 140,386 lines; 26,434 remain to reach the target.
+- Current app/test/documentation searches confirm no callers for the removed constructors or helpers. Reviewed model references, including response decoding and tool-name constants. No serialized field, decoder, encoder, enum case, or framework callback was removed.
+- Retained Sparkle's update methods despite old index findings: `TrafficLightUpdateButton` has live calls to `installAvailableUpdate` and `showUpdateInFocus`; the native driver also overrides the focus callback. Index findings are candidates, not deletion authority.
+- No local build or tests for this minor unused-code cleanup under AGENTS.md. Hosted compilation of the final source remains required; this follow-up allows the preceding run to finish with skip-ci.

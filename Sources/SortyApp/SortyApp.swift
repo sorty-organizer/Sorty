@@ -611,9 +611,6 @@ private enum ApplicationMover {
         AppRelocationService.isInApplicationsFolder(url)
     }
 
-    private static func originalBundleURL() -> URL {
-        AppRelocationService.originalBundleURL()
-    }
 
     private static func moveAndRelaunch(from sourceURL: URL) {
         guard !isMoving else { return }
@@ -661,9 +658,6 @@ private enum ApplicationMover {
         NSApplication.shared.terminate(nil)
     }
 
-    private static func appleScriptString(_ value: String) -> String {
-        AppRelocationService.appleScriptString(value)
-    }
 }
 
 @main

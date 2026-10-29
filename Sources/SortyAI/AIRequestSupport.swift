@@ -839,13 +839,6 @@ final class ImageBase64Cache: @unchecked Sendable {
         insertionOrder.removeFirst(min(victimCount, insertionOrder.count))
     }
 
-    func clear() {
-        lock.lock()
-        cache.removeAll()
-        insertionOrder.removeAll()
-        cachedBytes = 0
-        lock.unlock()
-    }
 }
 
 /// Estimates base64 size for the organizer's prepared-vision budget.

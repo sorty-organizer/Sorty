@@ -24,11 +24,6 @@ public struct LearningToolCall: Codable, Hashable, Sendable {
     public let reason: String
     public let source: String
 
-    public init(name: String, reason: String, source: String) {
-        self.name = name
-        self.reason = reason
-        self.source = source
-    }
 
     public var excludesCurrentRun: Bool {
         name == Self.excludeCurrentRunToolName
@@ -141,11 +136,6 @@ public struct PlanQualityAssessment: Codable, Hashable, Sendable {
     public let issues: [PlanQualityIssue]
     public let didRetry: Bool
 
-    public init(score: Int, issues: [PlanQualityIssue], didRetry: Bool = false) {
-        self.score = min(max(score, 0), 100)
-        self.issues = issues
-        self.didRetry = didRetry
-    }
 
     public var passes: Bool { score >= Self.passingScore }
 }
@@ -172,21 +162,6 @@ public struct PlanQualityIssue: Codable, Hashable, Sendable, Identifiable {
     public let fileIDs: [UUID]
     public let deduction: Int
 
-    public init(
-        id: UUID = UUID(),
-        kind: Kind,
-        message: String,
-        folderPaths: [String],
-        fileIDs: [UUID],
-        deduction: Int
-    ) {
-        self.id = id
-        self.kind = kind
-        self.message = message
-        self.folderPaths = folderPaths
-        self.fileIDs = fileIDs
-        self.deduction = deduction
-    }
 }
 
 /// Enforces workflow-mode safety at the filesystem boundary instead of relying on AI output.
