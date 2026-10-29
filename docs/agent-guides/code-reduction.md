@@ -68,7 +68,19 @@ Removed redundant `encode(to:)` methods from `AIConfig`, `OrganizationPlan`, and
 
 ### Hosted CI follow-up
 
-[The metadata/observer batch](https://github.com/sorty-organizer/Sorty/actions/runs/40860414035) compiled tests and built the app, but failed `DuplicateRestorationManagerTests.testRestoreDuplicate` with `trashedFileNotFound`. Neither that test nor its production owner changed in the batch. The failed hosted job was rerun once to check repeatability; its outcome remains pending. Do not treat the batch as fully verified from its successful compilation.
+[The metadata/observer batch](https://github.com/sorty-organizer/Sorty/actions/runs/40860414035) compiled tests and built the app, but failed `DuplicateRestorationManagerTests.testRestoreDuplicate` with `trashedFileNotFound`. Neither that test nor its production owner changed in the batch. Attempt 2 passed the hosted app build and test suite without source changes. The first failure was not reproduced; this does not establish its root cause.
+
+## Organizer run ownership
+
+Six tracked operations now share synchronous run-ownership checks and task cleanup. Each `defer` remains in its original caller, so cleanup still occurs after that caller handles errors and cancellation. No task creation, await, reset, timeout, or error-propagation policy moved into the helpers.
+
+Preview regeneration also reuses the existing `getFilesFromCurrentPlan()` traversal instead of duplicating it. Both reads occur on the main actor before any suspension, so the previously captured plan and the current plan are the same snapshot.
+
+- Net reduction: 63 production lines in this batch; 924 since baseline (0.65%).
+- Production total: 141,517 lines; 27,565 more lines must be removed to reach the target.
+- Expanded the six cancellation checks and six deferred cleanup calls back to their originals and compared all surrounding source before replacing the preview traversal. They matched exactly. Helpers preserve stale-run suppression clearing and ownership-guarded task clearing.
+- Retained the existing cancellation and restart tests, including `testCancelRegenerateReturnsToIdleWithoutError` and `testRegenerateWithModelWhileOrganizingRestartsAnalysis`. Hosted CI must run these against the final commit; caller comparison alone is not runtime evidence.
+- Rejected a single generic tracked-task wrapper: these entry points intentionally differ in whether they consume cancellation, preserve suppression, stop timers, and record errors. Clearing the task inside an awaited helper would also move cleanup before the caller's catch block.
 
 ## Next investigations
 

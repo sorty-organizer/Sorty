@@ -29,18 +29,7 @@ extension FolderOrganizer {
         }
         defer { releaseOrganizeRun(runToken) }
 
-        // Get original files from the current plan
-        var allFiles: [FileItem] = []
-        func collectFiles(_ suggestion: FolderSuggestion) {
-            allFiles.append(contentsOf: suggestion.files)
-            for subfolder in suggestion.subfolders {
-                collectFiles(subfolder)
-            }
-        }
-        for suggestion in basePlan.suggestions {
-            collectFiles(suggestion)
-        }
-        allFiles.append(contentsOf: basePlan.unorganizedFiles)
+        var allFiles = getFilesFromCurrentPlan()
 
         if let exclusionRules = exclusionRules {
             allFiles = exclusionRules.filterFiles(allFiles)
@@ -53,21 +42,11 @@ extension FolderOrganizer {
         currentTask = Task {
             try await performRegeneratePreview(allFiles: allFiles, basePlan: basePlan)
         }
-        defer {
-            if isCurrentOrganizeRun(runToken) {
-                currentTask = nil
-            }
-        }
+        defer { clearTask(ifOwnedBy: runToken) }
         do {
             try await currentTask?.value
         } catch where Self.isCancellationError(error) {
-            guard isCurrentOrganizeRun(runToken) else {
-                // A superseded run must not reset the newer run's state;
-                // consume any pending suppression so it cannot mute a later
-                // legitimate cancellation.
-                suppressCancellationReset = false
-                throw CancellationError()
-            }
+            try checkCancellationRunOwnership(runToken)
             if suppressCancellationReset {
                 suppressCancellationReset = false
                 throw CancellationError()

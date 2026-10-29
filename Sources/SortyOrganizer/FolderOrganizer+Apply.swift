@@ -76,23 +76,11 @@ extension FolderOrganizer {
                 runToken: runToken
             )
         }
-        defer {
-            // Only the run that still owns the token may clear the task; a
-            // superseded run must not clobber the winner.
-            if isCurrentOrganizeRun(runToken) {
-                currentTask = nil
-            }
-        }
+        defer { clearTask(ifOwnedBy: runToken) }
         do {
             try await currentTask?.value
         } catch where Self.isCancellationError(error) {
-            guard isCurrentOrganizeRun(runToken) else {
-                // A superseded run must not reset the newer run's state;
-                // consume any pending suppression so it cannot mute a later
-                // legitimate cancellation.
-                suppressCancellationReset = false
-                throw CancellationError()
-            }
+            try checkCancellationRunOwnership(runToken)
             if suppressCancellationReset {
                 suppressCancellationReset = false
                 throw CancellationError()
@@ -704,21 +692,11 @@ extension FolderOrganizer {
         currentTask = Task {
             try await performRegenerateWithModel(provider: provider, model: model, files: files)
         }
-        defer {
-            if isCurrentOrganizeRun(runToken) {
-                currentTask = nil
-            }
-        }
+        defer { clearTask(ifOwnedBy: runToken) }
         do {
             try await currentTask?.value
         } catch where Self.isCancellationError(error) {
-            guard isCurrentOrganizeRun(runToken) else {
-                // A superseded run must not reset the newer run's state;
-                // consume any pending suppression so it cannot mute a later
-                // legitimate cancellation.
-                suppressCancellationReset = false
-                throw CancellationError()
-            }
+            try checkCancellationRunOwnership(runToken)
             if suppressCancellationReset {
                 suppressCancellationReset = false
                 throw CancellationError()

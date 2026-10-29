@@ -594,6 +594,22 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         activeOrganizeRunToken == token
     }
 
+    /// A superseded run may neither reset the winner nor leave a suppression
+    /// flag that would mute a later legitimate cancellation.
+    func checkCancellationRunOwnership(_ token: UInt64) throws {
+        guard isCurrentOrganizeRun(token) else {
+            suppressCancellationReset = false
+            throw CancellationError()
+        }
+    }
+
+    /// Keep cleanup at the caller's exit; only the owning run may clear its task.
+    func clearTask(ifOwnedBy token: UInt64) {
+        if isCurrentOrganizeRun(token) {
+            currentTask = nil
+        }
+    }
+
     func releaseOrganizeRun(_ token: UInt64) {
         guard activeOrganizeRunToken == token else { return }
         activeOrganizeRunToken = nil
