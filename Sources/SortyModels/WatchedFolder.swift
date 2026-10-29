@@ -177,21 +177,7 @@ public class WatchedFoldersManager: ObservableObject {
     private var loadGeneration = 0
     private var restoreTask: Task<Void, Never>?
 
-    private struct BookmarkRestoreSnapshot: Sendable {
-        let id: UUID
-        let bookmarkData: Data
-        let path: String
-    }
 
-    private struct BookmarkRestoreResult: Sendable {
-        let id: UUID
-        let originalBookmark: Data
-        let status: FolderAccessStatus
-        let newBookmark: Data?
-        let resolvedPath: String?
-        let url: URL?
-        let didAccess: Bool
-    }
     
     public init() {
         if userDefaults.object(forKey: activeCountStorageKey) != nil {
@@ -538,7 +524,7 @@ public class WatchedFoldersManager: ObservableObject {
 
         let task = Task { [weak self] in
             let results = await Task.detached(priority: .utility) {
-                Self.resolveBookmarks(snapshots)
+                BookmarkRestorer.resolve(snapshots, purpose: .watchedFolder)
             }.value
             guard let self else {
                 for result in results where result.didAccess {
@@ -553,99 +539,7 @@ public class WatchedFoldersManager: ObservableObject {
         restoreTask = nil
     }
 
-    private nonisolated static func resolveBookmarks(
-        _ snapshots: [BookmarkRestoreSnapshot]
-    ) -> [BookmarkRestoreResult] {
-        var results: [BookmarkRestoreResult] = []
-        results.reserveCapacity(snapshots.count)
-        let requiresAccess = SandboxEnvironment.isSandboxed
 
-        for snapshot in snapshots {
-            guard !Task.isCancelled else { break }
-            var isStale = false
-            do {
-                let url = try URL(
-                    resolvingBookmarkData: snapshot.bookmarkData,
-                    options: .withSecurityScope,
-                    relativeTo: nil,
-                    bookmarkDataIsStale: &isStale
-                )
-                if !requiresAccess {
-                    // Outside the sandbox, stale bookmarks are harmless:
-                    // renew opportunistically and report valid so dev builds
-                    // do not surface spurious access issues.
-                    var newBookmark: Data? = nil
-                    if isStale {
-                        newBookmark = try? url.bookmarkData(
-                            options: .withSecurityScope,
-                            includingResourceValuesForKeys: nil,
-                            relativeTo: nil
-                        )
-                    }
-                    results.append(
-                        BookmarkRestoreResult(
-                            id: snapshot.id,
-                            originalBookmark: snapshot.bookmarkData,
-                            status: .valid,
-                            newBookmark: newBookmark,
-                            resolvedPath: url.path,
-                            url: nil,
-                            didAccess: false
-                        )
-                    )
-                    continue
-                }
-
-                guard url.startAccessingSecurityScopedResource() else {
-                    results.append(
-                        BookmarkRestoreResult(
-                            id: snapshot.id,
-                            originalBookmark: snapshot.bookmarkData,
-                            status: .lost,
-                            newBookmark: nil,
-                            resolvedPath: nil,
-                            url: nil,
-                            didAccess: false
-                        )
-                    )
-                    continue
-                }
-
-                var newBookmark: Data? = nil
-                if isStale {
-                    newBookmark = try? url.bookmarkData(
-                        options: .withSecurityScope,
-                        includingResourceValuesForKeys: nil,
-                        relativeTo: nil
-                    )
-                }
-                results.append(
-                    BookmarkRestoreResult(
-                        id: snapshot.id,
-                        originalBookmark: snapshot.bookmarkData,
-                        status: isStale ? .stale : .valid,
-                        newBookmark: newBookmark,
-                        resolvedPath: url.path,
-                        url: url,
-                        didAccess: true
-                    )
-                )
-            } catch {
-                results.append(
-                    BookmarkRestoreResult(
-                        id: snapshot.id,
-                        originalBookmark: snapshot.bookmarkData,
-                        status: .lost,
-                        newBookmark: nil,
-                        resolvedPath: nil,
-                        url: nil,
-                        didAccess: false
-                    )
-                )
-            }
-        }
-        return results
-    }
 
     private func applyBookmarkRestoreResults(
         _ results: [BookmarkRestoreResult],

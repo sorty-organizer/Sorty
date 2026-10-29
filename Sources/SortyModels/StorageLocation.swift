@@ -271,21 +271,7 @@ public class StorageLocationsManager: ObservableObject {
     private var accessNeedsRefresh = true
     private let accessValidationLifetime: TimeInterval = 5 * 60
 
-    private struct BookmarkRestoreSnapshot: Sendable {
-        let id: UUID
-        let bookmarkData: Data?
-        let path: String
-    }
 
-    private struct BookmarkRestoreResult: Sendable {
-        let id: UUID
-        let originalBookmark: Data?
-        let status: FolderAccessStatus
-        let newBookmark: Data?
-        let resolvedPath: String?
-        let url: URL?
-        let didAccess: Bool
-    }
     
     public convenience init() {
         self.init(userDefaults: .standard)
@@ -580,7 +566,7 @@ public class StorageLocationsManager: ObservableObject {
 
         let task = Task { [weak self] in
             let results = await Task.detached(priority: .utility) {
-                Self.resolveBookmarks(snapshots)
+                BookmarkRestorer.resolve(snapshots, purpose: .storageLocation)
             }.value
             guard let self else {
                 for result in results where result.didAccess {
@@ -618,105 +604,7 @@ public class StorageLocationsManager: ObservableObject {
         }
     }
 
-    private nonisolated static func resolveBookmarks(
-        _ snapshots: [BookmarkRestoreSnapshot]
-    ) -> [BookmarkRestoreResult] {
-        var results: [BookmarkRestoreResult] = []
-        results.reserveCapacity(snapshots.count)
 
-        for snapshot in snapshots {
-            guard !Task.isCancelled else { break }
-            guard let bookmarkData = snapshot.bookmarkData else {
-                let exists = FileManager.default.fileExists(atPath: snapshot.path)
-                results.append(
-                    BookmarkRestoreResult(
-                        id: snapshot.id,
-                        originalBookmark: nil,
-                        status: exists ? .valid : .lost,
-                        newBookmark: nil,
-                        resolvedPath: nil,
-                        url: nil,
-                        didAccess: false
-                    )
-                )
-                continue
-            }
-
-            var isStale = false
-            do {
-                let resolvedURL = try URL(
-                    resolvingBookmarkData: bookmarkData,
-                    options: .withSecurityScope,
-                    relativeTo: nil,
-                    bookmarkDataIsStale: &isStale
-                )
-                var newBookmark: Data? = nil
-                if isStale {
-                    newBookmark = try? resolvedURL.bookmarkData(
-                        options: .withSecurityScope,
-                        includingResourceValuesForKeys: nil,
-                        relativeTo: nil
-                    )
-                }
-                guard resolvedURL.startAccessingSecurityScopedResource() else {
-                    // Outside the sandbox, startAccessing returns false for
-                    // valid bookmarks; keep the location usable without a
-                    // held session.
-                    if SandboxEnvironment.isSandboxed {
-                        results.append(
-                            BookmarkRestoreResult(
-                                id: snapshot.id,
-                                originalBookmark: bookmarkData,
-                                status: .lost,
-                                newBookmark: nil,
-                                resolvedPath: nil,
-                                url: nil,
-                                didAccess: false
-                            )
-                        )
-                    } else {
-                        results.append(
-                            BookmarkRestoreResult(
-                                id: snapshot.id,
-                                originalBookmark: bookmarkData,
-                                status: .valid,
-                                newBookmark: newBookmark,
-                                resolvedPath: StorageLocationPathResolver.canonicalPath(resolvedURL.path),
-                                url: nil,
-                                didAccess: false
-                            )
-                        )
-                    }
-                    continue
-                }
-
-                results.append(
-                    BookmarkRestoreResult(
-                        id: snapshot.id,
-                        originalBookmark: bookmarkData,
-                        status: .valid,
-                        newBookmark: newBookmark,
-                        resolvedPath: StorageLocationPathResolver.canonicalPath(resolvedURL.path),
-                        url: resolvedURL,
-                        didAccess: true
-                    )
-                )
-            } catch {
-                results.append(
-                    BookmarkRestoreResult(
-                        id: snapshot.id,
-                        originalBookmark: bookmarkData,
-                        status: .lost,
-                        newBookmark: nil,
-                        resolvedPath: nil,
-                        url: nil,
-                        didAccess: false
-                    )
-                )
-            }
-        }
-        return results
-    }
 
     private func applyBookmarkRestoreResults(
         _ results: [BookmarkRestoreResult],
