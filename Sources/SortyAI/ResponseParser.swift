@@ -300,23 +300,6 @@ struct ResponseParser {
         let tags: [String]?
         let comment: String?
 
-        init(
-            filename: String,
-            suggestedName: String? = nil,
-            renameReason: String? = nil,
-            renameConfidence: Double? = nil,
-            tags: [String]? = nil,
-            comment: String? = nil
-        ) {
-            self.filename = filename
-            self.suggestedName = suggestedName
-            self.renameReason = renameReason
-            self.renameConfidence = renameConfidence
-            self.tags = tags
-            self.comment = comment
-        }
-
-
         // Support both simple string and object format
         init(from decoder: Decoder) throws {
             // Try to decode as a simple string first
@@ -355,11 +338,6 @@ struct ResponseParser {
     struct UnorganizedFileResponse: Decodable {
         let filename: String
         let reason: String
-
-        init(filename: String, reason: String) {
-            self.filename = filename
-            self.reason = reason
-        }
 
         init(from decoder: Decoder) throws {
             if let container = try? decoder.singleValueContainer(),

@@ -153,3 +153,11 @@ Removed unused design-system color, spacing, radius, and typography declarations
 - Net reduction: 65 production lines; 1,603 since baseline (1.13%). Production total: 140,838 lines; 26,886 remain to reach the target.
 - Reviewed index findings and namespace-qualified caller searches across app source, tests, and documentation; checked for imported aliases and inspected the active insight rendering path. Kept documented APIs and their dependencies. No model fields, enum cases, protocol requirements, UI controls, or live style values changed.
 - No local build or tests for this minor unused-code deletion under AGENTS.md. Hosted compilation remains required. Source review does not establish compatibility for consumers outside this app repository.
+
+## AI adapter and parser surface
+
+Removed the unused delete operation from `AIKeychainStore` and its two adapters. AI clients retain read/write credential access; Settings still deletes credentials through its existing `KeychainManager.deleteAsync` adapter. No credentials were read, changed, or deleted by this cleanup. Removed two unused explicit response constructors; custom string/object decoding, CodingKeys, and encoding remain.
+
+- Net reduction: 32 production lines; 1,635 since baseline (1.15%). Production total: 140,806 lines; 26,854 remain to reach the target.
+- Repository-wide searches found no calls to the removed adapter operation or parser constructors. Indexed findings agree; the production Settings deletion path remains referenced.
+- No local build or tests for this minor unused-code deletion under AGENTS.md. Hosted compilation of the final source remains required. The latest running hosted batch is allowed to finish rather than cancelling it for this small follow-up.

@@ -23,7 +23,4 @@ public struct LiveAIKeychainStore: AIKeychainStore {
         await KeychainManager.saveAsync(key: key, value: value)
     }
 
-    public func deleteAsync(key: String) async -> Bool {
-        await KeychainManager.deleteAsync(key: key)
-    }
 }

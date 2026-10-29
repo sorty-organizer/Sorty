@@ -3,7 +3,7 @@
 //  SortyAI
 //
 //  Keychain access for AI provider credentials. Uses how code is used: AI
-//  clients only ever read/write/delete API tokens by key, but KeychainManager
+//  clients only ever read/write API tokens by key, but KeychainManager
 //  lives up in SortyCore (shared infra also used by the organizer and
 //  settings), so clients go through this injectable store instead. The app
 //  injects the live KeychainManager-backed store at launch; tests and
@@ -18,7 +18,6 @@ public protocol AIKeychainStore: Sendable {
     func get(key: String) -> String?
     func getAsync(key: String) async -> String?
     func saveAsync(key: String, value: String) async -> Bool
-    func deleteAsync(key: String) async -> Bool
 }
 
 /// In-memory fallback. Never persists: used by tests, previews, and any
@@ -52,12 +51,6 @@ public final class EphemeralAIKeychainStore: AIKeychainStore, @unchecked Sendabl
         }
     }
 
-    public func deleteAsync(key: String) async -> Bool {
-        withLock {
-            storage.removeValue(forKey: key)
-            return true
-        }
-    }
 }
 
 /// Single entry point AI clients use for provider credentials.
