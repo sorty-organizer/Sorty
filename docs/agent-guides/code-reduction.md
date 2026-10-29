@@ -170,3 +170,11 @@ Nine picker callers now pass their existing `SettingsViewModel` to the shared ov
 - For all nine callers, verified the removed closures used the same settings object and the subscription lookup used the same provider supplied to the overlay. Normalized comparisons show all remaining caller source, including selection/auth/reset actions, matches the original.
 - An isolated package rebuild and all 64 existing subscription/configuration and organizer-state tests passed. The rebuild also compiled the preceding AI adapter/parser cleanup. These tests do not establish popover runtime behavior; no computer use was performed.
 - [Hosted validation for the preceding presentation cleanup](https://github.com/sorty-organizer/Sorty/actions/runs/40865054696) passed security checks, app build, and the test suite. Hosted validation of this shared-wiring commit is still required.
+
+## Shared reference beam stroke
+
+Scan progress, persona generation, and the instruction editor now share the same rounded reference-beam drawing. Each caller retains its timeline schedule, phase calculation, visibility and activation gates, Reduce Motion/Transparency handling, opacity, and animation. Scan/persona strokes remain one point wide; the instruction editor remains 1.2 points. The new view contains no state or timeline.
+
+- Net reduction: 38 production lines including the shared view; 1,722 since baseline (1.21%). Production total: 140,719 lines; 26,767 remain to reach the target.
+- Compared the shared drawing with all three original expressions after substituting each stroke width: gradient stops, RGBA values, locations, corner style, center, rotation, and stroke expressions match. Normalized source comparisons also confirm unchanged surrounding caller code.
+- The shared view belongs to the existing SPM UI target consumed by the local Xcode package. No local build, tests, or computer use for this small extraction under AGENTS.md. Hosted compilation of the final source and visual runtime acceptance remain outstanding.
