@@ -145,3 +145,11 @@ Removed the unused `DuplicateDetector.computeHashes` entry point; duplicate dete
 - Existing index findings plus repository-wide app, test, and documentation searches identify no callers for the deleted entry points. Finder wrappers only called the deleted Finder methods; the old batch-summary wrapper only called the deleted legacy constructor. No framework callbacks or protocol requirements were removed.
 - No local builds or tests for this minor dead-code deletion, per AGENTS.md. Hosted compilation is required to confirm the app and test consumers build. This does not establish compatibility for hypothetical external users of these public Swift declarations; Sorty's repository contains no such consumer.
 - Rejected a provider metadata table during review: it saved only 33 lines while making simple property lookups construct a larger value. It was discarded before committing.
+
+## Unused presentation definitions
+
+Removed unused design-system color, spacing, radius, and typography declarations, plus the unused AI insight category icon and string-color properties. Live insight rendering still uses `AnalysisInsightsView.categoryColor` and its category indicator. Retained `headline`, `sizeHeadline`, and `textPrimary`: the first and last are referenced by the design-system guide, and the font-size constant supports the retained method.
+
+- Net reduction: 65 production lines; 1,603 since baseline (1.13%). Production total: 140,838 lines; 26,886 remain to reach the target.
+- Reviewed index findings and namespace-qualified caller searches across app source, tests, and documentation; checked for imported aliases and inspected the active insight rendering path. Kept documented APIs and their dependencies. No model fields, enum cases, protocol requirements, UI controls, or live style values changed.
+- No local build or tests for this minor unused-code deletion under AGENTS.md. Hosted compilation remains required. Source review does not establish compatibility for consumers outside this app repository.

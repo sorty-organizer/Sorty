@@ -24,27 +24,7 @@ public struct AIInsight: Identifiable, Equatable, Sendable {
         case pattern = "Pattern"
         case general = "Analyzing"
 
-        public var icon: String {
-            switch self {
-            case .file: return "doc"
-            case .folder: return "folder"
-            case .constraint: return "exclamationmark.triangle"
-            case .decision: return "arrow.right"
-            case .pattern: return "circle.grid.3x3"
-            case .general: return "brain"
-            }
-        }
 
-        public var color: String {
-            switch self {
-            case .file: return "blue"
-            case .folder: return "orange"
-            case .constraint: return "yellow"
-            case .decision: return "green"
-            case .pattern: return "purple"
-            case .general: return "secondary"
-            }
-        }
     }
 
     public init(text: String, category: Category, filePath: String? = nil, stableSeed: String? = nil) {
