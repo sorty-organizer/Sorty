@@ -663,6 +663,19 @@ enum AIRequestSupport {
 /// Builds the shared organization request content and response metrics used by
 /// the network clients. Provider-specific wire formats stay with each client.
 enum SharedOrganizePipeline {
+    /// Keeps full parsing, partial recovery, and parse-error context consistent
+    /// across providers. Transport retries and completion callbacks stay with callers.
+    static func parsePlan(_ response: String, files: [FileItem], mode: OrganizationMode) throws -> OrganizationPlan {
+        do {
+            return try ResponseParser.parseResponse(response, originalFiles: files, mode: mode)
+        } catch {
+            if let partialPlan = ResponseParser.extractPartialResults(response, originalFiles: files, mode: mode) {
+                return partialPlan
+            }
+            throw AIClientError.jsonDecodingError(context: error.localizedDescription)
+        }
+    }
+
     static func buildPrompts(
         config: AIConfig,
         files: [FileItem],

@@ -307,16 +307,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
 
             // Parse (with a partial fallback) before signaling completion so a
             // failed parse can never report didComplete followed by didFail.
-            let plan: OrganizationPlan
-            do {
-                plan = try ResponseParser.parseResponse(accumulatedContent, originalFiles: files, mode: config.mode)
-            } catch {
-                if let partialPlan = ResponseParser.extractPartialResults(accumulatedContent, originalFiles: files, mode: config.mode) {
-                    plan = partialPlan
-                } else {
-                    throw AIClientError.jsonDecodingError(context: error.localizedDescription)
-                }
-            }
+            let plan = try SharedOrganizePipeline.parsePlan(accumulatedContent, files: files, mode: config.mode)
 
             let finalContent = accumulatedContent
             await MainActor.run { [weak self] in

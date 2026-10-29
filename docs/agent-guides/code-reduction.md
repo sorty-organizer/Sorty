@@ -186,3 +186,12 @@ Organizer progress messages and extracted AI insights now use one scanned-filena
 - Net reduction: 15 production lines; 1,737 since baseline (1.22%). Production total: 140,704 lines; 26,752 remain to reach the target.
 - Compared both original resolver bodies after whitespace normalization; they match exactly. The shared body and call arguments remain the same. Kept filename normalization and validation separate because the two streaming paths have different accepted lengths and character policies.
 - No local build or tests for this small extraction under AGENTS.md. The retained `AIInsightExtractorTests.testDuplicateFilenameDoesNotPickArbitraryThumbnail` protects the collision behavior at the insight interface; it has not been rerun for this commit. Hosted compilation and tests of the final source remain required.
+
+## Provider plan parsing and partial recovery
+
+Anthropic streaming, OpenAI streaming, and Codex responses now share full-plan parsing, partial-result recovery, and conversion of the original parser error into `jsonDecodingError`. OpenRouter still retries without streaming only after both parsing paths fail. Generation statistics and completion/failure notifications remain in each provider's original caller.
+
+- Net reduction: 13 production lines; 1,750 since baseline (1.23%). Production total: 140,691 lines; 26,739 remain to reach the target.
+- The shared parser body matches the original Codex helper after parameter-name normalization. Reviewed Anthropic's equivalent branch and OpenAI's separate OpenRouter retry branch; error context is wrapped once, and completion is still signaled only after a plan exists.
+- Rejected a general provider streaming-loop merge: protocol-specific completion events, truncation policy, retry conditions, timing statistics, and delegate notification ownership differ. Similar loop structure does not establish equivalent behavior.
+- No local build or tests for this small extraction under AGENTS.md. Hosted compilation and tests of this final source remain required. [Hosted validation for the shared reference stroke](https://github.com/sorty-organizer/Sorty/actions/runs/40870528137) passed.

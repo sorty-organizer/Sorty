@@ -750,22 +750,15 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             
             var plan: OrganizationPlan
             do {
-                plan = try ResponseParser.parseResponse(accumulatedContent, originalFiles: files, mode: config.mode)
+                plan = try SharedOrganizePipeline.parsePlan(accumulatedContent, files: files, mode: config.mode)
             } catch {
-                // Try partial extraction before giving up
-                if let partialPlan = ResponseParser.extractPartialResults(accumulatedContent, originalFiles: files, mode: config.mode) {
-                    plan = partialPlan
-                } else if config.provider == .openRouter {
-                    return try await retryOpenRouterWithoutStreaming(
-                        url: url,
-                        requestBody: requestBody,
-                        files: files,
-                        promptTokens: promptTokens
-                    )
-                } else {
-                    let clientError = AIClientError.jsonDecodingError(context: error.localizedDescription)
-                    throw clientError
-                }
+                guard config.provider == .openRouter else { throw error }
+                return try await retryOpenRouterWithoutStreaming(
+                    url: url,
+                    requestBody: requestBody,
+                    files: files,
+                    promptTokens: promptTokens
+                )
             }
             plan.generationStats = stats
             let finalContent = accumulatedContent

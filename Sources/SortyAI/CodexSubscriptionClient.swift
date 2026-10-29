@@ -107,7 +107,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         )
         let duration = Date().timeIntervalSince(start)
 
-        var plan = try parseOrganizationResponse(response, files: files)
+        var plan = try SharedOrganizePipeline.parsePlan(response, files: files, mode: config.mode)
         plan.generationStats = SharedOrganizePipeline.makeStats(
             config: config,
             files: files,
@@ -493,16 +493,6 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         return response
     }
 
-    private func parseOrganizationResponse(_ response: String, files: [FileItem]) throws -> OrganizationPlan {
-        do {
-            return try ResponseParser.parseResponse(response, originalFiles: files, mode: config.mode)
-        } catch {
-            if let partialPlan = ResponseParser.extractPartialResults(response, originalFiles: files, mode: config.mode) {
-                return partialPlan
-            }
-            throw AIClientError.jsonDecodingError(context: error.localizedDescription)
-        }
-    }
 
     private nonisolated static func organizationPrompt(systemPrompt: String, userPrompt: String) -> String {
         """
