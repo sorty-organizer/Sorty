@@ -249,3 +249,9 @@ Removed unused explicit constructors for `LearningToolCall`, `PlanQualityAssessm
 - Current app/test/documentation searches confirm no callers for the removed constructors or helpers. Reviewed model references, including response decoding and tool-name constants. No serialized field, decoder, encoder, enum case, or framework callback was removed.
 - Retained Sparkle's update methods despite old index findings: `TrafficLightUpdateButton` has live calls to `installAvailableUpdate` and `showUpdateInFocus`; the native driver also overrides the focus callback. Index findings are candidates, not deletion authority.
 - No local build or tests for this minor unused-code cleanup under AGENTS.md. Hosted compilation of the final source remains required; this follow-up allows the preceding run to finish with skip-ci.
+
+## Hosted validation checkpoint at 01d8d517
+
+[Current-head validation](https://github.com/sorty-organizer/Sorty/actions/runs/40876506678) passed for `01d8d51744b42d7c3f9f3543142fb3857c46f80d`: security checks, test compilation, app build, and the SPM test run all succeeded. The manual workflow also passed its pre-release script with `--skip-build --skip-tests --skip-sparkle`; that step is not independent Sparkle or release acceptance. This checkpoint covers all source changes through the unused constructor/forwarder cleanup.
+
+Production reduction remains 2,055 lines (1.44%); the 20% target is incomplete. A review of 336 larger computed view bodies identified similar empty-state and provider-row templates, but no consolidation was applied: their interactive content and selected/disabled/help treatments differ. Runtime comparison of the accumulated model-picker, onboarding-panel, and border changes remains outstanding. The supplied AGENTS.md instructions prohibit computer use unless specified, so scoped permission has been requested before that comparison. No permission is inferred from passing CI or elapsed time.
