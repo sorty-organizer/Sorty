@@ -379,12 +379,7 @@ package struct HistoryView: View {
             isPresented: $showRedoModelPicker,
             currentProvider: settingsViewModel.config.provider,
             currentModel: settingsViewModel.config.model,
-            reasoningEffortForModel: { provider, model in
-                settingsViewModel.config.reasoningEffort(for: provider, model: model)
-            },
-            onSelectReasoningEffort: { provider, model, effort in
-                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
-            },
+            settings: settingsViewModel,
             onSelect: { provider, model, authMethod in
                 guard let entry = redoModelEntry else { return }
                 if let authMethod {
@@ -392,8 +387,7 @@ package struct HistoryView: View {
                 }
                 showRedoModelPicker = false
                 handleRedoWithModel(entry, provider: provider, model: model)
-            },
-            isSubscriptionSelected: settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) == .accountSignIn
+            }
         )
         .onAppear {
             consumePendingHistoryEntryIfNeeded()

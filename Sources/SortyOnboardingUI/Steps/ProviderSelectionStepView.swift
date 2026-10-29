@@ -146,13 +146,8 @@ public struct ProviderSelectionStepView: View {
             isPresented: $isShowingModelPopover,
             currentProvider: settingsViewModel.config.provider,
             currentModel: settingsViewModel.config.model,
+            settings: settingsViewModel,
             contextMessage: "Choose the provider and model Sorty will use for organization.",
-            reasoningEffortForModel: { provider, model in
-                settingsViewModel.config.reasoningEffort(for: provider, model: model)
-            },
-            onSelectReasoningEffort: { provider, model, effort in
-                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
-            },
             onSelect: { provider, model, authMethod in
                 commitInputDrafts()
                 settingsViewModel.config.provider = provider
@@ -162,8 +157,7 @@ public struct ProviderSelectionStepView: View {
                         setAuthMethod(desired)
                     }
                 }
-            },
-            isSubscriptionSelected: settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) == .accountSignIn
+            }
         )
     }
 

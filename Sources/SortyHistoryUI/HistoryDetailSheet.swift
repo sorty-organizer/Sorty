@@ -181,19 +181,13 @@ package struct HistoryDetailSheet: View {
             isPresented: $showRedoModelPicker,
             currentProvider: settingsViewModel.config.provider,
             currentModel: settingsViewModel.config.model,
-            reasoningEffortForModel: { provider, model in
-                settingsViewModel.config.reasoningEffort(for: provider, model: model)
-            },
-            onSelectReasoningEffort: { provider, model, effort in
-                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
-            },
+            settings: settingsViewModel,
             onSelect: { provider, model, authMethod in
                 if let authMethod {
                     settingsViewModel.config.setAuthMethod(authMethod, for: provider)
                 }
                 handleRedoWithModel(provider: provider, model: model)
-            },
-            isSubscriptionSelected: settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) == .accountSignIn
+            }
         )
         .confirmationDialog(
             "Undo Organization?",

@@ -161,3 +161,12 @@ Removed the unused delete operation from `AIKeychainStore` and its two adapters.
 - Net reduction: 32 production lines; 1,635 since baseline (1.15%). Production total: 140,806 lines; 26,854 remain to reach the target.
 - Repository-wide searches found no calls to the removed adapter operation or parser constructors. Indexed findings agree; the production Settings deletion path remains referenced.
 - No local build or tests for this minor unused-code deletion under AGENTS.md. Hosted compilation of the final source remains required. The latest running hosted batch is allowed to finish rather than cancelling it for this small follow-up.
+
+## Shared model-picker settings wiring
+
+Nine picker callers now pass their existing `SettingsViewModel` to the shared overlay instead of repeating reasoning-effort read/write closures and subscription-state lookup. The overlay reads the current configuration when callbacks run and uses each caller's current provider for the subscription flag. Callers retain their original selection actions, including specialized provider-settings and onboarding authentication flows, watched-folder overrides, redo, and analysis restart. The popover, modifier, controls, focus, and animation implementations remain unchanged.
+
+- Net reduction: 49 production lines; 1,684 since baseline (1.18%). Production total: 140,757 lines; 26,805 remain to reach the target.
+- For all nine callers, verified the removed closures used the same settings object and the subscription lookup used the same provider supplied to the overlay. Normalized comparisons show all remaining caller source, including selection/auth/reset actions, matches the original.
+- An isolated package rebuild and all 64 existing subscription/configuration and organizer-state tests passed. The rebuild also compiled the preceding AI adapter/parser cleanup. These tests do not establish popover runtime behavior; no computer use was performed.
+- [Hosted validation for the preceding presentation cleanup](https://github.com/sorty-organizer/Sorty/actions/runs/40865054696) passed security checks, app build, and the test suite. Hosted validation of this shared-wiring commit is still required.

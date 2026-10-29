@@ -136,13 +136,8 @@ struct AutomationSettingsView: View {
             isPresented: $showModelPicker,
             currentProvider: selectedProvider,
             currentModel: selectedModel,
+            settings: viewModel,
             contextMessage: "Choose the provider and model Sorty uses for watched-folder automation.",
-            reasoningEffortForModel: { provider, model in
-                viewModel.config.reasoningEffort(for: provider, model: model)
-            },
-            onSelectReasoningEffort: { provider, model, effort in
-                viewModel.config.setReasoningEffort(effort, for: provider, model: model)
-            },
             onSelect: { provider, model, authMethod in
                 if let authMethod {
                     viewModel.config.setAuthMethod(authMethod, for: provider)
@@ -152,8 +147,7 @@ struct AutomationSettingsView: View {
                 selectedModel = trimmedModel
                 viewModel.config.automationProvider = provider
                 viewModel.config.automationModel = trimmedModel.isEmpty ? nil : trimmedModel
-            },
-            isSubscriptionSelected: viewModel.config.authMethod(for: selectedProvider) == .accountSignIn
+            }
         )
     }
 

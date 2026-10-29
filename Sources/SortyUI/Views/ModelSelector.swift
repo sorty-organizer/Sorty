@@ -97,19 +97,20 @@ extension View {
         anchorPreference(key: ModelSelectionTriggerBoundsPreferenceKey.self, value: .bounds) { $0 }
     }
 
+    /// Wires each picker to the current settings while callers retain their
+    /// model-selection action and any provider-specific authentication flow.
+    @MainActor
     package func modelSelectionOverlay(
         isPresented: Binding<Bool>,
         currentProvider: AIProvider,
         currentModel: String,
+        settings: SettingsViewModel,
         contextMessage: String? = nil,
         selectionActionTitle: String = "Select",
         isSelectionActionProminent: Bool = true,
         resetActionTitle: String? = nil,
         onReset: (() -> Void)? = nil,
-        reasoningEffortForModel: ((AIProvider, String) -> ReasoningEffort)? = nil,
-        onSelectReasoningEffort: ((AIProvider, String, ReasoningEffort) -> Void)? = nil,
-        onSelect: @escaping (AIProvider, String, ProviderAuthMethod?) -> Void,
-        isSubscriptionSelected: Bool = false
+        onSelect: @escaping (AIProvider, String, ProviderAuthMethod?) -> Void
     ) -> some View {
         modifier(
             ModelSelectionOverlayModifier(
@@ -121,10 +122,14 @@ extension View {
                 isSelectionActionProminent: isSelectionActionProminent,
                 resetActionTitle: resetActionTitle,
                 onReset: onReset,
-                reasoningEffortForModel: reasoningEffortForModel,
-                onSelectReasoningEffort: onSelectReasoningEffort,
+                reasoningEffortForModel: { provider, model in
+                    settings.config.reasoningEffort(for: provider, model: model)
+                },
+                onSelectReasoningEffort: { provider, model, effort in
+                    settings.config.setReasoningEffort(effort, for: provider, model: model)
+                },
                 onSelect: onSelect,
-                isSubscriptionSelected: isSubscriptionSelected
+                isSubscriptionSelected: settings.config.authMethod(for: currentProvider) == .accountSignIn
             )
         )
     }

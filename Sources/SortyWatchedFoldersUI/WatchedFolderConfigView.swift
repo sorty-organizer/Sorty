@@ -107,21 +107,15 @@ struct WatchedFolderConfigView: View {
             isPresented: $showModelPicker,
             currentProvider: selectedProvider,
             currentModel: selectedModel,
+            settings: settingsViewModel,
             contextMessage: "Choose the provider and model used only for this watched folder.",
-            reasoningEffortForModel: { provider, model in
-                settingsViewModel.config.reasoningEffort(for: provider, model: model)
-            },
-            onSelectReasoningEffort: { provider, model, effort in
-                settingsViewModel.config.setReasoningEffort(effort, for: provider, model: model)
-            },
             onSelect: { provider, model, authMethod in
                 if let authMethod {
                     settingsViewModel.config.setAuthMethod(authMethod, for: provider)
                 }
                 selectedProvider = provider
                 selectedModel = model
-            },
-            isSubscriptionSelected: settingsViewModel.config.authMethod(for: selectedProvider) == .accountSignIn
+            }
         )
         .sheet(isPresented: $showSavedPromptsSheet) {
             SavedPromptsSheet(

@@ -119,13 +119,8 @@ struct AIProviderSettingsView: View {
             isPresented: $showModelPicker,
             currentProvider: viewModel.config.provider,
             currentModel: viewModel.config.model,
+            settings: viewModel,
             contextMessage: "Choose the provider and model Sorty uses for organization.",
-            reasoningEffortForModel: { provider, model in
-                viewModel.config.reasoningEffort(for: provider, model: model)
-            },
-            onSelectReasoningEffort: { provider, model, effort in
-                viewModel.config.setReasoningEffort(effort, for: provider, model: model)
-            },
             onSelect: { provider, model, authMethod in
                 viewModel.config.provider = provider
                 viewModel.config.model = model
@@ -134,8 +129,7 @@ struct AIProviderSettingsView: View {
                         setAuthMethod(desired)
                     }
                 }
-            },
-            isSubscriptionSelected: viewModel.config.authMethod(for: viewModel.config.provider) == .accountSignIn
+            }
         )
     }
 
