@@ -7,9 +7,9 @@ runner because several exercise Apple Archive, code signing, and Xcode tools. Ap
 Swift test workers are explicitly limited to the runner's CPU count; `-j` also
 limits compilation jobs.
 
-The security scan uses a blobless full-history checkout. It retains commit
-history for Gitleaks and fetches file contents as needed. Build-only jobs retain
-shallow checkouts because they do not inspect history.
+The security scan uses a full-history checkout with blobs. A blobless checkout
+made Gitleaks exceed ten minutes in the first measurement run, so it was reverted.
+Build-only jobs retain shallow checkouts because they do not inspect history.
 
 ## Baseline and measurement
 
@@ -49,3 +49,18 @@ CI substitutes and verification for minor changes. Hosted Blacksmith checks
 remain the source of build and test confidence. Runner upgrades and additional
 shards should follow timing and cost measurements rather than the article's
 reported speedup.
+
+## First measurement
+
+[Run 41217809078](https://github.com/sorty-organizer/Sorty/actions/runs/41217809078)
+used the same app sources as the baseline. Build/test execution fell from 139 to
+104 seconds (25.2%). Its queue delay rose from 27 to 37 seconds, so time from
+workflow creation to build/test completion fell from 166 to 141 seconds (15.1%).
+Test execution stayed at 17 seconds; compilation rose from 21 to 39 seconds.
+The separate fuzz job passed in 55 seconds, including cache checks.
+
+The whole workflow did not improve: Gitleaks was cancelled after more than ten
+minutes with the blobless checkout. These results justify retaining parallel
+checks and reverting blobless checkout, but do not establish an end-to-end
+speedup. A corrected hosted run is required. This is one sample, not a repeated
+benchmark. The extra runner also adds setup time and may increase billed usage.

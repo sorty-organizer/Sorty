@@ -27,7 +27,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          filter: blob:none
       - name: Install Gitleaks
         env:
           GITLEAKS_VERSION: 8.28.0
