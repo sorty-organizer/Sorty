@@ -3224,12 +3224,13 @@ public class LearningsManager: ObservableObject {
     }
 
     func selectModelDirectoryContext(for files: [FileItem]) -> ReferenceDirectorySelection? {
-        let incomingFileExtensions = files.lazy
+        // These are known files; extracting extensions must not probe the filesystem.
+        let incomingFileExtensions = files
             .filter { $0.isDirectory == false }
             .map { file in
                 let explicitExtension = file.extension.trimmingCharacters(in: .whitespacesAndNewlines)
                 return explicitExtension.isEmpty
-                    ? URL(fileURLWithPath: file.path).pathExtension.lowercased()
+                    ? URL(fileURLWithPath: file.path, isDirectory: false).pathExtension.lowercased()
                     : explicitExtension.lowercased()
             }
         let incomingCategories = Set(
