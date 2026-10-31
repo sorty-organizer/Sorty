@@ -242,7 +242,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             #"{"id":1,"method":"initialize","params":{"clientInfo":{"name":"sorty","title":"Sorty","version":"1"}}}"#,
             #"{"id":2,"method":"model/list","params":{"includeHidden":false,"limit":100}}"#
         ].joined(separator: "\n") + "\n"
-        try inputPipe.fileHandleForWriting.write(contentsOf: Data(requests.utf8))
+        try Self.writeInput(Data(requests.utf8), to: inputPipe, operation: .modelList)
 
         return try await withTaskCancellationHandler {
             for try await line in outputPipe.fileHandleForReading.bytes.lines {
@@ -420,7 +420,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                     do {
                         try process.run()
                         if let promptData = prompt.data(using: .utf8) {
-                            try inputPipe.fileHandleForWriting.write(contentsOf: promptData)
+                            try Self.writeInput(promptData, to: inputPipe, operation: .generation)
                         }
                         try inputPipe.fileHandleForWriting.close()
                     } catch {
@@ -741,6 +741,22 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
 
     /// How long a stopped CLI process gets to exit on SIGTERM before SIGKILL.
     private static let processTerminationGracePeriod: TimeInterval = 5
+
+    /// Records the writer before the syscall, without retaining input or process arguments.
+    private nonisolated static func writeInput(
+        _ data: Data, to pipe: Pipe, operation: AIPipeDiagnostics.Operation
+    ) throws {
+        AIPipeDiagnostics.record(operation, .started)
+        do {
+            try pipe.fileHandleForWriting.write(contentsOf: data)
+            AIPipeDiagnostics.record(operation, .completed)
+        } catch {
+            let nsError = error as NSError
+            let posix = nsError.domain == NSPOSIXErrorDomain ? Int32(exactly: nsError.code) : nil
+            AIPipeDiagnostics.record(operation, .failed, errorCode: posix)
+            throw error
+        }
+    }
 
     /// Makes writes to a CLI's stdin throw EPIPE instead of raising SIGPIPE,
     /// which would kill Sorty when the CLI exits before reading its input.

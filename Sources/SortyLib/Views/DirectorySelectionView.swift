@@ -288,12 +288,15 @@ struct DirectorySelectionView: View {
     }
 
     private func selectDirectory() {
+        ReliabilityManager.shared.recordUIOperation("organize_folder_panel", phase: "constructing")
+        defer { ReliabilityManager.shared.recordUIOperation("organize_folder_panel", phase: "finished") }
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.prompt = "Select"
 
+        ReliabilityManager.shared.recordUIOperation("organize_folder_panel", phase: "presenting")
         if panel.runModal() == .OK, let url = panel.url {
             HapticFeedbackManager.shared.success()
             AnalyticsManager.shared.captureFeature(

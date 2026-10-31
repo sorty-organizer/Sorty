@@ -270,11 +270,14 @@ extension DuplicatesView {
     }
 
     func selectDirectory() {
+        ReliabilityManager.shared.recordUIOperation("duplicates_folder_panel", phase: "constructing")
+        defer { ReliabilityManager.shared.recordUIOperation("duplicates_folder_panel", phase: "finished") }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
 
+        ReliabilityManager.shared.recordUIOperation("duplicates_folder_panel", phase: "presenting")
         if panel.runModal() == .OK, let url = panel.url {
             appState.duplicateSelectedDirectory = url
             detectionManager.clearResults()

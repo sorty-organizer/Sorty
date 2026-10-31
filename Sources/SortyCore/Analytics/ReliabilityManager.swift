@@ -9,6 +9,7 @@ import Foundation
 import AppKit
 import UniformTypeIdentifiers
 @preconcurrency import Sentry
+import SortyAI
 import SortyFS
 
 /// Product area a bug report is about; one per feature module so Sentry
@@ -83,6 +84,7 @@ public final class ReliabilityManager {
     )
     private var launchSpan: ReliabilitySpan?
     private var windowSystemObservers: [NSObjectProtocol] = []
+    private var memoryPressureSource: DispatchSourceMemoryPressure?
 
     public var diagnosticSummary: [String: Any] {
         [
@@ -195,6 +197,14 @@ public final class ReliabilityManager {
             return
         }
         isActive = true
+        AIPipeDiagnostics.configure { operation, phase, errorCode in
+            guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else { return }
+            let breadcrumb = Breadcrumb(level: .info, category: "sorty.cli_stdin")
+            var data: [String: Any] = ["operation": operation.rawValue, "phase": phase.rawValue]
+            if let errorCode { data["posix_error"] = Int(errorCode) }
+            breadcrumb.data = data
+            SentrySDK.addBreadcrumb(breadcrumb)
+        }
         SentrySDK.configureScope { scope in
             scope.setTag(
                 value: InternalTelemetry.isEnabled ? "true" : "false",
@@ -202,6 +212,7 @@ public final class ReliabilityManager {
             )
         }
         observeWindowSystem()
+        observeMemoryPressure()
         SentrySDK.logger.info(
             "sorty.reliability.started",
             attributes: telemetryAttributes
@@ -336,6 +347,27 @@ public final class ReliabilityManager {
     public func recordWorkflow(workflow: String, stage: String, outcome: String) {
         guard let data = Self.workflowDiagnostics(workflow: workflow, stage: stage, outcome: outcome) else { return }
         addBreadcrumb(category: "sorty.workflow", data: data)
+    }
+
+    /// Call before synchronous native UI work so even a hang in construction has context.
+    public func recordUIOperation(_ operation: String, phase: String, itemCount: Int? = nil) {
+        guard isActive, consent == .granted,
+              !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
+              let data = Self.uiOperationDiagnostics(operation, phase: phase, itemCount: itemCount)
+        else { return }
+        SentrySDK.configureScope { scope in
+            scope.setContext(value: data, key: "last_ui_operation")
+        }
+        addBreadcrumb(category: "sorty.ui_operation", data: data)
+    }
+
+    static func uiOperationDiagnostics(_ operation: String, phase: String, itemCount: Int?) -> [String: Any]? {
+        let operations: Set = ["organize_folder_panel", "duplicates_folder_panel", "duplicates_exact_section", "duplicates_similar_section"]
+        let phases: Set = ["constructing", "presenting", "finished", "expanding", "collapsing"]
+        guard operations.contains(operation), phases.contains(phase) else { return nil }
+        var data: [String: Any] = ["operation": operation, "phase": phase]
+        if let itemCount { data["item_count_bucket"] = AnalyticsManager.countBucket(max(0, itemCount)) }
+        return data
     }
 
     /// Mirrors the PostHog `App Moved` / `App Deleted` family into Sentry:
@@ -584,6 +616,27 @@ public final class ReliabilityManager {
         return eventID.sentryIdString
     }
 
+    /// Kernel notifications add pressure context without polling or collecting process lists.
+    private func observeMemoryPressure() {
+        guard memoryPressureSource == nil else { return }
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.normal, .warning, .critical], queue: .main)
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.isActive, self.consent == .granted,
+                      !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
+                      let flags = self.memoryPressureSource?.data else { return }
+                let level = flags.contains(.critical) ? "critical" : flags.contains(.warning) ? "warning" : "normal"
+                let data: [String: Any] = ["level": level, "source": "kernel_notification"]
+                SentrySDK.configureScope { scope in
+                    scope.setContext(value: data, key: "last_memory_pressure")
+                }
+                self.addBreadcrumb(category: "sorty.memory_pressure", data: data)
+            }
+        }
+        memoryPressureSource = source
+        source.resume()
+    }
+
     /// Keeps the `window_system` context current so hangs and bug reports
     /// show the display setup, accessibility display settings, and power state
     /// that WindowServer stalls depend on. Refreshed on the changes that matter.
@@ -676,6 +729,9 @@ public final class ReliabilityManager {
     }
 
     public func stopAndClear() {
+        AIPipeDiagnostics.configure(nil)
+        memoryPressureSource?.cancel()
+        memoryPressureSource = nil
         launchSpan = nil
         windowSystemObservers.forEach(NotificationCenter.default.removeObserver)
         windowSystemObservers.removeAll()
@@ -969,26 +1025,33 @@ public final class ReliabilityManager {
     /// Keep diagnostics numeric or allowlisted. Never serialize NSError userInfo,
     /// decoding contexts, provider bodies, or arbitrary error domains.
     static func errorDiagnostics(_ error: Error) -> [String: Any] {
-        var diagnostics: [String: Any] = ["diagnostics_version": 2]
+        var diagnostics: [String: Any] = ["diagnostics_version": 3]
         var underlying = error
         if let aiError = error as? AIClientError {
             if case .apiError(let statusCode, let message) = aiError, (100...599).contains(statusCode) {
                 diagnostics["http_status"] = statusCode
+                diagnostics["provider_reason_recognized"] = false
+                diagnostics["provider_payload_shape"] = message.utf8.count > 65_536 ? "oversized" : "unrecognized"
                 // Only recognize fixed provider codes, never their message,
                 // parameter value, request ID, or arbitrary JSON properties.
                 if message.utf8.count <= 65_536,
                    let data = message.data(using: .utf8),
-                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let payload = object["error"] as? [String: Any] {
+                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    let payload = object["error"] as? [String: Any] ?? object
+                    diagnostics["provider_payload_shape"] = object["error"] is [String: Any] ? "nested_error" : "top_level"
                     let allowedCodes: Set = [
                         "model_not_found", "unsupported_parameter", "unsupported_value",
                         "invalid_api_key", "insufficient_quota", "context_length_exceeded",
                         "invalid_request_error", "authentication_error", "rate_limit_error",
                         "overloaded_error", "NOT_FOUND", "INVALID_ARGUMENT", "RESOURCE_EXHAUSTED",
+                        "insufficient_credits", "insufficient_balance", "billing_hard_limit_reached",
+                        "billing_not_active", "payment_required", "permission_denied",
+                        "PERMISSION_DENIED", "UNAUTHENTICATED", "UNAVAILABLE", "INTERNAL",
                     ]
                     let code = ["code", "type", "status"].compactMap { payload[$0] as? String }
                         .first { allowedCodes.contains($0) }
                     diagnostics["provider_error_code"] = code
+                    diagnostics["provider_reason_recognized"] = code != nil
                 }
                 if statusCode == 413 {
                     // Only fixed hints leave the device. A 413 can also be

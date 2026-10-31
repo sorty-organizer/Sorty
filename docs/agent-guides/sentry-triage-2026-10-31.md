@@ -38,3 +38,39 @@ required by the repository instructions. The fix needs a shipped build and
 recurrence monitoring. No Sentry status was changed and no release was made.
 The unresolved UI waits need a recurrence trace; the SIGPIPE needs a stack
 identifying the writer before another targeted patch is justified.
+
+## Diagnostic follow-up
+
+New reports from a build containing this follow-up can carry:
+
+- `last_ui_operation` context and `sorty.ui_operation` breadcrumbs before folder
+  panel construction/presentation and duplicate-section expansion/collapse.
+  Only fixed operation/phase names and bucketed group counts are recorded.
+  This context describes the last action, not proof it caused the hang.
+- `sorty.cli_stdin` breadcrumbs immediately before and after both Codex stdin
+  writes, with model-list/generation, write phase, and a numeric POSIX error on
+  failure. The callback runs synchronously on the writer thread. It collects
+  no input bytes, process arguments, paths, or CLI output. This may identify a
+  recent writer in a crash; it cannot guarantee attribution for every SIGPIPE.
+- `last_memory_pressure` context and breadcrumbs from kernel memory-pressure
+  notifications. These describe the last delivered notification, not a memory
+  measurement at the exact crash time. No timer, process list, or system trace
+  is collected.
+- Diagnostic version 3 accepts fixed provider codes from nested and top-level
+  JSON errors, including billing, permission, and availability codes. It marks
+  whether a reason was recognized and records a fixed payload-shape category.
+  Bodies larger than 64 KiB are not parsed. Unknown codes and free-text messages
+  stay excluded; an HTTP 402 without a recognized code remains unexplained.
+
+All collection remains gated by reliability consent and internet privacy mode.
+The pipe sink is installed after authorized Sentry startup and removed on stop;
+the memory-pressure source is cancelled on stop. Existing bounded breadcrumb
+storage applies. No screenshots, window titles, filenames, prompts, response
+bodies, credentials, or raw system traces were added.
+
+Extended the existing provider privacy test for top-level billing errors,
+unknown codes, free text, and oversized payloads; added an allowlist/count-bucket
+check for UI context. Local builds and tests were not run for this focused
+instrumentation change under the repository's minor-change rule. These checks
+are authored coverage, not passing-test evidence. Live collection still needs
+a shipped build with consent and fresh events.

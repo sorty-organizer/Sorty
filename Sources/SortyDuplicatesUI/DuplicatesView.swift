@@ -268,6 +268,23 @@ package struct DuplicatesView: View {
         )
     }
 
+    // Record in the binding setter: onChange may run only after the native expansion stalls.
+    private var exactSectionExpansion: Binding<Bool> {
+        Binding(get: { isExactSectionExpanded }, set: { expanded in
+            ReliabilityManager.shared.recordUIOperation("duplicates_exact_section",
+                phase: expanded ? "expanding" : "collapsing", itemCount: exactGroups.count)
+            isExactSectionExpanded = expanded
+        })
+    }
+
+    private var similarSectionExpansion: Binding<Bool> {
+        Binding(get: { isSimilarSectionExpanded }, set: { expanded in
+            ReliabilityManager.shared.recordUIOperation("duplicates_similar_section",
+                phase: expanded ? "expanding" : "collapsing", itemCount: similarGroups.count)
+            isSimilarSectionExpanded = expanded
+        })
+    }
+
     var resultsView: some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
@@ -282,7 +299,7 @@ package struct DuplicatesView: View {
 
                     List(selection: $appState.duplicateSelectedGroup) {
                         if !exactGroups.isEmpty {
-                            Section(isExpanded: $isExactSectionExpanded) {
+                            Section(isExpanded: exactSectionExpansion) {
                                 ForEach(exactGroups) { group in
                                     UnifiedDuplicateGroupRow(group: group)
                                         .tag(group)
@@ -290,7 +307,7 @@ package struct DuplicatesView: View {
                             } header: {
                                 DuplicateSectionHeader(
                                     title: "Exact duplicates",
-                                    isExpanded: $isExactSectionExpanded,
+                                    isExpanded: exactSectionExpansion,
                                     guidance: "Exact matches have identical content. Keep one copy, then remove the rest when you are confident about the location you want to preserve.",
                                     infoKey: "exactDuplicateGuidance"
                                 )
@@ -298,7 +315,7 @@ package struct DuplicatesView: View {
                         }
 
                         if !similarGroups.isEmpty {
-                            Section(isExpanded: $isSimilarSectionExpanded) {
+                            Section(isExpanded: similarSectionExpansion) {
                                 ForEach(similarGroups) { group in
                                     UnifiedDuplicateGroupRow(group: group)
                                         .tag(group)
@@ -306,7 +323,7 @@ package struct DuplicatesView: View {
                             } header: {
                                 DuplicateSectionHeader(
                                     title: "Similar files",
-                                    isExpanded: $isSimilarSectionExpanded,
+                                    isExpanded: similarSectionExpansion,
                                     guidance: "Similar files may be versions or variants. Review thumbnails, dates, and resolution before applying the recommendation.\n\nExcluded from Cleanup All. Review before applying a recommendation.",
                                     infoKey: "similarFileGuidance"
                                 )

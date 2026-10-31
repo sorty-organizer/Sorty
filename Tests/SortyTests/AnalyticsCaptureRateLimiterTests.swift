@@ -97,6 +97,24 @@ final class ReliabilityErrorDiagnosticsTests: XCTestCase {
             statusCode: 400, message: #"{"error":{"code":"private-secret-code"}}"#
         ))
         XCTAssertNil(unknown["provider_error_code"])
+        let billingCases = [
+            #"{"error":{"code":"insufficient_credits","message":"secret-token private-file"}}"#,
+            #"{"code":"insufficient_credits","message":"secret-token private-file"}"#,
+        ]
+        for message in billingCases {
+            let diagnostics = ReliabilityManager.errorDiagnostics(AIClientError.apiError(statusCode: 402, message: message))
+            XCTAssertEqual(diagnostics["provider_error_code"] as? String, "insufficient_credits")
+            XCTAssertEqual(diagnostics["provider_reason_recognized"] as? Bool, true)
+            XCTAssertFalse(String(describing: diagnostics).contains("secret-token"))
+            XCTAssertFalse(String(describing: diagnostics).contains("private-file"))
+        }
+        for message in ["private-file secret-token", #"{"error":{"code":"private-secret-code"}}"#, String(repeating: "x", count: 65_537)] {
+            let diagnostics = ReliabilityManager.errorDiagnostics(AIClientError.apiError(statusCode: 402, message: message))
+            XCTAssertNil(diagnostics["provider_error_code"])
+            XCTAssertEqual(diagnostics["provider_reason_recognized"] as? Bool, false)
+            XCTAssertFalse(String(describing: diagnostics).contains("private"))
+            XCTAssertFalse(String(describing: diagnostics).contains("secret-token"))
+        }
         let cases = [
             ("Invalid JSON response from AI", "invalid_json"),
             ("Response missing required fields", "missing_required_fields"),
@@ -109,6 +127,15 @@ final class ReliabilityErrorDiagnosticsTests: XCTestCase {
             XCTAssertEqual(diagnostics["decoding_failure"] as? String, expected)
             XCTAssertFalse(String(describing: diagnostics).contains("private-response"))
         }
+    }
+
+    func testUIOperationDiagnosticsRejectPrivateValuesAndBucketCounts() {
+        XCTAssertNil(ReliabilityManager.uiOperationDiagnostics("private-folder", phase: "constructing", itemCount: 1))
+        XCTAssertNil(ReliabilityManager.uiOperationDiagnostics("organize_folder_panel", phase: "secret-token", itemCount: 1))
+        let data = ReliabilityManager.uiOperationDiagnostics("duplicates_exact_section", phase: "expanding", itemCount: 12345)
+        XCTAssertEqual(data?["phase"] as? String, "expanding")
+        XCTAssertNotNil(data?["item_count_bucket"])
+        XCTAssertFalse(String(describing: data).contains("12345"))
     }
 
     func testBreadcrumbsRejectUnknownWorkflowAndScreenValues() {
