@@ -64,3 +64,17 @@ minutes with the blobless checkout. These results justify retaining parallel
 checks and reverting blobless checkout, but do not establish an end-to-end
 speedup. A corrected hosted run is required. This is one sample, not a repeated
 benchmark. The extra runner also adds setup time and may increase billed usage.
+
+## Corrected checkout measurement
+
+[Run 41219089356](https://github.com/sorty-organizer/Sorty/actions/runs/41219089356)
+finished in 119 seconds after restoring the full checkout, versus the baseline's
+167 seconds (28.7% less elapsed time). Build/test execution took 89 seconds
+versus 139 (36.0% less); security passed in 15 seconds and fuzz/cache checks
+passed in 52 seconds. Build/test runner queue delay was 29 seconds versus 27.
+
+This run failed `testRestoreDoesNotDependOnSurvivingDuplicate` with
+`trashedFileNotFound`. Compilation and app packaging passed, but this is not a
+successful time-to-green measurement. The cause of the test failure has not been
+established. Do not treat the elapsed-time reduction as a verified reliability
+or performance win until comparable repeated runs pass.
