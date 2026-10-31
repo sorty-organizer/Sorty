@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Fast security check - runs on ubuntu (faster startup)
+  # Independent checks start together; none waits for the app build.
   security-checks:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          filter: blob:none
       - name: Install Gitleaks
         env:
           GITLEAKS_VERSION: 8.28.0
@@ -38,7 +39,21 @@ jobs:
       - name: Run Gitleaks
         run: gitleaks detect --source . --verbose
 
-  # Main build and test job
+  fuzz:
+    runs-on: blacksmith-6vcpu-macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.3'
+      - name: Check source cache invalidation
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -p 'test_*cache.py'
+      - name: Fuzz filenames, paths, rename rules, and AI responses
+        run: bash scripts/fuzz.sh --seed 357813081177 --iterations 20000
+
+  # Keep compilation and app packaging together to reuse the same build outputs.
   build-and-test:
     runs-on: blacksmith-6vcpu-macos-26
     timeout-minutes: 30
@@ -66,12 +81,6 @@ jobs:
         with:
           kind: spm-tests
           toolchain: ${{ steps.toolchain.outputs.key }}
-
-      - name: Check source cache invalidation
-        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -p 'test_*cache.py'
-
-      - name: Fuzz filenames, paths, rename rules, and AI responses
-        run: bash scripts/fuzz.sh --seed 357813081177 --iterations 20000
 
       - name: Configure test Keychain
         run: |
@@ -122,7 +131,7 @@ jobs:
         run: |
           set -o pipefail
           CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
-          SORTY_BUILD_DIR="$GITHUB_WORKSPACE/.build" SORTY_VERBOSE=true ./scripts/swift_retry.sh ci_tests swift test -debug-info-format none -Xswiftc -gline-tables-only -Xcc -gline-tables-only -Xswiftc -module-cache-path -Xswiftc "$GITHUB_WORKSPACE/.build/ModuleCache" -Xcc "-fmodules-cache-path=$GITHUB_WORKSPACE/.build/ModuleCache" --disable-index-store --disable-sandbox --parallel --skip-build -j "$CORES" 2>&1 | tee unit_test_output.log
+          SORTY_BUILD_DIR="$GITHUB_WORKSPACE/.build" SORTY_VERBOSE=true ./scripts/swift_retry.sh ci_tests swift test -debug-info-format none -Xswiftc -gline-tables-only -Xcc -gline-tables-only -Xswiftc -module-cache-path -Xswiftc "$GITHUB_WORKSPACE/.build/ModuleCache" -Xcc "-fmodules-cache-path=$GITHUB_WORKSPACE/.build/ModuleCache" --disable-index-store --disable-sandbox --parallel --num-workers "$CORES" --skip-build -j "$CORES" 2>&1 | tee unit_test_output.log
           echo "✅ Build & tests completed"
 
       - name: Pre-release validation
