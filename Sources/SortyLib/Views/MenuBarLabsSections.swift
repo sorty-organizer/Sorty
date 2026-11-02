@@ -63,7 +63,7 @@ struct MenuBarExpiringFilesSection: View {
             HStack(spacing: 8) {
                 Image(systemName: SortyLabsFeature.expiringFiles.systemImage)
                     .foregroundStyle(.orange)
-                    .frame(width: 22)
+                    .frame(width: MenuBarMetrics.iconColumn)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Clean Up")
                         .font(.callout)

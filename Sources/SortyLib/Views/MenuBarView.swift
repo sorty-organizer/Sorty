@@ -53,7 +53,7 @@ private struct LaunchAtLoginIcon: View {
 
     private var symbol: some View {
         Image(systemName: "sunrise.fill")
-            .frame(width: 16)
+            .frame(width: MenuBarMetrics.iconColumn)
     }
 
     private var sweepColors: [Color] {
@@ -156,6 +156,12 @@ public struct MenuBarLabel: View {
     }
 }
 
+/// Shared layout so every menu row's text starts at the same x.
+enum MenuBarMetrics {
+    /// Width of the leading icon column; wide enough for the 22pt mascot and folder icons.
+    static let iconColumn: CGFloat = 22
+}
+
 public struct MenuBarView: View {
     @SortyHotReload private var hotReload
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
@@ -227,6 +233,7 @@ public struct MenuBarView: View {
     private var statusHeader: some View {
         HStack(spacing: 8) {
             MenuBarMascotIcon(activity: menuBarController.activity, size: CGSize(width: 22, height: 20))
+                .frame(width: MenuBarMetrics.iconColumn)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(headerTitle)
@@ -345,7 +352,7 @@ public struct MenuBarView: View {
             )) {
                 HStack(spacing: 8) {
                     Image(systemName: "bell.badge.fill")
-                        .frame(width: 16)
+                        .frame(width: MenuBarMetrics.iconColumn)
                     Text("Notifications")
                     Spacer()
                 }
@@ -376,7 +383,7 @@ public struct MenuBarView: View {
             )) {
                 HStack(spacing: 8) {
                     Image(systemName: "moon.fill")
-                        .frame(width: 16)
+                        .frame(width: MenuBarMetrics.iconColumn)
                     Text("Keep in Background")
                     Spacer()
                 }
@@ -398,7 +405,7 @@ public struct MenuBarView: View {
             )) {
                 HStack(spacing: 8) {
                     Image(systemName: "dock.rectangle")
-                        .frame(width: 16)
+                        .frame(width: MenuBarMetrics.iconColumn)
                     Text("Hide Dock Icon")
                     Spacer()
                 }
@@ -534,9 +541,10 @@ private struct MenuBarButton: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 16, height: 16)
+                        .frame(width: MenuBarMetrics.iconColumn)
                 } else if let icon = icon {
                     Image(systemName: icon)
-                        .frame(width: 16)
+                        .frame(width: MenuBarMetrics.iconColumn)
                         .foregroundStyle(isHovered ? (hoverIconColor ?? .primary) : .primary)
                 }
                 Text(LocalizedStringKey(title))
@@ -655,7 +663,7 @@ private struct WatchedFolderMenuItem: View {
                             .offset(x: 3, y: 3)
                     }
                 }
-                .frame(width: 22)
+                .frame(width: MenuBarMetrics.iconColumn)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(folder.name)
@@ -670,6 +678,7 @@ private struct WatchedFolderMenuItem: View {
 
                 Spacer()
 
+                // The pill takes the hover arrow's slot so it sits on the trailing edge.
                 if isPaused {
                     Label("Paused", systemImage: "pause.fill")
                         .labelStyle(.titleAndIcon)
@@ -679,12 +688,12 @@ private struct WatchedFolderMenuItem: View {
                         .padding(.vertical, 2)
                         .background(Capsule().fill(SortyDesignSystem.Colors.warning.opacity(0.15)))
                         .transition(.opacity)
+                } else {
+                    Image(systemName: "arrow.up.forward")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .opacity(isHovered ? 1 : 0)
                 }
-
-                Image(systemName: "arrow.up.forward")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .opacity(isHovered ? 1 : 0)
             }
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
