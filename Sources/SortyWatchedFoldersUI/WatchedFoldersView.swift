@@ -90,11 +90,6 @@ package struct WatchedFoldersView: View {
                     ScrollViewReader { scrollProxy in
                         ScrollView {
                             LazyVStack(spacing: 12) {
-                                if isExpiringFilesEnabled {
-                                    ExpiringFilesSection()
-                                        .animatedAppearance(delay: 0.05)
-                                }
-
                                 ForEach(
                                     Array(watchedFoldersManager.folders.enumerated()),
                                     id: \.element.id
@@ -240,6 +235,11 @@ package struct WatchedFoldersView: View {
 
             Spacer()
 
+            if isExpiringFilesEnabled {
+                ExpiringFilesButton()
+                    .transition(.opacity)
+            }
+
             Button {
                 HapticFeedbackManager.shared.tap()
                 showingFolderPicker = true
@@ -265,6 +265,10 @@ package struct WatchedFoldersView: View {
             }
 
             Spacer()
+
+            if isExpiringFilesEnabled {
+                ExpiringFilesButton()
+            }
         }
     }
 }

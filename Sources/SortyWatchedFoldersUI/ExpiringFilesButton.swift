@@ -1,29 +1,58 @@
 //
-//  ExpiringFilesSection.swift
+//  ExpiringFilesButton.swift
 //  Sorty
 //
-//  Watched Folders card for Labs Expiring Files.
+//  Watched Folders Clean Up popover for Labs Expiring Files.
 //
 
 import AppKit
 import SwiftUI
 
-/// One collapsed row at the top of Watched Folders while the Labs flag is on and
-/// files are waiting. Review expands the checklist inline; nothing shows when empty.
-struct ExpiringFilesSection: View {
+/// Header button in Watched Folders while the Labs flag is on. Opens a popover
+/// for clearing old installers, archives and screenshots by simple rules, no AI.
+struct ExpiringFilesButton: View {
     @ObservedObject private var expiring = ExpiringFilesManager.shared
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isReviewing = false
-    @State private var deselected: Set<String> = []
+    @State private var isPresented = false
 
     var body: some View {
-        content
-            .task {
-                await expiring.refresh()
+        Button {
+            HapticFeedbackManager.shared.tap()
+            isPresented.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: SortyLabsFeature.expiringFiles.systemImage)
+                Text("Clean Up")
+                if !expiring.candidates.isEmpty {
+                    Text("\(expiring.candidates.count)")
+                        .font(.caption2.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(.orange))
+                        .contentTransition(.numericText())
+                }
             }
-            .animation(reduceMotion ? nil : .sortySnappy, value: expiring.candidates.map(\.id))
-            .animation(reduceMotion ? nil : .sortySnappy, value: isReviewing)
+        }
+        .buttonStyle(.sortyBordered)
+        .help("Clear old installers, archives and screenshots without AI")
+        .accessibilityLabel(expiring.candidates.isEmpty ? "Clean Up" : "Clean Up, \(expiring.candidates.count) files")
+        .accessibilityIdentifier("ExpiringFilesButton")
+        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+            ExpiringFilesPanel()
+                .systemLiquidGlassPopover(cornerRadius: 12)
+        }
+        .task {
+            await expiring.refresh()
+        }
     }
+}
+
+/// Popover contents: rule-based review list with a single Trash action.
+private struct ExpiringFilesPanel: View {
+    @ObservedObject private var expiring = ExpiringFilesManager.shared
+    @EnvironmentObject private var appState: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var deselected: Set<String> = []
 
     private var selectedCandidates: [ExpiringFileCandidate] {
         expiring.candidates.filter { !deselected.contains($0.id) }
@@ -33,37 +62,44 @@ struct ExpiringFilesSection: View {
         selectedCandidates.reduce(0) { $0 + $1.size }
     }
 
-    private var summary: String {
-        let count = expiring.candidates.count
-        let size = ByteCountFormatter.string(fromByteCount: expiring.totalSize, countStyle: .file)
-        return "\(count) old \(count == 1 ? "file" : "files") to clear · \(size)"
+    private var ageDescription: String {
+        expiring.ageInDays == 1 ? "1 day" : "\(expiring.ageInDays) days"
     }
 
-    @ViewBuilder
-    private var content: some View {
-        if !expiring.candidates.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 10) {
-                    Image(systemName: SortyLabsFeature.expiringFiles.systemImage)
-                        .foregroundStyle(.orange)
-                        .accessibilityHidden(true)
-                    Text(summary)
-                        .font(.callout.weight(.medium))
-                        .contentTransition(.numericText())
-                    Spacer()
-                    Button(isReviewing ? "Done" : "Review") {
-                        HapticFeedbackManager.shared.tap()
-                        isReviewing.toggle()
-                    }
-                    .buttonStyle(.sortyBordered(size: .small))
-                    .accessibilityIdentifier("ExpiringFilesReviewButton")
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Clean Up")
+                        .font(.headline)
+                    Text("Installers, archives and screenshots older than \(ageDescription). No AI.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                Spacer()
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    appState.openSettingsWindow(section: .experimental)
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(.borderless)
+                .help("Clean Up settings")
+                .accessibilityLabel("Clean Up settings")
+                .accessibilityIdentifier("ExpiringFilesSettingsButton")
+            }
+            .padding(16)
 
-                if isReviewing {
-                    Divider().padding(.horizontal, 16)
+            Divider()
 
+            if expiring.candidates.isEmpty {
+                Label(expiring.lastResult ?? "Nothing to clear right now.", systemImage: "checkmark.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 28)
+            } else {
+                ScrollView {
                     VStack(spacing: 2) {
                         ForEach(expiring.candidates) { candidate in
                             ExpiringCandidateRow(
@@ -80,34 +116,36 @@ struct ExpiringFilesSection: View {
                         }
                     }
                     .padding(8)
-
-                    HStack {
-                        Spacer()
-                        Button {
-                            HapticFeedbackManager.shared.success()
-                            let chosen = selectedCandidates
-                            Task {
-                                await expiring.moveToTrash(chosen)
-                                deselected = []
-                            }
-                        } label: {
-                            Text("Move \(selectedCandidates.count) to Trash · \(ByteCountFormatter.string(fromByteCount: selectedSize, countStyle: .file))")
-                                .contentTransition(.numericText())
-                        }
-                        .buttonStyle(.sortyProminent(size: .small))
-                        .disabled(selectedCandidates.isEmpty)
-                        .help("Files go to the Trash, so you can still recover them.")
-                        .accessibilityIdentifier("ExpiringFilesTrashButton")
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                    .transition(.opacity)
                 }
+                .frame(maxHeight: 340)
+                .fixedSize(horizontal: false, vertical: true)
+
+                Divider()
+
+                HStack {
+                    Spacer()
+                    Button {
+                        HapticFeedbackManager.shared.success()
+                        let chosen = selectedCandidates
+                        Task {
+                            await expiring.moveToTrash(chosen)
+                            deselected = []
+                        }
+                    } label: {
+                        Text("Move \(selectedCandidates.count) to Trash · \(ByteCountFormatter.string(fromByteCount: selectedSize, countStyle: .file))")
+                            .contentTransition(.numericText())
+                    }
+                    .buttonStyle(.sortyProminent(size: .small))
+                    .disabled(selectedCandidates.isEmpty)
+                    .help("Files go to the Trash, so you can still recover them.")
+                    .accessibilityIdentifier("ExpiringFilesTrashButton")
+                }
+                .padding(12)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
-            .accessibilityIdentifier("ExpiringFilesCard")
         }
+        .frame(width: 420)
+        .animation(reduceMotion ? nil : .sortySnappy, value: expiring.candidates.map(\.id))
+        .accessibilityIdentifier("ExpiringFilesPanel")
     }
 }
 
