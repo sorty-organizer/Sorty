@@ -162,6 +162,7 @@ struct InternetAccessPolicyView: View {
         }
         .toggleStyle(.switch)
         .controlSize(.small)
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .sortyCard(padding: 0)
