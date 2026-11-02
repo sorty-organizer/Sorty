@@ -305,6 +305,8 @@ public struct OnboardingView: View {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 12, weight: .semibold))
                                 }
+                                // Same minimum as Back so the pair matches.
+                                .frame(minWidth: 80)
                             }
                             .buttonStyle(.sortyProminent)
                             .keyboardShortcut(.defaultAction)
