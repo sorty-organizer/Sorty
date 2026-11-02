@@ -980,7 +980,7 @@ struct ModelSelectionPopover: View {
         .background(chromeBackground)
     }
 
-    private var selectionActionButtonStyle: SortyStandardButtonStyle {
+    private var selectionActionButtonStyle: SortyButtonStyle {
         isSelectionActionProminent ? .sortyProminent : .sortyBordered(intent: .primary)
     }
 

@@ -40,7 +40,7 @@ struct UnavailableDuplicateFilesPopover: View {
                 Spacer()
                 Button("Scan Again", action: onScanAgain)
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.sortyPrimary(size: .small))
+                    .buttonStyle(.sortyProminent(size: .small))
             }
             .padding(12)
         }

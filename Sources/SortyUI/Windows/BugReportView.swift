@@ -158,7 +158,7 @@ public struct BugReportView: View {
                     } label: {
                         Label("Attach files", systemImage: "paperclip")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.sortyBordered(size: .small))
                     .help(sendToSentry
                         ? "Files are sent with your report."
                         : "Files are revealed in Finder so you can drag them into the GitHub issue.")

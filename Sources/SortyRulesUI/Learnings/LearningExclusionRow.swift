@@ -42,7 +42,7 @@ struct LearningExclusionRow: View {
                 Label("Open", systemImage: "arrow.up.right.square")
                     .font(.caption.bold())
             }
-            .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
+            .buttonStyle(.sortyBordered(size: .small))
 
             Button {
                 HapticFeedbackManager.shared.tap()
@@ -55,7 +55,7 @@ struct LearningExclusionRow: View {
                 Label("Remove", systemImage: "xmark")
                     .font(.caption.bold())
             }
-            .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
+            .buttonStyle(.sortyBordered(size: .small))
             .accessibilityLabel("Remove learnings exclusion for \(displayName)")
         }
         .padding(10)

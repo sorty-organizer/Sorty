@@ -211,7 +211,7 @@ struct PermissionsSettingsView: View {
                                     .symbolEffect(.rotate, options: .speed(1.5), value: refreshStatusAnimationTrigger)
                             }
                         }
-                        .buttonStyle(.sortySecondary(size: .regular))
+                        .buttonStyle(.sortyBordered(size: .regular))
                         .onHover { hovering in
                             if hovering && !isHoveringRefreshStatus {
                                 HapticFeedbackManager.shared.selection()
@@ -239,7 +239,7 @@ struct PermissionsSettingsView: View {
                                 }
                             }
                         }
-                        .buttonStyle(.sortySecondary(size: .regular))
+                        .buttonStyle(.sortyBordered(size: .regular))
                         .onHover { hovering in
                             privacyHoverSettleTask?.cancel()
                             privacyHoverSettleTask = nil

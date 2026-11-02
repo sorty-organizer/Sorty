@@ -76,7 +76,7 @@ struct RoutingRulesCard: View {
                         Label("Create", systemImage: "sparkles")
                     }
                 }
-                .buttonStyle(.sortyPrimary(size: .small))
+                .buttonStyle(.sortyProminent(size: .small))
                 .disabled(request.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isResolving)
                 .accessibilityIdentifier("RoutingRuleCreateButton")
             }
@@ -127,7 +127,7 @@ struct RoutingRulesCard: View {
                 } label: {
                     Label("Save Rule", systemImage: "checkmark")
                 }
-                .buttonStyle(.sortyPrimary(size: .small))
+                .buttonStyle(.sortyProminent(size: .small))
                 .disabled(RoutingRule.sanitizedTemplate(draft?.destinationTemplate ?? "").isEmpty)
                 .accessibilityIdentifier("RoutingRuleSaveButton")
             }

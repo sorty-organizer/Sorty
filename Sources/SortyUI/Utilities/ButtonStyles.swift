@@ -2,7 +2,7 @@
 //  ButtonStyles.swift
 //  Sorty
 //
-//  Centralized button styles for the application
+//  Sorty's button styles: SortyButtonStyle for every action, metal-fx for the Organize hero
 //
 
 import AppKit
@@ -36,19 +36,23 @@ public enum SortyButtonIntent: Equatable {
     }
 }
 
-/// Standard app button style for regular controls, with semantic tint variants.
-public struct SortyStandardButtonStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.isEnabled) private var isEnabled
-
+/// Sorty's one button style: a capsule in two weights.
+///
+/// Use `.sortyProminent` for the single main action in a group (filled with the
+/// intent color) and `.sortyBordered` for every other action (glass with a
+/// hairline border). Pick an `intent` for meaning, never an arbitrary color.
+/// Size comes from `size` when given, otherwise from the environment's
+/// `.controlSize`, so `.controlSize(.small)` works as it does on native buttons.
+/// The Organize hero button is the only exception and uses `.metalFxPrimary`.
+public struct SortyButtonStyle: ButtonStyle {
     var intent: SortyButtonIntent
     var isProminent: Bool
-    var size: ControlSize
+    var size: ControlSize?
 
     public init(
         intent: SortyButtonIntent = .secondary,
         isProminent: Bool = false,
-        size: ControlSize = .regular
+        size: ControlSize? = nil
     ) {
         self.intent = intent
         self.isProminent = isProminent
@@ -56,284 +60,93 @@ public struct SortyStandardButtonStyle: ButtonStyle {
     }
 
     public func makeBody(configuration: Configuration) -> some View {
+        SortyButtonBody(
+            configuration: configuration,
+            intent: configuration.role == .destructive ? .destructive : intent,
+            isProminent: isProminent,
+            size: size
+        )
+    }
+}
+
+private struct SortyButtonBody: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.controlSize) private var environmentSize
+    @State private var isHovering = false
+
+    let configuration: ButtonStyleConfiguration
+    let intent: SortyButtonIntent
+    let isProminent: Bool
+    let size: ControlSize?
+
+    var body: some View {
         let pressed = configuration.isPressed
-        let resolvedIntent = resolvedIntent(for: configuration)
-        let accent = resolvedIntent.accent
-        let radius = size == .small ? 7.0 : 8.0
+        let accent = intent.accent
 
         configuration.label
-            .font(.system(size: fontSize, weight: isProminent ? .semibold : .medium))
+            .font(.system(size: metrics.font, weight: isProminent ? .semibold : .medium))
             .lineLimit(nil)
             .fixedSize(horizontal: false, vertical: true)
             .multilineTextAlignment(.center)
-            .foregroundStyle(foregroundStyle(intent: resolvedIntent, accent: accent))
-            .padding(.horizontal, horizontalPadding)
-            .padding(.vertical, verticalPadding)
-            .contentShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .background {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .fill(backgroundStyle(accent: accent, isPressed: pressed))
-            }
-            .systemLiquidGlassBackground(cornerRadius: radius)
+            .foregroundStyle(foreground(accent: accent))
+            .padding(.horizontal, metrics.horizontal)
+            .padding(.vertical, metrics.vertical)
+            .background { surface(accent: accent, isPressed: pressed) }
             .overlay {
-                RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(borderStyle(intent: resolvedIntent, accent: accent), lineWidth: isProminent ? 1.15 : 1)
+                Capsule()
+                    .strokeBorder(border(accent: accent), lineWidth: 1)
             }
-            .scaleEffect(pressed ? 0.975 : 1)
+            .contentShape(Capsule())
+            .shadow(
+                color: accent.opacity(isProminent && isEnabled ? (isHovering ? 0.28 : 0.18) : 0),
+                radius: pressed ? 2 : 6,
+                y: pressed ? 1 : 2
+            )
+            .scaleEffect(pressed ? 0.97 : 1)
             .opacity(isEnabled ? 1 : 0.52)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: pressed)
-            .onChange(of: pressed) { _, newValue in
-                if newValue {
-                    if resolvedIntent == .destructive {
-                        HapticFeedbackManager.shared.error()
-                    } else {
-                        HapticFeedbackManager.shared.tap()
-                    }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovering)
+            .onHover { isHovering = $0 && isEnabled }
+            .onChange(of: pressed) { _, isPressed in
+                guard isPressed else { return }
+                if intent == .destructive {
+                    HapticFeedbackManager.shared.error()
+                } else {
+                    HapticFeedbackManager.shared.tap()
                 }
             }
     }
 
-    private var fontSize: CGFloat {
-        switch size {
-        case .mini: return 11
-        case .small: return 12
-        case .large, .extraLarge: return 15
-        default: return 14
-        }
-    }
-
-    private var horizontalPadding: CGFloat {
-        switch size {
-        case .mini: return 10
-        case .small: return 12
-        case .large, .extraLarge: return 20
-        default: return 16
-        }
-    }
-
-    private var verticalPadding: CGFloat {
-        switch size {
-        case .mini: return 4
-        case .small: return 6
-        case .large, .extraLarge: return 11
-        default: return 9
-        }
-    }
-
-    private func resolvedIntent(for configuration: Configuration) -> SortyButtonIntent {
-        configuration.role == .destructive ? .destructive : intent
-    }
-
-    private func foregroundStyle(intent: SortyButtonIntent, accent: Color) -> some ShapeStyle {
-        isProminent ? AnyShapeStyle(.white) : AnyShapeStyle(intent == .secondary ? Color.primary : accent)
-    }
-
-    private func backgroundStyle(accent: Color, isPressed: Bool) -> some ShapeStyle {
+    @ViewBuilder
+    private func surface(accent: Color, isPressed: Bool) -> some View {
         if isProminent {
-            return AnyShapeStyle(accent.opacity(isPressed ? 0.78 : 0.9))
+            Capsule()
+                .fill(accent.opacity(isPressed ? 0.78 : (isHovering ? 1 : 0.9)))
+        } else {
+            Capsule()
+                .fill(Color.primary.opacity(isPressed ? 0.10 : (isHovering ? 0.06 : 0)))
+                .systemLiquidGlassBackground(cornerRadius: 999)
         }
-
-        return AnyShapeStyle(Color.clear)
     }
 
-    private func borderStyle(intent: SortyButtonIntent, accent: Color) -> some ShapeStyle {
-        if isProminent {
-            return AnyShapeStyle(Color.white.opacity(0.24))
+    private var metrics: (font: CGFloat, horizontal: CGFloat, vertical: CGFloat) {
+        switch size ?? environmentSize {
+        case .mini: return (11, 10, 4)
+        case .small: return (12, 14, 6)
+        case .large, .extraLarge: return (16, 24, 12)
+        default: return (14, 18, 9)
         }
-
-        return AnyShapeStyle(accent.opacity(intent == .secondary ? 0.24 : 0.38))
-    }
-}
-
-/// Primary pill-shaped button style used for main actions
-public struct SortyPrimaryButtonStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    var isSecondary: Bool = false
-    var size: ControlSize = .regular
-    var isGlassInteractive: Bool = true
-    
-    public init(
-        isSecondary: Bool = false,
-        size: ControlSize = .regular,
-        isGlassInteractive: Bool = true
-    ) {
-        self.isSecondary = isSecondary
-        self.size = size
-        self.isGlassInteractive = isGlassInteractive
-    }
-    
-    public func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: size == .small ? 13 : size == .large ? 18 : 15, weight: .semibold))
-            .lineLimit(nil)
-            .fixedSize(horizontal: false, vertical: true)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(isSecondary ? Color.primary : Color.white)
-            .padding(.horizontal, size == .small ? 16 : size == .large ? 32 : 22)
-            .padding(.vertical, size == .small ? 8 : size == .large ? 16 : 10)
-            .background(
-                ZStack {
-                    if isSecondary {
-                        Capsule()
-                            .fill(Color.secondary.opacity(0.3))
-                    } else {
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    stops: [
-                                        .init(color: Color.accentColor.opacity(0.85), location: 0),
-                                        .init(color: Color.accentColor, location: 0.3),
-                                        .init(color: Color.accentColor.opacity(0.95), location: 0.5),
-                                        .init(color: Color.accentColor, location: 0.7),
-                                        .init(color: Color.accentColor.opacity(0.85), location: 1)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    stops: [
-                                        .init(color: Color.black.opacity(0.15), location: 0),
-                                        .init(color: Color.clear, location: 0.3),
-                                        .init(color: Color.clear, location: 0.7),
-                                        .init(color: Color.black.opacity(0.15), location: 1)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-
-                        Capsule()
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.25),
-                                        Color.white.opacity(0.1),
-                                        Color.black.opacity(0.1),
-                                        Color.black.opacity(0.2)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 1
-                            )
-                    }
-                }
-            )
-            .systemLiquidGlassBackground(cornerRadius: 999, interactive: isGlassInteractive)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .animation(
-                reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7),
-                value: configuration.isPressed
-            )
-            .shadow(color: Color.black.opacity(isSecondary ? 0 : 0.15), radius: 8, x: 0, y: 4)
-            .onChange(of: configuration.isPressed) { _, isPressed in
-                if isPressed {
-                    HapticFeedbackManager.shared.tap()
-                }
-            }
-    }
-}
-
-/// Pill button style with a caller-provided fill color for semantic actions.
-public struct TintedPillButtonStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    var fillColor: Color
-    var foregroundColor: Color = .white
-    var size: ControlSize = .regular
-
-    public init(fillColor: Color, foregroundColor: Color = .white, size: ControlSize = .regular) {
-        self.fillColor = fillColor
-        self.foregroundColor = foregroundColor
-        self.size = size
     }
 
-    public func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: size == .small ? 13 : 15, weight: .semibold))
-            .lineLimit(nil)
-            .fixedSize(horizontal: false, vertical: true)
-            .multilineTextAlignment(.center)
-            .foregroundColor(foregroundColor)
-            .padding(.horizontal, size == .small ? 16 : 22)
-            .padding(.vertical, size == .small ? 8 : 10)
-            .background(
-                ZStack {
-                    Capsule()
-                        .fill(fillColor.opacity(configuration.isPressed ? 0.88 : 1.0))
-
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.14),
-                                    Color.clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-
-                    Capsule()
-                        .strokeBorder(
-                            fillColor.opacity(0.35),
-                            lineWidth: 1
-                        )
-                }
-            )
-            .systemLiquidGlassBackground(cornerRadius: 999)
-            .shadow(color: fillColor.opacity(0.24), radius: 8, x: 0, y: 4)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .opacity(configuration.isPressed ? 0.92 : 1.0)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { _, newValue in
-                if newValue {
-                    HapticFeedbackManager.shared.tap()
-                }
-            }
+    private func foreground(accent: Color) -> AnyShapeStyle {
+        if isProminent { return AnyShapeStyle(.white) }
+        return AnyShapeStyle(intent == .secondary ? Color.primary : accent)
     }
-}
 
-/// Standard secondary button style with border and haptic feedback
-public struct SortySecondaryButtonStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    var size: ControlSize = .regular
-    var color: Color = .secondary
-    
-    public init(size: ControlSize = .regular, color: Color = .secondary) {
-        self.size = size
-        self.color = color
-    }
-    
-    public func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: size == .small ? 12 : 14, weight: .medium))
-            .lineLimit(nil)
-            .fixedSize(horizontal: false, vertical: true)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, size == .small ? 12 : 16)
-            .padding(.vertical, size == .small ? 6 : 10)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.8))
-            )
-            .systemLiquidGlassBackground(cornerRadius: 8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(color.opacity(0.3), lineWidth: 1)
-            )
-            .foregroundColor(color == .secondary ? .primary : color)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(reduceMotion ? nil : .subtleBounce, value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { oldValue, newValue in
-                if newValue {
-                    HapticFeedbackManager.shared.tap()
-                }
-            }
+    private func border(accent: Color) -> AnyShapeStyle {
+        if isProminent { return AnyShapeStyle(Color.white.opacity(0.22)) }
+        return AnyShapeStyle(accent.opacity(intent == .secondary ? 0.24 : 0.4))
     }
 }
 
@@ -775,59 +588,29 @@ private struct OnboardingBeamBorder: View {
     }
 }
 
-extension ButtonStyle where Self == TintedPillButtonStyle {
-    public static func tintedPill(
-        _ fillColor: Color,
-        foreground foregroundColor: Color = .white,
-        size: ControlSize = .regular
-    ) -> TintedPillButtonStyle {
-        TintedPillButtonStyle(fillColor: fillColor, foregroundColor: foregroundColor, size: size)
-    }
-}
-
-extension ButtonStyle where Self == SortyStandardButtonStyle {
-    public static var sortyBordered: SortyStandardButtonStyle {
-        SortyStandardButtonStyle()
+extension ButtonStyle where Self == SortyButtonStyle {
+    /// Secondary actions: glass capsule with a hairline border.
+    public static var sortyBordered: SortyButtonStyle {
+        SortyButtonStyle()
     }
 
-    public static var sortyProminent: SortyStandardButtonStyle {
-        SortyStandardButtonStyle(intent: .primary, isProminent: true)
+    /// The main action in a group: filled capsule.
+    public static var sortyProminent: SortyButtonStyle {
+        SortyButtonStyle(intent: .primary, isProminent: true)
     }
 
     public static func sortyBordered(
         intent: SortyButtonIntent = .secondary,
-        size: ControlSize = .regular
-    ) -> SortyStandardButtonStyle {
-        SortyStandardButtonStyle(intent: intent, size: size)
+        size: ControlSize? = nil
+    ) -> SortyButtonStyle {
+        SortyButtonStyle(intent: intent, size: size)
     }
 
     public static func sortyProminent(
         intent: SortyButtonIntent = .primary,
-        size: ControlSize = .regular
-    ) -> SortyStandardButtonStyle {
-        SortyStandardButtonStyle(intent: intent, isProminent: true, size: size)
-    }
-}
-
-extension ButtonStyle where Self == SortyPrimaryButtonStyle {
-    public static var sortyPrimary: SortyPrimaryButtonStyle { SortyPrimaryButtonStyle() }
-    public static func sortyPrimary(
-        isSecondary: Bool = false,
-        size: ControlSize = .regular,
-        isGlassInteractive: Bool = true
-    ) -> SortyPrimaryButtonStyle {
-        SortyPrimaryButtonStyle(
-            isSecondary: isSecondary,
-            size: size,
-            isGlassInteractive: isGlassInteractive
-        )
-    }
-}
-
-extension ButtonStyle where Self == SortySecondaryButtonStyle {
-    public static var sortySecondary: SortySecondaryButtonStyle { SortySecondaryButtonStyle() }
-    public static func sortySecondary(size: ControlSize = .regular, color: Color = .secondary) -> SortySecondaryButtonStyle {
-        SortySecondaryButtonStyle(size: size, color: color)
+        size: ControlSize? = nil
+    ) -> SortyButtonStyle {
+        SortyButtonStyle(intent: intent, isProminent: true, size: size)
     }
 }
 

@@ -319,7 +319,7 @@ struct ErrorView: View {
                                 .font(.caption.bold())
                         }
                     }
-                    .buttonStyle(.tintedPill(.indigo, size: .small))
+                    .buttonStyle(.sortyBordered(size: .small))
                     .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
                     .help("Open Advanced Settings and focus the timeout controls")
                     .accessibilityHint("Opens the request and resource timeout controls")
@@ -349,7 +349,7 @@ struct ErrorView: View {
                                 .font(.caption.bold())
                         }
                     }
-                    .buttonStyle(.tintedPill(.indigo, size: .small))
+                    .buttonStyle(.sortyBordered(size: .small))
                     .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
                     .help("Open Privacy & Permissions settings and focus Block Internet Connections")
                     .accessibilityHint(
@@ -383,7 +383,7 @@ struct ErrorView: View {
                                 .font(.caption.bold())
                         }
                     }
-                    .buttonStyle(.tintedPill(.indigo, size: .small))
+                    .buttonStyle(.sortyBordered(size: .small))
                     .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
                     .help("Open Settings to resolve this issue")
                     .accessibilityIdentifier("ErrorOpenSettingsButton")
@@ -411,7 +411,7 @@ struct ErrorView: View {
                                 .font(.caption.bold())
                         }
                     }
-                    .buttonStyle(.tintedPill(.indigo, size: .small))
+                    .buttonStyle(.sortyBordered(intent: .primary, size: .small))
                     .scaleEffect(activeActionFeedback == .grantPermission ? 1.04 : 1.0)
                     .help("Grant access to this folder and continue organizing")
                     .accessibilityHint(
@@ -436,7 +436,7 @@ struct ErrorView: View {
                                 .font(.caption.bold())
                         }
                     }
-                    .buttonStyle(.tintedPill(.purple, size: .small))
+                    .buttonStyle(.sortyBordered(size: .small))
                     .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
                     .help("Review all permissions in Sorty Settings")
                     .accessibilityHint(
@@ -469,7 +469,7 @@ struct ErrorView: View {
                                 .font(.caption.bold())
                         }
                     }
-                    .buttonStyle(.tintedPill(.green, size: .small))
+                    .buttonStyle(.sortyBordered(size: .small))
                     .scaleEffect(activeActionFeedback == .helpSupport ? 1.04 : 1.0)
                     .help("Open Help & About")
                     .accessibilityHint("Opens the Help and Support settings page")
@@ -498,7 +498,7 @@ struct ErrorView: View {
                             .numericTextTransition(animationValue: showCopiedFeedback)
                     }
                 }
-                .buttonStyle(.tintedPill(.orange, size: .small))
+                .buttonStyle(.sortyBordered(size: .small))
                 .scaleEffect(showCopiedFeedback || activeActionFeedback == .copy ? 1.04 : 1.0)
                 .help("Copy a privacy-safe error report for support")
                 .accessibilityHint(
@@ -588,7 +588,7 @@ struct ErrorView: View {
                         .font(.caption.bold())
                 }
             }
-            .buttonStyle(.tintedPill(.accentColor, size: .small))
+            .buttonStyle(.sortyProminent(size: .small))
             .help("Continue from the last completed part of this organization")
             .accessibilityIdentifier("ErrorContinueOrganizationButton")
         }
@@ -611,7 +611,7 @@ struct ErrorView: View {
                     .font(.caption.bold())
             }
         }
-        .buttonStyle(.tintedPill(.red, size: .small))
+        .buttonStyle(.sortyBordered(size: .small))
         .scaleEffect(activeActionFeedback == .cancel ? 1.04 : 1.0)
         .help("Return to folder selection")
         .accessibilityIdentifier("ErrorBackToFolderPickerButton")
@@ -637,7 +637,7 @@ struct ErrorView: View {
                     .font(.caption.bold())
             }
         }
-        .buttonStyle(.tintedPill(.accentColor, size: .small))
+        .buttonStyle(.sortyProminent(size: .small))
         .scaleEffect(activeActionFeedback == .retry ? 1.04 : 1.0)
         .help("Choose how to retry this organization")
         .accessibilityIdentifier("ErrorTryAgainButton")

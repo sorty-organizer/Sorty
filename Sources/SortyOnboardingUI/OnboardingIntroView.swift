@@ -261,12 +261,7 @@ struct OnboardingIntroContentLayer: View {
                             .font(.system(size: 13, weight: .semibold))
                     }
                 }
-                .buttonStyle(
-                    .sortyPrimary(
-                        size: .large,
-                        isGlassInteractive: false
-                    )
-                )
+                .buttonStyle(.sortyProminent(size: .large))
                 .keyboardShortcut(.defaultAction)
                 .disabled(!isGetStartedAvailable)
                 .opacity(isGetStartedAvailable ? 1 : 0.62)

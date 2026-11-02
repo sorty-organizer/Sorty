@@ -281,7 +281,7 @@ public struct OnboardingView: View {
                         }
                         .frame(minWidth: 80)
                     }
-                    .buttonStyle(.sortySecondary)
+                    .buttonStyle(.sortyBordered)
                     // ⌘[ matches Finder and Safari. Bare arrow keys would
                     // steal cursor movement from the provider's text fields.
                     .keyboardShortcut("[", modifiers: .command)
@@ -306,7 +306,7 @@ public struct OnboardingView: View {
                                         .font(.system(size: 12, weight: .semibold))
                                 }
                             }
-                            .buttonStyle(.sortyPrimary)
+                            .buttonStyle(.sortyProminent)
                             .keyboardShortcut(.defaultAction)
                             .disabled(!canUseAdvanceButton(validation: validation))
                             .opacity(canUseAdvanceButton(validation: validation) ? 1.0 : 0.5)

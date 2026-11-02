@@ -368,7 +368,7 @@ extension OrganizationCompleteView {
                 Label("Organise Another", systemImage: "folder.badge.plus")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.sortyPrimary(size: .large))
+            .buttonStyle(.sortyProminent(size: .large))
             .onHover { hovering in
                 if hovering {
                     HapticFeedbackManager.shared.selection()

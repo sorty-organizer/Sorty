@@ -40,12 +40,12 @@ struct PermissionActionButton: View {
         .accessibilityLabel(title)
     }
 
-    private var buttonStyle: SortyPrimaryButtonStyle {
+    private var buttonStyle: SortyButtonStyle {
         switch style {
         case .primary:
-            return .init(size: .small)
+            return .sortyProminent(size: .small)
         case .bordered:
-            return .init(isSecondary: true, size: .small)
+            return .sortyBordered(size: .small)
         }
     }
 }

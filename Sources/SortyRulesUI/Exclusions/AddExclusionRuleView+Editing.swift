@@ -37,7 +37,7 @@ extension AddExclusionRuleView {
                 HapticFeedbackManager.shared.success()
                 addRule()
             }
-            .buttonStyle(.sortyPrimary(size: .small))
+            .buttonStyle(.sortyProminent(size: .small))
             .disabled(!isValidInput)
             .keyboardShortcut(.return, modifiers: [.command])
         }
@@ -76,7 +76,7 @@ extension AddExclusionRuleView {
                     HapticFeedbackManager.shared.success()
                     addRule()
                 }
-                .buttonStyle(.sortyPrimary)
+                .buttonStyle(.sortyProminent)
                 .onboardingBeamBorder(variant: .warning, active: isValidInput)
                 .disabled(!isValidInput)
                 .keyboardShortcut(.return, modifiers: [.command])

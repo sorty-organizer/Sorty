@@ -15,7 +15,7 @@ struct ProviderTestConnectionButton: View {
                 Text("Test Connection")
             }
         }
-        .buttonStyle(.sortyPrimary)
+        .buttonStyle(.sortyProminent)
         .disabled(!canTest)
         .opacity(canTest ? 1 : 0.5)
     }

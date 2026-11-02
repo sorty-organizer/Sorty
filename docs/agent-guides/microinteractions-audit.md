@@ -21,10 +21,9 @@ Glass, drag-with-threshold, Canvas loaders, toasts/banners, stacked cards).
   sliver modifiers drive `playShimmerWave` with the same 1.25-second ease-in-out
   cadence as the visual sweep, while onboarding folder reveals use their matching
   0.6-second cadence. Repeating slivers remain silent.
-- **Button styles** (`Utilities/ButtonStyles.swift`) — `SortyStandard`,
-  `SortyPrimary`, `OnboardingPill`, `TintedPill`, `SortySecondary`,
-  `SortyDestructive`, `HapticBounce`, `MetalFxPrimary`, `GlossyCallToAction`.
-  Most already do press `scaleEffect` + haptic on `onChange(isPressed)`.
+- **Button styles** (`Utilities/ButtonStyles.swift`) — `SortyButtonStyle`
+  (`.sortyProminent` / `.sortyBordered`) for every action, plus `MetalFxPrimary`
+  for the Organize hero. Both do press `scaleEffect` + haptic on `onChange(isPressed)`.
 - **Custom `Animation` presets** (`Constants.swift:185`) — `pageTransition`,
   `modalBounce`, `subtleBounce`, `quickSnap`, `loadingPulse`, `smoothEase`.
 - **`BounceTapModifier`** (`Constants.swift`).

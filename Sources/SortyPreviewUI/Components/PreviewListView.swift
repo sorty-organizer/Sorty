@@ -144,7 +144,7 @@ struct EmptyPreviewState: View {
                                     .font(.caption.bold())
                             }
                         }
-                        .buttonStyle(.sortyPrimary(size: .small))
+                        .buttonStyle(.sortyProminent(size: .small))
                         .accessibilityIdentifier(action.accessibilityID ?? "")
                     }
                 }

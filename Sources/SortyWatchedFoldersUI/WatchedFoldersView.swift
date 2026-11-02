@@ -240,7 +240,7 @@ package struct WatchedFoldersView: View {
             } label: {
                 Label("Add Folder", systemImage: "folder.badge.plus")
             }
-            .buttonStyle(.sortyPrimary)
+            .buttonStyle(.sortyProminent)
             .onboardingBeamBorder(variant: .success)
             .accessibilityIdentifier("AddWatchedFolderButton")
         }
@@ -321,7 +321,7 @@ struct EmptyWatchedFoldersView: View {
             } label: {
                 Label("Add Folder", systemImage: "folder.badge.plus")
             }
-            .buttonStyle(.sortyPrimary)
+            .buttonStyle(.sortyProminent)
             .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)

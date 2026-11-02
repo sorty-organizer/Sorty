@@ -83,7 +83,7 @@ struct FinderIntegrationSettingsView: View {
                                     }
                                 }
                         }
-                        .buttonStyle(.sortySecondary(size: .regular))
+                        .buttonStyle(.sortyBordered(size: .regular))
                         .onHover { hovering in
                             if hovering && !isHoveringExtensions {
                                 HapticFeedbackManager.shared.selection()

@@ -278,7 +278,7 @@ struct OrganizationStrategySettingsView: View {
                     } label: {
                         Label("Edit", systemImage: "pencil")
                     }
-                    .buttonStyle(.sortyPrimary(size: .small))
+                    .buttonStyle(.sortyProminent(size: .small))
 
                     Button(role: .destructive) {
                         presetManager.deletePreset(id: selectedId)
@@ -289,7 +289,7 @@ struct OrganizationStrategySettingsView: View {
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
-                    .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
+                    .buttonStyle(.sortyBordered(size: .small))
 
                     Spacer()
                 }
@@ -458,7 +458,7 @@ struct OrganizationStrategySettingsView: View {
                                 systemImage: "folder"
                             )
                         }
-                        .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
+                        .buttonStyle(.sortyBordered(size: .small))
 
                         if let namingReferenceFolderURL {
                             Text(namingReferenceFolderURL.lastPathComponent)
@@ -495,7 +495,7 @@ struct OrganizationStrategySettingsView: View {
                             namingPreferenceInput = ""
                             namingReferenceFolderURL = nil
                         }
-                        .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
+                        .buttonStyle(.sortyBordered(size: .small))
 
                         Spacer()
 
@@ -523,7 +523,7 @@ struct OrganizationStrategySettingsView: View {
                                 }
                             }
                         }
-                        .buttonStyle(.sortyPrimary(size: .small))
+                        .buttonStyle(.sortyProminent(size: .small))
                         .disabled(
                             (namingPreferenceInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                 && namingReferenceFolderURL == nil)
@@ -544,7 +544,7 @@ struct OrganizationStrategySettingsView: View {
                 } label: {
                     Label("Generate Naming Template", systemImage: "wand.and.stars")
                 }
-                .buttonStyle(.sortyPrimary(size: .small))
+                .buttonStyle(.sortyProminent(size: .small))
                 .padding(.top, 4)
             }
         }
@@ -606,7 +606,7 @@ private struct EditPresetSheet: View {
                 Button("Cancel") {
                     isPresented = false
                 }
-                .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
+                .buttonStyle(.sortyBordered(size: .small))
 
                 Button("Save") {
                     var updated = preset
@@ -619,7 +619,7 @@ private struct EditPresetSheet: View {
                     }
                     isPresented = false
                 }
-                .buttonStyle(.sortyPrimary(size: .small))
+                .buttonStyle(.sortyProminent(size: .small))
                 .disabled(editName.isEmpty)
             }
         }

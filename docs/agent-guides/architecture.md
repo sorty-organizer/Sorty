@@ -134,17 +134,17 @@ User preferences are stored in `LearningsProfile`. `LocalRuleInferenceEngine` de
 - Clip custom glass rendering after `glassEffect` using its matching shape, including circular button labels and behind-window backgrounds. Background helpers keep foreground content unclipped. Native glass buttons and popovers retain system-managed chrome.
 
 ### Button Styles
-All interactive buttons must use Sorty's pill-style button system defined in `Sources/SortyUI/Utilities/ButtonStyles.swift`. Do **not** use `.buttonStyle(.bordered)` or plain system button styles for action buttons.
+Every action button uses `SortyButtonStyle` from `Sources/SortyUI/Utilities/ButtonStyles.swift`: one capsule shape in two weights. Do **not** use `.buttonStyle(.bordered)`, `.borderedProminent`, or a hand-rolled `.plain` background for action buttons.
 
 | Style | Usage | Example |
 |-------|-------|---------|
-| `.tintedPill(.red, size: .small)` | Destructive/cancel actions | Cancel, Delete |
-| `.tintedPill(.indigo, size: .small)` | Model/AI actions | Model picker |
-| `.onboardingPill(size: .small)` | Primary/positive actions | Regenerate, Choose Folder |
-| `.sortyPrimary` | Main CTA (e.g., Apply) | Apply button |
-| `.sortySecondary(size: .small, color:)` | Secondary actions | Reset |
+| `.sortyProminent` | The single main action in a group (filled) | Apply, Retry, Get Started |
+| `.sortyBordered` | Every other action (glass + hairline) | Cancel, Settings, Copy |
+| `intent:` | Meaning only: `.primary`, `.success`, `.warning`, `.info`, `.destructive` | `.sortyBordered(intent: .destructive)` for Remove All |
+| `size:` | Optional; otherwise follows `.controlSize(...)` | `.sortyBordered(size: .small)` |
+| `.metalFxPrimary` | Reserved for the Organize hero button only | Organize |
 
-Always pair buttons with `HapticFeedbackManager.shared.tap()` on press, and use `HStack(spacing: 4)` with an SF Symbol icon + `.caption.bold()` text for compact pill button labels.
+`Button(role: .destructive)` picks the destructive intent automatically. Do not tint buttons with arbitrary colors. `.plain` stays for icon buttons, rows, chips, and other custom controls; `.link` for inline text links; `.systemLiquidGlassButton()` for native glass toolbar-style buttons. The style already plays the press haptic.
 
 ### Text layout
 

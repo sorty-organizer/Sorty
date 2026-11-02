@@ -452,7 +452,7 @@ private struct SavedPromptDisplayCard: View {
         label labelView: () -> Label
     ) -> some View {
         Button(role: destructive ? .destructive : nil, action: action, label: labelView)
-            .buttonStyle(SavedPromptRowButtonStyle(isProminent: prominent))
+            .buttonStyle(SortyButtonStyle(intent: prominent ? .primary : .secondary, isProminent: prominent, size: .small))
             .accessibilityLabel(label)
             .accessibilityIdentifier("SavedPrompt\(id)Button-\(row.id.uuidString)")
             .scaleEffect(hoveredButton == id ? 1.04 : 1.0)
@@ -463,55 +463,6 @@ private struct SavedPromptDisplayCard: View {
                     HapticFeedbackManager.shared.selection()
                 }
             }
-    }
-}
-
-private struct SavedPromptRowButtonStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.isEnabled) private var isEnabled
-
-    var isProminent = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        let isDestructive = configuration.role == .destructive
-        let foregroundColor: Color = if isProminent {
-            .white
-        } else if isDestructive {
-            SortyDesignSystem.Colors.error
-        } else {
-            .primary
-        }
-
-        configuration.label
-            .font(.caption.weight(isProminent ? .semibold : .medium))
-            .lineLimit(1)
-            .foregroundStyle(foregroundColor)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .background {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(
-                        isProminent
-                            ? Color.accentColor.opacity(configuration.isPressed ? 0.78 : 0.9)
-                            : Color(NSColor.controlBackgroundColor).opacity(configuration.isPressed ? 0.7 : 0.42)
-                    )
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(
-                        isProminent
-                            ? Color.white.opacity(0.24)
-                            : foregroundColor.opacity(0.22),
-                        lineWidth: 1
-                    )
-            }
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .opacity(isEnabled ? 1 : 0.52)
-            .animation(
-                reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
-                value: configuration.isPressed
-            )
     }
 }
 

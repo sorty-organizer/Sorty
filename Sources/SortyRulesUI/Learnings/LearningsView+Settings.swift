@@ -134,7 +134,7 @@ extension LearningsView {
                         Label("Add Folder", systemImage: "plus")
                             .font(.caption.bold())
                     }
-                    .buttonStyle(.sortyPrimary(size: .small))
+                    .buttonStyle(.sortyProminent(size: .small))
                     .accessibilityIdentifier("AddModelDirectoryButton")
                 }
             }
@@ -173,7 +173,7 @@ extension LearningsView {
                         Label("Add Folder", systemImage: "plus")
                             .font(.caption.bold())
                     }
-                    .buttonStyle(.sortyPrimary(size: .small))
+                    .buttonStyle(.sortyProminent(size: .small))
                     .accessibilityIdentifier("EmptyStateAddModelDirectoryButton")
                     .opacity(emptyExampleFoldersHasAppeared ? 1 : 0)
                     .offset(y: emptyExampleFoldersHasAppeared ? 0 : 10)

@@ -488,7 +488,7 @@ public struct WhatsNewTourView: View {
                 .frame(width: 156, height: 24)
                 .numericTextTransition(animationValue: currentPage)
         }
-        .buttonStyle(.sortyPrimary)
+        .buttonStyle(.sortyProminent)
         .beam(
             .small,
             palette: .colorful,

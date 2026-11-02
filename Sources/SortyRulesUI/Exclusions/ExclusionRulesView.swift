@@ -336,7 +336,7 @@ package struct ExclusionRulesView: View {
                 } label: {
                     Label("Remove All", systemImage: "trash")
                 }
-                .buttonStyle(.tintedPill(.red, size: .small))
+                .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
                 .controlSize(.small)
                 .accessibilityIdentifier("ClearAllExclusionsButton")
                 .confirmationDialog(
@@ -363,7 +363,7 @@ package struct ExclusionRulesView: View {
             } label: {
                 Label("Add Exclusion", systemImage: "plus")
             }
-            .buttonStyle(.sortyPrimary)
+            .buttonStyle(.sortyProminent)
             .onboardingBeamBorder(variant: .featured)
             .accessibilityIdentifier("AddExclusionRuleButton")
         }

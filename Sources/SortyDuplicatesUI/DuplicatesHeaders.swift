@@ -131,7 +131,7 @@ struct DuplicatesHeaderNew: View {
                                 systemImage: "trash"
                             )
                         }
-                        .buttonStyle(.sortyPrimary(size: .small))
+                        .buttonStyle(.sortyProminent(size: .small))
                         .tint(.red)
                         .disabled(isCleaningUp)
                         .help("Keep one preferred copy from every exact-match group and move the rest to Trash")
@@ -141,14 +141,14 @@ struct DuplicatesHeaderNew: View {
                         Button(action: onCancel) {
                             Label("Cancel", systemImage: "xmark")
                         }
-                        .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
+                        .buttonStyle(.sortyBordered(size: .small))
                         .tint(.red)
                     } else if manager.lastScanDate == nil {
                         Button(action: onScan) {
                             Label(
                                 showsFullControls ? "Start Scan" : "Scan", systemImage: "play.fill")
                         }
-                        .buttonStyle(.sortyPrimary(size: .small))
+                        .buttonStyle(.sortyProminent(size: .small))
                         .disabled(currentDirectory == nil)
                     }
                 }
@@ -247,7 +247,7 @@ struct DuplicatesResultsSidebarHeader: View {
                             hasDismissedSemanticCleanupNotice = true
                         }
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.sortyBordered(size: .small))
                     .font(.caption.weight(.semibold))
                 }
                 .font(.caption)

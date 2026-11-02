@@ -151,7 +151,7 @@ extension AIProviderSettingsView {
                                     .font(.caption.bold())
                                     .contentTransition(.symbolEffect(.replace))
                                 }
-                                .buttonStyle(.tintedPill(.orange, size: .small))
+                                .buttonStyle(.sortyBordered(intent: .warning, size: .small))
                                 .help("Open Privacy & Permissions settings and focus Block Internet Connections")
                                 .accessibilityHint(
                                     "Opens the setting that prevents Sorty from contacting cloud providers"

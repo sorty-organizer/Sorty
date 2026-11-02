@@ -277,14 +277,14 @@ extension SkillSetupView {
         if isOnboarding && step == .complete {
             VStack(spacing: 12) {
                 Button("Delete App and Continue with Skill", action: onUseSkill)
-                    .buttonStyle(.sortyPrimary(size: .large))
+                    .buttonStyle(.sortyProminent(size: .large))
                     .onboardingBeamBorder(active: isPrimaryActionHovered && !reduceMotion)
                     .onHover { isPrimaryActionHovered = $0 }
                     .keyboardShortcut(.defaultAction)
                     .accessibilityHint("Opens a confirmation before uninstalling Sorty. Your installed skill stays in place.")
                     .accessibilityIdentifier("skill-onboarding.use-skill")
                 Button("Continue with App", action: closeWithFeedback)
-                    .buttonStyle(.sortyPrimary(isSecondary: true))
+                    .buttonStyle(.sortyBordered)
                     .accessibilityIdentifier("skill-onboarding.continue-app")
                 Text("Deleting Sorty removes its app data. You'll review the details before confirming.")
                     .font(supportingFont)
@@ -310,7 +310,7 @@ extension SkillSetupView {
             HStack(spacing: 16) {
                 if step != .complete {
                     Button(isOnboarding ? "Continue with App" : "Cancel", action: closeWithFeedback)
-                        .buttonStyle(.sortyPrimary(isSecondary: true))
+                        .buttonStyle(.sortyBordered)
                         .keyboardShortcut(.cancelAction)
                         .disabled(isSaving)
                         .accessibilityIdentifier(isOnboarding ? "skill-onboarding.continue-app" : "skill-import.cancel")
@@ -318,14 +318,20 @@ extension SkillSetupView {
                 Spacer()
                 if step != setupSteps.first && step != .complete {
                     Button("Back") { changeStep(Step(rawValue: step.rawValue - 1) ?? .welcome) }
-                        .buttonStyle(.sortyPrimary(isSecondary: true))
+                        .buttonStyle(.sortyBordered)
                         .disabled(isWaitingForOptions || isSaving)
                         .accessibilityIdentifier("skill-import.back")
                 }
                 Button(primaryTitle, action: advance)
                     .contentTransition(reduceMotion ? .identity : .numericText())
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: primaryTitle)
-                    .buttonStyle(.sortyPrimary(isSecondary: !canAdvanceFromNavigation, size: .large))
+                    .buttonStyle(
+                        SortyButtonStyle(
+                            intent: canAdvanceFromNavigation ? .primary : .secondary,
+                            isProminent: canAdvanceFromNavigation,
+                            size: .large
+                        )
+                    )
                     .opacity(canAdvanceFromNavigation ? 1 : 0.6)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: canAdvanceFromNavigation)
                     .onboardingBeamBorder(

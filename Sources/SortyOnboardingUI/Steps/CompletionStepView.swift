@@ -227,13 +227,13 @@ public struct CompletionStepView: View {
                 Button("Retry") {
                     verifyAndFinish()
                 }
-                .buttonStyle(.sortyPrimary(size: .small))
+                .buttonStyle(.sortyProminent(size: .small))
                 .accessibilityIdentifier("OnboardingCompletionRetryButton")
 
                 Button("Skip for Now") {
                     skipVerificationAndFinish()
                 }
-                .buttonStyle(.sortySecondary(size: .small))
+                .buttonStyle(.sortyBordered(size: .small))
                 .accessibilityIdentifier("OnboardingCompletionSkipButton")
             }
         }

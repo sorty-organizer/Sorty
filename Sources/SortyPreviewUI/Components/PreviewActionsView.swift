@@ -112,7 +112,7 @@ struct PreviewActionsView: View {
                         .font(.caption.bold())
                 }
             }
-            .buttonStyle(.tintedPill(.red, size: .small))
+            .buttonStyle(.sortyBordered(size: .small))
             .keyboardShortcut(.cancelAction)
             .keyboardShortcut(".", modifiers: .command)  // Cmd+.
             .help("Cancel this \(mode.gerund) session")
@@ -137,7 +137,7 @@ struct PreviewActionsView: View {
                             .font(.caption.bold())
                     }
                 }
-                .buttonStyle(.tintedPill(.orange.opacity(0.8), size: .small))
+                .buttonStyle(.sortyBordered(size: .small))
                 .help("Discard manual preview edits and restore the original plan")
                 .accessibilityIdentifier("ResetEditsButton")
                 .accessibilityLabel("Reset all manual edits")
@@ -174,7 +174,7 @@ struct PreviewActionsView: View {
                     }
                 }
             }
-            .buttonStyle(.sortyPrimary(size: .small))
+            .buttonStyle(.sortyProminent(size: .small))
             .keyboardShortcut("r", modifiers: [.command, .shift])
             .disabled(shouldDisableButtons || isRedoingWithModel)
             .help("Regenerate \(mode.gerund) plan with current instructions")
@@ -199,7 +199,7 @@ struct PreviewActionsView: View {
                         .font(.caption.bold())
                 }
             }
-            .buttonStyle(.tintedPill(.indigo, size: .small))
+            .buttonStyle(.sortyBordered(size: .small))
             .disabled(shouldDisableButtons || isRedoingWithModel)
             .help("Choose a different AI model and regenerate")
             .accessibilityIdentifier("ChooseModelButton")
@@ -228,7 +228,7 @@ struct PreviewActionsView: View {
                     .foregroundStyle(.secondary.opacity(0.8))
             }
         }
-        .buttonStyle(.sortyPrimary)
+        .buttonStyle(.sortyProminent)
         .keyboardShortcut(.defaultAction)
         .disabled(shouldDisableButtons)
         .help(mode == .renameOnly ? "Apply suggested file names in place" : "Apply file moves and create the planned folder structure")

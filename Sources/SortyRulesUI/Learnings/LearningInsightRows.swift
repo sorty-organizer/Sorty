@@ -34,7 +34,7 @@ struct PendingRuleApprovalButton: View {
                 HapticFeedbackManager.shared.success()
             }
         }
-        .buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
+        .buttonStyle(.sortyBordered(size: .small))
         .help("Let Sorty apply this pattern on its own")
         .accessibilityLabel("Approve pattern")
         .accessibilityIdentifier("ApprovePendingRuleButton")

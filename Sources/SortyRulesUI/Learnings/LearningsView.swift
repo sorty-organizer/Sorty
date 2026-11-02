@@ -249,7 +249,7 @@ package struct LearningsView: View {
                 Label("Enable Learning", systemImage: "checkmark.circle.fill")
                     .font(.headline)
             }
-            .buttonStyle(.sortyPrimary)
+            .buttonStyle(.sortyProminent)
             .onboardingBeamBorder(variant: .featured)
             .keyboardShortcut(.return)
             .onHover { hovering in
@@ -417,7 +417,7 @@ package struct LearningsView: View {
                             .font(.caption.bold())
                     }
                 }
-                .buttonStyle(.tintedPill(.red, size: .small))
+                .buttonStyle(.sortyBordered(intent: .warning, size: .small))
                 .disabled(pendingControlAction != nil)
                 .accessibilityHint("Stops learning until you enable it again")
             }

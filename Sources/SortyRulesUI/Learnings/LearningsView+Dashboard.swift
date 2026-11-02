@@ -217,7 +217,7 @@ extension LearningsView {
                     Button("Done") {
                         selectedLearningRecordsCategory = nil
                     }
-                    .buttonStyle(.sortyPrimary(size: .small))
+                    .buttonStyle(.sortyProminent(size: .small))
                 }
                 .padding(20)
 

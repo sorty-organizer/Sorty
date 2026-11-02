@@ -205,7 +205,7 @@ extension ProviderSelectionStepView {
                         codexAuth.signOut()
                         scheduleConnectionTest()
                     }
-                    .buttonStyle(.sortySecondary(size: .small))
+                    .buttonStyle(.sortyBordered(size: .small))
                 }
                 .padding(10)
                 .background(Color.green.opacity(0.08))
@@ -351,7 +351,7 @@ extension ProviderSelectionStepView {
                                 HapticFeedbackManager.shared.tap()
                                 testConnection()
                             }
-                            .buttonStyle(.sortySecondary(size: .small))
+                            .buttonStyle(.sortyBordered(size: .small))
                         }
 
                         if let error = connectionError {

@@ -77,7 +77,7 @@ struct DuplicatesEmptyStateView: View {
                 Text(actionTitle)
                     .frame(minWidth: 120)
             }
-            .buttonStyle(.sortyPrimary)
+            .buttonStyle(.sortyProminent)
             .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             .controlSize(.large)
             .modifier(DefaultActionShortcut(isEnabled: isDefaultAction))

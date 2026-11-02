@@ -61,7 +61,7 @@ package struct PermissionEducationView: View {
                         } label: {
                             Label("Back", systemImage: "chevron.left")
                         }
-                        .buttonStyle(.sortySecondary(size: .regular))
+                        .buttonStyle(.sortyBordered(size: .regular))
                     }
 
                     Button {
@@ -75,7 +75,7 @@ package struct PermissionEducationView: View {
                         Label(currentPage == pages.count - 1 ? "Done" : "Continue", systemImage: currentPage == pages.count - 1 ? "checkmark" : "chevron.right")
                             .symbolReplaceTransition(animationValue: currentPage)
                     }
-                    .buttonStyle(.sortyPrimary(size: .regular))
+                    .buttonStyle(.sortyProminent(size: .regular))
                     .keyboardShortcut(.defaultAction)
                 }
                 .padding(.top, 10)

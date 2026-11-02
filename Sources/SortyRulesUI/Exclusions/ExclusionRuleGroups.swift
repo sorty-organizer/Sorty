@@ -61,7 +61,7 @@ struct EmptyExclusionRulesView: View {
             } label: {
                 Label("Add Exclusion", systemImage: "plus")
             }
-            .buttonStyle(.sortyPrimary)
+            .buttonStyle(.sortyProminent)
             .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)

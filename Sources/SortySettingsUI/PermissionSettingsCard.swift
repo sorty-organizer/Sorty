@@ -242,7 +242,7 @@ struct PermissionSettingsCard: View {
                             .minimumScaleFactor(0.82)
                             .frame(maxWidth: isFeatured ? 180 : .infinity)
                     }
-                    .buttonStyle(.sortySecondary(size: .small, color: type.color))
+                    .buttonStyle(.sortyBordered(intent: .primary, size: .small))
                     .background(
                         ScreenFrameReader(frameInScreen: $actionFrameInScreen)
                             .allowsHitTesting(false)

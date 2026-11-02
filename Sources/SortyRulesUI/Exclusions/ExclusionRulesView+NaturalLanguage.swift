@@ -51,7 +51,7 @@ extension ExclusionRulesView {
                             Label("Add Folder", systemImage: "plus")
                                 .font(.caption.bold())
                         }
-                        .buttonStyle(.sortyPrimary(size: .small))
+                        .buttonStyle(.sortyProminent(size: .small))
                         .accessibilityIdentifier("AddLearningExclusionFolderButton")
                     }
                 }
@@ -91,7 +91,7 @@ extension ExclusionRulesView {
                             Label("Exclude Folder", systemImage: "plus")
                                 .font(.caption.bold())
                         }
-                        .buttonStyle(.sortyPrimary(size: .small))
+                        .buttonStyle(.sortyProminent(size: .small))
                         .accessibilityIdentifier("EmptyStateAddLearningExclusionFolderButton")
                     }
                     .padding(20)
@@ -229,7 +229,7 @@ extension ExclusionRulesView {
                                 Label("Create Rules", systemImage: "sparkles")
                             }
                         }
-                        .buttonStyle(.sortyPrimary(size: .small))
+                        .buttonStyle(.sortyProminent(size: .small))
                         .onboardingBeamBorder(
                             variant: .featured,
                             active: hasNaturalLanguageExceptionText
@@ -424,7 +424,7 @@ extension ExclusionRulesView {
                             systemImage: "checkmark.shield.fill"
                         )
                     }
-                    .buttonStyle(.sortyPrimary(size: .small))
+                    .buttonStyle(.sortyProminent(size: .small))
                 }
             }
 

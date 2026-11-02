@@ -3,7 +3,7 @@ import SwiftUI
 
 extension View {
     /// Uses the native interactive Liquid Glass button style on macOS 26,
-    /// while preserving Sorty's compact secondary pill on older systems.
+    /// while falling back to Sorty's small bordered capsule on older systems.
     @ViewBuilder
     package func systemLiquidGlassButton() -> some View {
         if #available(macOS 26.0, *) {
@@ -11,7 +11,7 @@ extension View {
                 .buttonStyle(.glass)
                 .tint(nil)
         } else {
-            self.buttonStyle(.sortyPrimary(isSecondary: true, size: .small))
+            self.buttonStyle(.sortyBordered(size: .small))
         }
     }
 

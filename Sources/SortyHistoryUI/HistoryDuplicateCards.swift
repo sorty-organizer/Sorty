@@ -49,16 +49,9 @@ struct HistoryLiquidGlassDuplicateCard: View {
                 handoffToDuplicates()
             } label: {
                 Label("Handle in Duplicates", systemImage: "arrowshape.turn.up.right.circle.fill")
-                    .font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
-                    )
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.sortyBordered(intent: .primary, size: .small))
             .padding(.bottom, 10)
 
             ScrollView {

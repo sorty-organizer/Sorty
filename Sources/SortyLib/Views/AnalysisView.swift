@@ -358,7 +358,7 @@ struct AnalysisView: View {
                             .font(.callout.weight(.semibold))
                     }
                 }
-                .buttonStyle(.tintedPill(.red))
+                .buttonStyle(.sortyBordered)
                 .accessibilityIdentifier("AnalysisEmptyCancelButton")
 
                 if let blockingRule = organizer.blockingExclusionRule {
@@ -384,7 +384,7 @@ struct AnalysisView: View {
                                 .font(.callout.weight(.semibold))
                         }
                     }
-                    .buttonStyle(.tintedPill(.indigo))
+                    .buttonStyle(.sortyBordered)
                     .accessibilityIdentifier("AnalysisEmptyViewExclusionButton")
                     .onHover { hovering in
                         if hovering && !isHoveringViewExclusion {
@@ -411,7 +411,7 @@ struct AnalysisView: View {
                             .font(.callout.weight(.semibold))
                     }
                 }
-                .buttonStyle(.tintedPill(.blue))
+                .buttonStyle(.sortyProminent)
                 .accessibilityIdentifier("AnalysisEmptyChooseFolderButton")
                 .onHover { hovering in
                     if hovering && !isHoveringChangeFolder {
@@ -477,7 +477,7 @@ struct AnalysisView: View {
                         .font(.caption.bold())
                 }
             }
-            .buttonStyle(.tintedPill(.red, size: .small))
+            .buttonStyle(.sortyBordered(size: .small))
             .keyboardShortcut(.escape, modifiers: [])
             .accessibilityIdentifier("AnalysisCancelButton")
 
@@ -492,7 +492,7 @@ struct AnalysisView: View {
                         .font(.caption.bold())
                 }
             }
-            .buttonStyle(.tintedPill(.indigo, size: .small))
+            .buttonStyle(.sortyBordered(size: .small))
             .accessibilityIdentifier("AnalysisModelButton")
             .modelSelectorTriggerBounds()
         }

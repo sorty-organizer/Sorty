@@ -90,7 +90,7 @@ struct CompletionPrimaryAction: View {
                     .font(.system(size: 13, weight: .semibold))
             }
         }
-        .buttonStyle(.sortyPrimary(size: .large))
+        .buttonStyle(.sortyProminent(size: .large))
         .keyboardShortcut(.defaultAction)
         .disabled(isChecking)
         .onHover { hovering in

@@ -158,7 +158,7 @@ struct UnifiedDuplicateGroupDetailView: View {
             } label: {
                 Text(compactButtonTitle(for: recommendation))
             }
-            .buttonStyle(.sortyPrimary)
+            .buttonStyle(.sortyProminent)
             .tint(.blue)
             .controlSize(.regular)
             .help(recommendation.description)
@@ -168,7 +168,7 @@ struct UnifiedDuplicateGroupDetailView: View {
             } label: {
                 Text("Clean Up Selected")
             }
-            .buttonStyle(.sortyPrimary)
+            .buttonStyle(.sortyProminent)
             .tint(.red)
             .controlSize(.regular)
             .help("Keep the first file and clean up the rest.")

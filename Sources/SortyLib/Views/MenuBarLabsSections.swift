@@ -302,7 +302,7 @@ struct MenuBarExpiringFilesSection: View {
                         isReviewing = false
                     }
                 }
-                .buttonStyle(.sortyPrimary(size: .small))
+                .buttonStyle(.sortyProminent(size: .small))
                 .disabled(selected.isEmpty)
                 .accessibilityIdentifier("MenuBarExpiringFilesTrash")
 

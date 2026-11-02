@@ -55,7 +55,7 @@ extension AddExclusionRuleView {
                     } label: {
                         Label("Choose Folder", systemImage: "folder.badge.minus")
                     }
-                    .buttonStyle(.sortyPrimary)
+                    .buttonStyle(.sortyProminent)
                     .accessibilityIdentifier("ChooseExclusionFolderButton")
                 }
             }
