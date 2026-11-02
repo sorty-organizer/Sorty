@@ -34,7 +34,11 @@ public enum SortyResources {
     /// Visible views retain the images they are displaying and missing entries
     /// are decoded again on demand when another screen needs them.
     public static func clearImageCache() {
-        imageCache.removeAllObjects()
+        // NSCache is thread-safe; releasing NSImage representations may block in
+        // ImageIO and must not stall the caller's main actor.
+        Task.detached(priority: .utility) {
+            imageCache.removeAllObjects()
+        }
     }
 
     @MainActor

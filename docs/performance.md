@@ -259,3 +259,17 @@ access (`-25211`), so no AX-driven control check was possible — first-frame
 throughput were not re-run. Harness (compiled `windowcheck`,
 `measure_launch.sh`, `measure_idle.sh`) and CSVs live outside the repo;
 worktrees were removed after the runs.
+
+## Image cache eviction
+
+Background and memory-pressure cache eviction schedules thumbnail, waveform, and
+resource-image removal at utility priority outside the main actor. Thumbnail
+request cancellation and waiter completion remain on the main actor. Cache
+removal is asynchronous; views can retain displayed images until they release them.
+
+The production event `430f3f6fa11e4c538a1e70357d7a881e` (Sorty 1.3.0,
+`20261004162224`) captured the main thread in `cache_remove_all`, `NSImage`
+and `NSBitmapImageRep` destruction, and ImageIO image-source finalization after
+`scheduleCacheEviction`. Moving explicit removal off the main actor addresses
+that sampled blocking path; it does not establish production resolution or rule
+out contention with concurrent cache access.

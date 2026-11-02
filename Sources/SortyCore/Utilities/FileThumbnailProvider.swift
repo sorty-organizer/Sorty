@@ -49,13 +49,13 @@ public class FileThumbnailProvider: ObservableObject {
 
     private static let maximumConcurrentRequests = 4
     private static let lazyStartDelay: Duration = .milliseconds(250)
-    private let cache = NSCache<NSString, NSImage>()
+    nonisolated(unsafe) private let cache = NSCache<NSString, NSImage>()
     private var pendingRequests: [String: PendingThumbnailRequest] = [:]
     private var queuedKeys: [String] = []
     private var activeKeys: Set<String> = []
     private var cancelledWaiters: Set<UUID> = []
     private var liveWaiters: Set<UUID> = []
-    private let waveformCache = NSCache<NSString, NSImage>()
+    nonisolated(unsafe) private let waveformCache = NSCache<NSString, NSImage>()
     private let metadataProbe = FileThumbnailMetadataProbe()
     /// Cached backing scale so cost accounting never queries NSScreen per
     /// thumbnail; refreshed at most once a minute.
@@ -335,10 +335,14 @@ public class FileThumbnailProvider: ObservableObject {
         (icon.copy() as? NSImage) ?? icon
     }
     
-    /// Clear the thumbnail cache
+    /// Cancels pending requests on the main actor and releases cached images off it.
     public func clearCache() {
-        cache.removeAllObjects()
-        waveformCache.removeAllObjects()
+        // NSCache synchronizes its own access. Image destruction can block inside
+        // ImageIO, so eviction must not run on the actor that handles user input.
+        Task.detached(priority: .utility) { [self] in
+            cache.removeAllObjects()
+            waveformCache.removeAllObjects()
+        }
 
         let emptyImage = SendableThumbnailImage(image: NSImage(size: NSSize(width: 1, height: 1)))
         for request in pendingRequests.values {
