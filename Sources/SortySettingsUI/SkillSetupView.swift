@@ -26,8 +26,7 @@ package struct SkillOnboardingView: View {
         .overlay {
             if isCheckingSkill {
                 ProgressView("Checking installed skill…")
-                    .padding(20)
-                    .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+                    .sortyCard(padding: 20)
             }
         }
         .frame(
@@ -274,7 +273,7 @@ struct SkillSetupView: View {
                 if let errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                         .font(supportingFont)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(SortyDesignSystem.Colors.error)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 40)
                         .padding(.top, 12)

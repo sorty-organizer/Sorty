@@ -224,7 +224,7 @@ package struct WatchedFoldersView: View {
                         let activeCount = watchedFoldersManager.activeFolderCount
 
                         Text("\(activeCount) active")
-                            .foregroundStyle(activeCount > 0 ? .green : .secondary)
+                            .foregroundStyle(activeCount > 0 ? SortyDesignSystem.Colors.success : .secondary)
                             .numericTextTransition(animationValue: activeCount)
                     }
                     .font(.caption)
@@ -269,69 +269,48 @@ struct EmptyWatchedFoldersView: View {
     @SortyHotReload private var hotReload
     let onAddFolder: () -> Void
     let onAddSuggestedFolder: (URL) -> Void
-    @State private var hasAppeared = false
     @State private var beamHasAppeared = false
 
     var body: some View {
-        VStack(spacing: 24) {
-            EmptyStateHeroIcon(systemName: "folder.badge.plus")
-                .opacity(hasAppeared ? 1 : 0)
-                .scaleEffect(hasAppeared ? 1 : 0.8)
-                .animation(
-                    .sortySpringStandard.delay(0.1), value: hasAppeared)
+        SortyEmptyState(
+            "No watched folders",
+            systemImage: "folder.badge.plus",
+            message: "Add a folder to automatically organize new files as they arrive"
+        ) {
+            VStack(spacing: 12) {
+                HStack(spacing: 6) {
+                    Text("Try")
+                        .foregroundStyle(.secondary)
 
-            VStack(spacing: 8) {
-                Text("No Watched Folders")
-                    .font(.title3)
-                    .fontWeight(.semibold)
+                    FolderSuggestionPill(
+                        name: "Downloads",
+                        url: FileManager.default.homeDirectoryForCurrentUser
+                            .appendingPathComponent("Downloads"),
+                        action: onAddSuggestedFolder
+                    )
 
-                VStack(spacing: 4) {
-                    HStack(spacing: 4) {
-                        Text("Add folders like")
+                    Text("or")
+                        .foregroundStyle(.secondary)
 
-                        FolderSuggestionPill(
-                            name: "Downloads",
-                            url: FileManager.default.homeDirectoryForCurrentUser
-                                .appendingPathComponent("Downloads"),
-                            action: onAddSuggestedFolder
-                        )
-
-                        Text("or")
-
-                        FolderSuggestionPill(
-                            name: "Desktop",
-                            url: FileManager.default.homeDirectoryForCurrentUser
-                                .appendingPathComponent("Desktop"),
-                            action: onAddSuggestedFolder
-                        )
-                    }
-
-                    Text("to automatically organize new files as they arrive")
+                    FolderSuggestionPill(
+                        name: "Desktop",
+                        url: FileManager.default.homeDirectoryForCurrentUser
+                            .appendingPathComponent("Desktop"),
+                        action: onAddSuggestedFolder
+                    )
                 }
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            }
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 10)
-            .animation(.sortySpringStandard.delay(0.2), value: hasAppeared)
 
-            Button {
-                onAddFolder()
-            } label: {
-                Label("Add Folder", systemImage: "folder.badge.plus")
+                Button {
+                    onAddFolder()
+                } label: {
+                    Label("Add Folder", systemImage: "folder.badge.plus")
+                }
+                .buttonStyle(.sortyProminent)
+                .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             }
-            .buttonStyle(.sortyProminent)
-            .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 15)
-            .animation(.sortySpringStandard.delay(0.3), value: hasAppeared)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                hasAppeared = true
-            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                 beamHasAppeared = true
             }
@@ -344,7 +323,6 @@ struct FolderSuggestionPill: View {
     let name: String
     let url: URL
     let action: (URL) -> Void
-    @State private var isHovered = false
 
     var body: some View {
         Button {
@@ -358,18 +336,8 @@ struct FolderSuggestionPill: View {
 
                 Text(name)
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(Color.secondary.opacity(isHovered ? 0.14 : 0.07))
-            .clipShape(Capsule())
-            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(isHovered ? .primary : .secondary)
-        .animation(.sortySnappy, value: isHovered)
-        .onHover { hovering in
-            isHovered = hovering
-        }
+        .buttonStyle(.sortyChip())
         .accessibilityLabel("Add \(name) to watched folders")
     }
 }

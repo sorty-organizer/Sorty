@@ -82,7 +82,7 @@ struct ExclusionRuleRow: View {
                 } label: {
                     Image(systemName: "trash")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(SortyDesignSystem.Colors.error)
                 }
                 .buttonStyle(.plain)
                 .transition(.scale.combined(with: .opacity))
@@ -220,30 +220,15 @@ struct ExclusionRuleRow: View {
 
                 if rule.isBuiltIn {
                     Text("Built-in")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.blue.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
+                        .sortyBadge(tint: SortyDesignSystem.Colors.info)
                 } else if rule.isAIGenerated == true {
                     Text("AI-created")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.purple.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
+                        .sortyBadge(tint: SortyDesignSystem.Colors.resolvedAccent)
                 }
 
                 if isGroupedCondition {
                     Text(groupSize > 1 ? "Group of \(groupSize)" : "Grouped")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.orange.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
+                        .sortyBadge(tint: SortyDesignSystem.Colors.warning)
                         .help("Every condition in this group must match before an item is excluded.")
                         .accessibilityLabel(
                             "Part of a group of \(max(groupSize, 1)) conditions that must all match"
@@ -252,12 +237,7 @@ struct ExclusionRuleRow: View {
 
                 if let validationIssue = rule.patternValidationIssue {
                     Label("Invalid pattern", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.red.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
+                        .sortyBadge(tint: SortyDesignSystem.Colors.error)
                         .help(validationIssue)
                         .accessibilityLabel("Invalid pattern. \(validationIssue)")
                 }

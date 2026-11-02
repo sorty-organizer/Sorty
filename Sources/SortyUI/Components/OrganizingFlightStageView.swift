@@ -197,7 +197,7 @@ package struct OrganizingFlightStageView: View {
                             )
 
                         Text(currentFileName)
-                            .foregroundStyle(Color.red.opacity(0.82))
+                            .foregroundStyle(SortyDesignSystem.Colors.error.opacity(0.82))
                             .opacity(Double(renameStrikeProgress))
                             .numericTextTransition(
                                 animationValue: currentFileName,
@@ -205,7 +205,7 @@ package struct OrganizingFlightStageView: View {
                             )
                             .overlay {
                                 Rectangle()
-                                    .fill(Color.red.opacity(0.78))
+                                    .fill(SortyDesignSystem.Colors.error.opacity(0.78))
                                     .frame(height: 1.5)
                                     .scaleEffect(x: renameStrikeProgress, anchor: .leading)
                             }
@@ -216,7 +216,7 @@ package struct OrganizingFlightStageView: View {
 
                     Text(currentRenamedFileName)
                         .fontWeight(.medium)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(SortyDesignSystem.Colors.success)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .numericTextTransition(

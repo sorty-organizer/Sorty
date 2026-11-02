@@ -59,16 +59,16 @@ struct DuplicatesHeaderNew: View {
             HStack(spacing: 16) {
                 ZStack {
                     Circle()
-                        .fill(Color.blue.opacity(0.1))
+                        .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
                         .frame(width: 44, height: 44)
 
                     Image(systemName: "doc.on.doc.fill")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         .font(.title3)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Duplicate Files")
+                    Text("Duplicate files")
                         .font(.headline)
                         .lineLimit(1)
 
@@ -132,7 +132,7 @@ struct DuplicatesHeaderNew: View {
                             )
                         }
                         .buttonStyle(.sortyProminent(size: .small))
-                        .tint(.red)
+                        .tint(SortyDesignSystem.Colors.error)
                         .disabled(isCleaningUp)
                         .help("Keep one preferred copy from every exact-match group and move the rest to Trash")
                     }
@@ -142,7 +142,7 @@ struct DuplicatesHeaderNew: View {
                             Label("Cancel", systemImage: "xmark")
                         }
                         .buttonStyle(.sortyBordered(size: .small))
-                        .tint(.red)
+                        .tint(SortyDesignSystem.Colors.error)
                     } else if manager.lastScanDate == nil {
                         Button(action: onScan) {
                             Label(
@@ -208,7 +208,7 @@ struct DuplicatesResultsSidebarHeader: View {
                 }
                 .buttonStyle(.plain)
                 .font(.caption)
-                .foregroundStyle(.orange)
+                .foregroundStyle(SortyDesignSystem.Colors.warning)
                 .fixedSize(horizontal: false, vertical: true)
                 .numericTextTransition(animationValue: manager.unreadableFileCount)
                 .accessibilityHint("Shows the unavailable files and recovery options")

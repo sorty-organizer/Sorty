@@ -9,7 +9,7 @@ extension LearningsView {
     var whatSortyHasLearnedSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("What Sorty Has Learned")
+                Text("What Sorty has learned")
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
@@ -57,15 +57,11 @@ extension LearningsView {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Text("Active Patterns")
+                    Text("Active patterns")
                         .font(.subheadline.bold())
                         .accessibilityAddTraits(.isHeader)
                     Text("\(topRules.count)")
-                        .font(.caption2.bold())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.primary.opacity(0.07)))
+                        .sortyBadge()
                     Spacer()
                     Image(systemName: "chevron.down")
                         .font(.caption.weight(.semibold))
@@ -104,7 +100,7 @@ extension LearningsView {
                 )
             }
         }
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
+        .sortyCard(padding: 0)
         .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
     }
 
@@ -185,14 +181,12 @@ extension LearningsView {
                         .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
                     }
                     .buttonStyle(.plain)
-                    .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.md)
+                    .sortyInsetSurface()
                     .accessibilityHint("Shows the stored \(metric.category.title.lowercased()) records")
                 }
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .sortyCard()
     }
 
     func learningRecordsDetailSheet(

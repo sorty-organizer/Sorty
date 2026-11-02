@@ -125,7 +125,7 @@ struct CodexDeviceAuthSheet: View {
 
             Label(isCodeCopied ? "Copied" : "Copy", systemImage: isCodeCopied ? "checkmark.circle.fill" : "doc.on.doc")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(isCodeCopied ? .green : .secondary)
+                .foregroundStyle(isCodeCopied ? SortyDesignSystem.Colors.success : .secondary)
                 .symbolReplaceTransition(animationValue: isCodeCopied)
         }
         .frame(maxWidth: .infinity, minHeight: 44)
@@ -140,12 +140,12 @@ struct CodexDeviceAuthSheet: View {
         .padding(.vertical, 12)
         .background {
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                .fill(isCodeCopied ? Color.green.opacity(0.10) : Color.clear)
+                .fill(isCodeCopied ? SortyDesignSystem.Colors.success.opacity(0.10) : Color.clear)
         }
         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
         .overlay {
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                .strokeBorder(isCodeCopied ? Color.green.opacity(0.42) : Color.primary.opacity(0.08), lineWidth: 1)
+                .strokeBorder(isCodeCopied ? SortyDesignSystem.Colors.success.opacity(0.42) : Color.primary.opacity(0.08), lineWidth: 1)
         }
         .scaleEffect(isCodeCopied && !reduceMotion ? 1.015 : 1)
         .disabled(session?.userCode == nil)
@@ -166,8 +166,7 @@ struct CodexDeviceAuthStep<Content: View>: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(.primary)
                 .frame(width: 32, height: 32)
-                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
-                .clipShape(Circle())
+                .background(Color.primary.opacity(0.08), in: Circle())
 
             VStack(alignment: .leading, spacing: 10) {
                 Text(LocalizedStringKey(title))
@@ -178,7 +177,7 @@ struct CodexDeviceAuthStep<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(14)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
     }
 }
 
@@ -195,10 +194,10 @@ struct CodexDeviceAuthStatusView: View {
             switch session?.status {
             case .authorized:
                 Label("Authorization complete", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(SortyDesignSystem.Colors.success)
             case .failed(let message):
                 Label(message, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(SortyDesignSystem.Colors.warning)
                     .multilineTextAlignment(.center)
                 Button("Try Again", action: onStart)
                     .buttonStyle(.sortyBordered)
@@ -218,17 +217,17 @@ struct CodexDeviceAuthStatusView: View {
             if !isCodexInstalled {
                 Text("Codex CLI is required. Install with: npm i -g @openai/codex")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(SortyDesignSystem.Colors.warning)
             } else if let authError {
                 Text(authError)
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(SortyDesignSystem.Colors.warning)
                     .multilineTextAlignment(.center)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
         .padding(.horizontal, 14)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
     }
 }

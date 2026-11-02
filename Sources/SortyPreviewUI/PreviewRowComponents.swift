@@ -18,7 +18,7 @@ struct RenameNameChangeView: View {
     var body: some View {
         Text(suggestedName)
             .fontWeight(.medium)
-            .foregroundColor(.green)
+            .foregroundColor(SortyDesignSystem.Colors.success)
             .lineLimit(1)
             .truncationMode(.middle)
             .opacity(isRegenerating ? 0 : (suggestedNameReveal ? 1 : 0))
@@ -74,7 +74,7 @@ private struct RenameNameRevealSweep: View {
                 colors: [
                     .clear,
                     .white.opacity(0.24),
-                    Color.green.opacity(0.18),
+                    SortyDesignSystem.Colors.success.opacity(0.18),
                     .clear
                 ],
                 startPoint: .leading,
@@ -210,7 +210,7 @@ struct FlatFileRowContent: View {
                         .foregroundColor(renameMapping?.hasRename == true ? .secondary : .primary)
                         .strikethrough(
                             renameMapping?.hasRename == true,
-                            color: .red.opacity(0.72)
+                            color: SortyDesignSystem.Colors.error.opacity(0.72)
                         )
                 }
 
@@ -272,7 +272,7 @@ struct FlatFileRowContent: View {
 
                     Image(systemName: "wand.and.stars")
                         .font(.caption)
-                        .foregroundColor(.purple)
+                        .foregroundColor(SortyDesignSystem.Colors.resolvedAccent)
                         .help(renameMapping.renameReason ?? "Sorty suggested rename")
 
                     RenameActionGlassCluster(

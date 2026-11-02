@@ -186,7 +186,7 @@ struct OrganizationCompleteView: View {
                 : "0 KB",
             "Data Organised",
             "internaldrive.fill",
-            .green
+            SortyDesignSystem.Colors.success
         )
     }
     

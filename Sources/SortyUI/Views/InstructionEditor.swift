@@ -112,14 +112,7 @@ package struct RotatingInstructionSuggestionEditor: View {
                     Spacer(minLength: 0)
 
                     Text("Tab")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Color.secondary.opacity(0.10),
-                            in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
-                        )
+                        .sortyBadge()
                         .accessibilityHidden(true)
                 }
                 .padding(.leading, 20)

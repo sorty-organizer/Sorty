@@ -17,7 +17,7 @@ struct DuplicateSettingsView: View {
         VStack(spacing: 0) {
             HStack(spacing: SortyDesignSystem.Spacing.lg) {
                 VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xxs) {
-                    Text("Duplicate Preferences")
+                    Text("Duplicate preferences")
                         .font(SortyDesignSystem.Typography.title3())
                     Text("Control what scans include and how bulk cleanup keeps a copy.")
                         .font(SortyDesignSystem.Typography.subheadline())
@@ -49,7 +49,7 @@ struct DuplicateSettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xl) {
                     SettingsCard(
-                        title: "Scan Results",
+                        title: "Scan results",
                         icon: "magnifyingglass",
                         color: SortyDesignSystem.Colors.primary
                     ) {
@@ -99,7 +99,7 @@ struct DuplicateSettingsView: View {
                     }
 
                     SettingsCard(
-                        title: "Bulk Cleanup",
+                        title: "Bulk cleanup",
                         icon: "checkmark.shield",
                         color: SortyDesignSystem.Colors.primary
                     ) {

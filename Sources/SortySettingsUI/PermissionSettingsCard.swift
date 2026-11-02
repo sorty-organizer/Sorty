@@ -127,16 +127,7 @@ struct PermissionSettingsCard: View {
 
             if isRequired {
                 Text("Required")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.red.opacity(0.18), in: Capsule(style: .continuous))
-                    .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .strokeBorder(Color.red.opacity(0.38), lineWidth: 0.75)
-                    )
+                    .sortyBadge(tint: SortyDesignSystem.Colors.error)
             }
         }
     }
@@ -183,10 +174,10 @@ struct PermissionSettingsCard: View {
                 } label: {
                     Image(systemName: "minus.circle.fill")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(isHoveringRemove ? .red : .secondary)
+                        .foregroundStyle(isHoveringRemove ? SortyDesignSystem.Colors.error : .secondary)
                         .frame(width: 24, height: 24)
                         .background(
-                            Color.red.opacity(isHoveringRemove ? 0.12 : 0),
+                            SortyDesignSystem.Colors.error.opacity(isHoveringRemove ? 0.12 : 0),
                             in: Circle()
                         )
                         .contentShape(Circle())

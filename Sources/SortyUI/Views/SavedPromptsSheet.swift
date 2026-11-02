@@ -82,34 +82,11 @@ package struct SavedPromptsSheet: View {
                 .scrollIndicators(.visible)
 
                 if isEmptyStateVisible && editingSession?.isDraft != true {
-                    VStack(spacing: 16) {
-                        Spacer()
-
-                        ZStack {
-                            Circle()
-                                .fill(Color.accentColor.opacity(0.1))
-                                .frame(width: 72, height: 72)
-
-                            Image(systemName: "text.badge.plus")
-                                .font(.title)
-                                .foregroundStyle(Color.accentColor)
-                                .symbolRenderingMode(.hierarchical)
-                                .accessibilityHidden(true)
-                        }
-
-                        VStack(spacing: 6) {
-                            Text("No saved prompts yet")
-                                .font(.headline)
-
-                            Text("Save your instructions from the organize view to reuse them.")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .frame(maxWidth: 300)
-                        }
-
-                        Spacer()
-                    }
+                    SortyEmptyState(
+                        "No saved prompts yet",
+                        systemImage: "text.badge.plus",
+                        message: "Save your instructions from the organize view to reuse them."
+                    )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(24)
                     .transition(
@@ -388,11 +365,7 @@ private struct SavedPromptDisplayCard: View {
 
                     if showsPinControls && row.isPinned {
                         Label("Pinned", systemImage: "pin.fill")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.secondary.opacity(0.12)))
+                            .sortyBadge()
                     }
                 }
 
@@ -493,7 +466,7 @@ private struct SavedPromptEditorCard: View {
             if hasDuplicateName {
                 Text("A prompt with this name already exists.")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SortyDesignSystem.Colors.error)
             }
 
             TextEditor(text: $session.text)
@@ -612,15 +585,7 @@ private struct SavedPromptEditorCard: View {
 
 private extension View {
     func savedPromptCardSurface() -> some View {
-        padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                    .fill(Color(NSColor.controlBackgroundColor))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                    .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
-            )
+        sortyCard()
     }
 
 }

@@ -214,13 +214,10 @@ public struct ProviderSelectionStepView: View {
                         Spacer()
                         Text(setupStatus.isReady ? "Ready" : "Setup recommended")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(setupStatus.isReady ? .green : .orange)
                             .numericTextTransition(
                                 animationValue: setupStatus.isReady
                             )
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background((setupStatus.isReady ? Color.green : Color.orange).opacity(0.12), in: Capsule())
+                            .sortyBadge(tint: setupStatus.isReady ? SortyDesignSystem.Colors.success : SortyDesignSystem.Colors.warning)
                     }
                     .frame(maxWidth: 640)
 
@@ -235,7 +232,7 @@ public struct ProviderSelectionStepView: View {
                         VStack(alignment: .leading, spacing: 14) {
                             HStack(spacing: 10) {
                                 Image(systemName: setupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
-                                    .foregroundStyle(setupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
+                                    .foregroundStyle(setupStatus.isReady ? SortyDesignSystem.Colors.success : SortyDesignSystem.Colors.resolvedAccent)
                                     .font(.system(size: 15, weight: .semibold))
                                     .symbolReplaceTransition(
                                         animationValue: setupStatus.isReady
@@ -263,15 +260,12 @@ public struct ProviderSelectionStepView: View {
                             if settingsViewModel.config.provider == .unavailableProvider {
                                 Text(setupStatus.message)
                                     .font(.subheadline)
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(SortyDesignSystem.Colors.warning)
                             } else {
                                 providerConfigSection
                             }
                         }
-                        .padding(16)
-                        // A container, not a control: interactive glass here
-                        // tracked every pointer move across the form.
-                        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
+                        .sortyCard(padding: 16)
                         .frame(maxWidth: 430)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                         .accessibilityIdentifier("OnboardingProviderConfigurationPanel")

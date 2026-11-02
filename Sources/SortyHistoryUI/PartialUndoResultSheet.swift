@@ -37,7 +37,7 @@ struct PartialUndoResultSheet: View {
             VStack(spacing: 12) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 40))
-                    .foregroundStyle(.orange.gradient)
+                    .foregroundStyle(SortyDesignSystem.Colors.warning.gradient)
                     .accessibilityHidden(true)
 
                 Text("Partial Undo Complete")
@@ -57,7 +57,7 @@ struct PartialUndoResultSheet: View {
                 VStack(spacing: 4) {
                     Text("\(result.successCount)")
                         .font(.title.bold())
-                        .foregroundStyle(.green)
+                        .foregroundStyle(SortyDesignSystem.Colors.success)
                         .numericTextTransition(animationValue: result.successCount)
                     Text("Restored")
                         .font(.caption)
@@ -70,7 +70,7 @@ struct PartialUndoResultSheet: View {
                 VStack(spacing: 4) {
                     Text("\(result.missingFiles.count)")
                         .font(.title.bold())
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(SortyDesignSystem.Colors.warning)
                         .numericTextTransition(animationValue: result.missingFiles.count)
                     Text("Missing")
                         .font(.caption)
@@ -84,7 +84,7 @@ struct PartialUndoResultSheet: View {
                     VStack(spacing: 4) {
                         Text("\(result.failedOperationCount)")
                             .font(.title.bold())
-                            .foregroundStyle(.red)
+                            .foregroundStyle(SortyDesignSystem.Colors.error)
                             .numericTextTransition(
                                 animationValue: result.failedOperationCount
                             )
@@ -102,7 +102,7 @@ struct PartialUndoResultSheet: View {
             if !result.missingFiles.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Label("Files Not Found", systemImage: "questionmark.folder")
+                        Label("Files not found", systemImage: "questionmark.folder")
                             .font(.headline)
                         Spacer()
                         Text("\(result.missingFiles.count) file\(result.missingFiles.count == 1 ? "" : "s")")
@@ -125,7 +125,7 @@ struct PartialUndoResultSheet: View {
                                     : fileName
                                 HStack(spacing: 8) {
                                     Image(systemName: "doc.questionmark")
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(SortyDesignSystem.Colors.warning)
                                         .font(.caption)
                                     Text(displayName)
                                         .font(.system(.caption, design: .monospaced))
@@ -135,8 +135,7 @@ struct PartialUndoResultSheet: View {
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
-                                .background(Color.orange.opacity(0.08))
-                                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
+                                .sortyInsetSurface(tint: SortyDesignSystem.Colors.warning, cornerRadius: SortyDesignSystem.Radius.sm)
                             }
                         }
                     }

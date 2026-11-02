@@ -171,7 +171,7 @@ extension ProviderSelectionStepView {
 
                 Image(systemName: "arrow.up.right.square")
                     .font(.caption2)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(SortyDesignSystem.Colors.info)
             }
         } else {
             Text(settingsViewModel.config.provider.apiKeyHelpText)
@@ -187,7 +187,7 @@ extension ProviderSelectionStepView {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title2)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(SortyDesignSystem.Colors.success)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Signed in via Codex CLI")
@@ -208,8 +208,7 @@ extension ProviderSelectionStepView {
                     .buttonStyle(.sortyBordered(size: .small))
                 }
                 .padding(10)
-                .background(Color.green.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+                .sortyInsetSurface(tint: SortyDesignSystem.Colors.success)
             } else {
                 Text("Sign in with your OpenAI account using Codex CLI to enable Codex integration in Sorty.")
                     .font(.caption)
@@ -266,13 +265,13 @@ extension ProviderSelectionStepView {
                 if !codexAuth.isCodexInstalled {
                     Label("Codex CLI not detected", systemImage: "xmark.circle")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(SortyDesignSystem.Colors.warning)
                 }
 
                 if let error = codexAuth.authError {
                     Text(error)
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(SortyDesignSystem.Colors.error)
                 }
             }
         }
@@ -309,8 +308,7 @@ extension ProviderSelectionStepView {
             .buttonStyle(.plain)
         }
         .padding(6)
-        .background(Color.black.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.xs)
     }
 
     @ViewBuilder
@@ -332,20 +330,20 @@ extension ProviderSelectionStepView {
                 case .success:
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(SortyDesignSystem.Colors.success)
                         Text("Connection successful")
                             .font(.subheadline)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(SortyDesignSystem.Colors.success)
                     }
 
                 case .failed:
                     VStack(alignment: .center, spacing: 8) {
                         HStack(spacing: 8) {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(SortyDesignSystem.Colors.warning)
                             Text("Connection failed")
                                 .font(.subheadline)
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(SortyDesignSystem.Colors.warning)
 
                             Button("Retry") {
                                 HapticFeedbackManager.shared.tap()

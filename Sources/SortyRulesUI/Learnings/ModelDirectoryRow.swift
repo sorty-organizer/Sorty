@@ -19,15 +19,15 @@ struct ModelDirectoryRow: View {
     private var status: (text: String, icon: String, color: Color) {
         switch scanState {
         case .scanning:
-            return ("Scanning folder structure and filenames", "arrow.triangle.2.circlepath", .blue)
+            return ("Scanning folder structure and filenames", "arrow.triangle.2.circlepath", SortyDesignSystem.Colors.info)
         case .ready:
-            return ("Ready for matching previews", "checkmark.circle.fill", .teal)
+            return ("Ready for matching previews", "checkmark.circle.fill", SortyDesignSystem.Colors.success)
         case .warning(let message):
-            return (message, "exclamationmark.triangle.fill", .orange)
+            return (message, "exclamationmark.triangle.fill", SortyDesignSystem.Colors.warning)
         case .failed(let message):
-            return ("Scan failed: \(message)", "xmark.circle.fill", .red)
+            return ("Scan failed: \(message)", "xmark.circle.fill", SortyDesignSystem.Colors.error)
         case .unavailable:
-            return ("Folder is missing or unavailable", "folder.badge.questionmark", .orange)
+            return ("Folder is missing or unavailable", "folder.badge.questionmark", SortyDesignSystem.Colors.warning)
         case .paused:
             return ("Paused and not used in previews", "pause.circle.fill", .secondary)
         }
@@ -181,10 +181,10 @@ struct ModelDirectoryRow: View {
                 if didToggle == false {
                     HapticFeedbackManager.shared.error()
                     NotificationManager.shared.showHUDInfo(
-                        title: "Five Example Folders Active",
+                        title: "Five example folders active",
                         message: "Pause another folder before using this one.",
                         icon: "exclamationmark.triangle.fill",
-                        iconColor: .orange
+                        iconColor: SortyDesignSystem.Colors.warning
                     )
                 }
             } label: {

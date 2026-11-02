@@ -313,7 +313,7 @@ package struct SettingsView: View {
                     .frame(width: 32, height: 32)
                     .background(Color.accentColor.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
-                Text("Search Results")
+                Text("Search results")
                     .font(.title2.bold())
             }
 
@@ -330,23 +330,12 @@ package struct SettingsView: View {
     @ViewBuilder
     private func searchResultsContent(results: [SettingsFeatureMatch], minHeight: CGFloat) -> some View {
         if results.isEmpty {
-            VStack(spacing: 16) {
-                Image(systemName: "magnifyingglass.circle")
-                    .font(.system(size: 96, weight: .regular))
-                    .foregroundStyle(Color.accentColor.opacity(0.85))
-                    .frame(width: 220, height: 160)
-                    .animatedEmptyStateIcon(tint: Color.accentColor)
-                    .accessibilityLabel("No matching settings")
-
-                VStack(spacing: 6) {
-                    Text("Sorty came up empty")
-                        .font(.headline)
-                    Text("Nothing matches \"\(trimmedSearchText)\" yet.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-            }
+            SortyEmptyState(
+                "Sorty came up empty",
+                systemImage: "magnifyingglass.circle",
+                message: "Nothing matches \"\(trimmedSearchText)\" yet.",
+                tint: Color.accentColor
+            )
             .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .center)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Sorty came up empty. Nothing matches \(trimmedSearchText) yet.")

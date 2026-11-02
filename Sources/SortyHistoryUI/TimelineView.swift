@@ -31,10 +31,10 @@ struct TimelineView: View {
             HStack {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.title2)
-                    .foregroundColor(.blue)
+                    .foregroundColor(SortyDesignSystem.Colors.info)
                 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Organization Timeline")
+                    Text("Organization timeline")
                         .font(.headline)
                     Text("Restore to any previous organization state")
                         .font(.caption)
@@ -72,8 +72,7 @@ struct TimelineView: View {
                 }
             }
         }
-        .padding()
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .sortyCard()
         .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
     }
 
@@ -191,7 +190,7 @@ struct TimelineNode: View {
             
             // Core node
             Circle()
-                .fill(entry.isUndone ? Color.orange : (entry.success ? Color.blue : Color.red))
+                .fill(entry.isUndone ? SortyDesignSystem.Colors.warning : (entry.success ? SortyDesignSystem.Colors.info : SortyDesignSystem.Colors.error))
                 .frame(width: nodeSize, height: nodeSize)
                 .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
             
@@ -232,11 +231,11 @@ struct SelectedEntryCard: View {
             // Icon status
             ZStack {
                 Circle()
-                    .fill(entry.isUndone ? Color.orange.opacity(0.1) : Color.blue.opacity(0.1))
+                    .fill((entry.isUndone ? SortyDesignSystem.Colors.warning : SortyDesignSystem.Colors.info).opacity(0.1))
                     .frame(width: 40, height: 40)
                 Image(systemName: entry.isUndone ? "arrow.uturn.backward" : "folder.badge.gear")
                     .font(.title3)
-                    .foregroundColor(entry.isUndone ? .orange : .blue)
+                    .foregroundColor(entry.isUndone ? SortyDesignSystem.Colors.warning : SortyDesignSystem.Colors.info)
                     .symbolReplaceTransition(animationValue: entry.isUndone)
             }
             
@@ -266,27 +265,20 @@ struct SelectedEntryCard: View {
             // Action
             if isCurrentState {
                 Label("Current", systemImage: "checkmark.circle.fill")
-                    .font(.subheadline)
-                    .foregroundColor(.green)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.green.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xxl, style: .continuous))
+                    .sortyBadge(tint: SortyDesignSystem.Colors.success)
             } else {
                 Button {
                     showRestoreConfirmation = true
                 } label: {
-                    Text("Restore this State")
+                    Text("Restore This State")
                         .fontWeight(.medium)
                 }
                 .buttonStyle(.sortyProminent)
-                .tint(.blue)
+                .tint(SortyDesignSystem.Colors.info)
             }
         }
         .padding(16)
-        .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
-        .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
         .alert("Restore to this state?", isPresented: $showRestoreConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Restore") {
@@ -316,19 +308,12 @@ struct SelectedEntryCard: View {
 struct EmptyTimelineView: View {
     @SortyHotReload private var hotReload
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "clock")
-                .font(.largeTitle)
-                .foregroundColor(.secondary.opacity(0.5))
-            
-            Text("No timeline available")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            
-            Text("Organize this folder to create timeline snapshots")
-                .font(.caption)
-                .foregroundColor(.secondary.opacity(0.6))
-        }
+        SortyEmptyState(
+            "No timeline available",
+            systemImage: "clock",
+            message: "Organize this folder to create timeline snapshots",
+            size: .inline
+        )
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
     }
@@ -365,8 +350,8 @@ struct CompactTimelineView: View {
             .overlay {
                 if isProcessing {
                     SortyGradientLoadingBar(width: 160, height: 10)
-                        .padding(20)
-                        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+                        .sortyCard(padding: 20)
+                        .fixedSize()
                 }
             }
             .alert("Timeline", isPresented: $showAlert) {

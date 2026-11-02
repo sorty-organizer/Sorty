@@ -84,7 +84,7 @@ struct ReadyToOrganizeView: View {
     }
 
     var storageLocationSelectionTint: Color {
-        unavailableSelectedStorageLocationCount > 0 ? .orange : .green
+        unavailableSelectedStorageLocationCount > 0 ? SortyDesignSystem.Colors.warning : SortyDesignSystem.Colors.success
     }
 
     var storageLocationsVerticalPadding: CGFloat {
@@ -313,14 +313,14 @@ struct ReadyToOrganizeView: View {
             } else if sessionManager.isPrewarmed {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 10))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(SortyDesignSystem.Colors.success)
                 Text("Connected to \(settingsViewModel.config.provider.displayName)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             } else if let error = sessionManager.prewarmError {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 10))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(SortyDesignSystem.Colors.warning)
                 Text("Connection warning: \(error)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)

@@ -29,9 +29,9 @@ struct PreviewStatsView: View {
                         HStack(spacing: 12) {
                         Image(systemName: "chart.bar.doc.horizontal")
                             .font(.system(size: 12))
-                            .foregroundStyle(.purple)
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         
-                        Text("Stats for Nerds")
+                        Text("Stats for nerds")
                             .font(.subheadline)
                             .fontWeight(.medium)
                         
@@ -56,24 +56,24 @@ struct PreviewStatsView: View {
                                 icon: "clock.arrow.circlepath",
                                 value: GenerationStats.formatDuration(stats.estimatedTimeSaved),
                                 unit: nil,
-                                color: .orange
+                                color: SortyDesignSystem.Colors.resolvedAccent
                             )
                         }
 
                         if let fileCount = stats.filesScanned ?? (totalFiles > 0 ? totalFiles : nil) {
-                            NerdStatPill(title: "Files Reviewed", icon: "doc.text.magnifyingglass", value: GenerationStats.formatCount(fileCount), unit: "files", color: .indigo)
+                            NerdStatPill(title: "Files Reviewed", icon: "doc.text.magnifyingglass", value: GenerationStats.formatCount(fileCount), unit: "files", color: SortyDesignSystem.Colors.resolvedAccent)
                         }
 
                         if let totalContextTokens = stats.totalContextTokens {
-                            NerdStatPill(title: "Context", icon: "sum", value: GenerationStats.formatCount(totalContextTokens), unit: "ctx", color: .teal)
+                            NerdStatPill(title: "Context", icon: "sum", value: GenerationStats.formatCount(totalContextTokens), unit: "ctx", color: SortyDesignSystem.Colors.resolvedAccent)
                         } else {
-                            NerdStatPill(title: "Response", icon: "text.bubble", value: GenerationStats.formatCount(stats.responseTokens), unit: "resp", color: .teal)
+                            NerdStatPill(title: "Response", icon: "text.bubble", value: GenerationStats.formatCount(stats.responseTokens), unit: "resp", color: SortyDesignSystem.Colors.resolvedAccent)
                         }
 
-                        NerdStatPill(title: "AI Time", icon: "clock.fill", value: GenerationStats.formatDuration(stats.duration), unit: nil, color: .blue)
+                        NerdStatPill(title: "AI Time", icon: "clock.fill", value: GenerationStats.formatDuration(stats.duration), unit: nil, color: SortyDesignSystem.Colors.info)
 
                         if stats.hasBillableCost {
-                            NerdStatPill(title: "Estimated Cost", icon: "dollarsign.circle", value: GenerationStats.formatCost(stats.computedCost), unit: nil, color: .green)
+                            NerdStatPill(title: "Estimated Cost", icon: "dollarsign.circle", value: GenerationStats.formatCost(stats.computedCost), unit: nil, color: SortyDesignSystem.Colors.success)
                         }
                         
                         // Time remaining estimate
@@ -83,7 +83,7 @@ struct PreviewStatsView: View {
                                 icon: "hourglass",
                                 value: GenerationStats.formatDuration(estimatedTime),
                                 unit: "left",
-                                color: .purple
+                                color: SortyDesignSystem.Colors.resolvedAccent
                             )
                         }
                     }
@@ -126,7 +126,7 @@ struct PreviewStatsView: View {
                 .padding(.vertical, 8)
             }
         }
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .sortyCard(padding: 0)
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .contextMenu {
@@ -177,7 +177,7 @@ struct PreviewStatsView: View {
         ], spacing: 12) {
             NerdStatPillExpanded(
                 icon: "clock.fill",
-                color: .blue,
+                color: SortyDesignSystem.Colors.info,
                 title: "AI Time",
                 value: GenerationStats.formatDuration(stats.duration),
                 unit: nil
@@ -185,7 +185,7 @@ struct PreviewStatsView: View {
 
             NerdStatPillExpanded(
                 icon: "bolt.fill",
-                color: .orange,
+                color: SortyDesignSystem.Colors.resolvedAccent,
                 title: "Throughput",
                 value: String(format: "%.1f", stats.tps),
                 unit: "tok/s"
@@ -193,7 +193,7 @@ struct PreviewStatsView: View {
             
             NerdStatPillExpanded(
                 icon: "timer",
-                color: .green,
+                color: SortyDesignSystem.Colors.success,
                 title: "TTFT",
                 value: GenerationStats.formatDuration(stats.ttft),
                 unit: nil
@@ -202,7 +202,7 @@ struct PreviewStatsView: View {
             if let promptTokens = stats.promptTokens {
                 NerdStatPillExpanded(
                     icon: "text.alignleft",
-                    color: .purple,
+                    color: SortyDesignSystem.Colors.resolvedAccent,
                     title: "Prompt",
                     value: GenerationStats.formatCount(promptTokens),
                     unit: "tok"
@@ -211,7 +211,7 @@ struct PreviewStatsView: View {
 
             NerdStatPillExpanded(
                 icon: "text.bubble",
-                color: .teal,
+                color: SortyDesignSystem.Colors.resolvedAccent,
                 title: "Response",
                 value: GenerationStats.formatCount(stats.responseTokens),
                 unit: "tok"
@@ -220,7 +220,7 @@ struct PreviewStatsView: View {
             if let totalContextTokens = stats.totalContextTokens {
                 NerdStatPillExpanded(
                     icon: "sum",
-                    color: .mint,
+                    color: SortyDesignSystem.Colors.resolvedAccent,
                     title: "Context",
                     value: GenerationStats.formatCount(totalContextTokens),
                     unit: "tok"
@@ -230,7 +230,7 @@ struct PreviewStatsView: View {
             if let filesScanned = stats.filesScanned {
                 NerdStatPillExpanded(
                     icon: "doc.text.magnifyingglass",
-                    color: .indigo,
+                    color: SortyDesignSystem.Colors.resolvedAccent,
                     title: "Files Reviewed",
                     value: GenerationStats.formatCount(filesScanned),
                     unit: "files"
@@ -240,7 +240,7 @@ struct PreviewStatsView: View {
             if let totalFileSize = stats.formattedTotalFileSize {
                 NerdStatPillExpanded(
                     icon: "internaldrive",
-                    color: .cyan,
+                    color: SortyDesignSystem.Colors.resolvedAccent,
                     title: "Data Volume",
                     value: totalFileSize,
                     unit: nil
@@ -250,7 +250,7 @@ struct PreviewStatsView: View {
             if let scanDuration = stats.scanDuration {
                 NerdStatPillExpanded(
                     icon: "stopwatch",
-                    color: .cyan,
+                    color: SortyDesignSystem.Colors.resolvedAccent,
                     title: "Scan Duration",
                     value: GenerationStats.formatDuration(scanDuration),
                     unit: nil
@@ -260,7 +260,7 @@ struct PreviewStatsView: View {
             if stats.hasBillableCost {
                 NerdStatPillExpanded(
                     icon: "dollarsign.circle",
-                    color: .green,
+                    color: SortyDesignSystem.Colors.success,
                     title: "Estimated Cost",
                     value: GenerationStats.formatCost(stats.computedCost),
                     unit: nil
@@ -270,7 +270,7 @@ struct PreviewStatsView: View {
             if let duplicatesFound = stats.duplicatesFound, duplicatesFound > 0 {
                 NerdStatPillExpanded(
                     icon: "doc.on.doc",
-                    color: .red,
+                    color: SortyDesignSystem.Colors.error,
                     title: "Duplicates",
                     value: GenerationStats.formatCount(duplicatesFound),
                     unit: "files"
@@ -280,7 +280,7 @@ struct PreviewStatsView: View {
             if let retryCount = stats.retryCount, retryCount > 0 {
                 NerdStatPillExpanded(
                     icon: "arrow.clockwise",
-                    color: .orange,
+                    color: SortyDesignSystem.Colors.resolvedAccent,
                     title: "Retries",
                     value: GenerationStats.formatCount(retryCount),
                     unit: nil
@@ -290,7 +290,7 @@ struct PreviewStatsView: View {
             if stats.estimatedTimeSaved > 0 {
                 NerdStatPillExpanded(
                     icon: "sparkles",
-                    color: .yellow,
+                    color: SortyDesignSystem.Colors.warning,
                     title: "Est. Time Saved",
                     value: GenerationStats.formatDuration(stats.estimatedTimeSaved),
                     unit: nil

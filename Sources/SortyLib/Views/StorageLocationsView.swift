@@ -48,7 +48,7 @@ struct StorageLocationConfigView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     // Basic Info Section
-                    SettingsCard(title: "Display Name", icon: "textformat", color: .blue) {
+                    SettingsCard(title: "Display name", icon: "textformat", color: SortyDesignSystem.Colors.info) {
                         VStack(alignment: .leading, spacing: 8) {
                             TextField("Location name", text: $name)
                                 .textFieldStyle(.roundedBorder)
@@ -60,7 +60,7 @@ struct StorageLocationConfigView: View {
                     }
                     
                     // Description Section
-                    SettingsCard(title: "Description for Sorty", icon: "text.bubble", color: .purple) {
+                    SettingsCard(title: "Description for Sorty", icon: "text.bubble", color: SortyDesignSystem.Colors.resolvedAccent) {
                         VStack(alignment: .leading, spacing: 8) {
                             descriptionEditor
                             Text("Describe what types of files belong here. Sorty uses this to decide which files to move to this location.")
@@ -178,8 +178,7 @@ struct StorageLocationConfigView: View {
             }
             .buttonStyle(.sortyProminent)
         }
-        .padding()
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
+        .sortyCard()
     }
 
     private var descriptionEditor: some View {

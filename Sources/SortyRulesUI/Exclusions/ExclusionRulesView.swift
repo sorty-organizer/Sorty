@@ -214,15 +214,11 @@ package struct ExclusionRulesView: View {
                             }
 
                             if !hasSearchResults && isSearching {
-                                VStack(spacing: 12) {
-                                    Image(systemName: "magnifyingglass")
-                                        .font(.title)
-                                        .foregroundStyle(.secondary)
-                                    Text("No rules match '\(trimmedSearchText)'")
-                                        .foregroundStyle(.secondary)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 40)
+                                SortyEmptyState(
+                                    "No rules match '\(trimmedSearchText)'",
+                                    systemImage: "magnifyingglass",
+                                    size: .inline
+                                )
                             }
 
                             if !isSearching || !filteredLearningExclusionPatterns.isEmpty {
@@ -307,7 +303,7 @@ package struct ExclusionRulesView: View {
 
                     HStack(spacing: 8) {
                         Text("\(rulesManager.enabledRulesCount) active")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(SortyDesignSystem.Colors.success)
                             .numericTextTransition(
                                 animationValue: rulesManager.enabledRulesCount
                             )
@@ -382,7 +378,7 @@ package struct ExclusionRulesView: View {
 
                 Spacer()
 
-                Text("Add an Exclusion")
+                Text("Add an exclusion")
                     .font(.headline)
 
                 Spacer()

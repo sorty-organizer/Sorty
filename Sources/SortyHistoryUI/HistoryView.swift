@@ -694,39 +694,12 @@ struct HistorySearchEmptyStateView: View {
     let searchText: String
     let onClear: () -> Void
 
-    @State private var hasAppeared = false
-    @State private var isHovered = false
-
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            ZStack {
-                Circle()
-                    .fill(Color.secondary.opacity(0.1))
-                    .frame(width: 80, height: 80)
-
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 36))
-                    .foregroundStyle(.secondary)
-            }
-            .opacity(hasAppeared ? 1 : 0)
-            .scaleEffect(hasAppeared ? 1 : 0.8)
-            .animation(.sortySmooth, value: hasAppeared)
-
-            VStack(spacing: 8) {
-                Text("No Results Found")
-                    .font(.title3.bold())
-
-                Text("No history entries match \"\(searchText)\"")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 10)
-            .animation(.sortySmooth.delay(0.1), value: hasAppeared)
-
+        SortyEmptyState(
+            "No results found",
+            systemImage: "magnifyingglass",
+            message: "No history entries match \"\(searchText)\""
+        ) {
             Button {
                 HapticFeedbackManager.shared.tap()
                 onClear()
@@ -734,25 +707,10 @@ struct HistorySearchEmptyStateView: View {
                 Label("Clear Search", systemImage: "xmark.circle")
             }
             .buttonStyle(.sortyBordered)
-            .scaleEffect(isHovered ? 1.03 : 1.0)
-            .animation(.spring(response: 0.2), value: isHovered)
-            .onHover { hovering in
-                isHovered = hovering
-                if hovering {
-                    HapticFeedbackManager.shared.selection()
-                }
-            }
-            .opacity(hasAppeared ? 1 : 0)
-            .animation(.sortySmooth.delay(0.2), value: hasAppeared)
             .accessibilityIdentifier("ClearSearchButton")
-
-            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
-        .onAppear {
-            hasAppeared = true
-        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("No search results for \(searchText)")
     }
@@ -767,33 +725,11 @@ struct HistoryEmptyStateView: View {
     @State private var hasAppeared = false
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            // Hero section
-            VStack(spacing: 16) {
-                EmptyStateHeroIcon(systemName: "clock.arrow.circlepath")
-                    .opacity(hasAppeared ? 1 : 0)
-                    .scaleEffect(hasAppeared ? 1 : 0.8)
-                    .animation(.sortySpringStandard.delay(0.1), value: hasAppeared)
-                    .accessibilityHidden(true)
-
-                VStack(spacing: 8) {
-                    Text("No History Yet")
-                        .font(.title2.bold())
-
-                    Text("Organize a folder to start tracking sessions, results, and actions you can revisit later.")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 400)
-                }
-                .opacity(hasAppeared ? 1 : 0)
-                .offset(y: hasAppeared ? 0 : 10)
-                .animation(.sortySpringStandard.delay(0.2), value: hasAppeared)
-            }
-
-            // CTA button
+        SortyEmptyState(
+            "No history yet",
+            systemImage: "clock.arrow.circlepath",
+            message: "Organize a folder to start tracking sessions, results, and actions you can revisit later."
+        ) {
             Button {
                 HapticFeedbackManager.shared.tap()
                 withAnimation(.sortySnappy) {
@@ -819,14 +755,9 @@ struct HistoryEmptyStateView: View {
                 }
                 isHovered = hovering
             }
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 15)
-            .animation(.sortySpringStandard.delay(0.3), value: hasAppeared)
             .accessibilityLabel("Start organizing a folder")
             .accessibilityHint("Navigate to the organize view to begin")
             .accessibilityIdentifier("HistoryEmptyStateCTA")
-
-            Spacer()
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

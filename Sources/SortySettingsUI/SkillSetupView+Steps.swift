@@ -105,9 +105,7 @@ extension SkillSetupView {
                 }
                 locationStatus
             }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xxl, interactive: false)
+            .sortyCard(padding: 24)
             Text("Nothing installs until you confirm.")
                 .font(supportingFont)
                 .foregroundStyle(.secondary)
@@ -197,8 +195,8 @@ extension SkillSetupView {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 72, height: 72)
-                .foregroundStyle(.green)
-                .milestoneEmptyStateSliver(trigger: 1, tint: .green)
+                .foregroundStyle(SortyDesignSystem.Colors.success)
+                .milestoneEmptyStateSliver(trigger: 1, tint: SortyDesignSystem.Colors.success)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 12) {
@@ -211,8 +209,7 @@ extension SkillSetupView {
                 .buttonStyle(.sortyBordered())
                 .accessibilityIdentifier("skill-import.copy-request")
             }
-            .padding(20)
-            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xxl, interactive: false)
+            .sortyCard(padding: 20)
             Text(isOnboarding
                  ? "Your skill and imported preferences work without the app. Ask your agent to update them whenever your preferences change."
                  : "Return here to update the skill when preferences change, or tell your agent to update the Sorty skill with your new preferences.")
@@ -251,8 +248,6 @@ extension SkillSetupView {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(20)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xxl, interactive: false)
+        .sortyCard(padding: 20)
     }
 }

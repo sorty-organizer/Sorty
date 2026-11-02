@@ -128,7 +128,7 @@ struct OnboardingProgressBar: View {
                                 .transition(.scale(scale: 0.4).combined(with: .opacity))
                         } else {
                             Text("\(index + 1)")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(
                                     step.rawValue <= currentStep.rawValue ? .white : .secondary)
                                 .transition(.opacity)

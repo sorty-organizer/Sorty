@@ -17,7 +17,7 @@ struct HistoryLiquidGlassDuplicateCard: View {
             GlassPillButton(
                 icon: "doc.on.doc",
                 title: "Duplicates",
-                tint: .red,
+                tint: SortyDesignSystem.Colors.error,
                 count: totalDuplicateCount
             ) {
                 showPopover.toggle()
@@ -36,7 +36,7 @@ struct HistoryLiquidGlassDuplicateCard: View {
             GlassPopoverHeader(
                 icon: "doc.on.doc",
                 title: "Duplicate Files",
-                tint: .red,
+                tint: SortyDesignSystem.Colors.error,
                 subtitle: "\(duplicateGroups.count) group\(duplicateGroups.count == 1 ? "" : "s"), \(totalDuplicateCount) duplicate\(totalDuplicateCount == 1 ? "" : "s")",
                 subtitleAnimationValue: "\(duplicateGroups.count)-\(totalDuplicateCount)"
             )
@@ -124,8 +124,7 @@ struct HistoryDuplicateGroupRow: View {
             }
         }
         .padding(8)
-        .background(Color.secondary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+        .sortyInsetSurface()
     }
 
     @ViewBuilder
@@ -173,12 +172,8 @@ struct HistoryDuplicateGroupRow: View {
                 .lineLimit(1)
             Spacer()
             Text("\(group.duplicateCount + 1) copies")
-                .font(.caption2)
-                .foregroundStyle(.white)
+                .sortyBadge(tint: SortyDesignSystem.Colors.error)
                 .numericTextTransition(animationValue: group.duplicateCount)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(.red))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(4)

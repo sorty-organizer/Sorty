@@ -87,11 +87,11 @@ struct WatchedFolderCard: View {
     }
 
     private var statusColor: Color {
-        if !folderExists { return .red }
-        if folder.accessStatus == .lost { return .orange }
+        if !folderExists { return SortyDesignSystem.Colors.error }
+        if folder.accessStatus == .lost { return SortyDesignSystem.Colors.warning }
         if !folder.isEnabled { return .secondary }
-        if isOrganizing { return .blue }
-        return .green
+        if isOrganizing { return SortyDesignSystem.Colors.info }
+        return SortyDesignSystem.Colors.success
     }
 
     private var statusIcon: String {
@@ -113,7 +113,7 @@ struct WatchedFolderCard: View {
         if isHighlighted {
             return SortyDesignSystem.Colors.resolvedAccent.opacity(highlightPulse ? 0.9 : 0.45)
         }
-        return folderExists ? Color.white.opacity(0.1) : Color.red.opacity(0.3)
+        return folderExists ? Color.white.opacity(0.1) : SortyDesignSystem.Colors.error.opacity(0.3)
     }
 
     private var cardShadowColor: Color {
@@ -152,27 +152,17 @@ struct WatchedFolderCard: View {
         HStack(spacing: 4) {
             SortyGradientCircularLoader(size: 10, lineWidth: 2)
             Text("Running...")
-                .font(.caption2)
         }
-        .foregroundColor(.blue)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(Color.blue.opacity(0.1))
-        .clipShape(Capsule())
+        .sortyBadge(tint: SortyDesignSystem.Colors.info)
     }
 
     private var aiMissingBadge: some View {
         HStack(spacing: 4) {
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.caption2)
-            Text("Provider Missing")
-                .font(.caption2)
+            Text("Provider missing")
         }
-        .foregroundColor(.orange)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(Color.orange.opacity(0.1))
-        .clipShape(Capsule())
+        .sortyBadge(tint: SortyDesignSystem.Colors.warning)
         .help("Watching requires a provider configured in Settings")
     }
 
@@ -219,7 +209,7 @@ struct WatchedFolderCard: View {
                         .lineLimit(1)
                         .numericTextTransition(animationValue: modelOverride)
                 }
-                .foregroundStyle(.purple)
+                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
             }
         }
     }
@@ -237,7 +227,7 @@ struct WatchedFolderCard: View {
                     animationValue: folder.effectiveOrganizationMode
                 )
         }
-        .foregroundStyle(.blue)
+        .foregroundStyle(SortyDesignSystem.Colors.info)
     }
 
     private var missingFolderStatus: some View {
@@ -248,7 +238,7 @@ struct WatchedFolderCard: View {
             Text("Folder not found")
                 .font(.caption2)
         }
-        .foregroundStyle(.red)
+        .foregroundStyle(SortyDesignSystem.Colors.error)
     }
 
     private var grantAccessButton: some View {
@@ -308,7 +298,7 @@ struct WatchedFolderCard: View {
     private var activityLine: some View {
         if isSnoozed, let until = folder.snoozedUntil {
             Label(snoozedActivityText(until: until), systemImage: "clock.badge.pause")
-                .foregroundStyle(.orange)
+                .foregroundStyle(SortyDesignSystem.Colors.warning)
         } else if let activity = watchedFoldersManager.activityByFolder[folder.id] {
             if case .awaitingReview(let count) = activity {
                 awaitingReviewLine(fileCount: count)
@@ -422,7 +412,7 @@ struct WatchedFolderCard: View {
             } label: {
                 Image(systemName: "trash")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SortyDesignSystem.Colors.error)
             }
             .buttonStyle(.sortyBordered)
             .controlSize(.small)
@@ -652,17 +642,17 @@ struct WatchedFolderCard: View {
 
     private var activeCard: some View {
         cardContent
-        .padding(16)
         .contentShape(Rectangle())
-        .background {
+        .sortyCard(padding: 16)
+        .overlay {
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(cardBackgroundColor)
+                .allowsHitTesting(false)
                 .animation(
                     reduceMotion ? nil : .sortyQuick,
                     value: isHovered
                 )
         }
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
         .overlay(
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(cardBorderColor, lineWidth: isHighlighted ? 1.6 : 1)

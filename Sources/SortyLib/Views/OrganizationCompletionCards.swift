@@ -15,7 +15,7 @@ struct InlineLearningMomentCard: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
                         Image(systemName: "questionmark.bubble.fill")
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         Text("Quick question")
                             .font(.subheadline.weight(.semibold))
                         Spacer()
@@ -38,24 +38,18 @@ struct InlineLearningMomentCard: View {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 6)], spacing: 6) {
                         ForEach(moment.options, id: \.self) { option in
                             Button {
-                                HapticFeedbackManager.shared.selection()
                                 answer(option, for: moment)
                             } label: {
                                 Text(option)
-                                    .font(.caption)
                                     .lineLimit(2)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
                                     .frame(maxWidth: .infinity)
-                                    .background(Capsule().fill(Color.secondary.opacity(0.1)))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.sortyChip())
                             .accessibilityIdentifier("InlineMomentOption-\(option)")
                         }
                     }
                 }
-                .padding(14)
-                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl)
+                .sortyCard(padding: 14)
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("InlineMomentCard")
                 .accessibilityLabel("Follow-up question: \(moment.prompt)")
@@ -126,11 +120,7 @@ struct TimeSavedHighlight: View {
         .padding(.horizontal, 14)
         .padding(.vertical, usesCompactVerticalLayout ? 7 : 10)
         .frame(maxWidth: 340)
-        .background(Color.secondary.opacity(0.055), in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Estimated manual time saved: \(value)")
     }
@@ -264,11 +254,11 @@ struct CompletionFeatureSuggestionCard: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
                 .font(.title3)
-                .foregroundStyle(.blue)
+                .foregroundStyle(SortyDesignSystem.Colors.info)
                 .frame(width: 32, height: 32)
                 .background(
                     Circle()
-                        .fill(Color.blue.opacity(0.12))
+                        .fill(SortyDesignSystem.Colors.info.opacity(0.12))
                 )
             
             VStack(alignment: .leading, spacing: 4) {
@@ -306,21 +296,7 @@ struct CompletionFeatureSuggestionCard: View {
             .help("Dismiss suggestion")
             .accessibilityLabel("Dismiss storage location suggestion")
         }
-        .padding(usesCompactVerticalLayout ? 12 : 16)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl)
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.28), Color.white.opacity(0.08)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 5)
+        .sortyCard(padding: usesCompactVerticalLayout ? 12 : 16)
         .help(description)
         .accessibilityElement(children: .contain)
     }

@@ -57,16 +57,9 @@ struct InsightHistorySection: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .sortyCard(padding: 0)
         .frame(maxWidth: 550)
-        .background(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
-                .fill(Color(NSColor.controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
-                        .stroke(Color(NSColor.separatorColor).opacity(0.8), lineWidth: 1)
-                )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .onChange(of: liveInsightsEnabled) { _, enabled in
             if !enabled {
                 viewState.showDebugStream = false
@@ -410,15 +403,7 @@ struct InsightHistorySection: View {
 
                         if markFirstAsLatest, index == 0 {
                             Text("Latest")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.14))
-                                )
+                                .sortyBadge(tint: SortyDesignSystem.Colors.resolvedAccent)
                         }
                     }
                 }
@@ -434,7 +419,7 @@ struct InsightHistorySection: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "text.word.spacing")
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 Text("AI Response")
                     .fontWeight(.medium)
             }
@@ -461,14 +446,7 @@ struct InsightHistorySection: View {
             .frame(maxWidth: 550, maxHeight: 180)
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                .fill(Color(NSColor.controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                )
-        )
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
         .accessibilityLabel(
             FeatureFlags.privacyModeEnabled
                 ? "AI response preview hidden in Privacy Mode" : "AI response preview")
@@ -482,7 +460,7 @@ struct InsightHistorySection: View {
             } else {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.callout)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(SortyDesignSystem.Colors.success)
             }
 
             Text(headerTitle)
@@ -499,13 +477,8 @@ struct InsightHistorySection: View {
             let insightCount = insights.history.count
             if insightCount > 0 {
                 Text("\(insightCount)")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.white)
                     .numericTextTransition(animationValue: insightCount)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(SortyDesignSystem.Colors.resolvedAccent))
+                    .sortyBadge(tint: SortyDesignSystem.Colors.resolvedAccent)
             }
 
             if FeatureFlags.privacyModeEnabled && !hidePrivacyWarning {
@@ -514,7 +487,7 @@ struct InsightHistorySection: View {
                 } label: {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(SortyDesignSystem.Colors.warning)
                 }
                 .buttonStyle(.plain)
                 .help("Privacy warning for live AI insights")
@@ -523,8 +496,8 @@ struct InsightHistorySection: View {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 8) {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                            Text("Privacy Warning")
+                                .foregroundStyle(SortyDesignSystem.Colors.warning)
+                            Text("Privacy warning")
                                 .font(.headline)
 
                             Spacer()

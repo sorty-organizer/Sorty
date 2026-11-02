@@ -23,8 +23,8 @@ struct FlatUnorganizedHeaderView: View {
                 .font(.caption.weight(.semibold))
                 .rotationEffect(.degrees(isExpanded ? 90 : 0))
             Image(systemName: "questionmark.folder")
-                .foregroundColor(.orange)
-            Text("Unorganized Files")
+                .foregroundColor(SortyDesignSystem.Colors.warning)
+            Text("Unorganized files")
                 .font(.headline)
                 .foregroundColor(.secondary)
             
@@ -57,8 +57,8 @@ struct FlatUnorganizedHeaderView: View {
         )
         .background(
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
-                .fill(isDropTarget ? Color.orange.opacity(0.1) : Color.clear)
-                .strokeBorder(isDropTarget ? Color.orange : Color.clear, lineWidth: 2)
+                .fill(isDropTarget ? SortyDesignSystem.Colors.warning.opacity(0.1) : Color.clear)
+                .strokeBorder(isDropTarget ? SortyDesignSystem.Colors.warning : Color.clear, lineWidth: 2)
         )
         .onDrop(of: [.text], delegate: OptimizedUnorganizedDropDelegate(
             store: store,

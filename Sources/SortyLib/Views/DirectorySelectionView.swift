@@ -72,7 +72,7 @@ struct DirectorySelectionView: View {
                         Image(systemName: "folder.badge.plus")
                             .font(.system(size: 15, weight: .medium))
                         Text("Browse for Folder")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.title3.weight(.semibold))
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
@@ -202,7 +202,7 @@ struct DirectorySelectionView: View {
             .animation(.sortyBouncy, value: iconBounce)
 
             Text(isTargeted ? "Drop to select" : "Drop folder here")
-                .font(.system(size: 14, weight: .medium))
+                .font(.body.weight(.medium))
                 .foregroundStyle(isTargeted ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
                 .numericTextTransition(animationValue: isTargeted)
         }

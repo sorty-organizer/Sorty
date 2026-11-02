@@ -110,9 +110,9 @@ struct SetupRepairGateView: View {
         VStack(spacing: 20) {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 36))
-                .foregroundStyle(.orange)
+                .foregroundStyle(SortyDesignSystem.Colors.warning)
 
-            Text("Finish Provider Setup")
+            Text("Finish provider setup")
                 .font(.title3.weight(.semibold))
 
             Text(message)

@@ -107,13 +107,12 @@ package struct DuplicatesView: View {
                             .transition(.opacity)
                         } else if detectionManager.lastScanDate == nil {
                             DuplicatesEmptyStateView(
-                                title: "Ready to Scan",
+                                title: "Ready to scan",
                                 description:
                                     "Identical files in \(effectiveDirectory?.lastPathComponent ?? "this folder") will be identified.",
                                 icon: "waveform.path.ecg",
-                                iconColor: SortyDesignSystem.Colors.resolvedAccent,
                                 actionTitle: "Start Scan",
-                                animatesIcon: true,
+                                actionAccessibilityIdentifier: "ReadytoScanAction",
                                 isDefaultAction: true,
                                 action: startScan
                             )
@@ -227,7 +226,7 @@ package struct DuplicatesView: View {
     func duplicatesBaseHeaderSection() -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Duplicate Files")
+                Text("Duplicate files")
                     .font(.largeTitle.bold())
 
                 Text("Find identical files, recover disk space, and keep your workspace tidy")
@@ -241,7 +240,7 @@ package struct DuplicatesView: View {
     @ViewBuilder
     func duplicatesBaseEmptyState() -> some View {
         DuplicatesEmptyStateView(
-            title: "Select a Directory",
+            title: "Select a directory",
             description: "Choose a folder to scan for identical files and recover disk space",
             icon: "doc.on.doc",
             actionTitle: "Choose Directory",
@@ -253,17 +252,17 @@ package struct DuplicatesView: View {
     var noDuplicatesView: some View {
         DuplicatesEmptyStateView(
             title: detectionManager.unreadableFileCount > 0
-                ? "Scan Incomplete"
-                : "No Duplicates Found",
+                ? "Scan incomplete"
+                : "No duplicates found",
             description: detectionManager.unreadableFileCount > 0
                 ? "Sorty couldn't read \(detectionManager.unreadableFileCount) file\(detectionManager.unreadableFileCount == 1 ? "" : "s"). Make cloud files available offline or reconnect the drive, then scan again."
                 : "All readable files in this folder are unique.",
             icon: detectionManager.unreadableFileCount > 0
                 ? "exclamationmark.triangle.fill"
                 : "checkmark.circle.fill",
-            heroTint: detectionManager.unreadableFileCount > 0 ? .orange : .green,
+            heroTint: detectionManager.unreadableFileCount > 0 ? SortyDesignSystem.Colors.warning : SortyDesignSystem.Colors.success,
             actionTitle: "Scan Another Folder",
-            celebratesAppearance: detectionManager.unreadableFileCount == 0,
+            actionAccessibilityIdentifier: detectionManager.unreadableFileCount > 0 ? "ScanIncompleteAction" : "NoDuplicatesFoundAction",
             action: selectDirectory
         )
     }

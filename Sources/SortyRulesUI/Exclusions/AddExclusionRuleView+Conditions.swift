@@ -248,7 +248,7 @@ extension AddExclusionRuleView {
     func patternErrorRow(_ text: String) -> some View {
         Label(text, systemImage: "exclamationmark.triangle.fill")
             .font(.caption)
-            .foregroundStyle(.red)
+            .foregroundStyle(SortyDesignSystem.Colors.error)
             .accessibilityIdentifier("ExclusionRulePatternError")
     }
 
@@ -268,7 +268,7 @@ extension AddExclusionRuleView {
     func explanationRow(_ text: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(SortyDesignSystem.Colors.success)
             Text(text)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

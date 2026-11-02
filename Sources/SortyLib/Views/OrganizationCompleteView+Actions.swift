@@ -106,7 +106,7 @@ extension OrganizationCompleteView {
             title: "Files restored",
             message: message,
             icon: "checkmark.seal.fill",
-            iconColor: .mint,
+            iconColor: SortyDesignSystem.Colors.success,
             actions: [
                 HUDNotificationAction(title: "Redo", systemImage: "arrow.uturn.forward") {
                     NotificationManager.shared.dismissHUD()

@@ -90,11 +90,11 @@ struct UnifiedDuplicateGroupDetailView: View {
             DuplicateMetricTile(
                 value: ByteCountFormatter.string(
                     fromByteCount: group.potentialSavings, countStyle: .file), label: "recoverable",
-                color: .green)
+                color: SortyDesignSystem.Colors.success)
             DuplicateMetricTile(
                 value: group.isExact ? "100%" : (group.similarityPercentage ?? "Review"),
                 label: group.isExact ? "match" : "similarity",
-                color: group.isExact ? .orange : .blue)
+                color: group.isExact ? SortyDesignSystem.Colors.warning : SortyDesignSystem.Colors.info)
         }
     }
 
@@ -124,11 +124,7 @@ struct UnifiedDuplicateGroupDetailView: View {
     private var overviewBadges: some View {
         if !group.isExact {
             Text(group.groupTypeLabel)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.blue)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.blue.opacity(0.1), in: Capsule())
+                .sortyBadge(tint: SortyDesignSystem.Colors.info)
         }
 
         if group.confidenceLevel == .low {
@@ -139,14 +135,11 @@ struct UnifiedDuplicateGroupDetailView: View {
     private var confidenceBadge: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(.orange)
+                .fill(SortyDesignSystem.Colors.warning)
                 .frame(width: 6, height: 6)
             Text(group.confidenceLevel.rawValue)
-                .font(.caption.weight(.medium))
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color.orange.opacity(0.12), in: Capsule())
+        .sortyBadge(tint: SortyDesignSystem.Colors.warning)
         .accessibilityElement(children: .combine)
     }
 
@@ -159,7 +152,7 @@ struct UnifiedDuplicateGroupDetailView: View {
                 Text(compactButtonTitle(for: recommendation))
             }
             .buttonStyle(.sortyProminent)
-            .tint(.blue)
+            .tint(SortyDesignSystem.Colors.info)
             .controlSize(.regular)
             .help(recommendation.description)
         } else {
@@ -169,7 +162,7 @@ struct UnifiedDuplicateGroupDetailView: View {
                 Text("Clean Up Selected")
             }
             .buttonStyle(.sortyProminent)
-            .tint(.red)
+            .tint(SortyDesignSystem.Colors.error)
             .controlSize(.regular)
             .help("Keep the first file and clean up the rest.")
         }
@@ -300,7 +293,7 @@ struct DuplicateMetricTile: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
         .frame(minHeight: 50)
         .accessibilityElement(children: .combine)
     }

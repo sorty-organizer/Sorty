@@ -28,34 +28,15 @@ struct ExclusionEditorTransitionModifier: ViewModifier {
 struct EmptyExclusionRulesView: View {
     @SortyHotReload private var hotReload
     let onAddRule: () -> Void
-    @State private var hasAppeared = false
     @State private var beamHasAppeared = false
 
     var body: some View {
-        VStack(spacing: 24) {
-            EmptyStateHeroIcon(systemName: "eye.slash.circle")
-                .opacity(hasAppeared ? 1 : 0)
-                .scaleEffect(hasAppeared ? 1 : 0.8)
-                .animation(
-                    .sortySpringStandard.delay(0.1), value: hasAppeared)
-
-            VStack(spacing: 8) {
-                Text("Nothing is excluded")
-                    .font(.title3)
-                    .fontWeight(.semibold)
-
-                Text(
-                    "Choose folders or rules for anything Sorty should exclude from organizations and renames."
-                )
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
-            }
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 10)
-            .animation(.sortySpringStandard.delay(0.2), value: hasAppeared)
-
+        SortyEmptyState(
+            "Nothing is excluded",
+            systemImage: "eye.slash.circle",
+            message: "Choose folders or rules for anything Sorty should exclude from organizations and renames.",
+            size: .page
+        ) {
             Button {
                 onAddRule()
             } label: {
@@ -63,18 +44,12 @@ struct EmptyExclusionRulesView: View {
             }
             .buttonStyle(.sortyProminent)
             .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 15)
-            .animation(.sortySpringStandard.delay(0.3), value: hasAppeared)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                hasAppeared = true
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                beamHasAppeared = true
-            }
+        .task {
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled else { return }
+            beamHasAppeared = true
         }
     }
 }
@@ -106,15 +81,10 @@ struct RuleGroupCard: View {
                             .foregroundStyle(.secondary)
 
                         Text("\(rules.count + naturalLanguageExceptions.count)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                             .numericTextTransition(
                                 animationValue: rules.count + naturalLanguageExceptions.count
                             )
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.1))
-                            .clipShape(Capsule())
+                            .sortyBadge()
                     }
                 }
                 .buttonStyle(.plain)
@@ -199,7 +169,7 @@ struct RuleGroupCard: View {
                 }
             }
         }
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
+        .sortyCard(padding: 0)
     }
 
     private func toggleExpanded() {
@@ -225,7 +195,7 @@ struct NaturalLanguageExceptionRow: View {
         HStack(spacing: 12) {
             exceptionIcon
                 .frame(width: 28, height: 28)
-                .background((exception.isEnabled ? Color.purple : .secondary).opacity(0.1))
+                .background((exception.isEnabled ? SortyDesignSystem.Colors.resolvedAccent : .secondary).opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
@@ -236,12 +206,7 @@ struct NaturalLanguageExceptionRow: View {
                         .lineLimit(2)
 
                     Text("Natural Language")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.purple.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
+                        .sortyBadge(tint: SortyDesignSystem.Colors.resolvedAccent)
                 }
 
                 HStack(spacing: 6) {
@@ -271,7 +236,7 @@ struct NaturalLanguageExceptionRow: View {
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(SortyDesignSystem.Colors.error)
                 }
                 .buttonStyle(.plain)
                 .transition(.scale.combined(with: .opacity))
@@ -319,7 +284,7 @@ struct NaturalLanguageExceptionRow: View {
         if exception.referencedPaths.isEmpty {
             Image(systemName: "sparkles")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(exception.isEnabled ? .purple : .secondary)
+                .foregroundStyle(exception.isEnabled ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
         } else {
             AppKitImageView(
                 image: Self.systemFolderIcon,
@@ -345,7 +310,7 @@ struct ExclusionRuleUsageButton: View {
         } label: {
             Label("\(usage?.matchCount ?? 0)", systemImage: "checkmark.shield")
                 .font(.caption2.monospacedDigit())
-                .foregroundStyle((usage?.matchCount ?? 0) > 0 ? .green : .secondary)
+                .foregroundStyle((usage?.matchCount ?? 0) > 0 ? SortyDesignSystem.Colors.success : .secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Color.primary.opacity(0.04), in: Capsule())

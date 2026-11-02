@@ -222,7 +222,7 @@ public struct WhatsNewTourView: View {
                     releaseSection(
                         title: "Improved",
                         symbol: "arrow.up.right.circle.fill",
-                        color: .green,
+                        color: SortyDesignSystem.Colors.success,
                         items: [
                             "Skill-first onboarding with Continue with App",
                             "Menu bar and Finder icon styles",
@@ -232,7 +232,7 @@ public struct WhatsNewTourView: View {
                     releaseSection(
                         title: "Fixed",
                         symbol: "wrench.and.screwdriver.fill",
-                        color: .orange,
+                        color: SortyDesignSystem.Colors.warning,
                         items: [
                             "Missing and replaced files stop unsafe operations",
                             "Concurrent AI batches keep their streams separate",

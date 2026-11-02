@@ -44,7 +44,7 @@ struct PrivacyFeatureRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 14))
-                .foregroundStyle(.green)
+                .foregroundStyle(SortyDesignSystem.Colors.success)
                 .frame(width: 20)
 
             Text(text)
@@ -92,7 +92,7 @@ struct OnboardingProviderRow: View {
     }
 
     var subtitleColor: Color {
-        provider == .ollama ? .green : .blue
+        provider == .ollama ? SortyDesignSystem.Colors.success : SortyDesignSystem.Colors.info
     }
 
     var body: some View {
@@ -176,11 +176,7 @@ struct OnboardingProviderRow: View {
 
             if !provider.isAvailable {
                 Text("Unavailable")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.secondary.opacity(0.1), in: Capsule())
+                    .sortyBadge()
             }
         }
         .padding(.vertical, 8)

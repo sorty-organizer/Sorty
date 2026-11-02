@@ -204,7 +204,7 @@ public struct CompletionStepView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(SortyDesignSystem.Colors.warning)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Provider check failed")
@@ -238,15 +238,7 @@ public struct CompletionStepView: View {
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
-                .fill(Color.orange.opacity(0.035))
-        )
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
-        .overlay(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
-                .stroke(Color.orange.opacity(0.15), lineWidth: 1)
-        )
+        .sortyInsetSurface(tint: SortyDesignSystem.Colors.warning, cornerRadius: SortyDesignSystem.Radius.lg)
     }
 
     private func verifyAndFinish() {

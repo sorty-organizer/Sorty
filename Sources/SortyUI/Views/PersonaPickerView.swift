@@ -180,11 +180,8 @@ package struct PersonaPickerView: View {
 
             if !customStore.customPersonas.isEmpty {
                 Text("\(customStore.customPersonas.count)")
-                    .font(.caption2.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(Color.secondary.opacity(0.12), in: Capsule())
+                    .monospacedDigit()
+                    .sortyBadge()
                     .numericTextTransition(animationValue: customStore.customPersonas.count)
             }
 
@@ -206,10 +203,10 @@ package struct PersonaPickerView: View {
             Image(systemName: "person.crop.circle.badge.plus")
                 .font(.system(size: 22, weight: .medium))
                 .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.purple)
+                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 .frame(width: 44, height: 44)
                 .background(
-                    Color.purple.opacity(0.12),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
                     in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 )
                 .accessibilityHidden(true)
@@ -231,11 +228,10 @@ package struct PersonaPickerView: View {
             .buttonStyle(.sortyProminent(size: .small))
             .accessibilityIdentifier("SettingsCreateCustomPersonaButton")
         }
-        .padding(12)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .sortyCard(padding: 12)
         .overlay {
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                .strokeBorder(Color.purple.opacity(isHoveringEmptyState ? 0.3 : 0.14), lineWidth: 1)
+                .strokeBorder(SortyDesignSystem.Colors.resolvedAccent.opacity(isHoveringEmptyState ? 0.3 : 0.14), lineWidth: 1)
         }
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -323,11 +319,11 @@ package struct PersonaPickerView: View {
                 } label: {
                     Image(systemName: localIcon)
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         .frame(width: 52, height: 52)
                         .symbolReplaceTransition(animationValue: localIcon)
                         .background(
-                            Color.purple.opacity(0.12),
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
                             in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         )
                 }
@@ -430,7 +426,7 @@ package struct PersonaPickerView: View {
             if let polishError {
                 Label(polishError, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SortyDesignSystem.Colors.error)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -456,10 +452,10 @@ package struct PersonaPickerView: View {
                             Image(systemName: icon)
                                 .font(.system(size: 17, weight: .medium))
                                 .frame(width: 38, height: 38)
-                                .foregroundStyle(localIcon == icon ? Color.purple : Color.primary)
+                                .foregroundStyle(localIcon == icon ? SortyDesignSystem.Colors.resolvedAccent : Color.primary)
                                 .background(
                                     localIcon == icon
-                                        ? Color.purple.opacity(0.14)
+                                        ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.14)
                                         : Color.primary.opacity(0.04),
                                     in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                                 )
@@ -585,7 +581,7 @@ package struct PersonaPickerView: View {
                     title: "Prompt Cleaned Up",
                     message: "Your intent was preserved and the rules were structured automatically.",
                     icon: "wand.and.stars",
-                    iconColor: .purple,
+                    iconColor: SortyDesignSystem.Colors.resolvedAccent,
                     identifier: "persona-prompt-polished"
                 )
             } catch {
@@ -619,7 +615,7 @@ package struct PersonaPickerView: View {
             title: "Persona Deleted",
             message: "\(persona.name) was removed.",
             icon: "trash.fill",
-            iconColor: .red,
+            iconColor: SortyDesignSystem.Colors.error,
             identifier: "persona-deleted"
         )
     }

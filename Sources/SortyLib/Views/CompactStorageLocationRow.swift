@@ -30,13 +30,13 @@ struct CompactStorageLocationRow: View {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: location.isEnabled ? "externaldrive.fill" : "externaldrive")
                     .font(.system(size: 14))
-                    .foregroundStyle(Color.blue)
+                    .foregroundStyle(SortyDesignSystem.Colors.info)
                     .symbolReplaceTransition(animationValue: location.isEnabled)
 
                 if needsAttention {
                     Image(systemName: !location.exists ? "exclamationmark.triangle.fill" : "lock.slash.fill")
                         .font(.system(size: 10))
-                        .foregroundStyle(!location.exists ? .red : .orange)
+                        .foregroundStyle(!location.exists ? SortyDesignSystem.Colors.error : SortyDesignSystem.Colors.warning)
                         .symbolReplaceTransition(animationValue: location.exists)
                         .offset(x: 5, y: 4)
                         .accessibilityHidden(true)
@@ -144,10 +144,7 @@ struct CompactStorageLocationRow: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .contentShape(Rectangle())
-        .background(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
-                .fill(Color.secondary.opacity(0.05))
-        )
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.sm)
         .contextMenu {
             Button("Reveal in Finder") {
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: location.path)

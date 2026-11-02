@@ -20,7 +20,7 @@ struct LearningExclusionRow: View {
         HStack(spacing: 12) {
             Image(systemName: "eye.slash.fill")
                 .font(.body.bold())
-                .foregroundColor(.orange)
+                .foregroundColor(SortyDesignSystem.Colors.warning)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {

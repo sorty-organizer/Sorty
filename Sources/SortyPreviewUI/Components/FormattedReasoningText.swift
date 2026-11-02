@@ -63,7 +63,7 @@ package struct FormattedReasoningText: View {
                 if showSectionIcons, let icon = segment.icon {
                     Image(systemName: icon)
                         .font(.system(size: level == 1 ? 11 : 10, weight: .semibold))
-                        .foregroundStyle(segment.iconColor ?? .purple)
+                        .foregroundStyle(segment.iconColor ?? SortyDesignSystem.Colors.resolvedAccent)
                 }
                 attributedText(segment.text, font: level == 1 ? font.weight(.bold) : secondaryFont.weight(.semibold))
                     .foregroundStyle(foregroundStyle)
@@ -71,7 +71,7 @@ package struct FormattedReasoningText: View {
         case .bullet:
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Circle()
-                    .fill(Color.purple.opacity(0.5))
+                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.5))
                     .frame(width: 4, height: 4)
                     .padding(.top, 4)
                 attributedText(segment.text, font: secondaryFont)
@@ -83,7 +83,7 @@ package struct FormattedReasoningText: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("\(n).")
                     .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.purple.opacity(0.7))
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent.opacity(0.7))
                     .frame(width: 16, alignment: .trailing)
                 attributedText(segment.text, font: secondaryFont)
                     .foregroundStyle(foregroundStyle.opacity(0.85))
@@ -147,7 +147,7 @@ private struct ReasoningSegment {
         if lower.contains("semantic") || lower.contains("grouping") { return .teal }
         if lower.contains("alternative") { return .orange }
         if lower.contains("benefit") || lower.contains("workflow") { return .green }
-        return .purple
+        return SortyDesignSystem.Colors.resolvedAccent
     }
 }
 

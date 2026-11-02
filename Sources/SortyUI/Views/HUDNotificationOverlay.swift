@@ -426,11 +426,11 @@ private struct HUDNotificationActionLabel: View {
             }
 
             Text(action.title)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.callout.weight(.semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
         }
-        .foregroundStyle(isDestructive ? Color.red : .primary)
+        .foregroundStyle(isDestructive ? SortyDesignSystem.Colors.error : .primary)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: 30, alignment: .center)

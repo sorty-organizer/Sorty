@@ -161,17 +161,13 @@ extension ReadyToOrganizeView {
                 if selectedStorageLocationCount > 0 {
                     HStack(spacing: 8) {
                         Text("\(selectedStorageLocationCount) selected")
-                            .font(.caption)
-                            .foregroundStyle(storageLocationSelectionTint)
                             .numericTextTransition(animationValue: selectedStorageLocationCount)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
+                            .sortyBadge(tint: storageLocationSelectionTint)
 
                         if unavailableSelectedStorageLocationCount > 0 {
                             Text("\(unavailableSelectedStorageLocationCount) unavailable")
                                 .font(.caption)
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(SortyDesignSystem.Colors.warning)
                                 .numericTextTransition(
                                     animationValue: unavailableSelectedStorageLocationCount
                                 )

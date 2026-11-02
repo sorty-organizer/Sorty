@@ -23,12 +23,11 @@ struct UnifiedFileDetailRow: View {
         verticalLayout
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
+        .sortyCard(padding: 0)
         .overlay {
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(
-                    isRecommended ? Color.green.opacity(0.24) : Color.primary.opacity(0.07),
+                    isRecommended ? SortyDesignSystem.Colors.success.opacity(0.24) : Color.primary.opacity(0.07),
                     lineWidth: 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
@@ -95,11 +94,7 @@ struct UnifiedFileDetailRow: View {
 
             if let label = recommendation {
                 Text(label)
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(.blue))
+                    .sortyBadge(tint: SortyDesignSystem.Colors.info)
             }
 
             revealButton
@@ -150,7 +145,7 @@ struct UnifiedFileDetailRow: View {
                 if let pixels = file.totalPixels, pixels > 0 {
                     Text("•")
                     Text("\(formatPixels(pixels))")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(SortyDesignSystem.Colors.info)
                 }
             }
 
@@ -161,7 +156,7 @@ struct UnifiedFileDetailRow: View {
                 }
                 if let pixels = file.totalPixels, pixels > 0 {
                     Text("\(formatPixels(pixels))")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(SortyDesignSystem.Colors.info)
                 }
             }
         }
@@ -174,7 +169,7 @@ struct UnifiedFileDetailRow: View {
         }
         .buttonStyle(.sortyBordered)
         .controlSize(.small)
-        .foregroundStyle(.red)
+        .foregroundStyle(SortyDesignSystem.Colors.error)
         .help("Delete this duplicate")
         .accessibilityLabel("Delete \(file.displayName)")
     }
@@ -191,12 +186,8 @@ struct UnifiedFileDetailRow: View {
 
     private var keepBadge: some View {
         Label("Keep", systemImage: "checkmark.circle.fill")
-            .font(.caption.bold())
-            .foregroundStyle(.green)
             .labelStyle(.titleAndIcon)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.green.opacity(0.1), in: Capsule())
+            .sortyBadge(tint: SortyDesignSystem.Colors.success)
     }
 
     private func formatPixels(_ pixels: Int) -> String {

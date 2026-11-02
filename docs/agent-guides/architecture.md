@@ -146,6 +146,24 @@ Every action button uses `SortyButtonStyle` from `Sources/SortyUI/Utilities/Butt
 
 `Button(role: .destructive)` picks the destructive intent automatically. Do not tint buttons with arbitrary colors. `.plain` stays for icon buttons, rows, chips, and other custom controls; `.link` for inline text links; `.systemLiquidGlassButton()` for native glass toolbar-style buttons. The style already plays the press haptic.
 
+### Surfaces, tokens, and copy
+Shared pieces live in `Sources/SortyUI/Components/SortySurfaces.swift` and `Sources/SortyCore/DesignSystem/SortyDesignSystem.swift`. Use them instead of hand-rolled fills, strokes, and capsules.
+
+| Need | Use |
+|------|-----|
+| A card | `.sortyCard(padding:)` (glass, `Radius.lg`, same as `SettingsCard`) |
+| A group inside a card | `.sortyInsetSurface(tint:isHighlighted:)` (glass never sits on glass) |
+| A count, status, or tag | `.sortyBadge(tint:)` |
+| A selectable filter or quick answer | `.buttonStyle(.sortyChip(isSelected:))` |
+| An empty state | `SortyEmptyState("No items yet", systemImage:, message:, size: .page/.inline) { actions }` |
+| Corner radius | `SortyDesignSystem.Radius.xs/sm/md/lg/xl/xxl` (4/6/8/12/16/20), always `.continuous`; `Capsule()` for pills |
+| Spacing | `SortyDesignSystem.Spacing` steps (4/6/8/12/16/20/24/32); literals stay on even steps |
+| Motion | `.sortyQuick`, `.sortyFade`, `.sortySlowFade`, `.sortySnappy`, `.sortySmooth`, `.sortySpringStandard`, `.sortyBouncy` |
+| Color | `SortyDesignSystem.Colors.resolvedAccent/success/warning/error/info`. Raw system colors only inside fixed identity tables (settings categories, Finder tags, provider/permission types, charts) |
+| Text | Semantic styles (`.caption`, `.subheadline`, `.callout`, `.body`, `.title3`…) with `.weight(...)`; `.system(size:)` is for SF Symbols and display sizes |
+
+Copy: sentence case for in-content headings, labels, and empty states; title case for buttons, menu items, and window titles (macOS HIG). When recasing a string, rename its key in `Sources/SortyLib/Resources/Localizable.xcstrings` so translations carry over.
+
 ### Text layout
 
 Shared action styles allow multiline labels and grow vertically. Keep settings,

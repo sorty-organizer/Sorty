@@ -80,7 +80,7 @@ struct WatchedFolderConfigView: View {
                     instructionsCard
                     // AI Model Section
                     modelCard
-                    SettingsCard(title: "Recent AI Actions", icon: "sparkles", color: .purple) {
+                    SettingsCard(title: "Recent AI actions", icon: "sparkles", color: SortyDesignSystem.Colors.resolvedAccent) {
                         WatchedFolderRecentActions(
                             folder: folder,
                             history: organizer.history
@@ -137,13 +137,8 @@ struct WatchedFolderConfigView: View {
                     Task { await improvePromptWithAI() }
                 } label: {
                     Label("Improve", systemImage: "wand.and.stars")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .foregroundColor(.teal)
+                .buttonStyle(.sortyBordered(size: .small))
                 .disabled(isImprovingPrompt)
                 .help("Improve instructions with Sorty")
                 .accessibilityHint("Rewrites this watched folder's prompt to be clearer and more specific")
@@ -160,13 +155,8 @@ struct WatchedFolderConfigView: View {
                     showSavePromptDialog.toggle()
                 } label: {
                     Label("Save", systemImage: "bookmark")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .foregroundColor(.accentColor)
+                .buttonStyle(.sortyBordered(size: .small))
                 .help("Save current instructions for reuse")
                 .accessibilityHint("Stores this prompt in your saved prompts list")
                 .popover(isPresented: $showSavePromptDialog) {
@@ -177,35 +167,15 @@ struct WatchedFolderConfigView: View {
             Button {
                 showSavedPromptsSheet.toggle()
             } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "text.alignleft")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                        .frame(width: 18)
-                        .accessibilityHidden(true)
-
-                    Text(
-                        steeringManager.prompts.isEmpty
-                            ? "Saved Prompts"
-                            : "Saved Prompts (\(steeringManager.prompts.count))"
-                    )
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
-                .overlay {
-                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                        .strokeBorder(
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.18),
-                            lineWidth: 1
-                        )
-                }
-                .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
+                Label(
+                    steeringManager.prompts.isEmpty
+                        ? "Saved Prompts"
+                        : "Saved Prompts (\(steeringManager.prompts.count))",
+                    systemImage: "text.alignleft"
+                )
+                .lineLimit(1)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.sortyBordered(size: .small))
             .help("Open your saved instruction prompts")
             .accessibilityHint("View, edit, and apply saved prompts")
 
@@ -228,7 +198,7 @@ struct WatchedFolderConfigView: View {
             if steeringManager.hasPrompt(named: savePromptName) {
                 Text("A prompt with this name already exists.")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SortyDesignSystem.Colors.error)
             }
 
             HStack {
@@ -492,7 +462,7 @@ struct WatchedFolderConfigView: View {
     }
 
     private var organizationModeCard: some View {
-        SettingsCard(title: "Action", icon: "slider.horizontal.3", color: .blue) {
+        SettingsCard(title: "Action", icon: "slider.horizontal.3", color: SortyDesignSystem.Colors.info) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 4) {
                     ForEach(OrganizationMode.allCases, id: \.self) { mode in
@@ -521,7 +491,7 @@ struct WatchedFolderConfigView: View {
     }
 
     private var applyPolicyCard: some View {
-        SettingsCard(title: "When a Plan Is Ready", icon: "checkmark.shield", color: .green) {
+        SettingsCard(title: "When a plan is ready", icon: "checkmark.shield", color: SortyDesignSystem.Colors.success) {
             VStack(alignment: .leading, spacing: 8) {
                 Picker("Apply policy", selection: $selectedApplyPolicy) {
                     ForEach(WatchedFolderApplyPolicy.allCases, id: \.self) { policy in
@@ -542,11 +512,11 @@ struct WatchedFolderConfigView: View {
     }
 
     private var actionsCard: some View {
-        SettingsCard(title: "Actions", icon: "play", color: .blue) {
+        SettingsCard(title: "Actions", icon: "play", color: SortyDesignSystem.Colors.info) {
             Button(action: openFullOrganization) {
                 HStack {
                     Image(systemName: selectedMode.iconName)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(SortyDesignSystem.Colors.info)
                         .symbolReplaceTransition(animationValue: selectedMode)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(LocalizedStringKey(selectedModeManualAction.title))
@@ -569,7 +539,7 @@ struct WatchedFolderConfigView: View {
     }
 
     private var instructionsCard: some View {
-        SettingsCard(title: "Custom Instructions", icon: "text.bubble", color: .purple)
+        SettingsCard(title: "Custom instructions", icon: "text.bubble", color: SortyDesignSystem.Colors.resolvedAccent)
         {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack(alignment: .topLeading) {
@@ -657,11 +627,11 @@ struct WatchedFolderConfigView: View {
     }
 
     private var modelCard: some View {
-        SettingsCard(title: "AI Model", icon: "cpu", color: .purple) {
+        SettingsCard(title: "AI model", icon: "cpu", color: SortyDesignSystem.Colors.resolvedAccent) {
             VStack(spacing: 12) {
                 Toggle(isOn: $useCustomModel) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Use Custom Model")
+                        Text("Use custom model")
                             .font(.subheadline)
                         Text("Override the global automation model for this folder")
                             .font(.caption)
@@ -673,7 +643,7 @@ struct WatchedFolderConfigView: View {
 
                 if useCustomModel {
                     SettingsSubsettingRow(
-                        title: "Folder Model",
+                        title: "Folder model",
                         description: "Used only for this watched folder"
                     ) {
                         HStack(spacing: 8) {
@@ -725,7 +695,7 @@ struct WatchedFolderConfigView: View {
                     if isCustomModelInvalid {
                         Label("Choose an available provider and model before saving.", systemImage: "exclamationmark.triangle")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(SortyDesignSystem.Colors.warning)
                             .padding(.leading, 36)
                     }
                 }

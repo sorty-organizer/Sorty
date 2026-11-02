@@ -47,13 +47,13 @@ public struct CopyButtonWithAnimation: View {
                         .opacity(showCheckmark ? 1 : 0)
                 }
                 .frame(width: iconSize, height: iconSize)
-                .foregroundStyle(showCheckmark ? Color.green : tint)
+                .foregroundStyle(showCheckmark ? SortyDesignSystem.Colors.success : tint)
                 .accessibilityHidden(true)
                 
                 if let label {
                     Text(label)
                         .font(labelFont)
-                        .foregroundStyle(showCheckmark ? .green : tint)
+                        .foregroundStyle(showCheckmark ? SortyDesignSystem.Colors.success : tint)
                 }
             }
         }

@@ -86,7 +86,7 @@ struct InstructionFileReferencePicker: View {
             HStack(spacing: 6) {
                 Image(systemName: "at")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 Text("Reference a file")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -108,7 +108,7 @@ struct InstructionFileReferencePicker: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             highlightedName(reference.name)
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.body.weight(.medium))
                                 .lineLimit(1)
 
                             Text(reference.subtitle)
@@ -121,11 +121,7 @@ struct InstructionFileReferencePicker: View {
 
                         if !reference.url.pathExtension.isEmpty {
                             Text(".\(reference.url.pathExtension)")
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.teal.opacity(0.12), in: Capsule())
+                                .sortyBadge(tint: SortyDesignSystem.Colors.resolvedAccent)
                         }
                     }
                     .padding(.horizontal, 10)
@@ -153,6 +149,6 @@ struct InstructionFileReferencePicker: View {
         let prefix = String(name[..<range.lowerBound])
         let match = String(name[range])
         let suffix = String(name[range.upperBound...])
-        return Text(prefix) + Text(match).foregroundStyle(.teal) + Text(suffix)
+        return Text(prefix) + Text(match).foregroundStyle(SortyDesignSystem.Colors.resolvedAccent) + Text(suffix)
     }
 }

@@ -183,7 +183,7 @@ package struct WindowLinkHoverPillOverlay: View {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.up.forward.app")
                                 .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(Color.blue.opacity(0.95))
+                                .foregroundStyle(SortyDesignSystem.Colors.info.opacity(0.95))
 
                             Text(labelText(for: url))
                                 .font(.system(size: 11, weight: .medium, design: .rounded))
@@ -196,12 +196,12 @@ package struct WindowLinkHoverPillOverlay: View {
                         .padding(.vertical, 6)
                         .background {
                             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.capsule, style: .continuous)
-                                .fill(Color.blue.opacity(0.12))
+                                .fill(SortyDesignSystem.Colors.info.opacity(0.12))
                                 .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
                         }
                         .overlay {
                             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.capsule, style: .continuous)
-                                .stroke(Color.blue.opacity(0.22), lineWidth: 1)
+                                .stroke(SortyDesignSystem.Colors.info.opacity(0.22), lineWidth: 1)
                         }
                     }
                     .buttonStyle(.plain)

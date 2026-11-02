@@ -214,8 +214,7 @@ struct FolderHistoryDetailRow: View {
             }
         }
         .padding(12)
-        .background(Color.secondary.opacity(0.03))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+        .sortyInsetSurface()
         .onAppear {
             expandForHighlightedFileIfNeeded(highlightedFileID)
         }

@@ -116,56 +116,56 @@ struct WatchedFolderNerdStats: View {
         ) {
             NerdStatPillExpanded(
                 icon: "tray.full",
-                color: .indigo,
+                color: SortyDesignSystem.Colors.resolvedAccent,
                 title: "Queued files",
                 value: GenerationStats.formatCount(queuedFileCount),
                 unit: nil
             )
             NerdStatPillExpanded(
                 icon: "waveform.path.ecg",
-                color: .blue,
+                color: SortyDesignSystem.Colors.info,
                 title: "Activity",
                 value: activityLabel,
                 unit: nil
             )
             NerdStatPillExpanded(
                 icon: "play.circle",
-                color: .orange,
+                color: SortyDesignSystem.Colors.resolvedAccent,
                 title: "Runs",
                 value: GenerationStats.formatCount(recentRuns.count),
                 unit: nil
             )
             NerdStatPillExpanded(
                 icon: "checkmark.circle",
-                color: .green,
+                color: SortyDesignSystem.Colors.success,
                 title: "Success rate",
                 value: successRate,
                 unit: nil
             )
             NerdStatPillExpanded(
                 icon: "doc.on.doc",
-                color: .teal,
+                color: SortyDesignSystem.Colors.resolvedAccent,
                 title: "Files organized",
                 value: GenerationStats.formatCount(filesOrganized),
                 unit: nil
             )
             NerdStatPillExpanded(
                 icon: "chart.bar",
-                color: .purple,
+                color: SortyDesignSystem.Colors.resolvedAccent,
                 title: "Avg files per run",
                 value: averageFilesPerRun,
                 unit: nil
             )
             NerdStatPillExpanded(
                 icon: "clock",
-                color: .blue,
+                color: SortyDesignSystem.Colors.info,
                 title: "Total AI time",
                 value: totalAITime,
                 unit: nil
             )
             NerdStatPillExpanded(
                 icon: "dollarsign.circle",
-                color: .green,
+                color: SortyDesignSystem.Colors.success,
                 title: "Estimated cost",
                 value: estimatedCost,
                 unit: nil

@@ -72,7 +72,7 @@ extension AIProviderSettingsView {
                                 Text(status.replacingOccurrences(of: "Error: ", with: ""))
                                     .font(.caption)
                                     .fontWeight(.semibold)
-                                    .foregroundColor(isInternetAccessBlocked ? .orange : .red)
+                                    .foregroundColor(isInternetAccessBlocked ? SortyDesignSystem.Colors.warning : SortyDesignSystem.Colors.error)
                                     .multilineTextAlignment(.center)
                                     .frame(maxWidth: 560)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -125,8 +125,7 @@ extension AIProviderSettingsView {
                                             .font(.system(.caption, design: .monospaced))
                                             .padding(10)
                                             .frame(maxWidth: .infinity, alignment: .leading)
-                                            .background(Color.secondary.opacity(0.1))
-                                            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
+                                            .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.xs)
                                             .fixedSize(horizontal: false, vertical: true)
                                             .textSelection(.enabled)
                                             .transition(.move(edge: .top).combined(with: .opacity))
@@ -218,7 +217,7 @@ extension AIProviderSettingsView {
             Image(systemName: hasCopiedConnectionError ? "checkmark" : "doc.on.doc")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(
-                    hasCopiedConnectionError ? .green : isHoveringCopyError ? .primary : .secondary
+                    hasCopiedConnectionError ? SortyDesignSystem.Colors.success : isHoveringCopyError ? .primary : .secondary
                 )
                 .contentTransition(.symbolEffect(.replace))
                 .scaleEffect(isHoveringCopyError && !reduceMotion ? 1.12 : 1)

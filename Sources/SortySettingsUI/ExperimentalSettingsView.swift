@@ -50,9 +50,7 @@ struct ExperimentalSettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .sortyCard(padding: 20)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Checking for experimental features.")
     }
@@ -63,9 +61,9 @@ struct ExperimentalSettingsView: View {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: feature.systemImage)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.indigo)
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         .frame(width: 28, height: 28)
-                        .background(.indigo.opacity(0.12), in: Circle())
+                        .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12), in: Circle())
                         .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 4) {
@@ -74,11 +72,7 @@ struct ExperimentalSettingsView: View {
                                 .font(.subheadline.weight(.semibold))
                             if let variant = feature.variant {
                                 Text(variant)
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(.secondary.opacity(0.1), in: Capsule())
+                                    .sortyBadge()
                             }
                         }
                         Text(feature.description)
@@ -96,10 +90,7 @@ struct ExperimentalSettingsView: View {
                 }
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
+        .sortyCard(padding: 16)
         .opacity(hasAppeared ? 1 : 0)
         .offset(y: hasAppeared ? 0 : 8)
         .animation(

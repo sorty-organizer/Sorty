@@ -52,8 +52,8 @@ struct PreviewListView: View {
         case .emptyDirectory:
             EmptyPreviewState(
                 icon: "folder.badge.questionmark",
-                iconColor: .orange,
-                title: "Empty Directory",
+                iconColor: SortyDesignSystem.Colors.warning,
+                title: "Empty directory",
                 message: "This folder doesn't contain any files to organize.",
                 actions: [
                     EmptyAction(
@@ -74,8 +74,8 @@ struct PreviewListView: View {
         case .allUnorganized(let count):
             EmptyPreviewState(
                 icon: "questionmark.folder",
-                iconColor: .orange,
-                title: "All Files Unorganized",
+                iconColor: SortyDesignSystem.Colors.warning,
+                title: "All files unorganized",
                 message: "\(count) files couldn't be automatically organized. Try providing specific instructions to help Sorty categorize them better.",
                 actions: [
                     EmptyAction(
@@ -108,77 +108,42 @@ struct EmptyPreviewState: View {
     let title: String
     let message: String
     var actions: [EmptyAction] = []
-    
-    @State private var isHovered = false
-    
+
     var body: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            
-            emptyStateArtwork
-            
-            VStack(spacing: 8) {
-                Text(LocalizedStringKey(title))
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                
-                Text(message)
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 400)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            
+        SortyEmptyState(
+            LocalizedStringKey(title),
+            systemImage: icon,
+            message: LocalizedStringKey(message),
+            tint: iconColor
+        ) {
             if !actions.isEmpty {
                 HStack(spacing: 12) {
-                    ForEach(actions) { action in
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            action.action()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: action.icon)
-                                    .font(.system(size: 10, weight: .semibold))
-                                Text(action.title)
-                                    .font(.caption.bold())
-                            }
+                    ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
+                        if index == 0 {
+                            actionButton(action)
+                                .buttonStyle(.sortyProminent(size: .small))
+                        } else {
+                            actionButton(action)
+                                .buttonStyle(.sortyBordered(size: .small))
                         }
-                        .buttonStyle(.sortyProminent(size: .small))
-                        .accessibilityIdentifier(action.accessibilityID ?? "")
                     }
                 }
-                .padding(.top, 8)
             }
-            
-            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
-        .opacity(isHovered ? 0.95 : 1.0)
-        .onHover { hovering in
-            isHovered = hovering
-        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(title): \(message)")
     }
 
-    @ViewBuilder
-    private var emptyStateArtwork: some View {
-        fallbackArtwork
-    }
-
-    private var fallbackArtwork: some View {
-        ZStack {
-            Circle()
-                .fill(iconColor.opacity(0.1))
-                .frame(width: 100, height: 100)
-
-            Image(systemName: icon)
-                .font(.system(size: 44))
-                .foregroundColor(iconColor)
+    private func actionButton(_ action: EmptyAction) -> some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            action.action()
+        } label: {
+            Label(action.title, systemImage: action.icon)
         }
-        .accessibilityHidden(true)
+        .accessibilityIdentifier(action.accessibilityID ?? "")
     }
 }
 

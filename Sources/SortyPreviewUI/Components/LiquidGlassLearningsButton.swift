@@ -15,10 +15,10 @@ private struct LearningsInsightRow {
         switch item.kind {
         case .learnedRule:
             self.icon = "sparkles"
-            self.color = .orange
+            self.color = SortyDesignSystem.Colors.resolvedAccent
         case .ruleEvidence:
             self.icon = "doc.text.magnifyingglass"
-            self.color = .mint
+            self.color = SortyDesignSystem.Colors.info
         }
     }
 }
@@ -66,7 +66,7 @@ package struct LiquidGlassLearningsButton: View {
             } label: {
                 Image(systemName: "brain.head.profile")
                     .font(.caption2)
-                    .foregroundStyle(showPopover ? .teal : .secondary)
+                    .foregroundStyle(showPopover ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("WhyPlacedButton")
@@ -77,7 +77,7 @@ package struct LiquidGlassLearningsButton: View {
                     HStack(spacing: 6) {
                         Image(systemName: "brain.head.profile")
                             .font(.caption)
-                            .foregroundStyle(.teal)
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
 
                         Text("Why placed here")
                             .font(.caption)

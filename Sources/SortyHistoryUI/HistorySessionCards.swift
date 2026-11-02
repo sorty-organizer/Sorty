@@ -79,7 +79,7 @@ struct HistoryHeader: View {
         HStack(spacing: 8) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.blue.gradient)
+                .foregroundStyle(SortyDesignSystem.Colors.info.gradient)
             Text("History")
                 .font(.system(size: 17, weight: .bold, design: .rounded))
                 .lineLimit(1)
@@ -104,7 +104,7 @@ struct HistoryHeader: View {
         return HStack(spacing: 8) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.blue.gradient)
+                .foregroundStyle(SortyDesignSystem.Colors.info.gradient)
 
             textLayout {
                 Text("History")
@@ -147,14 +147,8 @@ struct HistoryHeader: View {
             onClearHistory()
         } label: {
             Label("Clear", systemImage: "trash")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(.red)
-                .padding(.horizontal, 12)
-                .frame(height: 24)
-                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
-                .clipShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
         .disabled(totalSessions == 0)
         .accessibilityLabel("Clear all history")
         .accessibilityIdentifier("ClearHistoryButton")
@@ -168,7 +162,7 @@ struct HistoryHeader: View {
             Label("Clear History", systemImage: "trash")
                 .labelStyle(.iconOnly)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.red)
+                .foregroundStyle(SortyDesignSystem.Colors.error)
                 .frame(width: 24, height: 24)
                 .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
                 .clipShape(Circle())
@@ -351,7 +345,7 @@ struct HistorySummaryCard: View {
                     title: "Files Organized",
                     value: filesOrganizedValue,
                     icon: "doc.on.doc.fill",
-                    color: .blue
+                    color: SortyDesignSystem.Colors.info
                 )
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Files organized: \(filesOrganizedValue)")
@@ -360,7 +354,7 @@ struct HistorySummaryCard: View {
                     title: timeSavedLabel,
                     value: timeSavedValue,
                     icon: "clock.arrow.circlepath",
-                    color: .orange,
+                    color: SortyDesignSystem.Colors.resolvedAccent,
                     isEmphasized: true
                 )
                 .accessibilityElement(children: .combine)
@@ -370,7 +364,7 @@ struct HistorySummaryCard: View {
                     title: "Folders Created",
                     value: foldersCreatedValue,
                     icon: "folder.fill.badge.plus",
-                    color: .green
+                    color: SortyDesignSystem.Colors.success
                 )
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Folders created: \(foldersCreatedValue)")
@@ -388,15 +382,13 @@ struct HistorySummaryCard: View {
                     title: "Success Rate",
                     value: successRateValue,
                     icon: "chart.line.uptrend.xyaxis.circle.fill",
-                    color: .teal
+                    color: .secondary
                 )
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Success rate: \(successRateLabel)")
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, clear: true, interactive: false)
+        .sortyCard(padding: 16)
     }
 }
 
@@ -433,17 +425,7 @@ private struct HistoryStatItem: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, minHeight: 88)
-        .background(
-            Color.secondary.opacity(isEmphasized ? 0.085 : 0.06),
-            in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                .stroke(
-                    Color.primary.opacity(isHovered ? 0.18 : (isEmphasized ? 0.12 : 0)),
-                    lineWidth: 1
-                )
-        )
+        .sortyInsetSurface(isHighlighted: isHovered || isEmphasized, cornerRadius: SortyDesignSystem.Radius.lg)
         .onHover { hovering in
             isHovered = hovering
         }
@@ -493,12 +475,7 @@ struct HistorySessionCardHeader: View {
 
             if showsStatus {
                 Text(entry.status.displayName)
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(statusColor.opacity(0.15))
-                    .foregroundStyle(statusColor)
-                    .clipShape(Capsule())
+                    .sortyBadge(tint: statusColor)
             }
         }
         .padding(12)
@@ -546,13 +523,13 @@ struct HistorySessionCard: View {
 
     private var statusColor: Color {
         switch entry.status {
-        case .completed: return .green
-        case .failed: return .red
+        case .completed: return SortyDesignSystem.Colors.success
+        case .failed: return SortyDesignSystem.Colors.error
         case .cancelled: return .gray
         case .skipped: return .secondary
-        case .undo: return .orange
-        case .partiallyUndone: return .yellow
-        case .duplicatesCleanup: return .accentColor
+        case .undo: return SortyDesignSystem.Colors.warning
+        case .partiallyUndone: return SortyDesignSystem.Colors.warning
+        case .duplicatesCleanup: return SortyDesignSystem.Colors.resolvedAccent
         }
     }
 
@@ -594,9 +571,9 @@ struct HistorySessionCard: View {
                 .padding(.trailing, 12)
                 .accessibilityHidden(true)
         }
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl)
+        .sortyCard(padding: 0)
         .overlay(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(cardBorderColor, lineWidth: isSelected ? 2 : 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
@@ -669,7 +646,7 @@ struct QuickFeedbackButtons: View {
                     } label: {
                         Image(systemName: "hand.thumbsup")
                             .font(.caption)
-                            .foregroundStyle(usefulHovered ? .green : .secondary)
+                            .foregroundStyle(usefulHovered ? SortyDesignSystem.Colors.success : .secondary)
                     }
                     .buttonStyle(.plain)
                     .scaleEffect(usefulHovered ? 1.15 : 1.0)
@@ -690,7 +667,7 @@ struct QuickFeedbackButtons: View {
                     } label: {
                         Image(systemName: "hand.thumbsdown")
                             .font(.caption)
-                            .foregroundStyle(notUsefulHovered ? .orange : .secondary)
+                            .foregroundStyle(notUsefulHovered ? SortyDesignSystem.Colors.warning : .secondary)
                     }
                     .buttonStyle(.plain)
                     .scaleEffect(notUsefulHovered ? 1.15 : 1.0)
@@ -707,7 +684,7 @@ struct QuickFeedbackButtons: View {
                     HStack(spacing: 4) {
                         Image(systemName: feedbackGiven == .useful ? "checkmark.circle.fill" : "xmark.circle.fill")
                             .font(.caption)
-                            .foregroundStyle(feedbackGiven == .useful ? .green : .orange)
+                            .foregroundStyle(feedbackGiven == .useful ? SortyDesignSystem.Colors.success : SortyDesignSystem.Colors.warning)
                             .symbolReplaceTransition(animationValue: feedbackGiven)
 
                         Text(feedbackGiven == .useful ? "Thanks!" : "Noted")
@@ -718,10 +695,9 @@ struct QuickFeedbackButtons: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.secondary.opacity(0.08))
-            .clipShape(Capsule())
+            .padding(.horizontal, SortyDesignSystem.Spacing.sm)
+            .padding(.vertical, SortyDesignSystem.Spacing.xxs)
+            .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.capsule)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(feedbackGiven == nil ? "Rate this organization" : "Feedback recorded")
 
@@ -747,14 +723,8 @@ struct QuickFeedbackButtons: View {
                         draft.selectedChip = (draft.selectedChip == chip) ? nil : chip
                     } label: {
                         Text(chip)
-                            .font(.caption2)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule().fill(draft.selectedChip == chip ? Color.orange.opacity(0.2) : Color.secondary.opacity(0.1))
-                            )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.sortyChip(isSelected: draft.selectedChip == chip, tint: SortyDesignSystem.Colors.warning))
                     .accessibilityIdentifier("FeedbackReasonChip-\(chip)")
                 }
             }

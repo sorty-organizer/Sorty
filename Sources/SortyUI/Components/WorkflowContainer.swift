@@ -519,11 +519,6 @@ package struct WorkflowCard<Content: View>: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, verticalPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl)
-        .overlay(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        )
+        .sortyCard(padding: 0)
     }
 }

@@ -19,15 +19,15 @@ extension OrganizationCompleteView {
     private var statusColor: Color {
         switch undoState {
         case .idle:
-            return .green
+            return SortyDesignSystem.Colors.success
         case .undoing:
-            return .blue
+            return SortyDesignSystem.Colors.info
         case .completed:
-            return .green
+            return SortyDesignSystem.Colors.success
         case .redoing:
-            return .blue
+            return SortyDesignSystem.Colors.info
         case .failed:
-            return .red
+            return SortyDesignSystem.Colors.error
         }
     }
 
@@ -93,7 +93,7 @@ extension OrganizationCompleteView {
                 } label: {
                     Image(systemName: feedbackDraft.outcome == .useful ? "hand.thumbsup.fill" : "hand.thumbsup")
                         .font(.body)
-                        .foregroundStyle(feedbackDraft.outcome == .useful ? .green : .secondary)
+                        .foregroundStyle(feedbackDraft.outcome == .useful ? SortyDesignSystem.Colors.success : .secondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("CompleteFeedbackUsefulButton")
@@ -105,7 +105,7 @@ extension OrganizationCompleteView {
                 } label: {
                     Image(systemName: feedbackDraft.outcome == .notUseful ? "hand.thumbsdown.fill" : "hand.thumbsdown")
                         .font(.body)
-                        .foregroundStyle(feedbackDraft.outcome == .notUseful ? .orange : .secondary)
+                        .foregroundStyle(feedbackDraft.outcome == .notUseful ? SortyDesignSystem.Colors.warning : .secondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("CompleteFeedbackNotUsefulButton")
@@ -122,18 +122,11 @@ extension OrganizationCompleteView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 6)], spacing: 6) {
                     ForEach(LearningsManager.sessionFeedbackReasonPresets, id: \.self) { chip in
                         Button {
-                            HapticFeedbackManager.shared.selection()
                             feedbackDraft.selectedChip = (feedbackDraft.selectedChip == chip) ? nil : chip
                         } label: {
                             Text(chip)
-                                .font(.caption)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(
-                                    Capsule().fill(feedbackDraft.selectedChip == chip ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.1))
-                                )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.sortyChip(isSelected: feedbackDraft.selectedChip == chip))
                         .accessibilityIdentifier("CompleteFeedbackChip-\(chip)")
                     }
                 }
@@ -195,8 +188,7 @@ extension OrganizationCompleteView {
                     .accessibilityIdentifier("CompleteFeedbackPausedNotice")
             }
         }
-        .padding(14)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl)
+        .sortyCard(padding: 14)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Rate this organization")
     }
@@ -318,7 +310,7 @@ extension OrganizationCompleteView {
                     icon: mode == .renameOnly ? "pencil.line" : "doc.on.doc.fill",
                     value: primaryStatValue,
                     label: primaryStatLabel,
-                    color: .blue
+                    color: SortyDesignSystem.Colors.info
                 )
 
                 IconStatDivider(height: 54)
@@ -328,7 +320,7 @@ extension OrganizationCompleteView {
                     icon: mode == .renameOnly ? "doc.text" : "folder.fill.badge.plus",
                     value: secondaryStatValue,
                     label: secondaryStatLabel,
-                    color: .purple
+                    color: SortyDesignSystem.Colors.resolvedAccent
                 )
 
                 if mode == .organizeAndRename,
@@ -348,13 +340,8 @@ extension OrganizationCompleteView {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, usesCompactVerticalLayout ? 13 : 18)
+        .sortyCard(padding: 0)
         .frame(maxWidth: 560)
-        .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
-                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-        )
         .opacity(summaryAppeared ? 1 : 0)
         .offset(y: summaryAppeared ? 0 : 30)
     }

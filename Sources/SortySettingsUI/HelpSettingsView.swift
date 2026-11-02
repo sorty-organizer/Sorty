@@ -26,7 +26,7 @@ struct HelpSettingsView: View {
                         HelpIconLink(
                             title: "Documentation",
                             icon: "doc.text",
-                            color: .blue,
+                            color: SortyDesignSystem.Colors.info,
                             url: docsURL,
                             focusTarget: .helpDocumentation
                         )
@@ -34,7 +34,7 @@ struct HelpSettingsView: View {
                         HelpIconLink(
                             title: "Report Bug",
                             icon: "exclamationmark.bubble",
-                            color: .red,
+                            color: SortyDesignSystem.Colors.error,
                             focusTarget: .helpReportIssue,
                             action: { appState.showBugReport() }
                         )
@@ -42,7 +42,7 @@ struct HelpSettingsView: View {
                         HelpIconLink(
                             title: "View Changelog",
                             icon: "clock.arrow.circlepath",
-                            color: .purple,
+                            color: SortyDesignSystem.Colors.resolvedAccent,
                             url: changelogURL,
                             focusTarget: .helpChangelog
                         )
@@ -54,7 +54,7 @@ struct HelpSettingsView: View {
                         HelpIconLink(
                             title: "Privacy Policy",
                             icon: "hand.raised",
-                            color: .green,
+                            color: SortyDesignSystem.Colors.success,
                             url: privacyPolicyURL,
                             focusTarget: .helpPrivacy
                         )
@@ -62,7 +62,7 @@ struct HelpSettingsView: View {
                         HelpIconLink(
                             title: "Terms of Service",
                             icon: "doc.text",
-                            color: .indigo,
+                            color: SortyDesignSystem.Colors.resolvedAccent,
                             url: termsOfServiceURL,
                             focusTarget: .helpTerms
                         )
@@ -357,12 +357,7 @@ private struct HelpIconLink: View {
             }
             .frame(maxWidth: .infinity, minHeight: 58)
             .padding(.vertical, 8)
-            .background(isHovered ? color.opacity(0.14) : Color.secondary.opacity(0.045))
-            .overlay(
-                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
-                    .stroke(isHovered ? color.opacity(0.32) : Color.secondary.opacity(0.08), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+            .sortyInsetSurface(tint: isHovered ? color : nil, isHighlighted: isHovered)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -455,7 +450,7 @@ private struct DeeplinkEntryRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
+                    .sortyInsetSurface(tint: color, cornerRadius: SortyDesignSystem.Radius.sm)
                     .padding(.leading, 28)
                     .padding(.trailing, 8)
                     .padding(.bottom, 8)
@@ -506,9 +501,9 @@ private struct DeeplinkEntryRow: View {
         } label: {
             Image(systemName: copied ? "checkmark" : "doc.on.doc")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(copied ? .green : color)
+                .foregroundStyle(copied ? SortyDesignSystem.Colors.success : color)
                 .frame(width: 26, height: 26)
-                .background(Circle().fill((copied ? Color.green : color).opacity(isHovered || copied ? 0.16 : 0.08)))
+                .background(Circle().fill((copied ? SortyDesignSystem.Colors.success : color).opacity(isHovered || copied ? 0.16 : 0.08)))
                 .symbolReplaceTransition(animationValue: copied)
                 .contentShape(Circle())
         }

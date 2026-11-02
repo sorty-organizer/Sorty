@@ -57,7 +57,7 @@ struct AboutView: View {
                 } label: {
                     Text("Version \(BuildInfo.version)")
                         .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.blue)
+                        .foregroundColor(SortyDesignSystem.Colors.info)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("AboutVersionHistoryButton")
@@ -81,7 +81,7 @@ struct AboutView: View {
                     } label: {
                         Text("Commit \(BuildInfo.shortCommit)")
                             .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.blue)
+                            .foregroundColor(SortyDesignSystem.Colors.info)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("AboutCommitButton")
@@ -109,7 +109,7 @@ struct AboutView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "heart.fill")
-                                .foregroundStyle(.red)
+                                .foregroundStyle(SortyDesignSystem.Colors.error)
                             Text("Support the Developer")
                                 .foregroundStyle(.white)
                         }

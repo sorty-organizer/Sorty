@@ -89,7 +89,7 @@ struct PersonaGeneratorView: View {
                 .symbolEffect(.breathe, isActive: !reduceMotion)
 
             VStack(spacing: 10) {
-                Text("Building Your Persona")
+                Text("Building your persona")
                     .font(.title3.weight(.bold))
             }
 
@@ -222,7 +222,7 @@ struct PersonaGeneratorView: View {
             .padding(.horizontal, 32)
             
             if let error = generator.error {
-                Text(error.userFacingMessage).foregroundColor(.red).font(.caption).padding(.horizontal)
+                Text(error.userFacingMessage).foregroundColor(SortyDesignSystem.Colors.error).font(.caption).padding(.horizontal)
             }
             
             HStack(spacing: 16) {
@@ -264,7 +264,7 @@ struct PersonaGeneratorView: View {
     private func honingView(question: HoningQuestion) -> some View {
         VStack(spacing: 20) {
             VStack(spacing: 10) {
-                Text("Refining Your Persona")
+                Text("Refining your persona")
                     .font(.title3.weight(.bold))
 
                 Text("Question \(currentQuestionIndex + 1) of \(questions.count)")
@@ -308,7 +308,7 @@ struct PersonaGeneratorView: View {
             if let error = generator.error {
                 Label(error.userFacingMessage, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SortyDesignSystem.Colors.error)
                     .padding(.horizontal, 32)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }

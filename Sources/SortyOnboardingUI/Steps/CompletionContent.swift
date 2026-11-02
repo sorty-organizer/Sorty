@@ -181,14 +181,14 @@ struct CompletionAnalyticsPreference: View {
             detailSection(
                 title: "What is included",
                 systemImage: "checkmark.circle.fill",
-                color: .green,
+                color: SortyDesignSystem.Colors.success,
                 text: "Screens and features used; broad actions, outcomes, counts, and timings; app and macOS versions and device category; sanitized errors and crashes with messages and sensitive values redacted."
             )
 
             detailSection(
                 title: "What is never included",
                 systemImage: "xmark.circle.fill",
-                color: .red,
+                color: SortyDesignSystem.Colors.error,
                 text: "Your identity, folder or file names, paths, file contents, prompts, custom instructions, AI responses, API keys, or other credentials. Sorty does not record your screen or keystrokes."
             )
 

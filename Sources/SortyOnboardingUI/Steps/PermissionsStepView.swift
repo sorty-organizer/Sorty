@@ -41,7 +41,7 @@ public struct PermissionsStepView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     OnboardingIconSliver(
                         systemName: "hand.raised.fill",
-                        color: .blue,
+                        color: SortyDesignSystem.Colors.info,
                         fontSize: 44
                     )
 
@@ -84,12 +84,8 @@ public struct PermissionsStepView: View {
                     Spacer()
 
                     Text("\(grantedPermissionCount) of \(PermissionType.allCases.count) granted")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(grantedPermissionCount == PermissionType.allCases.count ? .green : .secondary)
                         .numericTextTransition(animationValue: grantedPermissionCount)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.primary.opacity(0.07), in: Capsule(style: .continuous))
+                        .sortyBadge(tint: grantedPermissionCount == PermissionType.allCases.count ? SortyDesignSystem.Colors.success : nil)
                 }
 
                 PermissionRow(

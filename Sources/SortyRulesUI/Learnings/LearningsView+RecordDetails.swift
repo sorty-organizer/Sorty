@@ -40,7 +40,7 @@ extension LearningsView {
                         }
                     }
                 }
-                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+                .sortyCard(padding: 0)
             }
             .padding(20)
         }
@@ -274,9 +274,7 @@ extension LearningsView {
                     : .sortySpringStandard.delay(0.3),
                 value: emptyLearningsHasAppeared)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .sortyCard(padding: 20)
         .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No patterns learned yet. Organize folders to start learning.")

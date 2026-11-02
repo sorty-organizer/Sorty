@@ -16,7 +16,7 @@ extension LearningsView {
                 HStack(spacing: 12) {
                     settingsRowLabel(
                         systemImage: "calendar.badge.clock",
-                        title: "Data Retention",
+                        title: "Data retention",
                         detail: "How long to keep learning data"
                     )
                     Spacer()
@@ -42,7 +42,7 @@ extension LearningsView {
                 HStack(spacing: 12) {
                     settingsRowLabel(
                         systemImage: "person.text.rectangle",
-                        title: "Learning Data",
+                        title: "Learning data",
                         detail: "Import, export, or delete your learning data"
                     )
                     Spacer()
@@ -74,7 +74,7 @@ extension LearningsView {
                 .padding(.vertical, 10)
                 .padding(.horizontal, 12)
             }
-            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+            .sortyCard(padding: 0)
             .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Learnings settings")
@@ -88,7 +88,7 @@ extension LearningsView {
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: systemImage)
-                .foregroundColor(.blue)
+                .foregroundColor(SortyDesignSystem.Colors.resolvedAccent)
                 .font(.body.bold())
                 .frame(width: 24)
                 .accessibilityHidden(true)
@@ -119,12 +119,7 @@ extension LearningsView {
                 Spacer()
                 if !manager.modelDirectories.isEmpty {
                     Text("\(manager.modelDirectories.filter(\.isEnabled).count) active")
-                        .font(.caption.bold())
-                        .foregroundStyle(.teal)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule, interactive: false)
-                        .clipShape(Capsule())
+                        .sortyBadge(tint: SortyDesignSystem.Colors.resolvedAccent)
                         .numericTextTransition(
                             animationValue: manager.modelDirectories.filter(\.isEnabled).count
                         )
@@ -186,7 +181,7 @@ extension LearningsView {
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity)
-                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+                .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
                 .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
                 .task {
                     guard !emptyExampleFoldersHasAppeared else { return }
@@ -204,9 +199,7 @@ extension LearningsView {
                 }
             }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
+        .sortyCard(padding: 20)
     }
 
     // MARK: - Helpers
@@ -239,10 +232,10 @@ extension LearningsView {
                 HapticFeedbackManager.shared.error()
                 if pendingAction != nil {
                     finishPendingControlAction(
-                        title: "Authentication Cancelled",
+                        title: "Authentication cancelled",
                         message: "No changes were made.",
                         icon: "xmark.circle.fill",
-                        iconColor: .orange
+                        iconColor: SortyDesignSystem.Colors.warning
                     )
                 }
                 return
@@ -267,10 +260,10 @@ extension LearningsView {
                 let summary = try manager.exportProfile(to: url)
                 HapticFeedbackManager.shared.success()
                 NotificationManager.shared.showHUDInfo(
-                    title: "Learning Profile Exported",
+                    title: "Learning profile exported",
                     message: "Saved \(summary.totalRecordCount) learning records with profile settings and integrity metadata.",
                     icon: "checkmark.circle.fill",
-                    iconColor: .green
+                    iconColor: SortyDesignSystem.Colors.success
                 )
             } catch {
                 DebugLogger.log("Failed to export profile: \(error)")
@@ -301,26 +294,26 @@ extension LearningsView {
             if addedCount > 0 {
                 HapticFeedbackManager.shared.success()
                 NotificationManager.shared.showHUDInfo(
-                    title: addedCount == 1 ? "Example Folder Added" : "Example Folders Added",
+                    title: addedCount == 1 ? "Example folder added" : "Example folders added",
                     message: "Sorty is scanning \(addedCount) folder\(addedCount == 1 ? "" : "s") now.",
                     icon: "folder.badge.plus",
-                    iconColor: .teal
+                    iconColor: SortyDesignSystem.Colors.resolvedAccent
                 )
             } else if limitReached {
                 HapticFeedbackManager.shared.error()
                 NotificationManager.shared.showHUDInfo(
-                    title: "Five Example Folders Active",
+                    title: "Five example folders active",
                     message: "Pause or remove one before adding another.",
                     icon: "exclamationmark.triangle.fill",
-                    iconColor: .orange
+                    iconColor: SortyDesignSystem.Colors.warning
                 )
             } else if duplicateCount > 0 {
                 HapticFeedbackManager.shared.error()
                 NotificationManager.shared.showHUDInfo(
-                    title: "Folder Already Added",
+                    title: "Folder already added",
                     message: "Sorty is already learning from that folder.",
                     icon: "folder.badge.questionmark",
-                    iconColor: .orange
+                    iconColor: SortyDesignSystem.Colors.warning
                 )
             } else {
                 HapticFeedbackManager.shared.error()
@@ -355,10 +348,10 @@ extension LearningsView {
                         details.append("The legacy profile was upgraded to the current format.")
                     }
                     NotificationManager.shared.showHUDInfo(
-                        title: "Learning Profile Imported",
+                        title: "Learning profile imported",
                         message: details.joined(separator: " "),
                         icon: "checkmark.circle.fill",
-                        iconColor: .green
+                        iconColor: SortyDesignSystem.Colors.success
                     )
                 } catch {
                     DebugLogger.log("Failed to import profile: \(error)")

@@ -241,32 +241,21 @@ struct PreviewActionsView: View {
         HStack(spacing: 4) {
             Image(systemName: "pencil.and.outline")
                 .font(.system(size: 10))
-                .foregroundStyle(.green)
+                .foregroundStyle(SortyDesignSystem.Colors.success)
 
             Text("\(editsCapturedCount)")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.green)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(SortyDesignSystem.Colors.success)
                 .numericTextTransition(animationValue: editsCapturedCount)
             Text(editsCapturedCount == 1 ? "edit" : "edits")
-                .font(.system(size: 11))
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(
-            editsBadgeBackground
-        )
+        .sortyInsetSurface(tint: SortyDesignSystem.Colors.success, cornerRadius: SortyDesignSystem.Radius.sm)
         .scaleEffect(editsPulse ? 1.08 : (isHoveringEditsCaptured ? 1.02 : 1.0))
         .animation(.sortyBouncy, value: editsPulse)
-    }
-
-    private var editsBadgeBackground: some View {
-        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
-            .fill(Color.green.opacity(0.1))
-            .overlay(
-                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
-                    .stroke(Color.green.opacity(0.2), lineWidth: 1)
-            )
     }
 }
 
@@ -370,35 +359,14 @@ private struct PreviewProgressControls: View {
 
     private var cancelButton: some View {
         Button(action: onCancel) {
-            cancelButtonLabel
+            Label("Stop", systemImage: "xmark.octagon.fill")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
         .keyboardShortcut(.cancelAction)
         .keyboardShortcut(".", modifiers: .command)
         .accessibilityIdentifier("CancelOrganizationProgressButton")
         .accessibilityLabel("Stop organization")
         .accessibilityHint("Press Command+Period to stop the organization")
-    }
-
-    private var cancelButtonLabel: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "xmark.octagon.fill")
-                .font(.caption)
-            Text("Stop")
-                .font(.caption.weight(.medium))
-        }
-        .foregroundColor(.red)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.red.opacity(0.1))
-                .overlay(
-                    Capsule(style: .continuous)
-                        .stroke(Color.red.opacity(0.3), lineWidth: 1)
-                )
-        )
-        .contentShape(Capsule(style: .continuous))
     }
 }
 
@@ -445,7 +413,7 @@ private struct ApplyProgressBar: View {
             HStack(spacing: 2) {
                 if clampedProgress > 0 {
                     RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
-                        .fill(Color.green.gradient)
+                        .fill(SortyDesignSystem.Colors.success.gradient)
                         .frame(width: max(geometry.size.width * clampedProgress - 1, 4))
                 }
             }
@@ -479,7 +447,7 @@ struct PreviewInstructionsRow: View {
                 axis: .horizontal
             )
             .textFieldStyle(.plain)
-            .font(.system(size: 12))
+            .font(.callout)
             .focused($isFocused)
             .onChange(of: instructions) { oldValue, newValue in
                 if !newValue.isEmpty && newValue != oldValue {
@@ -519,14 +487,14 @@ private struct EditsCapturedPopoverContent: View {
             HStack(spacing: 8) {
                 Image(systemName: "pencil.and.outline")
                     .font(.system(size: 14))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(SortyDesignSystem.Colors.success)
                 
-                Text("Edits Captured")
-                    .font(.system(size: 13, weight: .semibold))
+                Text("Edits captured")
+                    .font(.body.weight(.semibold))
             }
             
             Text("Your \(editsCapturedCount) manual \(editsCapturedCount == 1 ? "correction has" : "corrections have") been recorded. When you apply this organization, \(editsCapturedCount == 1 ? "it" : "they") will help improve future suggestions.")
-                .font(.system(size: 11))
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             
@@ -536,25 +504,25 @@ private struct EditsCapturedPopoverContent: View {
                 HStack(spacing: 4) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 10))
-                        .foregroundStyle(.green.opacity(0.7))
+                        .foregroundStyle(SortyDesignSystem.Colors.success.opacity(0.7))
                     Text("File moves to different folders")
-                        .font(.system(size: 10))
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
                 HStack(spacing: 4) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 10))
-                        .foregroundStyle(.green.opacity(0.7))
+                        .foregroundStyle(SortyDesignSystem.Colors.success.opacity(0.7))
                     Text("Rename edits & rejections")
-                        .font(.system(size: 10))
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
                 HStack(spacing: 4) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 10))
-                        .foregroundStyle(.green.opacity(0.7))
+                        .foregroundStyle(SortyDesignSystem.Colors.success.opacity(0.7))
                     Text("Files moved to unorganized")
-                        .font(.system(size: 10))
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
             }

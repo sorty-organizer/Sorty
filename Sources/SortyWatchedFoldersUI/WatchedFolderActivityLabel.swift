@@ -104,9 +104,9 @@ struct WatchedFolderActivityLabel: View {
 
     private func activityColor(_ activity: WatchedFolderActivity) -> Color {
         switch activity {
-        case .parked: .red
-        case .retrying: .orange
-        case .running, .awaitingReview: .blue
+        case .parked: SortyDesignSystem.Colors.error
+        case .retrying: SortyDesignSystem.Colors.warning
+        case .running, .awaitingReview: SortyDesignSystem.Colors.info
         case .waitingForStability, .queued: .secondary
         }
     }

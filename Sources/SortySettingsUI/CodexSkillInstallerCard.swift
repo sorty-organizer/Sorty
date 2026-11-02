@@ -18,9 +18,9 @@ struct CodexSkillInstallerCard: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "dollarsign")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.indigo)
+                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 .frame(width: 28, height: 28)
-                .background(.indigo.opacity(0.12), in: Circle())
+                .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12), in: Circle())
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -43,10 +43,7 @@ struct CodexSkillInstallerCard: View {
 
             actionView
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
+        .sortyCard(padding: 16)
         .contextMenu {
             if installer.state == .conflict {
                 Button("Remove Existing Skill", role: .destructive) {
@@ -179,8 +176,8 @@ struct CodexSkillInstallerCard: View {
 
     private var statusColor: Color {
         switch installer.state {
-        case .installed: .green
-        case .conflict, .unavailable, .failed: .orange
+        case .installed: SortyDesignSystem.Colors.success
+        case .conflict, .unavailable, .failed: SortyDesignSystem.Colors.warning
         default: .secondary
         }
     }

@@ -67,7 +67,7 @@ package struct LiquidGlassDuplicateButton: View {
     }
 
     private var accentColor: Color {
-        duplicateInfo.isExactMatch ? .red : .orange
+        duplicateInfo.isExactMatch ? SortyDesignSystem.Colors.error : SortyDesignSystem.Colors.warning
     }
 
     package var body: some View {
@@ -138,13 +138,8 @@ package struct LiquidGlassDuplicateButton: View {
                 Spacer()
 
                 Text("\(duplicateInfo.duplicateCount)")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.white)
+                    .sortyBadge(tint: accentColor)
                     .numericTextTransition(animationValue: duplicateInfo.duplicateCount)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(accentColor))
             }
             .padding(.bottom, 10)
 
@@ -206,11 +201,7 @@ package struct LiquidGlassDuplicateButton: View {
 
                 if isCurrent {
                     Text("Current")
-                        .font(.caption2)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(SortyDesignSystem.Colors.resolvedAccent))
+                        .sortyBadge(tint: SortyDesignSystem.Colors.resolvedAccent)
                 } else {
                     Image(systemName: "chevron.right")
                         .font(.caption2)

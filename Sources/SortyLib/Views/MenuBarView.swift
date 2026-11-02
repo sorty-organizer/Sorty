@@ -259,7 +259,7 @@ public struct MenuBarView: View {
 
             if watchedFoldersManager.accessIssueFolderCount > 0 {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(SortyDesignSystem.Colors.warning)
                     .help("\(watchedFoldersManager.accessIssueFolderCount) folder(s) need attention")
             }
         }
@@ -307,7 +307,7 @@ public struct MenuBarView: View {
 
     private var watchedFoldersList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Watched Folders")
+            Text("Watched folders")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
@@ -600,11 +600,11 @@ private struct WatchedFolderMenuItem: View {
     private var statusColor: Color {
         switch folder.accessStatus {
         case .valid:
-            return folder.isEnabled ? .green : .orange
+            return folder.isEnabled ? SortyDesignSystem.Colors.success : SortyDesignSystem.Colors.warning
         case .stale:
-            return .yellow
+            return SortyDesignSystem.Colors.warning
         case .lost:
-            return .red
+            return SortyDesignSystem.Colors.error
         case .unknown:
             return .gray
         }

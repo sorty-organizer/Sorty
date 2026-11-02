@@ -46,7 +46,6 @@ struct SupportHealthCheckRow: View {
             }
         }
         .padding(10)
-        .background(check.status.color.opacity(0.07))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
+        .sortyInsetSurface(tint: check.status.color, cornerRadius: SortyDesignSystem.Radius.lg)
     }
 }

@@ -34,7 +34,7 @@ struct RenameGenerationRevealSweep: View {
                 colors: [
                     .clear,
                     .white.opacity(0.22),
-                    Color.purple.opacity(0.17),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.17),
                     .clear
                 ],
                 startPoint: .leading,
@@ -81,7 +81,7 @@ struct RenameFileIcon: View {
 
             Image(systemName: isUnchanged ? "equal.circle.fill" : "checkmark.circle.fill")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(isUnchanged ? Color.secondary : Color.green)
+                .foregroundStyle(isUnchanged ? Color.secondary : SortyDesignSystem.Colors.success)
                 .symbolReplaceTransition(animationValue: isUnchanged)
                 .background(Circle().fill(Color(NSColor.windowBackgroundColor)))
                 .offset(x: 3, y: 3)
@@ -113,12 +113,12 @@ struct RenameShiftIndicator: View {
 
             Image(systemName: isUnchanged ? "equal" : "arrow.right")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(isUnchanged ? Color.secondary : Color.purple)
+                .foregroundStyle(isUnchanged ? Color.secondary : SortyDesignSystem.Colors.resolvedAccent)
                 .symbolReplaceTransition(animationValue: isUnchanged)
                 .scaleEffect(isActive && pulse ? 1.12 : 1)
 
             Capsule()
-                .fill((isUnchanged ? Color.secondary : Color.purple).opacity(0.18))
+                .fill((isUnchanged ? Color.secondary : SortyDesignSystem.Colors.resolvedAccent).opacity(0.18))
                 .frame(width: 16, height: 2)
         }
         .frame(width: 56)

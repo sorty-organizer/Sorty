@@ -289,7 +289,7 @@ struct AnalysisView: View {
             title: "This \(settingsViewModel.config.mode.gerund) run is taking a while",
             message: "Large folders can take 1-3 minutes. You can keep working in other apps.",
             icon: "clock.badge.exclamationmark",
-            iconColor: .orange,
+            iconColor: SortyDesignSystem.Colors.warning,
             actions: [
                 HUDNotificationAction(title: "Try Faster Model", systemImage: "bolt.circle") {
                     HapticFeedbackManager.shared.tap()
@@ -316,35 +316,12 @@ struct AnalysisView: View {
         VStack(spacing: 20) {
             Spacer()
 
-            ZStack {
-                Circle()
-                    .fill(Color.orange.opacity(0.1))
-                    .frame(width: 100, height: 100)
-
-                Image(systemName: "folder.badge.minus")
-                    .font(.system(size: 44))
-                    .foregroundColor(.orange)
-            }
-            .opacity(hasAppeared ? 1 : 0)
-            .scaleEffect(hasAppeared ? 1 : 0.9)
-            .animation(.sortySpringStandard.delay(0.1), value: hasAppeared)
-
-            VStack(spacing: 8) {
-                Text(emptyDirectoryTitle)
-                    .font(.title3)
-                    .fontWeight(.semibold)
-
-                Text(emptyDirectoryMessage)
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 400)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 10)
-            .animation(.sortySpringStandard.delay(0.2), value: hasAppeared)
-
+            SortyEmptyState(
+                LocalizedStringKey(emptyDirectoryTitle),
+                systemImage: "folder.badge.minus",
+                message: LocalizedStringKey(emptyDirectoryMessage),
+                tint: SortyDesignSystem.Colors.warning
+            ) {
             HStack(spacing: 14) {
                 Button {
                     HapticFeedbackManager.shared.tap()
@@ -420,8 +397,9 @@ struct AnalysisView: View {
                     isHoveringChangeFolder = hovering
                 }
             }
+            }
             .opacity(hasAppeared ? 1 : 0)
-            .animation(.sortySpringStandard.delay(0.3), value: hasAppeared)
+            .animation(.sortySpringStandard.delay(0.1), value: hasAppeared)
 
             Spacer()
         }
@@ -432,8 +410,8 @@ struct AnalysisView: View {
 
     private var emptyDirectoryTitle: String {
         organizer.blockingExclusionRule == nil
-            ? "No Files to \(settingsViewModel.config.mode.actionVerb)"
-            : "This Folder Is Excluded"
+            ? "No files to \(settingsViewModel.config.mode.actionVerb.lowercased())"
+            : "This folder is excluded"
     }
 
     private func presentReplacementDirectoryPicker() {

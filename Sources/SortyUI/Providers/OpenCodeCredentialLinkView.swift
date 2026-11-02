@@ -33,7 +33,7 @@ package struct OpenCodeCredentialLinkView: View {
             HStack(spacing: 10) {
                 Image(systemName: isConnected ? "checkmark.circle.fill" : "person.crop.circle.badge.checkmark")
                     .font(.title3)
-                    .foregroundStyle(isConnected ? Color.green : Color.secondary)
+                    .foregroundStyle(isConnected ? SortyDesignSystem.Colors.success : Color.secondary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isConnected ? "Connected to \(viewModel.config.provider.displayName)" : "Connect with OpenCode")
                         .accessibilityIdentifier("OpenCodeConnectionStatus")
@@ -90,7 +90,7 @@ package struct OpenCodeCredentialLinkView: View {
             if let errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.circle")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SortyDesignSystem.Colors.error)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !isConnected {
@@ -105,8 +105,7 @@ package struct OpenCodeCredentialLinkView: View {
             }
         }
         .padding(10)
-        .background((isConnected ? Color.green : Color.secondary).opacity(isConnected ? 0.08 : 0.05))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+        .sortyInsetSurface(tint: isConnected ? SortyDesignSystem.Colors.success : nil)
         .task(id: "\(canCheck)-\(refreshID)") {
             if canCheck { await viewModel.refreshOpenCodeCredentials() }
         }

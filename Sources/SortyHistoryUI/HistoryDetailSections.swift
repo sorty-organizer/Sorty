@@ -51,8 +51,7 @@ struct HistoryDetailHeaderSection: View {
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .padding(8)
-                .background(Color.secondary.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
+                .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.sm)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Full path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
                 .layoutPriority(1)
@@ -116,9 +115,9 @@ struct HistoryPartialUndoSection: View {
     var body: some View {
         if entry.status == .partiallyUndone {
             VStack(alignment: .leading, spacing: 10) {
-                Label("Not Undone", systemImage: "exclamationmark.triangle.fill")
+                Label("Not undone", systemImage: "exclamationmark.triangle.fill")
                     .font(.headline)
-                    .foregroundStyle(.yellow)
+                    .foregroundStyle(SortyDesignSystem.Colors.warning)
                     .accessibilityAddTraits(.isHeader)
 
                 if let restoredCount = entry.undoRestoredCount, restoredCount > 0 {
@@ -144,8 +143,7 @@ struct HistoryPartialUndoSection: View {
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.yellow.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
+            .sortyInsetSurface(tint: SortyDesignSystem.Colors.warning, cornerRadius: SortyDesignSystem.Radius.lg)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(
                 affectedItems.isEmpty
@@ -277,8 +275,8 @@ private struct HistoryPrimaryStats: View {
                     style: .detail,
                     icon: "trash.fill",
                     value: "\(entry.duplicatesDeleted ?? 0)",
-                    label: "Duplicates Deleted",
-                    color: .red
+                    label: "Duplicates deleted",
+                    color: SortyDesignSystem.Colors.error
                 )
 
                 if let recovered = entry.recoveredSpace {
@@ -287,8 +285,8 @@ private struct HistoryPrimaryStats: View {
                         style: .detail,
                         icon: "externaldrive.fill",
                         value: ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file),
-                        label: "Space Recovered",
-                        color: .green
+                        label: "Space recovered",
+                        color: SortyDesignSystem.Colors.success
                     )
                 }
             } else {
@@ -296,8 +294,8 @@ private struct HistoryPrimaryStats: View {
                     style: .detail,
                     icon: "doc.on.doc.fill",
                     value: "\(entry.filesOrganized)",
-                    label: "Files Organized",
-                    color: .blue
+                    label: "Files organized",
+                    color: SortyDesignSystem.Colors.info
                 )
 
                 IconStatDivider(height: 44)
@@ -306,8 +304,8 @@ private struct HistoryPrimaryStats: View {
                     style: .detail,
                     icon: "folder.fill.badge.plus",
                     value: "\(entry.foldersCreated)",
-                    label: "Folders Created",
-                    color: .purple)
+                    label: "Folders created",
+                    color: SortyDesignSystem.Colors.resolvedAccent)
 
                 if let plan = entry.plan, plan.version > 1 {
                     IconStatDivider(height: 44)
@@ -315,20 +313,14 @@ private struct HistoryPrimaryStats: View {
                         style: .detail,
                         icon: "number",
                         value: "v\(plan.version)",
-                        label: "Plan Version",
+                        label: "Plan version",
                         color: .gray)
                 }
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 6)
-        .frame(maxWidth: .infinity)
-        .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
-                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-        )
+        .sortyCard(padding: 0)
     }
 }
 
@@ -342,14 +334,14 @@ private struct HistoryNerdStatsGrid: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Stats for Nerds")
+            Text("Stats for nerds")
                 .font(.headline)
                 .padding(.top, 4)
 
             LazyVGrid(columns: columns, spacing: 8) {
                 NerdStatCard(
                     icon: "clock.fill",
-                    iconColor: .blue,
+                    iconColor: SortyDesignSystem.Colors.info,
                     title: "AI Time",
                     value: GenerationStats.formatDuration(stats.duration),
                     unit: nil,
@@ -357,7 +349,7 @@ private struct HistoryNerdStatsGrid: View {
                 )
                 NerdStatCard(
                     icon: "bolt.fill",
-                    iconColor: .orange,
+                    iconColor: SortyDesignSystem.Colors.resolvedAccent,
                     title: "Throughput",
                     value: String(format: "%.1f", stats.tps),
                     unit: "tok/s",
@@ -365,7 +357,7 @@ private struct HistoryNerdStatsGrid: View {
                 )
                 NerdStatCard(
                     icon: "timer",
-                    iconColor: .green,
+                    iconColor: SortyDesignSystem.Colors.success,
                     title: "TTFT",
                     value: GenerationStats.formatDuration(stats.ttft),
                     unit: nil,
@@ -382,8 +374,7 @@ private struct HistoryNerdStatsGrid: View {
                 HistoryOptionalNerdStats(stats: stats)
             }
         }
-        .padding(16)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .sortyCard(padding: 16)
     }
 }
 
@@ -396,7 +387,7 @@ private struct HistoryOptionalNerdStats: View {
             if let promptTokens = stats.promptTokens {
                 NerdStatCard(
                     icon: "text.alignleft",
-                    iconColor: .indigo,
+                    iconColor: SortyDesignSystem.Colors.resolvedAccent,
                     title: "Prompt",
                     value: GenerationStats.formatCount(promptTokens),
                     unit: "tok",
@@ -406,7 +397,7 @@ private struct HistoryOptionalNerdStats: View {
             if let totalContextTokens = stats.totalContextTokens {
                 NerdStatCard(
                     icon: "sum",
-                    iconColor: .mint,
+                    iconColor: SortyDesignSystem.Colors.resolvedAccent,
                     title: "Context",
                     value: GenerationStats.formatCount(totalContextTokens),
                     unit: "tok",
@@ -416,7 +407,7 @@ private struct HistoryOptionalNerdStats: View {
             if let scanned = stats.filesScanned {
                 NerdStatCard(
                     icon: "doc.text.magnifyingglass",
-                    iconColor: .green,
+                    iconColor: SortyDesignSystem.Colors.success,
                     title: "Reviewed",
                     value: GenerationStats.formatCount(scanned),
                     unit: "files",
@@ -426,7 +417,7 @@ private struct HistoryOptionalNerdStats: View {
             if let scanDuration = stats.scanDuration {
                 NerdStatCard(
                     icon: "stopwatch",
-                    iconColor: .blue,
+                    iconColor: SortyDesignSystem.Colors.info,
                     title: "Scan time",
                     value: GenerationStats.formatDuration(scanDuration),
                     unit: nil,
@@ -436,7 +427,7 @@ private struct HistoryOptionalNerdStats: View {
             if stats.estimatedTimeSaved > 0 {
                 NerdStatCard(
                     icon: "hourglass.bottomhalf.filled",
-                    iconColor: .orange,
+                    iconColor: SortyDesignSystem.Colors.resolvedAccent,
                     title: "Time saved",
                     value: GenerationStats.formatDuration(stats.estimatedTimeSaved),
                     unit: nil,
@@ -446,7 +437,7 @@ private struct HistoryOptionalNerdStats: View {
             if let size = stats.formattedTotalFileSize {
                 NerdStatCard(
                     icon: "internaldrive",
-                    iconColor: .cyan,
+                    iconColor: SortyDesignSystem.Colors.resolvedAccent,
                     title: "Volume",
                     value: size,
                     unit: nil,
@@ -456,7 +447,7 @@ private struct HistoryOptionalNerdStats: View {
             if stats.hasBillableCost {
                 NerdStatCard(
                     icon: "dollarsign.circle",
-                    iconColor: .yellow,
+                    iconColor: SortyDesignSystem.Colors.warning,
                     title: "AI cost",
                     value: GenerationStats.formatCost(stats.computedCost),
                     unit: nil,
@@ -465,7 +456,7 @@ private struct HistoryOptionalNerdStats: View {
             }
             NerdStatCard(
                 icon: "cpu",
-                iconColor: .purple,
+                iconColor: SortyDesignSystem.Colors.resolvedAccent,
                 title: "Model",
                 value: stats.compactModelName,
                 unit: nil,
@@ -484,7 +475,7 @@ private struct HistoryOptionalNerdStats: View {
             if let duplicates = stats.duplicatesFound, duplicates > 0 {
                 NerdStatCard(
                     icon: "doc.on.doc",
-                    iconColor: .red,
+                    iconColor: SortyDesignSystem.Colors.error,
                     title: "Duplicates",
                     value: GenerationStats.formatCount(duplicates),
                     unit: nil,
@@ -505,16 +496,15 @@ struct HistoryDetailErrorSection: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Error", systemImage: "exclamationmark.triangle.fill")
                     .font(.headline)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SortyDesignSystem.Colors.error)
                     .accessibilityAddTraits(.isHeader)
 
                 Text(error)
                     .font(.callout)
-                    .foregroundColor(.red)
+                    .foregroundColor(SortyDesignSystem.Colors.error)
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.red.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+                    .sortyInsetSurface(tint: SortyDesignSystem.Colors.error)
                     .accessibilityLabel("Error: \(error)")
             }
         }
@@ -622,7 +612,7 @@ struct HistoryPlanDetailsSection: View {
     var body: some View {
         if let plan = entry.plan {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Organization Details")
+                Text("Organization details")
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
 
@@ -652,9 +642,9 @@ private struct HistoryUnorganizedFilesSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Unorganized Files")
+            Text("Unorganized files")
                 .font(.subheadline.bold())
-                .foregroundColor(.orange)
+                .foregroundColor(SortyDesignSystem.Colors.warning)
 
             LazyVStack(alignment: .leading, spacing: 6) {
                 ForEach(files) { file in
@@ -667,8 +657,7 @@ private struct HistoryUnorganizedFilesSection: View {
             }
         }
         .padding()
-        .background(Color.orange.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+        .sortyInsetSurface(tint: SortyDesignSystem.Colors.warning)
     }
 }
 
@@ -734,7 +723,7 @@ struct HistoryFileOperationsSection: View {
         if !operations.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("File Operations")
+                    Text("File operations")
                         .font(.headline)
                         .accessibilityAddTraits(.isHeader)
                     Spacer()
@@ -776,7 +765,7 @@ struct HistoryRestorableItemsSection: View {
     var body: some View {
         if let items = entry.restorableItems, !items.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Deleted Files")
+                Text("Deleted files")
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
 
@@ -814,8 +803,7 @@ private struct HistoryRestorableItemRow: View {
         }
         .font(.caption)
         .padding(8)
-        .background(Color.secondary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.sm)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Deleted: \(deletedName), original: \(originalName)")
     }

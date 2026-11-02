@@ -576,7 +576,7 @@ private enum ApplicationMover {
                 message:
                     "Sorty runs fine from here, but moving it to Applications keeps updates and Finder features reliable.",
                 icon: "folder.fill.badge.plus",
-                iconColor: .blue,
+                iconColor: SortyDesignSystem.Colors.info,
                 identifier: suggestionIdentifier,
                 isPersistent: true,
                 actions: [

@@ -22,9 +22,9 @@ package enum NoticeSeverity {
 
     var color: Color {
         switch self {
-        case .info: return .blue
-        case .warning: return .orange
-        case .tip: return .green
+        case .info: return SortyDesignSystem.Colors.info
+        case .warning: return SortyDesignSystem.Colors.warning
+        case .tip: return SortyDesignSystem.Colors.success
         }
     }
 
@@ -97,14 +97,7 @@ package struct InlineNotice: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: isCentered ? .center : .leading)
-        .background(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
-                .fill(severity.color.opacity(0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
-                        .strokeBorder(severity.color.opacity(0.15), lineWidth: 1)
-                )
-        )
+        .sortyInsetSurface(tint: severity.color)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
         .accessibilityHint(message ?? "")
@@ -290,11 +283,6 @@ package struct InsightPill: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(Color.secondary.opacity(0.1))
-        )
+        .sortyBadge()
     }
 }

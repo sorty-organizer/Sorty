@@ -66,7 +66,7 @@ extension AddExclusionRuleView {
 
             Spacer()
 
-            Text(editingRule == nil ? (selectedIntent == nil ? "Add an Exclusion" : "Set Up Exclusion") : "Edit Exclusion")
+            Text(editingRule == nil ? (selectedIntent == nil ? "Add an exclusion" : "Set up exclusion") : "Edit exclusion")
                 .font(.headline)
 
             Spacer()
@@ -85,8 +85,7 @@ extension AddExclusionRuleView {
                     .hidden()
             }
         }
-        .padding()
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .sortyCard()
     }
 
     var intentPicker: some View {
@@ -189,8 +188,7 @@ extension AddExclusionRuleView {
                 )
             }
         }
-        .padding(14)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .sortyCard(padding: 14)
     }
 
     var displayedExceptionName: String {
@@ -228,8 +226,7 @@ extension AddExclusionRuleView {
                     advancedConfiguration
                 }
             }
-            .padding(16)
-            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+            .sortyCard()
 
             if intent != .folder {
                 VStack(alignment: .leading, spacing: 8) {
@@ -238,8 +235,7 @@ extension AddExclusionRuleView {
                     TextField("e.g. Old video exports", text: $description)
                         .textFieldStyle(.roundedBorder)
                 }
-                .padding(16)
-                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+                .sortyCard()
             }
 
             if supportsMatchingOptions {
@@ -249,8 +245,7 @@ extension AddExclusionRuleView {
                     Toggle("Match uppercase and lowercase separately", isOn: $caseSensitive)
                     Toggle("Exclude everything except matches", isOn: $negated)
                 }
-                .padding(16)
-                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+                .sortyCard()
             }
         }
     }

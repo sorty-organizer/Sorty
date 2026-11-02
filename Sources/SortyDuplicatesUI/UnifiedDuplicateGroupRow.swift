@@ -51,7 +51,7 @@ struct UnifiedDuplicateGroupRow: View {
     }
 
     private var badgeColor: Color {
-        group.isExact ? .orange : .blue
+        group.isExact ? SortyDesignSystem.Colors.warning : SortyDesignSystem.Colors.info
     }
 
     var body: some View {
@@ -92,7 +92,7 @@ struct UnifiedDuplicateGroupRow: View {
                         ByteCountFormatter.string(
                             fromByteCount: group.potentialSavings, countStyle: .file)
                     )
-                    .foregroundStyle(.green)
+                    .foregroundStyle(SortyDesignSystem.Colors.success)
                 }
                 .font(.caption2)
                 .foregroundStyle(.secondary)

@@ -67,23 +67,18 @@ struct LearningInsightRow: View {
                     if rule.successCount > 0 {
                         Text("\(rule.successCount) applied")
                             .font(.caption2)
-                            .foregroundColor(.green)
+                            .foregroundColor(SortyDesignSystem.Colors.success)
                             .numericTextTransition(animationValue: rule.successCount)
                     }
                     if rule.failureCount > 0 {
                         Text("\(rule.failureCount) corrected")
                             .font(.caption2)
-                            .foregroundColor(.orange)
+                            .foregroundColor(SortyDesignSystem.Colors.warning)
                             .numericTextTransition(animationValue: rule.failureCount)
                     }
                     if case .folder = rule.scope {
                         Text(rule.scope.displayName)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.blue)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(Color.blue.opacity(0.1))
-                            .clipShape(Capsule())
+                            .sortyBadge(tint: SortyDesignSystem.Colors.info)
                     }
                 }
                 if settingsViewModel.config.showStatsForNerds {
@@ -138,8 +133,8 @@ struct LearningInsightRow: View {
     }
 
     private var confidenceColor: Color {
-        if rule.failureRate > 0.3 { return .red }
-        if rule.failureRate > 0.15 { return .orange }
-        return .green
+        if rule.failureRate > 0.3 { return SortyDesignSystem.Colors.error }
+        if rule.failureRate > 0.15 { return SortyDesignSystem.Colors.warning }
+        return SortyDesignSystem.Colors.success
     }
 }

@@ -280,10 +280,10 @@ struct ModelSelectionPopover: View {
         HStack(spacing: 6) {
             Image(systemName: "bolt.fill")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.orange)
+                .foregroundColor(SortyDesignSystem.Colors.warning)
 
             Text("Fast mode")
-                .font(.system(size: 10, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundColor(.secondary)
 
             Spacer()
@@ -397,7 +397,7 @@ struct ModelSelectionPopover: View {
                 .font(.system(size: 12))
 
             Text(message)
-                .font(.system(size: 11))
+                .font(.subheadline)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -482,8 +482,8 @@ struct ModelSelectionPopover: View {
     
     private var providerList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("PROVIDER")
-                .font(.system(size: 10, weight: .semibold))
+            Text("Provider")
+                .font(.caption.weight(.semibold))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 12)
                 .padding(.top, 10)
@@ -526,7 +526,7 @@ struct ModelSelectionPopover: View {
                     .frame(width: 16)
 
                 Text(provider.displayName)
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundColor(selectedProvider == provider ? .white : .primary)
                     .lineLimit(1)
 
@@ -534,7 +534,7 @@ struct ModelSelectionPopover: View {
 
                 if provider == currentProvider {
                     Circle()
-                        .fill(selectedProvider == provider ? Color.white.opacity(0.8) : Color.green)
+                        .fill(selectedProvider == provider ? Color.white.opacity(0.8) : SortyDesignSystem.Colors.success)
                         .frame(width: 6, height: 6)
                 }
 
@@ -556,8 +556,8 @@ struct ModelSelectionPopover: View {
     private var modelList: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
-                Text("MODEL")
-                    .font(.system(size: 10, weight: .semibold))
+                Text("Model")
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(.secondary)
 
                 Spacer()
@@ -565,7 +565,7 @@ struct ModelSelectionPopover: View {
                 if supportsFreeFilter {
                     HStack(spacing: 4) {
                         Text("Free")
-                            .font(.system(size: 10))
+                            .font(.caption)
                             .foregroundColor(.secondary)
                         Toggle("", isOn: $showFreeOnly)
                             .toggleStyle(.switch)
@@ -579,7 +579,7 @@ struct ModelSelectionPopover: View {
                 if selectedProvider == .openAI && FeatureFlags.subscriptionAuthEnabled {
                     HStack(spacing: 4) {
                         Text("Codex")
-                            .font(.system(size: 10))
+                            .font(.caption)
                             .foregroundColor(.secondary)
                         Toggle("", isOn: $showCodexOnly)
                             .toggleStyle(.switch)
@@ -603,7 +603,7 @@ struct ModelSelectionPopover: View {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 10))
                         Text("Refresh")
-                            .font(.system(size: 10))
+                            .font(.caption)
                     }
                     .foregroundColor(.accentColor)
                 }
@@ -616,7 +616,7 @@ struct ModelSelectionPopover: View {
                         showAllModels.toggle()
                     } label: {
                         Text(showAllModels ? "Show Less" : "Show All")
-                            .font(.system(size: 10))
+                            .font(.caption)
                             .foregroundColor(.accentColor)
                             .numericTextTransition(animationValue: showAllModels)
                     }
@@ -690,7 +690,7 @@ struct ModelSelectionPopover: View {
         } label: {
             HStack(spacing: 8) {
                 Text(model)
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundColor(selectedModel == model ? .white : .primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -701,38 +701,20 @@ struct ModelSelectionPopover: View {
                         Image(systemName: "eye.fill")
                             .font(.system(size: 10, weight: .semibold))
                         Text("Vision")
-                            .font(.system(size: 10, weight: .bold))
                     }
-                    .foregroundColor(selectedModel == model ? .white : .teal)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.teal.opacity(0.15))
-                    )
+                    .sortyBadge(tint: selectedModel == model ? .white : SortyDesignSystem.Colors.info)
                     .fixedSize()
                 }
 
                 if supportsFreeFilter && isModelFree(model) {
                     Text("Free")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(selectedModel == model ? .white : .green)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.green.opacity(0.15))
-                        )
+                        .sortyBadge(tint: selectedModel == model ? .white : SortyDesignSystem.Colors.success)
                         .fixedSize()
                 }
 
                 if selectedProvider == .openAI && isCodexModel(model) {
                     Text("Codex")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(selectedModel == model ? .white : .purple)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.purple.opacity(0.15))
-                        )
+                        .sortyBadge(tint: selectedModel == model ? .white : SortyDesignSystem.Colors.resolvedAccent)
                         .fixedSize()
                 }
 
@@ -740,15 +722,15 @@ struct ModelSelectionPopover: View {
 
                 if model == selectedProvider.defaultModel {
                     Text("Default")
-                        .font(.system(size: 10))
+                        .font(.caption)
                         .foregroundColor(selectedModel == model ? .white.opacity(0.8) : .secondary)
                         .fixedSize()
                 }
 
                 if model == currentModel && selectedProvider == currentProvider {
                     Text("Current")
-                        .font(.system(size: 10))
-                        .foregroundColor(selectedModel == model ? .white.opacity(0.8) : .green)
+                        .font(.caption)
+                        .foregroundColor(selectedModel == model ? .white.opacity(0.8) : SortyDesignSystem.Colors.success)
                         .fixedSize()
                 }
             }
@@ -766,15 +748,15 @@ struct ModelSelectionPopover: View {
     private func errorView(_ error: Error) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.red)
+                .foregroundColor(SortyDesignSystem.Colors.error)
                 .font(.system(size: 12))
             
             VStack(alignment: .leading, spacing: 2) {
                 Text("Fetch Failed")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.red)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(SortyDesignSystem.Colors.error)
                 Text(fetchErrorMessage(for: error))
-                    .font(.system(size: 10))
+                    .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(2)
             }
@@ -782,8 +764,7 @@ struct ModelSelectionPopover: View {
             Spacer()
         }
         .padding(8)
-        .background(Color.red.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
+        .sortyInsetSurface(tint: SortyDesignSystem.Colors.error, cornerRadius: SortyDesignSystem.Radius.sm)
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
     }
@@ -791,18 +772,17 @@ struct ModelSelectionPopover: View {
     private var fallbackWarningView: some View {
         HStack(spacing: 8) {
             Image(systemName: "info.circle.fill")
-                .foregroundColor(.orange)
+                .foregroundColor(SortyDesignSystem.Colors.warning)
                 .font(.system(size: 12))
             
             Text("Using offline model list")
-                .font(.system(size: 11))
-                .foregroundColor(.orange)
+                .font(.subheadline)
+                .foregroundColor(SortyDesignSystem.Colors.warning)
             
             Spacer()
         }
         .padding(8)
-        .background(Color.orange.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
+        .sortyInsetSurface(tint: SortyDesignSystem.Colors.warning, cornerRadius: SortyDesignSystem.Radius.sm)
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
     }
@@ -835,7 +815,7 @@ struct ModelSelectionPopover: View {
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
                 Text("Use custom model ID...")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundColor(.secondary)
                 Spacer()
             }
@@ -904,7 +884,7 @@ struct ModelSelectionPopover: View {
                 HStack(spacing: 4) {
                     ProviderLogoView(provider: selectedProvider, size: 12)
                     Text("\(selectedProvider.displayName) / \(selectedModel)")
-                        .font(.system(size: 12))
+                        .font(.callout)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .numericTextTransition(
@@ -923,7 +903,7 @@ struct ModelSelectionPopover: View {
                 .animation(reduceMotion ? nil : .sortyFade, value: isFastBadgeVisible)
             } else {
                 Text("Select a model")
-                    .font(.system(size: 12))
+                    .font(.callout)
                     .foregroundColor(.secondary)
             }
             

@@ -128,11 +128,7 @@ struct OnboardingCapsuleBadge: View {
     let text: String
 
     var body: some View {
-        Text(text.uppercased())
-            .font(.system(size: 10, weight: .bold, design: .rounded))
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule, interactive: false)
+        Text(text)
+            .sortyBadge()
     }
 }

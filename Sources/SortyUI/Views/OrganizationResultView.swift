@@ -51,7 +51,7 @@ struct GenerationStatsView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "chart.bar.doc.horizontal")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                     
                     Text("Stats for Nerds")
                         .font(.headline)
@@ -60,12 +60,7 @@ struct GenerationStatsView: View {
                     Spacer()
                     
                     Text(stats.compactModelName)
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.purple.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
-                        .foregroundStyle(.purple)
+                        .sortyBadge(tint: SortyDesignSystem.Colors.resolvedAccent)
                     
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
@@ -93,7 +88,7 @@ struct GenerationStatsView: View {
                 LazyVGrid(columns: gridColumns, spacing: 16) {
                     NerdStatPillExpanded(
                         icon: "clock.fill",
-                        color: .blue,
+                        color: SortyDesignSystem.Colors.info,
                         title: "AI Time",
                         value: GenerationStats.formatDuration(stats.duration),
                         unit: nil
@@ -101,7 +96,7 @@ struct GenerationStatsView: View {
 
                     NerdStatPillExpanded(
                         icon: "bolt.fill",
-                        color: .orange,
+                        color: SortyDesignSystem.Colors.resolvedAccent,
                         title: "Throughput",
                         value: String(format: "%.1f", stats.tps),
                         unit: "t/s"
@@ -109,7 +104,7 @@ struct GenerationStatsView: View {
                     
                     NerdStatPillExpanded(
                         icon: "timer",
-                        color: .green,
+                        color: SortyDesignSystem.Colors.info,
                         title: "TTFT",
                         value: GenerationStats.formatDuration(stats.ttft),
                         unit: nil
@@ -117,7 +112,7 @@ struct GenerationStatsView: View {
 
                     NerdStatPillExpanded(
                         icon: "text.bubble",
-                        color: .teal,
+                        color: SortyDesignSystem.Colors.resolvedAccent,
                         title: "Response",
                         value: GenerationStats.formatCount(stats.responseTokens),
                         unit: "tok"
@@ -126,7 +121,7 @@ struct GenerationStatsView: View {
                     if let promptTokens = stats.promptTokens {
                         NerdStatPillExpanded(
                             icon: "text.alignleft",
-                            color: .indigo,
+                            color: SortyDesignSystem.Colors.resolvedAccent,
                             title: "Prompt",
                             value: GenerationStats.formatCount(promptTokens),
                             unit: "tok"
@@ -136,7 +131,7 @@ struct GenerationStatsView: View {
                     if let totalContextTokens = stats.totalContextTokens {
                         NerdStatPillExpanded(
                             icon: "sum",
-                            color: .mint,
+                            color: SortyDesignSystem.Colors.resolvedAccent,
                             title: "Context",
                             value: GenerationStats.formatCount(totalContextTokens),
                             unit: "tok"
@@ -146,7 +141,7 @@ struct GenerationStatsView: View {
                     if let scanned = stats.filesScanned {
                         NerdStatPillExpanded(
                             icon: "doc.text.magnifyingglass",
-                            color: .cyan,
+                            color: SortyDesignSystem.Colors.resolvedAccent,
                             title: "Files Reviewed",
                             value: GenerationStats.formatCount(scanned),
                             unit: "files"
@@ -166,7 +161,7 @@ struct GenerationStatsView: View {
                     if let scanDuration = stats.scanDuration {
                         NerdStatPillExpanded(
                             icon: "stopwatch",
-                            color: .blue,
+                            color: SortyDesignSystem.Colors.info,
                             title: "Scan Time",
                             value: GenerationStats.formatDuration(scanDuration),
                             unit: nil
@@ -176,7 +171,7 @@ struct GenerationStatsView: View {
                     if stats.hasBillableCost {
                         NerdStatPillExpanded(
                             icon: "dollarsign.circle.fill",
-                            color: .green,
+                            color: SortyDesignSystem.Colors.success,
                             title: "Estimated Cost",
                             value: GenerationStats.formatCost(stats.computedCost),
                             unit: nil
@@ -197,7 +192,7 @@ struct GenerationStatsView: View {
                     if dups > 0 {
                         NerdStatPillExpanded(
                             icon: "square.on.square",
-                            color: .red,
+                            color: SortyDesignSystem.Colors.warning,
                             title: "Duplicates",
                             value: GenerationStats.formatCount(dups),
                             unit: "files"
@@ -206,13 +201,7 @@ struct GenerationStatsView: View {
                 }
             }
         }
-        .padding(16)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
-        )
+        .sortyCard()
         .accessibilityElement(children: .contain)
     }
 }
@@ -253,16 +242,11 @@ public struct NerdStatPill: View {
             
             if let unit = unit {
                 Text(unit)
-                    .font(.system(size: 10))
+                    .font(.caption)
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(color.opacity(0.1))
-        )
+        .sortyBadge(tint: color)
         }
         .buttonStyle(.plain)
         .help("Copy \(copyText)")
@@ -323,13 +307,13 @@ public struct NerdStatPillExpanded: View {
                     
                     if let unit = unit {
                         Text(unit)
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.caption.weight(.medium))
                             .foregroundStyle(.tertiary)
                     }
                 }
                 
                 Text(LocalizedStringKey(title))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                     .lineLimit(1)
@@ -340,14 +324,7 @@ public struct NerdStatPillExpanded: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                .fill(Color.primary.opacity(0.03))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
-                )
-        )
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
         }
         .buttonStyle(.plain)
         .help("Copy \(copyText)")
@@ -395,7 +372,7 @@ package struct NerdStatCard: View {
                     .foregroundStyle(iconColor)
                 
                 Text(LocalizedStringKey(title))
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                     .tracking(0.5)
@@ -414,28 +391,20 @@ package struct NerdStatCard: View {
                     
                     if let unit = unit {
                         Text(unit)
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.caption.weight(.medium))
                             .foregroundStyle(.tertiary)
                     }
                 }
                 
                 Text(LocalizedStringKey(description))
-                    .font(.system(size: 10))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                .fill(Color(NSColor.windowBackgroundColor).opacity(0.5))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity, minHeight: 112 - 24, alignment: .topLeading)
+        .sortyCard(padding: 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title): \(value) \(unit ?? "")")
     }

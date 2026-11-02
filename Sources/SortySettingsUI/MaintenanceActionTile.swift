@@ -64,12 +64,7 @@ struct MaintenanceActionTile: View {
             .frame(maxWidth: .infinity, minHeight: 124)
             .padding(.horizontal, 10)
             .padding(.vertical, 12)
-            .background(isHovered ? color.opacity(0.14) : Color.secondary.opacity(0.045))
-            .overlay(
-                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
-                    .stroke(isHovered ? color.opacity(0.32) : Color.secondary.opacity(0.08), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+            .sortyInsetSurface(tint: isHovered ? color : nil, isHighlighted: isHovered)
             .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
         }
         .buttonStyle(.plain)

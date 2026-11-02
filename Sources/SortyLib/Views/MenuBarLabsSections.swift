@@ -21,7 +21,7 @@ struct MenuBarDownloadsInboxSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Downloads Inbox")
+                Text("Downloads inbox")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -43,7 +43,7 @@ struct MenuBarDownloadsInboxSection: View {
             if let error = inbox.lastError {
                 Text(error)
                     .font(.caption2)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SortyDesignSystem.Colors.error)
                     .lineLimit(2)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 2)
@@ -77,7 +77,7 @@ struct MenuBarDownloadsInboxSection: View {
     private func undoRow(_ move: DownloadsInboxMove) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
+                .foregroundStyle(SortyDesignSystem.Colors.success)
                 .font(.caption)
             Text("Moved to \(move.movedURL.deletingLastPathComponent().lastPathComponent)")
                 .font(.caption)

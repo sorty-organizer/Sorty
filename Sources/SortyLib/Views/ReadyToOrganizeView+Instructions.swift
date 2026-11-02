@@ -77,7 +77,7 @@ extension ReadyToOrganizeView {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .foregroundColor(.teal)
+                    .foregroundColor(SortyDesignSystem.Colors.resolvedAccent)
                     .disabled(isImprovingPrompt)
                     .help("Improve instructions with Sorty")
                     .accessibilityHint("Rewrites your prompt to be clearer and more specific")
@@ -117,7 +117,7 @@ extension ReadyToOrganizeView {
                             if steeringManager.hasPrompt(named: savePromptName) {
                                 Text("A prompt with this name already exists.")
                                     .font(.caption)
-                                    .foregroundStyle(.red)
+                                    .foregroundStyle(SortyDesignSystem.Colors.error)
                             }
 
                             HStack {

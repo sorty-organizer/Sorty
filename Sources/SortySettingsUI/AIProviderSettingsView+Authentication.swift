@@ -82,7 +82,7 @@ extension AIProviderSettingsView {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(SortyDesignSystem.Colors.success)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Codex subscription ready")
@@ -106,8 +106,7 @@ extension AIProviderSettingsView {
                     .controlSize(.small)
                 }
                 .padding(10)
-                .background(Color.green.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+                .sortyInsetSurface(tint: SortyDesignSystem.Colors.success)
             } else {
                 Text("Use your ChatGPT subscription for OpenAI inference through Codex CLI device authorization.")
                     .font(.caption)
@@ -127,13 +126,13 @@ extension AIProviderSettingsView {
                 if !codexAuth.isCodexInstalled {
                     Label("Codex CLI not detected", systemImage: "xmark.circle")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(SortyDesignSystem.Colors.warning)
                 }
 
                 if let error = codexAuth.authError {
                     Text(error)
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(SortyDesignSystem.Colors.error)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -195,7 +194,7 @@ extension AIProviderSettingsView {
                     Divider()
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "info.circle")
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(SortyDesignSystem.Colors.info)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("On-device model unavailable")
                                 .font(.caption)

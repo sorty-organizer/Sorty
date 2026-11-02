@@ -60,7 +60,7 @@ struct ThanksForUsingSortyView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "heart.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 Text("Support the Developer")
                     .foregroundStyle(.white)
             }

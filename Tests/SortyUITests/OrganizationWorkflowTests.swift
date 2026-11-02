@@ -52,16 +52,16 @@ final class OrganizationWorkflowTests: XCTestCase {
         historySidebarItem.click()
         Thread.sleep(forTimeInterval: 0.5)
 
-        // History shows "No History Yet" + CTA when empty, or session cards when populated.
+        // History shows "No history yet" + CTA when empty, or session cards when populated.
         // Assert the actual contract (passes either way: empty or populated).
-        let emptyMessage = app.staticTexts["No History Yet"]
+        let emptyMessage = app.staticTexts["No history yet"]
         let emptyCTA = app.buttons["HistoryEmptyStateCTA"]
         let hasHistoryCards = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'HistorySessionCard-'")
         ).count > 0
         XCTAssertTrue(
             emptyMessage.waitForExistence(timeout: 2.0) || emptyCTA.exists || hasHistoryCards,
-            "History view should show 'No History Yet' empty state or history entries"
+            "History view should show 'No history yet' empty state or history entries"
         )
 
         // An empty state or history list should be present

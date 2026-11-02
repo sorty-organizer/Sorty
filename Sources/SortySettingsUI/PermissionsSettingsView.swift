@@ -338,7 +338,7 @@ struct PermissionsSettingsView: View {
             Text("of \(PermissionType.allCases.count) ready")
         }
         .font(.system(size: 11, weight: .semibold, design: .rounded))
-        .foregroundStyle(readyPermissionCount == PermissionType.allCases.count ? .green : .secondary)
+        .foregroundStyle(readyPermissionCount == PermissionType.allCases.count ? SortyDesignSystem.Colors.success : .secondary)
         .animation(.sortyFade, value: readyPermissionCount)
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
@@ -460,7 +460,7 @@ struct PermissionsSettingsView: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.green)
+                .foregroundStyle(SortyDesignSystem.Colors.success)
                 .frame(width: 16)
                 .accessibilityHidden(true)
 

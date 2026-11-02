@@ -275,13 +275,13 @@ struct ErrorView: View {
 
             ZStack {
                 Circle()
-                    .fill(Color.red.opacity(0.1))
+                    .fill(SortyDesignSystem.Colors.error.opacity(0.1))
                     .frame(width: 100, height: 100)
 
                 Image(systemName: errorIcon)
                     .font(.system(size: 44, weight: .semibold))
-                    .foregroundStyle(.red)
-                    .animatedEmptyStateIcon(tint: .red)
+                    .foregroundStyle(SortyDesignSystem.Colors.error)
+                    .animatedEmptyStateIcon(tint: SortyDesignSystem.Colors.error)
             }
 
             VStack(spacing: 8) {

@@ -23,7 +23,7 @@ struct RoutingRulesCard: View {
     @FocusState private var isRequestFocused: Bool
 
     var body: some View {
-        SettingsCard(title: "Routing Rules", icon: "arrow.triangle.branch", color: .teal, count: store.rules.count) {
+        SettingsCard(title: "Routing rules", icon: "arrow.triangle.branch", color: SortyDesignSystem.Colors.resolvedAccent, count: store.rules.count) {
             VStack(alignment: .leading, spacing: 12) {
                 if let draft {
                     draftPreview(draft)
@@ -132,8 +132,7 @@ struct RoutingRulesCard: View {
                 .accessibilityIdentifier("RoutingRuleSaveButton")
             }
         }
-        .padding(12)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .sortyCard(padding: 12)
     }
 
     private func resolve() async {
@@ -218,7 +217,7 @@ private struct RoutingRuleRow: View {
             .accessibilityLabel("Delete rule")
         }
         .padding(10)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, clear: true, interactive: false)
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
         .onHover { isHovered = $0 }
         .animation(.sortyQuick, value: isHovered)
         .accessibilityIdentifier("RoutingRuleRow")

@@ -272,7 +272,7 @@ public struct BugReportView: View {
             if let errorMessage {
                 Text(errorMessage)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SortyDesignSystem.Colors.error)
                     .accessibilityAddTraits(.isStaticText)
             }
 
@@ -549,7 +549,7 @@ public struct BugReportView: View {
                 title: "Feedback sent",
                 message: "Thanks. Your report reached Sorty's developers.",
                 icon: "checkmark.seal.fill",
-                iconColor: .mint,
+                iconColor: SortyDesignSystem.Colors.resolvedAccent,
                 identifier: "bug-report-sentry-success"
             )
             HapticFeedbackManager.shared.success()
@@ -613,7 +613,7 @@ public struct BugReportView: View {
                         title: "GitHub could not open",
                         message: "Try opening the bug report again.",
                         icon: "xmark.circle.fill",
-                        iconColor: .red
+                        iconColor: SortyDesignSystem.Colors.error
                     )
                 }
             }
@@ -636,39 +636,17 @@ private struct FeedbackKindChip: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
-    @State private var isHovered = false
 
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.subheadline.weight(.medium))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .foregroundStyle(isSelected ? Color.white : Color.primary)
-                .background(
-                    Capsule().fill(isSelected
-                        ? SortyDesignSystem.Colors.resolvedAccent
-                        : Color.secondary.opacity(isHovered ? 0.18 : 0.1))
-                )
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(.sortyFade, value: isHovered)
-        .animation(.sortyFade, value: isSelected)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        Button(title, action: action)
+            .buttonStyle(.sortyChip(isSelected: isSelected))
     }
 }
 
 private extension View {
     /// Inset surface shared by the message box and the options group.
     func feedbackCard() -> some View {
-        background(Color(NSColor.controlBackgroundColor).opacity(0.6))
-            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                    .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
-            }
+        sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
     }
 }
 
@@ -733,7 +711,7 @@ private struct AttachmentChip: View {
         .font(.caption)
         .padding(4)
         .padding(.trailing, 4)
-        .background(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous).fill(Color.secondary.opacity(isHovered ? 0.18 : 0.12)))
+        .sortyInsetSurface(isHighlighted: isHovered)
         .onHover { isHovered = $0 }
         .animation(.sortyFade, value: isHovered)
         .help(url.path)

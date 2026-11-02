@@ -25,7 +25,7 @@ public struct WorkflowSelectionStepView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     OnboardingIconSliver(
                         systemName: "person.crop.circle.badge.checkmark",
-                        color: .teal,
+                        color: SortyDesignSystem.Colors.resolvedAccent,
                         fontSize: 48
                     )
                     
@@ -39,14 +39,13 @@ public struct WorkflowSelectionStepView: View {
                     
                     HStack(spacing: 8) {
                         Image(systemName: "info.circle.fill")
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(SortyDesignSystem.Colors.info)
                         Text("You can change this anytime in Settings")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     .padding(12)
-                    .background(Color.blue.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+                    .sortyInsetSurface(tint: SortyDesignSystem.Colors.info)
                 }
                 .frame(maxWidth: 350)
 
@@ -330,7 +329,7 @@ struct OnboardingCustomPersonaCard: View {
 
     @State private var isHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private let selectionAccent = Color.teal
+    private let selectionAccent = SortyDesignSystem.Colors.resolvedAccent
 
     var body: some View {
         Button {
@@ -432,7 +431,7 @@ struct OnboardingCustomPersonaCard: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [SortyDesignSystem.Colors.resolvedAccent.opacity(0.22), Color.teal.opacity(0.16)],
+                                colors: [SortyDesignSystem.Colors.resolvedAccent.opacity(0.22), selectionAccent.opacity(0.16)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -453,15 +452,8 @@ struct OnboardingCustomPersonaCard: View {
                         Spacer(minLength: 8)
 
                         Text(isSelected ? "Selected" : "Custom")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(isSelected ? selectionAccent : .secondary)
                             .numericTextTransition(animationValue: isSelected)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(isSelected ? selectionAccent.opacity(0.16) : Color.secondary.opacity(0.12))
-                            )
+                            .sortyBadge(tint: isSelected ? selectionAccent : nil)
                     }
 
                     Text(isSelected ? "Sorty will use this custom workflow by default." : "Custom workflow ready to use as your default persona.")
@@ -528,7 +520,7 @@ struct OnboardingCustomPersonaCard: View {
 
         return AnyShapeStyle(
             LinearGradient(
-                colors: [SortyDesignSystem.Colors.resolvedAccent.opacity(0.18), Color.teal.opacity(0.14)],
+                colors: [SortyDesignSystem.Colors.resolvedAccent.opacity(0.18), SortyDesignSystem.Colors.resolvedAccent.opacity(0.14)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )

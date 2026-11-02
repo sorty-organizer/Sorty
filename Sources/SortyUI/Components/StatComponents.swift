@@ -127,13 +127,8 @@ package struct GlassPillButton: View {
 
                 if let count {
                     Text("\(count)")
-                        .font(.caption2)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.white)
                         .numericTextTransition(animationValue: count)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(tint))
+                        .sortyBadge(tint: tint)
                 }
             }
             .padding(.horizontal, 12)

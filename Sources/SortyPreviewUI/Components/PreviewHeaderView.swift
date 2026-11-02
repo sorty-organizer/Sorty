@@ -72,22 +72,15 @@ struct PreviewHeaderView: View {
 
                 if isViewingHistory {
                     Text("(History)")
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
+                        .sortyBadge(tint: SortyDesignSystem.Colors.info)
                 }
 
                 if hasEdits {
-                    Button("Edited", action: { showDiff(currentDiffSource) })
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.orange.opacity(0.1), in: .rect(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
-                        .buttonStyle(.plain)
+                    Button(action: { showDiff(currentDiffSource) }) {
+                        Text("Edited")
+                            .sortyBadge(tint: SortyDesignSystem.Colors.warning)
+                    }
+                    .buttonStyle(.plain)
                         .help("Compare edits with Preview \(version)")
                 }
 
@@ -98,7 +91,7 @@ struct PreviewHeaderView: View {
                         ZStack {
                             Image(systemName: "brain")
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(showNotesPopover ? Color.purple : Color.secondary)
+                                .foregroundStyle(showNotesPopover ? SortyDesignSystem.Colors.info : Color.secondary)
                         }
                         .frame(width: 22, height: 22)
                         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
@@ -127,12 +120,12 @@ struct PreviewHeaderView: View {
                             HStack(spacing: 8) {
                                 ZStack {
                                     Circle()
-                                        .fill(Color.purple.opacity(0.12))
+                                        .fill(SortyDesignSystem.Colors.info.opacity(0.12))
                                         .frame(width: 28, height: 28)
 
                                     Image(systemName: "brain")
                                         .font(.system(size: 12, weight: .semibold))
-                                        .foregroundStyle(.purple)
+                                        .foregroundStyle(SortyDesignSystem.Colors.info)
                                 }
 
                                 Text("AI Reasoning")

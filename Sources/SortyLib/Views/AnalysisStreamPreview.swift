@@ -96,11 +96,11 @@ struct RenameGenerationSequenceView: View {
     private var renameIcon: some View {
         if #available(macOS 26.0, *) {
             Image(systemName: "pencil.and.scribble")
-                .foregroundStyle(.purple)
+                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 .symbolEffect(.drawOn, options: .repeating)
         } else {
             Image(systemName: "pencil.and.scribble")
-                .foregroundStyle(.purple)
+                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
         }
     }
 

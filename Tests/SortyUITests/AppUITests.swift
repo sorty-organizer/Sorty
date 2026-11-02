@@ -121,8 +121,8 @@ final class AppUITests: XCTestCase {
     func testWatchedFoldersViewShowsCorrectEmptyState() throws {
         navigateToView("WatchedFoldersSidebarItem")
 
-        // Either we see "No Watched Folders" (empty) or we see folder entries
-        let noFoldersText = app.staticTexts["No Watched Folders"]
+        // Either we see "No watched folders" (empty) or we see folder entries
+        let noFoldersText = app.staticTexts["No watched folders"]
         let addButton = app.buttons["AddWatchedFolderButton"]
 
         XCTAssertTrue(waitForElement(addButton), "Add Folder button should always be visible")
@@ -176,7 +176,7 @@ final class AppUITests: XCTestCase {
 
         // Verify view shows appropriate state
         let findDuplicatesText = app.staticTexts["Find Duplicate Files"]
-        let noDuplicatesText = app.staticTexts["No Duplicates Found"]
+        let noDuplicatesText = app.staticTexts["No duplicates found"]
 
         // One of these states should be visible
         let hasValidState = findDuplicatesText.exists || noDuplicatesText.exists || app.progressIndicators.count > 0

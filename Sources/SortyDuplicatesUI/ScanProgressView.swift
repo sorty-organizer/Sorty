@@ -3,62 +3,6 @@ import Foundation
 import SwiftUI
 import Beam
 
-struct ScanningPulseIcon: View {
-    @SortyHotReload private var hotReload
-    let systemName: String
-    let color: Color
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.controlActiveState) private var controlActiveState
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var isWindowVisible = true
-
-    private var isPaused: Bool {
-        reduceMotion || reduceTransparency || !isWindowVisible
-            || controlActiveState == .inactive || scenePhase != .active
-    }
-
-    var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: isPaused)) {
-            timeline in
-            let elapsed = timeline.date.timeIntervalSinceReferenceDate
-            let pulse = isPaused ? 0.5 : (sin(elapsed * 3.2) + 1) / 2
-            let beamPhase = isPaused ? 0.5 : elapsed.truncatingRemainder(dividingBy: 1.8) / 1.8
-
-            Image(systemName: systemName)
-                .font(.system(size: 48))
-                .foregroundStyle(color.opacity(0.55 + pulse * 0.2))
-                .overlay {
-                    GeometryReader { proxy in
-                        LinearGradient(
-                            colors: [
-                                .clear, .white, SortyDesignSystem.Colors.resolvedAccent, .clear,
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: proxy.size.width * 0.65)
-                        .offset(
-                            x: (proxy.size.width * 1.65 * beamPhase) - (proxy.size.width * 0.65))
-                    }
-                    .mask {
-                        Image(systemName: systemName)
-                            .font(.system(size: 48))
-                    }
-                    .opacity(isPaused ? 0.35 : 0.95)
-                }
-                .shadow(
-                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.27),
-                    radius: 4
-                )
-        }
-        .frame(width: 72, height: 56)
-        .background(WindowVisibilityReader(isVisible: $isWindowVisible))
-        .accessibilityHidden(true)
-    }
-}
-
 struct ScanProgressViewNew: View {
     @SortyHotReload private var hotReload
     let progress: Double

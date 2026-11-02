@@ -11,14 +11,14 @@ extension LearningsView {
     ) -> some View {
         switch category {
         case .patterns:
-            learningRecordSection(title: "Inferred Patterns", count: profile.inferredRules.count) {
+            learningRecordSection(title: "Inferred patterns", count: profile.inferredRules.count) {
                 ForEach(profile.inferredRules.sorted { $0.priority > $1.priority }) { rule in
                     learningPatternRecordRow(rule)
                 }
             }
 
         case .sessions:
-            learningRecordSection(title: "Organization Sessions", count: profile.sessions.count) {
+            learningRecordSection(title: "Organization sessions", count: profile.sessions.count) {
                 ForEach(profile.sessions.sorted { $0.timestamp > $1.timestamp }) { session in
                     learningRecordRow(
                         title: URL(fileURLWithPath: session.folderPath).lastPathComponent,
@@ -43,7 +43,7 @@ extension LearningsView {
 
     @ViewBuilder
     func feedbackRecordSections(profile: LearningsProfile) -> some View {
-        learningRecordSection(title: "Observed Changes", count: profile.postOrganizationChanges.count) {
+        learningRecordSection(title: "Observed changes", count: profile.postOrganizationChanges.count) {
             ForEach(profile.postOrganizationChanges.sorted { $0.timestamp > $1.timestamp }) { change in
                 learningRecordRow(
                     title: "Moved after organization",
@@ -58,7 +58,7 @@ extension LearningsView {
                 )
             }
         }
-        learningRecordSection(title: "Cancelled Plans", count: profile.cancelledOrganizations.count) {
+        learningRecordSection(title: "Cancelled plans", count: profile.cancelledOrganizations.count) {
             ForEach(profile.cancelledOrganizations.sorted { $0.timestamp > $1.timestamp }) { item in
                 learningRecordRow(
                     title: safeFileName(item.folderPath),
@@ -69,7 +69,7 @@ extension LearningsView {
                 )
             }
         }
-        learningRecordSection(title: "Regenerated Plans", count: profile.regeneratedOrganizations.count) {
+        learningRecordSection(title: "Regenerated plans", count: profile.regeneratedOrganizations.count) {
             ForEach(profile.regeneratedOrganizations.sorted { $0.timestamp > $1.timestamp }) { item in
                 learningRecordRow(
                     title: safeFileName(item.folderPath),
@@ -81,7 +81,7 @@ extension LearningsView {
             }
         }
         learningRecordSection(
-            title: "Accepted Regeneration Differences",
+            title: "Accepted regeneration differences",
             count: profile.regenerationPreferenceEvidence.count
         ) {
             ForEach(profile.regenerationPreferenceEvidence.sorted { $0.timestamp > $1.timestamp }) { item in
@@ -94,7 +94,7 @@ extension LearningsView {
                 )
             }
         }
-        learningRecordSection(title: "Rename Feedback", count: profile.renameFeedbackHistory.count) {
+        learningRecordSection(title: "Rename feedback", count: profile.renameFeedbackHistory.count) {
             ForEach(profile.renameFeedbackHistory.sorted { $0.timestamp > $1.timestamp }) { item in
                 learningRecordRow(
                     title: item.originalName,
@@ -105,7 +105,7 @@ extension LearningsView {
                 )
             }
         }
-        learningRecordSection(title: "History Reverts", count: profile.historyReverts.count) {
+        learningRecordSection(title: "History reverts", count: profile.historyReverts.count) {
             ForEach(profile.historyReverts.sorted { $0.timestamp > $1.timestamp }) { item in
                 learningRecordRow(
                     title: item.folderPath.map(safeFileName) ?? "Reverted organization",
@@ -121,8 +121,8 @@ extension LearningsView {
         }
         labeledExampleSection(title: "Corrections", items: profile.corrections)
         labeledExampleSection(title: "Rejections", items: profile.rejections)
-        labeledExampleSection(title: "Positive Examples", items: profile.positiveExamples)
-        learningRecordSection(title: "Inline Answers", count: profile.inlineLearningMomentAnswers.count) {
+        labeledExampleSection(title: "Positive examples", items: profile.positiveExamples)
+        learningRecordSection(title: "Inline answers", count: profile.inlineLearningMomentAnswers.count) {
             ForEach(profile.inlineLearningMomentAnswers.sorted { $0.timestamp > $1.timestamp }) { item in
                 learningRecordRow(
                     title: item.selectedOption,
@@ -140,9 +140,9 @@ extension LearningsView {
 
     @ViewBuilder
     func instructionRecordSections(profile: LearningsProfile) -> some View {
-        userInstructionSection(title: "Additional Instructions", items: profile.additionalInstructionsHistory)
-        userInstructionSection(title: "Guiding Instructions", items: profile.guidingInstructionsHistory)
-        learningRecordSection(title: "Steering Prompts", count: profile.steeringPrompts.count) {
+        userInstructionSection(title: "Additional instructions", items: profile.additionalInstructionsHistory)
+        userInstructionSection(title: "Guiding instructions", items: profile.guidingInstructionsHistory)
+        learningRecordSection(title: "Steering prompts", count: profile.steeringPrompts.count) {
             ForEach(profile.steeringPrompts.sorted { $0.timestamp > $1.timestamp }) { item in
                 learningRecordRow(
                     title: item.prompt,
@@ -160,7 +160,7 @@ extension LearningsView {
 
     @ViewBuilder
     func supportingDataRecordSections(profile: LearningsProfile) -> some View {
-        learningRecordSection(title: "Applied Jobs", count: profile.jobHistory.count) {
+        learningRecordSection(title: "Applied jobs", count: profile.jobHistory.count) {
             ForEach(profile.jobHistory.sorted { $0.timestamp > $1.timestamp }) { job in
                 learningRecordRow(
                     title: job.projectName,
@@ -175,7 +175,7 @@ extension LearningsView {
                 )
             }
         }
-        learningRecordSection(title: "Learning Exclusions", count: profile.learningExclusionPatterns.count) {
+        learningRecordSection(title: "Learning exclusions", count: profile.learningExclusionPatterns.count) {
             ForEach(profile.learningExclusionPatterns, id: \.self) { pattern in
                 learningRecordRow(
                     title: safeFileName(pattern),
@@ -189,7 +189,7 @@ extension LearningsView {
                 )
             }
         }
-        learningRecordSection(title: "Rejected Pattern Cooldowns", count: profile.rejectedRuleCooldowns.count) {
+        learningRecordSection(title: "Rejected pattern cooldowns", count: profile.rejectedRuleCooldowns.count) {
             ForEach(profile.rejectedRuleCooldowns.sorted { $0.value > $1.value }, id: \.key) { ruleID, date in
                 learningRecordRow(
                     title: "Pattern \(ruleID.prefix(8))",
@@ -253,7 +253,7 @@ extension LearningsView {
                 VStack(spacing: 0) {
                     content()
                 }
-                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+                .sortyCard(padding: 0)
             }
         }
     }
@@ -319,7 +319,7 @@ extension LearningsView {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: rule.isEnabled ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(rule.isEnabled ? .green : .secondary)
+                        .foregroundStyle(rule.isEnabled ? SortyDesignSystem.Colors.success : .secondary)
                         .frame(width: 22)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {

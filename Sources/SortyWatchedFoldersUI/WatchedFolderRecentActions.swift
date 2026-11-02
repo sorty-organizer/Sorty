@@ -41,14 +41,11 @@ struct WatchedFolderRecentActions: View {
     var body: some View {
         Group {
             if recentEntries.isEmpty {
-                HStack(spacing: 8) {
-                    Image(systemName: "clock.badge.questionmark")
-                        .foregroundStyle(.secondary)
-                    Text("No AI actions for this folder yet")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                SortyEmptyState(
+                    "No AI actions for this folder yet",
+                    systemImage: "clock.badge.questionmark",
+                    size: .inline
+                )
             } else {
                 ScrollView(.vertical, showsIndicators: true) {
                     LazyVStack(spacing: 0) {
@@ -214,12 +211,12 @@ struct WatchedFolderRecentActions: View {
 
     private func color(for entry: OrganizationHistoryEntry) -> Color {
         switch entry.status {
-        case .completed: .green
-        case .partiallyUndone, .skipped: .orange
-        case .undo: .blue
-        case .failed: .red
+        case .completed: SortyDesignSystem.Colors.success
+        case .partiallyUndone, .skipped: SortyDesignSystem.Colors.warning
+        case .undo: SortyDesignSystem.Colors.info
+        case .failed: SortyDesignSystem.Colors.error
         case .cancelled: .secondary
-        case .duplicatesCleanup: .purple
+        case .duplicatesCleanup: SortyDesignSystem.Colors.resolvedAccent
         }
     }
 

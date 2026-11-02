@@ -237,9 +237,7 @@ extension SkillSetupView {
                 }
             }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xxl, interactive: false)
+        .sortyCard(padding: 20)
     }
 
     func importOption(_ option: SkillImportOption) -> some View {

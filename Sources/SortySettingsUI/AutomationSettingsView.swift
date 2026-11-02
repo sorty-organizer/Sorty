@@ -124,7 +124,7 @@ struct AutomationSettingsView: View {
                     if !selectedProvider.isAvailable || selectedModel.isEmpty {
                         Label("Choose an available automation provider and model before running watched folders.", systemImage: "exclamationmark.triangle")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(SortyDesignSystem.Colors.warning)
                             .padding(.leading, 36)
                     }
                 }
@@ -254,16 +254,11 @@ struct AutomationSettingsView: View {
 
     private var backgroundStatusBadge: some View {
         Label(backgroundStatusTitle, systemImage: loginItemManager.isBackgroundAgentEnabled ? "checkmark.circle.fill" : "circle")
-            .font(.caption.weight(.medium))
-            .foregroundStyle(loginItemManager.isBackgroundAgentEnabled ? .green : .secondary)
             .symbolReplaceTransition(
                 animationValue: loginItemManager.isBackgroundAgentEnabled
             )
             .numericTextTransition(animationValue: backgroundStatusTitle)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background((loginItemManager.isBackgroundAgentEnabled ? Color.green : Color.secondary).opacity(0.08))
-            .clipShape(Capsule())
+            .sortyBadge(tint: loginItemManager.isBackgroundAgentEnabled ? SortyDesignSystem.Colors.success : nil)
             .accessibilityLabel("Background activity status is \(backgroundStatusTitle)")
     }
 

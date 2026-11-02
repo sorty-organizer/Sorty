@@ -14,7 +14,7 @@ struct HistoryLiquidGlassLearningsCard: View {
             GlassPillButton(
                 icon: "brain.head.profile",
                 title: "Learnings Applied",
-                tint: .teal,
+                tint: SortyDesignSystem.Colors.resolvedAccent,
                 count: fileContexts.count
             ) {
                 showPopover.toggle()
@@ -33,7 +33,7 @@ struct HistoryLiquidGlassLearningsCard: View {
             GlassPopoverHeader(
                 icon: "brain.head.profile",
                 title: "Learnings Applied",
-                tint: .teal,
+                tint: SortyDesignSystem.Colors.resolvedAccent,
                 subtitle: "\(fileContexts.count) file\(fileContexts.count == 1 ? "" : "s") with learnings context",
                 subtitleAnimationValue: "\(fileContexts.count)"
             )

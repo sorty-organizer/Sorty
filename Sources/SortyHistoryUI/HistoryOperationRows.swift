@@ -52,11 +52,11 @@ struct OperationRowView: View {
         HStack(spacing: 8) {
             if isUndone {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(SortyDesignSystem.Colors.success)
                     .font(.caption)
             } else if isFailed {
                 Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(SortyDesignSystem.Colors.error)
                     .font(.caption)
             } else {
                 Image(systemName: operationIcon)
@@ -86,10 +86,7 @@ struct OperationRowView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
-                .fill(operationBackgroundColor)
-        )
+        .sortyInsetSurface(tint: operationTint, cornerRadius: SortyDesignSystem.Radius.sm)
         .opacity(isUndone ? 0.7 : 1.0)
         .scaleEffect(isHovered ? 1.01 : 1.0)
         .animation(.subtleBounce, value: isHovered)
@@ -100,8 +97,8 @@ struct OperationRowView: View {
         .accessibilityLabel("\(operationLabel) \(fileName)\(isUndone ? ", undone" : "")\(isFailed ? ", failed" : "")")
     }
 
-    private var operationBackgroundColor: Color {
-        isUndone ? Color.green.opacity(0.05) : isFailed ? Color.red.opacity(0.05) : Color.secondary.opacity(0.05)
+    private var operationTint: Color? {
+        isUndone ? SortyDesignSystem.Colors.success : isFailed ? SortyDesignSystem.Colors.error : nil
     }
 
     private var operationDescription: some View {
@@ -143,8 +140,8 @@ struct ProcessingOverlay: View {
                     .foregroundColor(.primary)
                     .numericTextTransition(animationValue: stage)
             }
-            .padding(24)
-            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
+            .sortyCard(padding: 24)
+            .fixedSize()
             .scaleEffect(appeared ? 1 : 0.8)
             .opacity(appeared ? 1 : 0)
             .accessibilityElement(children: .combine)
@@ -166,24 +163,19 @@ struct StatusBadge: View {
 
     private var color: Color {
         switch status {
-        case .completed: return .green
-        case .failed: return .red
+        case .completed: return SortyDesignSystem.Colors.success
+        case .failed: return SortyDesignSystem.Colors.error
         case .cancelled: return .gray
         case .skipped: return .secondary
-        case .undo: return .orange
-        case .partiallyUndone: return .yellow
-        case .duplicatesCleanup: return .accentColor
+        case .undo: return SortyDesignSystem.Colors.warning
+        case .partiallyUndone: return SortyDesignSystem.Colors.warning
+        case .duplicatesCleanup: return SortyDesignSystem.Colors.resolvedAccent
         }
     }
 
     var body: some View {
         Text(status.displayName.uppercased())
-            .font(.system(size: 12, weight: .bold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.15))
-            .foregroundColor(color)
-            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
+            .sortyBadge(tint: color)
             .fixedSize(horizontal: true, vertical: false)
             .accessibilityLabel("Status: \(status.displayName)")
     }

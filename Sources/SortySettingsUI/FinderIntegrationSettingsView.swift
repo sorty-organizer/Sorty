@@ -52,7 +52,7 @@ struct FinderIntegrationSettingsView: View {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: statusIcon)
                             .font(.title3)
-                            .foregroundStyle(isOn ? Color.green : Color.secondary)
+                            .foregroundStyle(isOn ? SortyDesignSystem.Colors.success : Color.secondary)
                             .frame(width: 24)
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 4) {
@@ -138,7 +138,7 @@ struct FinderIntegrationSettingsView: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
                 .font(.title3)
-                .foregroundStyle(.cyan)
+                .foregroundStyle(.secondary)
                 .frame(width: 24, height: 24)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {

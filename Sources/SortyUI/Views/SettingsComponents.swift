@@ -307,7 +307,7 @@ package struct SettingsCard<Content: View>: View {
                 .foregroundStyle(color)
                 .frame(width: 14)
             Text(LocalizedStringKey(title))
-                .font(.system(size: 11, weight: .bold))
+                .font(.subheadline.weight(.bold))
                 .foregroundColor(.secondary)
             headerAccessory
             countBadge
@@ -319,13 +319,8 @@ package struct SettingsCard<Content: View>: View {
     private var countBadge: some View {
         if let count, count > 0 {
             Text("\(count)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
                 .numericTextTransition(animationValue: count)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color.secondary.opacity(0.1))
-                .clipShape(Capsule())
+                .sortyBadge()
         }
     }
 }

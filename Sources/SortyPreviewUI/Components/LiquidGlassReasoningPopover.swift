@@ -43,7 +43,7 @@ package struct LiquidGlassReasoningButton: View {
                     .symbolReplaceTransition(animationValue: isRule)
                     .foregroundStyle(
                         showPopover
-                            ? (isRule ? Color.orange : Color.purple)
+                            ? (isRule ? SortyDesignSystem.Colors.resolvedAccent : SortyDesignSystem.Colors.info)
                             : .secondary
                     )
             }
@@ -70,7 +70,7 @@ struct LiquidGlassReasoningPopover: View {
     }
 
     private var accentColor: Color {
-        isRule ? .orange : .purple
+        isRule ? SortyDesignSystem.Colors.resolvedAccent : SortyDesignSystem.Colors.info
     }
 
     var body: some View {

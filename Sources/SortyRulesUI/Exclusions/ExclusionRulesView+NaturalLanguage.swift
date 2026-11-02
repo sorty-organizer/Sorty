@@ -7,9 +7,9 @@ extension ExclusionRulesView {
 
     var learningExclusionsCard: some View {
         SettingsCard(
-            title: "Learning Exclusions",
+            title: "Learning exclusions",
             icon: "eye.slash",
-            color: .orange,
+            color: SortyDesignSystem.Colors.warning,
             count: filteredLearningExclusionPatterns.count,
             isExpanded: $isLearningExclusionsExpanded,
             headerAccessory: {
@@ -66,10 +66,10 @@ extension ExclusionRulesView {
                     VStack(spacing: 10) {
                         Image(systemName: "eye.slash")
                             .font(.system(size: 28))
-                            .foregroundStyle(.orange.opacity(0.6))
+                            .foregroundStyle(SortyDesignSystem.Colors.warning.opacity(0.6))
                             .milestoneEmptyStateSliver(
                                 trigger: learningExclusionSliverTrigger,
-                                tint: .orange
+                                tint: SortyDesignSystem.Colors.warning
                             )
                             .onScrollVisibilityChange(threshold: 0.6) { isVisible in
                                 guard isVisible else { return }
@@ -96,7 +96,7 @@ extension ExclusionRulesView {
                     }
                     .padding(20)
                     .frame(maxWidth: .infinity)
-                    .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+                    .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
                 }
             }
         }
@@ -104,9 +104,9 @@ extension ExclusionRulesView {
 
     var naturalLanguageExceptionsCard: some View {
         SettingsCard(
-            title: "Describe an Exception",
+            title: "Describe an exception",
             icon: "sparkles",
-            color: .purple,
+            color: SortyDesignSystem.Colors.resolvedAccent,
             count: 0,
             isExpanded: nil,
             headerAccessory: {
@@ -461,11 +461,7 @@ extension ExclusionRulesView {
                 LabeledContent("Supplementary instruction", value: resolvedSupplementalDescription)
                     .font(.caption2)
                     .padding(8)
-                    .systemLiquidGlassBackground(
-                        cornerRadius: SortyDesignSystem.Radius.lg,
-                        clear: true,
-                        interactive: false
-                    )
+                    .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
             }
 
         }

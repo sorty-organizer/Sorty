@@ -23,7 +23,7 @@ package struct OrganizationModeSegment: View {
                     .font(.system(size: 12, weight: .semibold))
                     .symbolReplaceTransition(animationValue: mode)
                 Text(mode.displayName)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .fixedSize()
                     .numericTextTransition(animationValue: mode)
             }

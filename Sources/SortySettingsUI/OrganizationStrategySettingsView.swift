@@ -94,7 +94,7 @@ struct OrganizationStrategySettingsView: View {
                     if !viewModel.config.provider.supportsDeepScan {
                         Text("Required for \(viewModel.config.provider.displayName) because Apple on-device models have tighter context limits.")
                             .font(.caption2)
-                            .foregroundColor(.orange)
+                            .foregroundColor(SortyDesignSystem.Colors.warning)
                             .padding(.leading, 32)
                     }
                 }
@@ -126,7 +126,7 @@ struct OrganizationStrategySettingsView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "info.circle")
                             .font(.caption2)
-                            .foregroundColor(.blue)
+                            .foregroundColor(SortyDesignSystem.Colors.info)
                         Text("Switch to a vision model (e.g., gpt-4o, claude-3-5-sonnet) to enable.")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -140,7 +140,7 @@ struct OrganizationStrategySettingsView: View {
         SettingsCard(
             title: "Renaming",
             icon: "textformat",
-            color: .indigo
+            color: SortyDesignSystem.Colors.resolvedAccent
         ) {
             Button {
                 HapticFeedbackManager.shared.tap()
@@ -373,11 +373,7 @@ struct OrganizationStrategySettingsView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
-            .overlay {
-                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                    .strokeBorder(Color.purple.opacity(0.14), lineWidth: 1)
-            }
+            .sortyInsetSurface(tint: SortyDesignSystem.Colors.resolvedAccent, cornerRadius: SortyDesignSystem.Radius.lg)
             .accessibilityElement(children: .combine)
         }
         .settingsFocusableSetting(.strategyNamingOptions)
@@ -436,12 +432,7 @@ struct OrganizationStrategySettingsView: View {
             .font(.system(.body, design: .monospaced))
             .frame(height: 60)
             .padding(4)
-            .background(Color(NSColor.controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
-                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-            )
+            .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.sm)
 
             if showNamingInput {
                 VStack(alignment: .leading, spacing: 8) {
@@ -534,7 +525,7 @@ struct OrganizationStrategySettingsView: View {
                     if let error = namingGenerator.error {
                         Text(error.userFacingMessage)
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(SortyDesignSystem.Colors.error)
                     }
                 }
                 .padding(.top, 4)
@@ -592,12 +583,7 @@ private struct EditPresetSheet: View {
                     .font(.system(.body, design: .monospaced))
                     .frame(minHeight: 120)
                     .padding(4)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
-                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                    )
+                    .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.sm)
             }
 
             HStack {

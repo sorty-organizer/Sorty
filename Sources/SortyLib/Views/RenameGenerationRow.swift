@@ -50,11 +50,11 @@ struct RenameGenerationRow: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
-                .fill(isActive ? Color.purple.opacity(0.08) : Color.primary.opacity(0.035))
+                .fill(isActive ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : Color.primary.opacity(0.035))
         )
         .overlay(
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
-                .stroke(isMostRecent && isRevealed ? Color.purple.opacity(0.24) : .clear, lineWidth: 1)
+                .stroke(isMostRecent && isRevealed ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.24) : .clear, lineWidth: 1)
         )
         .compositingGroup()
         .onAppear {
@@ -98,7 +98,7 @@ struct RenameNamePill: View {
     var body: some View {
         Text(text)
             .font(.caption.weight(isPrimary ? .semibold : .regular))
-            .foregroundStyle(isPrimary ? Color.purple : Color.secondary)
+            .foregroundStyle(isPrimary ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary)
             .lineLimit(1)
             .strikethrough(isStruck, color: .secondary)
             .numericTextTransition(
@@ -111,7 +111,7 @@ struct RenameNamePill: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
-                    .fill(isPrimary ? Color.purple.opacity(0.08) : Color.secondary.opacity(0.06))
+                    .fill(isPrimary ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : Color.secondary.opacity(0.06))
             )
             .overlay(alignment: .leading) {
                 if showRevealSweep {

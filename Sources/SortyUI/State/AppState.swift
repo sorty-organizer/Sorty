@@ -719,7 +719,7 @@ public class AppState: ObservableObject {
             title: "Setup Repair Needed",
             message: message,
             icon: "wrench.and.screwdriver.fill",
-            iconColor: .orange,
+            iconColor: SortyDesignSystem.Colors.warning,
             identifier: "setup-repair",
             isPersistent: true,
             actions: [
@@ -1341,7 +1341,7 @@ public class AppState: ObservableObject {
                 title: "Learning Paused",
                 message: "Learning is off. Your existing learnings data is still saved.",
                 icon: "pause.circle.fill",
-                iconColor: .green
+                iconColor: SortyDesignSystem.Colors.success
             )
         }
     }
@@ -1399,7 +1399,7 @@ public class AppState: ObservableObject {
                 title: "Nothing to Export",
                 message: "Sorty doesn't have a learning profile to export yet.",
                 icon: "info.circle.fill",
-                iconColor: .orange
+                iconColor: SortyDesignSystem.Colors.warning
             )
             return
         }
@@ -1425,7 +1425,7 @@ public class AppState: ObservableObject {
                 title: "Learning Profile Exported",
                 message: "Saved \(summary.totalRecordCount) learning records with profile settings and integrity metadata.",
                 icon: "checkmark.circle.fill",
-                iconColor: .green
+                iconColor: SortyDesignSystem.Colors.success
             )
         } catch {
             DebugLogger.log("Failed to export profile: \(error)")

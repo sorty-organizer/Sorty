@@ -18,9 +18,9 @@ enum SupportHealthStatus: Equatable {
 
     var color: Color {
         switch self {
-        case .healthy: return .green
-        case .needsAttention: return .orange
-        case .informational: return .blue
+        case .healthy: return SortyDesignSystem.Colors.success
+        case .needsAttention: return SortyDesignSystem.Colors.warning
+        case .informational: return SortyDesignSystem.Colors.info
         }
     }
 

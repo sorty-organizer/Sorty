@@ -29,11 +29,11 @@ struct NotificationPermissionCard: View {
     private var statusInfo: (icon: String, color: Color, title: String, description: String) {
         switch notificationManager.notificationPermissionStatus {
         case .authorized:
-            return ("checkmark.circle.fill", .green, "Authorized", "macOS allows Sorty to send notifications")
+            return ("checkmark.circle.fill", SortyDesignSystem.Colors.success, "Authorized", "macOS allows Sorty to send notifications")
         case .denied:
-            return ("xmark.circle.fill", .red, "Denied", "Open System Settings to enable notifications")
+            return ("xmark.circle.fill", SortyDesignSystem.Colors.error, "Denied", "Open System Settings to enable notifications")
         case .provisional:
-            return ("bell.badge.circle.fill", .orange, "Provisional", "Notifications delivered quietly")
+            return ("bell.badge.circle.fill", SortyDesignSystem.Colors.warning, "Provisional", "Notifications delivered quietly")
         case .notDetermined:
             return ("questionmark.circle.fill", .secondary, "Not Set", "Request permission to enable system notifications")
         @unknown default:
@@ -169,7 +169,7 @@ struct NotificationPermissionCard: View {
                 if notificationManager.notificationPermissionStatus != .authorized {
                     HStack(spacing: 6) {
                         Image(systemName: "info.circle")
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(SortyDesignSystem.Colors.info)
                         Text("In-app HUD notifications work regardless of this setting.")
                             .font(.caption)
                             .foregroundStyle(.secondary)

@@ -11,7 +11,7 @@ struct UnavailableDuplicateFilesPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Unavailable Files")
+                Text("Unavailable files")
                     .font(.headline)
                 Text("Reconnect external drives or download cloud files, then scan again.")
                     .font(.caption)

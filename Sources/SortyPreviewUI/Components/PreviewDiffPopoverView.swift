@@ -76,11 +76,11 @@ private struct PreviewDiffRow: View {
 
             if let before = change.before, let after = change.after {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    diffValue(before, systemImage: "minus", color: .red)
+                    diffValue(before, systemImage: "minus", color: SortyDesignSystem.Colors.error)
                     Image(systemName: "arrow.right")
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
-                    diffValue(after, systemImage: "plus", color: .green)
+                    diffValue(after, systemImage: "plus", color: SortyDesignSystem.Colors.success)
                 }
                 .font(.caption)
                 .lineLimit(2)
@@ -88,13 +88,13 @@ private struct PreviewDiffRow: View {
                 .accessibilityLabel("Before: \(before). After: \(after)")
             } else {
                 if let after = change.after {
-                    diffValue(after, systemImage: "plus", color: .green)
+                    diffValue(after, systemImage: "plus", color: SortyDesignSystem.Colors.success)
                         .accessibilityLabel("Added: \(after)")
                 } else {
                     diffValue(
                         change.before ?? "Removed from this preview",
                         systemImage: "minus",
-                        color: .red
+                        color: SortyDesignSystem.Colors.error
                     )
                     .accessibilityLabel("Removed: \(change.before ?? change.filename)")
                 }

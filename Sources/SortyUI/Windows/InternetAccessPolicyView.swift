@@ -137,7 +137,7 @@ struct InternetAccessPolicyView: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Policy unavailable", systemImage: "exclamationmark.triangle")
                 .font(.headline)
-                .foregroundStyle(.orange)
+                .foregroundStyle(SortyDesignSystem.Colors.warning)
 
             Text(message)
                 .font(.subheadline)
@@ -164,11 +164,11 @@ struct InternetAccessPolicyView: View {
         .controlSize(.small)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .sortyCard(padding: 0)
         .frame(maxWidth: 250)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
         .overlay {
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
-                .stroke(internetPrivacyModeEnabled ? Color.green.opacity(0.35) : Color.secondary.opacity(0.18), lineWidth: 1)
+                .stroke(internetPrivacyModeEnabled ? SortyDesignSystem.Colors.success.opacity(0.35) : Color.secondary.opacity(0.18), lineWidth: 1)
         }
         .accessibilityIdentifier("InternetAccessPolicyBlockInternetConnectionsToggle")
         .accessibilityHint("Blocks remote internet connections while allowing local model requests on localhost.")
@@ -197,11 +197,7 @@ private struct ConnectionCard: View {
 
                 if let relevance = connection.relevance, !relevance.isEmpty {
                     Text(relevance)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(relevanceAccent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(relevanceAccent.opacity(0.18), in: Capsule())
+                        .sortyBadge(tint: relevanceAccent)
                 }
             }
 
@@ -222,8 +218,7 @@ private struct ConnectionCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(12)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .sortyCard(padding: 12)
         .overlay {
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(relevanceAccent.opacity(0.35), lineWidth: 1)
@@ -239,16 +234,16 @@ private struct ConnectionCard: View {
 
     private var relevanceAccent: Color {
         guard let relevance = connection.relevance?.lowercased() else {
-            return .blue
+            return SortyDesignSystem.Colors.info
         }
 
         if relevance.contains("essential") {
-            return .green
+            return SortyDesignSystem.Colors.success
         }
         if relevance.contains("optional") {
-            return .orange
+            return SortyDesignSystem.Colors.warning
         }
-        return .blue
+        return SortyDesignSystem.Colors.info
     }
 }
 

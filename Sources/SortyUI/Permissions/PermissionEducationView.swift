@@ -161,7 +161,7 @@ package struct AutomationPermissionRecoveryView: View {
         VStack(alignment: .leading, spacing: 16) {
             Label("Sorty isn't listed", systemImage: "exclamationmark.triangle.fill")
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.orange)
+                .foregroundStyle(SortyDesignSystem.Colors.warning)
 
             Text(
                 "macOS did not register Sorty's request to control Finder. The Automation pane cannot add it manually."
@@ -195,7 +195,7 @@ package struct AutomationPermissionRecoveryView: View {
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+                .sortyInsetSurface()
                 Text("3. Reopen Sorty and choose Enable again.")
             }
             .font(.body)

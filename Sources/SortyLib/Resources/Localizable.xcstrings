@@ -3925,6 +3925,40 @@
         }
       }
     },
+    "Additional instructions": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zusätzliche Anweisungen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instrucciones adicionales"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instructions supplémentaires"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "追加の指示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "额外指令"
+          }
+        }
+      }
+    },
     "Additional Naming Instructions": {
       "localizations": {
         "de": {
@@ -8833,7 +8867,7 @@
         }
       }
     },
-    "Custom Instructions": {
+    "Custom instructions": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -9105,7 +9139,7 @@
         }
       }
     },
-    "Data Retention": {
+    "Data retention": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -9820,6 +9854,40 @@
       }
     },
     "Deleted Files": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gelöschte Dateien"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivos eliminados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichiers supprimés"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除されたファイル"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已删除文件"
+          }
+        }
+      }
+    },
+    "Deleted files": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -11185,6 +11253,40 @@
         }
       }
     },
+    "Duplicate files": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doppelte Dateien"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivos duplicados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichiers dupliqués"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重複ファイル"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重复文件"
+          }
+        }
+      }
+    },
     "Duplicate handling": {
       "localizations": {
         "de": {
@@ -11599,7 +11701,7 @@
         }
       }
     },
-    "Edits Captured": {
+    "Edits captured": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -13197,7 +13299,7 @@
         }
       }
     },
-    "File Operations": {
+    "File operations": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -13299,7 +13401,7 @@
         }
       }
     },
-    "Files Not Found": {
+    "Files not found": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -13537,7 +13639,7 @@
         }
       }
     },
-    "Finish Provider Setup": {
+    "Finish provider setup": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -18099,7 +18201,7 @@
         }
       }
     },
-    "No History Yet": {
+    "No history yet": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -18133,7 +18235,7 @@
         }
       }
     },
-    "No Results Found": {
+    "No results found": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -18167,7 +18269,7 @@
         }
       }
     },
-    "No Watched Folders": {
+    "No watched folders": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -20451,7 +20553,7 @@
         }
       }
     },
-    "Organization Details": {
+    "Organization details": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -20621,7 +20723,7 @@
         }
       }
     },
-    "Organization Timeline": {
+    "Organization timeline": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -22645,7 +22747,7 @@
         }
       }
     },
-    "Privacy Warning": {
+    "Privacy warning": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -22849,7 +22951,7 @@
         }
       }
     },
-    "Provider Missing": {
+    "Provider missing": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -23121,7 +23223,7 @@
         }
       }
     },
-    "Raw AI Response": {
+    "Raw AI response": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -24141,7 +24243,7 @@
         }
       }
     },
-    "Refining Your Persona": {
+    "Refining your persona": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -25467,7 +25569,7 @@
         }
       }
     },
-    "Restore this State": {
+    "Restore This State": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -27235,7 +27337,7 @@
         }
       }
     },
-    "Scan Results": {
+    "Scan results": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -27371,7 +27473,7 @@
         }
       }
     },
-    "Search Results": {
+    "Search results": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -30709,6 +30811,40 @@
         }
       }
     },
+    "Stats for nerds": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statistiken für Nerds"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estadísticas para entusiastas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statistiques pour les geeks"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nerds用の統計"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为极客准备的统计数据"
+          }
+        }
+      }
+    },
     "Stats for nerds. %@ for details": {
       "localizations": {
         "de": {
@@ -33429,6 +33565,40 @@
         }
       }
     },
+    "Unorganized files": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unorganisierte Dateien"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivos desorganizados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichiers non organisés"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無秩序のファイル"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未组织文件"
+          }
+        }
+      }
+    },
     "Unorganized file: %@": {
       "localizations": {
         "de": {
@@ -33633,7 +33803,7 @@
         }
       }
     },
-    "Use Custom Model": {
+    "Use custom model": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -34823,6 +34993,40 @@
         }
       }
     },
+    "Watched folders": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachtete Ordner"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carpetas Observadas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dossiers observés"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "監視されているフォルダ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观看的文件夹"
+          }
+        }
+      }
+    },
     "Watched automation for %@, %@": {
       "localizations": {
         "en": {
@@ -35033,7 +35237,7 @@
         }
       }
     },
-    "What Sorty Has Learned": {
+    "What Sorty has learned": {
       "localizations": {
         "de": {
           "stringUnit": {
@@ -38076,7 +38280,7 @@
         }
       }
     },
-    "AI Model": {
+    "AI model": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -38286,7 +38490,77 @@
         }
       }
     },
+    "Files organized": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Organisierte Dateien"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivos organizados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichiers organisés"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整理されたファイル"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已整理的文件"
+          }
+        }
+      }
+    },
     "Folders Created": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstellte Ordner"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " Carpeta creada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dossiers créés"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作成されたフォルダ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已创建的文件夹"
+          }
+        }
+      }
+    },
+    "Folders created": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -38566,7 +38840,7 @@
         }
       }
     },
-    "Empty Directory": {
+    "Empty directory": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -38636,7 +38910,7 @@
         }
       }
     },
-    "All Files Unorganized": {
+    "All files unorganized": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -38986,7 +39260,7 @@
         }
       }
     },
-    "Learns from Reverts": {
+    "Learns from reverts": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -39056,7 +39330,7 @@
         }
       }
     },
-    "Remembers Instructions": {
+    "Remembers instructions": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -39126,7 +39400,7 @@
         }
       }
     },
-    "Improves Over Time": {
+    "Improves over time": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -39231,7 +39505,7 @@
         }
       }
     },
-    "Learnings Data Deleted": {
+    "Learnings data deleted": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -39266,7 +39540,7 @@
         }
       }
     },
-    "Delete Failed": {
+    "Delete failed": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -39406,7 +39680,7 @@
         }
       }
     },
-    "Authentication Cancelled": {
+    "Authentication cancelled": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -39476,7 +39750,42 @@
         }
       }
     },
-    "Learning Profile Imported": {
+    "Learning profile exported": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lernungsprofil exportiert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perfil de Aprendizaje Exportado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profil d'apprentissage exporté"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "学習プロファイルをエクスポート"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "学习资料导出"
+          }
+        }
+      }
+    },
+    "Learning profile imported": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -39511,7 +39820,7 @@
         }
       }
     },
-    "Learning Exclusions": {
+    "Learning exclusions": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -39581,7 +39890,7 @@
         }
       }
     },
-    "Display Name": {
+    "Display name": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -40071,7 +40380,7 @@
         }
       }
     },
-    "Duplicates Deleted": {
+    "Duplicates deleted": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -40106,7 +40415,7 @@
         }
       }
     },
-    "Space Recovered": {
+    "Space recovered": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -40141,7 +40450,7 @@
         }
       }
     },
-    "Plan Version": {
+    "Plan version": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -41191,7 +41500,7 @@
         }
       }
     },
-    "Ready to Scan": {
+    "Ready to scan": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -41226,7 +41535,7 @@
         }
       }
     },
-    "Select a Directory": {
+    "Select a directory": {
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -52046,7 +52355,7 @@
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "重新扫描" } }
       }
     },
-    "Example Folder Added": {
+    "Example folder added": {
       "extractionState": "manual",
       "localizations": {
         "de": { "stringUnit": { "state": "translated", "value": "Beispielordner hinzugefügt" } },
@@ -52056,7 +52365,7 @@
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "已添加示例文件夹" } }
       }
     },
-    "Example Folders Added": {
+    "Example folders added": {
       "extractionState": "manual",
       "localizations": {
         "de": { "stringUnit": { "state": "translated", "value": "Beispielordner hinzugefügt" } },
@@ -52066,7 +52375,7 @@
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "已添加示例文件夹" } }
       }
     },
-    "Five Example Folders Active": {
+    "Five example folders active": {
       "extractionState": "manual",
       "localizations": {
         "de": { "stringUnit": { "state": "translated", "value": "Fünf Beispielordner sind aktiv" } },
@@ -52076,7 +52385,7 @@
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "已有五个示例文件夹处于启用状态" } }
       }
     },
-    "Folder Already Added": {
+    "Folder already added": {
       "extractionState": "manual",
       "localizations": {
         "de": { "stringUnit": { "state": "translated", "value": "Ordner bereits hinzugefügt" } },

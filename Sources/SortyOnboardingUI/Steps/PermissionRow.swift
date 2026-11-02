@@ -49,11 +49,7 @@ struct PermissionRow: View {
 
                     if isRequired {
                         Text("Required")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12), in: Capsule(style: .continuous))
+                            .sortyBadge(tint: SortyDesignSystem.Colors.resolvedAccent)
                     }
                 }
 
@@ -118,7 +114,7 @@ struct PermissionRow: View {
 
     private var rowFill: Color {
         if state == .granted {
-            return Color.green.opacity(colorScheme == .dark ? 0.12 : 0.08)
+            return SortyDesignSystem.Colors.success.opacity(colorScheme == .dark ? 0.12 : 0.08)
         }
 
         return Color(nsColor: .controlBackgroundColor)
@@ -127,7 +123,7 @@ struct PermissionRow: View {
 
     private var rowStroke: Color {
         if grantFlash || state == .granted {
-            return Color.green.opacity(grantFlash ? 0.72 : 0.34)
+            return SortyDesignSystem.Colors.success.opacity(grantFlash ? 0.72 : 0.34)
         }
 
         if isHovering {
@@ -217,10 +213,7 @@ struct PermissionRow: View {
                 .font(.caption.weight(.semibold))
                 .numericTextTransition(animationValue: state)
         }
-        .foregroundStyle(state.tint)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(state.tint.opacity(0.12), in: Capsule(style: .continuous))
+        .sortyBadge(tint: state.tint)
         .accessibilityLabel(state.title(for: type))
     }
 

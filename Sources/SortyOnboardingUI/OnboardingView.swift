@@ -336,7 +336,7 @@ public struct OnboardingView: View {
             {
                 Text(advanceValidationMessage)
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(SortyDesignSystem.Colors.warning)
                     .multilineTextAlignment(.center)
                     .accessibilityIdentifier("OnboardingValidationMessage")
                     .padding(.bottom, 2)

@@ -163,10 +163,10 @@ package enum PermissionState: Sendable, Equatable {
     package var tint: Color {
         switch self {
         case .unknown: return .secondary
-        case .pending: return .orange
-        case .granted: return .green
-        case .restartRequired: return .blue
-        case .denied: return .red
+        case .pending: return SortyDesignSystem.Colors.warning
+        case .granted: return SortyDesignSystem.Colors.success
+        case .restartRequired: return SortyDesignSystem.Colors.info
+        case .denied: return SortyDesignSystem.Colors.error
         }
     }
 }

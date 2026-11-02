@@ -57,8 +57,8 @@ package struct LearningsView: View {
 
         var iconColor: Color {
             switch self {
-            case .withdrawConsent: return .orange
-            case .deleteData: return .red
+            case .withdrawConsent: return SortyDesignSystem.Colors.warning
+            case .deleteData: return SortyDesignSystem.Colors.error
             }
         }
     }
@@ -201,36 +201,35 @@ package struct LearningsView: View {
                     icon: "eye.fill", title: "Watches",
                     description: "Observes when you modify directories after Sorty organization")
                 featureRow(
-                    icon: "arrow.uturn.backward.circle.fill", title: "Learns from Reverts",
+                    icon: "arrow.uturn.backward.circle.fill", title: "Learns from reverts",
                     description: "Understands when Sorty suggestions weren't right")
                 featureRow(
-                    icon: "text.bubble.fill", title: "Remembers Instructions",
+                    icon: "text.bubble.fill", title: "Remembers instructions",
                     description: "Captures your additional guidance and preferences")
                 featureRow(
-                    icon: "sparkles", title: "Improves Over Time",
+                    icon: "sparkles", title: "Improves over time",
                     description: "Uses learnings to make better future suggestions")
             }
-            .padding(16)
-            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
+            .sortyCard()
             .overlay {
-                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
             }
-            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Learnings features")
             .animatedAppearance(delay: 0.11)
 
             HStack(spacing: 12) {
                 Image(systemName: "lock.shield.fill")
-                    .foregroundColor(.green)
+                    .foregroundColor(SortyDesignSystem.Colors.success)
                 Text("Encrypted locally • On-device only • Delete anytime")
                     .font(.caption.bold())
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(Color.green.opacity(0.1))
+            .background(SortyDesignSystem.Colors.success.opacity(0.1))
             .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xxl, style: .continuous))
             .accessibilityElement(children: .combine)
             .accessibilityLabel(
@@ -392,7 +391,7 @@ package struct LearningsView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "brain.head.profile")
                             .font(.title2)
-                            .foregroundStyle(.blue.gradient)
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent.gradient)
                         Text("The Learnings")
                             .font(.title2.bold())
                     }
@@ -453,10 +452,10 @@ package struct LearningsView: View {
             await manager.withdrawConsent()
             HapticFeedbackManager.shared.success()
             finishPendingControlAction(
-                title: "Learning Paused",
+                title: "Learning paused",
                 message: "Learning is off. Your existing learnings data is still saved.",
                 icon: "pause.circle.fill",
-                iconColor: .green
+                iconColor: SortyDesignSystem.Colors.success
             )
         }
     }
@@ -472,18 +471,18 @@ package struct LearningsView: View {
                     appState.hasCompletedOnboarding = false
                 }
                 finishPendingControlAction(
-                    title: "Learnings Data Deleted",
+                    title: "Learnings data deleted",
                     message: "Your learnings profile, consent, and learning settings were removed.",
                     icon: "checkmark.circle.fill",
-                    iconColor: .green
+                    iconColor: SortyDesignSystem.Colors.success
                 )
             } else {
                 HapticFeedbackManager.shared.error()
                 finishPendingControlAction(
-                    title: "Delete Failed",
+                    title: "Delete failed",
                     message: manager.error ?? "Sorty could not delete all learnings data.",
                     icon: "exclamationmark.triangle.fill",
-                    iconColor: .red
+                    iconColor: SortyDesignSystem.Colors.error
                 )
             }
         }
