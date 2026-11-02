@@ -8,40 +8,22 @@
 import AppKit
 import SwiftUI
 
-/// Reviews expiring files at the top of Watched Folders while the Labs flag is on.
-/// Collapses to a single status line when nothing is waiting.
+/// One collapsed row at the top of Watched Folders while the Labs flag is on and
+/// files are waiting. Review expands the checklist inline; nothing shows when empty.
 struct ExpiringFilesSection: View {
     @ObservedObject private var expiring = ExpiringFilesManager.shared
-    @EnvironmentObject private var appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isReviewing = false
     @State private var deselected: Set<String> = []
 
     var body: some View {
-        expiringContent
+        content
             .task {
                 await expiring.refresh()
             }
             .animation(reduceMotion ? nil : .sortySnappy, value: expiring.candidates.map(\.id))
+            .animation(reduceMotion ? nil : .sortySnappy, value: isReviewing)
     }
-
-    private var ageDescription: String {
-        expiring.ageInDays == 1 ? "1 day" : "\(expiring.ageInDays) days"
-    }
-
-    private var labsSettingsButton: some View {
-        Button {
-            HapticFeedbackManager.shared.tap()
-            appState.openSettingsWindow(section: .experimental)
-        } label: {
-            Image(systemName: "slider.horizontal.3")
-        }
-        .buttonStyle(.sortyBordered(size: .small))
-        .help("Expiring Files settings in Labs")
-        .accessibilityLabel("Expiring Files settings")
-        .accessibilityIdentifier("ExpiringFilesSettingsButton")
-    }
-
-    // MARK: Expiring Files
 
     private var selectedCandidates: [ExpiringFileCandidate] {
         expiring.candidates.filter { !deselected.contains($0.id) }
@@ -51,120 +33,81 @@ struct ExpiringFilesSection: View {
         selectedCandidates.reduce(0) { $0 + $1.size }
     }
 
+    private var summary: String {
+        let count = expiring.candidates.count
+        let size = ByteCountFormatter.string(fromByteCount: expiring.totalSize, countStyle: .file)
+        return "\(count) old \(count == 1 ? "file" : "files") to clear · \(size)"
+    }
+
     @ViewBuilder
-    private var expiringContent: some View {
-        if expiring.candidates.isEmpty {
-            HStack(spacing: 12) {
-                ExpiringIconTile(systemImage: SortyLabsFeature.expiringFiles.systemImage, tint: Color.secondary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Expiring Files")
-                        .font(.headline)
-                    Text(expiring.lastResult ?? "Nothing in Downloads or on the Desktop is older than \(ageDescription).")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                labsSettingsButton
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
-            .accessibilityIdentifier("ExpiringFilesEmptyCard")
-        } else {
+    private var content: some View {
+        if !expiring.candidates.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .center, spacing: 12) {
-                    ExpiringIconTile(systemImage: SortyLabsFeature.expiringFiles.systemImage, tint: .orange)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Expiring Files")
-                            .font(.headline)
-                        Text(expiring.candidates.contains(where: \.isFinished)
-                            ? "Done with these? Uncheck anything you want to keep."
-                            : "Older than \(ageDescription). Uncheck anything you want to keep.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                HStack(spacing: 10) {
+                    Image(systemName: SortyLabsFeature.expiringFiles.systemImage)
+                        .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
+                    Text(summary)
+                        .font(.callout.weight(.medium))
+                        .contentTransition(.numericText())
                     Spacer()
-                    Toggle("Select All", isOn: Binding(
-                        get: { deselected.isEmpty },
-                        set: { isOn in
-                            HapticFeedbackManager.shared.selection()
-                            deselected = isOn ? [] : Set(expiring.candidates.map(\.id))
-                        }
-                    ))
-                    .toggleStyle(.checkbox)
-                    .font(.caption)
-                    .accessibilityIdentifier("ExpiringFilesSelectAll")
-                    labsSettingsButton
+                    Button(isReviewing ? "Done" : "Review") {
+                        HapticFeedbackManager.shared.tap()
+                        isReviewing.toggle()
+                    }
+                    .buttonStyle(.sortyBordered(size: .small))
+                    .accessibilityIdentifier("ExpiringFilesReviewButton")
                 }
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
 
-                Divider().padding(.horizontal, 16)
+                if isReviewing {
+                    Divider().padding(.horizontal, 16)
 
-                VStack(spacing: 2) {
-                    ForEach(expiring.candidates) { candidate in
-                        ExpiringCandidateRow(
-                            candidate: candidate,
-                            isSelected: Binding(
-                                get: { !deselected.contains(candidate.id) },
-                                set: { isOn in
-                                    HapticFeedbackManager.shared.selection()
-                                    if isOn { deselected.remove(candidate.id) } else { deselected.insert(candidate.id) }
-                                }
+                    VStack(spacing: 2) {
+                        ForEach(expiring.candidates) { candidate in
+                            ExpiringCandidateRow(
+                                candidate: candidate,
+                                isSelected: Binding(
+                                    get: { !deselected.contains(candidate.id) },
+                                    set: { isOn in
+                                        HapticFeedbackManager.shared.selection()
+                                        if isOn { deselected.remove(candidate.id) } else { deselected.insert(candidate.id) }
+                                    }
+                                )
                             )
-                        )
-                        .transition(.opacity)
-                    }
-                }
-                .padding(8)
-
-                Divider().padding(.horizontal, 16)
-
-                HStack {
-                    Label("Files go to the Trash, so you can still recover them.", systemImage: "arrow.uturn.backward.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button {
-                        HapticFeedbackManager.shared.success()
-                        let chosen = selectedCandidates
-                        Task {
-                            await expiring.moveToTrash(chosen)
-                            deselected = []
+                            .transition(.opacity)
                         }
-                    } label: {
-                        Text("Trash \(selectedCandidates.count) · \(ByteCountFormatter.string(fromByteCount: selectedSize, countStyle: .file))")
-                            .contentTransition(.numericText())
                     }
-                    .buttonStyle(.sortyProminent(size: .small))
-                    .disabled(selectedCandidates.isEmpty)
-                    .accessibilityIdentifier("ExpiringFilesTrashButton")
+                    .padding(8)
+
+                    HStack {
+                        Spacer()
+                        Button {
+                            HapticFeedbackManager.shared.success()
+                            let chosen = selectedCandidates
+                            Task {
+                                await expiring.moveToTrash(chosen)
+                                deselected = []
+                            }
+                        } label: {
+                            Text("Move \(selectedCandidates.count) to Trash · \(ByteCountFormatter.string(fromByteCount: selectedSize, countStyle: .file))")
+                                .contentTransition(.numericText())
+                        }
+                        .buttonStyle(.sortyProminent(size: .small))
+                        .disabled(selectedCandidates.isEmpty)
+                        .help("Files go to the Trash, so you can still recover them.")
+                        .accessibilityIdentifier("ExpiringFilesTrashButton")
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                    .transition(.opacity)
                 }
-                .padding(16)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
             .accessibilityIdentifier("ExpiringFilesCard")
         }
-    }
-}
-
-// MARK: - Cards
-
-/// A tinted rounded square holding a symbol, used to lead card headers.
-private struct ExpiringIconTile: View {
-    let systemImage: String
-    let tint: Color
-
-    var body: some View {
-        Image(systemName: systemImage)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(tint)
-            .frame(width: 34, height: 34)
-            .background(
-                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
-                    .fill(tint.opacity(0.14))
-            )
-            .accessibilityHidden(true)
     }
 }
 
