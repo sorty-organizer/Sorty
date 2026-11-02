@@ -175,7 +175,6 @@ package struct SortyEmptyState<Actions: View>: View {
                     Text(message)
                         .font(size == .page ? .body : .callout)
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .multilineTextAlignment(.center)
