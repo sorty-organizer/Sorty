@@ -176,7 +176,7 @@ struct DirectorySelectionView: View {
             }
         }
         .padding(4)
-        .systemLiquidGlassBackground(cornerRadius: 999)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Organization mode")
     }
@@ -186,7 +186,7 @@ struct DirectorySelectionView: View {
         let folderAccent = SortyDesignSystem.Colors.resolvedAccent
         return VStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                     .fill(isTargeted ? folderAccent.opacity(0.16) : folderAccent.opacity(0.08))
                     .frame(width: 64, height: 64)
                     .scaleEffect(isTargeted ? 1.1 : 1.0)
@@ -226,7 +226,7 @@ struct DirectorySelectionView: View {
             reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.1),
             value: hasAppeared
         )
-        .contentShape(RoundedRectangle(cornerRadius: 16))
+        .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
         .onHover { hovering in
             isHovering = hovering
             if hovering, !reduceMotion {

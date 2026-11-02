@@ -169,7 +169,7 @@ public struct ProviderSelectionStepView: View {
             VStack(alignment: .leading, spacing: 14) {
                 ProviderLogoView(provider: settingsViewModel.config.provider, size: 54)
                     .padding(12)
-                    .systemLiquidGlassBackground(cornerRadius: 18, interactive: false)
+                    .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
 
                 Text("Choose your AI")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -271,7 +271,7 @@ public struct ProviderSelectionStepView: View {
                         .padding(16)
                         // A container, not a control: interactive glass here
                         // tracked every pointer move across the form.
-                        .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
+                        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
                         .frame(maxWidth: 430)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                         .accessibilityIdentifier("OnboardingProviderConfigurationPanel")

@@ -74,8 +74,8 @@ extension LearningsView {
                 .padding(.vertical, 10)
                 .padding(.horizontal, 12)
             }
-            .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Learnings settings")
         }
@@ -123,7 +123,7 @@ extension LearningsView {
                         .foregroundStyle(.teal)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .systemLiquidGlassBackground(cornerRadius: 999, interactive: false)
+                        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule, interactive: false)
                         .clipShape(Capsule())
                         .numericTextTransition(
                             animationValue: manager.modelDirectories.filter(\.isEnabled).count
@@ -186,8 +186,8 @@ extension LearningsView {
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity)
-                .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
                 .task {
                     guard !emptyExampleFoldersHasAppeared else { return }
                     if !reduceMotion {
@@ -206,7 +206,7 @@ extension LearningsView {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
     }
 
     // MARK: - Helpers

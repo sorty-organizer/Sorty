@@ -149,7 +149,7 @@ private struct MenuBarInboxRow: View {
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                 .fill(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
         )
         .animation(.easeOut(duration: 0.15), value: isHovered)

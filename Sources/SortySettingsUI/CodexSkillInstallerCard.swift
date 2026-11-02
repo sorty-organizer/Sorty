@@ -45,8 +45,8 @@ struct CodexSkillInstallerCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .contextMenu {
             if installer.state == .conflict {
                 Button("Remove Existing Skill", role: .destructive) {

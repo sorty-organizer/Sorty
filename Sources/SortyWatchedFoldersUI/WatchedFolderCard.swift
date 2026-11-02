@@ -655,16 +655,16 @@ struct WatchedFolderCard: View {
         .padding(16)
         .contentShape(Rectangle())
         .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(cardBackgroundColor)
                 .animation(
                     reduceMotion ? nil : .easeOut(duration: 0.15),
                     value: isHovered
                 )
         }
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(cardBorderColor, lineWidth: isHighlighted ? 1.6 : 1)
         )
         .shadow(color: cardShadowColor, radius: cardShadowRadius, x: 0, y: 1)

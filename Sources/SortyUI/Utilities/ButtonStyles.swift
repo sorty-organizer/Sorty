@@ -129,7 +129,7 @@ private struct SortyButtonBody: View {
         } else {
             Capsule()
                 .fill(Color.primary.opacity(isPressed ? 0.10 : (isHovering ? 0.06 : 0)))
-                .systemLiquidGlassBackground(cornerRadius: 999)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
         }
     }
 

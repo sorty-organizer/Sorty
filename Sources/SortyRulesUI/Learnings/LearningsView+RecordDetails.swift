@@ -40,7 +40,7 @@ extension LearningsView {
                         }
                     }
                 }
-                .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
             }
             .padding(20)
         }
@@ -276,8 +276,8 @@ extension LearningsView {
         }
         .padding(20)
         .frame(maxWidth: .infinity)
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No patterns learned yet. Organize folders to start learning.")
         .task {

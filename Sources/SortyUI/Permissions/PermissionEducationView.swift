@@ -30,7 +30,7 @@ package struct PermissionEducationView: View {
                     .padding(.bottom, 8)
             }
         }
-        .systemLiquidGlassPopover(cornerRadius: 12)
+        .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         .animation(.easeOut(duration: 0.18), value: currentPage)
     }
 
@@ -85,9 +85,9 @@ package struct PermissionEducationView: View {
         }
         .frame(width: 640)
         .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .stroke(Color.primary.opacity(0.10), lineWidth: 1)
         }
     }
@@ -195,7 +195,7 @@ package struct AutomationPermissionRecoveryView: View {
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
                 Text("3. Reopen Sorty and choose Enable again.")
             }
             .font(.body)

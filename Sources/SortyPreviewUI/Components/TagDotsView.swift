@@ -59,7 +59,7 @@ package struct TagDotsView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
                 .fixedSize()
-                .systemLiquidGlassPopover(cornerRadius: 12)
+                .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }
         .accessibilityLabel("Tags: \(hoverText)")
         .accessibilityHint("Shows tag details on hover or keyboard focus")

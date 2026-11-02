@@ -52,7 +52,7 @@ struct HistoryDetailHeaderSection: View {
                 .foregroundStyle(.secondary)
                 .padding(8)
                 .background(Color.secondary.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Full path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
                 .layoutPriority(1)
@@ -145,7 +145,7 @@ struct HistoryPartialUndoSection: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.yellow.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
             .accessibilityElement(children: .contain)
             .accessibilityLabel(
                 affectedItems.isEmpty
@@ -214,7 +214,7 @@ private struct PartialUndoItemRow: View {
             .contentShape(Rectangle())
             .background(
                 Color.primary.opacity(isHovered ? 0.06 : 0),
-                in: RoundedRectangle(cornerRadius: 6)
+                in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
             )
         }
         .buttonStyle(.plain)
@@ -324,9 +324,9 @@ private struct HistoryPrimaryStats: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .stroke(Color.primary.opacity(0.1), lineWidth: 1)
         )
     }
@@ -383,7 +383,7 @@ private struct HistoryNerdStatsGrid: View {
             }
         }
         .padding(16)
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
     }
 }
 
@@ -514,7 +514,7 @@ struct HistoryDetailErrorSection: View {
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.red.opacity(0.05))
-                    .cornerRadius(8)
+                    .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
                     .accessibilityLabel("Error: \(error)")
             }
         }
@@ -668,7 +668,7 @@ private struct HistoryUnorganizedFilesSection: View {
         }
         .padding()
         .background(Color.orange.opacity(0.05))
-        .cornerRadius(8)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
     }
 }
 
@@ -703,7 +703,7 @@ private struct HistoryUnorganizedFileRow: View {
         .font(.caption)
         .padding(8)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                 .fill(
                     highlightedFileID == file.id
                         ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12)
@@ -815,7 +815,7 @@ private struct HistoryRestorableItemRow: View {
         .font(.caption)
         .padding(8)
         .background(Color.secondary.opacity(0.05))
-        .cornerRadius(6)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Deleted: \(deletedName), original: \(originalName)")
     }

@@ -67,7 +67,7 @@ struct ExclusionRuleRow: View {
             ruleIcon
                 .frame(width: 28, height: 28)
                 .background((rule.isEnabled ? colorForType(rule.type) : .secondary).opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
 
             ruleDescription
             Spacer()
@@ -119,7 +119,7 @@ struct ExclusionRuleRow: View {
         .background(isHovered ? Color.primary.opacity(0.03) : Color.clear)
         .sortyFocusHighlight(
             isActive: isHighlighted,
-            shape: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
@@ -225,7 +225,7 @@ struct ExclusionRuleRow: View {
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(Color.blue.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
                 } else if rule.isAIGenerated == true {
                     Text("AI-created")
                         .font(.caption2)
@@ -233,7 +233,7 @@ struct ExclusionRuleRow: View {
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(Color.purple.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
                 }
 
                 if isGroupedCondition {
@@ -243,7 +243,7 @@ struct ExclusionRuleRow: View {
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(Color.orange.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
                         .help("Every condition in this group must match before an item is excluded.")
                         .accessibilityLabel(
                             "Part of a group of \(max(groupSize, 1)) conditions that must all match"
@@ -257,7 +257,7 @@ struct ExclusionRuleRow: View {
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(Color.red.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
                         .help(validationIssue)
                         .accessibilityLabel("Invalid pattern. \(validationIssue)")
                 }

@@ -60,10 +60,10 @@ struct LearningExclusionRow: View {
         }
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                 .fill(Color.secondary.opacity(isHovered ? 0.08 : 0.03))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) { isHovered = hovering }
             if hovering { HapticFeedbackManager.shared.selection() }

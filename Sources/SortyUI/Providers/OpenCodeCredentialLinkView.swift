@@ -106,7 +106,7 @@ package struct OpenCodeCredentialLinkView: View {
         }
         .padding(10)
         .background((isConnected ? Color.green : Color.secondary).opacity(isConnected ? 0.08 : 0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
         .task(id: "\(canCheck)-\(refreshID)") {
             if canCheck { await viewModel.refreshOpenCodeCredentials() }
         }

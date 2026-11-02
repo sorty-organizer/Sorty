@@ -107,7 +107,7 @@ extension AIProviderSettingsView {
                 }
                 .padding(10)
                 .background(Color.green.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
             } else {
                 Text("Use your ChatGPT subscription for OpenAI inference through Codex CLI device authorization.")
                     .font(.caption)

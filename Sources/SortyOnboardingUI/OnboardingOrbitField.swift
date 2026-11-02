@@ -146,11 +146,11 @@ struct OnboardingOrbitFileChip: View, @MainActor Equatable {
         }
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .fill(cardFill)
         )
         .systemLiquidGlassBackground(
-            cornerRadius: 16,
+            cornerRadius: SortyDesignSystem.Radius.xl,
             clear: colorScheme == .light,
             interactive: false
         )

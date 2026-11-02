@@ -133,7 +133,7 @@ struct RoutingRulesCard: View {
             }
         }
         .padding(12)
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
     }
 
     private func resolve() async {
@@ -218,7 +218,7 @@ private struct RoutingRuleRow: View {
             .accessibilityLabel("Delete rule")
         }
         .padding(10)
-        .systemLiquidGlassBackground(cornerRadius: 10, clear: true, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, clear: true, interactive: false)
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
         .accessibilityIdentifier("RoutingRuleRow")

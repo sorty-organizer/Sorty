@@ -293,7 +293,7 @@ package struct SettingsView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
-                .background(selectedCategory.color.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(selectedCategory.color.gradient, in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
                 .accessibilityHidden(true)
             Text(LocalizedStringKey(selectedCategory.rawValue))
                 .font(.title2.bold())
@@ -312,7 +312,7 @@ package struct SettingsView: View {
                     .foregroundStyle(Color.accentColor)
                     .frame(width: 32, height: 32)
                     .background(Color.accentColor.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
                 Text("Search Results")
                     .font(.title2.bold())
             }

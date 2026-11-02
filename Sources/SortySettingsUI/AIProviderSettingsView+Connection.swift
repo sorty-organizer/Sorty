@@ -126,7 +126,7 @@ extension AIProviderSettingsView {
                                             .padding(10)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                             .background(Color.secondary.opacity(0.1))
-                                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                                            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
                                             .fixedSize(horizontal: false, vertical: true)
                                             .textSelection(.enabled)
                                             .transition(.move(edge: .top).combined(with: .opacity))

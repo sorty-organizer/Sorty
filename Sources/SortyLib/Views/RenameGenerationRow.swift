@@ -49,11 +49,11 @@ struct RenameGenerationRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                 .fill(isActive ? Color.purple.opacity(0.08) : Color.primary.opacity(0.035))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                 .stroke(isMostRecent && isRevealed ? Color.purple.opacity(0.24) : .clear, lineWidth: 1)
         )
         .compositingGroup()
@@ -110,7 +110,7 @@ struct RenameNamePill: View {
             .padding(.vertical, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 7)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                     .fill(isPrimary ? Color.purple.opacity(0.08) : Color.secondary.opacity(0.06))
             )
             .overlay(alignment: .leading) {

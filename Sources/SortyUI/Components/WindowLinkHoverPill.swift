@@ -195,12 +195,12 @@ package struct WindowLinkHoverPillOverlay: View {
                         .padding(.horizontal, 11)
                         .padding(.vertical, 6)
                         .background {
-                            RoundedRectangle(cornerRadius: 999, style: .continuous)
+                            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.capsule, style: .continuous)
                                 .fill(Color.blue.opacity(0.12))
-                                .systemLiquidGlassBackground(cornerRadius: 999)
+                                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
                         }
                         .overlay {
-                            RoundedRectangle(cornerRadius: 999, style: .continuous)
+                            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.capsule, style: .continuous)
                                 .stroke(Color.blue.opacity(0.22), lineWidth: 1)
                         }
                     }

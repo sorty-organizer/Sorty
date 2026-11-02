@@ -84,7 +84,7 @@ struct PersonaGeneratorView: View {
                 .frame(width: 58, height: 58)
                 .background(
                     SortyDesignSystem.Colors.resolvedAccent.opacity(0.13),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 )
                 .symbolEffect(.breathe, isActive: !reduceMotion)
 
@@ -117,9 +117,9 @@ struct PersonaGeneratorView: View {
             .animation(.easeInOut(duration: 0.22), value: currentGenerationStatus)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
         .overlay {
-            PersonaGenerationBorderBeam(cornerRadius: 16)
+            PersonaGenerationBorderBeam(cornerRadius: SortyDesignSystem.Radius.xl)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }
@@ -183,7 +183,7 @@ struct PersonaGeneratorView: View {
                                 .padding(.vertical, 3)
                                 .background(
                                     Color.secondary.opacity(0.10),
-                                    in: RoundedRectangle(cornerRadius: 5)
+                                    in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                                 )
                                 .accessibilityHidden(true)
                         }
@@ -207,9 +207,9 @@ struct PersonaGeneratorView: View {
                 }
                 .frame(height: 120)
                 .background(Color(nsColor: .textBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                         .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                 }
                 .accessibilityLabel("Persona description")
@@ -406,11 +406,11 @@ struct PersonaGeneratorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
         .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(hasAnswer ? accent.opacity(0.11) : Color(nsColor: .controlBackgroundColor))
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .strokeBorder(
                     hasAnswer ? accent.opacity(0.82) : isFocused ? accent.opacity(0.5) : Color.secondary.opacity(0.18),
                     lineWidth: hasAnswer ? 1.5 : 1
@@ -656,11 +656,11 @@ private struct HoningOptionButton: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     .fill(cardFill)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     .strokeBorder(cardStroke, lineWidth: isSelected ? 1.5 : 1)
             }
             .shadow(

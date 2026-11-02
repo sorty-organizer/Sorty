@@ -132,10 +132,10 @@ struct ModelDirectoryRow: View {
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(Color.secondary.opacity(isHovered ? 0.08 : 0.03))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .onHover { hovering in
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
                 isHovered = hovering

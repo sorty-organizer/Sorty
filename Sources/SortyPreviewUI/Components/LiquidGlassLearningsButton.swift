@@ -121,7 +121,7 @@ package struct LiquidGlassLearningsButton: View {
                 }
                 .padding(12)
                 .frame(minWidth: 240, maxWidth: 340)
-                .systemLiquidGlassPopover(cornerRadius: 12)
+                .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
             }
         }
     }

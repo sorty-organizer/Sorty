@@ -239,12 +239,12 @@ public struct CompletionStepView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .fill(Color.orange.opacity(0.035))
         )
-        .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .stroke(Color.orange.opacity(0.15), lineWidth: 1)
         )
     }

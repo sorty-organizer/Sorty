@@ -141,7 +141,7 @@ struct RuleGroupCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(14)
                             .frame(width: 280, alignment: .leading)
-                            .systemLiquidGlassPopover(cornerRadius: 12)
+                            .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                     }
                     .accessibilityLabel("About \(title)")
                     .help("About \(title)")
@@ -199,7 +199,7 @@ struct RuleGroupCard: View {
                 }
             }
         }
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
     }
 
     private func toggleExpanded() {
@@ -226,7 +226,7 @@ struct NaturalLanguageExceptionRow: View {
             exceptionIcon
                 .frame(width: 28, height: 28)
                 .background((exception.isEnabled ? Color.purple : .secondary).opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -241,7 +241,7 @@ struct NaturalLanguageExceptionRow: View {
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(Color.purple.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
                 }
 
                 HStack(spacing: 6) {
@@ -372,7 +372,7 @@ struct ExclusionRuleUsageButton: View {
             .font(.caption)
             .padding(16)
             .frame(width: 240, alignment: .leading)
-            .systemLiquidGlassPopover(cornerRadius: 12)
+            .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }
     }
 }

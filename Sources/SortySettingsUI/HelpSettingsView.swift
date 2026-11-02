@@ -212,7 +212,7 @@ struct DeeplinkSettingsView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(14)
                             .frame(width: 280, alignment: .leading)
-                            .systemLiquidGlassPopover(cornerRadius: 12)
+                            .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                     }
                     .help("About building deeplinks")
                     .accessibilityLabel("Deeplink encoding information")
@@ -237,7 +237,7 @@ struct DeeplinkSettingsView: View {
                         }
                         .settingsFocusable(
                             entry.focusTarget,
-                            shape: RoundedRectangle(cornerRadius: 8, style: .continuous),
+                            shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous),
                             horizontalRingPadding: 2,
                             verticalRingPadding: 2
                         )
@@ -359,16 +359,16 @@ private struct HelpIconLink: View {
             .padding(.vertical, 8)
             .background(isHovered ? color.opacity(0.14) : Color.secondary.opacity(0.045))
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                     .stroke(isHovered ? color.opacity(0.32) : Color.secondary.opacity(0.08), lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .settingsFocusable(
             focusTarget,
-            shape: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
         )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -455,7 +455,7 @@ private struct DeeplinkEntryRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
                     .padding(.leading, 28)
                     .padding(.trailing, 8)
                     .padding(.bottom, 8)
@@ -464,7 +464,7 @@ private struct DeeplinkEntryRow: View {
         }
         .background(
             Color.primary.opacity(isExpanded ? 0.05 : (isHovered ? 0.035 : 0)),
-            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
         )
         .onHover { hovering in
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.12)) {

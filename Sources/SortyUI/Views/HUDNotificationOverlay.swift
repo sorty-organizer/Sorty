@@ -100,7 +100,7 @@ struct HUDNotificationCard: View {
                 isHovered = hovering
             }
         }
-        .contentShape(RoundedRectangle(cornerRadius: 14))
+        .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
         .onTapGesture {
             activateCard()
         }
@@ -191,7 +191,7 @@ struct HUDNotificationCard: View {
         // sanctioned liquid-glass background (or a solid fallback when
         // transparency is reduced). A second glass layer here doubles the
         // backdrop sampling cost and draws a visible inner edge.
-        .hudFallbackBackground(cornerRadius: 14)
+        .hudFallbackBackground(cornerRadius: SortyDesignSystem.Radius.xl)
         .overlay(alignment: .bottom) {
             if !notification.isPersistent {
                 HUDNotificationProgress(
@@ -200,9 +200,9 @@ struct HUDNotificationCard: View {
                 )
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .stroke(
                     Color.white.opacity(0.18),
                     lineWidth: 1
@@ -231,7 +231,7 @@ private struct HUDNotificationHeader: View {
                 .foregroundStyle(notification.iconColor)
                 .frame(width: 28, height: 28)
                 .symbolReplaceTransition(animationValue: notification.icon)
-                .systemLiquidGlassBackground(cornerRadius: 14)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(notification.title)
@@ -378,7 +378,7 @@ private struct HUDNotificationQueueControls: View {
         }
         .buttonStyle(.plain)
         .frame(width: 28, height: 28)
-        .systemLiquidGlassBackground(cornerRadius: 8)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.md)
         .accessibilityLabel(accessibilityLabel)
     }
 }
@@ -434,13 +434,13 @@ private struct HUDNotificationActionLabel: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: 30, alignment: .center)
-        .systemLiquidGlassBackground(cornerRadius: 8)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.md)
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                 .strokeBorder(accent.opacity(isDestructive ? 0.28 : 0.22), lineWidth: 1)
         }
         .opacity(isEnabled ? 1 : 0.5)
-        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
     }
 }
 

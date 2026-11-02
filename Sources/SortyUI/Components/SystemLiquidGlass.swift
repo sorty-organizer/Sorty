@@ -50,14 +50,14 @@ extension View {
                     self.background {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(.clear)
-                            .glassEffect(.clear.interactive(), in: .rect(cornerRadius: cornerRadius))
+                            .glassEffect(.clear.interactive(), in: .rect(cornerRadius: cornerRadius, style: .continuous))
                             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                     }
                 } else {
                     self.background {
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .fill(.clear)
-                            .glassEffect(.clear, in: .rect(cornerRadius: cornerRadius))
+                            .glassEffect(.clear, in: .rect(cornerRadius: cornerRadius, style: .continuous))
                             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                     }
                 }
@@ -65,14 +65,14 @@ extension View {
                 self.background {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.clear)
-                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius, style: .continuous))
                         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 }
             } else {
                 self.background {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(.clear)
-                        .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                        .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
                         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 }
             }

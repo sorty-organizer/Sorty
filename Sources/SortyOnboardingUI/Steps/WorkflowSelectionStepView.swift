@@ -46,7 +46,7 @@ public struct WorkflowSelectionStepView: View {
                     }
                     .padding(12)
                     .background(Color.blue.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
                 }
                 .frame(maxWidth: 350)
 
@@ -256,14 +256,14 @@ struct OnboardingPersonaCard: View {
             .frame(height: 110)
             .padding(.vertical, 11)
             .padding(.horizontal, 14)
-            .contentShape(RoundedRectangle(cornerRadius: 16))
+            .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                     .fill(cardFill)
             )
-            .systemLiquidGlassBackground(cornerRadius: 16)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl)
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                     .stroke(cardStroke, lineWidth: isSelected ? 1.4 : 1)
             )
         }
@@ -347,7 +347,7 @@ struct OnboardingCustomPersonaCard: View {
             .frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
             .padding(compact ? 10 : 18)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
@@ -359,9 +359,9 @@ struct OnboardingCustomPersonaCard: View {
                         )
                     )
             )
-            .systemLiquidGlassBackground(cornerRadius: 18)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl)
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                     .stroke(
                         isSelected ? selectionAccent.opacity(0.78) : Color.primary.opacity(isHovered ? 0.18 : 0.09),
                         lineWidth: isSelected ? 1.4 : 1
@@ -373,7 +373,7 @@ struct OnboardingCustomPersonaCard: View {
                 x: 0,
                 y: 4
             )
-            .contentShape(RoundedRectangle(cornerRadius: 18))
+            .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
         }
         .buttonStyle(.plain)
         .contextMenu {

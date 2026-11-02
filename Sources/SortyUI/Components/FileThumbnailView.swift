@@ -27,7 +27,7 @@ public struct FileThumbnailView: View {
         AppKitImageView(
             image: thumbnail ?? placeholder,
             size: size,
-            cornerRadius: 3,
+            cornerRadius: SortyDesignSystem.Radius.xs,
             opacity: thumbnail == nil && isLoading ? 0.6 : 1
         )
         .frame(width: size.width, height: size.height)

@@ -32,11 +32,11 @@ extension ReadyToOrganizeView {
             .frame(minHeight: 60, maxHeight: 80)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     .fill(Color(NSColor.textBackgroundColor))
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     .stroke(Color(NSColor.separatorColor), lineWidth: 1)
 
                 FocusedInstructionBeamBorder(active: isTextFieldFocused)
@@ -150,7 +150,7 @@ extension ReadyToOrganizeView {
                         .padding(16)
                         .frame(width: 280)
                         .foregroundStyle(.primary)
-                        .systemLiquidGlassPopover(cornerRadius: 12)
+                        .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                     }
                 }
 
@@ -176,15 +176,15 @@ extension ReadyToOrganizeView {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
-                    .systemLiquidGlassBackground(cornerRadius: 12)
+                    .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                             .strokeBorder(
                                 Color.accentColor.opacity(0.18),
                                 lineWidth: 1
                             )
                     }
-                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .help("Open your saved instruction prompts")

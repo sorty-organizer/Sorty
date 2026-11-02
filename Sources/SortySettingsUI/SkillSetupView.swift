@@ -27,7 +27,7 @@ package struct SkillOnboardingView: View {
             if isCheckingSkill {
                 ProgressView("Checking installed skill…")
                     .padding(20)
-                    .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+                    .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
             }
         }
         .frame(

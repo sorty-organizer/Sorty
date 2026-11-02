@@ -145,7 +145,7 @@ struct CompactStorageLocationRow: View {
         .padding(.vertical, 6)
         .contentShape(Rectangle())
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                 .fill(Color.secondary.opacity(0.05))
         )
         .contextMenu {

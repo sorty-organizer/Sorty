@@ -165,9 +165,9 @@ struct InternetAccessPolicyView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .frame(maxWidth: 250)
-        .systemLiquidGlassBackground(cornerRadius: 10, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
         .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(internetPrivacyModeEnabled ? Color.green.opacity(0.35) : Color.secondary.opacity(0.18), lineWidth: 1)
         }
         .accessibilityIdentifier("InternetAccessPolicyBlockInternetConnectionsToggle")
@@ -223,9 +223,9 @@ private struct ConnectionCard: View {
             }
         }
         .padding(12)
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(relevanceAccent.opacity(0.35), lineWidth: 1)
         }
     }

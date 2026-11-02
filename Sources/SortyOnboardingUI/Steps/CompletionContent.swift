@@ -199,7 +199,7 @@ struct CompletionAnalyticsPreference: View {
         }
         .padding(18)
         .frame(width: 390, alignment: .leading)
-        .systemLiquidGlassPopover(cornerRadius: 12)
+        .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
     }
 
     private func detailSection(

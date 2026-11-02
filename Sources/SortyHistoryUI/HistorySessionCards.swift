@@ -151,7 +151,7 @@ struct HistoryHeader: View {
                 .foregroundStyle(.red)
                 .padding(.horizontal, 12)
                 .frame(height: 24)
-                .systemLiquidGlassBackground(cornerRadius: 999)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -170,7 +170,7 @@ struct HistoryHeader: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.red)
                 .frame(width: 24, height: 24)
-                .systemLiquidGlassBackground(cornerRadius: 999)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
@@ -396,7 +396,7 @@ struct HistorySummaryCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .systemLiquidGlassBackground(cornerRadius: 18, clear: true, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, clear: true, interactive: false)
     }
 }
 
@@ -435,10 +435,10 @@ private struct HistoryStatItem: View {
         .frame(maxWidth: .infinity, minHeight: 88)
         .background(
             Color.secondary.opacity(isEmphasized ? 0.085 : 0.06),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(
                     Color.primary.opacity(isHovered ? 0.18 : (isEmphasized ? 0.12 : 0)),
                     lineWidth: 1
@@ -594,9 +594,9 @@ struct HistorySessionCard: View {
                 .padding(.trailing, 12)
                 .accessibilityHidden(true)
         }
-        .systemLiquidGlassBackground(cornerRadius: 16)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl)
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .stroke(cardBorderColor, lineWidth: isSelected ? 2 : 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)

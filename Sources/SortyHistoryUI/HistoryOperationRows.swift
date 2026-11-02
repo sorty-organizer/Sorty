@@ -87,7 +87,7 @@ struct OperationRowView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                 .fill(operationBackgroundColor)
         )
         .opacity(isUndone ? 0.7 : 1.0)
@@ -144,7 +144,7 @@ struct ProcessingOverlay: View {
                     .numericTextTransition(animationValue: stage)
             }
             .padding(24)
-            .systemLiquidGlassBackground(cornerRadius: 12)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
             .scaleEffect(appeared ? 1 : 0.8)
             .opacity(appeared ? 1 : 0)
             .accessibilityElement(children: .combine)
@@ -183,7 +183,7 @@ struct StatusBadge: View {
             .padding(.vertical, 4)
             .background(color.opacity(0.15))
             .foregroundColor(color)
-            .cornerRadius(6)
+            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
             .fixedSize(horizontal: true, vertical: false)
             .accessibilityLabel("Status: \(status.displayName)")
     }

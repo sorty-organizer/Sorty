@@ -126,7 +126,7 @@ struct LearningInsightRow: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                 .fill(Color.secondary.opacity(isHovered ? 0.06 : 0))
         )
         .onHover { hovering in

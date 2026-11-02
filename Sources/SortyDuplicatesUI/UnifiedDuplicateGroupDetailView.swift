@@ -300,7 +300,7 @@ struct DuplicateMetricTile: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .systemLiquidGlassBackground(cornerRadius: 10, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
         .frame(minHeight: 50)
         .accessibilityElement(children: .combine)
     }

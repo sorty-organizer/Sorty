@@ -196,7 +196,7 @@ extension OrganizationCompleteView {
             }
         }
         .padding(14)
-        .systemLiquidGlassBackground(cornerRadius: 14)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Rate this organization")
     }
@@ -350,9 +350,9 @@ extension OrganizationCompleteView {
         .padding(.vertical, usesCompactVerticalLayout ? 13 : 18)
         .frame(maxWidth: 560)
         .background(Color(NSColor.controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .stroke(Color.primary.opacity(0.1), lineWidth: 1)
         )
         .opacity(summaryAppeared ? 1 : 0)

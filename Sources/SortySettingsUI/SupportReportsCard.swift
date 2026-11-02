@@ -240,6 +240,6 @@ struct SupportDetailChip: View {
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.secondary.opacity(0.07))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
     }
 }

@@ -148,7 +148,7 @@ struct DuplicatesNerdStatsStrip: View {
             }
         }
         .padding(10)
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "Duplicate scan stats. \(manager.scannedFileCount) files scanned. \(manager.hashCandidateCount) hash candidates. \(manager.sampledFileCount) files sampled. \(manager.hashedFileCount) files fully hashed. \(manager.hashCacheHitCount) cache hits. \(manager.semanticAnalyzedFileCount) files analyzed for similarity. \(manager.semanticSkippedFileCount) files skipped for similarity. \(manager.unreadableFileCount) unreadable files. Duration \(formattedDuration)."

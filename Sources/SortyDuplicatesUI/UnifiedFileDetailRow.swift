@@ -24,14 +24,14 @@ struct UnifiedFileDetailRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
         .overlay {
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(
                     isRecommended ? Color.green.opacity(0.24) : Color.primary.opacity(0.07),
                     lineWidth: 1)
         }
-        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .contextMenu {
             UnifiedFileDetailContextMenu(
                 isRecommended: isRecommended,

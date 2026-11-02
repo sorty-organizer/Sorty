@@ -139,12 +139,12 @@ struct CodexDeviceAuthSheet: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(isCodeCopied ? Color.green.opacity(0.10) : Color.clear)
         }
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .strokeBorder(isCodeCopied ? Color.green.opacity(0.42) : Color.primary.opacity(0.08), lineWidth: 1)
         }
         .scaleEffect(isCodeCopied && !reduceMotion ? 1.015 : 1)
@@ -166,7 +166,7 @@ struct CodexDeviceAuthStep<Content: View>: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(.primary)
                 .frame(width: 32, height: 32)
-                .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 10) {
@@ -178,7 +178,7 @@ struct CodexDeviceAuthStep<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(14)
-        .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
     }
 }
 
@@ -229,6 +229,6 @@ struct CodexDeviceAuthStatusView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
         .padding(.horizontal, 14)
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
     }
 }

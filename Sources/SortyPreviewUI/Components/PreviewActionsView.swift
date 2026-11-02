@@ -85,7 +85,7 @@ struct PreviewActionsView: View {
         }
         .popover(isPresented: $showEditsCapturedPopover, arrowEdge: .bottom) {
             EditsCapturedPopoverContent(editsCapturedCount: editsCapturedCount)
-                .systemLiquidGlassPopover(cornerRadius: 12)
+                .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }
         .help("\(editsCapturedCount) manual \(editsCapturedCount == 1 ? "edit" : "edits") captured for learning")
         .accessibilityIdentifier("EditsCapturedBadge")
@@ -261,10 +261,10 @@ struct PreviewActionsView: View {
     }
 
     private var editsBadgeBackground: some View {
-        RoundedRectangle(cornerRadius: 6)
+        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
             .fill(Color.green.opacity(0.1))
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                     .stroke(Color.green.opacity(0.2), lineWidth: 1)
             )
     }
@@ -444,7 +444,7 @@ private struct ApplyProgressBar: View {
         GeometryReader { geometry in
             HStack(spacing: 2) {
                 if clampedProgress > 0 {
-                    RoundedRectangle(cornerRadius: 3)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                         .fill(Color.green.gradient)
                         .frame(width: max(geometry.size.width * clampedProgress - 1, 4))
                 }

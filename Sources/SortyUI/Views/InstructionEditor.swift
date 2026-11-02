@@ -118,7 +118,7 @@ package struct RotatingInstructionSuggestionEditor: View {
                         .padding(.vertical, 3)
                         .background(
                             Color.secondary.opacity(0.10),
-                            in: RoundedRectangle(cornerRadius: 5)
+                            in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                         )
                         .accessibilityHidden(true)
                 }

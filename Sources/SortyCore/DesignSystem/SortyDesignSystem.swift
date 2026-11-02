@@ -61,14 +61,17 @@ public enum SortyDesignSystem {
     }
 
     // MARK: - Spacing
+    /// The spacing scale for padding and stack spacing. Stay on these steps
+    /// instead of inventing in-between values.
     public enum Spacing {
-        // Micro spacing
-        public static let xxs: CGFloat = 4
-
-        // Standard spacing
-        public static let md: CGFloat = 12
-        public static let lg: CGFloat = 16
-        public static let xl: CGFloat = 20
+        public nonisolated static let xxs: CGFloat = 4
+        public nonisolated static let xs: CGFloat = 6
+        public nonisolated static let sm: CGFloat = 8
+        public nonisolated static let md: CGFloat = 12
+        public nonisolated static let lg: CGFloat = 16
+        public nonisolated static let xl: CGFloat = 20
+        public nonisolated static let xxl: CGFloat = 24
+        public nonisolated static let xxxl: CGFloat = 32
     }
 
     // MARK: - Sizing
@@ -77,13 +80,39 @@ public enum SortyDesignSystem {
         public static let windowOnboardingHeight: CGFloat = 720
     }
 
-    // MARK: - Border Radius
+    // MARK: - Corner Radius
+    /// Corner radii, always drawn with `.continuous` corners.
+    /// `xs` badges and tiny swatches, `sm` inline tokens and thumbnails,
+    /// `md` rows, fields and compact tiles, `lg` cards and popovers,
+    /// `xl` large panels and sheets, `xxl` hero surfaces.
+    /// Use `Capsule()` (or `capsule` where an API needs a number) for pills.
     public enum Radius {
-        public static let xLarge: CGFloat = 16
+        public nonisolated static let xs: CGFloat = 4
+        public nonisolated static let sm: CGFloat = 6
+        public nonisolated static let md: CGFloat = 8
+        public nonisolated static let lg: CGFloat = 12
+        public nonisolated static let xl: CGFloat = 16
+        public nonisolated static let xxl: CGFloat = 20
+        public nonisolated static let capsule: CGFloat = 999
     }
 }
 
-// MARK: - Animation Extensions
+// MARK: - Motion
+/// Sorty's motion vocabulary. Pick by purpose, and pass `nil` instead when
+/// Reduce Motion is on.
 public extension Animation {
+    /// Hover, press and other instant feedback.
+    static var sortyQuick: Animation { .easeOut(duration: 0.15) }
+    /// Cross-fades and state swaps.
+    static var sortyFade: Animation { .easeInOut(duration: 0.2) }
+    /// Slower fades for larger surfaces.
+    static var sortySlowFade: Animation { .easeInOut(duration: 0.3) }
+    /// Small toggles, chips, disclosure and row expansion.
+    static var sortySnappy: Animation { .spring(response: 0.28, dampingFraction: 0.82) }
+    /// Panels, cards and layout changes.
+    static var sortySmooth: Animation { .spring(response: 0.4, dampingFraction: 0.84) }
+    /// Large transitions such as page and sheet changes.
     static var sortySpringStandard: Animation { .spring(response: 0.5, dampingFraction: 0.8) }
+    /// Celebratory pops that should overshoot.
+    static var sortyBouncy: Animation { .spring(response: 0.35, dampingFraction: 0.65) }
 }

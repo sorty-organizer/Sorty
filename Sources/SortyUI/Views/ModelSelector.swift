@@ -62,13 +62,13 @@ package struct ModelSelectorCompactButton: View {
             .frame(maxWidth: 220)
             .background {
                 if #unavailable(macOS 26.0) {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         .fill(Color.primary.opacity(isHovering ? 0.1 : 0.06))
                 }
             }
-            .systemLiquidGlassBackground(cornerRadius: 12)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     .strokeBorder(Color.white.opacity(isHovering ? 0.2 : 0.1), lineWidth: 1)
             )
             .shadow(color: .black.opacity(isHovering ? 0.09 : 0.05), radius: isHovering ? 6 : 3, y: 2)
@@ -545,7 +545,7 @@ struct ModelSelectionPopover: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                     .fill(selectedProvider == provider ? SortyDesignSystem.Colors.resolvedAccent : Color.clear)
             )
             .contentShape(Rectangle())
@@ -755,7 +755,7 @@ struct ModelSelectionPopover: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                     .fill(selectedModel == model ? SortyDesignSystem.Colors.resolvedAccent : Color.clear)
             )
             .contentShape(Rectangle())
@@ -783,7 +783,7 @@ struct ModelSelectionPopover: View {
         }
         .padding(8)
         .background(Color.red.opacity(0.1))
-        .cornerRadius(6)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
     }
@@ -802,7 +802,7 @@ struct ModelSelectionPopover: View {
         }
         .padding(8)
         .background(Color.orange.opacity(0.1))
-        .cornerRadius(6)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
     }
@@ -810,11 +810,11 @@ struct ModelSelectionPopover: View {
     private var modelListSkeleton: some View {
         ForEach(0..<5, id: \.self) { _ in
             HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                     .fill(Color.primary.opacity(0.12))
                     .frame(width: 140, height: 12)
                 Spacer()
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                     .fill(Color.primary.opacity(0.08))
                     .frame(width: 52, height: 12)
             }
@@ -1039,10 +1039,10 @@ struct ModelSelectionPopover: View {
     }
 
     private var customFieldBackground: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
+        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
             .fill(Color.primary.opacity(0.06))
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
             )
     }

@@ -26,7 +26,7 @@ struct HistoryLiquidGlassDuplicateCard: View {
             .accessibilityHint("Tap to view duplicate file groups")
             .popover(isPresented: $showPopover, arrowEdge: .bottom) {
                 historyDuplicatePopover
-                    .systemLiquidGlassPopover(cornerRadius: 12)
+                    .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
             }
         }
     }
@@ -125,7 +125,7 @@ struct HistoryDuplicateGroupRow: View {
         }
         .padding(8)
         .background(Color.secondary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
     }
 
     @ViewBuilder
@@ -183,10 +183,10 @@ struct HistoryDuplicateGroupRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(4)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                 .fill(highlightedFileID == group.file.id ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : Color.clear)
         )
-        .contentShape(RoundedRectangle(cornerRadius: 6))
+        .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
     }
 }
 
@@ -216,9 +216,9 @@ struct HistoryDuplicateFileLabel: View {
         .padding(.vertical, 2)
         .padding(.horizontal, 4)
         .background(
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                 .fill(isHighlighted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : Color.clear)
         )
-        .contentShape(RoundedRectangle(cornerRadius: 4))
+        .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
     }
 }

@@ -67,7 +67,7 @@ struct AIProviderSettingsView: View {
                     )
                     .settingsFocusable(
                         .providerChoice(provider),
-                        shape: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     )
                 }
             }
@@ -152,8 +152,8 @@ struct AIProviderSettingsView: View {
                 isCodeCopied: deviceCodeCopyFeedback.isCopied
             )
             .frame(width: 610)
-            .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
-            .systemLiquidGlassPopover(cornerRadius: 12)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+            .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }
         .onChange(of: codexAuth.isAuthenticated) { _, isAuthenticated in
             guard isAuthenticated, isShowingCodexDeviceAuth else { return }

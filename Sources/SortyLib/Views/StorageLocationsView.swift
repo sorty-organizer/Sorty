@@ -179,7 +179,7 @@ struct StorageLocationConfigView: View {
             .buttonStyle(.sortyProminent)
         }
         .padding()
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
     }
 
     private var descriptionEditor: some View {
@@ -219,7 +219,7 @@ struct StorageLocationConfigView: View {
                         .padding(.vertical, 3)
                         .background(
                             Color.secondary.opacity(0.10),
-                            in: RoundedRectangle(cornerRadius: 5)
+                            in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                         )
                         .accessibilityHidden(true)
                 }
@@ -243,11 +243,11 @@ struct StorageLocationConfigView: View {
             .frame(height: 80)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                     .fill(Color(NSColor.textBackgroundColor))
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                     .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
 
                 FocusedInstructionBeamBorder(active: isDescriptionFocused)
@@ -278,7 +278,7 @@ private struct StorageProviderBadge: View {
         .font(.caption2.weight(.semibold))
         .padding(.horizontal, 9)
         .padding(.vertical, 4)
-        .systemLiquidGlassBackground(cornerRadius: 999, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule, interactive: false)
         .fixedSize()
         .help(accessibilityDescription)
         .accessibilityElement(children: .ignore)

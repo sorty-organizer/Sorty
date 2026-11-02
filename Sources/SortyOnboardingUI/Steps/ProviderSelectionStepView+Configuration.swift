@@ -209,7 +209,7 @@ extension ProviderSelectionStepView {
                 }
                 .padding(10)
                 .background(Color.green.opacity(0.08))
-                .cornerRadius(8)
+                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
             } else {
                 Text("Sign in with your OpenAI account using Codex CLI to enable Codex integration in Sorty.")
                     .font(.caption)
@@ -310,7 +310,7 @@ extension ProviderSelectionStepView {
         }
         .padding(6)
         .background(Color.black.opacity(0.05))
-        .cornerRadius(4)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
     }
 
     @ViewBuilder

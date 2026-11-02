@@ -134,7 +134,7 @@ struct PermissionsSettingsView: View {
                     )
                     .settingsFocusable(
                         .permissionsFilesAndFolders,
-                        shape: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     )
 
                     LazyVGrid(
@@ -161,7 +161,7 @@ struct PermissionsSettingsView: View {
                         )
                         .settingsFocusable(
                             .permissionsFullDiskAccess,
-                            shape: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         )
 
                         PermissionSettingsCard(
@@ -175,7 +175,7 @@ struct PermissionsSettingsView: View {
                         )
                         .settingsFocusable(
                             .permissionsAutomation,
-                            shape: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         )
 
                         PermissionSettingsCard(
@@ -190,7 +190,7 @@ struct PermissionsSettingsView: View {
                         )
                         .settingsFocusable(
                             .permissionsNotifications,
-                            shape: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         )
                     }
 
@@ -396,7 +396,7 @@ struct PermissionsSettingsView: View {
             }
             .padding(14)
             .frame(width: 300, alignment: .leading)
-            .systemLiquidGlassPopover(cornerRadius: 12)
+            .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }
         .help("Privacy, terms, and source code")
         .accessibilityLabel("How Sorty uses access information")
@@ -440,7 +440,7 @@ struct PermissionsSettingsView: View {
             .frame(maxWidth: .infinity, minHeight: 34)
             .background(
                 Color.primary.opacity(hoveredAccessInfoAction == action ? 0.09 : 0.05),
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
             )
             .contentShape(Rectangle())
         }

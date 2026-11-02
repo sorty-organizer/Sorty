@@ -80,7 +80,7 @@ package struct LiquidGlassDuplicateButton: View {
                     .foregroundStyle(showPopover ? accentColor : Color.secondary)
             }
             .frame(width: 22, height: 22)
-            .systemLiquidGlassBackground(cornerRadius: 11)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
             .overlay(
                 Circle()
                     .stroke(
@@ -101,7 +101,7 @@ package struct LiquidGlassDuplicateButton: View {
         .help("\(duplicateInfo.duplicateCount) duplicate\(duplicateInfo.duplicateCount == 1 ? "" : "s") found")
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
             duplicatePopoverContent
-                .systemLiquidGlassPopover(cornerRadius: 12)
+                .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }
         .contextMenu {
             contextMenuItems
@@ -219,10 +219,10 @@ package struct LiquidGlassDuplicateButton: View {
             }
             .padding(8)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                     .fill(hoveredFileID == file.id ? Color.secondary.opacity(0.1) : Color.clear)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { isHovering in

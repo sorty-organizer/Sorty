@@ -210,7 +210,7 @@ package struct PersonaPickerView: View {
                 .frame(width: 44, height: 44)
                 .background(
                     Color.purple.opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 )
                 .accessibilityHidden(true)
 
@@ -232,9 +232,9 @@ package struct PersonaPickerView: View {
             .accessibilityIdentifier("SettingsCreateCustomPersonaButton")
         }
         .padding(12)
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .strokeBorder(Color.purple.opacity(isHoveringEmptyState ? 0.3 : 0.14), lineWidth: 1)
         }
         .contentShape(Rectangle())
@@ -304,9 +304,9 @@ package struct PersonaPickerView: View {
                     }
                     .frame(minHeight: 70, maxHeight: 320)
                     .background(Color(nsColor: .textBackgroundColor))
-                    .cornerRadius(6)
+                    .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                             .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                     )
                     .animation(.spring(response: 0.32, dampingFraction: 0.82), value: localPrompt)
@@ -328,7 +328,7 @@ package struct PersonaPickerView: View {
                         .symbolReplaceTransition(animationValue: localIcon)
                         .background(
                             Color.purple.opacity(0.12),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         )
                 }
                 .buttonStyle(.plain)
@@ -421,9 +421,9 @@ package struct PersonaPickerView: View {
             }
             .frame(minHeight: 150, maxHeight: 340)
             .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                     .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
             }
 
@@ -461,7 +461,7 @@ package struct PersonaPickerView: View {
                                     localIcon == icon
                                         ? Color.purple.opacity(0.14)
                                         : Color.primary.opacity(0.04),
-                                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -474,7 +474,7 @@ package struct PersonaPickerView: View {
         }
         .padding(16)
         .frame(width: 390)
-        .systemLiquidGlassPopover(cornerRadius: 12)
+        .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
     }
 
     private func instructionsInfoButton(
@@ -502,7 +502,7 @@ package struct PersonaPickerView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(14)
                 .frame(width: 300, alignment: .leading)
-                .systemLiquidGlassPopover(cornerRadius: 12)
+                .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }
         .help("About these instructions")
         .accessibilityLabel(accessibilityLabel)
@@ -720,12 +720,12 @@ struct CustomPersonaButton: View {
         }
         .frame(maxWidth: .infinity, minHeight: 68, maxHeight: 68)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(
                     isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.clear
                 )
                 .overlay {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         .strokeBorder(
                             isSelected
                                 ? SortyDesignSystem.Colors.resolvedAccent
@@ -763,12 +763,12 @@ struct PersonaButton: View {
             }
             .frame(maxWidth: .infinity, minHeight: 68, maxHeight: 68)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     .fill(
                         isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.clear
                     )
                     .overlay {
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                             .strokeBorder(
                                 isSelected
                                     ? SortyDesignSystem.Colors.resolvedAccent
@@ -859,9 +859,9 @@ package struct CompactPersonaPicker: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .systemLiquidGlassBackground(cornerRadius: 12)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
             .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     .strokeBorder(
                         SortyDesignSystem.Colors.resolvedAccent.opacity(isHovering ? 0.36 : 0.18),
                         lineWidth: 1

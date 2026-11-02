@@ -195,15 +195,15 @@ struct WatchedFolderConfigView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .systemLiquidGlassBackground(cornerRadius: 12)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         .strokeBorder(
                             SortyDesignSystem.Colors.resolvedAccent.opacity(0.18),
                             lineWidth: 1
                         )
                 }
-                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
             }
             .buttonStyle(.plain)
             .help("Open your saved instruction prompts")
@@ -256,7 +256,7 @@ struct WatchedFolderConfigView: View {
         .padding(16)
         .frame(width: 280)
         .foregroundStyle(.primary)
-        .systemLiquidGlassPopover(cornerRadius: 12)
+        .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
     }
 
     private var trimmedCustomPrompt: String {
@@ -476,7 +476,7 @@ struct WatchedFolderConfigView: View {
                     }
                     .padding(16)
                     .frame(width: 420)
-                    .systemLiquidGlassPopover(cornerRadius: 12)
+                    .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                 }
             }
 
@@ -488,7 +488,7 @@ struct WatchedFolderConfigView: View {
             .disabled(useCustomModel && isCustomModelInvalid)
         }
         .padding()
-        .systemLiquidGlassBackground(cornerRadius: 12)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
     }
 
     private var organizationModeCard: some View {
@@ -508,7 +508,7 @@ struct WatchedFolderConfigView: View {
                     }
                 }
                 .padding(4)
-                .systemLiquidGlassBackground(cornerRadius: 999)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Watched folder action")
 
@@ -608,7 +608,7 @@ struct WatchedFolderConfigView: View {
                                 .padding(.vertical, 3)
                                 .background(
                                     Color.secondary.opacity(0.10),
-                                    in: RoundedRectangle(cornerRadius: 5)
+                                    in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                                 )
                                 .accessibilityHidden(true)
                         }
@@ -634,11 +634,11 @@ struct WatchedFolderConfigView: View {
                 .frame(height: 80)
                 .frame(maxWidth: .infinity)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         .fill(Color(NSColor.textBackgroundColor))
                 )
                 .overlay {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         .stroke(Color(NSColor.separatorColor), lineWidth: 1)
 
                     FocusedInstructionBeamBorder(active: isPromptFocused)
@@ -717,7 +717,7 @@ struct WatchedFolderConfigView: View {
                                 }
                                 .padding(14)
                                 .frame(width: 300, alignment: .leading)
-                                .systemLiquidGlassPopover(cornerRadius: 12)
+                                .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                             }
                         }
                     }

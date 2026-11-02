@@ -107,13 +107,13 @@ struct OnboardingProviderRow: View {
         }
         .buttonStyle(.plain)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(
                     backgroundColor
                 )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(
                     isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.45) : Color.clear,
                     lineWidth: 1

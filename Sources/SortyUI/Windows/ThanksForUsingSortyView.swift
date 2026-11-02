@@ -93,8 +93,8 @@ struct ThanksForUsingSortyView: View {
                 Divider()
                 statsRow(left: statItems[2], right: statItems[3])
             }
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .modifier(LiquidSurface(cornerRadius: 18))
+            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
+            .modifier(LiquidSurface(cornerRadius: SortyDesignSystem.Radius.xl))
             .onHover { hovering in
                 if !hovering {
                     hoveredStatID = nil

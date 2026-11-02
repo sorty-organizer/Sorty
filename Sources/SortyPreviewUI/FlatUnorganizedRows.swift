@@ -56,7 +56,7 @@ struct FlatUnorganizedHeaderView: View {
             toggleExpanded
         )
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                 .fill(isDropTarget ? Color.orange.opacity(0.1) : Color.clear)
                 .strokeBorder(isDropTarget ? Color.orange : Color.clear, lineWidth: 2)
         )
@@ -156,11 +156,11 @@ struct FlatUnorganizedFileRowView: View {
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                 .fill(backgroundColor)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                 .stroke(isHighlighted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.3) : Color.clear, lineWidth: 1)
         )
         .contentShape(Rectangle())

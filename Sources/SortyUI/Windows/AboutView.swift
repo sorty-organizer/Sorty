@@ -228,7 +228,7 @@ private struct AboutAppIconEasterEgg: View {
                 SortyEnergyScanIcon(
                     image: carousel.currentImage,
                     size: iconSize,
-                    cornerRadius: 22,
+                    cornerRadius: SortyDesignSystem.Radius.xxl,
                     startDelay: 0.25,
                     sweepDuration: 2.2
                 )

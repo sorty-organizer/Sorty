@@ -62,7 +62,7 @@ extension SkillSetupView {
                     .opacity(isGetStartedHovered ? 1 : 0)
             }
             .frame(width: 80, height: 80, alignment: .center)
-            .systemLiquidGlassBackground(cornerRadius: 24, interactive: false)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xxl, interactive: false)
             .frame(maxWidth: .infinity, alignment: .center)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isGetStartedHovered)
             .accessibilityHidden(true)
@@ -107,7 +107,7 @@ extension SkillSetupView {
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xxl, interactive: false)
             Text("Nothing installs until you confirm.")
                 .font(supportingFont)
                 .foregroundStyle(.secondary)
@@ -212,7 +212,7 @@ extension SkillSetupView {
                 .accessibilityIdentifier("skill-import.copy-request")
             }
             .padding(20)
-            .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xxl, interactive: false)
             Text(isOnboarding
                  ? "Your skill and imported preferences work without the app. Ask your agent to update them whenever your preferences change."
                  : "Return here to update the skill when preferences change, or tell your agent to update the Sorty skill with your new preferences.")
@@ -253,6 +253,6 @@ extension SkillSetupView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
-        .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xxl, interactive: false)
     }
 }

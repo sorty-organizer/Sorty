@@ -55,7 +55,7 @@ struct InlineLearningMomentCard: View {
                     }
                 }
                 .padding(14)
-                .systemLiquidGlassBackground(cornerRadius: 14)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl)
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("InlineMomentCard")
                 .accessibilityLabel("Follow-up question: \(moment.prompt)")
@@ -126,9 +126,9 @@ struct TimeSavedHighlight: View {
         .padding(.horizontal, 14)
         .padding(.vertical, usesCompactVerticalLayout ? 7 : 10)
         .frame(maxWidth: 340)
-        .background(Color.secondary.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Color.secondary.opacity(0.055), in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)
@@ -307,10 +307,10 @@ struct CompletionFeatureSuggestionCard: View {
             .accessibilityLabel("Dismiss storage location suggestion")
         }
         .padding(usesCompactVerticalLayout ? 12 : 16)
-        .systemLiquidGlassBackground(cornerRadius: 16)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .stroke(
                     LinearGradient(
                         colors: [Color.white.opacity(0.28), Color.white.opacity(0.08)],

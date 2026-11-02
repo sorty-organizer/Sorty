@@ -136,7 +136,7 @@ struct PartialUndoResultSheet: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(Color.orange.opacity(0.08))
-                                .cornerRadius(6)
+                                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
                             }
                         }
                     }

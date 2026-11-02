@@ -60,7 +60,7 @@ struct UnifiedDuplicateGroupRow: View {
                 FileThumbnailView(url: url, size: CGSize(width: 40, height: 40))
                     .frame(width: 40, height: 40)
             } else {
-                RoundedRectangle(cornerRadius: 9)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                     .fill(badgeColor.opacity(0.12))
                     .frame(width: 40, height: 40)
                     .overlay {

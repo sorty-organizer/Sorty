@@ -141,7 +141,7 @@ package struct CodexActionButtonLabel: View {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: backgroundColors,
@@ -151,7 +151,7 @@ package struct CodexActionButtonLabel: View {
                 )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(borderColor, lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(isHovered ? 0.2 : 0.12), radius: isHovered ? 6 : 4, x: 0, y: 2)

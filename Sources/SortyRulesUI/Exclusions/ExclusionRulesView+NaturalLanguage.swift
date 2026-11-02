@@ -34,7 +34,7 @@ extension ExclusionRulesView {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(14)
                         .frame(width: 280, alignment: .leading)
-                        .systemLiquidGlassPopover(cornerRadius: 12)
+                        .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                     }
             }
         ) {
@@ -96,7 +96,7 @@ extension ExclusionRulesView {
                     }
                     .padding(20)
                     .frame(maxWidth: .infinity)
-                    .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+                    .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
                 }
             }
         }
@@ -129,7 +129,7 @@ extension ExclusionRulesView {
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(14)
                             .frame(width: 280, alignment: .leading)
-                            .systemLiquidGlassPopover(cornerRadius: 12)
+                            .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                     }
             }
         ) {
@@ -177,7 +177,7 @@ extension ExclusionRulesView {
                                     .padding(.vertical, 3)
                                     .background(
                                         Color.secondary.opacity(0.10),
-                                        in: RoundedRectangle(cornerRadius: 5)
+                                        in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                                     )
                                     .accessibilityHidden(true)
                             }
@@ -462,7 +462,7 @@ extension ExclusionRulesView {
                     .font(.caption2)
                     .padding(8)
                     .systemLiquidGlassBackground(
-                        cornerRadius: 10,
+                        cornerRadius: SortyDesignSystem.Radius.lg,
                         clear: true,
                         interactive: false
                     )
@@ -470,7 +470,7 @@ extension ExclusionRulesView {
 
         }
         .padding(10)
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
         .overlay {
             if isCreatingExceptionRules {
                 FocusedInstructionBeamBorder(active: true)
@@ -511,7 +511,7 @@ extension ExclusionRulesView {
             .font(.body.bold())
             .foregroundStyle(color)
             .frame(width: 36, height: 36)
-            .systemLiquidGlassBackground(cornerRadius: 10, clear: true, interactive: false)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, clear: true, interactive: false)
             .symbolEffect(
                 .variableColor.iterative,
                 isActive: isCreatingExceptionRules && !reduceMotion
@@ -584,7 +584,7 @@ extension ExclusionRulesView {
         }
         .padding(16)
         .frame(width: 320, alignment: .leading)
-        .systemLiquidGlassPopover(cornerRadius: 12)
+        .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
     }
 
     func toolColor(for type: ExclusionRuleType) -> Color {

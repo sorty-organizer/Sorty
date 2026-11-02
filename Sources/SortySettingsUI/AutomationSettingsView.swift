@@ -79,7 +79,7 @@ struct AutomationSettingsView: View {
                                 }
                                 .padding(14)
                                 .frame(width: 300, alignment: .leading)
-                                .systemLiquidGlassPopover(cornerRadius: 12)
+                                .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                             }
                         }
 
@@ -202,7 +202,7 @@ struct AutomationSettingsView: View {
                                     }
                                     .padding(14)
                                     .frame(width: 280, alignment: .leading)
-                                    .systemLiquidGlassPopover(cornerRadius: 12)
+                                    .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                                 }
                             }
 

@@ -98,10 +98,10 @@ package struct InlineNotice: View {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: isCentered ? .center : .leading)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                 .fill(severity.color.opacity(0.06))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                         .strokeBorder(severity.color.opacity(0.15), lineWidth: 1)
                 )
         )
@@ -190,7 +190,7 @@ private struct InlineNoticeActionButton: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                 .fill(color.opacity(isHovering ? 0.2 : 0.12))
         )
         .scaleEffect(reduceMotion ? 1 : (isHovering ? 1.03 : 1))

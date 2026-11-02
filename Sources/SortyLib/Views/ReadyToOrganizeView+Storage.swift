@@ -63,7 +63,7 @@ extension ReadyToOrganizeView {
                 }
                 .popover(isPresented: $showStorageLocationsInfo, arrowEdge: .bottom) {
                     StorageLocationsInfoPopover()
-                        .systemLiquidGlassPopover(cornerRadius: 12)
+                        .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                 }
                 .help("How storage locations work")
                 .accessibilityLabel("About storage locations")
@@ -166,7 +166,7 @@ extension ReadyToOrganizeView {
                             .numericTextTransition(animationValue: selectedStorageLocationCount)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .systemLiquidGlassBackground(cornerRadius: 999)
+                            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
 
                         if unavailableSelectedStorageLocationCount > 0 {
                             Text("\(unavailableSelectedStorageLocationCount) unavailable")

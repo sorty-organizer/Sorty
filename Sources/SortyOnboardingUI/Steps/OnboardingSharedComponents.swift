@@ -36,7 +36,7 @@ struct GeneratePersonaButton: View {
             label
                 .padding(.vertical, style == .expanded ? 14 : 10)
                 .padding(.horizontal, style == .expanded ? 16 : 14)
-                .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
+                .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .background(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(Color.primary.opacity(isHovered ? 0.08 : 0.045))
@@ -133,6 +133,6 @@ struct OnboardingCapsuleBadge: View {
             .foregroundStyle(.primary)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .systemLiquidGlassBackground(cornerRadius: 999, interactive: false)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule, interactive: false)
     }
 }

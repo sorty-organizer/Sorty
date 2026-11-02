@@ -248,7 +248,7 @@ public struct BugReportView: View {
                                 .padding(12)
                         }
                         .frame(width: 520, height: 280)
-                        .systemLiquidGlassPopover(cornerRadius: 12)
+                        .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                     }
                 }
                 .disabled(!offersDiagnostics)
@@ -664,9 +664,9 @@ private extension View {
     /// Inset surface shared by the message box and the options group.
     func feedbackCard() -> some View {
         background(Color(NSColor.controlBackgroundColor).opacity(0.6))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 1)
             }
     }
@@ -710,7 +710,7 @@ private struct AttachmentChip: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 28, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(url.lastPathComponent)
@@ -733,7 +733,7 @@ private struct AttachmentChip: View {
         .font(.caption)
         .padding(4)
         .padding(.trailing, 4)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(isHovered ? 0.18 : 0.12)))
+        .background(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous).fill(Color.secondary.opacity(isHovered ? 0.18 : 0.12)))
         .onHover { isHovered = $0 }
         .animation(.easeInOut(duration: 0.12), value: isHovered)
         .help(url.path)
@@ -760,11 +760,11 @@ private struct FeedbackDropZone: View {
     var body: some View {
         let accent = isFull ? Color.secondary : SortyDesignSystem.Colors.resolvedAccent
         ZStack {
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(Color(NSColor.windowBackgroundColor).opacity(0.92))
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(accent.opacity(0.08))
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .strokeBorder(accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
             VStack(spacing: 6) {
                 Image(systemName: isFull ? "nosign" : "arrow.down.doc.fill")

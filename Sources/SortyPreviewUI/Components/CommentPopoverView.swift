@@ -25,7 +25,7 @@ package struct CommentBubbleButton: View {
         .buttonStyle(.plain)
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
             CommentPopoverView(comment: comment)
-                .systemLiquidGlassPopover(cornerRadius: 12)
+                .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }
         .help("View comment")
     }

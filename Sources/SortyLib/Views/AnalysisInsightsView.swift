@@ -39,7 +39,7 @@ struct InsightHistorySection: View {
                 insightsHeader
             }
             .buttonStyle(.plain)
-            .contentShape(RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16))
+            .contentShape(RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16, style: .continuous))
 
             if viewState.isExpanded {
                 LazyVStack(spacing: 14) {
@@ -59,14 +59,14 @@ struct InsightHistorySection: View {
         }
         .frame(maxWidth: 550)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .fill(Color(NSColor.controlBackgroundColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                         .stroke(Color(NSColor.separatorColor).opacity(0.8), lineWidth: 1)
                 )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
         .onChange(of: liveInsightsEnabled) { _, enabled in
             if !enabled {
                 viewState.showDebugStream = false
@@ -462,10 +462,10 @@ struct InsightHistorySection: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(Color(NSColor.controlBackgroundColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         .stroke(Color(NSColor.separatorColor), lineWidth: 1)
                 )
         )
@@ -557,7 +557,7 @@ struct InsightHistorySection: View {
                     }
                     .padding(12)
                     .frame(width: 280)
-                    .systemLiquidGlassPopover(cornerRadius: 12)
+                    .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                 }
             }
 
@@ -594,7 +594,7 @@ struct InsightHistorySection: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16)
+            RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [

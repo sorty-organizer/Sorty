@@ -253,7 +253,7 @@ extension LearningsView {
                 VStack(spacing: 0) {
                     content()
                 }
-                .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
             }
         }
     }

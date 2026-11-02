@@ -77,7 +77,7 @@ struct PreviewHeaderView: View {
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Color.blue.opacity(0.1))
-                        .cornerRadius(4)
+                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
                 }
 
                 if hasEdits {
@@ -86,7 +86,7 @@ struct PreviewHeaderView: View {
                         .foregroundStyle(.orange)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.orange.opacity(0.1), in: .rect(cornerRadius: 4))
+                        .background(Color.orange.opacity(0.1), in: .rect(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
                         .buttonStyle(.plain)
                         .help("Compare edits with Preview \(version)")
                 }
@@ -101,7 +101,7 @@ struct PreviewHeaderView: View {
                                 .foregroundStyle(showNotesPopover ? Color.purple : Color.secondary)
                         }
                         .frame(width: 22, height: 22)
-                        .systemLiquidGlassBackground(cornerRadius: 11)
+                        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
                         .overlay(
                             Circle()
                                 .stroke(
@@ -157,7 +157,7 @@ struct PreviewHeaderView: View {
                         }
                         .padding(14)
                         .frame(minWidth: 240, maxWidth: 340)
-                        .systemLiquidGlassPopover(cornerRadius: 12)
+                        .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                     }
                 }
             }
@@ -178,7 +178,7 @@ struct PreviewHeaderView: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .systemLiquidGlassBackground(cornerRadius: 6)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.sm)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -202,7 +202,7 @@ struct PreviewHeaderView: View {
                 }
                 .padding(12)
                 .frame(width: 260)
-                .systemLiquidGlassPopover(cornerRadius: 12)
+                .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
             }
 
             Text("\(totalFiles) files • \(totalFolders) folders")
@@ -223,7 +223,7 @@ struct PreviewHeaderView: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .systemLiquidGlassBackground(cornerRadius: 4, interactive: false)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xs, interactive: false)
             }
         }
         .padding()

@@ -23,7 +23,7 @@ struct HistoryLiquidGlassLearningsCard: View {
             .accessibilityHint("Tap to view file-specific learnings")
             .popover(isPresented: $showPopover, arrowEdge: .bottom) {
                 learningsPopover
-                    .systemLiquidGlassPopover(cornerRadius: 12)
+                    .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
             }
         }
     }
@@ -80,7 +80,7 @@ struct HistoryLiquidGlassLearningsCard: View {
         }
         .padding(8)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                 .fill(hoveredFileID == context.file.id ? Color.secondary.opacity(0.1) : Color.clear)
         )
         .onHover { isHovering in
@@ -126,7 +126,7 @@ struct HistoryLiquidGlassReasoningCard: View {
             }
             .padding(14)
             .frame(minWidth: 280, maxWidth: 400)
-            .systemLiquidGlassPopover(cornerRadius: 12)
+            .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }
     }
 }

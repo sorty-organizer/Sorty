@@ -91,7 +91,7 @@ struct PreviewStatsView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         .fill(Color.primary.opacity(isHovering ? 0.05 : 0))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -126,7 +126,7 @@ struct PreviewStatsView: View {
                 .padding(.vertical, 8)
             }
         }
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .contextMenu {

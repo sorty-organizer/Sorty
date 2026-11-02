@@ -66,21 +66,21 @@ struct MaintenanceActionTile: View {
             .padding(.vertical, 12)
             .background(isHovered ? color.opacity(0.14) : Color.secondary.opacity(0.045))
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                     .stroke(isHovered ? color.opacity(0.32) : Color.secondary.opacity(0.08), lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(isBusy)
         .opacity(isBusy ? 0.6 : 1)
         // Beam rendering suspends itself while faded out and pauses for
         // Reduce Motion / inactive windows, so this costs nothing at rest.
-        .beam(.small, palette: .colorful, theme: .dark, active: isBusy, cornerRadius: 8)
+        .beam(.small, palette: .colorful, theme: .dark, active: isBusy, cornerRadius: SortyDesignSystem.Radius.md)
         .settingsFocusable(
             focusTarget,
-            shape: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
         )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {

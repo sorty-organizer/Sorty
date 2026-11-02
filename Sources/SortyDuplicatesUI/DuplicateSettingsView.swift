@@ -37,7 +37,7 @@ struct DuplicateSettingsView: View {
 
                     Button("Done", action: saveAndDismiss)
                         .buttonStyle(.sortyProminent(size: .small))
-                        .systemLiquidGlassBackground(cornerRadius: 999)
+                        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
                         .keyboardShortcut(.return)
                 }
             }

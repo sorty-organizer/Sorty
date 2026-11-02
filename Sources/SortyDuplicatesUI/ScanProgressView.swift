@@ -182,11 +182,11 @@ struct ScanProgressViewNew: View {
 
     private var beamSurface: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .fill(.clear)
-                .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
 
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .fill(Color.primary.opacity(0.035))
         }
         .beam(
@@ -194,11 +194,11 @@ struct ScanProgressViewNew: View {
             palette: .colorful,
             theme: .dark,
             active: isAnimationActive,
-            cornerRadius: 16,
+            cornerRadius: SortyDesignSystem.Radius.xl,
             strength: 1.0
         )
         .scanProgressReferenceBeamFallback(
-            cornerRadius: 16, active: true
+            cornerRadius: SortyDesignSystem.Radius.xl, active: true
         )
         .allowsHitTesting(false)
         .accessibilityHidden(true)

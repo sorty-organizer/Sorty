@@ -162,7 +162,7 @@ package struct SidebarButton: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 24, height: 24)
-                    .background(color.gradient, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .background(color.gradient, in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
 
                 Text(LocalizedStringKey(title))
                     .font(.body)
@@ -173,8 +173,8 @@ package struct SidebarButton: View {
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 5)
-            .background(rowBackground, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .background(rowBackground, in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovering in
@@ -297,7 +297,7 @@ package struct SettingsCard<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         // The card is a container. Its controls provide their own interaction
         // feedback, so the glass itself does not need continuous pointer state.
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
     }
 
     private func header() -> some View {
@@ -600,7 +600,7 @@ extension View {
     package func settingsFocusable(_ target: SettingsFocusTarget) -> some View {
         settingsFocusable(
             target,
-            shape: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
         )
     }
 
@@ -632,7 +632,7 @@ extension View {
     package func settingsFocusableSetting(_ target: SettingsFocusTarget) -> some View {
         settingsFocusable(
             target,
-            shape: RoundedRectangle(cornerRadius: 10, style: .continuous),
+            shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous),
             horizontalRingPadding: 8,
             verticalRingPadding: 6
         )

@@ -115,7 +115,7 @@ private struct TimeoutSliderRow: View {
                             .numericTextTransition(animationValue: effectiveMax)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
                     }
                     .buttonStyle(.plain)
                     .help("Click to set custom maximum")

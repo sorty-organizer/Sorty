@@ -40,7 +40,7 @@ struct PreviewDiffPopoverView: View {
             }
         }
         .frame(width: 440)
-        .systemLiquidGlassPopover(cornerRadius: 12)
+        .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Changes from \(diff.fromLabel) to \(diff.toLabel)")
     }
@@ -102,7 +102,7 @@ private struct PreviewDiffRow: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary, in: .rect(cornerRadius: 8))
+        .background(.quaternary, in: .rect(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 
@@ -112,6 +112,6 @@ private struct PreviewDiffRow: View {
             .foregroundStyle(color)
             .padding(.horizontal, 7)
             .padding(.vertical, 4)
-            .background(color.opacity(0.1), in: .rect(cornerRadius: 6))
+            .background(color.opacity(0.1), in: .rect(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
     }
 }

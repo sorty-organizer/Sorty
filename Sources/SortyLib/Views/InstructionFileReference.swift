@@ -130,7 +130,7 @@ struct InstructionFileReferencePicker: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
-                    .contentShape(RoundedRectangle(cornerRadius: 8))
+                    .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Reference \(reference.name)")
@@ -139,7 +139,7 @@ struct InstructionFileReferencePicker: View {
         }
         .padding(6)
         .frame(width: 360)
-        .systemLiquidGlassPopover(cornerRadius: 12)
+        .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 10)
     }
 

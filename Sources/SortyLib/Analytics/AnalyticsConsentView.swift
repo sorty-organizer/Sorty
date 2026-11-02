@@ -65,7 +65,7 @@ public struct AnalyticsConsentView: View {
             }
             .padding(24)
             .frame(width: 510)
-            .systemLiquidGlassBackground(cornerRadius: 18, interactive: false)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
             .shadow(color: .black.opacity(0.16), radius: 28, y: 12)
         }
         .accessibilityElement(children: .contain)

@@ -54,7 +54,7 @@ package struct LiquidGlassReasoningButton: View {
                     suggestion: suggestion,
                     matchedRule: matchedRule
                 )
-                .systemLiquidGlassPopover(cornerRadius: 12)
+                .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
             }
         }
     }

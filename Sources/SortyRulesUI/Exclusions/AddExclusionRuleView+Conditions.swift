@@ -37,7 +37,7 @@ extension AddExclusionRuleView {
                         .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         .frame(width: 44, height: 44)
                         .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Choose the folder to exclude")

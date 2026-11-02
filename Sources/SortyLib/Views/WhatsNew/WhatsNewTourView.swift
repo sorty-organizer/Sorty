@@ -184,9 +184,9 @@ public struct WhatsNewTourView: View {
                 Color(nsColor: .windowBackgroundColor)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
         }
     }
@@ -300,13 +300,13 @@ public struct WhatsNewTourView: View {
         }
         .clipShape(
             RoundedRectangle(
-                cornerRadius: SortyDesignSystem.Radius.xLarge,
+                cornerRadius: SortyDesignSystem.Radius.xl,
                 style: .continuous
             )
         )
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xLarge, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
         .overlay {
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xLarge, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .strokeBorder(color.opacity(0.28), lineWidth: 1)
         }
         .accessibilityElement(children: .contain)

@@ -104,8 +104,8 @@ extension LearningsView {
                 )
             }
         }
-        .systemLiquidGlassBackground(cornerRadius: 12)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
     }
 
     func learningDataMetrics(
@@ -182,17 +182,17 @@ extension LearningsView {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 9)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
                     }
                     .buttonStyle(.plain)
-                    .systemLiquidGlassBackground(cornerRadius: 9)
+                    .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.md)
                     .accessibilityHint("Shows the stored \(metric.category.title.lowercased()) records")
                 }
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
     }
 
     func learningRecordsDetailSheet(

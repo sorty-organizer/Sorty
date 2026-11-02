@@ -215,7 +215,7 @@ struct FolderHistoryDetailRow: View {
         }
         .padding(12)
         .background(Color.secondary.opacity(0.03))
-        .cornerRadius(8)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
         .onAppear {
             expandForHighlightedFileIfNeeded(highlightedFileID)
         }
@@ -251,7 +251,7 @@ struct FolderHistoryDetailRow: View {
                     NSPasteboard.general.setString(storageLocationPath, forType: .string)
                 }
             )
-            .systemLiquidGlassPopover(cornerRadius: 12)
+            .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }
     }
 }
@@ -307,7 +307,7 @@ struct FolderHistoryFileRow: View {
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
         .background(
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                 .fill(
                     highlightedFileID == file.id
                         ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12)

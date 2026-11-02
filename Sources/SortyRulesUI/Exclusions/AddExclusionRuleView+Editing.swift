@@ -86,7 +86,7 @@ extension AddExclusionRuleView {
             }
         }
         .padding()
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
     }
 
     var intentPicker: some View {
@@ -119,7 +119,7 @@ extension AddExclusionRuleView {
                             .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                             .frame(width: 34, height: 34)
                             .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
-                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(intent.title)
@@ -141,7 +141,7 @@ extension AddExclusionRuleView {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .systemLiquidGlassBackground(cornerRadius: 12)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
             }
         }
     }
@@ -185,12 +185,12 @@ extension AddExclusionRuleView {
                     displayedCondition.id == activeConditionID
                         ? Color.accentColor.opacity(0.10)
                         : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                 )
             }
         }
         .padding(14)
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
     }
 
     var displayedExceptionName: String {
@@ -229,7 +229,7 @@ extension AddExclusionRuleView {
                 }
             }
             .padding(16)
-            .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
 
             if intent != .folder {
                 VStack(alignment: .leading, spacing: 8) {
@@ -239,7 +239,7 @@ extension AddExclusionRuleView {
                         .textFieldStyle(.roundedBorder)
                 }
                 .padding(16)
-                .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
             }
 
             if supportsMatchingOptions {
@@ -250,7 +250,7 @@ extension AddExclusionRuleView {
                     Toggle("Exclude everything except matches", isOn: $negated)
                 }
                 .padding(16)
-                .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
             }
         }
     }

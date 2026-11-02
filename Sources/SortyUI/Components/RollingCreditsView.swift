@@ -817,7 +817,7 @@ package struct RollingCreditsView: View {
             .frame(height: rowHeight)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                     .fill((hoveredRowKey == rowKey ? Color.white.opacity(0.16) : Color.clear))
             )
         }

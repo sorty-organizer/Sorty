@@ -78,10 +78,10 @@ struct PermissionSettingsCard: View {
         .frame(maxWidth: .infinity, minHeight: isFeatured ? 76 : 148)
         .background(cardFill)
         .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .strokeBorder(cardStroke, lineWidth: 1)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .contentShape(Rectangle())
         .scaleEffect(isHovering ? 1.006 : 1)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isHovering)
@@ -132,7 +132,7 @@ struct PermissionSettingsCard: View {
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Color.red.opacity(0.18), in: Capsule(style: .continuous))
-                    .systemLiquidGlassBackground(cornerRadius: 999)
+                    .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
                     .overlay(
                         Capsule(style: .continuous)
                             .strokeBorder(Color.red.opacity(0.38), lineWidth: 0.75)

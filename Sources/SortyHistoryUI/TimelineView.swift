@@ -73,7 +73,7 @@ struct TimelineView: View {
             }
         }
         .padding()
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
         .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
     }
 
@@ -120,14 +120,14 @@ struct TimelineSliderTrack: View {
                 Rectangle()
                     .fill(.primary.opacity(0.1))
                     .frame(height: 4)
-                    .cornerRadius(2)
+                    .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
                 
                 // Filled portion up to selected
                 if selectedIndex > 0 && entries.count > 1 {
                     Rectangle()
                         .fill(.primary.opacity(0.4))
                         .frame(width: nodeSpacing * CGFloat(selectedIndex), height: 4)
-                        .cornerRadius(2)
+                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous))
                 }
                 
                 // Timeline nodes
@@ -271,7 +271,7 @@ struct SelectedEntryCard: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color.green.opacity(0.1))
-                    .cornerRadius(20)
+                    .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xxl, style: .continuous))
             } else {
                 Button {
                     showRestoreConfirmation = true
@@ -285,7 +285,7 @@ struct SelectedEntryCard: View {
         }
         .padding(16)
         .background(Color(NSColor.controlBackgroundColor))
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
         .alert("Restore to this state?", isPresented: $showRestoreConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -366,7 +366,7 @@ struct CompactTimelineView: View {
                 if isProcessing {
                     SortyGradientLoadingBar(width: 160, height: 10)
                         .padding(20)
-                        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+                        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
                 }
             }
             .alert("Timeline", isPresented: $showAlert) {

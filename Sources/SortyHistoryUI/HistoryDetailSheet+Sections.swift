@@ -57,7 +57,7 @@ extension HistoryDetailSheet {
                     .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 500, alignment: .leading)
                     .padding()
                     .background(Color.black.opacity(0.05))
-                    .cornerRadius(8)
+                    .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
                     .accessibilityLabel(FeatureFlags.privacyModeEnabled ? "Raw AI response hidden in Privacy Mode" : "Raw AI response data")
                 }
                 .transition(

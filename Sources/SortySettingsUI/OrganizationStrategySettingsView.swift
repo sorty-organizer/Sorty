@@ -159,7 +159,7 @@ struct OrganizationStrategySettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(14)
                     .frame(width: 300, alignment: .leading)
-                    .systemLiquidGlassPopover(cornerRadius: 12)
+                    .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
             }
             .onHover { hovering in
                 isRenamingInfoHovered = hovering
@@ -373,9 +373,9 @@ struct OrganizationStrategySettingsView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
             .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     .strokeBorder(Color.purple.opacity(0.14), lineWidth: 1)
             }
             .accessibilityElement(children: .combine)
@@ -417,7 +417,7 @@ struct OrganizationStrategySettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(14)
                     .frame(width: 300, alignment: .leading)
-                    .systemLiquidGlassPopover(cornerRadius: 12)
+                    .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
                 }
                 .help("About naming instructions")
                 .accessibilityLabel("Naming instruction information")
@@ -437,9 +437,9 @@ struct OrganizationStrategySettingsView: View {
             .frame(height: 60)
             .padding(4)
             .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(6)
+            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                     .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
             )
 
@@ -593,9 +593,9 @@ private struct EditPresetSheet: View {
                     .frame(minHeight: 120)
                     .padding(4)
                     .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(6)
+                    .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                             .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                     )
             }

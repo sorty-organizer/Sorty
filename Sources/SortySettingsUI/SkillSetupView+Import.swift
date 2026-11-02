@@ -23,10 +23,10 @@ extension SkillSetupView {
                 agentLocationIcon(agent)
                     .frame(width: agentIconSize, height: agentIconSize, alignment: .center)
                     .frame(width: 72, height: 72)
-                    .systemLiquidGlassBackground(cornerRadius: 18, interactive: true)
+                    .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: true)
                     .overlay {
                         if isSelected {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                                 .strokeBorder(SortyDesignSystem.Colors.resolvedAccent, lineWidth: 2)
                         }
                     }
@@ -239,7 +239,7 @@ extension SkillSetupView {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 20, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xxl, interactive: false)
     }
 
     func importOption(_ option: SkillImportOption) -> some View {

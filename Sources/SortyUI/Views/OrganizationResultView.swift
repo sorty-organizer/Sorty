@@ -64,7 +64,7 @@ struct GenerationStatsView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.purple.opacity(0.1))
-                        .cornerRadius(6)
+                        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
                         .foregroundStyle(.purple)
                     
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
@@ -208,9 +208,9 @@ struct GenerationStatsView: View {
         }
         .padding(16)
         .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(Color.primary.opacity(0.05), lineWidth: 1)
         )
         .accessibilityElement(children: .contain)
@@ -341,10 +341,10 @@ public struct NerdStatPillExpanded: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(Color.primary.opacity(0.03))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         .stroke(Color.primary.opacity(0.05), lineWidth: 1)
                 )
         )
@@ -429,11 +429,11 @@ package struct NerdStatCard: View {
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 112, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(Color(NSColor.windowBackgroundColor).opacity(0.5))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(Color.primary.opacity(0.05), lineWidth: 1)
         )
         .accessibilityElement(children: .combine)

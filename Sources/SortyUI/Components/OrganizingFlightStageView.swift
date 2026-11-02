@@ -174,11 +174,11 @@ package struct OrganizingFlightStageView: View {
         .padding(.horizontal, 12)
         .frame(width: currentCardWidth, height: 42)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(Color.primary.opacity(0.065))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.09), lineWidth: 1)
         )
     }

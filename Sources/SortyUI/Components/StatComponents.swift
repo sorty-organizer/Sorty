@@ -138,7 +138,7 @@ package struct GlassPillButton: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .systemLiquidGlassBackground(cornerRadius: 999)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
             .clipShape(Capsule())
             .overlay(
                 Capsule()

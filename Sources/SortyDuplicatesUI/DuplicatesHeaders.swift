@@ -92,9 +92,9 @@ struct DuplicatesHeaderNew: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(
-                                Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+                                Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
                         }
-                        .contentShape(RoundedRectangle(cornerRadius: 6))
+                        .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
                         .buttonStyle(.plain)
                         .help(PrivacyPathMasker.redactedPath(dir.path))
                     } else {

@@ -360,8 +360,8 @@ struct FlatFileRowSurface: View {
         .padding(.horizontal, 8)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 6).fill(fillColor))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(strokeColor, lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous).fill(fillColor))
+        .overlay(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous).stroke(strokeColor, lineWidth: 1))
         .contentShape(Rectangle())
         .contextMenu {
             FlatFileRowContextMenu(
@@ -415,7 +415,7 @@ private struct RenameActionGlassCluster: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
-        .systemLiquidGlassBackground(cornerRadius: 10, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
     }
 }
 

@@ -123,7 +123,7 @@ struct FlatFolderRowView: View {
                 toggleExpanded
             )
             .background(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                     .fill(isDropTarget ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
                     .strokeBorder(isDropTarget ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.55) : Color.clear, lineWidth: 1.5)
             )
@@ -193,7 +193,7 @@ struct FlatFolderRowView: View {
                     NSPasteboard.general.setString(usedStoragePath, forType: .string)
                 }
             )
-            .systemLiquidGlassPopover(cornerRadius: 12)
+            .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }
     }
 

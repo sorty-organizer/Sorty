@@ -41,12 +41,12 @@ struct AIProviderRow: View {
             rowLabel
         }
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(backgroundColor)
         )
         .contentShape(Rectangle())
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .stroke(isSelected ? provider.brandColor.opacity(0.35) : Color.secondary.opacity(0.1), lineWidth: 1)
         )
         .onHover { hovering in
@@ -77,7 +77,7 @@ struct AIProviderRow: View {
             ProviderLogoView(provider: logoProvider, size: 17)
                 .frame(width: 28, height: 28)
                 .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                         .fill(provider.brandColor.opacity(isSelected ? 0.16 : 0.1))
                 )
                 .overlay(alignment: .bottomTrailing) {

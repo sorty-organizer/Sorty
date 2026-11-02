@@ -211,12 +211,12 @@ package struct LearningsView: View {
                     description: "Uses learnings to make better future suggestions")
             }
             .padding(16)
-            .systemLiquidGlassBackground(cornerRadius: 16, interactive: false)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
             .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Learnings features")
             .animatedAppearance(delay: 0.11)
@@ -231,7 +231,7 @@ package struct LearningsView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background(Color.green.opacity(0.1))
-            .cornerRadius(20)
+            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xxl, style: .continuous))
             .accessibilityElement(children: .combine)
             .accessibilityLabel(
                 "Privacy: Data is encrypted locally with biometric protection. You can delete anytime."
@@ -271,8 +271,8 @@ package struct LearningsView: View {
                 .font(.title2.bold())
                 .foregroundColor(.accentColor)
                 .frame(width: 40, height: 40)
-                .systemLiquidGlassBackground(cornerRadius: 10, interactive: false)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(LocalizedStringKey(title)).font(.headline)

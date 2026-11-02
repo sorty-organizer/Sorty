@@ -72,12 +72,12 @@ struct PermissionRow: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 13)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .fill(rowFill)
         )
-        .systemLiquidGlassBackground(cornerRadius: 14, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .strokeBorder(rowStroke, lineWidth: state == .granted || grantFlash ? 1.2 : 1)
         )
         // Hover changes fill and stroke only. Scaling a glass row re-rasterizes
@@ -139,10 +139,10 @@ struct PermissionRow: View {
 
     private var permissionIcon: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(iconTint.opacity(state == .granted ? 0.18 : 0.13))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         .strokeBorder(iconTint.opacity(state == .granted ? 0.28 : 0.18), lineWidth: 1)
                 }
 

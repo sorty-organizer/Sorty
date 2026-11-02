@@ -291,7 +291,7 @@ public struct ContentView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                             .fill(
                                 isSelected
                                     ? AnyShapeStyle(.white.opacity(0.22))
@@ -307,7 +307,7 @@ public struct ContentView: View {
                 value: showCommandNumbers
             )
             .listRowBackground(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                     .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.clear)
                     .padding(.horizontal, 4)
             )

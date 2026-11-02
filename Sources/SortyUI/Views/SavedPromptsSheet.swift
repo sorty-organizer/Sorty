@@ -503,11 +503,11 @@ private struct SavedPromptEditorCard: View {
                 .scrollContentBackground(.hidden)
                 .padding(8)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                         .fill(Color(NSColor.textBackgroundColor))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
                         .stroke(Color(NSColor.separatorColor), lineWidth: 1)
                 )
 
@@ -614,11 +614,11 @@ private extension View {
     func savedPromptCardSurface() -> some View {
         padding(16)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     .fill(Color(NSColor.controlBackgroundColor))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                     .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
             )
     }

@@ -52,7 +52,7 @@ struct ExperimentalSettingsView: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity)
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Checking for experimental features.")
     }
@@ -98,8 +98,8 @@ struct ExperimentalSettingsView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 12, interactive: false)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+        .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .opacity(hasAppeared ? 1 : 0)
         .offset(y: hasAppeared ? 0 : 8)
         .animation(
