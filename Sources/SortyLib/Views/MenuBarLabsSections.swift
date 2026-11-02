@@ -210,7 +210,7 @@ private struct MenuBarExpiringGroupRow: View {
                     .labelsHidden()
                     .accessibilityLabel("Trash all \(group.kind.title)")
 
-                MenuBarThumbnailStack(urls: group.files.prefix(3).map(\.url))
+                MenuBarThumbnailStack(files: Array(group.files.prefix(3)))
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(group.kind.title)
@@ -263,12 +263,12 @@ private struct MenuBarExpiringGroupRow: View {
 
 /// Up to three thumbnails fanned out, like a small pile of the files.
 private struct MenuBarThumbnailStack: View {
-    let urls: [URL]
+    let files: [ExpiringFileCandidate]
 
     var body: some View {
         ZStack(alignment: .leading) {
-            ForEach(Array(urls.enumerated().reversed()), id: \.element) { index, url in
-                MenuBarThumbnail(url: url, side: 24)
+            ForEach(Array(files.enumerated().reversed()), id: \.element.id) { index, file in
+                MenuBarThumbnail(candidate: file, side: 24)
                     .offset(x: CGFloat(index) * 5)
             }
         }
@@ -277,30 +277,51 @@ private struct MenuBarThumbnailStack: View {
     }
 }
 
-/// QuickLook thumbnail with the Finder icon as a placeholder.
+/// Screenshots get a cropped QuickLook preview. Installers and archives have
+/// nothing to preview, so they show their Finder icon (disk image, zip) as is.
 private struct MenuBarThumbnail: View {
-    let url: URL
+    let candidate: ExpiringFileCandidate
     let side: CGFloat
     @State private var image: NSImage?
 
+    private var showsPreview: Bool { candidate.reason == .screenshot }
+
     var body: some View {
         Group {
-            if let image {
+            if showsPreview {
+                Group {
+                    if let image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Color.primary.opacity(0.08)
+                    }
+                }
+                .frame(width: side, height: side)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                )
+            } else if let image {
                 Image(nsImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: side, height: side)
             } else {
-                Color.primary.opacity(0.08)
+                Color.clear.frame(width: side, height: side)
             }
         }
-        .frame(width: side, height: side)
-        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
-        )
-        .task(id: url) {
-            image = await FileThumbnailProvider.shared.thumbnail(for: url, size: CGSize(width: side * 2, height: side * 2))
+        .task(id: candidate.id) {
+            if showsPreview {
+                image = await FileThumbnailProvider.shared.thumbnail(
+                    for: candidate.url,
+                    size: CGSize(width: side * 2, height: side * 2)
+                )
+            } else {
+                image = NSWorkspace.shared.icon(forFile: candidate.url.path)
+            }
         }
     }
 }
@@ -335,7 +356,7 @@ private struct MenuBarExpiringRow: View {
             .labelsHidden()
             .accessibilityLabel("Trash \(candidate.url.lastPathComponent)")
 
-            MenuBarThumbnail(url: candidate.url, side: 18)
+            MenuBarThumbnail(candidate: candidate, side: 18)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 0) {

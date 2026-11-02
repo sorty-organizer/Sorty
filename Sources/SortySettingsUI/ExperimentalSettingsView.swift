@@ -208,24 +208,22 @@ private struct SortyLabsCard: View {
             .padding(.vertical, 4)
 
             if feature == .expiringFiles, expiringFiles {
-                SettingsSubsettingRow(
-                    title: "Offer Files After",
-                    description: "How long a file sits untouched before it's offered."
-                ) {
+                SettingsSubsettingRow(title: "Offer Files After") {
                     Picker("Offer Files After", selection: $expiringAgeInDays) {
                         ForEach(agePresets, id: \.self) { days in
                             Text(days == 1 ? "1 day" : "\(days) days").tag(days)
                         }
                     }
-                    .labelsHidden()
                     .pickerStyle(.menu)
+                    .tint(.primary)
+                    .labelsHidden()
                     .fixedSize()
                     .accessibilityIdentifier("LabsExpiringAgePicker")
                 }
 
                 SettingsSubsettingRow(
                     title: "Spot Finished Downloads",
-                    description: "Offer an installer once its app is in Applications, and an archive once it's been extracted, without waiting."
+                    description: "Skip the wait for installers whose app is installed and archives you've extracted."
                 ) {
                     Toggle("Spot Finished Downloads", isOn: $finishedDownloads)
                         .labelsHidden()
@@ -239,25 +237,10 @@ private struct SortyLabsCard: View {
 
     /// Points each enabled feature at the screen where it lives in the main window.
     private func openLink(for feature: SortyLabsFeature) -> some View {
-        let (title, destination): (String, AppState.AppView) = switch feature {
-        case .routingRules: ("Add rules in Exclusions", .exclusions)
-        case .expiringFiles: ("Open Clean Up in Watched Folders", .watchedFolders)
-        }
-        return Button {
+        LabsOpenLink(feature: feature) {
             HapticFeedbackManager.shared.tap()
-            appState.openRelatedView(destination)
-        } label: {
-            HStack(spacing: 3) {
-                Text(title)
-                Image(systemName: "arrow.up.right")
-                    .font(.caption2.weight(.semibold))
-            }
-            .font(.caption.weight(.medium))
+            appState.openRelatedView($0)
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-        .pointerStyle(.link)
-        .accessibilityIdentifier("LabsOpen-\(feature.rawValue)")
     }
 
     private func binding(for feature: SortyLabsFeature) -> Binding<Bool> {
@@ -273,6 +256,39 @@ private struct SortyLabsCard: View {
                 AnalyticsManager.shared.captureSettingChanged(feature.title, isEnabled: newValue)
             }
         )
+    }
+}
+
+/// Quiet text link to where a Labs feature lives; picks up the accent on hover.
+private struct LabsOpenLink: View {
+    let feature: SortyLabsFeature
+    let open: (AppState.AppView) -> Void
+    @State private var isHovered = false
+
+    private var target: (title: String, view: AppState.AppView) {
+        switch feature {
+        case .routingRules: ("Add rules in Exclusions", .exclusions)
+        case .expiringFiles: ("Open Clean Up in Watched Folders", .watchedFolders)
+        }
+    }
+
+    var body: some View {
+        Button {
+            open(target.view)
+        } label: {
+            HStack(spacing: 3) {
+                Text(target.title)
+                Image(systemName: "arrow.up.right")
+                    .font(.caption2.weight(.semibold))
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(isHovered ? AnyShapeStyle(SortyDesignSystem.Colors.resolvedAccent) : AnyShapeStyle(.primary.opacity(0.8)))
+        }
+        .buttonStyle(.plain)
+        .pointerStyle(.link)
+        .onHover { isHovered = $0 }
+        .animation(.sortyQuick, value: isHovered)
+        .accessibilityIdentifier("LabsOpen-\(feature.rawValue)")
     }
 }
 

@@ -159,6 +159,7 @@ private struct ExpiringFilesPanel: View {
 /// Loads a QuickLook thumbnail, showing the Finder icon until it arrives.
 private struct ExpiringThumbnail: View {
     let url: URL
+    var showsPreview = true
     @State private var image: NSImage?
 
     var body: some View {
@@ -173,6 +174,8 @@ private struct ExpiringThumbnail: View {
         }
         .frame(width: 36, height: 36)
         .task(id: url) {
+            // Installers and archives have no useful QuickLook preview; their Finder icon says more.
+            guard showsPreview else { return }
             image = await FileThumbnailProvider.shared.thumbnail(for: url, size: CGSize(width: 72, height: 72))
         }
         .accessibilityHidden(true)
@@ -184,6 +187,7 @@ private struct ExpiringThumbnail: View {
 private struct ExpiringFileRow<Leading: View, Trailing: View>: View {
     let url: URL
     let detail: Text
+    var showsPreview = true
     /// Keeps actions visible without hover, for the row that owns a keyboard shortcut.
     var alwaysShowsTrailing = false
     @ViewBuilder let leading: Leading
@@ -193,7 +197,7 @@ private struct ExpiringFileRow<Leading: View, Trailing: View>: View {
     var body: some View {
         HStack(spacing: 12) {
             leading
-            ExpiringThumbnail(url: url)
+            ExpiringThumbnail(url: url, showsPreview: showsPreview)
             VStack(alignment: .leading, spacing: 2) {
                 Text(url.lastPathComponent)
                     .font(.callout.weight(.medium))
@@ -236,7 +240,8 @@ private struct ExpiringCandidateRow: View {
     var body: some View {
         ExpiringFileRow(
             url: candidate.url,
-            detail: Text("\(candidate.reason.rawValue) · added \(candidate.dateAdded.formatted(.relative(presentation: .named))) · \(ByteCountFormatter.string(fromByteCount: candidate.size, countStyle: .file))")
+            detail: Text("\(candidate.reason.rawValue) · added \(candidate.dateAdded.formatted(.relative(presentation: .named))) · \(ByteCountFormatter.string(fromByteCount: candidate.size, countStyle: .file))"),
+            showsPreview: candidate.reason == .screenshot
         ) {
             Toggle("", isOn: $isSelected)
                 .toggleStyle(.checkbox)
