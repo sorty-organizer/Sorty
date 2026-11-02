@@ -131,4 +131,29 @@ final class SortyLabsTests: XCTestCase {
         let url = URL(fileURLWithPath: "/tmp/\(name)")
         return FileItem(path: url.path, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension)
     }
+
+    // MARK: - Finished Downloads
+
+    func testFinishedDownloadsNeedAnOpenAndAMatchingResult() throws {
+        let added = Date().addingTimeInterval(-3_600)
+        let dmg = tempDirectory.appendingPathComponent("Slack-4.41.105-arm64.dmg")
+        let zip = tempDirectory.appendingPathComponent("Assets.zip")
+        let folder = tempDirectory.appendingPathComponent("Assets", isDirectory: true)
+        let untouched = tempDirectory.appendingPathComponent("Other.zip")
+
+        XCTAssertEqual(FinishedDownloadDetector.productName(of: dmg), "slack")
+
+        let detector = FinishedDownloadDetector(
+            installedApps: [.init(name: "Slack", added: Date())]
+        ) { $0 == untouched ? nil : Date() }
+        XCTAssertEqual(detector.reason(for: dmg, addedOn: added, siblings: []), .installed)
+        XCTAssertEqual(detector.reason(for: zip, addedOn: added, siblings: [zip, folder]), .extracted)
+        XCTAssertNil(detector.reason(for: zip, addedOn: added, siblings: [zip]))
+        XCTAssertNil(detector.reason(for: untouched, addedOn: added, siblings: [untouched, folder]))
+
+        let olderApp = FinishedDownloadDetector(
+            installedApps: [.init(name: "Slack", added: added.addingTimeInterval(-86_400))]
+        ) { _ in Date() }
+        XCTAssertNil(olderApp.reason(for: dmg, addedOn: added, siblings: []))
+    }
 }

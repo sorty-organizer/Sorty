@@ -108,6 +108,7 @@ private struct SortyLabsCard: View {
     @AppStorage(SortyLabsFeature.routingRules.defaultsKey) private var routingRules = false
     @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var expiringFiles = false
     @AppStorage(ExpiringFilesManager.ageInDaysKey) private var expiringAgeInDays = ExpiringFilesManager.defaultAgeInDays
+    @AppStorage(ExpiringFilesManager.finishedDownloadsKey) private var finishedDownloads = false
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
@@ -135,6 +136,20 @@ private struct SortyLabsCard: View {
                         }
                         .padding(.leading, 4)
                         .accessibilityIdentifier("LabsExpiringAgeStepper")
+
+                        SettingsToggle(
+                            isOn: Binding(
+                                get: { finishedDownloads },
+                                set: { newValue in
+                                    HapticFeedbackManager.shared.selection()
+                                    finishedDownloads = newValue
+                                }
+                            ),
+                            title: "Spot Finished Downloads",
+                            description: "Offer an installer once its app is in Applications, and an archive once you've opened and extracted it, without waiting for the age limit."
+                        )
+                        .padding(.leading, 4)
+                        .accessibilityIdentifier("LabsExpiringFinishedToggle")
                     }
 
                     if feature != SortyLabsFeature.allCases.last {
@@ -144,6 +159,9 @@ private struct SortyLabsCard: View {
             }
         }
         .onChange(of: expiringFiles) { _, _ in
+            Task { await ExpiringFilesManager.shared.refresh() }
+        }
+        .onChange(of: finishedDownloads) { _, _ in
             Task { await ExpiringFilesManager.shared.refresh() }
         }
     }

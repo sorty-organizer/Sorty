@@ -68,7 +68,7 @@ struct InboxView: View {
     private var headerSubtitle: String {
         let count = expiring.candidates.count
         guard count > 0 else { return "Old installers, archives and screenshots appear here" }
-        return "\(count) old \(count == 1 ? "file" : "files") · \(ByteCountFormatter.string(fromByteCount: expiring.totalSize, countStyle: .file))"
+        return "\(count) \(count == 1 ? "file" : "files") · \(ByteCountFormatter.string(fromByteCount: expiring.totalSize, countStyle: .file))"
     }
 
     // MARK: Expiring Files
@@ -94,7 +94,7 @@ struct InboxView: View {
                 HStack(alignment: .center, spacing: 12) {
                     InboxIconTile(systemImage: SortyLabsFeature.expiringFiles.systemImage, tint: .orange)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Older than \(expiring.ageInDays) days")
+                        Text(expiring.candidates.contains(where: \.isFinished) ? "Done with these?" : "Older than \(expiring.ageInDays) days")
                             .font(.headline)
                         Text("Uncheck anything you want to keep for now.")
                             .font(.caption)

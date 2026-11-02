@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import CoreServices
 
 /// A file Sorty thinks has outlived its use, waiting for the user's review.
 package struct ExpiringFileCandidate: Identifiable, Equatable, Sendable {
@@ -15,7 +16,12 @@ package struct ExpiringFileCandidate: Identifiable, Equatable, Sendable {
         case archive = "Archive"
         case screenshot = "Screenshot"
         case markedByYou = "Marked to expire"
+        case installed = "App installed"
+        case extracted = "Already extracted"
     }
+
+    /// True when the file was offered early because you're done with it, not for its age.
+    package var isFinished: Bool { reason == .installed || reason == .extracted }
 
     package var id: String { url.path }
     package let url: URL
@@ -33,6 +39,9 @@ package final class ExpiringFilesManager: ObservableObject {
 
     package static let defaultAgeInDays = 14
     package static let ageInDaysKey = "labs.expiring.days"
+    /// Sub-option of Expiring Files: offer installers and archives as soon as
+    /// their app is installed or their contents are extracted.
+    package static let finishedDownloadsKey = "labs.expiring.finished"
 
     @Published package private(set) var candidates: [ExpiringFileCandidate] = []
     @Published package private(set) var isScanning = false
@@ -76,8 +85,10 @@ package final class ExpiringFilesManager: ObservableObject {
         let cutoff = Date().addingTimeInterval(-TimeInterval(ageInDays) * 86_400)
         let kept = Set(defaults.stringArray(forKey: keptKey) ?? [])
         let marks = defaults.dictionary(forKey: marksKey) as? [String: Date] ?? [:]
+        let detectsFinished = defaults.bool(forKey: Self.finishedDownloadsKey)
         candidates = await Task.detached(priority: .utility) {
-            Self.scan(folders: folders, cutoff: cutoff, kept: kept, marks: marks)
+            let detector = detectsFinished ? FinishedDownloadDetector.live() : nil
+            return Self.scan(folders: folders, cutoff: cutoff, kept: kept, marks: marks, finished: detector)
         }.value
     }
 
@@ -136,6 +147,7 @@ package final class ExpiringFilesManager: ObservableObject {
         cutoff: Date,
         kept: Set<String>,
         marks: [String: Date],
+        finished: FinishedDownloadDetector? = nil,
         now: Date = Date()
     ) -> [ExpiringFileCandidate] {
         let keys: [URLResourceKey] = [.addedToDirectoryDateKey, .creationDateKey, .isDirectoryKey, .isPackageKey, .fileSizeKey]
@@ -155,6 +167,8 @@ package final class ExpiringFilesManager: ObservableObject {
                 if let expiry = marks[key(for: url)] {
                     guard expiry <= now else { continue }
                     reason = .markedByYou
+                } else if let done = finished?.reason(for: url, addedOn: added, siblings: contents) {
+                    reason = done
                 } else {
                     guard added <= cutoff, let kind = reasonForKind(of: url) else { continue }
                     reason = kind
@@ -180,5 +194,101 @@ package final class ExpiringFilesManager: ObservableObject {
         let screenshotPrefixes = ["Screenshot ", "Screen Shot ", "CleanShot ", "Screen Recording "]
         if screenshotPrefixes.contains(where: name.hasPrefix) { return .screenshot }
         return nil
+    }
+}
+
+/// Spots downloads you've already used: an installer whose app now sits in
+/// Applications, or an archive that was opened and extracted next to itself.
+/// Only files Finder recorded as opened qualify, so untouched downloads wait
+/// for the normal age limit.
+package struct FinishedDownloadDetector: Sendable {
+    package struct InstalledApp: Sendable {
+        package let name: String
+        package let added: Date
+        package init(name: String, added: Date) {
+            self.name = name
+            self.added = added
+        }
+    }
+
+    package let installedApps: [InstalledApp]
+    /// Last time the file was opened, from Spotlight's `kMDItemLastUsedDate`.
+    package let lastOpened: @Sendable (URL) -> Date?
+
+    package init(installedApps: [InstalledApp], lastOpened: @escaping @Sendable (URL) -> Date?) {
+        self.installedApps = installedApps
+        self.lastOpened = lastOpened
+    }
+
+    /// Reads apps from /Applications and ~/Applications, and open dates from Spotlight.
+    package static func live() -> FinishedDownloadDetector {
+        let fileManager = FileManager.default
+        let folders = [
+            URL(fileURLWithPath: "/Applications", isDirectory: true),
+            fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Applications", isDirectory: true),
+        ]
+        let keys: Set<URLResourceKey> = [.addedToDirectoryDateKey, .creationDateKey]
+        let apps = folders.flatMap { folder in
+            ((try? fileManager.contentsOfDirectory(at: folder, includingPropertiesForKeys: Array(keys))) ?? [])
+                .filter { $0.pathExtension == "app" }
+                .compactMap { url -> InstalledApp? in
+                    let values = try? url.resourceValues(forKeys: keys)
+                    guard let added = values?.addedToDirectoryDate ?? values?.creationDate else { return nil }
+                    return InstalledApp(name: url.deletingPathExtension().lastPathComponent, added: added)
+                }
+        }
+        return FinishedDownloadDetector(installedApps: apps) { url in
+            guard let item = MDItemCreateWithURL(kCFAllocatorDefault, url as CFURL) else { return nil }
+            return MDItemCopyAttribute(item, kMDItemLastUsedDate) as? Date
+        }
+    }
+
+    package func reason(for url: URL, addedOn added: Date, siblings: [URL]) -> ExpiringFileCandidate.Reason? {
+        let fileExtension = url.pathExtension.lowercased()
+        let isInstaller = ["dmg", "pkg", "mpkg"].contains(fileExtension)
+        let isArchive = ExpiringFilesManager.reasonForKind(of: url) == .archive
+        guard isInstaller || isArchive,
+              let opened = lastOpened(url), opened >= added
+        else { return nil }
+
+        let product = Self.productName(of: url)
+        // The app must have arrived after the download, so an older copy doesn't count.
+        if installedApps.contains(where: { $0.added >= added && Self.namesMatch(product, $0.name) }) {
+            return .installed
+        }
+        if isArchive, siblings.contains(where: { $0 != url && Self.archiveBaseName(of: $0) == Self.archiveBaseName(of: url) }) {
+            return .extracted
+        }
+        return nil
+    }
+
+    /// "Slack-4.41.105-arm64.dmg" -> "slack": drops versions and platform words.
+    package static func productName(of url: URL) -> String {
+        let noise: Set<String> = ["arm64", "x64", "x86", "64", "amd64", "universal", "mac", "macos", "osx", "darwin",
+                                  "intel", "apple", "silicon", "setup", "installer", "install", "latest", "release", "stable"]
+        let tokens = archiveBaseName(of: url)
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+        let kept = tokens.prefix { token in
+            guard let first = token.first, !first.isNumber else { return false }
+            return !(token.first == "v" && token.dropFirst().first?.isNumber == true)
+        }.filter { !noise.contains($0.lowercased()) }
+        return kept.joined().lowercased()
+    }
+
+    /// File name without archive extensions, so "a.tar.gz" and the folder "a" compare equal.
+    static func archiveBaseName(of url: URL) -> String {
+        var name = url.lastPathComponent
+        let extensions: Set<String> = ["zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "dmg", "pkg", "mpkg"]
+        while let dot = name.lastIndex(of: "."), extensions.contains(name[name.index(after: dot)...].lowercased()) {
+            name = String(name[..<dot])
+        }
+        return name
+    }
+
+    static func namesMatch(_ product: String, _ appName: String) -> Bool {
+        let app = appName.lowercased().filter { $0.isLetter || $0.isNumber }
+        guard product.count >= 3, app.count >= 3 else { return false }
+        return app.hasPrefix(product) || product.hasPrefix(app)
     }
 }
