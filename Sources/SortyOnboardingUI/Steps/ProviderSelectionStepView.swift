@@ -277,9 +277,19 @@ public struct ProviderSelectionStepView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: viewport.size.height, alignment: .center)
-                    .padding(.vertical, 12)
+                    .padding(.top, 12)
+                    .padding(.bottom, 32)
                 }
                 .scrollIndicators(.automatic)
+                // Long setups (Codex) scroll; fade the bottom edge so cards
+                // read as continuing instead of being sliced off.
+                .mask {
+                    VStack(spacing: 0) {
+                        Color.black
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 28)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.trailing, 72)

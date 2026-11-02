@@ -28,6 +28,14 @@ package enum NoticeSeverity {
         }
     }
 
+    var buttonIntent: SortyButtonIntent {
+        switch self {
+        case .info: return .info
+        case .warning: return .warning
+        case .tip: return .success
+        }
+    }
+
     var defaultIcon: String {
         switch self {
         case .info: return "info.circle.fill"
@@ -88,7 +96,7 @@ package struct InlineNotice: View {
             if !actions.isEmpty {
                 InlineNoticeActions(
                     actions: actions,
-                    color: severity.color,
+                    intent: severity.buttonIntent,
                     isCentered: isCentered
                 )
                 .padding(.leading, isCentered ? 0 : 20)
@@ -135,7 +143,7 @@ private struct InlineNoticeHeader: View {
 private struct InlineNoticeActions: View {
     @SortyHotReload private var hotReload
     let actions: [InlineNoticeAction]
-    let color: Color
+    let intent: SortyButtonIntent
     let isCentered: Bool
 
     var body: some View {
@@ -145,7 +153,7 @@ private struct InlineNoticeActions: View {
             }
 
             ForEach(actions) { action in
-                InlineNoticeActionButton(action: action, color: color)
+                InlineNoticeActionButton(action: action, intent: intent)
             }
 
             if isCentered {
@@ -157,45 +165,21 @@ private struct InlineNoticeActions: View {
 
 private struct InlineNoticeActionButton: View {
     @SortyHotReload private var hotReload
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let action: InlineNoticeAction
-    let color: Color
-    @State private var isHovering = false
+    let intent: SortyButtonIntent
 
     var body: some View {
         Button {
-            HapticFeedbackManager.shared.tap()
             action.action()
         } label: {
             HStack(spacing: 4) {
                 if let systemImage = action.systemImage {
                     Image(systemName: systemImage)
-                        .font(.caption2)
                 }
                 Text(action.title)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
-                .fill(color.opacity(isHovering ? 0.2 : 0.12))
-        )
-        .scaleEffect(reduceMotion ? 1 : (isHovering ? 1.03 : 1))
-        .animation(reduceMotion ? nil : .sortyFade, value: isHovering)
-        .onHover { hovering in
-            if hovering != isHovering {
-                isHovering = hovering
-                if hovering {
-                    HapticFeedbackManager.shared.selection()
-                }
-            }
-        }
+        .buttonStyle(.sortyBordered(intent: intent, size: .mini))
         .accessibilityLabel(action.title)
         .accessibilityIdentifier("InlineNoticeAction-\(action.title)")
         .accessibilityHint("Activates \(action.title.lowercased()) action")

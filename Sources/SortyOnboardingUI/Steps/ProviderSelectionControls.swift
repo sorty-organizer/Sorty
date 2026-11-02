@@ -49,9 +49,9 @@ struct OnboardingCodexActionButton: View {
     let idleSymbol: String
     let state: CodexActionVisualState
     let accessibilityIdentifier: String
+    /// The main step is filled; follow-up steps stay bordered.
+    var isProminent = true
     let action: () -> Void
-
-    @State var isHovering = false
 
     var body: some View {
         Button(action: action) {
@@ -62,11 +62,10 @@ struct OnboardingCodexActionButton: View {
                 failureTitle: failureTitle,
                 idleSymbol: idleSymbol,
                 state: state,
-                isHovered: isHovering
+                isProminent: isProminent
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(state.buttonStyle(prominent: isProminent))
         .accessibilityIdentifier(accessibilityIdentifier)
-        .debouncedHover($isHovering)
     }
 }

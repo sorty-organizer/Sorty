@@ -118,12 +118,11 @@ package struct GlassPillButton: View {
 
     package var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
                     .foregroundStyle(tint)
 
                 Text(title)
-                    .font(.headline)
 
                 if let count {
                     Text("\(count)")
@@ -131,27 +130,8 @@ package struct GlassPillButton: View {
                         .sortyBadge(tint: tint)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.3),
-                                Color.white.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.5
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.sortyBordered(size: .small))
     }
 }
 

@@ -249,6 +249,7 @@ extension ProviderSelectionStepView {
                     idleSymbol: "checkmark.shield",
                     state: codexVerifyButtonState,
                     accessibilityIdentifier: "CodexVerifyButton",
+                    isProminent: false,
                     action: manuallyVerifyCodexCLI
                 )
 
