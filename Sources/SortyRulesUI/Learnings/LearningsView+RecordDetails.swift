@@ -274,6 +274,7 @@ extension LearningsView {
                     : .sortySpringStandard.delay(0.3),
                 value: emptyLearningsHasAppeared)
         }
+        .frame(maxWidth: .infinity)
         .sortyCard(padding: 20)
         .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .accessibilityElement(children: .combine)
