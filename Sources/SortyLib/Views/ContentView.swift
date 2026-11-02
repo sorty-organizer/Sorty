@@ -376,6 +376,10 @@ public struct ContentView: View {
         }
         .navigationTitle("Sorty")
         .listStyle(.sidebar)
+        // The sidebar rows fit in any window height Sorty allows; without this
+        // a stray trackpad scroll can leave the list parked with every row but
+        // Settings tucked under the titlebar.
+        .scrollBounceBehavior(.basedOnSize)
         .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
     }
 
