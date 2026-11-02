@@ -106,7 +106,6 @@ struct ExperimentalSettingsView: View {
 private struct SortyLabsCard: View {
     @SortyHotReload private var hotReload
     @AppStorage(SortyLabsFeature.routingRules.defaultsKey) private var routingRules = false
-    @AppStorage(SortyLabsFeature.downloadsInbox.defaultsKey) private var downloadsInbox = false
     @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var expiringFiles = false
     @AppStorage(ExpiringFilesManager.ageInDaysKey) private var expiringAgeInDays = ExpiringFilesManager.defaultAgeInDays
     @EnvironmentObject private var appState: AppState
@@ -144,9 +143,6 @@ private struct SortyLabsCard: View {
                 }
             }
         }
-        .onChange(of: downloadsInbox) { _, _ in
-            DownloadsInboxManager.shared.refreshEnabledState()
-        }
         .onChange(of: expiringFiles) { _, _ in
             Task { await ExpiringFilesManager.shared.refresh() }
         }
@@ -156,7 +152,7 @@ private struct SortyLabsCard: View {
     private func openLink(for feature: SortyLabsFeature) -> some View {
         let (title, destination): (String, AppState.AppView) = switch feature {
         case .routingRules: ("Add Routing Rules in Exclusions", .exclusions)
-        case .downloadsInbox, .expiringFiles: ("Open Inbox", .inbox)
+        case .expiringFiles: ("Open Inbox", .inbox)
         }
         return Button {
             HapticFeedbackManager.shared.tap()
@@ -172,7 +168,6 @@ private struct SortyLabsCard: View {
     private func binding(for feature: SortyLabsFeature) -> Binding<Bool> {
         let binding: Binding<Bool> = switch feature {
         case .routingRules: $routingRules
-        case .downloadsInbox: $downloadsInbox
         case .expiringFiles: $expiringFiles
         }
         return Binding(

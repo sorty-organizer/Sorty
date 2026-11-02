@@ -15,7 +15,6 @@ import Foundation
 /// check a feature from any isolation domain.
 public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
     case routingRules = "labs.routingRules"
-    case downloadsInbox = "labs.downloadsInbox"
     case expiringFiles = "labs.expiringFiles"
 
     public var id: String { rawValue }
@@ -30,7 +29,6 @@ public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
     public var title: String {
         switch self {
         case .routingRules: "Routing Rules"
-        case .downloadsInbox: "Downloads Inbox"
         case .expiringFiles: "Expiring Files"
         }
     }
@@ -39,8 +37,6 @@ public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .routingRules:
             "Describe where files go, like \"bank statements go to Finance/Statements/{YYYY}\". Sorty turns it into a rule that runs without AI. Add them in Exclusions."
-        case .downloadsInbox:
-            "New downloads queue up in Inbox and the menu bar, each with a suggested folder. Press Return to file the top one."
         case .expiringFiles:
             "Old installers, archives and screenshots in Downloads and on the Desktop are offered for the Trash in Inbox after a set number of days. Nothing is removed without your review."
         }
@@ -49,7 +45,6 @@ public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
     public var systemImage: String {
         switch self {
         case .routingRules: "arrow.triangle.branch"
-        case .downloadsInbox: "tray.and.arrow.down"
         case .expiringFiles: "hourglass"
         }
     }

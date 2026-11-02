@@ -208,7 +208,7 @@ public class AppState: ObservableObject {
         case exclusions
         case watchedFolders
         case learnings
-        /// Labs: Downloads Inbox and Expiring Files. Listed only while one is on.
+        /// Labs: Expiring Files. Listed only while enabled.
         case inbox
     }
 

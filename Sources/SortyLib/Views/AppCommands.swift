@@ -45,11 +45,10 @@ public struct SortyCommands: Commands {
         #endif
     }
 
-    @AppStorage(SortyLabsFeature.downloadsInbox.defaultsKey) private var isDownloadsInboxEnabled = false
     @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var isExpiringFilesEnabled = false
 
     private var sidebarItems: [SidebarNavigationItem] {
-        SidebarNavigationItem.items(includingInbox: isDownloadsInboxEnabled || isExpiringFilesEnabled)
+        SidebarNavigationItem.items(includingInbox: isExpiringFilesEnabled)
     }
 
     public init() {}

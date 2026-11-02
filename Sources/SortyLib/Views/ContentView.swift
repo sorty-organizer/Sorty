@@ -27,7 +27,6 @@ public struct ContentView: View {
     @State private var personaHighlightDismissalTask: Task<Void, Never>?
     @StateObject private var windowLinkHoverState = WindowLinkHoverState()
     // Observed so the sidebar adds or drops Inbox as soon as Labs flags change.
-    @AppStorage(SortyLabsFeature.downloadsInbox.defaultsKey) private var isDownloadsInboxEnabled = false
     @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var isExpiringFilesEnabled = false
 
     public init() {}
@@ -224,7 +223,7 @@ public struct ContentView: View {
     }
 
     private var isInboxAvailable: Bool {
-        isDownloadsInboxEnabled || isExpiringFilesEnabled
+        isExpiringFilesEnabled
     }
 
     private func captureMainScreen(

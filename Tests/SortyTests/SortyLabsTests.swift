@@ -127,17 +127,6 @@ final class SortyLabsTests: XCTestCase {
         XCTAssertEqual(candidates.map(\.reason), [.markedByYou])
     }
 
-    func testInboxMoveNeverOverwrites() throws {
-        let destination = tempDirectory.appendingPathComponent("Images", isDirectory: true)
-        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: destination.appendingPathComponent("a.png").path, contents: Data())
-        let source = tempDirectory.appendingPathComponent("a.png")
-        FileManager.default.createFile(atPath: source.path, contents: Data())
-
-        let moved = try DownloadsInboxManager.move(source, into: destination)
-        XCTAssertEqual(moved.lastPathComponent, "a 2.png")
-    }
-
     private func file(_ name: String) -> FileItem {
         let url = URL(fileURLWithPath: "/tmp/\(name)")
         return FileItem(path: url.path, name: url.deletingPathExtension().lastPathComponent, extension: url.pathExtension)

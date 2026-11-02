@@ -2,39 +2,19 @@
 //  InboxView.swift
 //  Sorty
 //
-//  Main-window page for the Labs Downloads Inbox and Expiring Files.
+//  Main-window page for Labs Expiring Files.
 //
 
 import AppKit
 import SwiftUI
 
-/// Shows whichever of Downloads Inbox and Expiring Files is on. The sidebar
-/// lists this page only while at least one of them is enabled. With both on,
-/// a segmented control switches between them.
+/// Reviews expiring files while the feature is enabled.
 struct InboxView: View {
-    enum Tab: String {
-        case downloads
-        case expiring
-    }
-
     @SortyHotReload private var hotReload
     @EnvironmentObject private var appState: AppState
-    @ObservedObject private var inbox = DownloadsInboxManager.shared
     @ObservedObject private var expiring = ExpiringFilesManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(SortyLabsFeature.downloadsInbox.defaultsKey) private var isDownloadsInboxEnabled = false
-    @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var isExpiringFilesEnabled = false
-    @AppStorage("inbox.selectedTab") private var storedTab: Tab = .downloads
     @State private var deselected: Set<String> = []
-
-    /// The tab actually shown, falling back when the stored one is turned off.
-    private var tab: Tab {
-        switch (isDownloadsInboxEnabled, isExpiringFilesEnabled) {
-        case (true, false): .downloads
-        case (false, true): .expiring
-        default: storedTab
-        }
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -45,10 +25,7 @@ struct InboxView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    switch tab {
-                    case .downloads: downloadsContent
-                    case .expiring: expiringContent
-                    }
+                    expiringContent
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(24)
@@ -56,13 +33,9 @@ struct InboxView: View {
             }
         }
         .task {
-            inbox.scheduleRefresh(delay: .zero)
             await expiring.refresh()
         }
-        .animation(reduceMotion ? nil : .sortySnappy, value: inbox.items.map(\.id))
         .animation(reduceMotion ? nil : .sortySnappy, value: expiring.candidates.map(\.id))
-        .animation(reduceMotion ? nil : .sortyFade, value: inbox.lastMoves)
-        .animation(reduceMotion ? nil : .sortyFade, value: tab)
     }
 
     // MARK: Header
@@ -79,19 +52,6 @@ struct InboxView: View {
                     .contentTransition(.numericText())
             }
             Spacer()
-            if isDownloadsInboxEnabled && isExpiringFilesEnabled {
-                Picker("Section", selection: Binding(get: { tab }, set: { newValue in
-                    HapticFeedbackManager.shared.selection()
-                    storedTab = newValue
-                })) {
-                    Text("Downloads \(inbox.items.count)").tag(Tab.downloads)
-                    Text("Expiring \(expiring.candidates.count)").tag(Tab.expiring)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .accessibilityIdentifier("InboxTabPicker")
-            }
             Button {
                 HapticFeedbackManager.shared.tap()
                 appState.openSettingsWindow(section: .experimental)
@@ -106,84 +66,9 @@ struct InboxView: View {
     }
 
     private var headerSubtitle: String {
-        switch tab {
-        case .downloads:
-            let count = inbox.items.count
-            guard count > 0 else { return "New downloads appear here with a suggested folder" }
-            let folders = downloadGroups.count
-            return "\(count) new \(count == 1 ? "download" : "downloads") for \(folders) \(folders == 1 ? "folder" : "folders")"
-        case .expiring:
-            let count = expiring.candidates.count
-            guard count > 0 else { return "Old installers, archives and screenshots appear here" }
-            return "\(count) old \(count == 1 ? "file" : "files") · \(ByteCountFormatter.string(fromByteCount: expiring.totalSize, countStyle: .file))"
-        }
-    }
-
-    // MARK: Downloads Inbox
-
-    @ViewBuilder
-    private var downloadsContent: some View {
-        if let move = inbox.lastMove {
-            InboxBanner(
-                systemImage: "checkmark.circle.fill",
-                tint: SortyDesignSystem.Colors.success,
-                text: movedText(for: move)
-            ) {
-                Button("Undo") {
-                    HapticFeedbackManager.shared.tap()
-                    Task { await inbox.undoLastMove() }
-                }
-                .buttonStyle(.sortyBordered(size: .small))
-                .keyboardShortcut("z", modifiers: .command)
-                .accessibilityIdentifier("InboxUndoButton")
-            }
-            .transition(.opacity.combined(with: .move(edge: .top)))
-        }
-
-        if let error = inbox.lastError {
-            InboxBanner(
-                systemImage: "exclamationmark.triangle.fill",
-                tint: SortyDesignSystem.Colors.error,
-                text: error
-            ) { EmptyView() }
-        }
-
-        if inbox.items.isEmpty {
-            InboxEmptyCard(
-                title: "You're all caught up",
-                systemImage: "tray",
-                message: "Files you download from now on show up here with a suggested folder."
-            )
-        } else {
-            ForEach(downloadGroups, id: \.destination) { group in
-                InboxDestinationCard(
-                    suggestion: group.items[0].suggestion,
-                    items: group.items,
-                    firstItemID: inbox.items.first?.id
-                )
-                .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-            }
-        }
-    }
-
-    private func movedText(for move: DownloadsInboxMove) -> String {
-        let folder = move.movedURL.deletingLastPathComponent().lastPathComponent
-        let count = inbox.lastMoves.count
-        return count == 1
-            ? "Moved \(move.movedURL.lastPathComponent) to \(folder)"
-            : "Moved \(count) files to \(folder)"
-    }
-
-    /// Groups downloads by suggested folder, keeping the order each folder first appears in.
-    private var downloadGroups: [(destination: URL, items: [DownloadsInboxItem])] {
-        var order: [URL] = []
-        var byDestination: [URL: [DownloadsInboxItem]] = [:]
-        for item in inbox.items {
-            let key = item.suggestion.destination
-            if byDestination[key] == nil { order.append(key) }
-            byDestination[key, default: []].append(item)
-        }
-        return order.map { ($0, byDestination[$0] ?? []) }
+        let count = expiring.candidates.count
+        guard count > 0 else { return "Old installers, archives and screenshots appear here" }
+        return "\(count) old \(count == 1 ? "file" : "files") · \(ByteCountFormatter.string(fromByteCount: expiring.totalSize, countStyle: .file))"
     }
 
     // MARK: Expiring Files
@@ -281,79 +166,6 @@ struct InboxView: View {
 
 // MARK: - Cards
 
-/// One destination folder with the downloads headed there and a Move All action.
-private struct InboxDestinationCard: View {
-    let suggestion: DownloadsInboxSuggestion
-    let items: [DownloadsInboxItem]
-    let firstItemID: String?
-    @ObservedObject private var inbox = DownloadsInboxManager.shared
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 12) {
-                InboxIconTile(systemImage: "folder.fill", tint: .accentColor)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(suggestion.displayName)
-                            .font(.headline)
-                        Text("\(items.count)")
-                            .sortyBadge()
-                    }
-                    Label(reason, systemImage: reasonIcon)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .help(suggestion.destination.path)
-                }
-                Spacer()
-                if items.count > 1 {
-                    Button {
-                        HapticFeedbackManager.shared.success()
-                        let batch = items
-                        Task { await inbox.acceptAll(batch) }
-                    } label: {
-                        Label("Move All", systemImage: "arrow.right.circle")
-                    }
-                    .buttonStyle(.sortyBordered(size: .small))
-                    .help("Move all \(items.count) files to \(suggestion.displayName)")
-                    .accessibilityIdentifier("InboxMoveAllButton")
-                }
-            }
-            .padding(16)
-
-            Divider().padding(.horizontal, 16)
-
-            VStack(spacing: 2) {
-                ForEach(items) { item in
-                    InboxDownloadRow(item: item, isFirst: item.id == firstItemID)
-                        .transition(.opacity)
-                }
-            }
-            .padding(8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("InboxDestinationCard")
-    }
-
-    private var reason: String {
-        switch suggestion.source {
-        case .routingRule: "Matches a routing rule"
-        case .remembered: "Where you filed these before"
-        case .fileKind: "Sorted by file kind"
-        }
-    }
-
-    private var reasonIcon: String {
-        switch suggestion.source {
-        case .routingRule: "arrow.triangle.branch"
-        case .remembered: "clock.arrow.circlepath"
-        case .fileKind: "doc.on.doc"
-        }
-    }
-}
-
 private struct InboxEmptyCard: View {
     let title: String
     let systemImage: String
@@ -387,32 +199,6 @@ private struct InboxIconTile: View {
                     .fill(tint.opacity(0.14))
             )
             .accessibilityHidden(true)
-    }
-}
-
-/// A one-line notice above the cards, with an optional trailing action.
-private struct InboxBanner<Action: View>: View {
-    let systemImage: String
-    let tint: Color
-    let text: String
-    @ViewBuilder let action: Action
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: systemImage)
-                .foregroundStyle(tint)
-            Text(text)
-                .font(.callout)
-                .lineLimit(2)
-            Spacer(minLength: 8)
-            action
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
-                .fill(tint.opacity(0.1))
-        )
     }
 }
 
@@ -488,79 +274,6 @@ private struct InboxFileRow<Leading: View, Trailing: View>: View {
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             }
         }
-    }
-}
-
-private struct InboxDownloadRow: View {
-    let item: DownloadsInboxItem
-    let isFirst: Bool
-    @ObservedObject private var inbox = DownloadsInboxManager.shared
-
-    var body: some View {
-        InboxFileRow(
-            url: item.url,
-            detail: Text("\(ByteCountFormatter.string(fromByteCount: item.size, countStyle: .file)) · \(item.dateAdded.formatted(.relative(presentation: .named)))"),
-            alwaysShowsTrailing: isFirst
-        ) {
-            EmptyView()
-        } trailing: {
-            Menu {
-                Button("Choose Folder…") { chooseFolder() }
-                Button("Trash in 7 Days") {
-                    ExpiringFilesManager.shared.markToExpire(item.url, afterDays: 7)
-                    inbox.dismiss(item)
-                }
-                Button("Show in Finder") {
-                    NSWorkspace.shared.activateFileViewerSelecting([item.url])
-                }
-                Divider()
-                Button("Leave in Downloads") { inbox.dismiss(item) }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .foregroundStyle(.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("More options")
-            .accessibilityLabel("More options for \(item.url.lastPathComponent)")
-
-            moveButton
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("InboxDownloadRow")
-    }
-
-    @ViewBuilder
-    private var moveButton: some View {
-        let button = Button {
-            HapticFeedbackManager.shared.success()
-            Task { await inbox.accept(item) }
-        } label: {
-            Text("Move")
-        }
-        .buttonStyle(.sortyBordered(size: .small))
-        .help(isFirst ? "Move to \(item.suggestion.displayName) (Return)" : "Move to \(item.suggestion.displayName)")
-        .accessibilityLabel("Move \(item.url.lastPathComponent) to \(item.suggestion.displayName)")
-
-        if isFirst {
-            button.keyboardShortcut(.return, modifiers: [])
-        } else {
-            button
-        }
-    }
-
-    private func chooseFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.canCreateDirectories = true
-        panel.prompt = "Move Here"
-        panel.message = "Sorty will remember this folder for .\(item.url.pathExtension) files."
-        panel.directoryURL = item.suggestion.destination.deletingLastPathComponent()
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        HapticFeedbackManager.shared.success()
-        Task { await inbox.accept(item, to: url) }
     }
 }
 

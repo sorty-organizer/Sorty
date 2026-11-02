@@ -1033,7 +1033,6 @@ struct SortyApp: App {
             Task { await configureOperationalServicesIfNeeded() }
         }
         scheduleIdleStartupWorkIfNeeded()
-        SortyLabsServices.startEnabledServices()
 
         if ProcessInfo.processInfo.environment["XCUITEST_NOTIFICATION_ACTION"] == "showDetails" {
             Task { @MainActor in

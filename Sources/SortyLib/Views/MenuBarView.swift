@@ -165,7 +165,6 @@ public struct MenuBarView: View {
 
     @AppStorage("keepInBackground") private var keepInBackground = false
     @AppStorage("hideDockIcon") private var hideDockIcon = false
-    @AppStorage(SortyLabsFeature.downloadsInbox.defaultsKey) private var isDownloadsInboxEnabled = false
     @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var isExpiringFilesEnabled = false
 
     /// Launch at Login reflects the real registration and toggles through the
@@ -199,12 +198,6 @@ public struct MenuBarView: View {
             Divider()
 
             quickActions
-
-            if isDownloadsInboxEnabled {
-                Divider()
-
-                MenuBarDownloadsInboxSection()
-            }
 
             if isExpiringFilesEnabled {
                 Divider()

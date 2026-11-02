@@ -17,7 +17,7 @@ struct SidebarNavigationItem: Identifiable, Hashable {
 
     @MainActor
     static var mainItems: [SidebarNavigationItem] {
-        items(includingInbox: SortyLabsFeature.downloadsInbox.isEnabled || SortyLabsFeature.expiringFiles.isEnabled)
+        items(includingInbox: SortyLabsFeature.expiringFiles.isEnabled)
     }
 
     /// Sidebar rows in order. Inbox sits under Organize while a Labs feature uses it.
