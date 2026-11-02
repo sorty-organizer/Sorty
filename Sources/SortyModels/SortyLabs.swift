@@ -36,9 +36,9 @@ public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
     public var summary: String {
         switch self {
         case .routingRules:
-            "Describe where files go, like \"bank statements go to Finance/Statements/{YYYY}\". Sorty turns it into a rule that runs without AI. Add them in Exclusions."
+            "Describe where files go, like \"bank statements go to Finance/Statements/{YYYY}\". Sorty turns it into a rule that runs without AI."
         case .expiringFiles:
-            "Old installers, archives and screenshots in Downloads and on the Desktop are offered for the Trash in Watched Folders after a set number of days. Nothing is removed without your review."
+            "Old installers, archives and screenshots in Downloads and on the Desktop show up under Clean Up, in Watched Folders and the menu bar. Nothing is trashed without your review."
         }
     }
 
