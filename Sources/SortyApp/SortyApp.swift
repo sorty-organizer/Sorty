@@ -768,7 +768,12 @@ struct SortyApp: App {
         MenuBarExtra(
             isInserted: Binding(
                 get: { showMenuBarExtra || keepInBackground },
-                set: { showMenuBarExtra = $0 }
+                set: { isInserted in
+                    // AppKit reports insertion during scene updates, including
+                    // unchanged values. Avoid feeding those back into AppStorage.
+                    guard showMenuBarExtra != isInserted else { return }
+                    showMenuBarExtra = isInserted
+                }
             )
         ) {
             MenuBarView()

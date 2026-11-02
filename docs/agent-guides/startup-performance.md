@@ -132,6 +132,10 @@ Security-scoped bookmark creation for a newly selected manual folder runs at uti
 
 ## Verification
 
+The menu bar insertion binding must ignore unchanged values before writing to
+`@AppStorage`. AppKit can report insertion while SwiftUI updates the scene;
+writing the same value back can keep invalidating the app graph and stall launch.
+
 Use focused tests while developing:
 
 ```sh
