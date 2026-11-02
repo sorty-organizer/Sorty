@@ -72,7 +72,7 @@ private struct ExpiringFilesPanel: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Clean Up")
                         .font(.headline)
-                    Text("Installers, archives and screenshots older than \(ageDescription), found by file type and age. Your AI provider isn't used.")
+                    Text("Installers, archives and screenshots older than \(ageDescription). Your AI provider isn't used.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
