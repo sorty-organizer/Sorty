@@ -200,8 +200,7 @@ public struct MenuBarView: View {
             quickActions
 
             if isExpiringFilesEnabled {
-                Divider()
-
+                // Adds its own divider only when it has something to show.
                 MenuBarExpiringFilesSection()
             }
 
@@ -577,10 +576,12 @@ private struct WatchedFolderMenuItem: View {
 
     @State private var isHovered = false
 
+    /// Badge only for access problems. Watching is the normal state, and a
+    /// pause gets a spelled-out label instead of a badge too small to read.
     private var statusIcon: String? {
         switch folder.accessStatus {
         case .valid:
-            return folder.isEnabled ? "checkmark.circle.fill" : "pause.circle.fill"
+            return nil
         case .stale:
             return "exclamationmark.circle.fill"
         case .lost:
@@ -593,7 +594,7 @@ private struct WatchedFolderMenuItem: View {
     private var statusColor: Color {
         switch folder.accessStatus {
         case .valid:
-            return folder.isEnabled ? SortyDesignSystem.Colors.success : SortyDesignSystem.Colors.warning
+            return .secondary
         case .stale:
             return SortyDesignSystem.Colors.warning
         case .lost:
@@ -639,6 +640,7 @@ private struct WatchedFolderMenuItem: View {
                 ZStack(alignment: .bottomTrailing) {
                     AppKitImageView(image: folderIcon, size: CGSize(width: 18, height: 18))
                         .frame(width: 18, height: 18)
+                        .opacity(isPaused ? 0.5 : 1)
 
                     if let statusIcon {
                         Image(systemName: statusIcon)
@@ -668,6 +670,17 @@ private struct WatchedFolderMenuItem: View {
 
                 Spacer()
 
+                if isPaused {
+                    Label("Paused", systemImage: "pause.fill")
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(SortyDesignSystem.Colors.warning)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(SortyDesignSystem.Colors.warning.opacity(0.15)))
+                        .transition(.opacity)
+                }
+
                 Image(systemName: "arrow.up.forward")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
@@ -691,7 +704,7 @@ private struct WatchedFolderMenuItem: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Open \(folder.name) in Finder")
+        .accessibilityLabel(isPaused ? "Open \(folder.name) in Finder, paused" : "Open \(folder.name) in Finder")
         .accessibilityIdentifier("MenuBarWatchedFolder-\(folder.id.uuidString)")
         .contextMenu {
             Button {
@@ -725,6 +738,10 @@ private struct WatchedFolderMenuItem: View {
             .accessibilityIdentifier("MenuBarFolderRemove-\(folder.id.uuidString)")
             .disabled(isAwaitingReview)
         }
+    }
+
+    private var isPaused: Bool {
+        !folder.isEnabled && folder.accessStatus != .stale && folder.accessStatus != .lost
     }
 
     private var isAwaitingReview: Bool {
