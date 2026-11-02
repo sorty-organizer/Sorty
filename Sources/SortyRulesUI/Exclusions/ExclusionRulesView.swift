@@ -186,11 +186,6 @@ package struct ExclusionRulesView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 20) {
-                            if isRoutingRulesEnabled && !isSearching {
-                                RoutingRulesCard()
-                                    .animatedAppearance(delay: 0.02)
-                            }
-
                             // Grouped rules
                             ForEach(Array(groupedRules.enumerated()), id: \.1.0) { index, group in
                                 RuleGroupCard(
@@ -219,6 +214,11 @@ package struct ExclusionRulesView: View {
                                     systemImage: "magnifyingglass",
                                     size: .inline
                                 )
+                            }
+
+                            if isRoutingRulesEnabled && !isSearching {
+                                RoutingRulesCard()
+                                    .animatedAppearance(delay: 0.10)
                             }
 
                             if !isSearching || !filteredLearningExclusionPatterns.isEmpty {
