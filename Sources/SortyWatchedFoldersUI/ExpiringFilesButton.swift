@@ -145,6 +145,10 @@ private struct ExpiringFilesPanel: View {
             }
         }
         .frame(width: 420)
+        // Files come and go while the popover is closed, so opening it rescans.
+        .task {
+            await expiring.refresh()
+        }
         .animation(reduceMotion ? nil : .sortySnappy, value: expiring.candidates.map(\.id))
         .accessibilityIdentifier("ExpiringFilesPanel")
     }

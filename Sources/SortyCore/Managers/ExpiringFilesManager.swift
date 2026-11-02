@@ -24,6 +24,8 @@ package struct ExpiringFileCandidate: Identifiable, Equatable, Sendable {
     package var isFinished: Bool { reason == .installed || reason == .extracted }
 
     package var id: String { url.path }
+    /// Ties a Keep to this copy of the file, so a later download with the same name is still offered.
+    package var keepKey: String { ExpiringFilesManager.keepKey(for: url, added: dateAdded) }
     package let url: URL
     package let reason: Reason
     package let dateAdded: Date
@@ -50,6 +52,8 @@ package final class ExpiringFilesManager: ObservableObject {
     private let defaults: UserDefaults
     private let keptKey = "labs.expiring.kept"
     private let marksKey = "labs.expiring.marks"
+    /// Bumped by every refresh so a slow, older scan can't overwrite a newer one.
+    private var refreshGeneration = 0
 
     package init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -75,48 +79,98 @@ package final class ExpiringFilesManager: ObservableObject {
 
     /// Rescans the watched locations. Cheap: top-level listings only.
     package func refresh() async {
+        refreshGeneration += 1
+        let generation = refreshGeneration
         guard isEnabled else {
+            isScanning = false
             candidates = []
             return
         }
         isScanning = true
-        defer { isScanning = false }
         let folders = Self.scannedFolders()
         let cutoff = Date().addingTimeInterval(-TimeInterval(ageInDays) * 86_400)
         let kept = Set(defaults.stringArray(forKey: keptKey) ?? [])
         let marks = defaults.dictionary(forKey: marksKey) as? [String: Date] ?? [:]
         let detectsFinished = defaults.bool(forKey: Self.finishedDownloadsKey)
-        candidates = await Task.detached(priority: .utility) {
+        let found = await Task.detached(priority: .utility) {
             let detector = detectsFinished ? FinishedDownloadDetector.live() : nil
-            return Self.scan(folders: folders, cutoff: cutoff, kept: kept, marks: marks, finished: detector)
+            return Self.scan(
+                folders: folders,
+                cutoff: cutoff,
+                kept: kept,
+                marks: marks,
+                finished: detector,
+                signals: .live
+            )
         }.value
+        guard generation == refreshGeneration else { return }
+        isScanning = false
+        candidates = found
+        // A trash result is shown once; the next scan replaces it with the current state.
+        lastResult = nil
+        pruneMarks(marks)
     }
 
-    /// Never offers this file again.
+    /// Stops offering this copy of the file. A new download with the same name is judged afresh.
     package func keep(_ candidate: ExpiringFileCandidate) {
         var kept = defaults.stringArray(forKey: keptKey) ?? []
-        kept.append(Self.key(for: candidate.url))
+        kept.append(candidate.keepKey)
         defaults.set(Array(kept.suffix(1_000)), forKey: keptKey)
         candidates.removeAll { $0.id == candidate.id }
     }
 
-    /// Moves the chosen files to the Trash, where Finder can put them back.
+    /// Moves the chosen files to the Trash, where Finder can put them back. A file
+    /// that was replaced or moved since the scan is skipped rather than trashed.
     package func moveToTrash(_ selection: [ExpiringFileCandidate]) async {
-        let urls = selection.map(\.url)
-        let failures = await Task.detached(priority: .userInitiated) {
-            urls.filter { (try? FileManager.default.trashItem(at: $0, resultingItemURL: nil)) == nil }
+        let outcome = await Task.detached(priority: .userInitiated) {
+            var trashed: [URL] = []
+            var changed = 0
+            var failedIDs = Set<String>()
+            for candidate in selection {
+                guard Self.isUnchanged(candidate) else {
+                    changed += 1
+                    continue
+                }
+                if (try? FileManager.default.trashItem(at: candidate.url, resultingItemURL: nil)) != nil {
+                    trashed.append(candidate.url)
+                } else {
+                    failedIDs.insert(candidate.id)
+                }
+            }
+            return (trashed, changed, failedIDs)
         }.value
-        let trashedIDs = Set(urls.map(\.path)).subtracting(failures.map(\.path))
-        candidates.removeAll { trashedIDs.contains($0.id) }
+        let (trashed, changed, failedIDs) = outcome
+        let failed = failedIDs.count
+        // Failures stay listed for another try. Changed files leave: the next scan judges them afresh.
+        let removedIDs = Set(selection.map(\.id)).subtracting(failedIDs)
+        candidates.removeAll { removedIDs.contains($0.id) }
 
         var marks = defaults.dictionary(forKey: marksKey) as? [String: Date] ?? [:]
-        urls.filter { trashedIDs.contains($0.path) }.forEach { marks.removeValue(forKey: Self.key(for: $0)) }
+        trashed.forEach { marks.removeValue(forKey: Self.key(for: $0)) }
         defaults.set(marks, forKey: marksKey)
 
-        let trashedCount = trashedIDs.count
-        lastResult = failures.isEmpty
-            ? "Moved \(trashedCount) \(trashedCount == 1 ? "file" : "files") to the Trash."
-            : "Moved \(trashedCount) to the Trash. \(failures.count) couldn't be moved."
+        var parts = ["Moved \(trashed.count) \(trashed.count == 1 ? "file" : "files") to the Trash."]
+        if changed > 0 { parts.append("Skipped \(changed) that changed since the scan.") }
+        if failed > 0 { parts.append("\(failed) couldn't be moved.") }
+        lastResult = parts.joined(separator: " ")
+    }
+
+    /// Drops reminders for files that are gone, so the list doesn't grow forever.
+    private func pruneMarks(_ marks: [String: Date]) {
+        let live = marks.filter { FileManager.default.fileExists(atPath: $0.key) }
+        if live.count != marks.count {
+            defaults.set(live, forKey: marksKey)
+        }
+    }
+
+    /// True while the file at the candidate's path is still the one that was scanned.
+    nonisolated static func isUnchanged(_ candidate: ExpiringFileCandidate) -> Bool {
+        let keys: Set<URLResourceKey> = [.addedToDirectoryDateKey, .creationDateKey, .fileSizeKey, .isDirectoryKey]
+        guard let values = try? candidate.url.resourceValues(forKeys: keys) else { return false }
+        let added = values.addedToDirectoryDate ?? values.creationDate
+        guard let added, abs(added.timeIntervalSince(candidate.dateAdded)) < 1 else { return false }
+        // Package sizes are summed at scan time; only plain files can be compared cheaply.
+        return values.isDirectory == true || Int64(values.fileSize ?? 0) == candidate.size
     }
 
     // MARK: - Scanning
@@ -124,6 +178,11 @@ package final class ExpiringFilesManager: ObservableObject {
     /// Stable key for stored marks and kept files, whichever way a path is spelled.
     nonisolated static func key(for url: URL) -> String {
         url.resolvingSymlinksInPath().standardizedFileURL.path
+    }
+
+    /// Path plus the date the file arrived, so Keep sticks to one copy of a file.
+    nonisolated static func keepKey(for url: URL, added: Date) -> String {
+        "\(key(for: url))|\(Int(added.timeIntervalSince1970))"
     }
 
     /// Downloads, the Desktop, and the screenshot folder when it is set elsewhere.
@@ -142,59 +201,111 @@ package final class ExpiringFilesManager: ObservableObject {
         return folders
     }
 
+    /// Lists top-level files in `folders` that are due for review. A file opened
+    /// recently counts as in use, so its age runs from that open, not its arrival.
     nonisolated static func scan(
         folders: [URL],
         cutoff: Date,
         kept: Set<String>,
         marks: [String: Date],
         finished: FinishedDownloadDetector? = nil,
+        signals: FileSignals = .unavailable,
         now: Date = Date()
     ) -> [ExpiringFileCandidate] {
         let keys: [URLResourceKey] = [.addedToDirectoryDateKey, .creationDateKey, .isDirectoryKey, .isPackageKey, .fileSizeKey]
         var results: [ExpiringFileCandidate] = []
+        var seen = Set<String>()
         for folder in folders {
             let contents = (try? FileManager.default.contentsOfDirectory(
                 at: folder,
                 includingPropertiesForKeys: keys,
                 options: [.skipsHiddenFiles]
             )) ?? []
-            for url in contents where !kept.contains(key(for: url)) {
-                guard let values = try? url.resourceValues(forKeys: Set(keys)),
+            for url in contents {
+                let path = key(for: url)
+                // The screenshot folder can be Desktop or Downloads under another spelling.
+                guard seen.insert(path).inserted, !kept.contains(path),
+                      let values = try? url.resourceValues(forKeys: Set(keys)),
                       values.isDirectory != true || values.isPackage == true
                 else { continue }
                 let added = values.addedToDirectoryDate ?? values.creationDate ?? now
+                guard !kept.contains(keepKey(for: url, added: added)) else { continue }
                 let reason: ExpiringFileCandidate.Reason
-                if let expiry = marks[key(for: url)] {
+                if let expiry = marks[path] {
                     guard expiry <= now else { continue }
                     reason = .markedByYou
                 } else if let done = finished?.reason(for: url, addedOn: added, siblings: contents) {
                     reason = done
                 } else {
-                    guard added <= cutoff, let kind = reasonForKind(of: url) else { continue }
+                    let lastActive = max(added, signals.lastOpened(url) ?? added)
+                    guard lastActive <= cutoff,
+                          let kind = reasonForKind(of: url, isScreenCapture: signals.isScreenCapture(url))
+                    else { continue }
                     reason = kind
                 }
-                results.append(ExpiringFileCandidate(
-                    url: url,
-                    reason: reason,
-                    dateAdded: added,
-                    size: Int64(values.fileSize ?? 0)
-                ))
+                let size = values.isDirectory == true ? directorySize(url) : Int64(values.fileSize ?? 0)
+                results.append(ExpiringFileCandidate(url: url, reason: reason, dateAdded: added, size: size))
             }
         }
         return results.sorted { $0.dateAdded < $1.dateAdded }
     }
 
     /// Installers, archives and screenshots are offered automatically. Other
-    /// files only expire when the user marks them.
-    nonisolated static func reasonForKind(of url: URL) -> ExpiringFileCandidate.Reason? {
+    /// files only expire when the user marks them. Spotlight's screen-capture
+    /// flag catches screenshots in any language or with a custom name.
+    nonisolated static func reasonForKind(of url: URL, isScreenCapture: Bool = false) -> ExpiringFileCandidate.Reason? {
         let fileExtension = url.pathExtension.lowercased()
         if ["dmg", "pkg", "mpkg", "iso"].contains(fileExtension) { return .installer }
         if ["zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz"].contains(fileExtension) { return .archive }
+        if isScreenCapture { return .screenshot }
         let name = url.lastPathComponent
-        let screenshotPrefixes = ["Screenshot ", "Screen Shot ", "CleanShot ", "Screen Recording "]
         if screenshotPrefixes.contains(where: name.hasPrefix) { return .screenshot }
         return nil
     }
+
+    /// English defaults plus whatever name the user gave screenshots in the Screenshot app.
+    nonisolated static var screenshotPrefixes: [String] {
+        var prefixes = ["Screenshot ", "Screen Shot ", "CleanShot ", "Screen Recording "]
+        if let custom = UserDefaults(suiteName: "com.apple.screencapture")?.string(forKey: "name"), !custom.isEmpty {
+            prefixes.append(custom + " ")
+        }
+        return prefixes
+    }
+
+    /// Allocated size of a package such as an app bundle, so the Trash total is honest.
+    nonisolated static func directorySize(_ url: URL) -> Int64 {
+        let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey]
+        guard let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys) else { return 0 }
+        var total: Int64 = 0
+        for case let file as URL in enumerator {
+            total += Int64((try? file.resourceValues(forKeys: Set(keys)))?.totalFileAllocatedSize ?? 0)
+        }
+        return total
+    }
+}
+
+/// Spotlight facts about a file that make the scan smarter. Tests use `.unavailable`.
+package struct FileSignals: Sendable {
+    package let lastOpened: @Sendable (URL) -> Date?
+    package let isScreenCapture: @Sendable (URL) -> Bool
+
+    package init(lastOpened: @escaping @Sendable (URL) -> Date?, isScreenCapture: @escaping @Sendable (URL) -> Bool) {
+        self.lastOpened = lastOpened
+        self.isScreenCapture = isScreenCapture
+    }
+
+    package static let unavailable = FileSignals(lastOpened: { _ in nil }, isScreenCapture: { _ in false })
+
+    package static let live = FileSignals(
+        lastOpened: { url in
+            guard let item = MDItemCreateWithURL(kCFAllocatorDefault, url as CFURL) else { return nil }
+            return MDItemCopyAttribute(item, kMDItemLastUsedDate) as? Date
+        },
+        isScreenCapture: { url in
+            guard let item = MDItemCreateWithURL(kCFAllocatorDefault, url as CFURL) else { return false }
+            return (MDItemCopyAttribute(item, "kMDItemIsScreenCapture" as CFString) as? Bool) == true
+        }
+    )
 }
 
 /// Spots downloads you've already used: an installer whose app now sits in
@@ -237,10 +348,7 @@ package struct FinishedDownloadDetector: Sendable {
                     return InstalledApp(name: url.deletingPathExtension().lastPathComponent, added: added)
                 }
         }
-        return FinishedDownloadDetector(installedApps: apps) { url in
-            guard let item = MDItemCreateWithURL(kCFAllocatorDefault, url as CFURL) else { return nil }
-            return MDItemCopyAttribute(item, kMDItemLastUsedDate) as? Date
-        }
+        return FinishedDownloadDetector(installedApps: apps, lastOpened: FileSignals.live.lastOpened)
     }
 
     package func reason(for url: URL, addedOn added: Date, siblings: [URL]) -> ExpiringFileCandidate.Reason? {
@@ -256,10 +364,29 @@ package struct FinishedDownloadDetector: Sendable {
         if installedApps.contains(where: { $0.added >= added && Self.namesMatch(product, $0.name) }) {
             return .installed
         }
-        if isArchive, siblings.contains(where: { $0 != url && Self.archiveBaseName(of: $0) == Self.archiveBaseName(of: url) }) {
+        if isArchive, siblings.contains(where: { Self.isExtraction($0, of: url, addedOn: added) }) {
             return .extracted
         }
         return nil
+    }
+
+    /// True when `sibling` looks like what Archive Utility made from `archive`: same
+    /// base name (allowing its " 2" suffix), not an archive itself, and arrived
+    /// after the download, so an older folder that shares the name doesn't count.
+    static func isExtraction(_ sibling: URL, of archive: URL, addedOn added: Date) -> Bool {
+        guard sibling != archive,
+              ExpiringFilesManager.reasonForKind(of: sibling) != .archive,
+              ExpiringFilesManager.reasonForKind(of: sibling) != .installer
+        else { return false }
+        let base = archiveBaseName(of: archive)
+        let name = sibling.lastPathComponent
+        let matches = name == base
+            || (name.hasPrefix(base + " ") && Int(name.dropFirst(base.count + 1)) != nil)
+        guard matches else { return false }
+        let values = try? sibling.resourceValues(forKeys: [.addedToDirectoryDateKey, .creationDateKey])
+        guard let siblingAdded = values?.addedToDirectoryDate ?? values?.creationDate else { return false }
+        // A minute of slack covers clock rounding between the two timestamps.
+        return siblingAdded >= added.addingTimeInterval(-60)
     }
 
     /// "Slack-4.41.105-arm64.dmg" -> "slack": drops versions and platform words.
@@ -286,9 +413,13 @@ package struct FinishedDownloadDetector: Sendable {
         return name
     }
 
+    /// Exact match, or one name starting with the other when the shorter has at
+    /// least four characters, so "Arc" doesn't claim "archiver.dmg".
     static func namesMatch(_ product: String, _ appName: String) -> Bool {
         let app = appName.lowercased().filter { $0.isLetter || $0.isNumber }
         guard product.count >= 3, app.count >= 3 else { return false }
+        if product == app { return true }
+        guard min(product.count, app.count) >= 4 else { return false }
         return app.hasPrefix(product) || product.hasPrefix(app)
     }
 }

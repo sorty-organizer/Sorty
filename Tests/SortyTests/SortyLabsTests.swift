@@ -140,6 +140,8 @@ final class SortyLabsTests: XCTestCase {
         let zip = tempDirectory.appendingPathComponent("Assets.zip")
         let folder = tempDirectory.appendingPathComponent("Assets", isDirectory: true)
         let untouched = tempDirectory.appendingPathComponent("Other.zip")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let otherArchive = tempDirectory.appendingPathComponent("Assets.tar.gz")
 
         XCTAssertEqual(FinishedDownloadDetector.productName(of: dmg), "slack")
 
@@ -149,11 +151,38 @@ final class SortyLabsTests: XCTestCase {
         XCTAssertEqual(detector.reason(for: dmg, addedOn: added, siblings: []), .installed)
         XCTAssertEqual(detector.reason(for: zip, addedOn: added, siblings: [zip, folder]), .extracted)
         XCTAssertNil(detector.reason(for: zip, addedOn: added, siblings: [zip]))
+        // Another archive with the same name isn't an extraction, and neither is a folder older than the download.
+        XCTAssertNil(detector.reason(for: zip, addedOn: added, siblings: [zip, otherArchive]))
+        XCTAssertNil(detector.reason(for: zip, addedOn: Date().addingTimeInterval(3_600), siblings: [zip, folder]))
         XCTAssertNil(detector.reason(for: untouched, addedOn: added, siblings: [untouched, folder]))
 
         let olderApp = FinishedDownloadDetector(
             installedApps: [.init(name: "Slack", added: added.addingTimeInterval(-86_400))]
         ) { _ in Date() }
         XCTAssertNil(olderApp.reason(for: dmg, addedOn: added, siblings: []))
+        XCTAssertFalse(FinishedDownloadDetector.namesMatch("archiver", "Arc"))
+    }
+
+    func testRecentlyOpenedFilesWaitAndKeepSticksToOneCopy() throws {
+        let url = tempDirectory.appendingPathComponent("Screenshot 1.png")
+        FileManager.default.createFile(atPath: url.path, contents: Data("x".utf8))
+        let cutoff = Date().addingTimeInterval(3_600)
+
+        let due = ExpiringFilesManager.scan(folders: [tempDirectory], cutoff: cutoff, kept: [], marks: [:])
+        let candidate = try XCTUnwrap(due.first)
+        XCTAssertEqual(candidate.reason, .screenshot)
+
+        let openedLater = FileSignals(lastOpened: { _ in cutoff.addingTimeInterval(60) }, isScreenCapture: { _ in false })
+        XCTAssertTrue(ExpiringFilesManager.scan(
+            folders: [tempDirectory], cutoff: cutoff, kept: [], marks: [:], signals: openedLater
+        ).isEmpty)
+
+        XCTAssertTrue(ExpiringFilesManager.scan(
+            folders: [tempDirectory], cutoff: cutoff, kept: [candidate.keepKey], marks: [:]
+        ).isEmpty)
+        let otherCopy = ExpiringFilesManager.keepKey(for: url, added: candidate.dateAdded.addingTimeInterval(-86_400))
+        XCTAssertEqual(ExpiringFilesManager.scan(
+            folders: [tempDirectory], cutoff: cutoff, kept: [otherCopy], marks: [:]
+        ).count, 1)
     }
 }

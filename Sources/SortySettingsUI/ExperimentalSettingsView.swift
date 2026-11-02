@@ -164,6 +164,9 @@ private struct SortyLabsCard: View {
         .onChange(of: finishedDownloads) { _, _ in
             Task { await ExpiringFilesManager.shared.refresh() }
         }
+        .onChange(of: expiringAgeInDays) { _, _ in
+            Task { await ExpiringFilesManager.shared.refresh() }
+        }
     }
 
     /// Points each enabled feature at the screen where it lives in the main window.
