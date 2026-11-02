@@ -16,10 +16,18 @@ struct MenuBarDownloadsInboxSection: View {
     @ObservedObject private var inbox = DownloadsInboxManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    static let visibleItemCount = 4
+    /// The menu bar hides its header inside the Inbox page, which titles its own card.
+    let showsHeader: Bool
+    let visibleItemCount: Int
+
+    init(showsHeader: Bool = true, visibleItemCount: Int = 4) {
+        self.showsHeader = showsHeader
+        self.visibleItemCount = visibleItemCount
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if showsHeader {
             HStack {
                 Text("Downloads inbox")
                     .font(.caption)
@@ -34,6 +42,7 @@ struct MenuBarDownloadsInboxSection: View {
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 4)
+            }
 
             if let move = inbox.lastMove {
                 undoRow(move)
@@ -56,12 +65,12 @@ struct MenuBarDownloadsInboxSection: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
             } else {
-                ForEach(Array(inbox.items.prefix(Self.visibleItemCount).enumerated()), id: \.element.id) { index, item in
+                ForEach(Array(inbox.items.prefix(visibleItemCount).enumerated()), id: \.element.id) { index, item in
                     MenuBarInboxRow(item: item, isFirst: index == 0)
                         .transition(.opacity)
                 }
-                if inbox.items.count > Self.visibleItemCount {
-                    Text("+ \(inbox.items.count - Self.visibleItemCount) more")
+                if inbox.items.count > visibleItemCount {
+                    Text("+ \(inbox.items.count - visibleItemCount) more")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 12)
@@ -217,8 +226,13 @@ struct MenuBarExpiringFilesSection: View {
     @SortyHotReload private var hotReload
     @ObservedObject private var manager = ExpiringFilesManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isReviewing = false
+    @State private var isReviewing: Bool
     @State private var deselected: Set<String> = []
+
+    /// The Inbox page opens straight into the review list; the menu bar starts collapsed.
+    init(startsExpanded: Bool = false) {
+        _isReviewing = State(initialValue: startsExpanded)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

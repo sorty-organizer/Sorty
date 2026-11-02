@@ -26,6 +26,9 @@ public struct ContentView: View {
     @State private var commandFlagsMonitor: Any?
     @State private var personaHighlightDismissalTask: Task<Void, Never>?
     @StateObject private var windowLinkHoverState = WindowLinkHoverState()
+    // Observed so the sidebar adds or drops Inbox as soon as Labs flags change.
+    @AppStorage(SortyLabsFeature.downloadsInbox.defaultsKey) private var isDownloadsInboxEnabled = false
+    @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var isExpiringFilesEnabled = false
 
     public init() {}
 
@@ -145,6 +148,11 @@ public struct ContentView: View {
                 )
             }
         }
+        .onChange(of: isInboxAvailable) { _, isAvailable in
+            if !isAvailable, appState.currentView == .inbox {
+                appState.currentView = .organize
+            }
+        }
         .onChange(of: appState.showDirectoryPicker) { _, showPicker in
             if showPicker {
                 appState.showsFinderWorkflowPicker = false
@@ -206,11 +214,17 @@ public struct ContentView: View {
             WatchedFoldersView()
         case .learnings:
             LearningsView()
+        case .inbox:
+            InboxView()
         }
     }
 
     private var sidebarItems: [SidebarNavigationItem] {
-        SidebarNavigationItem.mainItems
+        SidebarNavigationItem.items(includingInbox: isInboxAvailable)
+    }
+
+    private var isInboxAvailable: Bool {
+        isDownloadsInboxEnabled || isExpiringFilesEnabled
     }
 
     private func captureMainScreen(
@@ -235,6 +249,7 @@ public struct ContentView: View {
         case .exclusions: return "exclusions"
         case .watchedFolders: return "watched_folders"
         case .learnings: return "learnings"
+        case .inbox: return "inbox"
         }
     }
 
@@ -247,6 +262,7 @@ public struct ContentView: View {
         case .exclusions: return "ExclusionsScreen"
         case .watchedFolders: return "WatchedFoldersScreen"
         case .learnings: return "LearningsScreen"
+        case .inbox: return "InboxScreen"
         }
     }
 

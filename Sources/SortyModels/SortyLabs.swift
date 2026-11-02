@@ -38,11 +38,11 @@ public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
     public var summary: String {
         switch self {
         case .routingRules:
-            "Describe where files go, like \"bank statements go to Finance/Statements/{YYYY}\". Sorty turns it into a rule that runs without AI."
+            "Describe where files go, like \"bank statements go to Finance/Statements/{YYYY}\". Sorty turns it into a rule that runs without AI. Add them in Exclusions."
         case .downloadsInbox:
-            "New downloads queue up in the menu bar with a suggested folder. Press Return to file the top one."
+            "New downloads queue up in Inbox and the menu bar, each with a suggested folder. Press Return to file the top one."
         case .expiringFiles:
-            "Old installers, archives and screenshots in Downloads and on the Desktop are offered for the Trash after a set number of days. Nothing is removed without your review."
+            "Old installers, archives and screenshots in Downloads and on the Desktop are offered for the Trash in Inbox after a set number of days. Nothing is removed without your review."
         }
     }
 

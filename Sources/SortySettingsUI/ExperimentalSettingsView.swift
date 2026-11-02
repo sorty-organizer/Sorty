@@ -109,6 +109,7 @@ private struct SortyLabsCard: View {
     @AppStorage(SortyLabsFeature.downloadsInbox.defaultsKey) private var downloadsInbox = false
     @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var expiringFiles = false
     @AppStorage(ExpiringFilesManager.ageInDaysKey) private var expiringAgeInDays = ExpiringFilesManager.defaultAgeInDays
+    @EnvironmentObject private var appState: AppState
 
     var body: some View {
         SettingsCard(title: "Sorty Labs", icon: "flask", color: .indigo) {
@@ -120,6 +121,11 @@ private struct SortyLabsCard: View {
                         description: feature.summary
                     )
                     .accessibilityIdentifier("LabsToggle-\(feature.rawValue)")
+
+                    if binding(for: feature).wrappedValue {
+                        openLink(for: feature)
+                            .transition(.opacity)
+                    }
 
                     if feature == .expiringFiles, expiringFiles {
                         Stepper(value: $expiringAgeInDays, in: 1...365) {
@@ -144,6 +150,23 @@ private struct SortyLabsCard: View {
         .onChange(of: expiringFiles) { _, _ in
             Task { await ExpiringFilesManager.shared.refresh() }
         }
+    }
+
+    /// Points each enabled feature at the screen where it lives in the main window.
+    private func openLink(for feature: SortyLabsFeature) -> some View {
+        let (title, destination): (String, AppState.AppView) = switch feature {
+        case .routingRules: ("Add Routing Rules in Exclusions", .exclusions)
+        case .downloadsInbox, .expiringFiles: ("Open Inbox", .inbox)
+        }
+        return Button {
+            HapticFeedbackManager.shared.tap()
+            appState.openRelatedView(destination)
+        } label: {
+            Label(title, systemImage: "arrow.up.right")
+        }
+        .buttonStyle(.sortyBordered(intent: .info, size: .small))
+        .padding(.leading, 4)
+        .accessibilityIdentifier("LabsOpen-\(feature.rawValue)")
     }
 
     private func binding(for feature: SortyLabsFeature) -> Binding<Bool> {

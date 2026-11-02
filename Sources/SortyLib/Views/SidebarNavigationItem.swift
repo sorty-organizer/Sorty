@@ -17,6 +17,12 @@ struct SidebarNavigationItem: Identifiable, Hashable {
 
     @MainActor
     static var mainItems: [SidebarNavigationItem] {
+        items(includingInbox: SortyLabsFeature.downloadsInbox.isEnabled || SortyLabsFeature.expiringFiles.isEnabled)
+    }
+
+    /// Sidebar rows in order. Inbox sits under Organize while a Labs feature uses it.
+    @MainActor
+    static func items(includingInbox: Bool) -> [SidebarNavigationItem] {
         var items: [SidebarNavigationItem] = [
             SidebarNavigationItem(
                 view: .organize,
@@ -27,6 +33,17 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                 helpText: "Organize files with Sorty suggestions"
             )
         ]
+
+        if includingInbox {
+            items.append(SidebarNavigationItem(
+                view: .inbox,
+                title: "Inbox",
+                systemImage: "tray.and.arrow.down",
+                accessibilityIdentifier: "InboxSidebarItem",
+                accessibilityHint: "Review new downloads and old files waiting for the Trash",
+                helpText: "File new downloads and clear out old ones"
+            ))
+        }
 
         items.append(contentsOf: [
             SidebarNavigationItem(
