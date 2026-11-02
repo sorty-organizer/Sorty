@@ -12,6 +12,7 @@ struct ExperimentalSettingsView: View {
     @ObservedObject private var analytics = AnalyticsManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasAppeared = false
+    @State private var hasReportedRemoteExperiments = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -22,11 +23,16 @@ struct ExperimentalSettingsView: View {
                     .transition(.opacity)
             }
         }
+        .onChange(of: analytics.isLoadingExperimentalFeatures) { _, isLoading in
+            if !isLoading { reportRemoteExperimentsOnce() }
+        }
         .animation(reduceMotion ? .sortyQuick : .sortySmooth, value: analytics.isLoadingExperimentalFeatures)
         // Keep the section focus target stable while experimental features load.
         .settingsFocusable(.experimentalEmptyState)
         .task {
             analytics.reloadExperimentalFeatures()
+            // A throttled reload answers from cache without a loading phase.
+            if !analytics.isLoadingExperimentalFeatures { reportRemoteExperimentsOnce() }
             guard !hasAppeared else { return }
             if !reduceMotion {
                 try? await Task.sleep(for: .milliseconds(100))
@@ -34,6 +40,13 @@ struct ExperimentalSettingsView: View {
             guard !Task.isCancelled else { return }
             hasAppeared = true
         }
+    }
+
+    /// Reported once per visit, after loading settles, so reloads don't double count.
+    private func reportRemoteExperimentsOnce() {
+        guard !hasReportedRemoteExperiments else { return }
+        hasReportedRemoteExperiments = true
+        LabsTelemetry.remoteExperimentsShown(count: otherExperimentalFeatures.count)
     }
 
     private var otherExperimentalFeatures: [ExperimentalFeature] {
@@ -140,9 +153,11 @@ private struct SortyLabsCard: View {
     @AppStorage(ExpiringFilesManager.finishedDownloadsKey) private var finishedDownloads = false
     @EnvironmentObject private var appState: AppState
 
+    static let agePresetValues = [1, 3, 7, 14, 30, 60, 90]
+
     /// Ages offered in the menu; a value set with `defaults write` is added so it still shows.
     private var agePresets: [Int] {
-        let presets = [1, 3, 7, 14, 30, 60, 90]
+        let presets = Self.agePresetValues
         return presets.contains(expiringAgeInDays) ? presets : (presets + [expiringAgeInDays]).sorted()
     }
 
@@ -178,12 +193,14 @@ private struct SortyLabsCard: View {
         .onChange(of: expiringFiles) { _, _ in
             Task { await ExpiringFilesManager.shared.refresh() }
         }
-        .onChange(of: finishedDownloads) { _, _ in
+        .onChange(of: finishedDownloads) { _, isOn in
             HapticFeedbackManager.shared.selection()
+            AnalyticsManager.shared.captureSettingChanged("Spot Finished Downloads", isEnabled: isOn, section: "experimental")
             Task { await ExpiringFilesManager.shared.refresh() }
         }
-        .onChange(of: expiringAgeInDays) { _, _ in
+        .onChange(of: expiringAgeInDays) { _, days in
             HapticFeedbackManager.shared.selection()
+            LabsTelemetry.expiringAgeChanged(to: days, presets: Self.agePresetValues)
             Task { await ExpiringFilesManager.shared.refresh() }
         }
     }
@@ -250,6 +267,7 @@ private struct SortyLabsCard: View {
         }
         return Button {
             HapticFeedbackManager.shared.tap()
+            LabsTelemetry.openedFromSettings(feature)
             appState.openRelatedView(destination)
         } label: {
             Label(title, systemImage: "arrow.up.right")

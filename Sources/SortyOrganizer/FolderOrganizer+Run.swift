@@ -166,6 +166,18 @@ extension FolderOrganizer {
 
             let (filesWithHashes, duplicateContext) = try await duplicateDetectionPhase(files: files)
             let routing = partitionFilesByRoutingRules(filesWithHashes)
+            if routing.routedCount > 0 {
+                // Labs: how much of a run routing rules handle without the AI.
+                OrganizerServices.captureWorkflow(
+                    workflow: "organize",
+                    stage: "routing_applied",
+                    outcome: routing.remaining.isEmpty ? "success" : "partial",
+                    properties: [
+                        "count_bucket": OrganizerServices.countBucket(routing.routedCount),
+                        "result_kind": routing.remaining.isEmpty ? "all_routed" : "some_routed",
+                    ]
+                )
+            }
             let validatedPlan: OrganizationPlan
             if routing.remaining.isEmpty {
                 // Every file matched a routing rule, so there is nothing to ask the AI.

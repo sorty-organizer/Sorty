@@ -18,6 +18,9 @@ struct ExpiringFilesButton: View {
         Button {
             HapticFeedbackManager.shared.tap()
             isPresented.toggle()
+            if isPresented {
+                LabsTelemetry.expiringReviewOpened(from: .watchedFolders, waiting: expiring.candidates.count)
+            }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: SortyLabsFeature.expiringFiles.systemImage)
@@ -129,7 +132,7 @@ private struct ExpiringFilesPanel: View {
                         HapticFeedbackManager.shared.success()
                         let chosen = selectedCandidates
                         Task {
-                            await expiring.moveToTrash(chosen)
+                            await expiring.moveToTrash(chosen, from: .watchedFolders)
                             deselected = []
                         }
                     } label: {
@@ -250,7 +253,7 @@ private struct ExpiringCandidateRow: View {
         } trailing: {
             Button("Keep") {
                 HapticFeedbackManager.shared.tap()
-                ExpiringFilesManager.shared.keep(candidate)
+                ExpiringFilesManager.shared.keep(candidate, from: .watchedFolders)
             }
             .buttonStyle(.sortyBordered(size: .small))
             .help("Never suggest this file again")

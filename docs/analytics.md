@@ -191,6 +191,25 @@ The Mac app also uses consent-gated PostHog feature flags to populate **Settings
 
 The Sorty skill installer is available in Settings → Features → Sorty Skill without a feature flag. It reports `Codex Skill Installer <Action>` events with `feature=experimental`, `subfeature=codex_skill_installer`, bounded `card_viewed`, `install`, `replace`, and `uninstall` actions, and availability, conflict, success, failure, or unavailable outcomes. When the matching skill is already installed, the card-view event may include the standard rounded duration properties based on the local installation creation date. It never captures the Codex home path, skill contents, filenames, prompts, or other user data.
 
+### Sorty Labs telemetry
+
+Labs features report in more detail than stable features while they are experimental. All events come from `LabsTelemetry` (`Sources/SortyCore/Analytics/LabsTelemetry.swift`) with `feature=labs`, and each one also leaves a `sorty.workflow` Sentry breadcrumb, so a crash or handled error shows the Labs steps before it. None of them include file names, paths, rule text or folder names.
+
+| Event | When | Properties |
+| --- | --- | --- |
+| `Expiring Files Scan Completed` | A scan whose result changed, or at most every 30 minutes | `count_bucket`, `installer_count_bucket`, `archive_count_bucket`, `screenshot_count_bucket`, `finished_count_bucket`, `unreadable_folder_count` (0–3), `finished_detection`, `scan_duration_ms`; outcome `partial` when a folder couldn't be listed |
+| `Expiring Files Review Opened` | Clean Up popover or menu bar list opened | `source` (`watched_folders`, `menu_bar`), `count_bucket` |
+| `Expiring Files Move To Trash` | Move to Trash finished | `source`, `count_bucket` (trashed), `selection_kind` (`all`, `subset`), `result_kind` (`age_only`, `finished_only`, `mixed`), `failure_reason` (`changed_since_scan`, `trash_failed`, `changed_and_trash_failed`); outcome `partial` or `failed` |
+| `Expiring Files File Kept` | Keep pressed | `source`, `result_kind` (the file's kind, e.g. `installer`, `app_installed`) |
+| `Expiring Files Age Changed` | Age menu changed | `selection_kind` (`7_days` etc., or `custom`) |
+| `Routing Rules Drafted` | AI drafted a rule, or failed to | outcome `success`/`failed` |
+| `Routing Rules Saved` / `Deleted` / `Enabled` / `Disabled` | Rule changed | `count_bucket` (rules afterwards) |
+| `Organize Routing Applied` | Rules routed files in an organize run | `count_bucket` (routed), `result_kind` (`all_routed`, `some_routed`) |
+| `<Feature> Opened From Settings` | Labs shortcut in Settings used | `source=settings` |
+| `Remote Experiments Card Viewed` | In Testing card loaded, once per visit | `count_bucket`; flag keys are not sent |
+
+The Labs switches and Spot Finished Downloads report through `Setting Changed`. Sentry receives sanitized handled errors for `labs` operations `expiring_files_scan` (usually a missing Files and Folders permission), `expiring_files_trash` and `routing_rule_draft`. When a feature leaves Labs, drop the per-kind properties and scan event, and move what remains into the normal taxonomy.
+
 The website uses the same `labs-` key prefix through the typed hooks in `website/lib/feature-flags.ts`. Components should use `useLabsFeatureEnabled`, `useLabsFeatureVariant`, or `useLabsFeaturePayload`; the hooks read cached assignments without emitting feature-flag exposure events, and payloads are limited to bounded `title`, `description`, and `system_image` values. Denying website analytics clears the rendered Labs state and stops further flag use or exposure events.
 
 ## Adding instrumentation

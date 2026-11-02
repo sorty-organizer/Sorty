@@ -92,18 +92,31 @@ package final class ExpiringFilesManager: ObservableObject {
         let kept = Set(defaults.stringArray(forKey: keptKey) ?? [])
         let marks = defaults.dictionary(forKey: marksKey) as? [String: Date] ?? [:]
         let detectsFinished = defaults.bool(forKey: Self.finishedDownloadsKey)
-        let found = await Task.detached(priority: .utility) {
+        let startedAt = Date()
+        let report = await Task.detached(priority: .utility) {
             let detector = detectsFinished ? FinishedDownloadDetector.live() : nil
-            return Self.scan(
+            return Self.scanReport(
                 folders: folders,
                 cutoff: cutoff,
                 kept: kept,
                 marks: marks,
                 finished: detector,
-                signals: .live
+                signals: .live,
+                now: Date()
             )
         }.value
         guard generation == refreshGeneration else { return }
+        let found = report.candidates
+        LabsTelemetry.expiringScanned(
+            candidates: found,
+            unreadableFolders: report.folderErrors.count,
+            finishedDetection: detectsFinished,
+            duration: Date().timeIntervalSince(startedAt)
+        )
+        // Usually a missing Files and Folders permission for Desktop or Downloads.
+        for error in report.folderErrors {
+            ReliabilityManager.shared.capture(error: error, feature: "labs", operation: "expiring_files_scan")
+        }
         isScanning = false
         candidates = found
         // A trash result is shown once; the next scan replaces it with the current state.
@@ -112,7 +125,8 @@ package final class ExpiringFilesManager: ObservableObject {
     }
 
     /// Stops offering this copy of the file. A new download with the same name is judged afresh.
-    package func keep(_ candidate: ExpiringFileCandidate) {
+    package func keep(_ candidate: ExpiringFileCandidate, from surface: LabsTelemetry.Surface) {
+        LabsTelemetry.expiringKept(from: surface, reason: candidate.reason)
         var kept = defaults.stringArray(forKey: keptKey) ?? []
         kept.append(candidate.keepKey)
         defaults.set(Array(kept.suffix(1_000)), forKey: keptKey)
@@ -121,26 +135,42 @@ package final class ExpiringFilesManager: ObservableObject {
 
     /// Moves the chosen files to the Trash, where Finder can put them back. A file
     /// that was replaced or moved since the scan is skipped rather than trashed.
-    package func moveToTrash(_ selection: [ExpiringFileCandidate]) async {
+    package func moveToTrash(_ selection: [ExpiringFileCandidate], from surface: LabsTelemetry.Surface) async {
+        let offered = candidates.count
         let outcome = await Task.detached(priority: .userInitiated) {
             var trashed: [URL] = []
             var changed = 0
             var failedIDs = Set<String>()
+            var firstError: NSError?
             for candidate in selection {
                 guard Self.isUnchanged(candidate) else {
                     changed += 1
                     continue
                 }
-                if (try? FileManager.default.trashItem(at: candidate.url, resultingItemURL: nil)) != nil {
+                do {
+                    try FileManager.default.trashItem(at: candidate.url, resultingItemURL: nil)
                     trashed.append(candidate.url)
-                } else {
+                } catch {
                     failedIDs.insert(candidate.id)
+                    if firstError == nil { firstError = error as NSError }
                 }
             }
-            return (trashed, changed, failedIDs)
+            return (trashed, changed, failedIDs, firstError)
         }.value
-        let (trashed, changed, failedIDs) = outcome
+        let (trashed, changed, failedIDs, trashError) = outcome
+        if let trashError {
+            ReliabilityManager.shared.capture(error: trashError, feature: "labs", operation: "expiring_files_trash")
+        }
         let failed = failedIDs.count
+        LabsTelemetry.expiringTrashed(
+            from: surface,
+            offered: offered,
+            selected: selection.count,
+            trashed: trashed.count,
+            changed: changed,
+            failed: failed,
+            finished: selection.filter(\.isFinished).count
+        )
         // Failures stay listed for another try. Changed files leave: the next scan judges them afresh.
         let removedIDs = Set(selection.map(\.id)).subtracting(failedIDs)
         candidates.removeAll { removedIDs.contains($0.id) }
@@ -212,15 +242,42 @@ package final class ExpiringFilesManager: ObservableObject {
         signals: FileSignals = .unavailable,
         now: Date = Date()
     ) -> [ExpiringFileCandidate] {
+        scanReport(folders: folders, cutoff: cutoff, kept: kept, marks: marks, finished: finished, signals: signals, now: now)
+            .candidates
+    }
+
+    /// Candidates plus the folders that couldn't be listed, for diagnostics.
+    struct ScanReport: Sendable {
+        var candidates: [ExpiringFileCandidate]
+        var folderErrors: [NSError]
+    }
+
+    nonisolated static func scanReport(
+        folders: [URL],
+        cutoff: Date,
+        kept: Set<String>,
+        marks: [String: Date],
+        finished: FinishedDownloadDetector?,
+        signals: FileSignals,
+        now: Date
+    ) -> ScanReport {
+        var folderErrors: [NSError] = []
         let keys: [URLResourceKey] = [.addedToDirectoryDateKey, .creationDateKey, .isDirectoryKey, .isPackageKey, .fileSizeKey]
         var results: [ExpiringFileCandidate] = []
         var seen = Set<String>()
         for folder in folders {
-            let contents = (try? FileManager.default.contentsOfDirectory(
-                at: folder,
-                includingPropertiesForKeys: keys,
-                options: [.skipsHiddenFiles]
-            )) ?? []
+            let contents: [URL]
+            do {
+                contents = try FileManager.default.contentsOfDirectory(
+                    at: folder,
+                    includingPropertiesForKeys: keys,
+                    options: [.skipsHiddenFiles]
+                )
+            } catch {
+                // A screenshot folder that was deleted isn't a fault worth reporting.
+                if FileManager.default.fileExists(atPath: folder.path) { folderErrors.append(error as NSError) }
+                continue
+            }
             for url in contents {
                 let path = key(for: url)
                 // The screenshot folder can be Desktop or Downloads under another spelling.
@@ -247,7 +304,7 @@ package final class ExpiringFilesManager: ObservableObject {
                 results.append(ExpiringFileCandidate(url: url, reason: reason, dateAdded: added, size: size))
             }
         }
-        return results.sorted { $0.dateAdded < $1.dateAdded }
+        return ScanReport(candidates: results.sorted { $0.dateAdded < $1.dateAdded }, folderErrors: folderErrors)
     }
 
     /// Installers, archives and screenshots are offered automatically. Other

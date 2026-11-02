@@ -153,9 +153,12 @@ struct RoutingRulesCard: View {
                 destinationTemplate: resolution.destinationTemplate
             )
             HapticFeedbackManager.shared.success()
+            LabsTelemetry.routingRuleDrafted(succeeded: true)
         } catch {
             errorMessage = error.localizedDescription
             HapticFeedbackManager.shared.error()
+            LabsTelemetry.routingRuleDrafted(succeeded: false)
+            ReliabilityManager.shared.capture(error: error, feature: "labs", operation: "routing_rule_draft")
         }
     }
 
@@ -163,6 +166,7 @@ struct RoutingRulesCard: View {
         guard var rule = draft else { return }
         rule.destinationTemplate = RoutingRule.sanitizedTemplate(rule.destinationTemplate)
         store.add(rule)
+        LabsTelemetry.routingRuleChanged(action: "rule_saved", ruleCount: store.rules.count)
         draft = nil
         request = ""
         HapticFeedbackManager.shared.success()
@@ -184,6 +188,10 @@ private struct RoutingRuleRow: View {
                     var updated = rule
                     updated.isEnabled = isOn
                     store.update(updated)
+                    LabsTelemetry.routingRuleChanged(
+                        action: isOn ? "rule_enabled" : "rule_disabled",
+                        ruleCount: store.rules.count
+                    )
                 }
             ))
             .toggleStyle(.switch)
@@ -207,6 +215,7 @@ private struct RoutingRuleRow: View {
             Button {
                 HapticFeedbackManager.shared.tap()
                 store.remove(id: rule.id)
+                LabsTelemetry.routingRuleChanged(action: "rule_deleted", ruleCount: store.rules.count)
             } label: {
                 Image(systemName: "trash")
                     .font(.caption)

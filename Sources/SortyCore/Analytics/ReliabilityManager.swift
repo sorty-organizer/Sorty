@@ -490,9 +490,10 @@ public final class ReliabilityManager {
     }
 
     static func workflowDiagnostics(workflow: String, stage: String, outcome: String) -> [String: Any]? {
-        let workflows: Set = ["organize", "apply", "regenerate", "undo", "duplicate_scan", "app_launch", "model_catalog", "learnings_profile"]
-        let stages: Set = ["started", "preparing", "scanning", "scan_completed", "plan_generation", "plan_ready", "apply", "applied", "apply_started", "restore", "loaded", "completed", "main_window_appeared", "window_ready", "cancel_requested", "cancelled", "failed", "finished"]
-        let outcomes: Set = ["started", "success", "completed", "failed", "cancelled", "empty", "skipped"]
+        // Labs workflows (expiring_files, routing_rules) are listed while the features are experimental.
+        let workflows: Set = ["organize", "apply", "regenerate", "undo", "duplicate_scan", "app_launch", "model_catalog", "learnings_profile", "expiring_files", "routing_rules"]
+        let stages: Set = ["started", "preparing", "scanning", "scan_completed", "plan_generation", "plan_ready", "apply", "applied", "apply_started", "restore", "loaded", "completed", "main_window_appeared", "window_ready", "cancel_requested", "cancelled", "failed", "finished", "routing_applied", "review_opened", "move_to_trash", "file_kept", "rule_drafted", "rule_saved", "rule_deleted", "rule_enabled", "rule_disabled"]
+        let outcomes: Set = ["started", "success", "completed", "failed", "cancelled", "empty", "skipped", "partial"]
         guard workflows.contains(workflow), stages.contains(stage), outcomes.contains(outcome) else { return nil }
         return ["workflow": workflow, "stage": stage, "outcome": outcome]
     }

@@ -59,6 +59,9 @@ struct MenuBarExpiringFilesSection: View {
         Button {
             HapticFeedbackManager.shared.selection()
             isReviewing.toggle()
+            if isReviewing {
+                LabsTelemetry.expiringReviewOpened(from: .menuBar, waiting: manager.candidates.count)
+            }
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: SortyLabsFeature.expiringFiles.systemImage)
@@ -121,7 +124,7 @@ struct MenuBarExpiringFilesSection: View {
                             selection: selection(for:),
                             onKeep: { candidate in
                                 HapticFeedbackManager.shared.tap()
-                                manager.keep(candidate)
+                                manager.keep(candidate, from: .menuBar)
                             }
                         )
                         .transition(.opacity)
@@ -135,7 +138,7 @@ struct MenuBarExpiringFilesSection: View {
                 HapticFeedbackManager.shared.success()
                 let chosen = selected
                 Task {
-                    await manager.moveToTrash(chosen)
+                    await manager.moveToTrash(chosen, from: .menuBar)
                     deselected = []
                 }
             } label: {
