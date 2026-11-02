@@ -17,7 +17,6 @@ public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
     case routingRules = "labs.routingRules"
     case downloadsInbox = "labs.downloadsInbox"
     case expiringFiles = "labs.expiringFiles"
-    case projectDetection = "labs.projectDetection"
 
     public var id: String { rawValue }
 
@@ -33,7 +32,6 @@ public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
         case .routingRules: "Routing Rules"
         case .downloadsInbox: "Downloads Inbox"
         case .expiringFiles: "Expiring Files"
-        case .projectDetection: "Project Detection"
         }
     }
 
@@ -45,8 +43,6 @@ public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
             "New downloads queue up in the menu bar with a suggested folder. Press Return to file the top one."
         case .expiringFiles:
             "Old installers, archives and screenshots in Downloads and on the Desktop are offered for the Trash after a set number of days. Nothing is removed without your review."
-        case .projectDetection:
-            "Leaves code projects intact and keeps related files, like a trip's photos and its booking PDFs, in one folder."
         }
     }
 
@@ -55,7 +51,6 @@ public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
         case .routingRules: "arrow.triangle.branch"
         case .downloadsInbox: "tray.and.arrow.down"
         case .expiringFiles: "hourglass"
-        case .projectDetection: "square.stack.3d.up"
         }
     }
 }

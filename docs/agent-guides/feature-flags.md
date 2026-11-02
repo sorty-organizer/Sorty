@@ -35,7 +35,10 @@ The Labs switches remain visible when no remote experiments are available; the p
 | Routing Rules | `labs.routingRules` | A card on the Rules page turns a sentence into a saved rule (exclusion-style conditions plus a relative destination with `{YYYY}`, `{MM}`, `{DD}`, `{Month}`). The AI runs once, when the rule is written. During manual organize runs, matching files skip the AI and merge into the plan (`FolderOrganizer+Routing.swift`). Rename-only runs and watched folders ignore routing rules. |
 | Downloads Inbox | `labs.downloadsInbox` | `DownloadsInboxManager` watches `~/Downloads` with one vnode source and queues files added after the feature was turned on. The menu bar lists them with a suggested folder: a routing rule match, then a folder the user picked before for that extension, then a folder named for the kind of file inside Downloads. Return files the top item and ⌘Z undoes the last move. Moves never overwrite. |
 | Expiring Files | `labs.expiringFiles` | `ExpiringFilesManager` lists installers, archives and screenshots at the top level of Downloads, the Desktop and the screenshot folder once they are older than `labs.expiring.days` (default 14), plus files the user marked "Trash in 7 Days" in the inbox. The menu bar asks for review and moves approved files to the Trash. "Keep" stops a file from being offered again. |
-| Project Detection | `labs.projectDetection` | The organize scan skips folders that hold project markers (`.git`, `Package.swift`, `package.json`, `.xcodeproj` and similar; see `ProjectFolderDetector`), so their files are never moved. `ProjectClusterDetector` groups loose files that share a distinctive name word across two or more file kinds and asks the AI to keep each group in one folder. |
+
+### Developer Mode project detection
+
+Project detection is part of the Developer Mode persona, with no separate Labs switch. In organize runs, the scanner leaves detected project folders and their contents in place, and `ProjectClusterDetector` asks the AI to keep related loose files together across file types. Rename-only runs and custom personas do not enable this behavior. The former `labs.projectDetection` preference is no longer read.
 
 ### Sorty Codex Skill
 

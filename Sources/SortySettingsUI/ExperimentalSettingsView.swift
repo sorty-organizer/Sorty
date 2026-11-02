@@ -108,7 +108,6 @@ private struct SortyLabsCard: View {
     @AppStorage(SortyLabsFeature.routingRules.defaultsKey) private var routingRules = false
     @AppStorage(SortyLabsFeature.downloadsInbox.defaultsKey) private var downloadsInbox = false
     @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var expiringFiles = false
-    @AppStorage(SortyLabsFeature.projectDetection.defaultsKey) private var projectDetection = false
     @AppStorage(ExpiringFilesManager.ageInDaysKey) private var expiringAgeInDays = ExpiringFilesManager.defaultAgeInDays
 
     var body: some View {
@@ -152,7 +151,6 @@ private struct SortyLabsCard: View {
         case .routingRules: $routingRules
         case .downloadsInbox: $downloadsInbox
         case .expiringFiles: $expiringFiles
-        case .projectDetection: $projectDetection
         }
         return Binding(
             get: { binding.wrappedValue },

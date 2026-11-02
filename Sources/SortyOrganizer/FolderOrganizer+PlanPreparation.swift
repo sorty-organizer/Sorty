@@ -250,6 +250,16 @@ extension FolderOrganizer {
         return instructions
     }
 
+    /// Project protection and clustering follow the active built-in Developer Mode.
+    var usesDeveloperProjectDetection: Bool {
+        guard let personaManager, personaManager.selectedPersona == .developer else { return false }
+        if let customId = personaManager.selectedCustomPersonaId,
+           customPersonaStore?.customPersonas.contains(where: { $0.id == customId }) == true {
+            return false
+        }
+        return true
+    }
+
     /// Effective persona prompt for the current selection: a selected custom
     /// persona wins when a custom store is configured, otherwise the standard
     /// persona (or its custom prompt) is used.

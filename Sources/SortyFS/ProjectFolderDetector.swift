@@ -2,7 +2,7 @@
 //  ProjectFolderDetector.swift
 //  Sorty
 //
-//  Recognizes folders that only work as a whole (Labs: Project Detection).
+//  Recognizes folders that only work as a whole (Developer Mode).
 //
 
 import Foundation

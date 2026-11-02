@@ -331,7 +331,7 @@ extension FolderOrganizer {
                 deepScan: usesDeepScan,
                 deepScanFileLimit: Self.deepScanFileLimit,
                 exclusionMatcher: exclusionMatcher,
-                protectsProjectFolders: SortyLabsFeature.projectDetection.isEnabled
+                protectsProjectFolders: usesDeveloperProjectDetection
                     && aiConfig?.mode != .renameOnly
             )
         } catch {
@@ -429,7 +429,7 @@ extension FolderOrganizer {
         let isRenameOnly = aiConfig?.mode == .renameOnly
         instructions += exclusionInstructions(forRenameOnly: isRenameOnly)
 
-        if !isRenameOnly, SortyLabsFeature.projectDetection.isEnabled,
+        if !isRenameOnly, usesDeveloperProjectDetection,
            let projectContext = ProjectClusterDetector.promptContext(
                clusters: ProjectClusterDetector.detect(in: files),
                protectedProjectFolders: await scanner.lastProtectedProjectFolders

@@ -28,7 +28,7 @@ public enum PersonaType: String, Codable, CaseIterable, Sendable {
         case .general:
             return "Organize by file type and context"
         case .developer:
-            return "Tidy root clutter without breaking code"
+            return "Keep code projects intact and group related files"
         case .photographer:
             return "Sort photos by date, event, and camera"
         case .office:
@@ -64,7 +64,8 @@ public enum PersonaType: String, Codable, CaseIterable, Sendable {
             return """
             
             ## Developer Mode Specialization — codebase-safe root hygiene:
-            - **Assume a live codebase**: package.json, Cargo.toml, go.mod, *.xcodeproj, Package.swift, pom.xml, build.gradle, Gemfile, pyproject.toml, Makefile, CMakeLists.txt, .git/ mean imports/builds depend on current paths. This overrides the generic Project Detection rule — do NOT consolidate the repo into a new Projects/ folder.
+            - **Assume a live codebase**: package.json, Cargo.toml, go.mod, *.xcodeproj, Package.swift, pom.xml, build.gradle, Gemfile, pyproject.toml, Makefile, CMakeLists.txt, .git/ mean imports/builds depend on current paths. Do NOT consolidate a live repo into a new Projects/ folder.
+            - **Keep related files together**: group loose files from the same project, trip, client, or event in one folder, even when their file types differ. Leave detected project folders and their contents in place.
             - **Root hygiene first**: only move loose files in the root that clearly don't belong there — screenshots, downloads, installers (.dmg/.pkg), stray zips, random PDFs/notes, exported logs/dumps, one-off scratch scripts. Leave everything else in place.
             - **Respect conventions**: reuse existing folders (docs/, scripts/, tools/, assets/) with their exact casing; keep moves shallow (depth ≤2); match the repo's naming style. Never re-group source by language/stack, never re-nest src/, lib/, Sources/, Tests/, and never move manifests, lockfiles, Makefiles, Dockerfiles, CI configs, dotfiles, or .git/.
             - **Never touch build output or deps**: node_modules/, vendor/, target/, build/, dist/, .venv/, Pods/, DerivedData/, .cache/. Never rename source or config files tied to imports/builds.

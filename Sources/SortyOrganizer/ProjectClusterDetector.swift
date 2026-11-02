@@ -2,7 +2,7 @@
 //  ProjectClusterDetector.swift
 //  Sorty
 //
-//  Finds loose files that belong to one project, trip or event (Labs: Project Detection).
+//  Finds loose files that belong to one project, trip or event (Developer Mode).
 //
 
 import Foundation
