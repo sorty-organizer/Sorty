@@ -56,7 +56,9 @@ package final class DownloadsInboxManager: ObservableObject {
     nonisolated package static let maximumItems = 20
 
     @Published package private(set) var items: [DownloadsInboxItem] = []
-    @Published package private(set) var lastMove: DownloadsInboxMove?
+    /// Moves from the most recent accept, so one Undo reverses a whole "Move All".
+    @Published package private(set) var lastMoves: [DownloadsInboxMove] = []
+    package var lastMove: DownloadsInboxMove? { lastMoves.last }
     @Published package private(set) var lastError: String?
 
     package let downloadsURL: URL
@@ -122,7 +124,7 @@ package final class DownloadsInboxManager: ObservableObject {
         source = nil
         refreshTask?.cancel()
         items = []
-        lastMove = nil
+        lastMoves = []
     }
 
     /// Coalesces bursts of folder events; a browser download fires several.
@@ -234,6 +236,25 @@ package final class DownloadsInboxManager: ObservableObject {
     /// Moves the file to its suggestion, or to `destination` when the user
     /// picked one. A picked folder is remembered for that file extension.
     package func accept(_ item: DownloadsInboxItem, to destination: URL? = nil) async {
+        await acceptAll([item], to: destination)
+    }
+
+    /// Moves several files in one step; Undo then reverses all of them.
+    package func acceptAll(_ batch: [DownloadsInboxItem], to destination: URL? = nil) async {
+        var moves: [DownloadsInboxMove] = []
+        var failure: String?
+        for item in batch {
+            if let move = await move(item, to: destination) {
+                moves.append(move)
+            } else {
+                failure = lastError
+            }
+        }
+        if !moves.isEmpty { lastMoves = moves }
+        lastError = failure
+    }
+
+    private func move(_ item: DownloadsInboxItem, to destination: URL?) async -> DownloadsInboxMove? {
         let target = destination ?? item.suggestion.destination
         let sourceURL = item.url
         do {
@@ -246,23 +267,26 @@ package final class DownloadsInboxManager: ObservableObject {
                 defaults.set(remembered, forKey: rememberedKey)
             }
             items.removeAll { $0.id == item.id }
-            lastMove = DownloadsInboxMove(originalURL: sourceURL, movedURL: movedURL)
-            lastError = nil
+            return DownloadsInboxMove(originalURL: sourceURL, movedURL: movedURL)
         } catch {
             lastError = "Couldn't move \(sourceURL.lastPathComponent): \(error.userFacingMessage)"
+            return nil
         }
     }
 
     package func undoLastMove() async {
-        guard let move = lastMove else { return }
+        let moves = lastMoves
+        guard !moves.isEmpty else { return }
         do {
             try await Task.detached(priority: .userInitiated) {
-                guard !FileManager.default.fileExists(atPath: move.originalURL.path) else {
-                    throw CocoaError(.fileWriteFileExists)
+                for move in moves.reversed() {
+                    guard !FileManager.default.fileExists(atPath: move.originalURL.path) else {
+                        throw CocoaError(.fileWriteFileExists)
+                    }
+                    try FileManager.default.moveItem(at: move.movedURL, to: move.originalURL)
                 }
-                try FileManager.default.moveItem(at: move.movedURL, to: move.originalURL)
             }.value
-            lastMove = nil
+            lastMoves = []
             lastError = nil
             scheduleRefresh(delay: .zero)
         } catch {
