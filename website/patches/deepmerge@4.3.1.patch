@@ -1,0 +1,54 @@
+diff --git a/dist/cjs.js b/dist/cjs.js
+index 7c36cbdd06cc22c92d590be3f87a08a91ca06b40..53924d6922a9e2a4cd64ea2c0fec9d8cc09f36ac 100644
+--- a/dist/cjs.js
++++ b/dist/cjs.js
+@@ -80,11 +80,12 @@ function mergeObject(target, source, options) {
+ 	var destination = {};
+ 	if (options.isMergeableObject(target)) {
+ 		getKeys(target).forEach(function(key) {
++			if (key === "__proto__" || key === "constructor" || key === "prototype") return;
+ 			destination[key] = cloneUnlessOtherwiseSpecified(target[key], options);
+ 		});
+ 	}
+ 	getKeys(source).forEach(function(key) {
+-		if (propertyIsUnsafe(target, key)) {
++		if (key === "__proto__" || key === "constructor" || key === "prototype" || propertyIsUnsafe(target, key)) {
+ 			return
+ 		}
+ 
+diff --git a/dist/umd.js b/dist/umd.js
+index 4071e7c56ec8e5273fe166f6e723ac460fab8b72..51b11f956a1462e7a9d5ff0c233e7201131dbfcd 100644
+--- a/dist/umd.js
++++ b/dist/umd.js
+@@ -84,11 +84,12 @@
+ 		var destination = {};
+ 		if (options.isMergeableObject(target)) {
+ 			getKeys(target).forEach(function(key) {
++			if (key === "__proto__" || key === "constructor" || key === "prototype") return;
+ 				destination[key] = cloneUnlessOtherwiseSpecified(target[key], options);
+ 			});
+ 		}
+ 		getKeys(source).forEach(function(key) {
+-			if (propertyIsUnsafe(target, key)) {
++			if (key === "__proto__" || key === "constructor" || key === "prototype" || propertyIsUnsafe(target, key)) {
+ 				return
+ 			}
+ 
+diff --git a/index.js b/index.js
+index 77968aed5d456cccc294f60912ef381fa1e52a7b..8c5d9f4e6dfca262c295c99398eeecb34b46447e 100644
+--- a/index.js
++++ b/index.js
+@@ -55,11 +55,12 @@ function mergeObject(target, source, options) {
+ 	var destination = {}
+ 	if (options.isMergeableObject(target)) {
+ 		getKeys(target).forEach(function(key) {
++			if (key === "__proto__" || key === "constructor" || key === "prototype") return;
+ 			destination[key] = cloneUnlessOtherwiseSpecified(target[key], options)
+ 		})
+ 	}
+ 	getKeys(source).forEach(function(key) {
+-		if (propertyIsUnsafe(target, key)) {
++		if (key === "__proto__" || key === "constructor" || key === "prototype" || propertyIsUnsafe(target, key)) {
+ 			return
+ 		}
+ 

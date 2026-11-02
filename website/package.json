@@ -45,7 +45,7 @@
   },
   "pnpm": {
     "overrides": {
-      "@hono/node-server": "2.0.10",
+      "@hono/node-server": "2.1.5",
       "body-parser": "2.4.0",
       "browserslist": "4.28.7",
       "brace-expansion@<2.0.0": "1.1.21",
@@ -59,15 +59,18 @@
       "postcss": "8.5.23",
       "postcss-selector-parser": "7.1.6",
       "proxy-addr": "2.0.8",
-      "qs": "6.16.0",
+      "qs": "6.17.1",
       "sharp": "0.35.5",
       "source-map-js": "1.2.2",
       "undici@<7.0.0": "6.29.1",
-      "zod": "4.6.6"
+      "zod": "4.6.6",
+      "glob": "14.0.2",
+      "minimatch@>=10.0.0": "11.0.1"
     },
     "patchedDependencies": {
       "@highlighters/core@1.2.0": "patches/@highlighters__core@1.2.0.patch",
-      "braces@3.0.3": "patches/braces@3.0.3.patch"
+      "braces@3.0.3": "patches/braces@3.0.3.patch",
+      "deepmerge@4.3.1": "patches/deepmerge@4.3.1.patch"
     }
   }
 }
