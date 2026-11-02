@@ -55,6 +55,7 @@ package struct WatchedFoldersView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingFolderPicker = false
     @State private var isDropTargeted = false
+    @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var isExpiringFilesEnabled = false
 
     package init() {}
 
@@ -89,6 +90,11 @@ package struct WatchedFoldersView: View {
                     ScrollViewReader { scrollProxy in
                         ScrollView {
                             LazyVStack(spacing: 12) {
+                                if isExpiringFilesEnabled {
+                                    ExpiringFilesSection()
+                                        .animatedAppearance(delay: 0.05)
+                                }
+
                                 ForEach(
                                     Array(watchedFoldersManager.folders.enumerated()),
                                     id: \.element.id

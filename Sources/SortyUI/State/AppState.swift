@@ -208,8 +208,6 @@ public class AppState: ObservableObject {
         case exclusions
         case watchedFolders
         case learnings
-        /// Labs: Expiring Files. Listed only while enabled.
-        case inbox
     }
 
     public struct NavigationReturnRoute: Equatable, Sendable {

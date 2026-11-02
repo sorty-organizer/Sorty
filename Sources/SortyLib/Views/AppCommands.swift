@@ -45,10 +45,8 @@ public struct SortyCommands: Commands {
         #endif
     }
 
-    @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var isExpiringFilesEnabled = false
-
     private var sidebarItems: [SidebarNavigationItem] {
-        SidebarNavigationItem.items(includingInbox: isExpiringFilesEnabled)
+        SidebarNavigationItem.mainItems
     }
 
     public init() {}

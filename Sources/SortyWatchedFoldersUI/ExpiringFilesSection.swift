@@ -1,74 +1,44 @@
 //
-//  InboxView.swift
+//  ExpiringFilesSection.swift
 //  Sorty
 //
-//  Main-window page for Labs Expiring Files.
+//  Watched Folders card for Labs Expiring Files.
 //
 
 import AppKit
 import SwiftUI
 
-/// Reviews expiring files while the feature is enabled.
-struct InboxView: View {
-    @SortyHotReload private var hotReload
-    @EnvironmentObject private var appState: AppState
+/// Reviews expiring files at the top of Watched Folders while the Labs flag is on.
+/// Collapses to a single status line when nothing is waiting.
+struct ExpiringFilesSection: View {
     @ObservedObject private var expiring = ExpiringFilesManager.shared
+    @EnvironmentObject private var appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var deselected: Set<String> = []
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-                .animatedAppearance(delay: 0.03)
-
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    expiringContent
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(24)
-                .animatedAppearance(delay: 0.05)
+        expiringContent
+            .task {
+                await expiring.refresh()
             }
-        }
-        .task {
-            await expiring.refresh()
-        }
-        .animation(reduceMotion ? nil : .sortySnappy, value: expiring.candidates.map(\.id))
+            .animation(reduceMotion ? nil : .sortySnappy, value: expiring.candidates.map(\.id))
     }
 
-    // MARK: Header
-
-    private var header: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Inbox")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                Text(headerSubtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .contentTransition(.numericText())
-            }
-            Spacer()
-            Button {
-                HapticFeedbackManager.shared.tap()
-                appState.openSettingsWindow(section: .experimental)
-            } label: {
-                Label("Labs Settings", systemImage: "flask")
-            }
-            .buttonStyle(.sortyBordered(size: .small))
-            .accessibilityIdentifier("InboxLabsSettingsButton")
-        }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
+    private var ageDescription: String {
+        expiring.ageInDays == 1 ? "1 day" : "\(expiring.ageInDays) days"
     }
 
-    private var headerSubtitle: String {
-        let count = expiring.candidates.count
-        guard count > 0 else { return "Old installers, archives and screenshots appear here" }
-        return "\(count) \(count == 1 ? "file" : "files") · \(ByteCountFormatter.string(fromByteCount: expiring.totalSize, countStyle: .file))"
+    private var labsSettingsButton: some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            appState.openSettingsWindow(section: .experimental)
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+        }
+        .buttonStyle(.sortyBordered(size: .small))
+        .help("Expiring Files settings in Labs")
+        .accessibilityLabel("Expiring Files settings")
+        .accessibilityIdentifier("ExpiringFilesSettingsButton")
     }
 
     // MARK: Expiring Files
@@ -84,19 +54,32 @@ struct InboxView: View {
     @ViewBuilder
     private var expiringContent: some View {
         if expiring.candidates.isEmpty {
-            InboxEmptyCard(
-                title: expiring.lastResult ?? "Nothing has expired",
-                systemImage: "checkmark.circle",
-                message: "Installers, archives and screenshots older than \(expiring.ageInDays) days show up here for review."
-            )
+            HStack(spacing: 12) {
+                ExpiringIconTile(systemImage: SortyLabsFeature.expiringFiles.systemImage, tint: Color.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Expiring Files")
+                        .font(.headline)
+                    Text(expiring.lastResult ?? "Nothing in Downloads or on the Desktop is older than \(ageDescription).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                labsSettingsButton
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
+            .accessibilityIdentifier("ExpiringFilesEmptyCard")
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .center, spacing: 12) {
-                    InboxIconTile(systemImage: SortyLabsFeature.expiringFiles.systemImage, tint: .orange)
+                    ExpiringIconTile(systemImage: SortyLabsFeature.expiringFiles.systemImage, tint: .orange)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(expiring.candidates.contains(where: \.isFinished) ? "Done with these?" : "Older than \(expiring.ageInDays) days")
+                        Text("Expiring Files")
                             .font(.headline)
-                        Text("Uncheck anything you want to keep for now.")
+                        Text(expiring.candidates.contains(where: \.isFinished)
+                            ? "Done with these? Uncheck anything you want to keep."
+                            : "Older than \(ageDescription). Uncheck anything you want to keep.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -110,7 +93,8 @@ struct InboxView: View {
                     ))
                     .toggleStyle(.checkbox)
                     .font(.caption)
-                    .accessibilityIdentifier("InboxExpiringSelectAll")
+                    .accessibilityIdentifier("ExpiringFilesSelectAll")
+                    labsSettingsButton
                 }
                 .padding(16)
 
@@ -118,7 +102,7 @@ struct InboxView: View {
 
                 VStack(spacing: 2) {
                     ForEach(expiring.candidates) { candidate in
-                        InboxExpiringRow(
+                        ExpiringCandidateRow(
                             candidate: candidate,
                             isSelected: Binding(
                                 get: { !deselected.contains(candidate.id) },
@@ -153,39 +137,21 @@ struct InboxView: View {
                     }
                     .buttonStyle(.sortyProminent(size: .small))
                     .disabled(selectedCandidates.isEmpty)
-                    .accessibilityIdentifier("InboxExpiringTrashButton")
+                    .accessibilityIdentifier("ExpiringFilesTrashButton")
                 }
                 .padding(16)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
-            .accessibilityIdentifier("InboxExpiringCard")
+            .accessibilityIdentifier("ExpiringFilesCard")
         }
     }
 }
 
 // MARK: - Cards
 
-private struct InboxEmptyCard: View {
-    let title: String
-    let systemImage: String
-    let message: String
-
-    var body: some View {
-        SortyEmptyState(
-            LocalizedStringKey(title),
-            systemImage: systemImage,
-            message: LocalizedStringKey(message),
-            size: .inline
-        )
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
-    }
-}
-
 /// A tinted rounded square holding a symbol, used to lead card headers.
-private struct InboxIconTile: View {
+private struct ExpiringIconTile: View {
     let systemImage: String
     let tint: Color
 
@@ -205,7 +171,7 @@ private struct InboxIconTile: View {
 // MARK: - Rows
 
 /// Loads a QuickLook thumbnail, showing the Finder icon until it arrives.
-private struct InboxThumbnail: View {
+private struct ExpiringThumbnail: View {
     let url: URL
     @State private var image: NSImage?
 
@@ -229,7 +195,7 @@ private struct InboxThumbnail: View {
 
 /// Shared row chrome: thumbnail, two lines of text, hover highlight. Trailing
 /// actions are inserted on hover rather than faded, so idle rows stay clean.
-private struct InboxFileRow<Leading: View, Trailing: View>: View {
+private struct ExpiringFileRow<Leading: View, Trailing: View>: View {
     let url: URL
     let detail: Text
     /// Keeps actions visible without hover, for the row that owns a keyboard shortcut.
@@ -241,7 +207,7 @@ private struct InboxFileRow<Leading: View, Trailing: View>: View {
     var body: some View {
         HStack(spacing: 12) {
             leading
-            InboxThumbnail(url: url)
+            ExpiringThumbnail(url: url)
             VStack(alignment: .leading, spacing: 2) {
                 Text(url.lastPathComponent)
                     .font(.callout.weight(.medium))
@@ -277,12 +243,12 @@ private struct InboxFileRow<Leading: View, Trailing: View>: View {
     }
 }
 
-private struct InboxExpiringRow: View {
+private struct ExpiringCandidateRow: View {
     let candidate: ExpiringFileCandidate
     @Binding var isSelected: Bool
 
     var body: some View {
-        InboxFileRow(
+        ExpiringFileRow(
             url: candidate.url,
             detail: Text("\(candidate.reason.rawValue) · added \(candidate.dateAdded.formatted(.relative(presentation: .named))) · \(ByteCountFormatter.string(fromByteCount: candidate.size, countStyle: .file))")
         ) {
@@ -299,6 +265,6 @@ private struct InboxExpiringRow: View {
             .help("Never suggest this file again")
         }
         .opacity(isSelected ? 1 : 0.6)
-        .accessibilityIdentifier("InboxExpiringRow")
+        .accessibilityIdentifier("ExpiringCandidateRow")
     }
 }

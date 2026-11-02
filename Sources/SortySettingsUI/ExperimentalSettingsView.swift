@@ -129,7 +129,7 @@ private struct SortyLabsCard: View {
 
                     if feature == .expiringFiles, expiringFiles {
                         Stepper(value: $expiringAgeInDays, in: 1...365) {
-                            Text("Offer files older than \(expiringAgeInDays) days")
+                            Text("Offer files older than \(expiringAgeInDays) \(expiringAgeInDays == 1 ? "day" : "days")")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .numericTextTransition(animationValue: expiringAgeInDays)
@@ -170,7 +170,7 @@ private struct SortyLabsCard: View {
     private func openLink(for feature: SortyLabsFeature) -> some View {
         let (title, destination): (String, AppState.AppView) = switch feature {
         case .routingRules: ("Add Routing Rules in Exclusions", .exclusions)
-        case .expiringFiles: ("Open Inbox", .inbox)
+        case .expiringFiles: ("Review in Watched Folders", .watchedFolders)
         }
         return Button {
             HapticFeedbackManager.shared.tap()

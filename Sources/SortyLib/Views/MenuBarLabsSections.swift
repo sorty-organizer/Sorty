@@ -15,13 +15,8 @@ struct MenuBarExpiringFilesSection: View {
     @SortyHotReload private var hotReload
     @ObservedObject private var manager = ExpiringFilesManager.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isReviewing: Bool
+    @State private var isReviewing = false
     @State private var deselected: Set<String> = []
-
-    /// The Inbox page opens straight into the review list; the menu bar starts collapsed.
-    init(startsExpanded: Bool = false) {
-        _isReviewing = State(initialValue: startsExpanded)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
