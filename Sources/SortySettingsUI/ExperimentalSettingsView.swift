@@ -149,14 +149,27 @@ private struct SortyLabsCard: View {
     var body: some View {
         SettingsCard(title: "Sorty Labs", icon: "flask", color: .indigo) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Early features you can switch on yourself. They work offline and may change.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
                 ForEach(SortyLabsFeature.allCases) { feature in
-                    Divider()
-                    featureSection(feature)
+                    SettingsToggle(
+                        isOn: binding(for: feature),
+                        title: feature.title,
+                        description: feature.summary
+                    )
+                    .accessibilityIdentifier("LabsToggle-\(feature.rawValue)")
+
+                    if binding(for: feature).wrappedValue {
+                        openLink(for: feature)
+                            .transition(.opacity)
+                    }
+
+                    if feature == .expiringFiles, expiringFiles {
+                        expiringOptions
+                            .transition(.opacity)
+                    }
+
+                    if feature != SortyLabsFeature.allCases.last {
+                        Divider()
+                    }
                 }
             }
             .animation(reduceMotion ? .sortyFade : .sortySmooth, value: expiringFiles)
@@ -175,120 +188,82 @@ private struct SortyLabsCard: View {
         }
     }
 
-    @ViewBuilder
-    private func featureSection(_ feature: SortyLabsFeature) -> some View {
-        let isOn = binding(for: feature)
+    /// Expiring Files options in one inset box under the feature, so they read
+    /// as belonging to it rather than as features of their own.
+    private var expiringOptions: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 12) {
-                LabsIconTile(systemImage: feature.systemImage, tint: .indigo)
+            HStack(spacing: 12) {
+                Text("Offer files after")
+                    .font(.callout)
+                Spacer(minLength: 12)
+                Picker("Offer files after", selection: $expiringAgeInDays) {
+                    ForEach(agePresets, id: \.self) { days in
+                        Text(days == 1 ? "1 day" : "\(days) days").tag(days)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(.primary)
+                .labelsHidden()
+                .fixedSize()
+                .accessibilityIdentifier("LabsExpiringAgePicker")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(feature.title)
-                        .font(.subheadline.weight(.medium))
-                    Text(feature.summary)
+            Divider()
+                .padding(.leading, 12)
+
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Spot finished downloads")
+                        .font(.callout)
+                    Text("Offer installers once their app is installed, and archives once extracted, without waiting.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                        .lineSpacing(2)
-                    if isOn.wrappedValue {
-                        openLink(for: feature)
-                            .padding(.top, 2)
-                            .transition(.opacity)
-                    }
                 }
-
                 Spacer(minLength: 12)
-
-                Toggle(feature.title, isOn: isOn)
-                    .labelsHidden()
+                Toggle("Spot finished downloads", isOn: $finishedDownloads)
                     .toggleStyle(.switch)
-                    .fixedSize()
-                    .accessibilityIdentifier("LabsToggle-\(feature.rawValue)")
-            }
-            .padding(.vertical, 4)
-
-            if feature == .expiringFiles, expiringFiles {
-                SettingsSubsettingRow(title: "Offer Files After") {
-                    Picker("Offer Files After", selection: $expiringAgeInDays) {
-                        ForEach(agePresets, id: \.self) { days in
-                            Text(days == 1 ? "1 day" : "\(days) days").tag(days)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .tint(.primary)
+                    .controlSize(.small)
                     .labelsHidden()
-                    .fixedSize()
-                    .accessibilityIdentifier("LabsExpiringAgePicker")
-                }
-
-                SettingsSubsettingRow(
-                    title: "Spot Finished Downloads",
-                    description: "Skip the wait for installers whose app is installed and archives you've extracted."
-                ) {
-                    Toggle("Spot Finished Downloads", isOn: $finishedDownloads)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .fixedSize()
-                        .accessibilityIdentifier("LabsExpiringFinishedToggle")
-                }
+                    .accessibilityIdentifier("LabsExpiringFinishedToggle")
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
+        .background(
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
+                .fill(Color.primary.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        )
     }
 
     /// Points each enabled feature at the screen where it lives in the main window.
     private func openLink(for feature: SortyLabsFeature) -> some View {
-        LabsOpenLink(feature: feature) {
-            HapticFeedbackManager.shared.tap()
-            appState.openRelatedView($0)
+        let (title, destination): (String, AppState.AppView) = switch feature {
+        case .routingRules: ("Add Routing Rules in Exclusions", .exclusions)
+        case .expiringFiles: ("Review in Watched Folders", .watchedFolders)
         }
+        return Button {
+            HapticFeedbackManager.shared.tap()
+            appState.openRelatedView(destination)
+        } label: {
+            Label(title, systemImage: "arrow.up.right")
+        }
+        .buttonStyle(.sortyBordered(intent: .info, size: .small))
+        .accessibilityIdentifier("LabsOpen-\(feature.rawValue)")
     }
 
+    /// SettingsToggle already plays the haptic and records the change.
     private func binding(for feature: SortyLabsFeature) -> Binding<Bool> {
-        let binding: Binding<Bool> = switch feature {
+        switch feature {
         case .routingRules: $routingRules
         case .expiringFiles: $expiringFiles
         }
-        return Binding(
-            get: { binding.wrappedValue },
-            set: { newValue in
-                HapticFeedbackManager.shared.selection()
-                binding.wrappedValue = newValue
-                AnalyticsManager.shared.captureSettingChanged(feature.title, isEnabled: newValue)
-            }
-        )
-    }
-}
-
-/// Quiet text link to where a Labs feature lives; picks up the accent on hover.
-private struct LabsOpenLink: View {
-    let feature: SortyLabsFeature
-    let open: (AppState.AppView) -> Void
-    @State private var isHovered = false
-
-    private var target: (title: String, view: AppState.AppView) {
-        switch feature {
-        case .routingRules: ("Add rules in Exclusions", .exclusions)
-        case .expiringFiles: ("Open Clean Up in Watched Folders", .watchedFolders)
-        }
-    }
-
-    var body: some View {
-        Button {
-            open(target.view)
-        } label: {
-            HStack(spacing: 3) {
-                Text(target.title)
-                Image(systemName: "arrow.up.right")
-                    .font(.caption2.weight(.semibold))
-            }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(isHovered ? AnyShapeStyle(SortyDesignSystem.Colors.resolvedAccent) : AnyShapeStyle(.primary.opacity(0.8)))
-        }
-        .buttonStyle(.plain)
-        .pointerStyle(.link)
-        .onHover { isHovered = $0 }
-        .animation(.sortyQuick, value: isHovered)
-        .accessibilityIdentifier("LabsOpen-\(feature.rawValue)")
     }
 }
 
