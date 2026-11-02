@@ -64,12 +64,13 @@ extension AddExclusionRuleView {
 
     var fileKindConfiguration: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Picker("Match", selection: $fileKindChoice) {
-                ForEach(FileKindChoice.allCases) { choice in
-                    Text(choice.rawValue).tag(choice)
-                }
-            }
-            .pickerStyle(.segmented)
+            CapsuleSegmentedControl(
+                accessibilityLabel: "Match",
+                accessibilityIdentifier: "ExclusionFileKindPicker",
+                values: FileKindChoice.allCases,
+                labels: FileKindChoice.allCases.map(\.rawValue),
+                selection: $fileKindChoice
+            )
 
             if fileKindChoice == .category {
                 Picker("Category", selection: $selectedFileTypeCategory) {
@@ -116,12 +117,13 @@ extension AddExclusionRuleView {
 
     var nameConfiguration: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Picker("Match", selection: $nameMatchChoice) {
-                ForEach(NameMatchChoice.allCases) { choice in
-                    Text(choice.rawValue).tag(choice)
-                }
-            }
-            .pickerStyle(.segmented)
+            CapsuleSegmentedControl(
+                accessibilityLabel: "Match",
+                accessibilityIdentifier: "ExclusionNameMatchPicker",
+                values: NameMatchChoice.allCases,
+                labels: NameMatchChoice.allCases.map(\.rawValue),
+                selection: $nameMatchChoice
+            )
 
             labeledPatternField(
                 title: nameMatchChoice == .fileName ? "Text in the file name" : "Folder name",
@@ -135,12 +137,13 @@ extension AddExclusionRuleView {
 
     var propertyConfiguration: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Picker("Property", selection: $propertyChoice) {
-                ForEach(PropertyChoice.allCases) { choice in
-                    Text(choice.rawValue).tag(choice)
-                }
-            }
-            .pickerStyle(.segmented)
+            CapsuleSegmentedControl(
+                accessibilityLabel: "Property",
+                accessibilityIdentifier: "ExclusionPropertyPicker",
+                values: PropertyChoice.allCases,
+                labels: PropertyChoice.allCases.map(\.rawValue),
+                selection: $propertyChoice
+            )
 
             if propertyChoice == .fileSize {
                 HStack(spacing: 10) {

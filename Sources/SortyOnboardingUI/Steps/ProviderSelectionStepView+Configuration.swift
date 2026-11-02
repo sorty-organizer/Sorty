@@ -6,24 +6,19 @@ extension ProviderSelectionStepView {
     var providerConfigSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             if [.openCodeZen, .openCodeGo].contains(settingsViewModel.config.provider) {
-                Picker("OpenCode plan", selection: Binding(
-                    get: { settingsViewModel.config.provider },
-                    set: { selectProvider($0) }
-                )) {
-                    Label {
-                        Text("Zen")
-                    } icon: {
-                        ProviderLogoView(provider: .openCodeZen, size: 14)
-                    }
-                    .tag(AIProvider.openCodeZen)
-                    Label {
-                        Text("Go")
-                    } icon: {
-                        ProviderLogoView(provider: .openCodeGo, size: 14)
-                    }
-                    .tag(AIProvider.openCodeGo)
-                }
-                .pickerStyle(.segmented)
+                CapsuleSegmentedControl(
+                    accessibilityLabel: "OpenCode plan",
+                    accessibilityIdentifier: "OnboardingOpenCodePlanPicker",
+                    values: [AIProvider.openCodeZen, .openCodeGo],
+                    labels: ["Zen", "Go"],
+                    images: [AIProvider.openCodeZen, .openCodeGo].map { provider in
+                        ImageRenderer(content: ProviderLogoView(provider: provider, size: 14)).nsImage
+                    },
+                    selection: Binding(
+                        get: { settingsViewModel.config.provider },
+                        set: { selectProvider($0) }
+                    )
+                )
             }
 
             if settingsViewModel.config.provider == .openAICompatible || settingsViewModel.config.provider == .ollama {

@@ -493,12 +493,13 @@ struct WatchedFolderConfigView: View {
     private var applyPolicyCard: some View {
         SettingsCard(title: "When a plan is ready", icon: "checkmark.shield", color: SortyDesignSystem.Colors.success) {
             VStack(alignment: .leading, spacing: 8) {
-                Picker("Apply policy", selection: $selectedApplyPolicy) {
-                    ForEach(WatchedFolderApplyPolicy.allCases, id: \.self) { policy in
-                        Text(policy.displayName).tag(policy)
-                    }
-                }
-                .pickerStyle(.segmented)
+                CapsuleSegmentedControl(
+                    accessibilityLabel: "Apply policy",
+                    accessibilityIdentifier: "WatchedFolderApplyPolicyPicker",
+                    values: WatchedFolderApplyPolicy.allCases,
+                    labels: WatchedFolderApplyPolicy.allCases.map(\.displayName),
+                    selection: $selectedApplyPolicy
+                )
                 .accessibilityHint("Choose whether Sorty applies watched-folder plans or waits for your review")
 
                 Text(selectedApplyPolicy == .autoApply

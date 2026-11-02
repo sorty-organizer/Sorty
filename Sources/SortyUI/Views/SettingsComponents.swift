@@ -643,12 +643,13 @@ extension View {
     }
 }
 
-/// Native capsule segmented selector shared by Settings pickers, matching the
+/// Native capsule segmented selector shared by app pickers, matching the
 /// History filters. Callers own haptics through their selection binding.
 package struct CapsuleSegmentedControl: NSViewRepresentable {
     let accessibilityLabel: String
     let accessibilityIdentifier: String
     let labels: [String]
+    var images: [NSImage?] = []
     @Binding var selectedIndex: Int
 
     package init(
@@ -661,6 +662,30 @@ package struct CapsuleSegmentedControl: NSViewRepresentable {
         self.accessibilityIdentifier = accessibilityIdentifier
         self.labels = labels
         self._selectedIndex = selectedIndex
+    }
+
+    /// Adapts a typed selection while keeping the native control's index private.
+    package init<Value: Equatable>(
+        accessibilityLabel: String,
+        accessibilityIdentifier: String,
+        values: [Value],
+        labels: [String],
+        images: [NSImage?] = [],
+        selection: Binding<Value>
+    ) {
+        self.init(
+            accessibilityLabel: accessibilityLabel,
+            accessibilityIdentifier: accessibilityIdentifier,
+            labels: labels,
+            selectedIndex: Binding(
+                get: { values.firstIndex(of: selection.wrappedValue) ?? -1 },
+                set: { index in
+                    guard values.indices.contains(index) else { return }
+                    selection.wrappedValue = values[index]
+                }
+            )
+        )
+        self.images = images
     }
 
     package func makeCoordinator() -> Coordinator {
@@ -696,6 +721,8 @@ package struct CapsuleSegmentedControl: NSViewRepresentable {
         control.segmentCount = labels.count
         for (index, label) in labels.enumerated() {
             control.setLabel(label, forSegment: index)
+            control.setImage(images.indices.contains(index) ? images[index] : nil, forSegment: index)
+            control.setImageScaling(.scaleProportionallyDown, forSegment: index)
         }
         control.selectedSegment = selectedIndex
     }
