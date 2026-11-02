@@ -14,6 +14,8 @@ import SwiftUI
 extension View {
     /// The standard card: system glass at `Radius.lg`, matching `SettingsCard`.
     /// Pass `padding: 0` when the content manages its own insets.
+    /// For centered content, fill the width before applying this modifier.
+    /// For compact overlays, apply `.fixedSize()` after it.
     package func sortyCard(padding: CGFloat = SortyDesignSystem.Spacing.lg) -> some View {
         self
             .padding(padding)

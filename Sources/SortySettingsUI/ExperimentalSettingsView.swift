@@ -50,6 +50,7 @@ struct ExperimentalSettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity)
         .sortyCard(padding: 20)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Checking for experimental features.")

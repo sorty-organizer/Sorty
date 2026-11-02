@@ -27,6 +27,7 @@ package struct SkillOnboardingView: View {
             if isCheckingSkill {
                 ProgressView("Checking installed skill…")
                     .sortyCard(padding: 20)
+                    .fixedSize()
             }
         }
         .frame(
