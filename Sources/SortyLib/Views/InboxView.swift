@@ -38,9 +38,9 @@ struct InboxView: View {
                             .animatedAppearance(delay: 0.08)
                     }
                 }
+                .frame(maxWidth: 760, alignment: .leading)
                 .padding(24)
-                .frame(maxWidth: 760)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .task {
