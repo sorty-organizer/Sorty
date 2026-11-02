@@ -206,7 +206,9 @@ private struct EmptyStateWorkflowGradientModifier: ViewModifier {
                         )
                         .animation(.easeInOut(duration: reduceMotion ? 0.01 : 0.45), value: isVisible)
                 }
-                .ignoresSafeArea()
+                // Vertical only: the detail column's leading safe area sits
+                // under the sidebar, so ignoring it paints over the sidebar.
+                .ignoresSafeArea(edges: .vertical)
             }
     }
 }
