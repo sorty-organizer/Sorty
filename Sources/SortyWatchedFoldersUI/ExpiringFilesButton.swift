@@ -34,7 +34,7 @@ struct ExpiringFilesButton: View {
             }
         }
         .buttonStyle(.sortyBordered)
-        .help("Clear old installers, archives and screenshots without AI")
+        .help("Clear old installers, archives and screenshots, found by file type and age")
         .accessibilityLabel(expiring.candidates.isEmpty ? "Clean Up" : "Clean Up, \(expiring.candidates.count) files")
         .accessibilityIdentifier("ExpiringFilesButton")
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
@@ -72,9 +72,10 @@ private struct ExpiringFilesPanel: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Clean Up")
                         .font(.headline)
-                    Text("Installers, archives and screenshots older than \(ageDescription). No AI.")
+                    Text("Installers, archives and screenshots older than \(ageDescription), found by file type and age. Your AI provider isn't used.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 Button {
