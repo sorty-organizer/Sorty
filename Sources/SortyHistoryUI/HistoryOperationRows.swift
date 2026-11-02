@@ -151,7 +151,7 @@ struct ProcessingOverlay: View {
             .accessibilityLabel("Processing: \(stage)")
         }
         .onAppear {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            withAnimation(.sortySnappy) {
                 appeared = true
             }
         }

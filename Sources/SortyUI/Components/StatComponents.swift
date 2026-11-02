@@ -64,11 +64,11 @@ private extension IconStatItem.Style {
     }
 
     var iconFont: Font {
-        self == .detail ? .system(size: 18, weight: .semibold) : .title2
+        self == .detail ? .system(size: 17, weight: .semibold) : .title2
     }
 
     var valueFont: Font {
-        self == .detail ? .system(size: 18, weight: .bold, design: .rounded) : .title2.bold()
+        self == .detail ? .system(size: 17, weight: .bold, design: .rounded) : .title2.bold()
     }
 
     var labelFont: Font {

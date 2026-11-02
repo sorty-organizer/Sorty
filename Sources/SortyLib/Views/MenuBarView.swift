@@ -551,7 +551,7 @@ private struct MenuBarButton: View {
                 Spacer()
                 if showsExternalArrow {
                     Image(systemName: "arrow.up.forward")
-                        .font(.system(size: 8))
+                        .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                         .opacity(isHovered ? 1 : 0)
                         .accessibilityHidden(true)
@@ -568,7 +568,7 @@ private struct MenuBarButton: View {
         .buttonStyle(.plain)
         .opacity(isEnabled ? 1 : 0.5)
         .accessibilityIdentifier("MenuBarButton-\(title)")
-        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .animation(.sortyQuick, value: isHovered)
         .onHover { hovering in
             isHovered = hovering
         }
@@ -649,7 +649,7 @@ private struct WatchedFolderMenuItem: View {
 
                     if let statusIcon {
                         Image(systemName: statusIcon)
-                            .font(.system(size: 8))
+                            .font(.system(size: 10))
                             .foregroundStyle(statusColor)
                             .symbolReplaceTransition(animationValue: statusIcon)
                             .background(
@@ -676,7 +676,7 @@ private struct WatchedFolderMenuItem: View {
                 Spacer()
 
                 Image(systemName: "arrow.up.forward")
-                    .font(.system(size: 8))
+                    .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
                     .opacity(isHovered ? 1 : 0)
             }
@@ -687,7 +687,7 @@ private struct WatchedFolderMenuItem: View {
                     .fill(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
             )
             .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
-            .animation(.easeOut(duration: 0.15), value: isHovered)
+            .animation(.sortyQuick, value: isHovered)
             .onHover { hovering in
                 isHovered = hovering
                 if hovering {

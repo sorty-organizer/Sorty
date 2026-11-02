@@ -519,13 +519,13 @@ struct WatchedFolderCard: View {
                 .allowsHitTesting(isHovered)
                 .accessibilityHidden(!isHovered)
                 .animation(
-                    reduceMotion ? nil : .easeOut(duration: 0.15),
+                    reduceMotion ? nil : .sortyQuick,
                     value: isHovered
                 )
 
             watchToggle
         }
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: folder.isEnabled)
+        .animation(.sortySnappy, value: folder.isEnabled)
     }
 
     var body: some View {
@@ -611,7 +611,7 @@ struct WatchedFolderCard: View {
 
     private func removeFolder() {
         HapticFeedbackManager.shared.tap()
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(reduceMotion ? nil : .sortySnappy) {
             watchedFoldersManager.removeFolder(folder)
         }
     }
@@ -658,7 +658,7 @@ struct WatchedFolderCard: View {
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                 .fill(cardBackgroundColor)
                 .animation(
-                    reduceMotion ? nil : .easeOut(duration: 0.15),
+                    reduceMotion ? nil : .sortyQuick,
                     value: isHovered
                 )
         }

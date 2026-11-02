@@ -101,7 +101,7 @@ struct PermissionsSettingsView: View {
                     focusTarget: .privacyAnalytics
                 )
                 .disabled(internetPrivacyModeEnabled)
-                .animation(.easeInOut(duration: 0.2), value: internetPrivacyModeEnabled)
+                .animation(.sortyFade, value: internetPrivacyModeEnabled)
                 .accessibilityIdentifier("AnonymousAnalyticsToggle")
             }
         }
@@ -250,13 +250,13 @@ struct PermissionsSettingsView: View {
                                     try? await Task.sleep(for: .milliseconds(120))
                                     guard !Task.isCancelled else { return }
                                     HapticFeedbackManager.shared.selection()
-                                    withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                    withAnimation(reduceMotion ? nil : .sortySnappy) {
                                         isHoveringOpenPrivacySettings = true
                                     }
                                     privacyHoverSettleTask = nil
                                 }
                             } else {
-                                withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                withAnimation(reduceMotion ? nil : .sortySnappy) {
                                     isHoveringOpenPrivacySettings = false
                                 }
                             }
@@ -330,7 +330,7 @@ struct PermissionsSettingsView: View {
     }
 
     private var statusSummary: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
             Text("\(readyPermissionCount)")
                 .monospacedDigit()
                 .numericTextTransition(animationValue: readyPermissionCount)
@@ -339,8 +339,8 @@ struct PermissionsSettingsView: View {
         }
         .font(.system(size: 11, weight: .semibold, design: .rounded))
         .foregroundStyle(readyPermissionCount == PermissionType.allCases.count ? .green : .secondary)
-        .animation(.easeInOut(duration: 0.16), value: readyPermissionCount)
-        .padding(.horizontal, 9)
+        .animation(.sortyFade, value: readyPermissionCount)
+        .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .background(Color.primary.opacity(0.07), in: Capsule(style: .continuous))
     }
@@ -369,7 +369,7 @@ struct PermissionsSettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                VStack(spacing: 7) {
+                VStack(spacing: 8) {
                     accessInfoActionButton(
                         title: "Privacy Policy & Terms",
                         icon: "hand.raised",
@@ -449,7 +449,7 @@ struct PermissionsSettingsView: View {
             if hovering && hoveredAccessInfoAction != action {
                 HapticFeedbackManager.shared.selection()
             }
-            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+            withAnimation(reduceMotion ? nil : .sortySnappy) {
                 hoveredAccessInfoAction = hovering ? action : nil
             }
         }
@@ -802,7 +802,7 @@ struct PermissionsSettingsView: View {
 
         HapticFeedbackManager.shared.tap()
         privacyOpenResetTask?.cancel()
-        withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+        withAnimation(reduceMotion ? nil : .sortySnappy) {
             isOpeningPrivacySettings = true
         }
         openPrivacyAndSecuritySettings()
@@ -810,7 +810,7 @@ struct PermissionsSettingsView: View {
         privacyOpenResetTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(0.75))
             guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+            withAnimation(reduceMotion ? nil : .sortySnappy) {
                 isOpeningPrivacySettings = false
             }
         }

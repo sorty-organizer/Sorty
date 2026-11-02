@@ -60,7 +60,7 @@ struct PermissionSettingsCard: View {
                     footer
                 }
             } else {
-                VStack(spacing: 7) {
+                VStack(spacing: 8) {
                     permissionIcon
 
                     title
@@ -84,8 +84,8 @@ struct PermissionSettingsCard: View {
         .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .contentShape(Rectangle())
         .scaleEffect(isHovering ? 1.006 : 1)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isHovering)
-        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.78), value: state)
+        .animation(reduceMotion ? nil : .sortyFade, value: isHovering)
+        .animation(reduceMotion ? nil : .sortySnappy, value: state)
         .onHover { hovering in
             if hovering && !isHovering {
                 HapticFeedbackManager.shared.selection()
@@ -118,7 +118,7 @@ struct PermissionSettingsCard: View {
     }
 
     private var title: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             Text(LocalizedStringKey(type.rawValue))
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
@@ -127,10 +127,10 @@ struct PermissionSettingsCard: View {
 
             if isRequired {
                 Text("Required")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                     .background(Color.red.opacity(0.18), in: Capsule(style: .continuous))
                     .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule)
                     .overlay(
@@ -155,7 +155,7 @@ struct PermissionSettingsCard: View {
     }
 
     private var statusBadge: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             Image(systemName: state.symbol)
                 .font(.system(size: 10, weight: .bold))
                 .symbolReplaceTransition(animationValue: state)
@@ -174,7 +174,7 @@ struct PermissionSettingsCard: View {
     @ViewBuilder
     private var footer: some View {
         if canRemovePermission, let onRemovePermission {
-            HStack(spacing: 7) {
+            HStack(spacing: 8) {
                 statusBadge
 
                 Button {
@@ -201,7 +201,7 @@ struct PermissionSettingsCard: View {
                     withAnimation(
                         reduceMotion
                             ? nil
-                            : .spring(response: 0.24, dampingFraction: 0.82)
+                            : .sortySnappy
                     ) {
                         isHoveringRemove = hovering
                     }

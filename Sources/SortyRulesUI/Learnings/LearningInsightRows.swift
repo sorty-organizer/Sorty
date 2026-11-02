@@ -58,7 +58,7 @@ struct LearningInsightRow: View {
                 .frame(width: 24)
                 .symbolReplaceTransition(animationValue: rule.isEnabled)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(rule.explanation)
                     .font(.subheadline)
                     .foregroundColor(rule.isEnabled ? .primary : .secondary)
@@ -78,9 +78,9 @@ struct LearningInsightRow: View {
                     }
                     if case .folder = rule.scope {
                         Text(rule.scope.displayName)
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.blue)
-                            .padding(.horizontal, 5)
+                            .padding(.horizontal, 6)
                             .padding(.vertical, 1)
                             .background(Color.blue.opacity(0.1))
                             .clipShape(Capsule())
@@ -130,7 +130,7 @@ struct LearningInsightRow: View {
                 .fill(Color.secondary.opacity(isHovered ? 0.06 : 0))
         )
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) { isHovered = hovering }
+            withAnimation(.sortyFade) { isHovered = hovering }
             if hovering { HapticFeedbackManager.shared.selection() }
         }
         .accessibilityElement(children: .contain)

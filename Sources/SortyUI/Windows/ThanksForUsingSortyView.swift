@@ -64,7 +64,7 @@ struct ThanksForUsingSortyView: View {
                 Text("Support the Developer")
                     .foregroundStyle(.white)
             }
-            .font(.system(size: 16, weight: .semibold, design: .rounded))
+            .font(.system(size: 15, weight: .semibold, design: .rounded))
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
         }
@@ -72,7 +72,7 @@ struct ThanksForUsingSortyView: View {
         .controlSize(.large)
         .trackHoveredURL(sponsorsURL)
         .scaleEffect(supportHovered ? 1.04 : 1.0)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: supportHovered)
+        .animation(reduceMotion ? nil : .sortyFade, value: supportHovered)
         .onHover { hovering in
             supportHovered = hovering
             if hovering {
@@ -126,7 +126,7 @@ struct ThanksForUsingSortyView: View {
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(isHighlighted ? Color.white.opacity(0.09) : Color.clear)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isHighlighted)
+        .animation(reduceMotion ? nil : .sortyFade, value: isHighlighted)
         .contentShape(Rectangle())
         .onHover { hovering in
             if hovering {

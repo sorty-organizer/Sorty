@@ -107,7 +107,7 @@ struct OnboardingProgressBar: View {
                                 )
                         }
                         .frame(width: 56, height: 2)
-                        .padding(.top, 11)
+                        .padding(.top, 12)
                 }
 
                 VStack(spacing: 6) {

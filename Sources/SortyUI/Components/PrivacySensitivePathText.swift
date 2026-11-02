@@ -36,7 +36,7 @@ package struct PrivacySensitivePathText: View {
     private var revealAnimation: Animation {
         isRevealed
             ? .timingCurve(0.2, 0.95, 0.2, 1.0, duration: 0.38)
-            : .easeInOut(duration: 0.26)
+            : .sortySlowFade
     }
 
     private var isRevealed: Bool {

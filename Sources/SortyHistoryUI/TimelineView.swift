@@ -141,7 +141,7 @@ struct TimelineSliderTrack: View {
             }
         }
         .frame(height: 44)
-        .padding(.horizontal, 22)
+        .padding(.horizontal, 24)
     }
 
     private func timelineNodeButton(index: Int, entry: OrganizationHistoryEntry, magnitude: Double) -> some View {

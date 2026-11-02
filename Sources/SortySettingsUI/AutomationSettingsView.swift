@@ -157,8 +157,8 @@ struct AutomationSettingsView: View {
 
     private var subsettingAnimation: Animation {
         reduceMotion
-            ? .easeInOut(duration: 0.14)
-            : .spring(response: 0.34, dampingFraction: 0.78)
+            ? .sortyFade
+            : .sortySmooth
     }
 
     private var backgroundBehaviorSection: some View {
@@ -230,7 +230,7 @@ struct AutomationSettingsView: View {
     private var watchedFoldersSection: some View {
         SettingsCard(title: "Watched Folders", icon: "eye", color: .green) {
             HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     WatchedFolderCountLabel()
                     Text("Sorty organizes new files in these folders automatically.")
                         .font(.caption)

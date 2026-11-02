@@ -68,14 +68,14 @@ private struct PreviewDiffRow: View {
     let change: OrganizationPlanDiff.Change
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(change.filename)
                 .font(.callout.bold())
                 .lineLimit(1)
                 .truncationMode(.middle)
 
             if let before = change.before, let after = change.after {
-                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     diffValue(before, systemImage: "minus", color: .red)
                     Image(systemName: "arrow.right")
                         .foregroundStyle(.secondary)
@@ -110,7 +110,7 @@ private struct PreviewDiffRow: View {
         Label(value, systemImage: systemImage)
             .font(.caption)
             .foregroundStyle(color)
-            .padding(.horizontal, 7)
+            .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(color.opacity(0.1), in: .rect(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
     }

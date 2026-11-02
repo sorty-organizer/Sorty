@@ -69,8 +69,8 @@ struct MenuBarDownloadsInboxSection: View {
                 }
             }
         }
-        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: inbox.items.map(\.id))
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: inbox.lastMove)
+        .animation(reduceMotion ? nil : .sortySnappy, value: inbox.items.map(\.id))
+        .animation(reduceMotion ? nil : .sortyFade, value: inbox.lastMove)
         .task { inbox.scheduleRefresh(delay: .zero) }
     }
 
@@ -152,7 +152,7 @@ private struct MenuBarInboxRow: View {
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                 .fill(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
         )
-        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .animation(.sortyQuick, value: isHovered)
         .onHover { isHovered = $0 }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("MenuBarInboxRow")
@@ -244,7 +244,7 @@ struct MenuBarExpiringFilesSection: View {
                 }
             }
         }
-        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.86), value: isReviewing)
+        .animation(reduceMotion ? nil : .sortySnappy, value: isReviewing)
         .task { await manager.refresh() }
     }
 
@@ -349,6 +349,6 @@ struct MenuBarExpiringFilesSection: View {
             .help("Never suggest this file again")
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
     }
 }

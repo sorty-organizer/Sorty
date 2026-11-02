@@ -81,7 +81,7 @@ struct HistoryHeader: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.blue.gradient)
             Text("History")
-                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .font(.system(size: 17, weight: .bold, design: .rounded))
                 .lineLimit(1)
 
             Text("\(totalSessions) runs")
@@ -108,7 +108,7 @@ struct HistoryHeader: View {
 
             textLayout {
                 Text("History")
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
                     .lineLimit(1)
 
                 Text("\(totalSessions) runs")
@@ -122,7 +122,7 @@ struct HistoryHeader: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("History, \(totalSessions) runs")
         .animation(
-            reduceMotion ? nil : .easeInOut(duration: 0.2),
+            reduceMotion ? nil : .sortyFade,
             value: stacksRunCount
         )
     }
@@ -279,7 +279,7 @@ private struct HistoryNavigatorControl: NSViewRepresentable {
 
             let newSelection = filters[sender.selectedSegment]
             guard newSelection != selection.wrappedValue else { return }
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+            withAnimation(.sortySnappy) {
                 selection.wrappedValue = newSelection
             }
             HapticFeedbackManager.shared.selection()
@@ -528,7 +528,7 @@ private struct HistorySessionSummary: View {
     }
 
     private func metric(_ value: String, systemImage: String) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
             Image(systemName: systemImage)
             Text(value)
                 .monospacedDigit()
@@ -600,7 +600,7 @@ struct HistorySessionCard: View {
                 .stroke(cardBorderColor, lineWidth: isSelected ? 2 : 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
-        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .animation(.sortyQuick, value: isHovered)
         .onHover { hovering in
             guard hovering != isHovered else { return }
             isHovered = hovering
@@ -654,7 +654,7 @@ struct QuickFeedbackButtons: View {
                     // Thumbs up
                     Button {
                         HapticFeedbackManager.shared.success()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        withAnimation(.sortySnappy) {
                             feedbackGiven = .useful
                             showConfirmation = true
                         }
@@ -662,7 +662,7 @@ struct QuickFeedbackButtons: View {
 
                         // Auto-hide confirmation
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            withAnimation(.easeOut(duration: 0.2)) {
+                            withAnimation(.sortyFade) {
                                 showConfirmation = false
                             }
                         }
@@ -673,7 +673,7 @@ struct QuickFeedbackButtons: View {
                     }
                     .buttonStyle(.plain)
                     .scaleEffect(usefulHovered ? 1.15 : 1.0)
-                    .animation(.spring(response: 0.2, dampingFraction: 0.6), value: usefulHovered)
+                    .animation(.sortyBouncy, value: usefulHovered)
                     .onHover { hovering in
                         usefulHovered = hovering
                     }
@@ -683,7 +683,7 @@ struct QuickFeedbackButtons: View {
                     // Thumbs down
                     Button {
                         HapticFeedbackManager.shared.tap()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        withAnimation(.sortySnappy) {
                             showingReasonForm = true
                             draft.outcome = .notUseful
                         }
@@ -694,7 +694,7 @@ struct QuickFeedbackButtons: View {
                     }
                     .buttonStyle(.plain)
                     .scaleEffect(notUsefulHovered ? 1.15 : 1.0)
-                    .animation(.spring(response: 0.2, dampingFraction: 0.6), value: notUsefulHovered)
+                    .animation(.sortyBouncy, value: notUsefulHovered)
                     .onHover { hovering in
                         notUsefulHovered = hovering
                     }
@@ -766,14 +766,14 @@ struct QuickFeedbackButtons: View {
                 Button("Save") {
                     HapticFeedbackManager.shared.tap()
                     let reason = draft.resolvedReason
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    withAnimation(.sortySnappy) {
                         feedbackGiven = .notUseful
                         showingReasonForm = false
                         showConfirmation = true
                     }
                     onFeedback(.notUseful, reason)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation(.easeOut(duration: 0.2)) { showConfirmation = false }
+                        withAnimation(.sortyFade) { showConfirmation = false }
                     }
                 }
                 .buttonStyle(.sortyBordered(size: .small))

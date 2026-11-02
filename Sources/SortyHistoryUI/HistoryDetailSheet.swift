@@ -149,11 +149,11 @@ package struct HistoryDetailSheet: View {
                 }
                 .onChange(of: highlightedFileID) { _, highlightedFileID in
                     guard let highlightedFileID else { return }
-                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .sortySnappy) {
                         scrollProxy.scrollTo(highlightedFileID, anchor: .center)
                     }
                     DispatchQueue.main.async {
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+                        withAnimation(reduceMotion ? nil : .sortySnappy) {
                             scrollProxy.scrollTo(highlightedFileID, anchor: .center)
                         }
                     }

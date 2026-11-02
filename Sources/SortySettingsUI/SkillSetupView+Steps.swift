@@ -64,7 +64,7 @@ extension SkillSetupView {
             .frame(width: 80, height: 80, alignment: .center)
             .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xxl, interactive: false)
             .frame(maxWidth: .infinity, alignment: .center)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: isGetStartedHovered)
+            .animation(reduceMotion ? nil : .sortyFade, value: isGetStartedHovered)
             .accessibilityHidden(true)
             .modifier(introductionReveal(at: 3))
             VStack(alignment: .leading, spacing: 24) {
@@ -124,7 +124,7 @@ extension SkillSetupView {
                     ForEach(SkillImportOption.Section.allCases, id: \.self) { section in
                         Button {
                             HapticFeedbackManager.shared.selection()
-                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                            withAnimation(reduceMotion ? nil : .sortyFade) {
                                 activeSection = section
                                 optionSearch = ""
                             }
@@ -148,7 +148,7 @@ extension SkillSetupView {
                     }
                     Button(allSelected ? "Deselect All" : "Select All", action: toggleAll)
                         .contentTransition(reduceMotion ? .identity : .numericText())
-                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: allSelected)
+                        .animation(reduceMotion ? nil : .sortyFade, value: allSelected)
                         .buttonStyle(.sortyBordered())
                         .padding(.top, 12)
                         .accessibilityIdentifier("skill-import.select-all")
@@ -240,7 +240,7 @@ extension SkillSetupView {
                         Spacer()
                         Text(rows.isEmpty ? "None selected" : "\(rows.count) selected")
                             .contentTransition(reduceMotion ? .identity : .numericText(value: Double(rows.count)))
-                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: rows.count)
+                            .animation(reduceMotion ? nil : .sortyFade, value: rows.count)
                             .font(supportingFont).foregroundStyle(.secondary)
                     }
                     if !rows.isEmpty {
@@ -252,7 +252,7 @@ extension SkillSetupView {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        .padding(20)
         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xxl, interactive: false)
     }
 }

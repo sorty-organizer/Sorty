@@ -83,7 +83,7 @@ struct MaintenanceActionTile: View {
             shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
         )
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(.sortyFade) {
                 isHovered = hovering
             }
             if hovering {

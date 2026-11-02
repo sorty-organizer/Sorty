@@ -214,7 +214,7 @@ package struct PersonaPickerView: View {
                 )
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Make Sorty organize your way")
                     .font(.subheadline.weight(.medium))
                 Text("Describe how you work and Sorty generates a persona with its own folder rules.")
@@ -239,7 +239,7 @@ package struct PersonaPickerView: View {
         }
         .contentShape(Rectangle())
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(.sortyFade) {
                 isHoveringEmptyState = hovering
             }
         }
@@ -254,7 +254,7 @@ package struct PersonaPickerView: View {
     private func dismissPersonaGenerationHighlight() {
         guard appState.settingsFocusTarget == .rulesOrganizationStyle else { return }
 
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(.sortyFade) {
             appState.settingsFocusTarget = nil
         }
     }
@@ -309,7 +309,7 @@ package struct PersonaPickerView: View {
                         RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                             .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
                     )
-                    .animation(.spring(response: 0.32, dampingFraction: 0.82), value: localPrompt)
+                    .animation(.sortySnappy, value: localPrompt)
             }
         }
     }
@@ -322,7 +322,7 @@ package struct PersonaPickerView: View {
                     showingIconPicker = true
                 } label: {
                     Image(systemName: localIcon)
-                        .font(.system(size: 24, weight: .semibold))
+                        .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(.purple)
                         .frame(width: 52, height: 52)
                         .symbolReplaceTransition(animationValue: localIcon)
@@ -454,7 +454,7 @@ package struct PersonaPickerView: View {
                             HapticFeedbackManager.shared.selection()
                         } label: {
                             Image(systemName: icon)
-                                .font(.system(size: 18, weight: .medium))
+                                .font(.system(size: 17, weight: .medium))
                                 .frame(width: 38, height: 38)
                                 .foregroundStyle(localIcon == icon ? Color.purple : Color.primary)
                                 .background(
@@ -576,7 +576,7 @@ package struct PersonaPickerView: View {
                     return
                 }
 
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                withAnimation(.sortySnappy) {
                     localPrompt = polished
                 }
                 saveChangesIfNeeded()
@@ -838,7 +838,7 @@ package struct CompactPersonaPicker: View {
                 }
             }
         } label: {
-            HStack(spacing: 9) {
+            HStack(spacing: 10) {
                 Image(systemName: currentIcon)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
@@ -853,12 +853,12 @@ package struct CompactPersonaPicker: View {
                     .numericTextTransition(animationValue: currentName)
 
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.tertiary)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
             .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
             .overlay {
                 RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
@@ -873,7 +873,7 @@ package struct CompactPersonaPicker: View {
                 y: isHovering ? 4 : 2
             )
             .scaleEffect(isHovering ? 1.015 : 1)
-            .animation(.spring(response: 0.24, dampingFraction: 0.82), value: isHovering)
+            .animation(.sortySnappy, value: isHovering)
         }
         .menuStyle(.borderlessButton)
         .onHover { hovering in

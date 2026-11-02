@@ -70,7 +70,7 @@ struct UnifiedDuplicateGroupDetailView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 18)
+        .padding(.vertical, 20)
         .overlay(alignment: .bottom) {
             Divider()
         }
@@ -137,7 +137,7 @@ struct UnifiedDuplicateGroupDetailView: View {
     }
 
     private var confidenceBadge: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             Circle()
                 .fill(.orange)
                 .frame(width: 6, height: 6)
@@ -284,7 +284,7 @@ struct DuplicateMetricTile: View {
     let color: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(value)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(color)

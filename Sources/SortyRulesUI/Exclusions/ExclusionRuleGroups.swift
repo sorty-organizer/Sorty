@@ -37,7 +37,7 @@ struct EmptyExclusionRulesView: View {
                 .opacity(hasAppeared ? 1 : 0)
                 .scaleEffect(hasAppeared ? 1 : 0.8)
                 .animation(
-                    .spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
+                    .sortySpringStandard.delay(0.1), value: hasAppeared)
 
             VStack(spacing: 8) {
                 Text("Nothing is excluded")
@@ -54,7 +54,7 @@ struct EmptyExclusionRulesView: View {
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            .animation(.sortySpringStandard.delay(0.2), value: hasAppeared)
 
             Button {
                 onAddRule()
@@ -65,7 +65,7 @@ struct EmptyExclusionRulesView: View {
             .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+            .animation(.sortySpringStandard.delay(0.3), value: hasAppeared)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -203,7 +203,7 @@ struct RuleGroupCard: View {
     }
 
     private func toggleExpanded() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.sortySnappy) {
             isExpanded.toggle()
         }
         HapticFeedbackManager.shared.tap()
@@ -228,7 +228,7 @@ struct NaturalLanguageExceptionRow: View {
                 .background((exception.isEnabled ? Color.purple : .secondary).opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(exception.text)
                         .font(.subheadline.weight(.medium))
@@ -303,7 +303,7 @@ struct NaturalLanguageExceptionRow: View {
         .background(isHovered ? Color.primary.opacity(0.03) : Color.clear)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .animation(.sortyQuick, value: isHovered)
         .contextMenu {
             Button(role: .destructive, action: onDelete) {
                 Label("Delete", systemImage: "trash")

@@ -55,7 +55,7 @@ extension SkillSetupView {
         }
         .buttonStyle(.plain)
         .onHover { hoveredAgentLocation = $0 ? name : nil }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.16), value: hoveredAgentLocation)
+        .animation(reduceMotion ? nil : .sortyFade, value: hoveredAgentLocation)
         .accessibilityLabel(name)
         .accessibilityHint(agent == nil ? "Choose a custom skills folder" : isDetected ? "Settings folder found. Use this agent's skills folder." : "Use this agent's standard skills folder.")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -174,7 +174,7 @@ extension SkillSetupView {
                         .font(supportingFont)
                         .foregroundStyle(.secondary)
                         .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedCount)))
-                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedCount)
+                        .animation(reduceMotion ? nil : .sortyFade, value: selectedCount)
                     Spacer()
                     Button(sectionSelected ? "Deselect all" : "Select all") {
                         if sectionSelected { selected.subtract(identifiers) }
@@ -187,7 +187,7 @@ extension SkillSetupView {
                 }
                 Divider()
                 Button {
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                    withAnimation(reduceMotion ? nil : .sortyFade) {
                         if expandedSections.contains(section) { expandedSections.remove(section) }
                         else { expandedSections.insert(section) }
                     }
@@ -201,7 +201,7 @@ extension SkillSetupView {
                             .font(supportingFont.weight(.medium))
                         Spacer(minLength: 0)
                     }
-                    .padding(.horizontal, 18)
+                    .padding(.horizontal, 20)
                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     .background(Color.primary.opacity(isImportDisclosureHovered ? 0.04 : 0))
                     .contentShape(Rectangle())
@@ -237,7 +237,7 @@ extension SkillSetupView {
                 }
             }
         }
-        .padding(18)
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xxl, interactive: false)
     }
@@ -324,7 +324,7 @@ extension SkillSetupView {
                 }
                 Button(primaryTitle, action: advance)
                     .contentTransition(reduceMotion ? .identity : .numericText())
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: primaryTitle)
+                    .animation(reduceMotion ? nil : .sortyFade, value: primaryTitle)
                     .buttonStyle(
                         SortyButtonStyle(
                             intent: canAdvanceFromNavigation ? .primary : .secondary,
@@ -333,7 +333,7 @@ extension SkillSetupView {
                         )
                     )
                     .opacity(canAdvanceFromNavigation ? 1 : 0.6)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: canAdvanceFromNavigation)
+                    .animation(reduceMotion ? nil : .sortyFade, value: canAdvanceFromNavigation)
                     .onboardingBeamBorder(
                         active: !reduceMotion && canAdvanceFromNavigation
                             && (step == .welcome || step == .rethink || isPrimaryActionHovered)
@@ -366,7 +366,7 @@ extension SkillSetupView {
                 } else if step == .preferences && !selected.isEmpty {
                     Text("\(selectedOptions.count) selected")
                         .contentTransition(reduceMotion ? .identity : .numericText(value: Double(selectedOptions.count)))
-                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: selectedOptions.count)
+                        .animation(reduceMotion ? nil : .sortyFade, value: selectedOptions.count)
                         .font(supportingFont)
                         .foregroundStyle(.secondary)
                         .allowsHitTesting(false)

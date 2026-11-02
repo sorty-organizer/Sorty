@@ -39,7 +39,7 @@ extension AddExclusionRuleView {
                         .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
                         .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("Choose the folder to exclude")
                             .font(.subheadline.weight(.semibold))
                         Text("The folder and everything inside it will be excluded from organizations and renames.")

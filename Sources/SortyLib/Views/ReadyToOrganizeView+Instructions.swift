@@ -62,7 +62,7 @@ extension ReadyToOrganizeView {
                     .zIndex(4)
                 }
             }
-            .animation(.easeInOut(duration: 0.16), value: mention?.query)
+            .animation(.sortyFade, value: mention?.query)
 
             HStack(alignment: .center, spacing: 0) {
                 // Improve with AI button
@@ -158,7 +158,7 @@ extension ReadyToOrganizeView {
                 Button {
                     showSavedPromptsSheet.toggle()
                 } label: {
-                    HStack(spacing: 9) {
+                    HStack(spacing: 10) {
                         Image(systemName: "text.alignleft")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Color.accentColor)
@@ -175,7 +175,7 @@ extension ReadyToOrganizeView {
                         .lineLimit(1)
                     }
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
+                    .padding(.vertical, 8)
                     .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
                     .overlay {
                         RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)

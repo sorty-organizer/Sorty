@@ -123,13 +123,13 @@ struct InstructionFileReferencePicker: View {
                             Text(".\(reference.url.pathExtension)")
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
                                 .background(Color.teal.opacity(0.12), in: Capsule())
                         }
                     }
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
+                    .padding(.vertical, 8)
                     .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
                 }
                 .buttonStyle(.plain)

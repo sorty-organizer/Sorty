@@ -168,7 +168,7 @@ struct PartialUndoResultSheet: View {
                 .buttonStyle(.sortyBordered)
                 .scaleEffect(isHoveredOpenFolder ? 1.02 : 1.0)
                 .animation(
-                    reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                    reduceMotion ? nil : .sortySnappy,
                     value: isHoveredOpenFolder
                 )
                 .onHover { hovering in
@@ -176,7 +176,7 @@ struct PartialUndoResultSheet: View {
                         HapticFeedbackManager.shared.selection()
                     }
                     withAnimation(
-                        reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)
+                        reduceMotion ? nil : .sortySnappy
                     ) {
                         isHoveredOpenFolder = hovering
                     }

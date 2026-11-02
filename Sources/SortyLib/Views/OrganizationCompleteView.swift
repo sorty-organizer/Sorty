@@ -219,7 +219,7 @@ struct OrganizationCompleteView: View {
                             usesCompactVerticalLayout: usesCompactVerticalLayout,
                             onDismiss: {
                                 HapticFeedbackManager.shared.tap()
-                                withAnimation(.easeOut(duration: 0.2)) {
+                                withAnimation(.sortyFade) {
                                     isStorageSuggestionDismissed = true
                                 }
                             }
@@ -241,13 +241,13 @@ struct OrganizationCompleteView: View {
                         HapticFeedbackManager.shared.tap()
                         appState.openRelatedView(.history)
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 6) {
                             Image(systemName: "clock.arrow.circlepath")
 
                             Text("View History")
 
                             Image(systemName: "arrow.up.right")
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.system(size: 10, weight: .semibold))
                                 .frame(width: 10)
                                 .opacity(isHoveringHistoryLink ? 1 : 0)
                                 .offset(
@@ -269,7 +269,7 @@ struct OrganizationCompleteView: View {
                     }
                     .buttonStyle(.plain)
                     .animation(
-                        reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                        reduceMotion ? nil : .sortySnappy,
                         value: isHoveringHistoryLink
                     )
                     .onHover { hovering in
@@ -298,7 +298,7 @@ struct OrganizationCompleteView: View {
             }
         }
         .background(WorkflowGradientBackground())
-        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: undoState)
+        .animation(.sortySmooth, value: undoState)
         .onChange(of: undoState) { _, newState in
             if newState != .failed {
                 keepsFailureCardPinned = false
@@ -329,7 +329,7 @@ struct OrganizationCompleteView: View {
             organizer.pinsCompletionView = true
             HapticFeedbackManager.shared.success()
             
-            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.6).delay(0.1)) {
+            withAnimation(reduceMotion ? nil : .sortyBouncy.delay(0.1)) {
                 iconAppeared = true
             }
 
@@ -339,30 +339,30 @@ struct OrganizationCompleteView: View {
                 }
             }
             
-            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.2)) {
+            withAnimation(reduceMotion ? nil : .sortySpringStandard.delay(0.2)) {
                 titleAppeared = true
             }
             
-            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.35)) {
+            withAnimation(reduceMotion ? nil : .sortySpringStandard.delay(0.35)) {
                 timeSavedAppeared = true
             }
             
-            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.5)) {
+            withAnimation(reduceMotion ? nil : .sortySpringStandard.delay(0.5)) {
                 summaryAppeared = true
             }
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                withAnimation(reduceMotion ? nil : .spring(response: 0.58, dampingFraction: 0.86)) {
+                withAnimation(reduceMotion ? nil : .sortySpringStandard) {
                     shouldShowFinalCounts = true
                 }
                 HapticFeedbackManager.shared.alignment()
             }
             
-            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.65)) {
+            withAnimation(reduceMotion ? nil : .sortySpringStandard.delay(0.65)) {
                 buttonsAppeared = true
             }
             
-            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.8)) {
+            withAnimation(reduceMotion ? nil : .sortySpringStandard.delay(0.8)) {
                 historyLinkAppeared = true
             }
         }

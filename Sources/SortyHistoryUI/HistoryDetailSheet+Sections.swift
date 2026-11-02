@@ -84,8 +84,8 @@ extension HistoryDetailSheet {
 
     var rawAIResponseDisclosureAnimation: Animation {
         reduceMotion
-            ? .easeOut(duration: 0.12)
-            : .spring(response: 0.52, dampingFraction: 0.86)
+            ? .sortyQuick
+            : .sortySpringStandard
     }
 
     func handleUndo() {

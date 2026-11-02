@@ -47,7 +47,7 @@ struct DirectorySelectionView: View {
                         .fontWeight(.bold)
                         .id(headlineText)
                         .transition(.blurReplace)
-                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: headlineText)
+                        .animation(.sortySmooth, value: headlineText)
                         .opacity(hasAppeared ? 1 : 0)
 
                     Text("Drag and drop a folder here, or click to browse")
@@ -55,7 +55,7 @@ struct DirectorySelectionView: View {
                         .foregroundStyle(.secondary)
                         .opacity(hasAppeared ? 1 : 0)
                 }
-                .animation(.easeOut(duration: 0.2).delay(0.05), value: hasAppeared)
+                .animation(.sortyFade.delay(0.05), value: hasAppeared)
 
                 dropZone
 
@@ -92,7 +92,7 @@ struct DirectorySelectionView: View {
                 )
                 .contentShape(Capsule())
                 .scaleEffect(isBrowseHovering ? 1.03 : 1.0)
-                .animation(.easeOut(duration: 0.15), value: isBrowseHovering)
+                .animation(.sortyQuick, value: isBrowseHovering)
                 .onHover { hovering in
                     let wasHovering = isBrowseHovering
                     if hovering && !wasHovering {
@@ -102,13 +102,13 @@ struct DirectorySelectionView: View {
                 }
                 .keyboardShortcut("o", modifiers: .command)
                 .opacity(hasAppeared ? 1 : 0)
-                .animation(.easeOut(duration: 0.2).delay(0.1), value: hasAppeared)
+                .animation(.sortyFade.delay(0.1), value: hasAppeared)
                 .accessibilityIdentifier("BrowseForFolderButton")
 
                 if settingsViewModel.config.enableSmartRename {
                     organizationModePicker
                         .opacity(hasAppeared ? 1 : 0)
-                        .animation(.easeOut(duration: 0.2).delay(0.12), value: hasAppeared)
+                        .animation(.sortyFade.delay(0.12), value: hasAppeared)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -118,7 +118,7 @@ struct DirectorySelectionView: View {
 
             quickTips
                 .opacity(hasAppeared ? 1 : 0)
-                .animation(.easeOut(duration: 0.2).delay(0.15), value: hasAppeared)
+                .animation(.sortyFade.delay(0.15), value: hasAppeared)
         }
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .siriDropZone(isTargeted: $isTargeted) { providers in
@@ -161,7 +161,7 @@ struct DirectorySelectionView: View {
                     mode: mode,
                     isSelected: settingsViewModel.config.mode == mode
                 ) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    withAnimation(.sortySnappy) {
                         settingsViewModel.config.mode = mode
                     }
                     HapticFeedbackManager.shared.tap()
@@ -198,8 +198,8 @@ struct DirectorySelectionView: View {
                     .animatedEmptyStateIcon()
                     .scaleEffect(iconBounce ? 1.1 : 1.0)
             }
-            .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isTargeted)
-            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: iconBounce)
+            .animation(.sortyBouncy, value: isTargeted)
+            .animation(.sortyBouncy, value: iconBounce)
 
             Text(isTargeted ? "Drop to select" : "Drop folder here")
                 .font(.system(size: 14, weight: .medium))
@@ -219,23 +219,23 @@ struct DirectorySelectionView: View {
         .buttonStyle(.plain)
         .scaleEffect(isTargeted ? 1.05 : 1.0)
         .shadow(color: isTargeted ? .accentColor.opacity(0.2) : .clear, radius: 12, y: 4)
-        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7), value: isTargeted)
+        .animation(reduceMotion ? nil : .sortySnappy, value: isTargeted)
         .opacity(hasAppeared ? 1 : 0)
         .scaleEffect(hasAppeared ? 1 : 0.9)
         .animation(
-            reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.8).delay(0.1),
+            reduceMotion ? nil : .sortySpringStandard.delay(0.1),
             value: hasAppeared
         )
         .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
         .onHover { hovering in
             isHovering = hovering
             if hovering, !reduceMotion {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                withAnimation(.sortyBouncy) {
                     iconBounce = true
                 }
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(150))
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    withAnimation(.sortySnappy) {
                         iconBounce = false
                     }
                 }
@@ -314,8 +314,8 @@ struct DirectorySelectionView: View {
 
     private var workflowNavigationAnimation: Animation {
         reduceMotion
-            ? .easeOut(duration: 0.1)
-            : .spring(response: 0.38, dampingFraction: 0.86)
+            ? .sortyQuick
+            : .sortySmooth
     }
 
     private func openMenuBarTip() {
@@ -481,7 +481,7 @@ struct QuickTipItemCompact: View {
             }
         }
         .scaleEffect(isHovering ? 1.03 : 1.0)
-        .animation(reduceMotion ? nil : .spring(response: 0.2, dampingFraction: 0.7), value: isHovering)
+        .animation(reduceMotion ? nil : .sortySnappy, value: isHovering)
         .contentShape(Rectangle())
         .onHover { isHovering = action != nil && $0 }
     }

@@ -88,7 +88,7 @@ struct FinderIntegrationSettingsView: View {
                             if hovering && !isHoveringExtensions {
                                 HapticFeedbackManager.shared.selection()
                             }
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                            withAnimation(reduceMotion ? nil : .sortySnappy) {
                                 isHoveringExtensions = hovering
                             }
                         }
@@ -113,7 +113,7 @@ struct FinderIntegrationSettingsView: View {
                 .accessibilityIdentifier("FinderAutoRevealToggle")
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: setupState)
+        .animation(reduceMotion ? nil : .sortyFade, value: setupState)
         .task(id: refreshGeneration) {
             setupState = nil
             let diagnostics = await ExtensionCommunication.prepareFinderIntegrationAsync()

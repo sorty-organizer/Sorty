@@ -229,14 +229,14 @@ struct OnboardingPersonaCard: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 7) {
+            VStack(spacing: 8) {
                 ZStack {
                     Circle()
                         .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.secondary.opacity(0.1))
                         .frame(width: 44, height: 44)
                     
                     Image(systemName: persona.icon)
-                        .font(.system(size: 21))
+                        .font(.system(size: 22))
                         .foregroundStyle(isSelected ? SortyDesignSystem.Colors.resolvedAccent : .primary)
                 }
                 
@@ -254,7 +254,7 @@ struct OnboardingPersonaCard: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 110)
-            .padding(.vertical, 11)
+            .padding(.vertical, 12)
             .padding(.horizontal, 14)
             .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
             .background(
@@ -288,9 +288,9 @@ struct OnboardingPersonaCard: View {
         // fill, and stroke, so the glass card never re-blurs a growing shadow.
         .shadow(color: shadowColor, radius: 8, x: 0, y: 4)
         .onHover { isHovered = $0 }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovered)
+        .animation(reduceMotion ? nil : .sortyQuick, value: isHovered)
         .animation(
-            reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7),
+            reduceMotion ? nil : .sortySnappy,
             value: isSelected
         )
     }
@@ -404,7 +404,7 @@ struct OnboardingCustomPersonaCard: View {
 
                 Button(role: .destructive) {
                     HapticFeedbackManager.shared.tap()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    withAnimation(.sortySnappy) {
                         onDelete()
                     }
                 } label: {
@@ -418,9 +418,9 @@ struct OnboardingCustomPersonaCard: View {
             }
             isHovered = hovering
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isHovered)
+        .animation(reduceMotion ? nil : .sortyFade, value: isHovered)
         .animation(
-            reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7),
+            reduceMotion ? nil : .sortySnappy,
             value: isSelected
         )
     }
@@ -440,7 +440,7 @@ struct OnboardingCustomPersonaCard: View {
                         .frame(width: 58, height: 58)
 
                     Image(systemName: persona.icon)
-                        .font(.system(size: 26, weight: .semibold))
+                        .font(.system(size: 28, weight: .semibold))
                         .foregroundStyle(isSelected ? selectionAccent : .primary)
                 }
 
@@ -457,7 +457,7 @@ struct OnboardingCustomPersonaCard: View {
                             .foregroundStyle(isSelected ? selectionAccent : .secondary)
                             .numericTextTransition(animationValue: isSelected)
                             .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
+                            .padding(.vertical, 6)
                             .background(
                                 Capsule()
                                     .fill(isSelected ? selectionAccent.opacity(0.16) : Color.secondary.opacity(0.12))
@@ -492,14 +492,14 @@ struct OnboardingCustomPersonaCard: View {
 
     // Matches the built-in OnboardingPersonaCard's compact 2-column layout.
     private var compactBody: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 8) {
             ZStack {
                 Circle()
                     .fill(compactIconFill)
                     .frame(width: 44, height: 44)
 
                 Image(systemName: persona.icon)
-                    .font(.system(size: 21))
+                    .font(.system(size: 22))
                     .foregroundStyle(isSelected ? selectionAccent : .primary)
             }
 

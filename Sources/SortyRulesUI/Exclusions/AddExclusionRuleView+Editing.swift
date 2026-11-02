@@ -23,7 +23,7 @@ extension AddExclusionRuleView {
         HStack {
             Button {
                 HapticFeedbackManager.shared.selection()
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.sortyFade) {
                     selectedIntent = nil
                     selectedFolderURL = nil
                 }
@@ -54,7 +54,7 @@ extension AddExclusionRuleView {
             } else {
                 Button {
                     HapticFeedbackManager.shared.selection()
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.sortyFade) {
                         selectedIntent = nil
                         selectedFolderURL = nil
                     }
@@ -104,7 +104,7 @@ extension AddExclusionRuleView {
             ForEach(ExclusionIntent.allCases) { intent in
                 Button {
                     HapticFeedbackManager.shared.selection()
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.sortyFade) {
                         selectedIntent = intent
                         if let relatedRule = relatedRules.first(where: {
                             Self.intent(for: $0) == intent
@@ -121,7 +121,7 @@ extension AddExclusionRuleView {
                             .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
                             .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
 
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(intent.title)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
@@ -302,7 +302,7 @@ extension AddExclusionRuleView {
     }
 
     func switchCondition(to condition: ExclusionRule) {
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(.sortyFade) {
             selectedIntent = Self.intent(for: condition)
             loadCondition(condition)
         }

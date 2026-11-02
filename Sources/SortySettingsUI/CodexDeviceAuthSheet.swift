@@ -40,7 +40,7 @@ struct CodexDeviceAuthSheet: View {
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Reauthenticate ChatGPT Subscription")

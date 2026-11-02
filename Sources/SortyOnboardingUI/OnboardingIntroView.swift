@@ -142,7 +142,7 @@ struct OnboardingIntroView: View {
             withAnimation(.easeOut(duration: 0.34)) {
                 iconOpacity = 1
             }
-            withAnimation(.spring(response: 0.56, dampingFraction: 0.88)) {
+            withAnimation(.sortySpringStandard) {
                 iconScale = 1
             }
             glowVisible = true
@@ -221,7 +221,7 @@ struct OnboardingIntroContentLayer: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
 
-            VStack(spacing: 26) {
+            VStack(spacing: 24) {
                 VStack(spacing: 20) {
                     ZStack {
                         RetainedIntroGlow(
@@ -258,7 +258,7 @@ struct OnboardingIntroContentLayer: View {
                     HStack(spacing: 8) {
                         Text("Get Started")
                         Image(systemName: "arrow.right")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: 15, weight: .bold))
                     }
                 }
                 .buttonStyle(.sortyProminent(size: .extraLarge))
@@ -270,7 +270,7 @@ struct OnboardingIntroContentLayer: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(!isGetStartedAvailable)
                 .opacity(isGetStartedAvailable ? 1 : 0.62)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: isGetStartedAvailable)
+                .animation(reduceMotion ? nil : .sortyFade, value: isGetStartedAvailable)
                 .accessibilityIdentifier("OnboardingAdvanceButton")
                 .background {
                     Color.clear

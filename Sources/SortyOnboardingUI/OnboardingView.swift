@@ -439,7 +439,7 @@ public struct OnboardingView: View {
 
         let validation = currentStepValidation
         guard validation.canAdvance else {
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+            withAnimation(reduceMotion ? nil : .sortyFade) {
                 advanceValidationMessage = validation.message
             }
             HapticFeedbackManager.shared.error()

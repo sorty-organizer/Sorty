@@ -67,7 +67,7 @@ package struct PermissionAnimatedIcon: View {
                         value: reduceMotion ? 0 : grantAnimationTrigger
                     )
                     .animation(
-                        reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.68),
+                        reduceMotion ? nil : .sortyBouncy,
                         value: state
                     )
 
@@ -122,7 +122,7 @@ package struct PermissionAnimatedIcon: View {
     private func openAndCloseFolder() {
         folderOpenTask?.cancel()
         folderOpenTask = Task { @MainActor in
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.68)) {
+            withAnimation(.sortyBouncy) {
                 folderFlapRotation = -42
                 folderBackOpacity = 0.48
             }
@@ -130,7 +130,7 @@ package struct PermissionAnimatedIcon: View {
             try? await Task.sleep(for: .milliseconds(280))
             guard !Task.isCancelled else { return }
 
-            withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
+            withAnimation(.sortySmooth) {
                 folderFlapRotation = 0
                 folderBackOpacity = 0
             }

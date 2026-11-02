@@ -35,7 +35,7 @@ public struct PermissionsStepView: View {
 
     public var body: some View {
         HStack(spacing: 36) {
-            VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 24) {
                 Spacer()
 
                 VStack(alignment: .leading, spacing: 14) {
@@ -72,7 +72,7 @@ public struct PermissionsStepView: View {
 
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("Grant Access")
                             .font(.title3.weight(.semibold))
 
@@ -88,7 +88,7 @@ public struct PermissionsStepView: View {
                         .foregroundStyle(grantedPermissionCount == PermissionType.allCases.count ? .green : .secondary)
                         .numericTextTransition(animationValue: grantedPermissionCount)
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 6)
                         .background(Color.primary.opacity(0.07), in: Capsule(style: .continuous))
                 }
 

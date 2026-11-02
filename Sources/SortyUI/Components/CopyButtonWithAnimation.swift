@@ -66,8 +66,8 @@ public struct CopyButtonWithAnimation: View {
     }
     
     private func copyToClipboard() {
-        feedback.copy(content, animation: reduceMotion ? nil : .easeInOut(duration: 0.15),
-                      resetAnimation: reduceMotion ? nil : .easeInOut(duration: 0.15))
+        feedback.copy(content, animation: reduceMotion ? nil : .sortyFade,
+                      resetAnimation: reduceMotion ? nil : .sortyFade)
     }
 }
 

@@ -87,8 +87,8 @@ struct GeneralSettingsView: View {
                 }
                 .animation(
                     reduceMotion
-                        ? .easeInOut(duration: 0.14)
-                        : .spring(response: 0.34, dampingFraction: 0.78),
+                        ? .sortyFade
+                        : .sortySmooth,
                     value: showMenuBarExtra
                 )
             }

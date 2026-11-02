@@ -55,7 +55,7 @@ struct GeneratePersonaButton: View {
             y: shadowY
         )
         .onHover { isHovered = $0 }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovered)
+        .animation(reduceMotion ? nil : .sortyQuick, value: isHovered)
     }
 
     @ViewBuilder
@@ -69,7 +69,7 @@ struct GeneratePersonaButton: View {
                         .frame(width: 50, height: 50)
 
                     Image(systemName: "sparkles")
-                        .font(.system(size: 24))
+                        .font(.system(size: 22))
                         .foregroundStyle(.primary)
                 }
 
@@ -94,7 +94,7 @@ struct GeneratePersonaButton: View {
                         .frame(width: 38, height: 38)
 
                     Image(systemName: "sparkles")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(.primary)
                 }
 
@@ -129,10 +129,10 @@ struct OnboardingCapsuleBadge: View {
 
     var body: some View {
         Text(text.uppercased())
-            .font(.system(size: 9, weight: .bold, design: .rounded))
+            .font(.system(size: 10, weight: .bold, design: .rounded))
             .foregroundStyle(.primary)
             .padding(.horizontal, 6)
-            .padding(.vertical, 3)
+            .padding(.vertical, 4)
             .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule, interactive: false)
     }
 }

@@ -38,7 +38,7 @@ struct AboutView: View {
             
             // App Name
             Text("Sorty")
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(.system(size: 22, weight: .bold, design: .rounded))
             
             // Description
             Text("The FOSS File Organiser")
@@ -64,7 +64,7 @@ struct AboutView: View {
                 .trackHoveredURL(versionHistoryURL)
                 .scaleEffect(versionHovered ? 1.02 : 1.0)
                 .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.15)) { versionHovered = hovering }
+                    withAnimation(.sortyFade) { versionHovered = hovering }
                     if hovering { HapticFeedbackManager.shared.selection() }
                 }
                 
@@ -88,7 +88,7 @@ struct AboutView: View {
                     .trackHoveredURL(commitURL)
                     .scaleEffect(commitHovered ? 1.02 : 1.0)
                     .onHover { hovering in
-                        withAnimation(.easeInOut(duration: 0.15)) { commitHovered = hovering }
+                        withAnimation(.sortyFade) { commitHovered = hovering }
                         if hovering { HapticFeedbackManager.shared.selection() }
                     }
                 } else {
@@ -121,7 +121,7 @@ struct AboutView: View {
                     .trackHoveredURL(sponsorsURL)
                     .scaleEffect(supportHovered ? 1.04 : 1.0)
                     .onHover { hovering in
-                        withAnimation(.easeInOut(duration: 0.15)) { supportHovered = hovering }
+                        withAnimation(.sortyFade) { supportHovered = hovering }
                         if hovering { HapticFeedbackManager.shared.selection() }
                     }
                 }
@@ -137,7 +137,7 @@ struct AboutView: View {
                     .trackHoveredURL(docsURL)
                     .scaleEffect(docsHovered ? 1.04 : 1.0)
                     .onHover { hovering in
-                        withAnimation(.easeInOut(duration: 0.15)) { docsHovered = hovering }
+                        withAnimation(.sortyFade) { docsHovered = hovering }
                         if hovering { HapticFeedbackManager.shared.selection() }
                     }
                     
@@ -151,7 +151,7 @@ struct AboutView: View {
                     .trackHoveredURL(githubURL)
                     .scaleEffect(githubHovered ? 1.04 : 1.0)
                     .onHover { hovering in
-                        withAnimation(.easeInOut(duration: 0.15)) { githubHovered = hovering }
+                        withAnimation(.sortyFade) { githubHovered = hovering }
                         if hovering { HapticFeedbackManager.shared.selection() }
                     }
                 }
@@ -166,7 +166,7 @@ struct AboutView: View {
                 .accessibilityIdentifier("AboutAccreditationsButton")
                 .scaleEffect(accreditationsHovered ? 1.04 : 1.0)
                 .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.15)) { accreditationsHovered = hovering }
+                    withAnimation(.sortyFade) { accreditationsHovered = hovering }
                     if hovering { HapticFeedbackManager.shared.selection() }
                 }
             }
@@ -239,12 +239,12 @@ private struct AboutAppIconEasterEgg: View {
                 .blur(radius: carousel.isBursting ? 6 : 0)
                 .opacity(carousel.isBursting ? 0 : 1)
                 .transition(.opacity)
-                .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7), value: iconHovered)
+                .animation(reduceMotion ? nil : .sortySnappy, value: iconHovered)
             }
             .frame(width: stageWidth, height: stageHeight)
             .contentShape(Rectangle())
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: carousel.iconID)
-            .animation(reduceMotion ? .easeInOut(duration: 0.2) : .easeIn(duration: 0.24), value: carousel.isBursting)
+            .animation(reduceMotion ? .sortyFade : .easeIn(duration: 0.24), value: carousel.isBursting)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Sorty app icon")

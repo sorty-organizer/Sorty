@@ -105,8 +105,8 @@ private struct SortyButtonBody: View {
             )
             .scaleEffect(pressed ? 0.97 : 1)
             .opacity(isEnabled ? 1 : 0.52)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: pressed)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovering)
+            .animation(reduceMotion ? nil : .sortyQuick, value: pressed)
+            .animation(reduceMotion ? nil : .sortyQuick, value: isHovering)
             .onHover { isHovering = $0 && isEnabled }
             .onChange(of: pressed) { _, isPressed in
                 guard isPressed else { return }
@@ -199,8 +199,8 @@ public struct MetalFxPrimaryButtonStyle: ButtonStyle {
             )
             .scaleEffect(pressed ? 0.975 : 1)
             .opacity(isEnabled ? 1 : 0.56)
-            .animation(.easeOut(duration: 0.14), value: pressed)
-            .animation(.spring(response: 0.24, dampingFraction: 0.82), value: isHovering)
+            .animation(.sortyQuick, value: pressed)
+            .animation(.sortySnappy, value: isHovering)
             .onHover { hovering in
                 isHovering = hovering
                 if hovering {

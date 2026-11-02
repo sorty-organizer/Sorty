@@ -42,8 +42,8 @@ struct RenameGenerationRow: View {
                 .opacity(isRevealed ? (suggestedNameReveal ? 1 : 0) : 0.62)
                 .offset(x: reduceMotion ? 0 : (suggestedNameReveal ? 0 : -8))
                 .scaleEffect(isRevealed ? 1 : 0.985)
-                .animation(.easeInOut(duration: 0.18), value: isRevealed)
-                .animation(.spring(response: 0.42, dampingFraction: 0.82), value: suggestedNameReveal)
+                .animation(.sortyFade, value: isRevealed)
+                .animation(.sortySmooth, value: suggestedNameReveal)
             }
         }
         .padding(.horizontal, 12)
@@ -80,7 +80,7 @@ struct RenameGenerationRow: View {
 
         suggestedNameReveal = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+            withAnimation(.sortySmooth) {
                 suggestedNameReveal = true
             }
         }
@@ -103,7 +103,7 @@ struct RenameNamePill: View {
             .strikethrough(isStruck, color: .secondary)
             .numericTextTransition(
                 animationValue: text,
-                animation: .easeInOut(duration: 0.28)
+                animation: .sortySlowFade
             )
             .textShimmer(isLoading: isShimmering, phaseOffset: 0.12, intensity: 1.18)
             .padding(.horizontal, 10)

@@ -55,7 +55,7 @@ extension SkillSetupView {
     func changeStep(_ next: Step) {
         HapticFeedbackManager.shared.selection()
         if next == .review { hasReachedReviewBottom = false }
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+        withAnimation(reduceMotion ? nil : .sortyFade) {
             introductionStage = 0
             step = next
         }
@@ -184,7 +184,7 @@ extension SkillSetupView {
                     SoundEffectPlayer.play(named: "Glass", volume: 0.20)
                 }
                 // Reveal the ready page and dismiss progress in one animated update.
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                withAnimation(reduceMotion ? nil : .sortyFade) {
                     step = .complete
                     isSaving = false
                     importProgressDeadline = nil

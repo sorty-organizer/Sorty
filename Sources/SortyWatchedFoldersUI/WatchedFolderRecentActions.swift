@@ -59,7 +59,7 @@ struct WatchedFolderRecentActions: View {
                             }
 
                             actionRow(entry)
-                                .padding(.vertical, 7)
+                                .padding(.vertical, 8)
                         }
                     }
                 }

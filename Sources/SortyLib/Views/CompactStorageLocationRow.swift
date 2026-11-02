@@ -35,7 +35,7 @@ struct CompactStorageLocationRow: View {
 
                 if needsAttention {
                     Image(systemName: !location.exists ? "exclamationmark.triangle.fill" : "lock.slash.fill")
-                        .font(.system(size: 8))
+                        .font(.system(size: 10))
                         .foregroundStyle(!location.exists ? .red : .orange)
                         .symbolReplaceTransition(animationValue: location.exists)
                         .offset(x: 5, y: 4)
@@ -54,13 +54,13 @@ struct CompactStorageLocationRow: View {
                     HapticFeedbackManager.shared.tap()
                     NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: location.path)
                 } label: {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         PrivacySensitivePathText(path: location.path, revealOnClick: false)
                             .lineLimit(1)
                             .truncationMode(.middle)
 
                         Image(systemName: "arrow.up.right")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.system(size: 10, weight: .semibold))
                             .frame(width: 10)
                             .opacity(isHoveringPath ? 1 : 0)
                             .offset(
@@ -80,7 +80,7 @@ struct CompactStorageLocationRow: View {
                 .help("Reveal \(location.name) in Finder")
                 .accessibilityLabel("Reveal \(location.name) in Finder")
                 .animation(
-                    reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                    reduceMotion ? nil : .sortySnappy,
                     value: isHoveringPath
                 )
                 .onHover { hovering in
@@ -116,7 +116,7 @@ struct CompactStorageLocationRow: View {
 
                 Button(role: .destructive) {
                     HapticFeedbackManager.shared.tap()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    withAnimation(.sortySnappy) {
                         storageLocationsManager.removeLocation(location)
                     }
                 } label: {
@@ -158,7 +158,7 @@ struct CompactStorageLocationRow: View {
             Divider()
             Button("Remove", role: .destructive) {
                 HapticFeedbackManager.shared.tap()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                withAnimation(.sortySnappy) {
                     storageLocationsManager.removeLocation(location)
                 }
             }

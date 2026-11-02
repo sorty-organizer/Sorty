@@ -101,8 +101,8 @@ struct ReadyToOrganizeView: View {
 
     var storageLocationInsertionAnimation: Animation {
         reduceMotion
-            ? .easeOut(duration: 0.12)
-            : .spring(response: 0.32, dampingFraction: 0.84)
+            ? .sortyQuick
+            : .sortySnappy
     }
 
     var storageLocationRowTransition: AnyTransition {
@@ -252,14 +252,14 @@ struct ReadyToOrganizeView: View {
             return
         }
 
-        withAnimation(.spring(response: 0.18, dampingFraction: 0.56)) {
+        withAnimation(.sortyBouncy) {
             startCTACompression = 1
         }
 
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(70))
             onStart()
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.62)) {
+            withAnimation(.sortyBouncy) {
                 startCTACompression = 0
             }
         }
@@ -268,7 +268,7 @@ struct ReadyToOrganizeView: View {
     func selectWorkflow(_ selectedMode: OrganizationMode) {
         guard selectedMode != mode else { return }
         HapticFeedbackManager.shared.selection()
-        withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.6)) {
+        withAnimation(reduceMotion ? nil : .sortyBouncy) {
             if selectedMode != .organize {
                 settingsViewModel.config.enableSmartRename = true
             }
@@ -278,7 +278,7 @@ struct ReadyToOrganizeView: View {
 
     func toggleStorageLocations() {
         HapticFeedbackManager.shared.selection()
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+        withAnimation(reduceMotion ? nil : .sortyFade) {
             showStorageLocations.toggle()
         }
     }

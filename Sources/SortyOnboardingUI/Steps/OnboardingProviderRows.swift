@@ -125,8 +125,8 @@ struct OnboardingProviderRow: View {
         .onHover { hovering in
             if provider.isAvailable { isHovering = hovering }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isSelected)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovering)
+        .animation(reduceMotion ? nil : .sortyQuick, value: isSelected)
+        .animation(reduceMotion ? nil : .sortyQuick, value: isHovering)
         .accessibilityIdentifier("OnboardingProvider_\(provider.rawValue)")
         .accessibilityHint(isBlockedByInternetPrivacy ? internetPrivacyExplanation : (isOpenCodeCard ? "Selects OpenCode. Switch between the Zen and Go plans in the plan picker." : "Selects \(provider.displayName)."))
         .help(isBlockedByInternetPrivacy ? internetPrivacyExplanation : (isOpenCodeCard ? "Use OpenCode (switch plans in the plan picker)" : "Use \(provider.displayName)"))
@@ -143,7 +143,7 @@ struct OnboardingProviderRow: View {
     }
 
     var rowLabel: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 10) {
             ProviderLogoView(provider: logoProvider, size: 20)
                 .frame(width: 28, height: 28)
                 .overlay(alignment: .bottomTrailing) {
@@ -179,7 +179,7 @@ struct OnboardingProviderRow: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
+                    .padding(.vertical, 4)
                     .background(Color.secondary.opacity(0.1), in: Capsule())
             }
         }

@@ -29,7 +29,7 @@ package struct TagDotsView: View {
     }
 
     package var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
             ForEach(colorTags.prefix(3), id: \.0) { _, color in
                 Circle()
                     .fill(color)
@@ -57,7 +57,7 @@ package struct TagDotsView: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 10)
-                .padding(.vertical, 7)
+                .padding(.vertical, 8)
                 .fixedSize()
                 .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }

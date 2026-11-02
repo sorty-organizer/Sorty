@@ -180,7 +180,7 @@ package struct WindowLinkHoverPillOverlay: View {
                         HapticFeedbackManager.shared.tap()
                         NSWorkspace.shared.open(url)
                     } label: {
-                        HStack(spacing: 7) {
+                        HStack(spacing: 8) {
                             Image(systemName: "arrow.up.forward.app")
                                 .font(.system(size: 10, weight: .semibold))
                                 .foregroundStyle(Color.blue.opacity(0.95))
@@ -192,7 +192,7 @@ package struct WindowLinkHoverPillOverlay: View {
                                 .truncationMode(.middle)
                                 .numericTextTransition(animationValue: labelText(for: url))
                         }
-                        .padding(.horizontal, 11)
+                        .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background {
                             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.capsule, style: .continuous)
@@ -220,8 +220,8 @@ package struct WindowLinkHoverPillOverlay: View {
             .padding(.bottom, 16)
         }
         .allowsHitTesting(hoverState.hoveredURL != nil)
-        .animation(.spring(response: 0.24, dampingFraction: 0.86), value: hoverState.hoveredURL != nil)
-        .animation(.easeInOut(duration: 0.12), value: hoverState.isCommandPressed)
+        .animation(.sortySnappy, value: hoverState.hoveredURL != nil)
+        .animation(.sortyFade, value: hoverState.isCommandPressed)
         .zIndex(1100)
     }
 

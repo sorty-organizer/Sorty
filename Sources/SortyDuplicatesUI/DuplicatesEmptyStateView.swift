@@ -46,8 +46,8 @@ struct DuplicatesEmptyStateView: View {
             .scaleEffect(hasAppeared ? 1 : 0.82)
             .animation(
                 reduceMotion
-                    ? .easeOut(duration: 0.18)
-                    : .spring(response: 0.48, dampingFraction: 0.64).delay(0.06),
+                    ? .sortyFade
+                    : .sortyBouncy.delay(0.06),
                 value: hasAppeared
             )
             .accessibilityHidden(true)
@@ -68,8 +68,8 @@ struct DuplicatesEmptyStateView: View {
             .offset(y: reduceMotion || hasAppeared ? 0 : 10)
             .animation(
                 reduceMotion
-                    ? .easeOut(duration: 0.18).delay(0.04)
-                    : .spring(response: 0.5, dampingFraction: 0.82).delay(0.16),
+                    ? .sortyFade.delay(0.04)
+                    : .sortySpringStandard.delay(0.16),
                 value: hasAppeared
             )
 
@@ -95,8 +95,8 @@ struct DuplicatesEmptyStateView: View {
             .offset(y: reduceMotion || hasAppeared ? 0 : 14)
             .animation(
                 reduceMotion
-                    ? .easeOut(duration: 0.18).delay(0.08)
-                    : .spring(response: 0.52, dampingFraction: 0.82).delay(0.24),
+                    ? .sortyFade.delay(0.08)
+                    : .sortySpringStandard.delay(0.24),
                 value: hasAppeared
             )
         }

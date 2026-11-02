@@ -18,7 +18,7 @@ package struct OrganizationModeSegment: View {
 
     package var body: some View {
         Button(action: action) {
-            HStack(spacing: 7) {
+            HStack(spacing: 8) {
                 Image(systemName: mode.iconName)
                     .font(.system(size: 12, weight: .semibold))
                     .symbolReplaceTransition(animationValue: mode)
@@ -28,7 +28,7 @@ package struct OrganizationModeSegment: View {
                     .numericTextTransition(animationValue: mode)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity)
             .background {
                 Capsule(style: .continuous)
@@ -40,8 +40,8 @@ package struct OrganizationModeSegment: View {
             }
             .foregroundColor(isSelected ? .white : .primary)
             .contentShape(Capsule())
-            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
-            .animation(.easeInOut(duration: 0.15), value: isHovering)
+            .animation(.sortySnappy, value: isSelected)
+            .animation(.sortyFade, value: isHovering)
         }
         .buttonStyle(.plain)
         .onHover { hovering in

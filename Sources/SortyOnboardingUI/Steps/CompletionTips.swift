@@ -81,7 +81,7 @@ struct QuickTipRow: View {
             }
 
             Text(text)
-                .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
         }

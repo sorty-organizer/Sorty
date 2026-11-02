@@ -104,7 +104,7 @@ package struct WatchedFoldersView: View {
                         }
                         .onChange(of: appState.highlightedWatchedFolderID) { _, highlightedID in
                             guard let highlightedID else { return }
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            withAnimation(.sortySmooth) {
                                 scrollProxy.scrollTo(highlightedID, anchor: .center)
                             }
                         }
@@ -172,7 +172,7 @@ package struct WatchedFoldersView: View {
             path: url.path,
             bookmarkData: bookmarkData
         )
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(.sortySnappy) {
             watchedFoldersManager.addFolder(folder)
         }
     }
@@ -195,7 +195,7 @@ package struct WatchedFoldersView: View {
                         path: url.path,
                         bookmarkData: bookmarkData
                     )
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    withAnimation(.sortySnappy) {
                         watchedFoldersManager.addFolder(folder)
                     }
                 }
@@ -278,7 +278,7 @@ struct EmptyWatchedFoldersView: View {
                 .opacity(hasAppeared ? 1 : 0)
                 .scaleEffect(hasAppeared ? 1 : 0.8)
                 .animation(
-                    .spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
+                    .sortySpringStandard.delay(0.1), value: hasAppeared)
 
             VStack(spacing: 8) {
                 Text("No Watched Folders")
@@ -314,7 +314,7 @@ struct EmptyWatchedFoldersView: View {
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            .animation(.sortySpringStandard.delay(0.2), value: hasAppeared)
 
             Button {
                 onAddFolder()
@@ -325,7 +325,7 @@ struct EmptyWatchedFoldersView: View {
             .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+            .animation(.sortySpringStandard.delay(0.3), value: hasAppeared)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -358,7 +358,7 @@ struct FolderSuggestionPill: View {
 
                 Text(name)
             }
-            .padding(.horizontal, 5)
+            .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(Color.secondary.opacity(isHovered ? 0.14 : 0.07))
             .clipShape(Capsule())
@@ -366,7 +366,7 @@ struct FolderSuggestionPill: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(isHovered ? .primary : .secondary)
-        .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isHovered)
+        .animation(.sortySnappy, value: isHovered)
         .onHover { hovering in
             isHovered = hovering
         }

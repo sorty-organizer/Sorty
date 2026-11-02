@@ -32,7 +32,7 @@ package struct PreviewHandoffView: View {
                 .font(.subheadline.weight(.semibold))
                 .numericTextTransition(animationValue: mode)
 
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 ForEach(0..<3, id: \.self) { index in
                     Circle()
                         .fill(Color.secondary.opacity(0.32))

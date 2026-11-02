@@ -42,7 +42,7 @@ struct CompletionHero: View {
         .opacity(hasAppeared ? 1 : 0)
         .scaleEffect(reduceMotion || hasAppeared ? 1 : 0.9)
         .animation(
-            reduceMotion ? nil : .spring(response: 0.55, dampingFraction: 0.9),
+            reduceMotion ? nil : .sortySpringStandard,
             value: hasAppeared
         )
         .scaleEffect(contentDismissed ? 0.8 : 1.0)
@@ -301,7 +301,7 @@ struct CompletionCheckmarkIcon: View {
                     .scaleEffect(isButtonHovered ? 1 : 0.72)
             }
             .animation(
-                reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82),
+                reduceMotion ? nil : .sortySnappy,
                 value: isButtonHovered
             )
         }

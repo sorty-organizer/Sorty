@@ -17,13 +17,13 @@ struct CodexSkillInstallerCard: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "dollarsign")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.indigo)
                 .frame(width: 28, height: 28)
                 .background(.indigo.opacity(0.12), in: Circle())
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("Sorty skill")
                     .font(.subheadline.weight(.semibold))
 
@@ -110,7 +110,7 @@ struct CodexSkillInstallerCard: View {
                     Text("Show Existing Skill")
                         .overlay(alignment: .trailing) {
                             Image(systemName: "arrow.up.right")
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.system(size: 10, weight: .semibold))
                                 .offset(
                                     x: reduceMotion || isHoveringShowExisting ? 14 : 11,
                                     y: reduceMotion || isHoveringShowExisting ? 0 : 3
@@ -125,7 +125,7 @@ struct CodexSkillInstallerCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .animation(
-                    reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                    reduceMotion ? nil : .sortySnappy,
                     value: isHoveringShowExisting
                 )
                 .onHover { hovering in

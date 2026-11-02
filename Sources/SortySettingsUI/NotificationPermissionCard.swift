@@ -123,14 +123,14 @@ struct NotificationPermissionCard: View {
                         
                     case .authorized, .provisional:
                         Button {
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                            withAnimation(reduceMotion ? nil : .sortySnappy) {
                                 isOpeningMacOSSettings = true
                             }
                             openSystemSettings()
 
                             Task { @MainActor in
                                 try? await Task.sleep(for: .seconds(0.35))
-                                withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                                withAnimation(reduceMotion ? nil : .sortySnappy) {
                                     isOpeningMacOSSettings = false
                                 }
                             }
@@ -155,7 +155,7 @@ struct NotificationPermissionCard: View {
                         .controlSize(.small)
                         .help("Open macOS notification settings")
                         .onHover { hovering in
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                            withAnimation(reduceMotion ? nil : .sortySnappy) {
                                 isHoveringMacOSSettings = hovering
                             }
                         }

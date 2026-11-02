@@ -82,14 +82,14 @@ struct RenameGenerationSequenceView: View {
 
             RenameGenerationEventList(events: events, shouldFollowLatest: $shouldFollowLatest)
             .frame(height: rowStackHeight)
-            .animation(.spring(response: 0.28, dampingFraction: 0.86), value: activeEventID)
+            .animation(.sortySnappy, value: activeEventID)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 20)
         .padding(.vertical, 16)
         .frame(maxWidth: 720)
         .frame(height: panelHeight, alignment: .top)
         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
-        .animation(.spring(response: 0.34, dampingFraction: 0.86), value: visibleRowCount)
+        .animation(.sortySmooth, value: visibleRowCount)
     }
 
     @ViewBuilder

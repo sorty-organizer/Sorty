@@ -45,8 +45,8 @@ struct RoutingRulesCard: View {
                 }
             }
         }
-        .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86), value: draft)
-        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.86), value: store.rules)
+        .animation(reduceMotion ? nil : .sortySmooth, value: draft)
+        .animation(reduceMotion ? nil : .sortySnappy, value: store.rules)
     }
 
     private var requestEditor: some View {
@@ -220,7 +220,7 @@ private struct RoutingRuleRow: View {
         .padding(10)
         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, clear: true, interactive: false)
         .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .animation(.sortyQuick, value: isHovered)
         .accessibilityIdentifier("RoutingRuleRow")
     }
 }

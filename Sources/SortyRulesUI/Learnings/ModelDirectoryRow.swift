@@ -91,7 +91,7 @@ struct ModelDirectoryRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         if scanState == .scanning {
                             ProgressView()
                                 .controlSize(.mini)
@@ -137,7 +137,7 @@ struct ModelDirectoryRow: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
         .onHover { hovering in
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.15)) {
+            withAnimation(reduceMotion ? nil : .sortyFade) {
                 isHovered = hovering
             }
             if hovering { HapticFeedbackManager.shared.selection() }
@@ -210,7 +210,7 @@ struct ModelDirectoryRow: View {
 
         Button {
             HapticFeedbackManager.shared.tap()
-            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+            withAnimation(reduceMotion ? nil : .sortySnappy) {
                 manager.removeModelDirectory(id: directory.id)
             }
         } label: {

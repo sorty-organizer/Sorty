@@ -89,7 +89,7 @@ struct FlattenedRowView: View, @MainActor Equatable {
                     .lineLimit(1)
             }
             .padding(.leading, CGFloat(row.depth) * 20 + 12)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
         }
     }
 }

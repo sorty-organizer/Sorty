@@ -44,7 +44,7 @@ struct GenerationStatsView: View {
         VStack(alignment: .leading, spacing: 16) {
             Button {
                 HapticFeedbackManager.shared.light()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                withAnimation(.sortySnappy) {
                     isExpanded.toggle()
                 }
             } label: {
@@ -243,7 +243,7 @@ public struct NerdStatPill: View {
         Button(action: copyToPasteboard) {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 9))
+                .font(.system(size: 10))
                 .foregroundStyle(color)
             
             Text(value)
@@ -253,7 +253,7 @@ public struct NerdStatPill: View {
             
             if let unit = unit {
                 Text(unit)
-                    .font(.system(size: 9))
+                    .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
         }
@@ -323,13 +323,13 @@ public struct NerdStatPillExpanded: View {
                     
                     if let unit = unit {
                         Text(unit)
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.tertiary)
                     }
                 }
                 
                 Text(LocalizedStringKey(title))
-                    .font(.system(size: 8, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                     .lineLimit(1)
@@ -395,7 +395,7 @@ package struct NerdStatCard: View {
                     .foregroundStyle(iconColor)
                 
                 Text(LocalizedStringKey(title))
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
                     .tracking(0.5)
@@ -404,9 +404,9 @@ package struct NerdStatCard: View {
             }
             
             VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(value)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)

@@ -257,7 +257,7 @@ struct DeeplinkSettingsView: View {
             set: { newValue in
                 guard newValue != selectedGroupID else { return }
                 HapticFeedbackManager.shared.selection()
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) {
+                withAnimation(reduceMotion ? nil : .sortyFade) {
                     selectedGroupID = newValue
                     expandedEntryID = nil
                 }
@@ -278,7 +278,7 @@ struct DeeplinkSettingsView: View {
 
     private func toggleExpansion(of entry: DeeplinkEntry) {
         HapticFeedbackManager.shared.tap()
-        withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.88)) {
+        withAnimation(reduceMotion ? nil : .sortySnappy) {
             expandedEntryID = expandedEntryID == entry.id ? nil : entry.id
         }
     }
@@ -371,7 +371,7 @@ private struct HelpIconLink: View {
             shape: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
         )
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(.sortyFade) {
                 isHovered = hovering
             }
             if hovering {
@@ -467,7 +467,7 @@ private struct DeeplinkEntryRow: View {
             in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous)
         )
         .onHover { hovering in
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.12)) {
+            withAnimation(reduceMotion ? nil : .sortyFade) {
                 isHovered = hovering
             }
         }

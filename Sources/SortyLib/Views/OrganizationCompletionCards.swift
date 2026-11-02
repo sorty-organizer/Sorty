@@ -82,7 +82,7 @@ struct InlineLearningMomentCard: View {
         )
         Task { await learningsManager.recordInlineLearningMomentAnswer(answer) }
         HapticFeedbackManager.shared.success()
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(.sortyFade) {
             self.moment = nil
         }
     }

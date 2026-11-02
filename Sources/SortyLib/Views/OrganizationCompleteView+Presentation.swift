@@ -128,7 +128,7 @@ extension OrganizationCompleteView {
                             Text(chip)
                                 .font(.caption)
                                 .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
+                                .padding(.vertical, 6)
                                 .background(
                                     Capsule().fill(feedbackDraft.selectedChip == chip ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.1))
                                 )
@@ -229,7 +229,7 @@ extension OrganizationCompleteView {
                         reduceMotion
                             ? .linear(duration: 0.01)
                             : isIntensified
-                                ? .spring(response: 0.2, dampingFraction: 0.68)
+                                ? .sortyBouncy
                                 : .easeOut(duration: 0.48)
                     }
                     .scaleEffect(iconAppeared ? 1 : 0.7)
@@ -346,7 +346,7 @@ extension OrganizationCompleteView {
                 }
             }
         }
-        .padding(.horizontal, 22)
+        .padding(.horizontal, 24)
         .padding(.vertical, usesCompactVerticalLayout ? 13 : 18)
         .frame(maxWidth: 560)
         .background(Color(NSColor.controlBackgroundColor))

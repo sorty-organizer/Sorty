@@ -74,7 +74,7 @@ struct StreamingProgressBeam: View {
             progressCard
         }
         .frame(width: targetWidth)
-        .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.82), value: matchesInsightsWidth)
+        .animation(reduceMotion ? nil : .sortySpringStandard, value: matchesInsightsWidth)
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Organization progress")
@@ -92,7 +92,7 @@ struct StreamingProgressBeam: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .numericTextTransition(
                         animationValue: displayedStage,
-                        animation: .easeInOut(duration: 0.28)
+                        animation: .sortySlowFade
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -101,7 +101,7 @@ struct StreamingProgressBeam: View {
                         .monospacedDigit()
                         .numericTextTransition(
                             animationValue: percent,
-                            animation: .easeInOut(duration: 0.3)
+                            animation: .sortySlowFade
                         )
                         .milestoneEmptyStateSliver(trigger: milestone)
                         .frame(width: 54, alignment: .trailing)
@@ -114,9 +114,9 @@ struct StreamingProgressBeam: View {
                         .frame(width: 54, alignment: .trailing)
                 }
             }
-            .font(.system(size: 18, weight: .semibold))
+            .font(.system(size: 17, weight: .semibold))
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 22)
+            .padding(.horizontal, 24)
             .padding(.vertical, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
         }

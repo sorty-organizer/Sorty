@@ -198,7 +198,7 @@ private struct PartialUndoItemRow: View {
                 Spacer()
 
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .frame(width: 10)
                     .opacity(isHovered ? 1 : 0)
                     .offset(
@@ -219,7 +219,7 @@ private struct PartialUndoItemRow: View {
         }
         .buttonStyle(.plain)
         .animation(
-            reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+            reduceMotion ? nil : .sortySnappy,
             value: isHovered
         )
         .onHover { isHovered = $0 }
@@ -320,7 +320,7 @@ private struct HistoryPrimaryStats: View {
                 }
             }
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 20)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
         .background(Color(NSColor.controlBackgroundColor))

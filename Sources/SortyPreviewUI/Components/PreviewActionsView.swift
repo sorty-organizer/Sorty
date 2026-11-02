@@ -67,7 +67,7 @@ struct PreviewActionsView: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(.sortyFade) {
                 isHoveringEditsCaptured = hovering
             }
         }
@@ -145,7 +145,7 @@ struct PreviewActionsView: View {
                 .transition(TransitionStyles.scaleAndFade)
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: hasEdits)
+        .animation(.sortySnappy, value: hasEdits)
     }
     
     private var regenerationSection: some View {
@@ -160,7 +160,7 @@ struct PreviewActionsView: View {
                 )
                 onRegenerate()
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .font(.system(size: 10, weight: .semibold))
                     Text("Regenerate")
@@ -257,7 +257,7 @@ struct PreviewActionsView: View {
             editsBadgeBackground
         )
         .scaleEffect(editsPulse ? 1.08 : (isHoveringEditsCaptured ? 1.02 : 1.0))
-        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: editsPulse)
+        .animation(.sortyBouncy, value: editsPulse)
     }
 
     private var editsBadgeBackground: some View {
@@ -389,7 +389,7 @@ private struct PreviewProgressControls: View {
         }
         .foregroundColor(.red)
         .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.vertical, 6)
         .background(
             Capsule(style: .continuous)
                 .fill(Color.red.opacity(0.1))

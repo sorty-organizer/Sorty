@@ -31,7 +31,7 @@ package struct FocusedInstructionBeamBorder: View {
 
             ReferenceBeamStroke(cornerRadius: cornerRadius, phase: phase, lineWidth: 1.2)
                 .opacity(active ? 0.95 : 0)
-                .animation(.easeOut(duration: 0.2), value: active)
+                .animation(.sortyFade, value: active)
         }
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
         // AppKit-hosted editors do not inherit a SwiftUI scene's activation state.
@@ -114,17 +114,17 @@ package struct RotatingInstructionSuggestionEditor: View {
                     Text("Tab")
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
                         .background(
                             Color.secondary.opacity(0.10),
                             in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                         )
                         .accessibilityHidden(true)
                 }
-                .padding(.leading, 18)
+                .padding(.leading, 20)
                 .padding(.trailing, 10)
-                .padding(.vertical, 9)
+                .padding(.vertical, 10)
                 .allowsHitTesting(false)
             }
         }

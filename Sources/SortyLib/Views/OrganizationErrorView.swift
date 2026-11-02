@@ -357,7 +357,7 @@ struct ErrorView: View {
                     )
                     .accessibilityIdentifier("ErrorOpenInternetSettingsButton")
                     .onHover { hovering in
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                        withAnimation(reduceMotion ? nil : .sortySnappy) {
                             isHoveringSettings = hovering
                         }
                     }
@@ -388,7 +388,7 @@ struct ErrorView: View {
                     .help("Open Settings to resolve this issue")
                     .accessibilityIdentifier("ErrorOpenSettingsButton")
                     .onHover { hovering in
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                        withAnimation(reduceMotion ? nil : .sortySnappy) {
                             isHoveringSettings = hovering
                         }
                     }
@@ -475,7 +475,7 @@ struct ErrorView: View {
                     .accessibilityHint("Opens the Help and Support settings page")
                     .accessibilityIdentifier("ErrorHelpSupportButton")
                     .onHover { hovering in
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+                        withAnimation(reduceMotion ? nil : .sortySnappy) {
                             isHoveringHelpSupport = hovering
                         }
                     }
@@ -483,8 +483,8 @@ struct ErrorView: View {
 
                 Button {
                     copyFeedback.copy(privacySafeSupportDetails, duration: .milliseconds(1200),
-                        animation: .spring(response: 0.3, dampingFraction: 0.72),
-                        resetAnimation: .spring(response: 0.3, dampingFraction: 0.72),
+                        animation: .sortySnappy,
+                        resetAnimation: .sortySnappy,
                         haptic: { HapticFeedbackManager.shared.selection() })
                     animateActionFeedback(.copy)
                 } label: {
@@ -560,7 +560,7 @@ struct ErrorView: View {
     }
 
     private func animateActionFeedback(_ action: ErrorActionFeedback) {
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) {
+        withAnimation(.sortySnappy) {
             activeActionFeedback = action
         }
 
@@ -568,7 +568,7 @@ struct ErrorView: View {
         actionFeedbackResetTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 240_000_000)
             guard !Task.isCancelled else { return }
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+            withAnimation(.sortySnappy) {
                 activeActionFeedback = nil
             }
         }
@@ -583,7 +583,7 @@ struct ErrorView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "play.fill")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                     Text("Continue \(settingsViewModel.config.mode.displayName)")
                         .font(.caption.bold())
                 }
@@ -616,7 +616,7 @@ struct ErrorView: View {
         .help("Return to folder selection")
         .accessibilityIdentifier("ErrorBackToFolderPickerButton")
         .onHover { hovering in
-            withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82)) {
+            withAnimation(reduceMotion ? nil : .sortySnappy) {
                 isHoveringCancel = hovering
             }
         }

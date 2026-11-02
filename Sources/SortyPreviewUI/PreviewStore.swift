@@ -182,7 +182,7 @@ package class PreviewStore: ObservableObject {
         editsCapturedCount += 1
         
         // Trigger pulse animation
-        withAnimation(.easeOut(duration: 0.15)) {
+        withAnimation(.sortyQuick) {
             editCapturedPulse = true
         }
         

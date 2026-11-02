@@ -62,13 +62,13 @@ struct ExperimentalSettingsView: View {
             ForEach(otherExperimentalFeatures) { feature in
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: feature.systemImage)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.indigo)
                         .frame(width: 28, height: 28)
                         .background(.indigo.opacity(0.12), in: Circle())
                         .accessibilityHidden(true)
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
                             Text(feature.title)
                                 .font(.subheadline.weight(.semibold))
@@ -103,7 +103,7 @@ struct ExperimentalSettingsView: View {
         .opacity(hasAppeared ? 1 : 0)
         .offset(y: hasAppeared ? 0 : 8)
         .animation(
-            reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.45, dampingFraction: 0.82),
+            reduceMotion ? .sortyQuick : .sortySmooth,
             value: hasAppeared
         )
     }

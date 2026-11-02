@@ -17,8 +17,8 @@ enum SettingsPageTransition {
 
     static func animation(reduceMotion: Bool) -> Animation {
         reduceMotion
-            ? .easeOut(duration: 0.12)
-            : .spring(response: 0.26, dampingFraction: 0.9)
+            ? .sortyQuick
+            : .sortySnappy
     }
 
     static func transition(reduceMotion: Bool) -> AnyTransition {
@@ -290,7 +290,7 @@ package struct SettingsView: View {
         HStack(spacing: 12) {
             Image(systemName: selectedCategory.sidebarIcon)
                 .symbolVariant(.fill)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 32, height: 32)
                 .background(selectedCategory.color.gradient, in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
@@ -338,7 +338,7 @@ package struct SettingsView: View {
                     .animatedEmptyStateIcon(tint: Color.accentColor)
                     .accessibilityLabel("No matching settings")
 
-                VStack(spacing: 5) {
+                VStack(spacing: 6) {
                     Text("Sorty came up empty")
                         .font(.headline)
                     Text("Nothing matches \"\(trimmedSearchText)\" yet.")
@@ -468,7 +468,7 @@ package struct SettingsView: View {
                 return
             }
 
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            withAnimation(.sortySmooth) {
                 proxy.scrollTo(target.rawValue, anchor: .center)
             }
 

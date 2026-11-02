@@ -18,13 +18,13 @@ extension OrganizeView {
     }
 
     var persistentWorkflowGradientAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.08) : .easeInOut(duration: 0.22)
+        reduceMotion ? .sortyQuick : .sortyFade
     }
 
     var workflowNavigationAnimation: Animation {
         reduceMotion
-            ? .easeOut(duration: 0.1)
-            : .spring(response: 0.38, dampingFraction: 0.86)
+            ? .sortyQuick
+            : .sortySmooth
     }
 
     var stateContentOpacity: Double {
@@ -104,7 +104,7 @@ extension OrganizeView {
     }
 
     var completionHandoffAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.42)
+        reduceMotion ? .sortyQuick : .smooth(duration: 0.42)
     }
 
     var shouldShowCompletionView: Bool {

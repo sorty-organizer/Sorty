@@ -208,7 +208,7 @@ package struct HistoryView: View {
             insertion: .opacity.combined(with: .scale(scale: 0.985, anchor: .top)),
             removal: .opacity
         )
-        .animation(.easeInOut(duration: 0.18))
+        .animation(.sortyFade)
     }
 
     private var filterSelection: Binding<HistoryFilter> {
@@ -348,7 +348,7 @@ package struct HistoryView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isProcessing)
+        .animation(.sortySnappy, value: isProcessing)
         .alert("History Action", isPresented: $showAlert) {
             Button("OK", role: .cancel) {
                 HapticFeedbackManager.shared.tap()
@@ -458,7 +458,7 @@ package struct HistoryView: View {
         if !entries.isEmpty {
             Button {
                 HapticFeedbackManager.shared.selection()
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.22)) {
+                withAnimation(reduceMotion ? nil : .sortyFade) {
                     if isCollapsed {
                         collapsedSections.remove(kind)
                     } else {
@@ -607,7 +607,7 @@ package struct HistoryView: View {
 
     private func selectEntry(id: UUID) {
         guard let entry = cachedEntries.first(where: { $0.id == id }) else { return }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.sortySnappy) {
             selectedEntry = entry
             showingDetail = true
         }
@@ -712,7 +712,7 @@ struct HistorySearchEmptyStateView: View {
             }
             .opacity(hasAppeared ? 1 : 0)
             .scaleEffect(hasAppeared ? 1 : 0.8)
-            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: hasAppeared)
+            .animation(.sortySmooth, value: hasAppeared)
 
             VStack(spacing: 8) {
                 Text("No Results Found")
@@ -725,7 +725,7 @@ struct HistorySearchEmptyStateView: View {
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
-            .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+            .animation(.sortySmooth.delay(0.1), value: hasAppeared)
 
             Button {
                 HapticFeedbackManager.shared.tap()
@@ -743,7 +743,7 @@ struct HistorySearchEmptyStateView: View {
                 }
             }
             .opacity(hasAppeared ? 1 : 0)
-            .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            .animation(.sortySmooth.delay(0.2), value: hasAppeared)
             .accessibilityIdentifier("ClearSearchButton")
 
             Spacer()
@@ -775,7 +775,7 @@ struct HistoryEmptyStateView: View {
                 EmptyStateHeroIcon(systemName: "clock.arrow.circlepath")
                     .opacity(hasAppeared ? 1 : 0)
                     .scaleEffect(hasAppeared ? 1 : 0.8)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
+                    .animation(.sortySpringStandard.delay(0.1), value: hasAppeared)
                     .accessibilityHidden(true)
 
                 VStack(spacing: 8) {
@@ -790,13 +790,13 @@ struct HistoryEmptyStateView: View {
                 }
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(y: hasAppeared ? 0 : 10)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+                .animation(.sortySpringStandard.delay(0.2), value: hasAppeared)
             }
 
             // CTA button
             Button {
                 HapticFeedbackManager.shared.tap()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                withAnimation(.sortySnappy) {
                     appState.currentView = .organize
                 }
             } label: {
@@ -812,7 +812,7 @@ struct HistoryEmptyStateView: View {
             .controlSize(.large)
             .contentShape(Capsule())
             .scaleEffect(isHovered ? 1.03 : 1.0)
-            .animation(.spring(response: 0.22, dampingFraction: 0.84), value: isHovered)
+            .animation(.sortySnappy, value: isHovered)
             .onHover { hovering in
                 if hovering && !isHovered {
                     HapticFeedbackManager.shared.selection()
@@ -821,7 +821,7 @@ struct HistoryEmptyStateView: View {
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+            .animation(.sortySpringStandard.delay(0.3), value: hasAppeared)
             .accessibilityLabel("Start organizing a folder")
             .accessibilityHint("Navigate to the organize view to begin")
             .accessibilityIdentifier("HistoryEmptyStateCTA")

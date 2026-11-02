@@ -205,7 +205,7 @@ package struct ExclusionRulesView: View {
                                         ? filteredNaturalLanguageExceptions : [],
                                     onEditRule: { ruleToEdit = $0 },
                                     onRemoveNaturalLanguageException: { exception in
-                                        withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
+                                        withAnimation(reduceMotion ? nil : .sortySnappy) {
                                             rulesManager.removeNaturalLanguageException(id: exception.id)
                                         }
                                     }
@@ -279,7 +279,7 @@ package struct ExclusionRulesView: View {
         guard let ruleID = appState.highlightedExclusionRuleID else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(120))
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(.sortySlowFade) {
                 proxy.scrollTo(ruleID, anchor: .center)
             }
             try? await Task.sleep(for: .seconds(3))
@@ -345,7 +345,7 @@ package struct ExclusionRulesView: View {
                     titleVisibility: .visible
                 ) {
                     Button("Remove All", role: .destructive) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        withAnimation(.sortySnappy) {
                             rulesManager.clearAllRules()
                         }
                         HapticFeedbackManager.shared.success()

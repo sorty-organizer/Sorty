@@ -173,8 +173,8 @@ extension ExclusionRulesView {
                                 Text("Tab")
                                     .font(.system(size: 10, weight: .semibold, design: .rounded))
                                     .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 3)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
                                     .background(
                                         Color.secondary.opacity(0.10),
                                         in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
@@ -249,7 +249,7 @@ extension ExclusionRulesView {
                         }
                     }
                         .animation(
-                            reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.82),
+                            reduceMotion ? nil : .sortySnappy,
                             value: hasNaturalLanguageExceptionText
                         )
                     }
@@ -264,7 +264,7 @@ extension ExclusionRulesView {
                 try? await Task.sleep(for: .seconds(8))
                 guard !Task.isCancelled, newNLException.isEmpty else { return }
 
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                withAnimation(reduceMotion ? nil : .sortyFade) {
                     naturalLanguageSuggestionIndex =
                         (naturalLanguageSuggestionIndex + 1) % naturalLanguageExceptionSuggestions.count
                 }
@@ -365,7 +365,7 @@ extension ExclusionRulesView {
             resolvedSupplementalDescription = resolution.supplementalDescription
             for (index, rule) in resolution.rules.enumerated() {
                 if !reduceMotion { try? await Task.sleep(for: .milliseconds(180)) }
-                withAnimation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.82)) {
+                withAnimation(reduceMotion ? nil : .sortySmooth) {
                     revealedExceptionRuleCount = index + 1
                 }
                 HapticFeedbackManager.shared.selection()
@@ -481,11 +481,11 @@ extension ExclusionRulesView {
         .accessibilityLabel("Exclusion rule interpretation")
         .accessibilityValue(interpretationProgressLabel)
         .animation(
-            reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.84),
+            reduceMotion ? nil : .sortySmooth,
             value: isCreatingExceptionRules
         )
         .animation(
-            reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.86),
+            reduceMotion ? nil : .sortySmooth,
             value: revealedExceptionRuleCount
         )
     }
@@ -597,7 +597,7 @@ extension ExclusionRulesView {
     }
 
     func saveResolvedExceptionRules() {
-        withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
+        withAnimation(reduceMotion ? nil : .sortySnappy) {
             resolvedExceptionRules.forEach(rulesManager.addRule)
             if let resolvedSupplementalDescription {
                 rulesManager.addNaturalLanguageException(resolvedSupplementalDescription)

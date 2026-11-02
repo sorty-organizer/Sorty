@@ -113,7 +113,7 @@ struct StorageLocationConfigView: View {
         updated.name = name.isEmpty ? location.url.lastPathComponent : name
         updated.description = description.isEmpty ? nil : description
 
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
+        withAnimation(reduceMotion ? nil : .sortySnappy) {
             storageLocationsManager.updateLocation(updated)
         }
         dismiss()
@@ -138,12 +138,12 @@ struct StorageLocationConfigView: View {
                             inFileViewerRootedAtPath: location.path
                         )
                     } label: {
-                        HStack(spacing: 5) {
+                        HStack(spacing: 6) {
                             PrivacySensitivePathText(path: location.path)
                                 .lineLimit(1)
 
                             Image(systemName: "arrow.up.right")
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.system(size: 10, weight: .semibold))
                                 .frame(width: 10)
                                 .opacity(isHoveringPath ? 1 : 0)
                                 .offset(
@@ -161,7 +161,7 @@ struct StorageLocationConfigView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .animation(
-                        reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                        reduceMotion ? nil : .sortySnappy,
                         value: isHoveringPath
                     )
                     .onHover { isHoveringPath = $0 }
@@ -215,17 +215,17 @@ struct StorageLocationConfigView: View {
                             )
                         )
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
                         .background(
                             Color.secondary.opacity(0.10),
                             in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                         )
                         .accessibilityHidden(true)
                 }
-                .padding(.leading, 18)
+                .padding(.leading, 20)
                 .padding(.trailing, 10)
-                .padding(.vertical, 9)
+                .padding(.vertical, 10)
                 .allowsHitTesting(false)
                 .task(id: shouldCycleDescriptionSuggestions) {
                     guard shouldCycleDescriptionSuggestions else { return }
@@ -267,7 +267,7 @@ private struct StorageProviderBadge: View {
     let provider: StorageProviderKind
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             Image(systemName: symbolName)
                 .foregroundStyle(tint)
                 .accessibilityHidden(true)
@@ -276,7 +276,7 @@ private struct StorageProviderBadge: View {
                 .foregroundStyle(.primary)
         }
         .font(.caption2.weight(.semibold))
-        .padding(.horizontal, 9)
+        .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule, interactive: false)
         .fixedSize()

@@ -247,7 +247,7 @@ struct AIProviderSettingsView: View {
     }
 
     func selectProvider(_ provider: AIProvider) {
-        withAnimation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.85)) {
+        withAnimation(reduceMotion ? nil : .sortySnappy) {
             viewModel.config.provider = provider
             if let defaultURL = provider.defaultAPIURL {
                 viewModel.config.apiURL = defaultURL
@@ -277,8 +277,8 @@ struct AIProviderSettingsView: View {
 
     var authenticationTransitionAnimation: Animation {
         reduceMotion
-            ? .easeInOut(duration: 0.16)
-            : .spring(response: 0.4, dampingFraction: 0.82)
+            ? .sortyFade
+            : .sortySmooth
     }
 
     var authenticationPanelTransition: AnyTransition {

@@ -61,7 +61,7 @@ struct InternetAccessPolicyView: View {
                 .foregroundStyle(.secondary)
                 .scaleEffect(iconHovered ? 1.06 : 1.0)
                 .onHover { hovering in
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
+                    withAnimation(.sortySnappy) {
                         iconHovered = hovering
                     }
                     if hovering {
@@ -71,7 +71,7 @@ struct InternetAccessPolicyView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Internet Access Policy")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
 
                 Text("Transparency for every host Sorty may contact")
                     .font(.subheadline)
@@ -111,7 +111,7 @@ struct InternetAccessPolicyView: View {
                     .trackHoveredURL(websiteURL)
                     .scaleEffect(websiteHovered ? 1.03 : 1.0)
                     .onHover { hovering in
-                        withAnimation(.easeInOut(duration: 0.15)) {
+                        withAnimation(.sortyFade) {
                             websiteHovered = hovering
                         }
                         if hovering {
@@ -150,7 +150,7 @@ struct InternetAccessPolicyView: View {
 
     private var blockInternetConnectionsToggle: some View {
         Toggle(isOn: $internetPrivacyModeEnabled) {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Block Internet Connections")
                     .font(.caption.weight(.semibold))
 
@@ -163,7 +163,7 @@ struct InternetAccessPolicyView: View {
         .toggleStyle(.switch)
         .controlSize(.small)
         .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.vertical, 10)
         .frame(maxWidth: 250)
         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg, interactive: false)
         .overlay {

@@ -69,7 +69,7 @@ struct FlatUnorganizedHeaderView: View {
     }
 
     private func toggleExpanded() {
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(reduceMotion ? nil : .sortySnappy) {
             store.toggleFolder(id: PreviewStore.unorganizedSectionID)
         }
     }

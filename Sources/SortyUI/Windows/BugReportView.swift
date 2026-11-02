@@ -130,7 +130,7 @@ public struct BugReportView: View {
                         Text(placeholder)
                             .font(.body)
                             .foregroundStyle(.tertiary)
-                            .padding(.leading, 5)
+                            .padding(.leading, 6)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
                     }
@@ -181,8 +181,8 @@ public struct BugReportView: View {
                     .transition(.opacity)
                 }
             }
-            .animation(.easeInOut(duration: 0.15), value: showsDropZone)
-            .animation(.easeInOut(duration: 0.15), value: textHeight)
+            .animation(.sortyFade, value: showsDropZone)
+            .animation(.sortyFade, value: textHeight)
             .onDrop(of: [.fileURL, .image], isTargeted: $isDropTargeted) { providers in
                 handleDrop(providers)
             }
@@ -306,12 +306,12 @@ public struct BugReportView: View {
         .frame(width: 560, alignment: .top)
         .fixedSize(horizontal: false, vertical: true)
         .animation(
-            reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.32, dampingFraction: 0.86),
+            reduceMotion ? .sortyQuick : .sortySnappy,
             value: sendToSentry
         )
-        .animation(.easeInOut(duration: 0.15), value: wantsGitHub)
-        .animation(.easeInOut(duration: 0.18), value: trimmedDescription.isEmpty)
-        .animation(.easeInOut(duration: 0.15), value: attachments)
+        .animation(.sortyFade, value: wantsGitHub)
+        .animation(.sortyFade, value: trimmedDescription.isEmpty)
+        .animation(.sortyFade, value: attachments)
         .onChange(of: area) { _, _ in HapticFeedbackManager.shared.selection() }
         .onChange(of: errorMessage) { _, newValue in
             if newValue != nil { HapticFeedbackManager.shared.error() }
@@ -654,8 +654,8 @@ private struct FeedbackKindChip: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .animation(.easeInOut(duration: 0.12), value: isHovered)
-        .animation(.easeInOut(duration: 0.15), value: isSelected)
+        .animation(.sortyFade, value: isHovered)
+        .animation(.sortyFade, value: isSelected)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
@@ -735,7 +735,7 @@ private struct AttachmentChip: View {
         .padding(.trailing, 4)
         .background(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous).fill(Color.secondary.opacity(isHovered ? 0.18 : 0.12)))
         .onHover { isHovered = $0 }
-        .animation(.easeInOut(duration: 0.12), value: isHovered)
+        .animation(.sortyFade, value: isHovered)
         .help(url.path)
         .task(id: url) {
             let scale = NSScreen.main?.backingScaleFactor ?? 2
@@ -768,7 +768,7 @@ private struct FeedbackDropZone: View {
                 .strokeBorder(accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
             VStack(spacing: 6) {
                 Image(systemName: isFull ? "nosign" : "arrow.down.doc.fill")
-                    .font(.system(size: 26, weight: .medium))
+                    .font(.system(size: 28, weight: .medium))
                     .foregroundStyle(accent)
                 Text(isFull ? "20 MB limit reached" : "Drop to attach")
                     .font(.headline)

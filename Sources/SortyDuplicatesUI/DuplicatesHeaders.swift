@@ -85,7 +85,7 @@ struct DuplicatesHeaderNew: View {
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 8, weight: .bold))
+                                    .font(.system(size: 10, weight: .bold))
                             }
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -259,7 +259,7 @@ struct DuplicatesResultsSidebarHeader: View {
     }
 
     private var noticeDismissAnimation: Animation? {
-        reduceMotion ? nil : .easeInOut(duration: 0.24)
+        reduceMotion ? nil : .sortyFade
     }
 
     private var noticeDismissTransition: AnyTransition {

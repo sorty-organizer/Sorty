@@ -110,8 +110,8 @@ package struct OrganizingFlightStageView: View {
                         .padding(.bottom, 6)
                         .animation(
                             systemReduceMotion
-                                ? .easeInOut(duration: 0.18)
-                                : .spring(response: 0.42, dampingFraction: 0.72),
+                                ? .sortyFade
+                                : .sortySmooth,
                             value: visibleSuggestions.map(\.id)
                         )
                     }
@@ -153,7 +153,7 @@ package struct OrganizingFlightStageView: View {
     // MARK: - Subviews
 
     private var fileCard: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 10) {
             Image(nsImage: currentFileIcon)
                 .resizable()
                 .interpolation(.high)
@@ -193,7 +193,7 @@ package struct OrganizingFlightStageView: View {
                             .opacity(1 - Double(renameStrikeProgress))
                             .numericTextTransition(
                                 animationValue: currentFileName,
-                                animation: .easeInOut(duration: 0.28)
+                                animation: .sortySlowFade
                             )
 
                         Text(currentFileName)
@@ -201,7 +201,7 @@ package struct OrganizingFlightStageView: View {
                             .opacity(Double(renameStrikeProgress))
                             .numericTextTransition(
                                 animationValue: currentFileName,
-                                animation: .easeInOut(duration: 0.28)
+                                animation: .sortySlowFade
                             )
                             .overlay {
                                 Rectangle()
@@ -221,7 +221,7 @@ package struct OrganizingFlightStageView: View {
                         .truncationMode(.middle)
                         .numericTextTransition(
                             animationValue: currentRenamedFileName,
-                            animation: .easeInOut(duration: 0.28)
+                            animation: .sortySlowFade
                         )
                         .opacity(Double(renameProgress))
                 }
@@ -230,7 +230,7 @@ package struct OrganizingFlightStageView: View {
                     .foregroundStyle(.primary.opacity(0.72))
                     .numericTextTransition(
                         animationValue: currentFileName,
-                        animation: .easeInOut(duration: 0.28)
+                        animation: .sortySlowFade
                     )
             }
         }
@@ -277,7 +277,7 @@ package struct OrganizingFlightStageView: View {
                             radius: isBumped ? 8 : 4, x: 0, y: 3)
             }
             .frame(width: bucketSize.width + 18, height: bucketSize.height + 6)
-            .animation(.spring(response: 0.32, dampingFraction: 0.55), value: bumpTrigger)
+            .animation(.sortyBouncy, value: bumpTrigger)
             .animation(.easeOut(duration: 0.25), value: showHalo)
 
             GeneratingFolderNameLabel(
@@ -394,11 +394,11 @@ package struct OrganizingFlightStageView: View {
         guard let index = visibleSuggestions.firstIndex(where: { $0.folderName == target }) else {
             // The target folder was evicted mid-flight: fade the card out
             // rather than dropping the file into a stranger's folder.
-            withAnimation(.easeOut(duration: 0.18)) { cardOpacity = 0 }
+            withAnimation(.sortyFade) { cardOpacity = 0 }
             return
         }
         let destX = centerOffset(for: index)
-        withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) {
+        withAnimation(.sortySmooth) {
             flightDestination.width = destX
         }
     }
@@ -523,7 +523,7 @@ package struct OrganizingFlightStageView: View {
         guard merged != displayedSuggestions else { return }
 
         if animated && didInsert && !systemReduceMotion {
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) {
+            withAnimation(.sortySmooth) {
                 displayedSuggestions = merged
             }
             HapticFeedbackManager.shared.light()
@@ -643,7 +643,7 @@ private struct GeneratingFolderNameLabel: View {
             .truncationMode(.middle)
             .numericTextTransition(
                 animationValue: name,
-                animation: .easeInOut(duration: 0.28)
+                animation: .sortySlowFade
             )
             .frame(maxWidth: maxWidth)
             .frame(height: 28, alignment: .top)
@@ -654,7 +654,7 @@ private struct GeneratingFolderNameLabel: View {
                     isRevealed = true
                     return
                 }
-                withAnimation(.spring(response: 0.48, dampingFraction: 0.84).delay(0.12)) {
+                withAnimation(.sortySpringStandard.delay(0.12)) {
                     isRevealed = true
                 }
             }
@@ -670,7 +670,7 @@ private struct GeneratingFolderNameLabel: View {
         }
 
         isRevealed = false
-        withAnimation(.spring(response: 0.48, dampingFraction: 0.84).delay(0.08)) {
+        withAnimation(.sortySpringStandard.delay(0.08)) {
             isRevealed = true
         }
     }

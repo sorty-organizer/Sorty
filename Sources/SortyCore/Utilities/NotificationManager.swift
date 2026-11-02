@@ -783,7 +783,7 @@ public class NotificationManager: ObservableObject {
     /// Dismiss current HUD notification
     public func dismissHUD() {
         dismissTask?.cancel()
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(.sortyFade) {
             currentHUDNotification = nil
         }
         processQueue()
@@ -804,7 +804,7 @@ public class NotificationManager: ObservableObject {
         dismissTask?.cancel()
         queueTask?.cancel()
         hudNotificationQueue.removeAll()
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(.sortyFade) {
             currentHUDNotification = nil
         }
     }
@@ -1117,7 +1117,7 @@ public class NotificationManager: ObservableObject {
             playHUDSound()
         }
         
-        withAnimation(.easeOut(duration: 0.2)) {
+        withAnimation(.sortyFade) {
             currentHUDNotification = notification
         }
         

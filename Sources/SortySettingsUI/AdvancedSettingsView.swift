@@ -105,7 +105,7 @@ private struct TimeoutSliderRow: View {
                         }
                 } else {
                     Button {
-                        withAnimation(.easeInOut(duration: 0.15)) {
+                        withAnimation(.sortyFade) {
                             editingMax = true
                         }
                     } label: {
@@ -148,13 +148,13 @@ private struct TimeoutSliderRow: View {
            parsed <= maxAllowed {
             let rounded = (parsed / step).rounded() * step
             let bounded = min(rounded, maxAllowed)
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(.sortyFade) {
                 customMax = bounded
                 if value > bounded { value = bounded }
             }
             HapticFeedbackManager.shared.success()
         }
-        withAnimation(.easeInOut(duration: 0.15)) {
+        withAnimation(.sortyFade) {
             editingMax = false
         }
     }

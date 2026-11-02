@@ -78,8 +78,8 @@ public struct ContentView: View {
             windowLinkHoverState.clearAllHover()
             personaHighlightDismissalTask?.cancel()
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: appState.hasCompletedOnboarding)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: appState.hasCompletedSkillIntroduction)
+        .animation(reduceMotion ? nil : .sortyFade, value: appState.hasCompletedOnboarding)
+        .animation(reduceMotion ? nil : .sortyFade, value: appState.hasCompletedSkillIntroduction)
         .sheet(item: $appState.personaGeneratorPresentationContext) { context in
             PersonaGeneratorView(
                 store: customPersonaStore,
@@ -125,7 +125,7 @@ public struct ContentView: View {
         .onChange(of: appState.showingSidebar) { _, isShowingSidebar in
             let nextVisibility: NavigationSplitViewVisibility = isShowingSidebar ? .all : .detailOnly
             guard columnVisibility != nextVisibility else { return }
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) {
+            withAnimation(reduceMotion ? nil : .sortySlowFade) {
                 columnVisibility = nextVisibility
             }
         }
@@ -164,7 +164,7 @@ public struct ContentView: View {
             removeCommandKeyMonitor()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) {
+            withAnimation(reduceMotion ? nil : .sortyQuick) {
                 showCommandNumbers = false
             }
         }

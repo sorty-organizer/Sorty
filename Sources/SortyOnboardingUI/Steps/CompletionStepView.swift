@@ -116,7 +116,7 @@ public struct CompletionStepView: View {
                             if reduceMotion {
                                 isCompletionButtonHovered = isHovered
                             } else {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                withAnimation(.sortySnappy) {
                                     isCompletionButtonHovered = isHovered
                                 }
                             }

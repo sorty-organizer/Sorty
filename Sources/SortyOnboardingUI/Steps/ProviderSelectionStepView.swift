@@ -163,7 +163,7 @@ public struct ProviderSelectionStepView: View {
 
 
     private var providerIntroduction: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 24) {
             Spacer()
 
             VStack(alignment: .leading, spacing: 14) {
@@ -200,7 +200,7 @@ public struct ProviderSelectionStepView: View {
         let setupStatus = readinessSnapshot.setupStatus
         let canTest = readinessSnapshot.canTestConnection
 
-        HStack(spacing: 34) {
+        HStack(spacing: 32) {
             providerIntroduction
             // This pane can exceed the minimum onboarding height for providers
             // with multi-step setup. Keep overflow local to the pane so the
@@ -219,7 +219,7 @@ public struct ProviderSelectionStepView: View {
                                 animationValue: setupStatus.isReady
                             )
                             .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
+                            .padding(.vertical, 6)
                             .background((setupStatus.isReady ? Color.green : Color.orange).opacity(0.12), in: Capsule())
                     }
                     .frame(maxWidth: 640)
@@ -236,7 +236,7 @@ public struct ProviderSelectionStepView: View {
                             HStack(spacing: 10) {
                                 Image(systemName: setupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
                                     .foregroundStyle(setupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.system(size: 15, weight: .semibold))
                                     .symbolReplaceTransition(
                                         animationValue: setupStatus.isReady
                                     )
@@ -290,7 +290,7 @@ public struct ProviderSelectionStepView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.trailing, 72)
             .animation(
-                reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7),
+                reduceMotion ? nil : .sortySnappy,
                 value: settingsViewModel.config.provider
             )
         }

@@ -468,7 +468,7 @@ package struct LearningsView: View {
             let didClear = await manager.clearAllData()
             if didClear {
                 HapticFeedbackManager.shared.success()
-                withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.72)) {
+                withAnimation(reduceMotion ? nil : .sortySmooth) {
                     appState.hasCompletedOnboarding = false
                 }
                 finishPendingControlAction(

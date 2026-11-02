@@ -80,7 +80,7 @@ struct RenameFileIcon: View {
             }
 
             Image(systemName: isUnchanged ? "equal.circle.fill" : "checkmark.circle.fill")
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(isUnchanged ? Color.secondary : Color.green)
                 .symbolReplaceTransition(animationValue: isUnchanged)
                 .background(Circle().fill(Color(NSColor.windowBackgroundColor)))

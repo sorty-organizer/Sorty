@@ -29,7 +29,7 @@ struct DirectoryHeader: View {
             .accessibilityLabel("Reveal \(url.lastPathComponent) in Finder") // [VERIFY] confirm label matches intent
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 7) {
+                HStack(spacing: 8) {
                     Image(systemName: mode.iconName)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
@@ -46,12 +46,12 @@ struct DirectoryHeader: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Button(action: revealSelectedDirectory) {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         PrivacySensitivePathText(path: url.deletingLastPathComponent().path)
                             .lineLimit(1)
 
                         Image(systemName: "arrow.up.right")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.system(size: 10, weight: .semibold))
                             .frame(width: 10)
                             .opacity(isHoveringPath ? 1 : 0)
                             .offset(
@@ -71,7 +71,7 @@ struct DirectoryHeader: View {
                 .help("Reveal \(url.lastPathComponent) in Finder")
                 .accessibilityLabel("Reveal \(url.lastPathComponent) in Finder") // [VERIFY] confirm label matches intent
                 .animation(
-                    reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                    reduceMotion ? nil : .sortySnappy,
                     value: isHoveringPath
                 )
                 .onHover { hovering in
@@ -107,7 +107,7 @@ struct SetupRepairGateView: View {
     let onOpenSettings: () -> Void
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 36))
                 .foregroundStyle(.orange)

@@ -30,7 +30,7 @@ private struct NumericTextTransitionModifier<Value: Equatable>: ViewModifier {
             .transaction(value: animationValue) { transaction in
                 transaction.disablesAnimations = false
                 transaction.animation = reduceMotion
-                    ? .easeOut(duration: 0.12)
+                    ? .sortyQuick
                     : animation
             }
     }
@@ -48,7 +48,7 @@ private struct SymbolReplaceTransitionModifier<Value: Equatable>: ViewModifier {
             .transaction(value: animationValue) { transaction in
                 transaction.disablesAnimations = false
                 transaction.animation = reduceMotion
-                    ? .easeOut(duration: 0.12)
+                    ? .sortyQuick
                     : animation
             }
     }
@@ -66,7 +66,7 @@ extension View {
 
     package func numericTextTransition<Value: Equatable>(
         animationValue: Value,
-        animation: Animation = .spring(response: 0.28, dampingFraction: 0.78)
+        animation: Animation = .sortySnappy
     ) -> some View {
         modifier(
             NumericTextTransitionModifier(
@@ -78,7 +78,7 @@ extension View {
 
     package func symbolReplaceTransition<Value: Equatable>(
         animationValue: Value,
-        animation: Animation = .spring(response: 0.28, dampingFraction: 0.78)
+        animation: Animation = .sortySnappy
     ) -> some View {
         modifier(
             SymbolReplaceTransitionModifier(

@@ -48,13 +48,13 @@ extension AIProviderSettingsView {
                             Text(connectionButtonTitle)
                         }
                         .animation(
-                            reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78),
+                            reduceMotion ? nil : .sortySnappy,
                             value: connectionButtonTitle
                         )
                     }
                     .buttonStyle(.sortyBordered(intent: connectionButtonIntent))
                     .animation(
-                        reduceMotion ? nil : .easeInOut(duration: 0.2),
+                        reduceMotion ? nil : .sortyFade,
                         value: connectionButtonIntent
                     )
                     .settingsFocusable(
@@ -90,7 +90,7 @@ extension AIProviderSettingsView {
                                         withAnimation(
                                             reduceMotion
                                                 ? nil
-                                                : .spring(response: 0.30, dampingFraction: 0.78)
+                                                : .sortySnappy
                                         ) {
                                             isDetailsExpanded.toggle()
                                         }
@@ -161,7 +161,7 @@ extension AIProviderSettingsView {
                                     withAnimation(
                                         reduceMotion
                                             ? nil
-                                            : .spring(response: 0.24, dampingFraction: 0.82)
+                                            : .sortySnappy
                                     ) {
                                         isHoveringInternetSettings = hovering
                                     }
@@ -224,7 +224,7 @@ extension AIProviderSettingsView {
                 .scaleEffect(isHoveringCopyError && !reduceMotion ? 1.12 : 1)
                 .opacity(isHoveringCopyError ? 1 : 0.75)
                 .animation(
-                    reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.75),
+                    reduceMotion ? nil : .sortySnappy,
                     value: isHoveringCopyError
                 )
         }

@@ -20,7 +20,7 @@ struct DebouncedHoverModifier: ViewModifier {
                     if reduceMotion {
                         isHovering = hovering
                     } else {
-                        withAnimation(.easeOut(duration: 0.15)) {
+                        withAnimation(.sortyQuick) {
                             isHovering = hovering
                         }
                     }

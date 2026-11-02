@@ -177,7 +177,7 @@ struct WatchedFolderConfigView: View {
             Button {
                 showSavedPromptsSheet.toggle()
             } label: {
-                HStack(spacing: 9) {
+                HStack(spacing: 10) {
                     Image(systemName: "text.alignleft")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
@@ -194,7 +194,7 @@ struct WatchedFolderConfigView: View {
                     .lineLimit(1)
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 7)
+                .padding(.vertical, 8)
                 .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.lg)
                 .overlay {
                     RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
@@ -424,7 +424,7 @@ struct WatchedFolderConfigView: View {
             dismiss()
             return
         }
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
+        withAnimation(reduceMotion ? nil : .sortySnappy) {
             watchedFoldersManager.updateFolder(updatedFolder)
         }
         dismiss()
@@ -500,7 +500,7 @@ struct WatchedFolderConfigView: View {
                             mode: mode,
                             isSelected: selectedMode == mode
                         ) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            withAnimation(.sortySnappy) {
                                 selectedMode = mode
                             }
                             HapticFeedbackManager.shared.selection()
@@ -604,17 +604,17 @@ struct WatchedFolderConfigView: View {
                                     )
                                 )
                                 .foregroundStyle(.secondary)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
                                 .background(
                                     Color.secondary.opacity(0.10),
                                     in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                                 )
                                 .accessibilityHidden(true)
                         }
-                        .padding(.leading, 18)
+                        .padding(.leading, 20)
                         .padding(.trailing, 10)
-                        .padding(.vertical, 9)
+                        .padding(.vertical, 10)
                         .allowsHitTesting(false)
                         .task(id: InstructionSuggestionCycleID(suggestions: instructionSuggestions, shouldCycle: shouldCycleInstructionSuggestions)) {
                             instructionSuggestionIndex = 0
@@ -732,8 +732,8 @@ struct WatchedFolderConfigView: View {
             }
             .animation(
                 reduceMotion
-                    ? .easeOut(duration: 0.15)
-                    : .easeInOut(duration: 0.25),
+                    ? .sortyQuick
+                    : .sortySlowFade,
                 value: useCustomModel
             )
         }

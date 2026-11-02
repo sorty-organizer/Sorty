@@ -25,7 +25,7 @@ struct SupportHealthCheckRow: View {
                 .frame(width: 20, height: 20)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(check.title)
                     .font(.subheadline.weight(.semibold))
 

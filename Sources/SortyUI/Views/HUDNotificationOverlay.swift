@@ -48,7 +48,7 @@ public struct HUDNotificationOverlay: View {
         }
         .allowsHitTesting(notificationManager.currentHUDNotification != nil)
         .animation(
-            reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.78),
+            reduceMotion ? nil : .sortySpringStandard,
             value: notificationManager.currentHUDNotification?.id
         )
         .ignoresSafeArea()
@@ -96,7 +96,7 @@ struct HUDNotificationCard: View {
     var body: some View {
         notificationContent
         .onHover { hovering in
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+            withAnimation(reduceMotion ? nil : .sortyQuick) {
                 isHovered = hovering
             }
         }
@@ -400,7 +400,7 @@ private struct HUDNotificationProgress: View {
         }
         .frame(height: 2)
         .padding(.horizontal, 6)
-        .padding(.bottom, 3)
+        .padding(.bottom, 4)
     }
 }
 
@@ -432,7 +432,7 @@ private struct HUDNotificationActionLabel: View {
         }
         .foregroundStyle(isDestructive ? Color.red : .primary)
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.vertical, 8)
         .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: 30, alignment: .center)
         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.md)
         .overlay {

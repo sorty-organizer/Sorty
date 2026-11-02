@@ -65,7 +65,7 @@ struct LearningExclusionRow: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) { isHovered = hovering }
+            withAnimation(.sortyFade) { isHovered = hovering }
             if hovering { HapticFeedbackManager.shared.selection() }
         }
         .accessibilityElement(children: .contain)

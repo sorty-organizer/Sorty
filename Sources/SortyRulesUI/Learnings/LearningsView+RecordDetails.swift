@@ -10,7 +10,7 @@ extension LearningsView {
         fields: [LearningRecordField]
     ) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 20) {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: systemImage)
                         .font(.title2)
@@ -245,8 +245,8 @@ extension LearningsView {
                 .scaleEffect(emptyLearningsHasAppeared ? 1 : 0.8)
                 .animation(
                     reduceMotion
-                        ? .easeOut(duration: 0.12)
-                        : .spring(response: 0.5, dampingFraction: 0.7).delay(0.1),
+                        ? .sortyQuick
+                        : .sortySpringStandard.delay(0.1),
                     value: emptyLearningsHasAppeared
                 )
                 .accessibilityHidden(true)
@@ -256,8 +256,8 @@ extension LearningsView {
                 .offset(y: emptyLearningsHasAppeared ? 0 : 8)
                 .animation(
                     reduceMotion
-                        ? .easeOut(duration: 0.12)
-                        : .spring(response: 0.5, dampingFraction: 0.8).delay(0.2),
+                        ? .sortyQuick
+                        : .sortySpringStandard.delay(0.2),
                     value: emptyLearningsHasAppeared)
             Text(
                 "Organize some folders, and Sorty will pick up your preferences from corrections and feedback."
@@ -270,8 +270,8 @@ extension LearningsView {
             .offset(y: emptyLearningsHasAppeared ? 0 : 10)
             .animation(
                 reduceMotion
-                    ? .easeOut(duration: 0.12)
-                    : .spring(response: 0.5, dampingFraction: 0.8).delay(0.3),
+                    ? .sortyQuick
+                    : .sortySpringStandard.delay(0.3),
                 value: emptyLearningsHasAppeared)
         }
         .padding(20)

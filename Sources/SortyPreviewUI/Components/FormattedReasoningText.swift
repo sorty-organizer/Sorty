@@ -59,7 +59,7 @@ package struct FormattedReasoningText: View {
     private func segmentView(_ segment: ReasoningSegment) -> some View {
         switch segment.kind {
         case .header(let level):
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 if showSectionIcons, let icon = segment.icon {
                     Image(systemName: icon)
                         .font(.system(size: level == 1 ? 11 : 10, weight: .semibold))

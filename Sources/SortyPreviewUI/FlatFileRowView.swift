@@ -122,7 +122,7 @@ struct FlatFileRowView: View {
     private func regenerateSuggestedName() {
         guard !isRegeneratingName else { return }
         let previousSuggestion = renameMapping?.suggestedName ?? ""
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(.sortyFade) {
             isRegeneratingName = true
         }
         HapticFeedbackManager.shared.selection()
@@ -159,7 +159,7 @@ struct FlatFileRowView: View {
                 await MainActor.run {
                     store.updateRename(fileID: file.id, folderID: parentFolderID, newName: replacementName)
                     onPlanChanged()
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.sortyFade) {
                         isRegeneratingName = false
                     }
                     HapticFeedbackManager.shared.success()
@@ -172,7 +172,7 @@ struct FlatFileRowView: View {
                     )
                     store.updateRename(fileID: file.id, folderID: parentFolderID, newName: fallbackName)
                     onPlanChanged()
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.sortyFade) {
                         isRegeneratingName = false
                     }
                     HapticFeedbackManager.shared.error()

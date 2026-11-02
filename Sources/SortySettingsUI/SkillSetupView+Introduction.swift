@@ -169,7 +169,7 @@ extension SkillSetupView {
                 .font(.largeTitle.weight(.medium))
                 .foregroundStyle(.secondary)
                 .opacity(introductionStage >= 6 ? 1 : 0)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: introductionStage >= 6)
+                .animation(reduceMotion ? nil : .sortyQuick, value: introductionStage >= 6)
 
             if let skillIcon {
                 Image(nsImage: skillIcon)
@@ -178,7 +178,7 @@ extension SkillSetupView {
                     .frame(width: 160, height: 160)
                     .offset(x: 120)
                     .opacity(introductionStage >= 7 ? 1 : 0)
-                    .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: introductionStage >= 7)
+                    .animation(reduceMotion ? nil : .sortyFade, value: introductionStage >= 7)
             }
         }
         .frame(width: 400, height: 180)

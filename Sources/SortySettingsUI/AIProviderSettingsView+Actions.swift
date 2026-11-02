@@ -29,7 +29,7 @@ extension AIProviderSettingsView {
                     guard connectionTestID == testID, viewModel.config == testedConfig else { return }
                     HapticFeedbackManager.shared.success()
                     withAnimation(
-                        shouldAnimate ? .spring(response: 0.4, dampingFraction: 0.7) : nil
+                        shouldAnimate ? .sortySmooth : nil
                     ) {
                         testConnectionStatus = "Success: Connection test passed"
                         testConnectionDetails = nil
@@ -54,7 +54,7 @@ extension AIProviderSettingsView {
                 await MainActor.run {
                     guard connectionTestID == testID, viewModel.config == testedConfig else { return }
                     HapticFeedbackManager.shared.error()
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    withAnimation(.sortySmooth) {
                         testConnectionStatus = "Error: Invalid response format"
                         testConnectionDetails = "The API endpoint may be incorrect or the service returned unexpected data.\n\nDetails: \(context)"
                     }
@@ -71,7 +71,7 @@ extension AIProviderSettingsView {
                         details = (error as NSError).localizedFailureReason ?? (error as NSError).localizedRecoverySuggestion
                     }
 
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    withAnimation(.sortySmooth) {
                         if isInternetAccessBlocked {
                             testConnectionStatus = """
                             Error: Sorty can’t connect to \(testedConfig.provider.displayName) while Block Internet Connections is on.
@@ -115,7 +115,7 @@ extension AIProviderSettingsView {
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             guard !Task.isCancelled else { return }
             HapticFeedbackManager.shared.selection()
-            withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.78)) {
+            withAnimation(reduceMotion ? nil : .sortySmooth) {
                 testConnectionStatus = nil
                 testConnectionDetails = nil
                 isDetailsExpanded = false
@@ -230,8 +230,8 @@ extension AIProviderSettingsView {
     func copyCodexDeviceCode() {
         guard let code = codexAuth.deviceAuthSession?.userCode else { return }
         deviceCodeCopyFeedback.copy(code, duration: .milliseconds(1250),
-            animation: reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.72),
-            resetAnimation: reduceMotion ? nil : .easeOut(duration: 0.18))
+            animation: reduceMotion ? nil : .sortySmooth,
+            resetAnimation: reduceMotion ? nil : .sortyFade)
     }
 
     @MainActor

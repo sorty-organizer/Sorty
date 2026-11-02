@@ -130,7 +130,7 @@ struct UnifiedFileDetailRow: View {
                 .frame(width: 12, height: 12)
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 3)
+            .padding(.vertical, 4)
             .background(Color.secondary.opacity(0.1), in: Capsule())
             .foregroundStyle(.secondary)
         }
@@ -141,7 +141,7 @@ struct UnifiedFileDetailRow: View {
 
     private var fileMetadata: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
                 if let date = file.creationDate {
                     Text("•")
@@ -154,7 +154,7 @@ struct UnifiedFileDetailRow: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
                 if let date = file.creationDate {
                     Text(date.formatted(date: .abbreviated, time: .shortened))
@@ -194,8 +194,8 @@ struct UnifiedFileDetailRow: View {
             .font(.caption.bold())
             .foregroundStyle(.green)
             .labelStyle(.titleAndIcon)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .background(.green.opacity(0.1), in: Capsule())
     }
 

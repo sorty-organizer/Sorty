@@ -10,7 +10,7 @@ struct ReadyToOrganizeTitle: View {
     var body: some View {
         VStack(spacing: 6) {
             if showsWorkflowPicker {
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("Ready to")
                         .font(.title2.weight(.semibold))
 
@@ -69,7 +69,7 @@ struct ReadyToOrganizeTitle: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 10)
-                .padding(.vertical, 7)
+                .padding(.vertical, 8)
             }
         }
         .padding(6)

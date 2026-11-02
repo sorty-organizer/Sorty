@@ -122,7 +122,7 @@ package struct PreviewView: View {
                 previousDiffSource: previousDiffSource,
                 nextDiffSource: nextDiffSource,
                 onPreviousVersion: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(.sortySnappy) {
                         if let idx = viewingHistoryIndex {
                             if idx > 0 {
                                 viewingHistoryIndex = idx - 1
@@ -133,7 +133,7 @@ package struct PreviewView: View {
                     }
                 },
                 onNextVersion: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(.sortySnappy) {
                         if let idx = viewingHistoryIndex {
                             if idx >= organizer.planHistory.count - 1 {
                                 viewingHistoryIndex = nil

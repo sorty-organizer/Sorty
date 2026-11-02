@@ -140,7 +140,7 @@ extension AddExclusionRuleView {
     }
 
     func save(_ rule: ExclusionRule) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(.sortySnappy) {
             persist(rule)
         }
         dismiss()

@@ -11,7 +11,7 @@ extension OrganizationCompleteView {
             reason: feedbackDraft.resolvedReason
         )
         HapticFeedbackManager.shared.success()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.sortySnappy) {
             feedbackSubmitted = true
         }
     }
@@ -56,7 +56,7 @@ extension OrganizationCompleteView {
             organizer.completionFailureEntry = nil
         }
 
-        withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+        withAnimation(.sortySmooth) {
             undoState = .undoing
             showParticles = false
         }
@@ -70,7 +70,7 @@ extension OrganizationCompleteView {
                 await MainActor.run {
                     undoRestoredCount = restoredDisplayCount(for: detailedEntry, result: result)
                     undoSkippedCount = result.missingFiles.count
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                    withAnimation(.sortySmooth) {
                         undoState = .completed
                     }
                     if undoRestoredCount > 0 || undoSkippedCount > 0 {
@@ -83,7 +83,7 @@ extension OrganizationCompleteView {
             } catch {
                 await MainActor.run {
                     let message = "Couldn't restore your files: \(error.userFacingMessage)"
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
+                    withAnimation(.sortySmooth) {
                         undoState = .failed
                     }
                     failureMessage = message
@@ -157,7 +157,7 @@ extension OrganizationCompleteView {
             organizer.completionFailureEntry = nil
         }
 
-        withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+        withAnimation(.sortySmooth) {
             undoState = .redoing
         }
 
@@ -166,7 +166,7 @@ extension OrganizationCompleteView {
                 try await organizer.redoOrganization(from: entry)
                 await MainActor.run {
                     failedAction = nil
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                    withAnimation(.sortySmooth) {
                         undoState = .idle
                     }
                     lastUndoneEntry = nil
@@ -180,7 +180,7 @@ extension OrganizationCompleteView {
             } catch {
                 await MainActor.run {
                     let message = "Couldn't reapply the organization: \(error.userFacingMessage)"
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
+                    withAnimation(.sortySmooth) {
                         undoState = .failed
                     }
                     failureMessage = message

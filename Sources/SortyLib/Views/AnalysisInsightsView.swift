@@ -32,7 +32,7 @@ struct InsightHistorySection: View {
     var body: some View {
         VStack(spacing: 0) {
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                withAnimation(.sortySnappy) {
                     viewState.isExpanded.toggle()
                 }
             } label: {
@@ -277,7 +277,7 @@ struct InsightHistorySection: View {
                 .multilineTextAlignment(.leading)
                 .numericTextTransition(
                     animationValue: displayInsight,
-                    animation: .easeInOut(duration: 0.28)
+                    animation: .sortySlowFade
                 )
 
             Spacer()
@@ -491,7 +491,7 @@ struct InsightHistorySection: View {
                 .foregroundStyle(.primary)
                 .numericTextTransition(
                     animationValue: headerTitle,
-                    animation: .easeInOut(duration: 0.28)
+                    animation: .sortySlowFade
                 )
 
             Spacer()
@@ -588,7 +588,7 @@ struct InsightHistorySection: View {
                 .foregroundStyle(.secondary)
                 .rotationEffect(.degrees(viewState.isExpanded ? 0 : -90))
                 .animation(
-                    .spring(response: 0.3, dampingFraction: 0.8),
+                    .sortySnappy,
                     value: viewState.isExpanded)
         }
         .padding(.horizontal, 14)

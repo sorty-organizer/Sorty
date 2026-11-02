@@ -19,7 +19,7 @@ public struct AnalyticsConsentView: View {
             Color.black.opacity(0.22)
                 .ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 20) {
                 Label("Help Improve Sorty", systemImage: "chart.bar.xaxis")
                     .font(.title2.bold())
                     .foregroundStyle(.primary)

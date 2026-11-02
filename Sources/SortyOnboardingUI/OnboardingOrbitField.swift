@@ -138,7 +138,7 @@ struct OnboardingOrbitFileChip: View, @MainActor Equatable {
                 .foregroundStyle(.primary.opacity(0.82))
                 .lineLimit(1)
                 .padding(.horizontal, 8)
-                .padding(.vertical, 3)
+                .padding(.vertical, 4)
                 .background(
                     Capsule(style: .continuous)
                         .fill(Color.primary.opacity(0.08))

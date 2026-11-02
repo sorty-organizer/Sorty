@@ -92,7 +92,7 @@ struct AnalysisView: View {
                         .opacity(hasAppeared ? 1 : 0)
                         .scaleEffect(hasAppeared ? 1 : 0.9)
                         .animation(
-                            .spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+                            .sortySpringStandard.delay(0.1), value: hasAppeared)
 
                     tieredNoticeView
 
@@ -131,8 +131,8 @@ struct AnalysisView: View {
                     analysisActionButtons
                 }
                 .frame(maxHeight: .infinity)
-                .animation(.spring(response: 0.34, dampingFraction: 0.86), value: hasRenameStreamEvents)
-                .animation(.spring(response: 0.34, dampingFraction: 0.86), value: hasOrganizeStreamEvents)
+                .animation(.sortySmooth, value: hasRenameStreamEvents)
+                .animation(.sortySmooth, value: hasOrganizeStreamEvents)
             }
 
             Spacer(minLength: 20)
@@ -327,7 +327,7 @@ struct AnalysisView: View {
             }
             .opacity(hasAppeared ? 1 : 0)
             .scaleEffect(hasAppeared ? 1 : 0.9)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+            .animation(.sortySpringStandard.delay(0.1), value: hasAppeared)
 
             VStack(spacing: 8) {
                 Text(emptyDirectoryTitle)
@@ -343,7 +343,7 @@ struct AnalysisView: View {
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            .animation(.sortySpringStandard.delay(0.2), value: hasAppeared)
 
             HStack(spacing: 14) {
                 Button {
@@ -393,7 +393,7 @@ struct AnalysisView: View {
                         withAnimation(
                             reduceMotion
                                 ? nil
-                                : .spring(response: 0.24, dampingFraction: 0.82)
+                                : .sortySnappy
                         ) {
                             isHoveringViewExclusion = hovering
                         }
@@ -421,7 +421,7 @@ struct AnalysisView: View {
                 }
             }
             .opacity(hasAppeared ? 1 : 0)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+            .animation(.sortySpringStandard.delay(0.3), value: hasAppeared)
 
             Spacer()
         }
@@ -498,7 +498,7 @@ struct AnalysisView: View {
         }
         .opacity(hasAppeared ? 1 : 0)
         .animation(
-            .spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared
+            .sortySpringStandard.delay(0.3), value: hasAppeared
         )
         .confirmationDialog(
             "Cancel Organization?",

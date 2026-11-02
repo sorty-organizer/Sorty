@@ -67,7 +67,7 @@ struct CompletionTipsGrid: View {
             .opacity(tipsAppeared ? 1 : 0)
             .offset(y: tipsAppeared ? 0 : 12)
             .animation(
-                reduceMotion ? nil : .spring(response: 0.6, dampingFraction: 0.85).delay(delay),
+                reduceMotion ? nil : .sortySpringStandard.delay(delay),
                 value: tipsAppeared
             )
     }
@@ -117,7 +117,7 @@ struct CompletionAnalyticsPreference: View {
         HStack(spacing: 10) {
             Toggle(isOn: $isEnabled) {
                 Text("Share anonymous analytics")
-                    .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
             }
             .toggleStyle(.switch)
             .controlSize(.small)
@@ -148,7 +148,7 @@ struct CompletionAnalyticsPreference: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 9)
+        .padding(.vertical, 10)
         .background {
             if colorScheme == .light {
                 Capsule()
@@ -197,7 +197,7 @@ struct CompletionAnalyticsPreference: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(18)
+        .padding(20)
         .frame(width: 390, alignment: .leading)
         .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
     }
@@ -213,7 +213,7 @@ struct CompletionAnalyticsPreference: View {
                 .foregroundStyle(color)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
                 Text(text)

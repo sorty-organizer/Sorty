@@ -7,7 +7,7 @@ import SortyFileSystem
 // MARK: - Actions
 extension OrganizeView {
     var returnToStartExitAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.08) : .easeInOut(duration: 0.18)
+        reduceMotion ? .sortyQuick : .sortyFade
     }
 
     func returnToStartAfterCancellation() {
@@ -84,7 +84,7 @@ extension OrganizeView {
     }
 
     func handleStateChange(to newState: OrganizationState) {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        withAnimation(.sortySmooth) {
             switch newState {
             case .completed:
                 HapticFeedbackManager.shared.success()
@@ -174,7 +174,7 @@ extension OrganizeView {
     func beginCompletionHandoff() {
         guard !showsCompletionContent else { return }
 
-        withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.42)) {
+        withAnimation(reduceMotion ? .sortyQuick : .smooth(duration: 0.42)) {
             showsCompletionContent = true
         }
     }
@@ -197,7 +197,7 @@ extension OrganizeView {
         guard let directory = appState.selectedDirectory else { return }
         if let testRoute = ErrorViewTestRoute(instructions: organizer.customInstructions) {
             resetLiveOrganizationPresentation()
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            withAnimation(.sortySmooth) {
                 errorViewTestRoute = testRoute
             }
             HapticFeedbackManager.shared.error()
@@ -284,7 +284,7 @@ extension OrganizeView {
     }
 
     func dismissErrorViewTestRoute() {
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+        withAnimation(.sortySmooth) {
             errorViewTestRoute = nil
         }
     }

@@ -34,7 +34,7 @@ extension ReadyToOrganizeView {
                             .foregroundStyle(.secondary)
                             .numericTextTransition(
                                 animationValue: storageLocationTitle,
-                                animation: .easeInOut(duration: 0.28)
+                                animation: .sortySlowFade
                             )
                     }
                     .frame(minHeight: 44, alignment: .leading)
@@ -129,7 +129,7 @@ extension ReadyToOrganizeView {
                                 Image(systemName: "plus")
                                     .rotationEffect(.degrees(showingFolderPicker ? 45 : 0))
                                     .animation(
-                                        reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.72),
+                                        reduceMotion ? nil : .sortySnappy,
                                         value: showingFolderPicker
                                     )
                             }
@@ -191,7 +191,7 @@ extension ReadyToOrganizeView {
             .transition(storageLocationSummaryTransition)
         }
         .animation(
-            reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.26, dampingFraction: 0.86),
+            reduceMotion ? .sortyQuick : .sortySnappy,
             value: storageLocationSummaryID
         )
         .accessibilityElement(children: .combine)

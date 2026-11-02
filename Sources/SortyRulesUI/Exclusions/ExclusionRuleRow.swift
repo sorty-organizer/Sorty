@@ -50,7 +50,7 @@ struct ExclusionRuleRow: View {
 
     private func deleteRule() {
         HapticFeedbackManager.shared.tap()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(.sortySnappy) {
             rulesManager.removeRule(rule)
         }
     }
@@ -123,7 +123,7 @@ struct ExclusionRuleRow: View {
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .animation(.sortyQuick, value: isHovered)
         .accessibilityValue(isHighlighted ? "Newly added" : "")
         .contextMenu {
             Button {
@@ -211,7 +211,7 @@ struct ExclusionRuleRow: View {
     }
 
     private var ruleDescription: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(exclusionTitle)
                     .font(.subheadline)

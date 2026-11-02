@@ -33,7 +33,7 @@ struct OrganizationRulesSettingsView: View {
 
             SettingsCard(title: "Exclusions", icon: "minus.circle", color: .red) {
                 HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 4) {
                         ExclusionRuleCountLabel()
                         Text("Files and folders that match are left out of every organization plan.")
                             .font(.caption)

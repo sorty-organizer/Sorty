@@ -89,14 +89,14 @@ struct FolderHistoryDetailRow: View {
     private func expandForHighlightedFileIfNeeded(_ fileID: UUID?) {
         guard let fileID, !isExpanded else { return }
         guard subtreeContainsFile(fileID, in: suggestion) else { return }
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(reduceMotion ? nil : .sortySnappy) {
             isExpanded = true
         }
     }
 
     private func toggleExpanded() {
         HapticFeedbackManager.shared.tap()
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) {
+        withAnimation(reduceMotion ? nil : .sortySnappy) {
             isExpanded.toggle()
         }
     }
@@ -318,7 +318,7 @@ struct FolderHistoryFileRow: View {
         .offset(y: isExpanded ? 0 : -5)
         .animation(
             animationDelay.map {
-                Animation.spring(response: 0.3, dampingFraction: 0.7).delay($0)
+                Animation.sortySnappy.delay($0)
             },
             value: isExpanded
         )

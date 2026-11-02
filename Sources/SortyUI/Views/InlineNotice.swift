@@ -194,7 +194,7 @@ private struct InlineNoticeActionButton: View {
                 .fill(color.opacity(isHovering ? 0.2 : 0.12))
         )
         .scaleEffect(reduceMotion ? 1 : (isHovering ? 1.03 : 1))
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isHovering)
+        .animation(reduceMotion ? nil : .sortyFade, value: isHovering)
         .onHover { hovering in
             if hovering != isHovering {
                 isHovering = hovering
@@ -281,7 +281,7 @@ package struct InsightPill: View {
                         Circle().stroke(categoryColor.opacity(0.65), lineWidth: 1)
                     )
                     .frame(width: 8, height: 8)
-                    .padding(.horizontal, 3)
+                    .padding(.horizontal, 4)
                     .accessibilityHidden(true)
             }
 

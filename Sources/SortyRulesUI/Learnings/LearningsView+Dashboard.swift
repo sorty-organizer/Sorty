@@ -50,8 +50,8 @@ extension LearningsView {
                 HapticFeedbackManager.shared.light()
                 withAnimation(
                     reduceMotion
-                        ? .easeOut(duration: 0.12)
-                        : .spring(response: 0.32, dampingFraction: 0.86)
+                        ? .sortyQuick
+                        : .sortySnappy
                 ) {
                     isActivePatternsExpanded.toggle()
                 }
@@ -141,7 +141,7 @@ extension LearningsView {
         hasActivePatterns: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("\(totalRecordCount.formatted()) stored learning record\(totalRecordCount == 1 ? "" : "s")")
                     .font(.subheadline.bold())
                 Text(
@@ -180,7 +180,7 @@ extension LearningsView {
                                 .accessibilityHidden(true)
                         }
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 9)
+                        .padding(.vertical, 10)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
                     }

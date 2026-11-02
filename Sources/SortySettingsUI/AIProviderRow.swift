@@ -52,8 +52,8 @@ struct AIProviderRow: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovered)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isSelected)
+        .animation(reduceMotion ? nil : .sortyQuick, value: isHovered)
+        .animation(reduceMotion ? nil : .sortyQuick, value: isSelected)
         .buttonStyle(.plain)
         .disabled(isBlockedByInternetPrivacy)
         .minimumHitTarget()
@@ -87,7 +87,7 @@ struct AIProviderRow: View {
                                 .fill(provider.brandColor)
 
                             Image(systemName: "checkmark")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(.background)
                         }
                         .frame(width: 14, height: 14)

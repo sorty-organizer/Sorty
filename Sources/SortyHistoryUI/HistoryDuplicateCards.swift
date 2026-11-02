@@ -97,7 +97,7 @@ struct HistoryDuplicateGroupRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                withAnimation(.sortySnappy) {
                     highlightedFileID = group.file.id
                 }
             } label: {
@@ -110,7 +110,7 @@ struct HistoryDuplicateGroupRow: View {
 
             ForEach(group.duplicates) { dup in
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    withAnimation(.sortySnappy) {
                         highlightedFileID = dup.id
                     }
                 } label: {

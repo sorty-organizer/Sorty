@@ -46,7 +46,7 @@ struct OptimizedPreviewTree: View {
                 if reduceMotion {
                     scrollProxy.scrollTo(rowID, anchor: .center)
                 } else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(.sortySnappy) {
                         scrollProxy.scrollTo(rowID, anchor: .center)
                     }
                 }

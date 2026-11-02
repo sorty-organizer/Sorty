@@ -7,17 +7,17 @@ import SortyCore
 extension Animation {
     /// Smooth spring animation for page transitions - subtle
     public static var pageTransition: Animation {
-        .easeOut(duration: 0.2)
+        .sortyFade
     }
 
     /// Restrained spring animation for modal content settling into place.
     public static var modalBounce: Animation {
-        .spring(response: 0.38, dampingFraction: 0.84)
+        .sortySmooth
     }
 
     /// Subtle bounce for interactive elements
     public static var subtleBounce: Animation {
-        .spring(response: 0.24, dampingFraction: 0.78)
+        .sortySnappy
     }
 }
 /// Gives custom modal content a restrained scale-and-rise entrance.
@@ -205,7 +205,7 @@ struct AnimatedAppearanceModifier: ViewModifier {
                     appeared = true
                     return
                 }
-                withAnimation(.easeOut(duration: 0.2).delay(delay)) {
+                withAnimation(.sortyFade.delay(delay)) {
                     appeared = true
                 }
             }

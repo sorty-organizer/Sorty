@@ -276,7 +276,7 @@ extension ProviderSelectionStepView {
                 }
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isAutoVerifyingCodex)
+        .animation(reduceMotion ? nil : .sortyFade, value: isAutoVerifyingCodex)
         .task(id: codexSignInAttempt) {
             // Polling starts only after the Terminal sign-in so an idle panel
             // spawns no `codex login status` processes.

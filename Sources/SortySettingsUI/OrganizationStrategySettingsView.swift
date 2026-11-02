@@ -102,7 +102,7 @@ struct OrganizationStrategySettingsView: View {
         }
         .onAppear(perform: enforceProviderScanMode)
         .onChange(of: viewModel.config.provider) { _, _ in
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) {
+            withAnimation(reduceMotion ? nil : .sortyFade) {
                 enforceProviderScanMode()
             }
         }

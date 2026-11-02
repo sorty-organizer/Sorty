@@ -42,7 +42,7 @@ struct PermissionRow: View {
             permissionIcon
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 7) {
+                HStack(spacing: 8) {
                     Text(LocalizedStringKey(type.rawValue))
                         .font(.headline)
                         .fixedSize(horizontal: false, vertical: true)
@@ -51,8 +51,8 @@ struct PermissionRow: View {
                         Text("Required")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
                             .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12), in: Capsule(style: .continuous))
                     }
                 }
@@ -70,7 +70,7 @@ struct PermissionRow: View {
                 .fixedSize()
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 13)
+        .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
                 .fill(rowFill)
@@ -84,9 +84,9 @@ struct PermissionRow: View {
         // its text, and animating shadow radius re-blurs it every frame.
         .shadow(color: .black.opacity(colorScheme == .dark ? 0.12 : 0.05), radius: 8, x: 0, y: 4)
         .scaleEffect(grantFlash ? 1.012 : 1)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: state)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovering)
-        .animation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82), value: grantFlash)
+        .animation(reduceMotion ? nil : .sortyQuick, value: state)
+        .animation(reduceMotion ? nil : .sortyQuick, value: isHovering)
+        .animation(reduceMotion ? nil : .sortySnappy, value: grantFlash)
         .onHover { hovering in
             isHovering = hovering
         }
@@ -228,13 +228,13 @@ struct PermissionRow: View {
         HapticFeedbackManager.shared.success()
         guard !reduceMotion else { return }
 
-        withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+        withAnimation(.sortySnappy) {
             grantFlash = true
         }
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 260_000_000)
-            withAnimation(.easeOut(duration: 0.24)) {
+            withAnimation(.sortyFade) {
                 grantFlash = false
             }
         }

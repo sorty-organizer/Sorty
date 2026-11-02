@@ -54,11 +54,11 @@ package struct ModelSelectorCompactButton: View {
                 Spacer(minLength: 10)
 
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
             .frame(maxWidth: 220)
             .background {
                 if #unavailable(macOS 26.0) {
@@ -76,7 +76,7 @@ package struct ModelSelectorCompactButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(.sortyFade) {
                 isHovering = hovering
             }
         }
@@ -279,7 +279,7 @@ struct ModelSelectionPopover: View {
     ) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "bolt.fill")
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.orange)
 
             Text("Fast mode")
@@ -409,7 +409,7 @@ struct ModelSelectionPopover: View {
                 if reduceMotion {
                     isContextMessageVisible = false
                 } else {
-                    withAnimation(.easeInOut(duration: 0.15)) {
+                    withAnimation(.sortyFade) {
                         isContextMessageVisible = false
                     }
                 }
@@ -459,7 +459,7 @@ struct ModelSelectionPopover: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.secondary)
-                    .font(.system(size: 16))
+                    .font(.system(size: 15))
             }
             .buttonStyle(.plain)
         }
@@ -510,7 +510,7 @@ struct ModelSelectionPopover: View {
             withAnimation(
                 reduceMotion
                     ? nil
-                    : .spring(response: 0.3, dampingFraction: 0.82)
+                    : .sortySnappy
             ) {
                 selectedProvider = provider
                 selectedModel = ""
@@ -601,7 +601,7 @@ struct ModelSelectionPopover: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 9))
+                            .font(.system(size: 10))
                         Text("Refresh")
                             .font(.system(size: 10))
                     }
@@ -697,14 +697,14 @@ struct ModelSelectionPopover: View {
                     .layoutPriority(1)
 
                 if isVisionModel(model) {
-                    HStack(spacing: 3) {
+                    HStack(spacing: 4) {
                         Image(systemName: "eye.fill")
-                            .font(.system(size: 8, weight: .semibold))
+                            .font(.system(size: 10, weight: .semibold))
                         Text("Vision")
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                     }
                     .foregroundColor(selectedModel == model ? .white : .teal)
-                    .padding(.horizontal, 5)
+                    .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(
                         Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.teal.opacity(0.15))
@@ -714,9 +714,9 @@ struct ModelSelectionPopover: View {
 
                 if supportsFreeFilter && isModelFree(model) {
                     Text("Free")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundColor(selectedModel == model ? .white : .green)
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(
                             Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.green.opacity(0.15))
@@ -726,9 +726,9 @@ struct ModelSelectionPopover: View {
 
                 if selectedProvider == .openAI && isCodexModel(model) {
                     Text("Codex")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundColor(selectedModel == model ? .white : .purple)
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(
                             Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.purple.opacity(0.15))
@@ -740,20 +740,20 @@ struct ModelSelectionPopover: View {
 
                 if model == selectedProvider.defaultModel {
                     Text("Default")
-                        .font(.system(size: 9))
+                        .font(.system(size: 10))
                         .foregroundColor(selectedModel == model ? .white.opacity(0.8) : .secondary)
                         .fixedSize()
                 }
 
                 if model == currentModel && selectedProvider == currentProvider {
                     Text("Current")
-                        .font(.system(size: 9))
+                        .font(.system(size: 10))
                         .foregroundColor(selectedModel == model ? .white.opacity(0.8) : .green)
                         .fixedSize()
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.sm, style: .continuous)
                     .fill(selectedModel == model ? SortyDesignSystem.Colors.resolvedAccent : Color.clear)
@@ -819,7 +819,7 @@ struct ModelSelectionPopover: View {
                     .frame(width: 52, height: 12)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
             .shimmer(isLoading: true)
             .accessibilityHidden(true)
         }
@@ -840,7 +840,7 @@ struct ModelSelectionPopover: View {
                 Spacer()
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -920,7 +920,7 @@ struct ModelSelectionPopover: View {
                             .accessibilityLabel("Fast mode enabled")
                     }
                 }
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: isFastBadgeVisible)
+                .animation(reduceMotion ? nil : .sortyFade, value: isFastBadgeVisible)
             } else {
                 Text("Select a model")
                     .font(.system(size: 12))

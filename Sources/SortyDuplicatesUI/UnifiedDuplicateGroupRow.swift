@@ -71,14 +71,14 @@ struct UnifiedDuplicateGroupRow: View {
                     .accessibilityHidden(true)
             }
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(group.displayName)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .help(group.displayName)
 
-                HStack(spacing: 5) {
+                HStack(spacing: 6) {
                     Label(folderSummary, systemImage: "folder")
                         .labelStyle(.titleAndIcon)
                         .lineLimit(1)
@@ -100,7 +100,7 @@ struct UnifiedDuplicateGroupRow: View {
             .layoutPriority(1)
 
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, 8)
         .frame(minHeight: 64)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -132,7 +132,7 @@ struct DuplicateSectionHeader: View {
     var body: some View {
         HStack(spacing: 4) {
             Button {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.24)) {
+                withAnimation(reduceMotion ? nil : .sortyFade) {
                     isExpanded.toggle()
                 }
             } label: {
@@ -141,7 +141,7 @@ struct DuplicateSectionHeader: View {
                         .font(.caption.weight(.semibold))
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                         .animation(
-                            reduceMotion ? nil : .easeInOut(duration: 0.24),
+                            reduceMotion ? nil : .sortyFade,
                             value: isExpanded
                         )
                         .accessibilityHidden(true)

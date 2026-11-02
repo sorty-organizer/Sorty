@@ -57,7 +57,7 @@ public struct WhatsNewTourView: View {
     }
 
     private var swipeResetAnimation: Animation? {
-        reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.82)
+        reduceMotion ? nil : .sortySmooth
     }
 
     private var resistedSwipeOffset: CGFloat {
@@ -369,7 +369,7 @@ public struct WhatsNewTourView: View {
             ("Learning", "Learning")
         ]
 
-        return VStack(spacing: 5) {
+        return VStack(spacing: 6) {
             HStack(spacing: 0) {
                 Text("Activity")
                     .frame(width: 160, alignment: .leading)
@@ -468,7 +468,7 @@ public struct WhatsNewTourView: View {
             accent: SortyDesignSystem.Colors.resolvedAccent
         )
         .animation(
-            reduceMotion ? nil : .spring(response: 0.56, dampingFraction: 0.84),
+            reduceMotion ? nil : .sortySpringStandard,
             value: currentPage
         )
         .accessibilityElement(children: .ignore)

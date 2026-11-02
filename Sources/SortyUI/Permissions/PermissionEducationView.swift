@@ -31,7 +31,7 @@ package struct PermissionEducationView: View {
             }
         }
         .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
-        .animation(.easeOut(duration: 0.18), value: currentPage)
+        .animation(.sortyFade, value: currentPage)
     }
 
     private func educationPage(_ permission: PermissionType) -> some View {
@@ -81,7 +81,7 @@ package struct PermissionEducationView: View {
                 .padding(.top, 10)
             }
             .padding(.top, 10)
-            .padding(.bottom, 18)
+            .padding(.bottom, 20)
         }
         .frame(width: 640)
         .background(Color(nsColor: .controlBackgroundColor))
@@ -134,7 +134,7 @@ package struct PermissionEducationView: View {
     }
 
     private var pageIndicator: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 8) {
             ForEach(pages.indices, id: \.self) { index in
                 Capsule(style: .continuous)
                     .fill(index == currentPage ? Color.primary.opacity(0.82) : Color.secondary.opacity(0.28))
@@ -180,8 +180,8 @@ package struct AutomationPermissionRecoveryView: View {
 
                     Button {
                         resetCommandCopyFeedback.copy(resetCommand,
-                            animation: reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.72),
-                            resetAnimation: reduceMotion ? nil : .easeOut(duration: 0.18),
+                            animation: reduceMotion ? nil : .sortySnappy,
+                            resetAnimation: reduceMotion ? nil : .sortyFade,
                             haptic: { HapticFeedbackManager.shared.success() })
                     } label: {
                         Image(systemName: hasCopiedResetCommand ? "checkmark" : "doc.on.doc")

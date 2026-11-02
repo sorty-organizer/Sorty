@@ -103,7 +103,7 @@ private struct SortyFocusHighlightModifier<FocusShape: InsettableShape>: ViewMod
                     : .clear,
                 radius: reduceMotion ? 0 : (isBreathing ? 14 : 7)
             )
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isActive)
+            .animation(reduceMotion ? nil : .sortyFade, value: isActive)
             .onAppear { updateBreathingAnimation(isActive) }
             .onChange(of: isActive) { _, newValue in
                 updateBreathingAnimation(newValue)
@@ -172,13 +172,13 @@ package struct SidebarButton: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 6)
-            .padding(.vertical, 5)
+            .padding(.vertical, 6)
             .background(rowBackground, in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.12)) {
+            withAnimation(.sortyFade) {
                 isHovering = hovering
             }
         }
@@ -240,7 +240,7 @@ package struct SettingsCard<Content: View>: View {
         VStack(alignment: .leading, spacing: isExpanded == nil ? 12 : 0) {
             if let isExpanded {
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    withAnimation(.sortySnappy) {
                         isExpanded.wrappedValue.toggle()
                     }
                     HapticFeedbackManager.shared.tap()
@@ -415,8 +415,8 @@ package struct SettingsSecureField: View {
 
     private var visibilityAnimation: Animation {
         reduceMotion
-            ? .easeInOut(duration: 0.14)
-            : .spring(response: 0.34, dampingFraction: 0.78)
+            ? .sortyFade
+            : .sortySmooth
     }
 
     private var visibilityButtonLabel: String {
@@ -451,7 +451,7 @@ package struct SettingsToggle: View {
     
     package var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(LocalizedStringKey(title))
                     .font(.subheadline.weight(.medium))
                     .fixedSize(horizontal: false, vertical: true)
@@ -538,7 +538,7 @@ package struct SettingsSubsettingRow<Control: View>: View {
                     .frame(width: 20)
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(LocalizedStringKey(title))
                         .font(.subheadline.weight(.medium))
                         .fixedSize(horizontal: false, vertical: true)

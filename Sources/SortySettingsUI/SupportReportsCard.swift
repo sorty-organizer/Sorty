@@ -140,8 +140,8 @@ struct SupportReportsCard: View {
 
     private func copyIssueDetails() {
         reportCopyFeedback.copy(issueDetailsText,
-            animation: reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7),
-            resetAnimation: reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.7),
+            animation: reduceMotion ? nil : .sortySmooth,
+            resetAnimation: reduceMotion ? nil : .sortySmooth,
             haptic: { HapticFeedbackManager.shared.success() })
         AnalyticsManager.shared.captureFeature(
             feature: "support",
@@ -237,7 +237,7 @@ struct SupportDetailChip: View {
                 .truncationMode(.middle)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.secondary.opacity(0.07))
         .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.md, style: .continuous))

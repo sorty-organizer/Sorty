@@ -144,11 +144,11 @@ package struct SavedPromptsSheet: View {
         .frame(width: 520, height: 500)
         .onChange(of: steeringManager.prompts.isEmpty) { _, isEmpty in
             if isEmpty {
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.24).delay(0.16)) {
+                withAnimation(reduceMotion ? nil : .sortyFade.delay(0.16)) {
                     isEmptyStateVisible = true
                 }
             } else {
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.14)) {
+                withAnimation(reduceMotion ? nil : .sortyQuick) {
                     isEmptyStateVisible = false
                 }
             }
@@ -188,7 +188,7 @@ package struct SavedPromptsSheet: View {
         }
 
         let newPrompt = SavedSteeringPrompt(name: name, prompt: "")
-        withAnimation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.82)) {
+        withAnimation(reduceMotion ? nil : .sortySmooth) {
             editingSession = SavedPromptEditingSession(prompt: newPrompt, isDraft: true)
             isEmptyStateVisible = false
         }
@@ -219,7 +219,7 @@ package struct SavedPromptsSheet: View {
 
     private func cancelEditing(_ session: SavedPromptEditingSession) {
         var didSaveDraft = false
-        withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.9)) {
+        withAnimation(reduceMotion ? nil : .sortySmooth) {
             didSaveDraft = saveDraftIfNeeded(session)
             editingSession = nil
             if steeringManager.prompts.isEmpty {
@@ -237,7 +237,7 @@ package struct SavedPromptsSheet: View {
         prompt.prompt = session.text
 
         var didSave = false
-        withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.9)) {
+        withAnimation(reduceMotion ? nil : .sortySmooth) {
             didSave = session.isDraft
                 ? steeringManager.addPrompt(prompt)
                 : steeringManager.updatePrompt(prompt)
@@ -265,21 +265,21 @@ package struct SavedPromptsSheet: View {
 
     private func beginEditing(id: UUID) {
         guard let prompt = steeringManager.prompt(id: id) else { return }
-        withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.9)) {
+        withAnimation(reduceMotion ? nil : .sortySmooth) {
             editingSession = SavedPromptEditingSession(prompt: prompt)
         }
     }
 
     private func togglePin(id: UUID) {
         guard showsPinControls, let prompt = steeringManager.prompt(id: id) else { return }
-        withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.9)) {
+        withAnimation(reduceMotion ? nil : .sortySmooth) {
             steeringManager.setPinned(!prompt.isPinned, id: id)
         }
         HapticFeedbackManager.shared.selection()
     }
 
     private func deletePrompt(id: UUID) {
-        withAnimation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.86)) {
+        withAnimation(reduceMotion ? nil : .sortySmooth) {
             steeringManager.deletePrompt(id: id)
         }
         HapticFeedbackManager.shared.tap()
@@ -390,7 +390,7 @@ private struct SavedPromptDisplayCard: View {
                         Label("Pinned", systemImage: "pin.fill")
                             .font(.caption2.weight(.bold))
                             .foregroundStyle(.secondary)
-                            .padding(.horizontal, 5)
+                            .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Color.secondary.opacity(0.12)))
                     }
@@ -456,7 +456,7 @@ private struct SavedPromptDisplayCard: View {
             .accessibilityLabel(label)
             .accessibilityIdentifier("SavedPrompt\(id)Button-\(row.id.uuidString)")
             .scaleEffect(hoveredButton == id ? 1.04 : 1.0)
-            .animation(.spring(response: 0.22, dampingFraction: 0.75), value: hoveredButton)
+            .animation(.sortySnappy, value: hoveredButton)
             .onHover { hovering in
                 hoveredButton = hovering ? id : nil
                 if hovering {

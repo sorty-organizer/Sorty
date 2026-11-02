@@ -122,7 +122,7 @@ extension LearningsView {
                         .font(.caption.bold())
                         .foregroundStyle(.teal)
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 6)
                         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.capsule, interactive: false)
                         .clipShape(Capsule())
                         .numericTextTransition(
@@ -151,8 +151,8 @@ extension LearningsView {
                             .scaleEffect(emptyExampleFoldersHasAppeared ? 1 : 0.8)
                             .animation(
                                 reduceMotion
-                                    ? .easeOut(duration: 0.12)
-                                    : .spring(response: 0.5, dampingFraction: 0.7).delay(0.1),
+                                    ? .sortyQuick
+                                    : .sortySpringStandard.delay(0.1),
                                 value: emptyExampleFoldersHasAppeared
                             )
                             .accessibilityHidden(true)
@@ -163,8 +163,8 @@ extension LearningsView {
                         .offset(y: emptyExampleFoldersHasAppeared ? 0 : 8)
                         .animation(
                             reduceMotion
-                                ? .easeOut(duration: 0.12)
-                                : .spring(response: 0.5, dampingFraction: 0.8).delay(0.2),
+                                ? .sortyQuick
+                                : .sortySpringStandard.delay(0.2),
                             value: emptyExampleFoldersHasAppeared
                         )
                     Button {
@@ -179,8 +179,8 @@ extension LearningsView {
                     .offset(y: emptyExampleFoldersHasAppeared ? 0 : 10)
                     .animation(
                         reduceMotion
-                            ? .easeOut(duration: 0.12)
-                            : .spring(response: 0.5, dampingFraction: 0.8).delay(0.3),
+                            ? .sortyQuick
+                            : .sortySpringStandard.delay(0.3),
                         value: emptyExampleFoldersHasAppeared
                     )
                 }
@@ -204,7 +204,7 @@ extension LearningsView {
                 }
             }
         }
-        .padding(18)
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
     }

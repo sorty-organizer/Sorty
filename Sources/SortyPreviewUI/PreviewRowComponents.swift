@@ -30,8 +30,8 @@ struct RenameNameChangeView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .animation(isHighlighted ? .easeInOut(duration: 0.18) : nil, value: isRegenerating)
-            .animation(isHighlighted ? .spring(response: 0.42, dampingFraction: 0.82) : nil, value: suggestedNameReveal)
+            .animation(isHighlighted ? .sortyFade : nil, value: isRegenerating)
+            .animation(isHighlighted ? .sortySmooth : nil, value: suggestedNameReveal)
             .help(helpText)
             .onChange(of: suggestedName) { _, _ in
                 guard !reduceMotion, isHighlighted else {
@@ -41,7 +41,7 @@ struct RenameNameChangeView: View {
                 suggestedNameReveal = false
                 showRevealSweep = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-                    withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                    withAnimation(.sortySmooth) {
                         suggestedNameReveal = true
                         showRevealSweep = true
                     }
@@ -53,7 +53,7 @@ struct RenameNameChangeView: View {
             .onChange(of: isRegenerating) { _, newValue in
                 guard !reduceMotion, isHighlighted else { return }
                 if newValue {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.sortyFade) {
                         suggestedNameReveal = false
                         showRevealSweep = false
                     }
@@ -117,7 +117,7 @@ struct FlatFolderRowHeaderContent: View {
                 .frame(width: 20)
                 .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 .animation(
-                    reduceMotion ? nil : .spring(response: 0.25, dampingFraction: 0.75),
+                    reduceMotion ? nil : .sortySnappy,
                     value: isExpanded
                 )
                 .accessibilityHidden(true)

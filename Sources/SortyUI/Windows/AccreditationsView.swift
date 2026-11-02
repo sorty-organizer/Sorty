@@ -47,7 +47,7 @@ struct AccreditationsView: View {
                 .debouncedHover($iconHovered)
 
             Text("Accreditations")
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .font(.system(size: 28, weight: .bold, design: .rounded))
 
             Text("These open-source projects and contributors help keep Sorty alive.")
                 .font(.subheadline)

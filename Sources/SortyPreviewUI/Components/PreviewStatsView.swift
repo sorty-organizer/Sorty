@@ -94,10 +94,10 @@ struct PreviewStatsView: View {
                     RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous)
                         .fill(Color.primary.opacity(isHovering ? 0.05 : 0))
                         .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
+                        .padding(.vertical, 4)
                 )
                 .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.15)) {
+                    withAnimation(.sortyFade) {
                         isHovering = hovering
                     }
                 }
@@ -144,7 +144,7 @@ struct PreviewStatsView: View {
 
     private func toggleExpandedStats() {
         HapticFeedbackManager.shared.selection()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.sortySnappy) {
             isExpanded.toggle()
         }
     }

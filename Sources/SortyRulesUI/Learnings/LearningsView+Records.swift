@@ -278,7 +278,7 @@ extension LearningsView {
                     .foregroundStyle(.secondary)
                     .frame(width: 22)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(.subheadline)
                         .fixedSize(horizontal: false, vertical: true)
@@ -322,7 +322,7 @@ extension LearningsView {
                         .foregroundStyle(rule.isEnabled ? .green : .secondary)
                         .frame(width: 22)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(rule.explanation)
                             .font(.subheadline)
                         Text("\(ruleStateLabel(rule)) · \(rule.scope.displayName)")

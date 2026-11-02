@@ -62,7 +62,7 @@ struct PersonaGeneratorView: View {
         }
         .frame(width: 500, height: isHoning || generator.isGenerating ? 550 : 430)
         .animation(
-            reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82),
+            reduceMotion ? nil : .sortySmooth,
             value: isHoning || generator.isGenerating
         )
         .background(WindowVisibilityReader(isVisible: $isWindowVisible))
@@ -77,7 +77,7 @@ struct PersonaGeneratorView: View {
     }
 
     private var generationOverlay: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: 24) {
             Image(systemName: "wand.and.stars")
                 .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
@@ -114,7 +114,7 @@ struct PersonaGeneratorView: View {
                         )
                     )
             }
-            .animation(.easeInOut(duration: 0.22), value: currentGenerationStatus)
+            .animation(.sortyFade, value: currentGenerationStatus)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
@@ -179,17 +179,17 @@ struct PersonaGeneratorView: View {
                             Text("Tab")
                                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.secondary)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
                                 .background(
                                     Color.secondary.opacity(0.10),
                                     in: RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xs, style: .continuous)
                                 )
                                 .accessibilityHidden(true)
                         }
-                        .padding(.leading, 15)
+                        .padding(.leading, 16)
                         .padding(.trailing, 10)
-                        .padding(.top, 7)
+                        .padding(.top, 8)
                         .allowsHitTesting(false)
                         .task(id: shouldCyclePromptSuggestions) {
                             guard shouldCyclePromptSuggestions else { return }
@@ -219,7 +219,7 @@ struct PersonaGeneratorView: View {
                         : "Press Command and Return to continue"
                 )
             }
-            .padding(.horizontal, 30)
+            .padding(.horizontal, 32)
             
             if let error = generator.error {
                 Text(error.userFacingMessage).foregroundColor(.red).font(.caption).padding(.horizontal)
@@ -271,14 +271,14 @@ struct PersonaGeneratorView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                     .numericTextTransition(animationValue: currentQuestionIndex)
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                     .background(
                         SortyDesignSystem.Colors.resolvedAccent.opacity(0.12),
                         in: Capsule(style: .continuous)
                     )
             }
-            .padding(.top, 18)
+            .padding(.top, 20)
 
             SortyGradientProgressBar(
                 progress: Double(currentQuestionIndex + 1) / Double(max(questions.count, 1)),
@@ -303,13 +303,13 @@ struct PersonaGeneratorView: View {
 
                 customAnswerField(for: question)
             }
-            .padding(.horizontal, 30)
+            .padding(.horizontal, 32)
 
             if let error = generator.error {
                 Label(error.userFacingMessage, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.red)
-                    .padding(.horizontal, 30)
+                    .padding(.horizontal, 32)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
@@ -319,7 +319,7 @@ struct PersonaGeneratorView: View {
                 Button("Back") {
                     focusedCustomAnswerQuestionID = nil
                     HapticFeedbackManager.shared.selection()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
+                    withAnimation(.sortyBouncy) {
                         if currentQuestionIndex > 0 {
                             currentQuestionIndex -= 1
                         } else {
@@ -338,8 +338,8 @@ struct PersonaGeneratorView: View {
                 .buttonStyle(.sortyProminent)
                 .disabled(answers[question.id] == nil || generator.isGenerating)
             }
-            .padding(.horizontal, 30)
-            .padding(.bottom, 30)
+            .padding(.horizontal, 32)
+            .padding(.bottom, 32)
         }
     }
     
@@ -377,16 +377,16 @@ struct PersonaGeneratorView: View {
         // TextEditor fills that space and scrolls anything longer.
         return Text(answer.isEmpty ? " " : answer)
             .lineLimit(1...3)
-            .padding(.horizontal, 5)
+            .padding(.horizontal, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
             .hidden()
             .overlay(alignment: .topLeading) {
             Text(showsPlaceholder ? "Or type exactly what you want…" : "")
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 5)
+                .padding(.horizontal, 6)
                 .allowsHitTesting(false)
                 .contentTransition(reduceMotion ? .opacity : .numericText())
-                .animation(reduceMotion ? .easeOut(duration: 0.12) : .default, value: showsPlaceholder)
+                .animation(reduceMotion ? .sortyQuick : .default, value: showsPlaceholder)
 
             TextEditor(text: customAnswerBinding(for: question))
                 .font(.body)
@@ -418,8 +418,8 @@ struct PersonaGeneratorView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { focusedCustomAnswerQuestionID = question.id }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isFocused)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: hasAnswer)
+        .animation(reduceMotion ? nil : .sortyQuick, value: isFocused)
+        .animation(reduceMotion ? nil : .sortyQuick, value: hasAnswer)
     }
 
     private func advance(from question: HoningQuestion) {
@@ -428,7 +428,7 @@ struct PersonaGeneratorView: View {
 
         if currentQuestionIndex < questions.count - 1 {
             HapticFeedbackManager.shared.selection()
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
+            withAnimation(.sortyBouncy) {
                 currentQuestionIndex += 1
             }
         } else {
@@ -484,7 +484,7 @@ struct PersonaGeneratorView: View {
                     generateFinalPersona()
                 } else {
                     HapticFeedbackManager.shared.selection()
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                    withAnimation(.sortySmooth) {
                         isHoning = true
                     }
                 }
@@ -677,11 +677,11 @@ private struct HoningOptionButton: View {
             isHovered = hovering
         }
         .animation(
-            reduceMotion ? nil : .easeOut(duration: 0.15),
+            reduceMotion ? nil : .sortyQuick,
             value: isHovered
         )
         .animation(
-            reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.6),
+            reduceMotion ? nil : .sortyBouncy,
             value: isSelected
         )
         .accessibilityAddTraits(isSelected ? .isSelected : [])

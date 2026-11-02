@@ -140,11 +140,11 @@ struct ScanProgressViewNew: View {
                                 .fixedSize(horizontal: true, vertical: false)
                                 .numericTextTransition(
                                     animationValue: percent,
-                                    animation: .easeInOut(duration: 0.3)
+                                    animation: .sortySlowFade
                                 )
                         }
                     }
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.primary)
 
                     Text(LocalizedStringKey(subtitle))
