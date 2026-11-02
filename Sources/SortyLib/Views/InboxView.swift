@@ -50,9 +50,8 @@ struct InboxView: View {
                     case .expiring: expiringContent
                     }
                 }
-                .frame(maxWidth: 760, alignment: .leading)
-                .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(24)
                 .animatedAppearance(delay: 0.05)
             }
         }
