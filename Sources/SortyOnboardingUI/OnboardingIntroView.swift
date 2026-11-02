@@ -229,7 +229,7 @@ struct OnboardingIntroContentLayer: View {
                             reduceMotion: reduceMotion,
                             isActive: controlActiveState != .inactive
                         )
-                        .frame(width: 220, height: 220)
+                        .frame(width: 168, height: 168)
                         .accessibilityHidden(true)
 
                         SortyEnergyScanIcon(
@@ -258,10 +258,15 @@ struct OnboardingIntroContentLayer: View {
                     HStack(spacing: 8) {
                         Text("Get Started")
                         Image(systemName: "arrow.right")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 16, weight: .bold))
                     }
                 }
-                .buttonStyle(.sortyProminent(size: .large))
+                .buttonStyle(.sortyProminent(size: .extraLarge))
+                .shadow(
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(isGetStartedAvailable ? 0.45 : 0),
+                    radius: isHoveringButton ? 22 : 16,
+                    y: 6
+                )
                 .keyboardShortcut(.defaultAction)
                 .disabled(!isGetStartedAvailable)
                 .opacity(isGetStartedAvailable ? 1 : 0.62)

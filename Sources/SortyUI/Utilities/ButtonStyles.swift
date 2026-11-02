@@ -122,7 +122,10 @@ private struct SortyButtonBody: View {
     private func surface(accent: Color, isPressed: Bool) -> some View {
         if isProminent {
             Capsule()
-                .fill(accent.opacity(isPressed ? 0.78 : (isHovering ? 1 : 0.9)))
+                .fill(accent.opacity(isPressed ? 0.82 : 1))
+                .overlay {
+                    Capsule().fill(Color.white.opacity(isHovering && !isPressed ? 0.1 : 0))
+                }
         } else {
             Capsule()
                 .fill(Color.primary.opacity(isPressed ? 0.10 : (isHovering ? 0.06 : 0)))
@@ -134,7 +137,8 @@ private struct SortyButtonBody: View {
         switch size ?? environmentSize {
         case .mini: return (11, 10, 4)
         case .small: return (12, 14, 6)
-        case .large, .extraLarge: return (16, 24, 12)
+        case .large: return (16, 24, 12)
+        case .extraLarge: return (19, 34, 15)
         default: return (14, 18, 9)
         }
     }

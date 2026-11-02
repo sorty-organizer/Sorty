@@ -25,10 +25,16 @@ struct RetainedIntroGlow: NSViewRepresentable {
     }
 }
 
-/// Preserves the intro's 28-to-38 point Gaussian bloom on one retained layer.
+/// Draws the intro's soft bloom as a blurred squircle that follows the app
+/// icon's outline, on one retained layer.
 /// SwiftUI no longer rerenders the blurred 220-point shape during the reveal.
 @MainActor
 final class RetainedIntroGlowView: NSView {
+    /// Wide enough that the squircle's edge disappears into the background.
+    private static let blurRadius: CGFloat = 30
+    private static let glowAlpha: CGFloat = 0.42
+    /// Matches the app icon's corner ratio (34pt on a 156pt icon).
+    private static let cornerRatio: CGFloat = 34.0 / 156.0
     private let glowLayer = CALayer()
     private let glowShapeLayer = CALayer()
     private let blurFilter = CIFilter.gaussianBlur()
@@ -48,11 +54,11 @@ final class RetainedIntroGlowView: NSView {
         glowLayer.shouldRasterize = true
         updateGlowRasterizationScale()
         blurFilter.name = "introGlowBlur"
-        blurFilter.radius = 16
+        blurFilter.radius = Float(Self.blurRadius)
         glowShapeLayer.backgroundColor = NSColor(SortyDesignSystem.Colors.resolvedAccent)
-            .withAlphaComponent(0.30)
+            .withAlphaComponent(Self.glowAlpha)
             .cgColor
-        glowShapeLayer.cornerRadius = 44
+        glowShapeLayer.cornerCurve = .continuous
         glowLayer.opacity = 0
         glowLayer.filters = [blurFilter]
         glowLayer.addSublayer(glowShapeLayer)
@@ -70,7 +76,7 @@ final class RetainedIntroGlowView: NSView {
         lastLayoutBounds = bounds
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        let blurOutset: CGFloat = 60
+        let blurOutset = Self.blurRadius * 3
         glowLayer.frame = bounds.insetBy(dx: -blurOutset, dy: -blurOutset)
         glowShapeLayer.frame = CGRect(
             x: blurOutset,
@@ -78,6 +84,7 @@ final class RetainedIntroGlowView: NSView {
             width: bounds.width,
             height: bounds.height
         )
+        glowShapeLayer.cornerRadius = min(bounds.width, bounds.height) * Self.cornerRatio
         CATransaction.commit()
     }
 
@@ -94,7 +101,7 @@ final class RetainedIntroGlowView: NSView {
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         glowShapeLayer.backgroundColor = NSColor(SortyDesignSystem.Colors.resolvedAccent)
-            .withAlphaComponent(0.30).cgColor
+            .withAlphaComponent(Self.glowAlpha).cgColor
     }
 
     private func updateGlowRasterizationScale() {
@@ -142,7 +149,7 @@ final class RetainedIntroGlowView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         glowLayer.opacity = 1
-        blurFilter.radius = 16
+        blurFilter.radius = Float(Self.blurRadius)
         CATransaction.commit()
     }
 
@@ -152,7 +159,7 @@ final class RetainedIntroGlowView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         glowLayer.opacity = isVisible ? 1 : 0
-        blurFilter.radius = 16
+        blurFilter.radius = Float(Self.blurRadius)
         CATransaction.commit()
     }
 
@@ -162,7 +169,7 @@ final class RetainedIntroGlowView: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         glowLayer.opacity = 0
-        blurFilter.radius = 16
+        blurFilter.radius = Float(Self.blurRadius)
         CATransaction.commit()
     }
 }
