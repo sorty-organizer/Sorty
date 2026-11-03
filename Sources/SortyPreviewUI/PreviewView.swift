@@ -104,7 +104,7 @@ package struct PreviewView: View {
         self.onApplyStarted = onApplyStarted
         _previewStore = StateObject(wrappedValue: PreviewStore(plan: plan))
         _editablePlan = State(initialValue: plan)
-        _memoizedRenameCount = State(initialValue: plan.suggestions.reduce(0) { $0 + $1.renameCount })
+        _memoizedRenameCount = State(initialValue: plan.totalRenameCount)
     }
     
     package var body: some View {
@@ -281,7 +281,7 @@ package struct PreviewView: View {
     // unrelated organizer publishes (progress ticks, stage strings).
     private func refreshDerivedPlanStats() {
         let shown = displayedPlan
-        memoizedRenameCount = shown.suggestions.reduce(0) { $0 + $1.renameCount }
+        memoizedRenameCount = shown.totalRenameCount
         if viewingHistoryIndex == nil, hasEdits {
             memoizedCurrentDiff = OrganizationPlanDiff.Source(
                 oldPlan: plan,
@@ -348,7 +348,8 @@ package struct PreviewView: View {
         case .organizeAndRename:
             return "\(displayedPlan.totalFiles) files will be organized, with \(renameCount) name changes. \(displayedPlan.unorganizedFiles.count) files will remain in place."
         case .organize:
-            return "\(displayedPlan.totalFiles) files will be organized. \(displayedPlan.unorganizedFiles.count) files will remain in place."
+            let renames = renameCount > 0 ? ", with \(renameCount) name changes" : ""
+            return "\(displayedPlan.totalFiles) files will be organized\(renames). \(displayedPlan.unorganizedFiles.count) files will remain in place."
         }
     }
     

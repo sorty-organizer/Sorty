@@ -67,10 +67,11 @@ struct FlattenedRowView: View, @MainActor Equatable {
                 dragDropManager: dragDropManager,
                 onPlanChanged: onPlanChanged
             )
-        case .unorganizedFile(let row, let duplicateInfo, let isHighlighted, let moveDestinations):
+        case .unorganizedFile(let row, let renameMapping, let duplicateInfo, let isHighlighted, let moveDestinations):
             if case .unorganizedFile(let file) = row.type {
                 FlatUnorganizedFileRowView(
                     file: file,
+                    renameMapping: renameMapping,
                     dragDropManager: dragDropManager,
                     store: store,
                     duplicateInfo: duplicateInfo,

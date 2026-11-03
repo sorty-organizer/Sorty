@@ -80,6 +80,7 @@ struct FlatUnorganizedHeaderView: View {
 struct FlatUnorganizedFileRowView: View {
     @SortyHotReload private var hotReload
     let file: FileItem
+    let renameMapping: FileRenameMapping?
     @ObservedObject var dragDropManager: DragDropManager
     let store: PreviewStore
     let duplicateInfo: DuplicateInfo?
@@ -87,6 +88,11 @@ struct FlatUnorganizedFileRowView: View {
     let moveDestinations: [PreviewMoveDestination]
     let onPlanChanged: () -> Void
     @State private var isDragging = false
+    @State private var isEditingName = false
+    @State private var editedName = ""
+    @FocusState private var isNameFieldFocused: Bool
+
+    private var hasRename: Bool { renameMapping?.hasRename == true }
 
     var body: some View {
         contextualRow
@@ -104,6 +110,7 @@ struct FlatUnorganizedFileRowView: View {
         .accessibilityAction(named: "Reveal \(file.displayName) in Finder") {
             NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
         }
+        .accessibilityAction(named: "Rename \(file.displayName)", startEditing)
         .accessibilityActions {
             ForEach(moveDestinations) { destination in
                 Button("Move to \(destination.name)") {
@@ -118,12 +125,69 @@ struct FlatUnorganizedFileRowView: View {
             dragDropManager.startDrag(file)
             return NSItemProvider(object: file.id.uuidString as NSString)
         }
+        .onDisappear { isEditingName = false }
     }
 
     private var rowContent: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            nameRow
+
+            if let renameMapping, hasRename, !isEditingName {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.turn.down.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    RenameNameChangeView(
+                        suggestedName: renameMapping.suggestedName ?? "",
+                        helpText: "Renamed by you. Stays in its current folder.",
+                        isHighlighted: isHighlighted
+                    )
+                    .onTapGesture(count: 2, perform: startEditing)
+
+                    Spacer(minLength: 12)
+
+                    Image(systemName: "person.crop.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help("Renamed by you")
+                        .accessibilityLabel("Renamed by you")
+
+                    Button(action: revertName) {
+                        Image(systemName: "xmark.circle")
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(width: 16, height: 16)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Keep original name")
+                    .accessibilityLabel("Keep original name")
+                    .accessibilityIdentifier("UnorganizedRevertNameButton")
+                }
+                .padding(.leading, 28)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private var nameRow: some View {
         HStack {
             FileThumbnailView(url: URL(fileURLWithPath: file.path), size: CGSize(width: 20, height: 20))
-            Text(file.displayName)
+            if isEditingName {
+                TextField("New name", text: $editedName)
+                    .textFieldStyle(.plain)
+                    .focused($isNameFieldFocused)
+                    .onSubmit(saveName)
+                    .onExitCommand { isEditingName = false }
+                    .accessibilityIdentifier("UnorganizedRenameField")
+            } else {
+                Text(file.displayName)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .foregroundColor(hasRename ? .secondary : .primary)
+                    .strikethrough(hasRename, color: SortyDesignSystem.Colors.error.opacity(0.72))
+                    // Double-clicking the name renames; the rest of the row still opens the file.
+                    .onTapGesture(count: 2, perform: startEditing)
+            }
             Spacer()
 
             if let dupInfo = duplicateInfo {
@@ -142,6 +206,28 @@ struct FlatUnorganizedFileRowView: View {
             Image(systemName: "line.3.horizontal")
                 .foregroundColor(.secondary.opacity(0.6))
         }
+    }
+
+    private func startEditing() {
+        HapticFeedbackManager.shared.selection()
+        editedName = hasRename ? (renameMapping?.suggestedName ?? file.displayName) : file.displayName
+        isEditingName = true
+        isNameFieldFocused = true
+    }
+
+    private func saveName() {
+        let trimmed = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            store.updateUnorganizedRename(fileID: file.id, newName: trimmed)
+            onPlanChanged()
+        }
+        isEditingName = false
+    }
+
+    private func revertName() {
+        HapticFeedbackManager.shared.tap()
+        store.updateUnorganizedRename(fileID: file.id, newName: nil)
+        onPlanChanged()
     }
 
     private var backgroundColor: Color {
@@ -175,6 +261,18 @@ struct FlatUnorganizedFileRowView: View {
                 NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
             } label: {
                 Label("Reveal in Finder", systemImage: "folder")
+            }
+
+            Divider()
+
+            Button(action: startEditing) {
+                Label("Rename…", systemImage: "pencil")
+            }
+
+            if hasRename {
+                Button(role: .destructive, action: revertName) {
+                    Label("Revert Name", systemImage: "arrow.uturn.backward")
+                }
             }
 
             if !moveDestinations.isEmpty {

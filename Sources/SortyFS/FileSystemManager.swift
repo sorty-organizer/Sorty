@@ -650,6 +650,30 @@ public actor FileSystemManager {
         renameMetadata == nil ? .moveFile : .renameFile
     }
 
+    /// Groups renamed unorganized files by their current parent folder so the
+    /// move loop renames them in place. Folder names are absolute paths.
+    private func inPlaceRenameSuggestions(for plan: OrganizationPlan) -> [FolderSuggestion] {
+        let mappings = plan.applicableUnorganizedRenames
+        guard !mappings.isEmpty else { return [] }
+        let mappingsByID = Dictionary(mappings.map { ($0.originalFile.id, $0) }, uniquingKeysWith: { _, latest in latest })
+        var groups: [String: (files: [FileItem], mappings: [FileRenameMapping])] = [:]
+        for file in plan.unorganizedFiles {
+            guard let mapping = mappingsByID[file.id], let url = file.url else { continue }
+            let parentPath = url.deletingLastPathComponent().standardizedFileURL.path
+            groups[parentPath, default: ([], [])].files.append(file)
+            groups[parentPath, default: ([], [])].mappings.append(mapping)
+        }
+        return groups.keys.sorted().map { parentPath in
+            FolderSuggestion(
+                folderName: parentPath,
+                description: "Rename in place",
+                files: groups[parentPath]?.files ?? [],
+                reasoning: "Renamed by the user",
+                fileRenameMappings: groups[parentPath]?.mappings ?? []
+            )
+        }
+    }
+
     private func renameMappingsByFileID(
         in suggestion: FolderSuggestion
     ) -> [UUID: FileRenameMapping] {
@@ -978,7 +1002,9 @@ public actor FileSystemManager {
         var exclusionSkips: [OperationFailure] = []
 
         do {
+            let inPlaceRenameSuggestions = inPlaceRenameSuggestions(for: plan)
             let totalFiles = plan.suggestions.reduce(0) { $0 + countFiles(in: $1) }
+                + inPlaceRenameSuggestions.reduce(0) { $0 + $1.files.count }
             let totalFolders = plan.suggestions.reduce(0) { $0 + countFolders(in: $1) }
             let totalOps = totalFiles + totalFolders + (enableTagging ? totalFiles + totalFolders : 0)
             allOperations.reserveCapacity(totalFiles + totalFolders)
@@ -1051,6 +1077,24 @@ public actor FileSystemManager {
             // still confirms via fileExists.
             let existingPathsSnapshot: Set<String> = dryRun ? [] : snapshotExistingPaths(at: baseURL)
             for suggestion in plan.suggestions {
+                let result = try await moveFilesInSuggestionWithProgress(
+                    suggestion,
+                    parentURL: baseURL,
+                    dryRun: dryRun,
+                    exclusionMatcher: exclusionMatcher,
+                    exclusionManager: exclusionManager,
+                    operationProgress: &operationProgress,
+                    failures: &allFailures,
+                    exclusionSkips: &exclusionSkips,
+                    reserved: &reservedDestinations,
+                    existingPaths: existingPathsSnapshot
+                )
+                allOperations.append(contentsOf: result.operations)
+            }
+
+            // Unorganized files the user renamed: same move path, but the
+            // destination is the folder the file already lives in.
+            for suggestion in inPlaceRenameSuggestions {
                 let result = try await moveFilesInSuggestionWithProgress(
                     suggestion,
                     parentURL: baseURL,

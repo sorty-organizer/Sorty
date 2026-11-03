@@ -37,6 +37,9 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
     public var suggestions: [FolderSuggestion]
     public var unorganizedFiles: [FileItem] // Keep for backward compatibility/UI logic
     public var unorganizedDetails: [UnorganizedFile]
+    /// Names the user typed for unorganized files. Apply renames these files
+    /// where they are without moving them.
+    public var unorganizedRenameMappings: [FileRenameMapping]
     public var notes: String
     public var timestamp: Date
     public var version: Int
@@ -55,6 +58,7 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
         case suggestions
         case unorganizedFiles
         case unorganizedDetails
+        case unorganizedRenameMappings
         case notes
         case timestamp
         case version
@@ -72,6 +76,7 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
         suggestions: [FolderSuggestion] = [],
         unorganizedFiles: [FileItem] = [],
         unorganizedDetails: [UnorganizedFile] = [],
+        unorganizedRenameMappings: [FileRenameMapping] = [],
         notes: String = "",
         timestamp: Date = Date(),
         version: Int = 1,
@@ -87,6 +92,7 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
         self.suggestions = suggestions
         self.unorganizedFiles = unorganizedFiles
         self.unorganizedDetails = unorganizedDetails
+        self.unorganizedRenameMappings = unorganizedRenameMappings
         self.notes = notes
         self.timestamp = timestamp
         self.version = version
@@ -105,6 +111,7 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
         suggestions = try container.decodeIfPresent([FolderSuggestion].self, forKey: .suggestions) ?? []
         unorganizedFiles = try container.decodeIfPresent([FileItem].self, forKey: .unorganizedFiles) ?? []
         unorganizedDetails = try container.decodeIfPresent([UnorganizedFile].self, forKey: .unorganizedDetails) ?? []
+        unorganizedRenameMappings = try container.decodeIfPresent([FileRenameMapping].self, forKey: .unorganizedRenameMappings) ?? []
         notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
         timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
@@ -117,6 +124,19 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
     }
 
     
+    /// In-place renames that apply will perform for files still in the unorganized list.
+    public var applicableUnorganizedRenames: [FileRenameMapping] {
+        let unorganizedIDs = Set(unorganizedFiles.map(\.id))
+        return unorganizedRenameMappings.filter {
+            $0.shouldApplyRename && unorganizedIDs.contains($0.originalFile.id)
+        }
+    }
+
+    /// Renames across organized folders and unorganized files.
+    public var totalRenameCount: Int {
+        suggestions.reduce(0) { $0 + $1.renameCount } + applicableUnorganizedRenames.count
+    }
+
     public var totalFiles: Int {
         suggestions.reduce(0) { $0 + $1.totalFileCount } + unorganizedFiles.count
     }
@@ -184,6 +204,7 @@ public enum OrganizationModePlanEnforcer {
     private static func removingRenameSuggestions(from plan: OrganizationPlan) -> OrganizationPlan {
         var updated = plan
         updated.suggestions = updated.suggestions.map(removingRenameSuggestions)
+        updated.unorganizedRenameMappings.removeAll { $0.isUserEdited != true }
         return updated
     }
 
@@ -194,7 +215,8 @@ public enum OrganizationModePlanEnforcer {
             updatedFile.suggestedFilename = nil
             return updatedFile
         }
-        updated.fileRenameMappings = []
+        // Organize-only mode drops AI names but honors names the user typed.
+        updated.fileRenameMappings.removeAll { $0.isUserEdited != true }
         updated.subfolders = updated.subfolders.map(removingRenameSuggestions)
         return updated
     }

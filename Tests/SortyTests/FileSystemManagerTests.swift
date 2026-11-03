@@ -278,6 +278,42 @@ class FileSystemManagerTests: XCTestCase {
     }
 
     @MainActor
+    func testUnorganizedRenameAppliesInPlaceAndClashesBecomeUnique() async throws {
+        let nested = tempDirectory.appendingPathComponent("Inbox")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        let source = nested.appendingPathComponent("scan 3.pdf")
+        try "scan".write(to: source, atomically: true, encoding: .utf8)
+        try "taken".write(to: nested.appendingPathComponent("Lease.pdf"), atomically: true, encoding: .utf8)
+
+        let file = FileItem(path: source.path, name: "scan 3", extension: "pdf", size: 4, isDirectory: false)
+        var plan = OrganizationPlan(suggestions: [], unorganizedFiles: [file], notes: "")
+        plan.unorganizedRenameMappings.upsertRename(for: file, newName: "Lease.pdf", isUserEdited: true)
+
+        let operations = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, enableTagging: false)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: nested.appendingPathComponent("Lease_1.pdf").path))
+        XCTAssertEqual(operations.filter { $0.type == .renameFile }.map(\.sourcePath), [source.path])
+    }
+
+    func testOrganizeOnlyModeKeepsOnlyUserTypedNames() {
+        let base = URL(fileURLWithPath: "/tmp/base")
+        let aiFile = FileItem(path: "/tmp/base/a.txt", name: "a", extension: "txt", size: 1, isDirectory: false)
+        let userFile = FileItem(path: "/tmp/base/b.txt", name: "b", extension: "txt", size: 1, isDirectory: false)
+        let looseFile = FileItem(path: "/tmp/base/c.txt", name: "c", extension: "txt", size: 1, isDirectory: false)
+        var folder = FolderSuggestion(folderName: "Docs", files: [aiFile, userFile])
+        folder.updateRename(for: aiFile, newName: "ai.txt")
+        folder.updateRename(for: userFile, newName: "mine.txt", isUserEdited: true)
+        var plan = OrganizationPlan(suggestions: [folder], unorganizedFiles: [looseFile], notes: "")
+        plan.unorganizedRenameMappings.upsertRename(for: looseFile, newName: "loose.txt", isUserEdited: true)
+
+        let enforced = OrganizationModePlanEnforcer.enforce(plan, mode: .organize, baseURL: base)
+
+        XCTAssertEqual(enforced.suggestions[0].fileRenameMappings.compactMap(\.suggestedName), ["mine.txt"])
+        XCTAssertEqual(enforced.totalRenameCount, 2)
+    }
+
+    @MainActor
     func testApplyHonorsRenameConfidenceSelectionPolicy() async throws {
         let mediumSource = tempDirectory.appendingPathComponent("scan.pdf")
         let lowSource = tempDirectory.appendingPathComponent("export.pdf")

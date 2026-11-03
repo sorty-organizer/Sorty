@@ -49,6 +49,7 @@ enum PreviewRowPresentation: Equatable {
     case unorganizedHeader(row: FlattenedRow, fileCount: Int)
     case unorganizedFile(
         row: FlattenedRow,
+        renameMapping: FileRenameMapping?,
         duplicateInfo: DuplicateInfo?,
         isHighlighted: Bool,
         moveDestinations: [PreviewMoveDestination]
@@ -381,6 +382,9 @@ package class PreviewStore: ObservableObject {
         for suggestion in plan.suggestions {
             collect(from: suggestion)
         }
+        for mapping in plan.unorganizedRenameMappings where visibleFileIDs.contains(mapping.originalFile.id) {
+            visibleRenames[mapping.originalFile.id] = mapping
+        }
         renameMappings = visibleRenames
         tagMappings = visibleTags
         fileCommentMappings = visibleComments
@@ -458,6 +462,7 @@ package class PreviewStore: ObservableObject {
         case .unorganizedFile(let file):
             return .unorganizedFile(
                 row: row,
+                renameMapping: renameMappings[file.id],
                 duplicateInfo: duplicateMappings[file.id],
                 isHighlighted: highlightedFileID == file.id,
                 moveDestinations: moveDestinations
@@ -646,6 +651,13 @@ package class PreviewStore: ObservableObject {
         if !updatedPlan.unorganizedFiles.contains(where: { $0.id == fileID }) {
             updatedPlan.unorganizedFiles.append(file)
         }
+        // A name the user typed follows the file; AI names do not, so an
+        // unorganized file is never renamed unless the user asked.
+        if let mapping = renameMappings[fileID], mapping.hasRename, mapping.isUserEdited == true {
+            updatedPlan.unorganizedRenameMappings.upsertRename(
+                for: file, newName: mapping.suggestedName, isUserEdited: true
+            )
+        }
         
         updateInternalPlan(updatedPlan)
     }
@@ -687,6 +699,15 @@ package class PreviewStore: ObservableObject {
         }
     }
     
+    /// Sets the name the user typed for an unorganized file; apply renames it in place.
+    package func updateUnorganizedRename(fileID: UUID, newName: String?) {
+        guard let file = plan.unorganizedFiles.first(where: { $0.id == fileID }) else { return }
+        var updatedPlan = plan
+        updatedPlan.unorganizedRenameMappings.upsertRename(for: file, newName: newName, isUserEdited: true)
+        updatedPlan.unorganizedRenameMappings.removeAll { !$0.hasRename }
+        updateInternalPlan(updatedPlan)
+    }
+
     package func rejectRename(fileID: UUID, folderID: UUID) {
         // Record rename rejection before mutating the plan
         if let file = findFile(by: fileID),
@@ -782,6 +803,11 @@ package class PreviewStore: ObservableObject {
             if !updatedPlan.unorganizedFiles.contains(where: { $0.id == file.id }) {
                 updatedPlan.unorganizedFiles.append(file)
             }
+            if let mapping = renameMappings[file.id], mapping.hasRename, mapping.isUserEdited == true {
+                updatedPlan.unorganizedRenameMappings.upsertRename(
+                    for: file, newName: mapping.suggestedName, isUserEdited: true
+                )
+            }
         }
         
         updateInternalPlan(updatedPlan)
@@ -808,6 +834,14 @@ package class PreviewStore: ObservableObject {
         return nil
     }
     
+    /// Returns `root` with the folder matching `folder.id` replaced.
+    private func replaceFolder(_ folder: FolderSuggestion, in root: FolderSuggestion) -> FolderSuggestion {
+        if root.id == folder.id { return folder }
+        var updated = root
+        updated.subfolders = root.subfolders.map { replaceFolder(folder, in: $0) }
+        return updated
+    }
+
     private func removeFolderFromSuggestion(_ folder: FolderSuggestion, targetID: UUID) -> FolderSuggestion {
         var updatedFolder = folder
         updatedFolder.subfolders.removeAll { $0.id == targetID }
@@ -874,6 +908,7 @@ package class PreviewStore: ObservableObject {
             suggestions: updatedPlan.suggestions,
             unorganizedFiles: updatedPlan.unorganizedFiles,
             unorganizedDetails: updatedPlan.unorganizedDetails,
+            unorganizedRenameMappings: updatedPlan.unorganizedRenameMappings,
             notes: updatedPlan.notes,
             timestamp: Date(),
             version: updatedPlan.version + 1,
@@ -904,10 +939,17 @@ package class PreviewStore: ObservableObject {
             updatedPlan.suggestions[i] = removeFileFromFolder(file, from: updatedPlan.suggestions[i])
         }
         updatedPlan.unorganizedFiles.removeAll { $0.id == fileID }
+        let carriedName = updatedPlan.unorganizedRenameMappings
+            .first { $0.originalFile.id == fileID && $0.hasRename }?.suggestedName
+        updatedPlan.unorganizedRenameMappings.removeAll { $0.originalFile.id == fileID }
         
         // Add to new location
         for i in 0..<updatedPlan.suggestions.count {
             updatedPlan.suggestions[i] = addFileToFolder(file, to: updatedPlan.suggestions[i], targetId: toFolderID)
+            if let carriedName, var folder = findFolderByID(toFolderID, in: updatedPlan.suggestions[i]) {
+                folder.updateRename(for: file, newName: carriedName, isUserEdited: true)
+                updatedPlan.suggestions[i] = replaceFolder(folder, in: updatedPlan.suggestions[i])
+            }
         }
         
         updateInternalPlan(updatedPlan)

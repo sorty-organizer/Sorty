@@ -84,6 +84,52 @@ public struct FileRenameMapping: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+extension Array where Element == FileRenameMapping {
+    /// Sets or clears the pending name for `file`. A nil, empty, or unchanged
+    /// name clears the rename; the extension is always preserved.
+    public mutating func upsertRename(
+        for file: FileItem,
+        newName: String?,
+        reason: String? = nil,
+        confidence: Double? = nil,
+        isUserEdited: Bool = false
+    ) {
+        var sanitizedName: String?
+        if let newName, !newName.isEmpty {
+            sanitizedName = FilenameSanitizer.sanitize(
+                newName,
+                preservingExtension: file.extension,
+                enforceExtension: true
+            ).sanitizedName
+        }
+
+        // Treat no-op rename as "no rename" to avoid forcing unchanged mappings.
+        if sanitizedName == file.displayName {
+            sanitizedName = nil
+        }
+
+        if let index = firstIndex(where: { $0.originalFile.id == file.id }) {
+            self[index].suggestedName = sanitizedName
+            self[index].renameReason = reason ?? self[index].renameReason
+            self[index].isSelected = sanitizedName != nil
+            self[index].isUserEdited = isUserEdited ? true : nil
+            if let confidence {
+                self[index].renameConfidence = Swift.min(Swift.max(confidence, 0.0), 1.0)
+            }
+        } else if sanitizedName != nil {
+            var mapping = FileRenameMapping(
+                originalFile: file,
+                suggestedName: sanitizedName,
+                renameReason: reason,
+                renameConfidence: confidence,
+                isSelected: true
+            )
+            mapping.isUserEdited = isUserEdited ? true : nil
+            append(mapping)
+        }
+    }
+}
+
 public enum RenameConfidenceBand: String, Codable, CaseIterable, Sendable {
     case high
     case medium
@@ -221,42 +267,13 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
         confidence: Double? = nil,
         isUserEdited: Bool = false
     ) {
-        var sanitizedName: String?
-        if let newName, !newName.isEmpty {
-            let result = FilenameSanitizer.sanitize(
-                newName,
-                preservingExtension: file.extension,
-                enforceExtension: true
-            )
-            sanitizedName = result.sanitizedName
-        } else {
-            sanitizedName = nil
-        }
-
-        // Treat no-op rename as "no rename" to avoid forcing unchanged mappings.
-        if sanitizedName == file.displayName {
-            sanitizedName = nil
-        }
-
-        if let index = fileRenameMappings.firstIndex(where: { $0.originalFile.id == file.id }) {
-            fileRenameMappings[index].suggestedName = sanitizedName
-            fileRenameMappings[index].renameReason = reason ?? fileRenameMappings[index].renameReason
-            fileRenameMappings[index].isSelected = sanitizedName != nil
-            fileRenameMappings[index].isUserEdited = isUserEdited ? true : nil
-            if let confidence {
-                fileRenameMappings[index].renameConfidence = min(max(confidence, 0.0), 1.0)
-            }
-        } else if sanitizedName != nil {
-            var mapping = FileRenameMapping(
-                originalFile: file,
-                suggestedName: sanitizedName,
-                renameReason: reason,
-                renameConfidence: confidence,
-                isSelected: true
-            )
-            mapping.isUserEdited = isUserEdited ? true : nil
-            fileRenameMappings.append(mapping)
-        }
+        fileRenameMappings.upsertRename(
+            for: file,
+            newName: newName,
+            reason: reason,
+            confidence: confidence,
+            isUserEdited: isUserEdited
+        )
     }
 
     public mutating func setRenameSelected(for fileID: UUID, isSelected: Bool) {
