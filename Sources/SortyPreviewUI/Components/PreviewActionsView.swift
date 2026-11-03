@@ -16,8 +16,6 @@ struct PreviewActionsView: View {
     let shouldDisableButtons: Bool
     /// True while a file name field is open; Return then saves the name, not Apply.
     var isRenamingFile = false
-    /// True while the instructions field has focus; Return then regenerates.
-    var isEditingInstructions = false
     let mode: OrganizationMode
     
     let onCancel: () -> Void
@@ -124,16 +122,10 @@ struct PreviewActionsView: View {
                         .font(.caption.bold())
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                    if isEditingInstructions {
-                        Text("↩")
-                            .font(.caption2)
-                            .opacity(0.75)
-                    } else if hasCustomInstructions {
-                        // White on the accent button so it reads as "uses your instructions".
+                    if hasCustomInstructions {
                         Circle()
                             .fill(Color.white.opacity(0.9))
                             .frame(width: 5, height: 5)
-                            .help("Uses your guiding instructions")
                     }
                 }
             }
@@ -186,15 +178,14 @@ struct PreviewActionsView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 12))
                 Text("Apply")
-                if !isRenamingFile && !isEditingInstructions {
-                    Text("↩")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary.opacity(0.8))
-                }
+                // SF Symbol sits on the text's vertical center; the "↩" glyph rides low.
+                Image(systemName: "return")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary.opacity(0.8))
             }
         }
         .buttonStyle(.sortyProminent)
-        .keyboardShortcut(isRenamingFile || isEditingInstructions ? nil : .defaultAction)
+        .keyboardShortcut(isRenamingFile ? nil : .defaultAction)
         .disabled(shouldDisableButtons)
         .help(mode == .renameOnly ? "Apply suggested file names in place" : "Apply file moves and create the planned folder structure")
         .accessibilityIdentifier("ApplyOrganizationButton")
@@ -378,8 +369,6 @@ struct PreviewInstructionsRow: View {
     @Binding var instructions: String
     @FocusState var isFocused: Bool
     let onInstructionsChanged: (String) -> Void
-    /// Return in the field regenerates with the typed instructions.
-    var onSubmit: () -> Void = {}
     
     var body: some View {
         HStack(spacing: 10) {
@@ -395,7 +384,6 @@ struct PreviewInstructionsRow: View {
             .textFieldStyle(.plain)
             .font(.callout)
             .focused($isFocused)
-            .onSubmit(onSubmit)
             .onChange(of: instructions) { oldValue, newValue in
                 if !newValue.isEmpty && newValue != oldValue {
                     onInstructionsChanged(newValue)

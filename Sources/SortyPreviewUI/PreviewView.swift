@@ -328,16 +328,7 @@ package struct PreviewView: View {
     private var bottomToolbar: some View {
         VStack(spacing: 0) {
             if !isOrganizing {
-                PreviewInstructionsRow(
-                    instructions: $organizer.customInstructions,
-                    isFocused: _instructionsFocused,
-                    onInstructionsChanged: handleInstructionsChanged,
-                    onSubmit: {
-                        let typed = organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !typed.isEmpty, !shouldDisableButtons, !isRedoingWithModel else { return }
-                        regeneratePreview()
-                    }
-                )
+                PreviewInstructionsRow(instructions: $organizer.customInstructions, isFocused: _instructionsFocused, onInstructionsChanged: handleInstructionsChanged)
                 Divider()
             }
             if isOrganizing {
@@ -359,7 +350,6 @@ package struct PreviewView: View {
                     isRedoingWithModel: isRedoingWithModel,
                     shouldDisableButtons: shouldDisableButtons,
                     isRenamingFile: previewStore.renamingFileID != nil,
-                    isEditingInstructions: instructionsFocused,
                     mode: mode,
                     onCancel: { recordCancelledOrganization(); cancelToStart() },
                     onReset: { HapticFeedbackManager.shared.tap(); editablePlan = plan; previewStore.updatePlan(plan); previewStore.resetEditsCaptured(); hasEdits = false },
