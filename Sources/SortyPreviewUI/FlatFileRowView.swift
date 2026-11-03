@@ -139,33 +139,12 @@ struct FlatFileRowView: View {
 
         Task {
             do {
-                let client: any AIClientProtocol
-                if let injected = injectedAIClient {
-                    client = injected
-                } else {
-                    client = try AIClientFactory.createClient(config: settingsViewModel.config)
-                }
-                let plan = try await client.analyze(
-                    files: [file],
-                    customInstructions: renameRegenerationPrompt(),
-                    personaPrompt: nil,
-                    temperature: 0.8
+                let replacementName = try await RenameRegenerator.regenerate(
+                    file: file,
+                    currentSuggestion: renameMapping?.suggestedName,
+                    config: settingsViewModel.config,
+                    client: injectedAIClient
                 )
-                let suggestedName = plan.suggestions
-                    .lazy
-                    .flatMap(\.allFileRenameMappings)
-                    .first { $0.originalFile.id == file.id || $0.originalFile.displayName == file.displayName }?
-                    .suggestedName
-                guard let suggestedName, !suggestedName.isEmpty else {
-                    throw AIClientError.invalidResponseFormat
-                }
-                let normalized = FilenameNormalizer.normalize(
-                    suggestedName,
-                    originalFilename: file.displayName,
-                    options: settingsViewModel.config.renameNamingOptions
-                ) ?? suggestedName
-                let replacementName = distinctRegeneratedName(normalized, previousSuggestion: previousSuggestion)
-
                 await MainActor.run {
                     store.updateRename(fileID: file.id, folderID: parentFolderID, newName: replacementName)
                     onPlanChanged()
@@ -176,7 +155,7 @@ struct FlatFileRowView: View {
                 }
             } catch {
                 await MainActor.run {
-                    let fallbackName = distinctRegeneratedName(
+                    let fallbackName = RenameRegenerator.distinctName(
                         previousSuggestion.isEmpty ? file.displayName : previousSuggestion,
                         previousSuggestion: previousSuggestion
                     )
@@ -191,51 +170,6 @@ struct FlatFileRowView: View {
         }
     }
 
-    private func renameRegenerationPrompt() -> String {
-        let currentSuggestion = renameMapping?.suggestedName ?? "None"
-        let metadata = file.contentMetadata
-        let title = metadata?.documentTitle ?? ""
-        let keywords = metadata?.detectedKeywords?.prefix(8).joined(separator: ", ") ?? ""
-        let contentPreview = String(
-            metadata?.allTextContent?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .prefix(900) ?? ""
-        )
-
-        return """
-        Rename only this one file. Keep it in the current folder.
-
-        Original filename: \(file.displayName)
-        Current suggested filename: \(currentSuggestion)
-        File extension to preserve: \(file.extension)
-        Document title: \(title)
-        Keywords: \(keywords)
-        Content preview:
-        \(contentPreview)
-
-        Requirements:
-        - Return Sorty's normal JSON organization response.
-        - Use a single folder named ".".
-        - Preserve the original file extension.
-        - Make the name specific, useful, and concise.
-        - Spaces are valid if they improve readability.
-        - Do not return the current suggested filename. Generate a meaningfully different name.
-        - Include suggested_name, rename_reason, and rename_confidence for this file.
-        """
-    }
-
-    private func distinctRegeneratedName(_ candidate: String, previousSuggestion: String) -> String {
-        guard candidate.caseInsensitiveCompare(previousSuggestion) == .orderedSame else {
-            return candidate
-        }
-
-        let nsName = candidate as NSString
-        let ext = nsName.pathExtension
-        let base = nsName.deletingPathExtension
-        let revised = "\(base) Revised"
-        return ext.isEmpty ? revised : "\(revised).\(ext)"
-    }
-    
     private func cancelRename() {
         isEditingName = false
     }

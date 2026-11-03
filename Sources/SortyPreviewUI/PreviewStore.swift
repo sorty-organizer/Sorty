@@ -711,11 +711,12 @@ package class PreviewStore: ObservableObject {
         }
     }
     
-    /// Sets the name the user typed for an unorganized file; apply renames it in place.
-    package func updateUnorganizedRename(fileID: UUID, newName: String?) {
+    /// Sets a new name for an unorganized file; apply renames it in place.
+    /// `isUserEdited` is false when the name came from the regenerate button.
+    package func updateUnorganizedRename(fileID: UUID, newName: String?, isUserEdited: Bool = true) {
         guard let file = plan.unorganizedFiles.first(where: { $0.id == fileID }) else { return }
         var updatedPlan = plan
-        updatedPlan.unorganizedRenameMappings.upsertRename(for: file, newName: newName, isUserEdited: true)
+        updatedPlan.unorganizedRenameMappings.upsertRename(for: file, newName: newName, isUserEdited: isUserEdited)
         updatedPlan.unorganizedRenameMappings.removeAll { !$0.hasRename }
         updateInternalPlan(updatedPlan)
     }
@@ -951,15 +952,17 @@ package class PreviewStore: ObservableObject {
             updatedPlan.suggestions[i] = removeFileFromFolder(file, from: updatedPlan.suggestions[i])
         }
         updatedPlan.unorganizedFiles.removeAll { $0.id == fileID }
-        let carriedName = updatedPlan.unorganizedRenameMappings
-            .first { $0.originalFile.id == fileID && $0.hasRename }?.suggestedName
+        let carried = updatedPlan.unorganizedRenameMappings
+            .first { $0.originalFile.id == fileID && $0.hasRename }
         updatedPlan.unorganizedRenameMappings.removeAll { $0.originalFile.id == fileID }
         
         // Add to new location
         for i in 0..<updatedPlan.suggestions.count {
             updatedPlan.suggestions[i] = addFileToFolder(file, to: updatedPlan.suggestions[i], targetId: toFolderID)
-            if let carriedName, var folder = findFolderByID(toFolderID, in: updatedPlan.suggestions[i]) {
-                folder.updateRename(for: file, newName: carriedName, isUserEdited: true)
+            if let carried, var folder = findFolderByID(toFolderID, in: updatedPlan.suggestions[i]) {
+                folder.updateRename(
+                    for: file, newName: carried.suggestedName, isUserEdited: carried.isUserEdited == true
+                )
                 updatedPlan.suggestions[i] = replaceFolder(folder, in: updatedPlan.suggestions[i])
             }
         }

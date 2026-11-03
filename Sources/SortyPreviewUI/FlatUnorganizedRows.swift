@@ -88,7 +88,9 @@ struct FlatUnorganizedFileRowView: View {
     let moveDestinations: [PreviewMoveDestination]
     let onPlanChanged: () -> Void
     @State private var isDragging = false
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @State private var isEditingName = false
+    @State private var isRegeneratingName = false
     @State private var editedName = ""
     @FocusState private var isNameFieldFocused: Bool
 
@@ -148,28 +150,34 @@ struct FlatUnorganizedFileRowView: View {
 
                     RenameNameChangeView(
                         suggestedName: renameMapping.suggestedName ?? "",
-                        helpText: "Renamed by you. Stays in its current folder.",
+                        helpText: "Renamed in place; the file stays in its current folder.",
+                        isRegenerating: isRegeneratingName,
                         isHighlighted: isHighlighted
                     )
                     .onTapGesture(count: 2, perform: startEditing)
 
                     Spacer(minLength: 12)
 
-                    Image(systemName: "person.crop.circle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .help("Renamed by you")
-                        .accessibilityLabel("Renamed by you")
-
-                    Button(action: revertName) {
-                        Image(systemName: "xmark.circle")
-                            .font(.system(size: 12, weight: .semibold))
-                            .frame(width: 16, height: 16)
+                    if renameMapping.isUserEdited == true {
+                        Image(systemName: "person.crop.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .help("Renamed by you")
+                            .accessibilityLabel("Renamed by you")
+                    } else {
+                        Image(systemName: "wand.and.stars")
+                            .font(.caption)
+                            .foregroundColor(SortyDesignSystem.Colors.resolvedAccent)
+                            .help("Name suggested by Sorty")
+                            .accessibilityLabel("Name suggested by Sorty")
                     }
-                    .buttonStyle(.plain)
-                    .help("Keep original name")
-                    .accessibilityLabel("Keep original name")
-                    .accessibilityIdentifier("UnorganizedRevertNameButton")
+
+                    RenameActionGlassCluster(
+                        isRegenerating: isRegeneratingName,
+                        onEdit: startEditing,
+                        onRegenerate: regenerateName,
+                        onReject: revertName
+                    )
                 }
                 .padding(.leading, 28)
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -232,6 +240,42 @@ struct FlatUnorganizedFileRowView: View {
         isEditingName = false
     }
 
+    private func regenerateName() {
+        guard !isRegeneratingName else { return }
+        let previousSuggestion = renameMapping?.suggestedName ?? ""
+        withAnimation(.sortyFade) { isRegeneratingName = true }
+        HapticFeedbackManager.shared.selection()
+
+        Task {
+            let newName: String
+            let succeeded: Bool
+            do {
+                newName = try await RenameRegenerator.regenerate(
+                    file: file,
+                    currentSuggestion: renameMapping?.suggestedName,
+                    config: settingsViewModel.config
+                )
+                succeeded = true
+            } catch {
+                newName = RenameRegenerator.distinctName(
+                    previousSuggestion.isEmpty ? file.displayName : previousSuggestion,
+                    previousSuggestion: previousSuggestion
+                )
+                succeeded = false
+            }
+            await MainActor.run {
+                store.updateUnorganizedRename(fileID: file.id, newName: newName, isUserEdited: false)
+                onPlanChanged()
+                withAnimation(.sortyFade) { isRegeneratingName = false }
+                if succeeded {
+                    HapticFeedbackManager.shared.success()
+                } else {
+                    HapticFeedbackManager.shared.error()
+                }
+            }
+        }
+    }
+
     private func revertName() {
         HapticFeedbackManager.shared.tap()
         store.updateUnorganizedRename(fileID: file.id, newName: nil)
@@ -275,6 +319,10 @@ struct FlatUnorganizedFileRowView: View {
 
             Button(action: startEditing) {
                 Label("Rename…", systemImage: "pencil")
+            }
+
+            Button(action: regenerateName) {
+                Label("Regenerate Name", systemImage: "arrow.triangle.2.circlepath")
             }
 
             if hasRename {

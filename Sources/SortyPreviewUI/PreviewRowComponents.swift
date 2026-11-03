@@ -416,7 +416,7 @@ struct FlatFileRowSurface: View {
     }
 }
 
-private struct RenameActionGlassCluster: View {
+struct RenameActionGlassCluster: View {
     @SortyHotReload private var hotReload
     let isRegenerating: Bool
     let onEdit: () -> Void

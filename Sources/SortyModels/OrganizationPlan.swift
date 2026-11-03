@@ -37,8 +37,8 @@ public struct OrganizationPlan: Codable, Identifiable, Hashable, Sendable {
     public var suggestions: [FolderSuggestion]
     public var unorganizedFiles: [FileItem] // Keep for backward compatibility/UI logic
     public var unorganizedDetails: [UnorganizedFile]
-    /// Names the user typed for unorganized files. Apply renames these files
-    /// where they are without moving them.
+    /// New names for unorganized files, typed or regenerated at the user's
+    /// request. Apply renames these files where they are without moving them.
     public var unorganizedRenameMappings: [FileRenameMapping]
     public var notes: String
     public var timestamp: Date
@@ -204,7 +204,6 @@ public enum OrganizationModePlanEnforcer {
     private static func removingRenameSuggestions(from plan: OrganizationPlan) -> OrganizationPlan {
         var updated = plan
         updated.suggestions = updated.suggestions.map(removingRenameSuggestions)
-        updated.unorganizedRenameMappings.removeAll { $0.isUserEdited != true }
         return updated
     }
 
