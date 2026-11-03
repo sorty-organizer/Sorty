@@ -275,8 +275,8 @@ package struct PreviewView: View {
         guard !hasShownLearnedEditNotice else { return }
         hasShownLearnedEditNotice = true
         NotificationManager.shared.showHUDInfo(
-            title: "Sorty will remember this",
-            message: "Moves, name edits, and files sent to Unorganized are saved to your learning profile so future plans fit how you organize.",
+            title: "Sorty learns from your edits",
+            message: "Moves, renames, and files sent to Unorganized help future plans match how you organize. You can review or clear them in Learnings.",
             icon: "pencil.and.outline",
             iconColor: SortyDesignSystem.Colors.resolvedAccent,
             actions: [
