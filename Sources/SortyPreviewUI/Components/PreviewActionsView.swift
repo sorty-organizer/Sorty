@@ -14,6 +14,8 @@ struct PreviewActionsView: View {
     let hasCustomInstructions: Bool
     let isRedoingWithModel: Bool
     let shouldDisableButtons: Bool
+    /// True while a file name field is open; Return then saves the name, not Apply.
+    var isRenamingFile = false
     let editsCapturedCount: Int
     let mode: OrganizationMode
     
@@ -229,7 +231,7 @@ struct PreviewActionsView: View {
             }
         }
         .buttonStyle(.sortyProminent)
-        .keyboardShortcut(.defaultAction)
+        .keyboardShortcut(isRenamingFile ? nil : .defaultAction)
         .disabled(shouldDisableButtons)
         .help(mode == .renameOnly ? "Apply suggested file names in place" : "Apply file moves and create the planned folder structure")
         .accessibilityIdentifier("ApplyOrganizationButton")

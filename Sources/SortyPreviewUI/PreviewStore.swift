@@ -83,6 +83,18 @@ package class PreviewStore: ObservableObject {
     
     /// Count of user edits captured for learning this session (moves, rejections, renames)
     @Published private(set) var editsCapturedCount: Int = 0
+    /// File whose name field is open. Return belongs to that field while set,
+    /// so the Apply shortcut steps aside.
+    @Published package var renamingFileID: UUID?
+
+    /// Rows call this when their rename field opens or closes.
+    package func setRenaming(_ isRenaming: Bool, fileID: UUID) {
+        if isRenaming {
+            renamingFileID = fileID
+        } else if renamingFileID == fileID {
+            renamingFileID = nil
+        }
+    }
     
     /// Triggers a brief pulse animation when a new edit is captured
     @Published private(set) var editCapturedPulse: Bool = false

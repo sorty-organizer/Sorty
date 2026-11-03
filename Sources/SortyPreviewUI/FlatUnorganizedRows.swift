@@ -101,8 +101,13 @@ struct FlatUnorganizedFileRowView: View {
         }
         .focusable()
         .onKeyPress(.return) {
+            // Return saves an open rename field instead of opening the file.
+            guard !isEditingName else { return .ignored }
             NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
             return .handled
+        }
+        .onChange(of: isEditingName) { _, editing in
+            store.setRenaming(editing, fileID: file.id)
         }
         .accessibilityAction(named: "Open \(file.displayName)") {
             NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
@@ -125,7 +130,10 @@ struct FlatUnorganizedFileRowView: View {
             dragDropManager.startDrag(file)
             return NSItemProvider(object: file.id.uuidString as NSString)
         }
-        .onDisappear { isEditingName = false }
+        .onDisappear {
+            isEditingName = false
+            store.setRenaming(false, fileID: file.id)
+        }
     }
 
     private var rowContent: some View {

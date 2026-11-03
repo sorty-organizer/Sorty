@@ -75,6 +75,9 @@ struct FlatFileRowView: View {
             onBeginDrag: beginDrag,
             onDisappear: resetInteractionState
         )
+        .onChange(of: isEditingName) { _, editing in
+            store.setRenaming(editing, fileID: file.id)
+        }
     }
     
     private var editableName: String {
@@ -115,6 +118,7 @@ struct FlatFileRowView: View {
     private func resetInteractionState() {
         isDragging = false
         isEditingName = false
+        store.setRenaming(false, fileID: file.id)
     }
     
     private func saveRename() {

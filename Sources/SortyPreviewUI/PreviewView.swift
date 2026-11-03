@@ -325,6 +325,7 @@ package struct PreviewView: View {
                     hasCustomInstructions: !organizer.customInstructions.isEmpty,
                     isRedoingWithModel: isRedoingWithModel,
                     shouldDisableButtons: shouldDisableButtons,
+                    isRenamingFile: previewStore.renamingFileID != nil,
                     editsCapturedCount: previewStore.editsCapturedCount,
                     mode: mode,
                     onCancel: { recordCancelledOrganization(); cancelToStart() },
