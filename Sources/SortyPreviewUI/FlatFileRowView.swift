@@ -68,6 +68,7 @@ struct FlatFileRowView: View {
             hasRename: renameMapping?.hasRename == true,
             onOpen: openFile,
             onReveal: revealInFinder,
+            onRename: { startEditing(initialValue: editableName) },
             onRegenerate: regenerateSuggestedName,
             onRejectRename: rejectRename,
             onRevertOrganization: revertOrganization,
@@ -76,7 +77,12 @@ struct FlatFileRowView: View {
         )
     }
     
+    private var editableName: String {
+        FlatFileRowContent.editableName(for: file, renameMapping: renameMapping)
+    }
+
     private func startEditing(initialValue: String) {
+        HapticFeedbackManager.shared.selection()
         editedName = initialValue
         isEditingName = true
         isFocused = true

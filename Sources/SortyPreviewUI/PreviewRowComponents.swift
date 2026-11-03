@@ -188,6 +188,18 @@ struct FlatFileRowContent: View {
     let onRegenerate: () -> Void
     let onReject: () -> Void
 
+    /// Name the rename field starts with: the pending suggestion, else the current name.
+    static func editableName(for file: FileItem, renameMapping: FileRenameMapping?) -> String {
+        if let renameMapping, renameMapping.hasRename, let suggested = renameMapping.suggestedName {
+            return suggested
+        }
+        return file.displayName
+    }
+
+    private var editableName: String {
+        Self.editableName(for: file, renameMapping: renameMapping)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
@@ -212,6 +224,8 @@ struct FlatFileRowContent: View {
                             renameMapping?.hasRename == true,
                             color: SortyDesignSystem.Colors.error.opacity(0.72)
                         )
+                        // Double-clicking the name renames; the rest of the row still opens the file.
+                        .onTapGesture(count: 2) { onStartEditing(editableName) }
                 }
 
                 Spacer(minLength: 12)
@@ -267,6 +281,7 @@ struct FlatFileRowContent: View {
                         isRegenerating: isRegeneratingName,
                         isHighlighted: isHighlighted
                     )
+                    .onTapGesture(count: 2) { onStartEditing(editableName) }
 
                     Spacer(minLength: 12)
 
@@ -294,6 +309,7 @@ private struct FlatFileRowContextMenu: View {
     let hasRename: Bool
     let onOpen: () -> Void
     let onReveal: () -> Void
+    let onRename: () -> Void
     let onRegenerate: () -> Void
     let onRejectRename: () -> Void
     let onRevertOrganization: () -> Void
@@ -306,6 +322,9 @@ private struct FlatFileRowContextMenu: View {
             Label("Reveal in Finder", systemImage: "folder")
         }
         Divider()
+        Button(action: onRename) {
+            Label("Rename…", systemImage: "pencil")
+        }
         if hasRename {
             Button(action: onRegenerate) {
                 Label("Regenerate Name", systemImage: "arrow.triangle.2.circlepath")
@@ -330,6 +349,7 @@ struct FlatFileRowSurface: View {
     let hasRename: Bool
     let onOpen: () -> Void
     let onReveal: () -> Void
+    let onRename: () -> Void
     let onRegenerate: () -> Void
     let onRejectRename: () -> Void
     let onRevertOrganization: () -> Void
@@ -368,6 +388,7 @@ struct FlatFileRowSurface: View {
                 hasRename: hasRename,
                 onOpen: onOpen,
                 onReveal: onReveal,
+                onRename: onRename,
                 onRegenerate: onRegenerate,
                 onRejectRename: onRejectRename,
                 onRevertOrganization: onRevertOrganization
@@ -376,6 +397,7 @@ struct FlatFileRowSurface: View {
         .onTapGesture(count: 2, perform: onOpen)
         .accessibilityAction(named: "Open file", onOpen)
         .accessibilityAction(named: "Reveal file in Finder", onReveal)
+        .accessibilityAction(named: "Rename file", onRename)
         .opacity(isDragging ? 0.5 : 1.0)
         .onDrag(onBeginDrag)
         .onDrop(of: [.text], isTargeted: nil) { _ in
