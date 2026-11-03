@@ -30,3 +30,30 @@ updates, and blocking waits.
 This review compared the full production stack with current source and Git
 history. No build, tests, installation, or runtime reproduction was performed;
 the only repository change is this note. No Sentry issue status was changed.
+
+## Analysis cancellation-dialog hang
+
+[SORTY-MACOS-4S, event 71be374889264923931d201f174cd44c](https://sorty-z1.sentry.io/issues/7826345333/events/71be374889264923931d201f174cd44c/)
+reports another main-thread hang of at least two seconds at 07:11:47 UTC on
+3 November, on the same production release `com.sorty.app@1.3.0+20261004162224`.
+Retrieved the complete event through the authenticated Sentry API on 4 November.
+
+The exception stack runs through the AppKit run loop, SwiftUI graph transaction
+flushing, and `AnalysisView.body` into `analysisActionButtons` at line 704.
+The final frames are three `View.confirmationDialog` frames and
+`_swift_getKeyPath`. This captures dialog construction during a view update;
+it does not show the cancel action executing, file operations, or an explicit
+blocking wait. The stack alone does not establish why this work took two seconds.
+
+Current `analysisActionButtons` still attaches a native confirmation dialog, but
+contains no obvious expensive synchronous calculation. The old status-message
+timer described above has been removed; unlike 4R, this stack does not identify
+that timer as the update trigger. Do not assume the two issues have the same
+cause or claim that removing the timer fixes 4S.
+
+No runtime patch is supported by this event alone. Keep the issue open pending
+evidence from a distributed build containing current changes. If it recurs,
+compare the new full stack and capture a Time Profiler or system trace during
+analysis to distinguish repeated graph updates from Swift runtime work.
+This review did not build, install, or reproduce the hang, and did not change
+the Sentry issue status.
