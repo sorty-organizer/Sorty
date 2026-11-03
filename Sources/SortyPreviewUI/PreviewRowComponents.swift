@@ -6,14 +6,15 @@ struct RenameNameChangeView: View {
     let suggestedName: String
     let helpText: String
     var isRegenerating = false
-    /// Only the highlighted row plays the reveal sweep. Every other row
-    /// renders its final state directly: no GeometryReader sweep, no blur
-    /// bounce, no delayed dispatch hops.
+    /// Only the highlighted row, or a row whose name was just regenerated,
+    /// plays the reveal. Every other row renders its final state directly.
     var isHighlighted = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var suggestedNameReveal = true
     @State private var showRevealSweep = false
+    /// Set while a regeneration is in flight so the incoming name animates in.
+    @State private var awaitingRegeneratedName = false
 
     var body: some View {
         Text(suggestedName)
@@ -22,43 +23,67 @@ struct RenameNameChangeView: View {
             .lineLimit(1)
             .truncationMode(.middle)
             .opacity(isRegenerating ? 0 : (suggestedNameReveal ? 1 : 0))
-            .blur(radius: reduceMotion ? 0 : (isRegenerating ? 6 : (suggestedNameReveal ? 0 : 4)))
-            .offset(x: reduceMotion ? 0 : (suggestedNameReveal ? 0 : -10))
+            .blur(radius: reduceMotion ? 0 : (suggestedNameReveal ? 0 : 5))
+            .offset(x: reduceMotion ? 0 : (suggestedNameReveal ? 0 : -8))
+            // The hidden name keeps its width so the skeleton matches it.
+            .frame(minWidth: isRegenerating ? 120 : nil, alignment: .leading)
             .overlay(alignment: .leading) {
-                if showRevealSweep && suggestedNameReveal && !isRegenerating && !reduceMotion && isHighlighted {
+                if isRegenerating {
+                    RenameNameSkeleton()
+                        .transition(.opacity)
+                }
+            }
+            .overlay(alignment: .leading) {
+                if showRevealSweep && suggestedNameReveal && !isRegenerating && !reduceMotion {
                     RenameNameRevealSweep()
                         .allowsHitTesting(false)
                 }
             }
-            .animation(isHighlighted ? .sortyFade : nil, value: isRegenerating)
-            .animation(isHighlighted ? .sortySmooth : nil, value: suggestedNameReveal)
-            .help(helpText)
+            .animation(reduceMotion ? nil : .sortyFade, value: isRegenerating)
+            .help(isRegenerating ? "Generating a new name..." : helpText)
+            .accessibilityLabel(isRegenerating ? "Generating a new name" : suggestedName)
+            .onChange(of: isRegenerating) { _, regenerating in
+                if regenerating { awaitingRegeneratedName = true }
+            }
             .onChange(of: suggestedName) { _, _ in
-                guard !reduceMotion, isHighlighted else {
+                let shouldAnimate = !reduceMotion && (isHighlighted || awaitingRegeneratedName)
+                awaitingRegeneratedName = false
+                guard shouldAnimate else {
                     suggestedNameReveal = true
                     return
                 }
-                suggestedNameReveal = false
-                showRevealSweep = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
-                    withAnimation(.sortySmooth) {
-                        suggestedNameReveal = true
-                        showRevealSweep = true
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                        showRevealSweep = false
-                    }
-                }
+                playReveal()
             }
-            .onChange(of: isRegenerating) { _, newValue in
-                guard !reduceMotion, isHighlighted else { return }
-                if newValue {
-                    withAnimation(.sortyFade) {
-                        suggestedNameReveal = false
-                        showRevealSweep = false
-                    }
-                }
+    }
+
+    /// Blur-in from the left, then one highlight sweep across the new name.
+    private func playReveal() {
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) {
+            suggestedNameReveal = false
+            showRevealSweep = false
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(40))
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
+                suggestedNameReveal = true
+                showRevealSweep = true
             }
+            try? await Task.sleep(for: .milliseconds(700))
+            showRevealSweep = false
+        }
+    }
+}
+
+/// Placeholder bar shown where a regenerating name will appear.
+private struct RenameNameSkeleton: View {
+    var body: some View {
+        Capsule()
+            .fill(SortyDesignSystem.Colors.success.opacity(0.16))
+            .frame(height: 11)
+            .shimmer(isLoading: true)
+            .accessibilityHidden(true)
     }
 }
 
