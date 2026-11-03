@@ -22,7 +22,6 @@ struct AnalysisView: View {
     @AppStorage("analysis.liveInsightsEnabled") private var liveInsightsEnabled = true
     @AppStorage("analysis.hideTakingLongerHUD") private var hideTakingLongerHUD = false
     @State private var hasAppeared = false
-    @State private var showCancelConfirmation = false
     @State private var showFasterModelPicker = false
     @State private var didShowTakingLongerHUD = false
     @State private var pendingModelSwitch: PendingModelSwitch?
@@ -128,7 +127,14 @@ struct AnalysisView: View {
                                 ))
                     }
 
-                    analysisActionButtons
+                    AnalysisActionButtons(
+                        hasAppeared: hasAppeared,
+                        showModelPicker: $showFasterModelPicker,
+                        onCancel: {
+                            recordCancelledAnalysis()
+                            returnToStart()
+                        }
+                    )
                 }
                 .frame(maxHeight: .infinity)
                 .animation(.sortySmooth, value: hasRenameStreamEvents)
@@ -442,56 +448,63 @@ struct AnalysisView: View {
 
     // MARK: - Analysis Action Buttons
 
-    private var analysisActionButtons: some View {
-        HStack(spacing: 12) {
-            Button {
-                HapticFeedbackManager.shared.tap()
-                showCancelConfirmation = true
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .semibold))
-                    Text("Cancel")
-                        .font(.caption.bold())
-                }
-            }
-            .buttonStyle(.sortyBordered(size: .small))
-            .keyboardShortcut(.escape, modifiers: [])
-            .accessibilityIdentifier("AnalysisCancelButton")
+    /// Owns dialog presentation independently of the organizer's streaming updates.
+    private struct AnalysisActionButtons: View {
+        let hasAppeared: Bool
+        @Binding var showModelPicker: Bool
+        let onCancel: () -> Void
+        @State private var showCancelConfirmation = false
 
-            Button {
-                HapticFeedbackManager.shared.tap()
-                showFasterModelPicker = true
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "cpu")
-                        .font(.system(size: 10, weight: .semibold))
-                    Text("Model")
-                        .font(.caption.bold())
+        var body: some View {
+            HStack(spacing: 12) {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    showCancelConfirmation = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Cancel")
+                            .font(.caption.bold())
+                    }
                 }
+                .buttonStyle(.sortyBordered(size: .small))
+                .keyboardShortcut(.escape, modifiers: [])
+                .accessibilityIdentifier("AnalysisCancelButton")
+
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    showModelPicker = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "cpu")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("Model")
+                            .font(.caption.bold())
+                    }
+                }
+                .buttonStyle(.sortyBordered(size: .small))
+                .accessibilityIdentifier("AnalysisModelButton")
+                .modelSelectorTriggerBounds()
             }
-            .buttonStyle(.sortyBordered(size: .small))
-            .accessibilityIdentifier("AnalysisModelButton")
-            .modelSelectorTriggerBounds()
-        }
-        .opacity(hasAppeared ? 1 : 0)
-        .animation(
-            .sortySpringStandard.delay(0.3), value: hasAppeared
-        )
-        .confirmationDialog(
-            "Cancel Organization?",
-            isPresented: $showCancelConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Cancel Generation", role: .destructive) {
-                recordCancelledAnalysis()
-                returnToStart()
-            }
-            Button("Continue", role: .cancel) {}
-        } message: {
-            Text(
-                "This will stop Sorty's analysis and return to the start screen. Your progress will not be saved."
+            .opacity(hasAppeared ? 1 : 0)
+            .animation(
+                .sortySpringStandard.delay(0.3), value: hasAppeared
             )
+            .confirmationDialog(
+                "Cancel Organization?",
+                isPresented: $showCancelConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Cancel Generation", role: .destructive) {
+                    onCancel()
+                }
+                Button("Continue", role: .cancel) {}
+            } message: {
+                Text(
+                    "This will stop Sorty's analysis and return to the start screen. Your progress will not be saved."
+                )
+            }
         }
     }
 

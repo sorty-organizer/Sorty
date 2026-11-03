@@ -57,3 +57,18 @@ compare the new full stack and capture a Time Profiler or system trace during
 analysis to distinguish repeated graph updates from Swift runtime work.
 This review did not build, install, or reproduce the hang, and did not change
 the Sentry issue status.
+
+### Targeted mitigation, 4 November
+
+Moved the action controls and cancellation presentation state into a dedicated
+`AnalysisActionButtons` view. The dialog now has its own SwiftUI body boundary
+instead of being constructed inline by the streaming analysis body's computed
+property. The child does not observe the organizer; it receives appearance
+state, a model-picker binding, and a cancellation callback. The native dialog,
+keyboard shortcut, button styles, and cancellation actions are preserved.
+
+This reduces the parent body's rendering scope at the sampled location. It does
+not prove that Swift runtime key-path work caused the hang or that SwiftUI skips
+every child update. No local build or runtime verification was run for this
+small refactor, per repository instructions. Production resolution still needs
+evidence from a distributed build containing this change.
