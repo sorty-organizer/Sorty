@@ -190,6 +190,47 @@ struct OrganizationCompleteView: View {
         )
     }
     
+    private var historyLink: some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            appState.openRelatedView(.history)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "clock.arrow.circlepath")
+
+                Text("View History")
+
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 10)
+                    .opacity(isHoveringHistoryLink ? 1 : 0)
+                    .offset(
+                        x: reduceMotion || isHoveringHistoryLink ? 0 : -3,
+                        y: reduceMotion || isHoveringHistoryLink ? 0 : 3
+                    )
+                    .scaleEffect(reduceMotion || isHoveringHistoryLink ? 1 : 0.75)
+                    .accessibilityHidden(true)
+            }
+            .font(.subheadline)
+            .foregroundStyle(
+                isHoveringHistoryLink
+                    ? SortyDesignSystem.Colors.accent
+                    : SortyDesignSystem.Colors.textSecondary
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(reduceMotion ? nil : .sortySnappy, value: isHoveringHistoryLink)
+        .onHover { hovering in
+            isHoveringHistoryLink = hovering
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
+        }
+        .help("Review this run and previous organization sessions")
+        .accessibilityHint("Opens organization history")
+    }
+
     var body: some View {
         GeometryReader { proxy in
             let usesCompactVerticalLayout = proxy.size.height < 720
@@ -200,10 +241,24 @@ struct OrganizationCompleteView: View {
 
                     completionSummary(usesCompactVerticalLayout: usesCompactVerticalLayout)
 
-                    completionFeedbackCard
-                        .frame(maxWidth: 560)
-                        .opacity(summaryAppeared ? 1 : 0)
-                        .offset(y: summaryAppeared ? 0 : 20)
+                    completionActions(usesCompactVerticalLayout: usesCompactVerticalLayout)
+
+                    // History link and the thumbs share one quiet footer row; the
+                    // feedback form only takes card space once a thumb is picked.
+                    VStack(spacing: 12) {
+                        HStack(spacing: 14) {
+                            historyLink
+                            Divider().frame(height: 12)
+                            completionFeedbackThumbs
+                        }
+                        completionFeedbackDetails
+                            .frame(maxWidth: 560)
+                    }
+                    .padding(.top, -4)
+                    .animation(reduceMotion ? nil : .sortySmooth, value: feedbackDraft.outcome)
+                    .animation(reduceMotion ? nil : .sortySmooth, value: feedbackSubmitted)
+                    .opacity(historyLinkAppeared ? 1 : 0)
+                    .offset(y: historyLinkAppeared ? 0 : 10)
 
                     if let observer = organizer.learningsObserver {
                         InlineLearningMomentCard(observer: observer)
@@ -215,8 +270,7 @@ struct OrganizationCompleteView: View {
                             icon: "externaldrive.fill",
                             title: "Route large runs to preferred destinations",
                             description: "Add storage locations to send future results directly into archive or project folders.",
-                            actionTitle: "Set Up Locations",
-                            usesCompactVerticalLayout: usesCompactVerticalLayout,
+                            actionTitle: "Set Up",
                             onDismiss: {
                                 HapticFeedbackManager.shared.tap()
                                 withAnimation(.sortyFade) {
@@ -230,60 +284,10 @@ struct OrganizationCompleteView: View {
                             }
                         }
                         .frame(maxWidth: 560)
-                        .opacity(summaryAppeared ? 1 : 0)
-                        .offset(y: summaryAppeared ? 0 : 20)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .opacity(historyLinkAppeared ? 1 : 0)
+                        .transition(.opacity)
                     }
-                    
-                    completionActions(usesCompactVerticalLayout: usesCompactVerticalLayout)
 
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        appState.openRelatedView(.history)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "clock.arrow.circlepath")
-
-                            Text("View History")
-
-                            Image(systemName: "arrow.up.right")
-                                .font(.system(size: 10, weight: .semibold))
-                                .frame(width: 10)
-                                .opacity(isHoveringHistoryLink ? 1 : 0)
-                                .offset(
-                                    x: reduceMotion || isHoveringHistoryLink ? 0 : -3,
-                                    y: reduceMotion || isHoveringHistoryLink ? 0 : 3
-                                )
-                                .scaleEffect(
-                                    reduceMotion || isHoveringHistoryLink ? 1 : 0.75
-                                )
-                                .accessibilityHidden(true)
-                        }
-                        .font(.subheadline)
-                        .foregroundStyle(
-                            isHoveringHistoryLink
-                                ? SortyDesignSystem.Colors.accent
-                                : SortyDesignSystem.Colors.textSecondary
-                        )
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .animation(
-                        reduceMotion ? nil : .sortySnappy,
-                        value: isHoveringHistoryLink
-                    )
-                    .onHover { hovering in
-                        isHoveringHistoryLink = hovering
-                        if hovering {
-                            HapticFeedbackManager.shared.selection()
-                        }
-                    }
-                    .help("Review this run and previous organization sessions")
-                    .accessibilityHint("Opens organization history")
-                    .padding(.top, -4)
-                    .opacity(historyLinkAppeared ? 1 : 0)
-                    .offset(y: historyLinkAppeared ? 0 : 10)
-                    
                     if let stats = stats, settingsViewModel.config.showStatsForNerds, undoState == .idle {
                         OrganizationResultView(stats: stats)
                             .padding(.horizontal, 12)

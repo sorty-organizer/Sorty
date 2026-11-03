@@ -79,118 +79,98 @@ extension OrganizationCompleteView {
 
     private var canStoreFeedback: Bool { learningsManager.consentManager.canCollectData }
 
-    // "Was this helpful?" card with optional reason and Undo/History actions on 👎.
+    // "Was this helpful?" thumbs in the footer. 👍 records right away; 👎 opens
+    // a short "what went wrong" form below. After sending, the row says thanks.
     @ViewBuilder
-    var completionFeedbackCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    var completionFeedbackThumbs: some View {
+        if feedbackSubmitted {
+            Label("Thanks for the feedback", systemImage: "checkmark.circle.fill")
+                .font(.subheadline)
+                .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
+                .accessibilityIdentifier("CompleteFeedbackConfirmation")
+        } else {
             HStack(spacing: 8) {
                 Text("Was this helpful?")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
+                    .font(.subheadline)
+                    .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
                 Button {
-                    HapticFeedbackManager.shared.success()
-                    feedbackDraft.outcome = .useful
+                    feedbackDraft = SessionFeedbackDraft(outcome: .useful)
+                    submitCompletionFeedback()
                 } label: {
-                    Image(systemName: feedbackDraft.outcome == .useful ? "hand.thumbsup.fill" : "hand.thumbsup")
+                    Image(systemName: "hand.thumbsup")
                         .font(.body)
-                        .foregroundStyle(feedbackDraft.outcome == .useful ? SortyDesignSystem.Colors.success : .secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .help("Helpful")
                 .accessibilityIdentifier("CompleteFeedbackUsefulButton")
                 .accessibilityLabel("Mark as helpful")
-                .disabled(feedbackSubmitted)
                 Button {
                     HapticFeedbackManager.shared.tap()
-                    feedbackDraft.outcome = .notUseful
+                    feedbackDraft.outcome = feedbackDraft.outcome == .notUseful ? nil : .notUseful
                 } label: {
                     Image(systemName: feedbackDraft.outcome == .notUseful ? "hand.thumbsdown.fill" : "hand.thumbsdown")
                         .font(.body)
                         .foregroundStyle(feedbackDraft.outcome == .notUseful ? SortyDesignSystem.Colors.warning : .secondary)
                 }
                 .buttonStyle(.plain)
+                .help("Not helpful")
                 .accessibilityIdentifier("CompleteFeedbackNotUsefulButton")
                 .accessibilityLabel("Mark as not helpful")
-                .disabled(feedbackSubmitted)
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Rate this organization")
+        }
+    }
 
-            if feedbackSubmitted {
-                Label("Thanks — feedback recorded.", systemImage: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("CompleteFeedbackConfirmation")
-            } else if feedbackDraft.outcome != nil {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 6)], spacing: 6) {
+    // Shown after 👎: pick a reason or type one, then send.
+    @ViewBuilder
+    var completionFeedbackDetails: some View {
+        if !feedbackSubmitted && feedbackDraft.outcome == .notUseful {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("What went wrong?")
+                    .font(.subheadline.weight(.semibold))
+
+                HStack(spacing: 6) {
                     ForEach(LearningsManager.sessionFeedbackReasonPresets, id: \.self) { chip in
                         Button {
                             feedbackDraft.selectedChip = (feedbackDraft.selectedChip == chip) ? nil : chip
                         } label: {
                             Text(chip)
+                                .lineLimit(1)
                         }
                         .buttonStyle(.sortyChip(isSelected: feedbackDraft.selectedChip == chip))
                         .accessibilityIdentifier("CompleteFeedbackChip-\(chip)")
                     }
                 }
-                TextField("Tell us what went wrong (optional)", text: $feedbackDraft.freeText)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.callout)
-                    .accessibilityIdentifier("CompleteFeedbackReasonTextField")
+
+                HStack(spacing: 8) {
+                    TextField("Or describe it (optional)", text: $feedbackDraft.freeText)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.callout)
+                        .onSubmit(submitCompletionFeedback)
+                        .accessibilityIdentifier("CompleteFeedbackReasonTextField")
+
+                    Button("Send", action: submitCompletionFeedback)
+                        .buttonStyle(.sortyBordered(intent: .primary, size: .small))
+                        .disabled(!feedbackDraft.canSubmit)
+                        .accessibilityIdentifier("CompleteFeedbackSubmitButton")
+                }
 
                 if isFeedbackStoragePaused {
-                    Text("Learning is paused — feedback won't be stored.")
+                    Text("Learning is paused, so this won't be stored.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("CompleteFeedbackPausedNotice")
                 } else if !canStoreFeedback {
-                    Text("Enable Learning to save feedback for future runs.")
+                    Text("Turn on Learning to keep feedback for future runs.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-
-                Button {
-                    submitCompletionFeedback()
-                } label: {
-                    Text("Send feedback")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.sortyBordered(size: .small))
-                .disabled(!feedbackDraft.canSubmit)
-                .accessibilityIdentifier("CompleteFeedbackSubmitButton")
-
-                if feedbackDraft.outcome == .notUseful {
-                    Divider().opacity(0.4)
-                    Text("Not quite right? Undo, or fix individual files in History — undone files teach Sorty.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: 8) {
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            undoLastOrganization()
-                        } label: {
-                            Label("Undo", systemImage: "arrow.uturn.backward")
-                        }
-                        .buttonStyle(.sortyBordered(size: .small))
-                        .disabled(undoState.isBusy || !canUndo)
-                        .accessibilityIdentifier("CompleteFeedbackUndoButton")
-                        Button {
-                            HapticFeedbackManager.shared.selection()
-                            appState.openRelatedView(.history)
-                        } label: {
-                            Label("Fix files in History", systemImage: "clock.arrow.circlepath")
-                        }
-                        .buttonStyle(.sortyBordered(size: .small))
-                        .accessibilityIdentifier("CompleteFeedbackHistoryButton")
-                    }
-                }
-            } else if isFeedbackStoragePaused {
-                Text("Learning is paused — feedback won't be stored.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("CompleteFeedbackPausedNotice")
             }
+            .sortyCard(padding: 14)
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
-        .sortyCard(padding: 14)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Rate this organization")
     }
 
     private func timeSavedString(_ seconds: TimeInterval) -> String {
@@ -279,10 +259,9 @@ extension OrganizationCompleteView {
                 if effectiveTimeSaved > 0 && undoState == .idle {
                     TimeSavedHighlight(
                         value: timeSavedString(effectiveTimeSaved),
-                        animationValue: effectiveTimeSaved,
-                        usesCompactVerticalLayout: usesCompactVerticalLayout
+                        animationValue: effectiveTimeSaved
                     )
-                    .padding(.top, usesCompactVerticalLayout ? 2 : 8)
+                    .padding(.top, 2)
                     .opacity(timeSavedAppeared ? 1 : 0)
                     .offset(y: timeSavedAppeared ? 0 : 10)
                 }
@@ -291,19 +270,7 @@ extension OrganizationCompleteView {
     }
 
     func completionSummary(usesCompactVerticalLayout: Bool) -> some View {
-        VStack(spacing: usesCompactVerticalLayout ? 12 : 18) {
-            HStack(spacing: 10) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(statusColor)
-
-                Text(undoState == .completed ? "Undo summary" : "Run summary")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-            }
-
+        VStack(spacing: 0) {
             HStack(spacing: 0) {
                 IconStatItem(
                     style: .completion,
@@ -339,7 +306,7 @@ extension OrganizationCompleteView {
             }
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, usesCompactVerticalLayout ? 13 : 18)
+        .padding(.vertical, usesCompactVerticalLayout ? 12 : 16)
         .sortyCard(padding: 0)
         .frame(maxWidth: 560)
         .opacity(summaryAppeared ? 1 : 0)

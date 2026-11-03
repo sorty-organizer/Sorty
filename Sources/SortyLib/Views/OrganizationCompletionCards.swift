@@ -82,45 +82,22 @@ struct InlineLearningMomentCard: View {
     }
 }
 
+/// One quiet line under the completion subtitle, e.g. "About 37 minutes of manual work saved".
 struct TimeSavedHighlight: View {
     @SortyHotReload private var hotReload
     let value: String
     let animationValue: TimeInterval
-    let usesCompactVerticalLayout: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 6) {
             Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 32, height: 32)
-                .background(Color.secondary.opacity(0.1), in: Circle())
+                .foregroundStyle(SortyDesignSystem.Colors.success)
                 .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Estimated time saved")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-
-                Text(value)
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.primary)
-                    .numericTextTransition(animationValue: animationValue)
-            }
-
-            Spacer(minLength: 12)
-
-            Text("Manual work")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.tertiary)
+            Text("About \(Text(value).monospacedDigit().foregroundStyle(.primary)) of manual work saved")
+                .numericTextTransition(animationValue: animationValue)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, usesCompactVerticalLayout ? 7 : 10)
-        .frame(maxWidth: 340)
-        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(.secondary)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Estimated manual time saved: \(value)")
     }
@@ -240,63 +217,54 @@ struct ConfettiParticlesView: View {
     }
 }
 
+/// Slim, dismissible tip row at the bottom of the completion screen.
 struct CompletionFeatureSuggestionCard: View {
     @SortyHotReload private var hotReload
     let icon: String
     let title: String
     let description: String
     let actionTitle: String
-    let usesCompactVerticalLayout: Bool
     let onDismiss: () -> Void
     let action: () -> Void
-    
+
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.title3)
+                .font(.caption)
                 .foregroundStyle(SortyDesignSystem.Colors.info)
-                .frame(width: 32, height: 32)
-                .background(
-                    Circle()
-                        .fill(SortyDesignSystem.Colors.info.opacity(0.12))
-                )
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(LocalizedStringKey(title))
-                    .font(.subheadline.weight(.semibold))
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(LocalizedStringKey(description))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .help(description)
-            }
-            
-            Spacer()
-            
+                .accessibilityHidden(true)
+
+            Text(LocalizedStringKey(title))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 8)
+
             Button(action: action) {
                 Text(actionTitle)
-                    .lineLimit(1)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
             }
-                .buttonStyle(.sortyBordered(intent: .primary, size: .small))
-                .fixedSize(horizontal: true, vertical: false)
-                .layoutPriority(2)
-                .help("Open storage location settings")
+            .buttonStyle(.plain)
+            .fixedSize()
+            .help("Open storage location settings")
 
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 24, height: 24)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 18, height: 18)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Dismiss suggestion")
             .accessibilityLabel("Dismiss storage location suggestion")
         }
-        .sortyCard(padding: usesCompactVerticalLayout ? 12 : 16)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.lg)
         .help(description)
         .accessibilityElement(children: .contain)
     }
