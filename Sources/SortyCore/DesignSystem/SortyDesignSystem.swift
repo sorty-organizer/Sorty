@@ -78,6 +78,10 @@ public enum SortyDesignSystem {
     public enum Sizing {
         public static let windowOnboardingWidth: CGFloat = 1100
         public static let windowOnboardingHeight: CGFloat = 720
+        /// Smallest main-window content size. Every screen is laid out to fit
+        /// at least this, so the window must never shrink below it.
+        public static let windowMinWidth: CGFloat = 960
+        public static let windowMinHeight: CGFloat = 640
     }
 
     // MARK: - Corner Radius

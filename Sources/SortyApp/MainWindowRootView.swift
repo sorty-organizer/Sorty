@@ -388,6 +388,10 @@ struct MainWindowRootView: View {
 
     private var contentWithEnvironment: some View {
         ContentView()
+            .frame(
+                minWidth: SortyDesignSystem.Sizing.windowMinWidth,
+                minHeight: SortyDesignSystem.Sizing.windowMinHeight
+            )
             .handlesExternalEvents(
                 preferring: MainWindowRouter.existingWindowExternalEventMatchers,
                 allowing: MainWindowRouter.existingWindowExternalEventMatchers

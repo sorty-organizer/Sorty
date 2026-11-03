@@ -800,6 +800,7 @@ struct SortyApp: App {
         }
         .windowStyle(.automatic)
         .defaultSize(width: 1100, height: 750)
+        .windowResizability(.contentMinSize)
         .defaultLaunchBehavior(.presented)
 
         WindowGroup(for: WindowLaunchRequest.self) { launchRequest in
@@ -807,6 +808,7 @@ struct SortyApp: App {
         }
         .windowStyle(.automatic)
         .defaultSize(width: 1100, height: 750)
+        .windowResizability(.contentMinSize)
         .commands {
             SortyCommands()
         }
