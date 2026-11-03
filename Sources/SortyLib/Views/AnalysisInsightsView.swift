@@ -44,7 +44,9 @@ struct InsightHistorySection: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Not `.disabled`: that would dim the row and block the privacy note.
             Button {
+                guard hasBody else { return }
                 withAnimation(.sortySnappy) {
                     viewState.isExpanded.toggle()
                 }
@@ -52,7 +54,6 @@ struct InsightHistorySection: View {
                 insightsHeader
             }
             .buttonStyle(.plain)
-            .disabled(!hasBody)
             .contentShape(Rectangle())
 
             if viewState.isExpanded && hasBody {
@@ -453,23 +454,24 @@ struct InsightHistorySection: View {
                     .sortyBadge(tint: SortyDesignSystem.Colors.resolvedAccent)
             }
 
-            if FeatureFlags.privacyModeEnabled && !hidePrivacyWarning {
+            // Only relevant once streamed text is on screen.
+            if FeatureFlags.privacyModeEnabled && !hidePrivacyWarning && hasInsightContent {
                 Button {
                     showPrivacyWarning.toggle()
                 } label: {
-                    Image(systemName: "exclamationmark.triangle.fill")
+                    Image(systemName: "eye.slash")
                         .font(.caption)
-                        .foregroundStyle(SortyDesignSystem.Colors.warning)
+                        .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("Privacy warning for live AI insights")
+                .help("About Privacy Mode and live insights")
                 .accessibilityIdentifier("LiveInsightsPrivacyWarningButton")
                 .popover(isPresented: $showPrivacyWarning, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(SortyDesignSystem.Colors.warning)
-                            Text("Privacy warning")
+                            Image(systemName: "eye.slash")
+                                .foregroundStyle(.secondary)
+                            Text("Privacy Mode")
                                 .font(.headline)
 
                             Spacer()
@@ -483,7 +485,7 @@ struct InsightHistorySection: View {
                             .buttonStyle(.plain)
                             .frame(width: 24, height: 24)
                             .contentShape(Rectangle())
-                            .accessibilityLabel("Dismiss privacy warning")
+                            .accessibilityLabel("Dismiss Privacy Mode note")
                             .accessibilityIdentifier("DismissLiveInsightsPrivacyWarningButton")
                         }
 
