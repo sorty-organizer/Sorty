@@ -29,6 +29,19 @@ struct InsightHistorySection: View {
 
     private var isActive: Bool { activity != .none }
 
+    /// Insight text shown in the island body, if the stream has produced any yet.
+    private var hasInsightContent: Bool {
+        guard streamingModeEnabled, liveInsightsEnabled else { return false }
+        return !insights.current.isEmpty || streamFallbackInsight != nil || insights.history.count > 1
+    }
+
+    private var showsDebugStream: Bool {
+        streamingModeEnabled && liveInsightsEnabled && viewState.showDebugStream && debugModeEnabled
+    }
+
+    /// The island stays a single quiet row until there is something to expand.
+    private var hasBody: Bool { hasInsightContent || showsDebugStream }
+
     var body: some View {
         VStack(spacing: 0) {
             Button {
@@ -39,15 +52,14 @@ struct InsightHistorySection: View {
                 insightsHeader
             }
             .buttonStyle(.plain)
-            .contentShape(RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16, style: .continuous))
+            .disabled(!hasBody)
+            .contentShape(Rectangle())
 
-            if viewState.isExpanded {
+            if viewState.isExpanded && hasBody {
                 LazyVStack(spacing: 14) {
                     liveInsightsPrimaryContent
 
-                    if streamingModeEnabled && liveInsightsEnabled && viewState.showDebugStream
-                        && debugModeEnabled
-                    {
+                    if showsDebugStream {
                         streamingPreview
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
@@ -57,6 +69,7 @@ struct InsightHistorySection: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .animation(.sortySmooth, value: hasBody)
         .sortyCard(padding: 0)
         .frame(maxWidth: 550)
         .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.lg, style: .continuous))
@@ -78,17 +91,9 @@ struct InsightHistorySection: View {
     private var headerTitle: String {
         switch activity {
         case .none: return "Analysis complete"
-        case .preparingImages: return "Preparing images..."
-        case .requesting: return "Sorty is reasoning..."
-        case .validating: return "Finishing up..."
-        }
-    }
-
-    private var loaderLabel: String {
-        switch activity {
         case .preparingImages: return "Preparing images for analysis..."
+        case .requesting: return hasInsightContent ? "Sorty is reasoning..." : "Waiting for the AI response..."
         case .validating: return "Checking suggestions..."
-        case .none, .requesting: return "Receiving AI response..."
         }
     }
 
@@ -96,7 +101,7 @@ struct InsightHistorySection: View {
     private var liveInsightsPrimaryContent: some View {
         let currentInsightItem = insights.history.last(where: { $0.text == insights.current })
         if !streamingModeEnabled {
-            receivingResponseView
+            EmptyView()
         } else if liveInsightsEnabled, !insights.current.isEmpty {
             currentInsightPill(
                 insight: insights.current,
@@ -109,8 +114,6 @@ struct InsightHistorySection: View {
                 detail: nil,
                 fallbackCategory: inferredInsightCategory(for: fallbackInsight)
             )
-        } else if isActive {
-            receivingResponseView
         }
 
         if streamingModeEnabled && liveInsightsEnabled && insights.history.count > 1 {
@@ -119,31 +122,6 @@ struct InsightHistorySection: View {
                 markFirstAsLatest: false
             )
         }
-    }
-
-    private var receivingResponseView: some View {
-        HStack(spacing: 12) {
-            ThinkingOrbLoaderView()
-                .frame(width: 36, height: 36)
-
-            Text(loaderLabel)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.primary.opacity(0.85))
-                .textSweep()
-
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            Capsule()
-                .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.05))
-                .overlay(
-                    Capsule()
-                        .stroke(SortyDesignSystem.Colors.resolvedAccent.opacity(0.15), lineWidth: 1)
-                )
-        )
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
     private var streamFallbackInsight: String? {
@@ -274,14 +252,6 @@ struct InsightHistorySection: View {
                 )
 
             Spacer()
-
-            if isActive {
-                Circle()
-                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.4))
-                    .frame(width: 6, height: 6)
-                    .scaleEffect(isActive ? 1.3 : 1.0)
-                    .animation(.default.speed(0.8), value: isActive)
-            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -456,7 +426,9 @@ struct InsightHistorySection: View {
     private var insightsHeader: some View {
         HStack(spacing: 8) {
             if isActive {
-                BreatheWaveformIcon()
+                Image(systemName: "waveform")
+                    .font(.callout)
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
             } else {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.callout)
@@ -556,28 +528,17 @@ struct InsightHistorySection: View {
                         : "Enable Live Insights to preview Streaming Mode output")
             }
 
-            Image(systemName: "chevron.down")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .rotationEffect(.degrees(viewState.isExpanded ? 0 : -90))
-                .animation(
-                    .sortySnappy,
-                    value: viewState.isExpanded)
+            if hasBody {
+                Image(systemName: "chevron.down")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(viewState.isExpanded ? 0 : -90))
+                    .animation(
+                        .sortySnappy,
+                        value: viewState.isExpanded)
+            }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.08),
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.03),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-        )
+        .padding(.vertical, 12)
     }
 }

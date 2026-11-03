@@ -8,6 +8,7 @@ Keep visible animations, frame rates, Reduce Motion behavior, and file previews 
 - `AppKitImageView` assigns scaling, opacity, and layer properties only when their values change. Image identity checks remain in place. This avoids redundant setter calls when parent views update during animation or progress reporting.
 - `CometLoader` pauses its timeline when Sorty is inactive or its window is occluded or minimized. Occlusion and minimization retain the animation phase until the window is visible again. The visibility observer does not track app activation; SwiftUI freezes the timeline date while that schedule is paused.
 - The historical `RefreshManager` pause/resume implementation was removed on October 18 after its sole caller became unreachable. Current analysis progress uses the active stream and stage state.
+- On November 3 the analysis insights island dropped `ThinkingOrbLoaderView`, the text sweep, and the breathing waveform. The progress card's beam is now the only continuous animation on the analysis screen; the island stays a static row until insights arrive.
 
 ## Validation and limits
 

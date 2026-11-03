@@ -3,24 +3,6 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Waveform icon whose repeating breathe is gated on Reduce Motion and
-/// window activation instead of running unconditionally.
-struct BreatheWaveformIcon: View {
-    @SortyHotReload private var hotReload
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.controlActiveState) private var controlActiveState
-
-    var body: some View {
-        Image(systemName: "waveform")
-            .font(.callout)
-            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-            .symbolEffect(
-                .breathe,
-                options: reduceMotion || controlActiveState == .inactive ? .nonRepeating : .repeating
-            )
-    }
-}
-
 struct RenameGenerationRevealSweep: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
