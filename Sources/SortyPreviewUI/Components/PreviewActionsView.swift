@@ -16,7 +16,6 @@ struct PreviewActionsView: View {
     let shouldDisableButtons: Bool
     /// True while a file name field is open; Return then saves the name, not Apply.
     var isRenamingFile = false
-    let editsCapturedCount: Int
     let mode: OrganizationMode
     
     let onCancel: () -> Void
@@ -26,12 +25,8 @@ struct PreviewActionsView: View {
     let onApply: () -> Void
     
     @State private var isHoveringCancel = false
-    @State private var isHoveringEditsCaptured = false
-    @State private var showEditsCapturedPopover = false
     // Local pulse: driven by the count, not by a store-published Bool that
     // would invalidate the whole preview tree on every edit.
-    @State private var editsPulse = false
-    @State private var editsPulseTask: Task<Void, Never>?
     
     var body: some View {
         HStack(spacing: 12) {
@@ -39,11 +34,6 @@ struct PreviewActionsView: View {
             cancelAndResetSection
             
             Spacer()
-            
-            // Center-left: Edits captured badge (shows user their corrections are being learned)
-            if editsCapturedCount > 0 {
-                editsCapturedBadge
-            }
             
             // Center: Regeneration controls
             regenerationSection
@@ -56,43 +46,6 @@ struct PreviewActionsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Color(NSColor.controlBackgroundColor))
-    }
-    
-    // MARK: - Edits Captured Badge
-    
-    private var editsCapturedBadge: some View {
-        Button {
-            HapticFeedbackManager.shared.selection()
-            showEditsCapturedPopover.toggle()
-        } label: {
-            editsBadgeLabel
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(.sortyFade) {
-                isHoveringEditsCaptured = hovering
-            }
-        }
-        .onChange(of: editsCapturedCount) { _, _ in
-            editsPulseTask?.cancel()
-            editsPulse = true
-            editsPulseTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 200_000_000)
-                guard !Task.isCancelled else { return }
-                editsPulse = false
-            }
-        }
-        .onDisappear {
-            editsPulseTask?.cancel()
-        }
-        .popover(isPresented: $showEditsCapturedPopover, arrowEdge: .bottom) {
-            EditsCapturedPopoverContent(editsCapturedCount: editsCapturedCount)
-                .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
-        }
-        .help("Sorty learned from \(editsCapturedCount) \(editsCapturedCount == 1 ? "edit" : "edits") in this preview")
-        .accessibilityIdentifier("EditsCapturedBadge")
-        .accessibilityLabel("Sorty learned from \(editsCapturedCount) \(editsCapturedCount == 1 ? "edit" : "edits") in this preview")
-        .transition(.opacity.combined(with: .scale(scale: 0.9)))
     }
     
     private var cancelAndResetSection: some View {
@@ -237,26 +190,6 @@ struct PreviewActionsView: View {
         .accessibilityIdentifier("ApplyOrganizationButton")
         .accessibilityLabel("Apply this \(mode.gerund) plan to your files")
         .accessibilityHint(mode == .renameOnly ? "This action renames files and can be undone from history" : "This action moves files and is not easily undone")
-    }
-
-    private var editsBadgeLabel: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "pencil.and.outline")
-                .font(.system(size: 10))
-
-            Text("\(editsCapturedCount)")
-                .font(.subheadline.weight(.semibold))
-                .numericTextTransition(animationValue: editsCapturedCount)
-            Text(editsCapturedCount == 1 ? "edit" : "edits")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .foregroundStyle(.secondary)
-        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.sm)
-        .scaleEffect(editsPulse ? 1.08 : (isHoveringEditsCaptured ? 1.02 : 1.0))
-        .animation(.sortyBouncy, value: editsPulse)
     }
 }
 
@@ -477,37 +410,6 @@ struct PreviewInstructionsRow: View {
     }
 }
 
-// MARK: - Edits Captured Popover Content
-
-private struct EditsCapturedPopoverContent: View {
-    @SortyHotReload private var hotReload
-    let editsCapturedCount: Int
-
-    private var countText: String {
-        editsCapturedCount == 1 ? "1 edit" : "\(editsCapturedCount) edits"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "pencil.and.outline")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-
-                Text("Sorty learned from \(countText)")
-                    .font(.body.weight(.semibold))
-            }
-
-            Text("When you move a file, edit a suggested name, or send a file to Unorganized, Sorty saves that to your learning profile right away, so future plans fit how you organize. Review or clear it any time in Learnings.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(12)
-        .frame(width: 260)
-    }
-}
-
 // MARK: - Previews
 
 #Preview("Preview Actions - Standard") {
@@ -517,7 +419,6 @@ private struct EditsCapturedPopoverContent: View {
         hasCustomInstructions: false,
         isRedoingWithModel: false,
         shouldDisableButtons: false,
-        editsCapturedCount: 0,
         mode: .organize,
         onCancel: {},
         onReset: {},
@@ -535,7 +436,6 @@ private struct EditsCapturedPopoverContent: View {
         hasCustomInstructions: true,
         isRedoingWithModel: false,
         shouldDisableButtons: false,
-        editsCapturedCount: 3,
         mode: .organizeAndRename,
         onCancel: {},
         onReset: {},
@@ -553,7 +453,6 @@ private struct EditsCapturedPopoverContent: View {
         hasCustomInstructions: false,
         isRedoingWithModel: false,
         shouldDisableButtons: false,
-        editsCapturedCount: 0,
         mode: .renameOnly,
         onCancel: {},
         onReset: {},
@@ -571,7 +470,6 @@ private struct EditsCapturedPopoverContent: View {
         hasCustomInstructions: false,
         isRedoingWithModel: false,
         shouldDisableButtons: false,
-        editsCapturedCount: 7,
         mode: .organize,
         onCancel: {},
         onReset: {},

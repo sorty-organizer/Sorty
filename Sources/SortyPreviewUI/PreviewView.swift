@@ -18,6 +18,7 @@ package struct PreviewView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var learningsManager: LearningsManager
+    @AppStorage("preview.hasShownLearnedEditNotice") private var hasShownLearnedEditNotice = false
     @StateObject private var dragDropManager = DragDropManager()
     @StateObject private var previewStore: PreviewStore
     @State private var showApplyConfirmation = false
@@ -236,6 +237,10 @@ package struct PreviewView: View {
         .onChange(of: hasEdits) { _, _ in
             refreshDerivedPlanStats()
         }
+        .onChange(of: previewStore.editsCapturedCount) { oldCount, newCount in
+            guard oldCount == 0, newCount > 0 else { return }
+            showLearnedEditNoticeOnce()
+        }
         .onChange(of: appState.pendingNotificationActionRequest?.id) { _, _ in
             consumePendingNotificationActionIfNeeded()
         }
@@ -263,6 +268,25 @@ package struct PreviewView: View {
         )
         .environmentObject(dragDropManager)
         .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    /// Tells the user, once ever, that preview edits feed their learning profile.
+    private func showLearnedEditNoticeOnce() {
+        guard !hasShownLearnedEditNotice else { return }
+        hasShownLearnedEditNotice = true
+        NotificationManager.shared.showHUDInfo(
+            title: "Sorty will remember this",
+            message: "Moves, name edits, and files sent to Unorganized are saved to your learning profile so future plans fit how you organize.",
+            icon: "pencil.and.outline",
+            iconColor: SortyDesignSystem.Colors.resolvedAccent,
+            actions: [
+                HUDNotificationAction(title: "Manage Learnings", systemImage: "brain") {
+                    HapticFeedbackManager.shared.tap()
+                    NotificationManager.shared.dismissHUD()
+                    appState.openRelatedView(.learnings)
+                }
+            ]
+        )
     }
 
     private func diff(from oldIndex: Int, to newIndex: Int) -> OrganizationPlanDiff.Source? {
@@ -326,7 +350,6 @@ package struct PreviewView: View {
                     isRedoingWithModel: isRedoingWithModel,
                     shouldDisableButtons: shouldDisableButtons,
                     isRenamingFile: previewStore.renamingFileID != nil,
-                    editsCapturedCount: previewStore.editsCapturedCount,
                     mode: mode,
                     onCancel: { recordCancelledOrganization(); cancelToStart() },
                     onReset: { HapticFeedbackManager.shared.tap(); editablePlan = plan; previewStore.updatePlan(plan); previewStore.resetEditsCaptured(); hasEdits = false },
