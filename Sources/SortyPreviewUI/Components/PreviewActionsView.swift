@@ -89,9 +89,9 @@ struct PreviewActionsView: View {
             EditsCapturedPopoverContent(editsCapturedCount: editsCapturedCount)
                 .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
         }
-        .help("\(editsCapturedCount) manual \(editsCapturedCount == 1 ? "edit" : "edits") captured for learning")
+        .help("Sorty learned from \(editsCapturedCount) \(editsCapturedCount == 1 ? "edit" : "edits") in this preview")
         .accessibilityIdentifier("EditsCapturedBadge")
-        .accessibilityLabel("\(editsCapturedCount) edits captured for learning")
+        .accessibilityLabel("Sorty learned from \(editsCapturedCount) \(editsCapturedCount == 1 ? "edit" : "edits") in this preview")
         .transition(.opacity.combined(with: .scale(scale: 0.9)))
     }
     
@@ -243,11 +243,9 @@ struct PreviewActionsView: View {
         HStack(spacing: 4) {
             Image(systemName: "pencil.and.outline")
                 .font(.system(size: 10))
-                .foregroundStyle(SortyDesignSystem.Colors.success)
 
             Text("\(editsCapturedCount)")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(SortyDesignSystem.Colors.success)
                 .numericTextTransition(animationValue: editsCapturedCount)
             Text(editsCapturedCount == 1 ? "edit" : "edits")
                 .font(.subheadline)
@@ -255,7 +253,8 @@ struct PreviewActionsView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .sortyInsetSurface(tint: SortyDesignSystem.Colors.success, cornerRadius: SortyDesignSystem.Radius.sm)
+        .foregroundStyle(.secondary)
+        .sortyInsetSurface(cornerRadius: SortyDesignSystem.Radius.sm)
         .scaleEffect(editsPulse ? 1.08 : (isHoveringEditsCaptured ? 1.02 : 1.0))
         .animation(.sortyBouncy, value: editsPulse)
     }
@@ -483,54 +482,29 @@ struct PreviewInstructionsRow: View {
 private struct EditsCapturedPopoverContent: View {
     @SortyHotReload private var hotReload
     let editsCapturedCount: Int
-    
+
+    private var countText: String {
+        editsCapturedCount == 1 ? "1 edit" : "\(editsCapturedCount) edits"
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "pencil.and.outline")
-                    .font(.system(size: 14))
-                    .foregroundStyle(SortyDesignSystem.Colors.success)
-                
-                Text("Edits captured")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+
+                Text("Sorty learned from \(countText)")
                     .font(.body.weight(.semibold))
             }
-            
-            Text("Your \(editsCapturedCount) manual \(editsCapturedCount == 1 ? "correction has" : "corrections have") been recorded. When you apply this organization, \(editsCapturedCount == 1 ? "it" : "they") will help improve future suggestions.")
+
+            Text("When you move a file, edit a suggested name, or send a file to Unorganized, Sorty saves that to your learning profile right away, so future plans fit how you organize. Review or clear it any time in Learnings.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(SortyDesignSystem.Colors.success.opacity(0.7))
-                    Text("File moves to different folders")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(SortyDesignSystem.Colors.success.opacity(0.7))
-                    Text("Rename edits & rejections")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(SortyDesignSystem.Colors.success.opacity(0.7))
-                    Text("Files moved to unorganized")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
         }
         .padding(12)
-        .frame(width: 240)
+        .frame(width: 260)
     }
 }
 
