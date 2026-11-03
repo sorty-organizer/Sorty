@@ -119,7 +119,7 @@ struct FlatFileRowView: View {
     
     private func saveRename() {
         if !editedName.isEmpty {
-            store.updateRename(fileID: file.id, folderID: parentFolderID, newName: editedName)
+            store.updateRename(fileID: file.id, folderID: parentFolderID, newName: editedName, isUserEdited: true)
             onPlanChanged()
         }
         isEditingName = false
@@ -237,6 +237,7 @@ struct FlatFileRowView: View {
     }
 
     private func renameHelpText(_ mapping: FileRenameMapping) -> String {
+        if mapping.isUserEdited == true { return "Renamed by you" }
         let reason = mapping.renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return reason.isEmpty ? "Sorty suggested rename" : reason
     }

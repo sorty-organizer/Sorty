@@ -43,6 +43,20 @@ final class PreviewStoreRenameTests: XCTestCase {
         XCTAssertEqual(mapping?.suggestedName, "invoice.txt")
     }
 
+    func testUserRenameIsCreditedUntilAIRegeneratesIt() {
+        let file = makeFile("draft")
+        var folder = FolderSuggestion(folderName: "Docs", files: [file])
+        folder.updateRename(for: file, newName: "ai.txt", reason: "AI")
+        let plan = OrganizationPlan(suggestions: [folder], unorganizedFiles: [], notes: "")
+        let store = PreviewStore(plan: plan)
+
+        store.updateRename(fileID: file.id, folderID: folder.id, newName: "mine.txt", isUserEdited: true)
+        XCTAssertEqual(store.plan.suggestions[0].renameMapping(for: file)?.isUserEdited, true)
+
+        store.updateRename(fileID: file.id, folderID: folder.id, newName: "regenerated.txt")
+        XCTAssertNil(store.plan.suggestions[0].renameMapping(for: file)?.isUserEdited)
+    }
+
     func testUpdateRenameNoOpDoesNotCreateMapping() {
         let file = makeFile("notes")
         let folder = FolderSuggestion(folderName: "Docs", files: [file])

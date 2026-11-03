@@ -285,10 +285,18 @@ struct FlatFileRowContent: View {
 
                     Spacer(minLength: 12)
 
-                    Image(systemName: "wand.and.stars")
-                        .font(.caption)
-                        .foregroundColor(SortyDesignSystem.Colors.resolvedAccent)
-                        .help(renameMapping.renameReason ?? "Sorty suggested rename")
+                    if renameMapping.isUserEdited == true {
+                        Image(systemName: "person.crop.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .help("Renamed by you")
+                            .accessibilityLabel("Renamed by you")
+                    } else {
+                        Image(systemName: "wand.and.stars")
+                            .font(.caption)
+                            .foregroundColor(SortyDesignSystem.Colors.resolvedAccent)
+                            .help(renameMapping.renameReason ?? "Sorty suggested rename")
+                    }
 
                     RenameActionGlassCluster(
                         isRegenerating: isRegeneratingName,

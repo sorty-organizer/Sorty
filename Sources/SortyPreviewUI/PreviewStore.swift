@@ -661,10 +661,11 @@ package class PreviewStore: ObservableObject {
         return plan.suggestions.lazy.compactMap(find).first
     }
     
-    package func updateRename(fileID: UUID, folderID: UUID, newName: String) {
+    /// Sets a file's pending name. Pass `isUserEdited` for names the user typed, not AI regenerations.
+    package func updateRename(fileID: UUID, folderID: UUID, newName: String, isUserEdited: Bool = false) {
         // Record rename edit before mutating the plan
         if let file = findFile(by: fileID),
-           let mapping = renameMappings[fileID], mapping.hasRename {
+           let mapping = renameMappings[fileID], mapping.hasRename, mapping.isUserEdited != true {
             learningsManager?.recordRenameFeedback(
                 originalName: file.displayName,
                 suggestedName: mapping.suggestedName,
@@ -678,7 +679,7 @@ package class PreviewStore: ObservableObject {
         
         var updatedPlan = plan
         for i in 0..<updatedPlan.suggestions.count {
-            if let updated = updateRenameInFolder(updatedPlan.suggestions[i], targetID: folderID, fileID: fileID, newName: newName) {
+            if let updated = updateRenameInFolder(updatedPlan.suggestions[i], targetID: folderID, fileID: fileID, newName: newName, isUserEdited: isUserEdited) {
                 updatedPlan.suggestions[i] = updated
                 updateInternalPlan(updatedPlan)
                 return
@@ -689,7 +690,7 @@ package class PreviewStore: ObservableObject {
     package func rejectRename(fileID: UUID, folderID: UUID) {
         // Record rename rejection before mutating the plan
         if let file = findFile(by: fileID),
-           let mapping = renameMappings[fileID], mapping.hasRename {
+           let mapping = renameMappings[fileID], mapping.hasRename, mapping.isUserEdited != true {
             learningsManager?.recordRenameFeedback(
                 originalName: file.displayName,
                 suggestedName: mapping.suggestedName,
@@ -814,17 +815,17 @@ package class PreviewStore: ObservableObject {
         return updatedFolder
     }
     
-    private func updateRenameInFolder(_ folder: FolderSuggestion, targetID: UUID, fileID: UUID, newName: String) -> FolderSuggestion? {
+    private func updateRenameInFolder(_ folder: FolderSuggestion, targetID: UUID, fileID: UUID, newName: String, isUserEdited: Bool) -> FolderSuggestion? {
         var updatedFolder = folder
         if folder.id == targetID {
             if let file = updatedFolder.files.first(where: { $0.id == fileID }) {
-                updatedFolder.updateRename(for: file, newName: newName)
+                updatedFolder.updateRename(for: file, newName: newName, isUserEdited: isUserEdited)
                 return updatedFolder
             }
         }
         
         for i in 0..<updatedFolder.subfolders.count {
-            if let updated = updateRenameInFolder(updatedFolder.subfolders[i], targetID: targetID, fileID: fileID, newName: newName) {
+            if let updated = updateRenameInFolder(updatedFolder.subfolders[i], targetID: targetID, fileID: fileID, newName: newName, isUserEdited: isUserEdited) {
                 updatedFolder.subfolders[i] = updated
                 return updatedFolder
             }

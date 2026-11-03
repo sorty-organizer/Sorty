@@ -19,6 +19,8 @@ public struct FileRenameMapping: Codable, Identifiable, Hashable, Sendable {
     public var renameReason: String?
     public var renameConfidence: Double?
     public var isSelected: Bool?
+    /// True when the user typed this name in the preview, so the UI credits them instead of Sorty.
+    public var isUserEdited: Bool?
 
     public init(
         id: UUID = UUID(),
@@ -216,7 +218,8 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
         for file: FileItem,
         newName: String?,
         reason: String? = nil,
-        confidence: Double? = nil
+        confidence: Double? = nil,
+        isUserEdited: Bool = false
     ) {
         var sanitizedName: String?
         if let newName, !newName.isEmpty {
@@ -239,17 +242,19 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
             fileRenameMappings[index].suggestedName = sanitizedName
             fileRenameMappings[index].renameReason = reason ?? fileRenameMappings[index].renameReason
             fileRenameMappings[index].isSelected = sanitizedName != nil
+            fileRenameMappings[index].isUserEdited = isUserEdited ? true : nil
             if let confidence {
                 fileRenameMappings[index].renameConfidence = min(max(confidence, 0.0), 1.0)
             }
         } else if sanitizedName != nil {
-            let mapping = FileRenameMapping(
+            var mapping = FileRenameMapping(
                 originalFile: file,
                 suggestedName: sanitizedName,
                 renameReason: reason,
                 renameConfidence: confidence,
                 isSelected: true
             )
+            mapping.isUserEdited = isUserEdited ? true : nil
             fileRenameMappings.append(mapping)
         }
     }
