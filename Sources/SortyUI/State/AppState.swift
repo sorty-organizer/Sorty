@@ -138,6 +138,8 @@ public class AppState: ObservableObject {
     @Published public var pendingDuplicatesHandoff: DuplicatesHandoff?
     @Published public var highlightedWatchedFolderID: UUID?
     @Published public var highlightedExclusionRuleID: UUID?
+    /// Raw value of a Learnings records list to open once Learnings is on screen.
+    @Published public var pendingLearningRecordsCategory: String?
     @Published public var showsFinderWorkflowPicker = false
     @Published public var pendingNotificationActionRequest: PendingNotificationActionRequest?
     @Published public var pendingHistoryEntryID: UUID?
@@ -694,6 +696,12 @@ public class AppState: ObservableObject {
         withAnimation(.pageTransition) {
             currentView = destination
         }
+    }
+
+    /// Opens Learnings with one of its record lists (for example "feedback") showing.
+    public func openLearningRecords(_ category: String) {
+        pendingLearningRecordsCategory = category
+        openRelatedView(.learnings)
     }
 
     public func clearNavigationReturnRoute() {

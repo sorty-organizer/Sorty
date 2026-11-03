@@ -174,6 +174,14 @@ package struct LearningsView: View {
         .navigationTitle("Learnings")
     }
 
+    /// Shows the records list another screen asked for, once the profile has loaded.
+    func openPendingLearningRecords() {
+        guard let raw = appState.pendingLearningRecordsCategory,
+              manager.currentProfile != nil else { return }
+        appState.pendingLearningRecordsCategory = nil
+        selectedLearningRecordsCategory = LearningRecordsCategory(rawValue: raw)
+    }
+
     // MARK: - Onboarding
 
     var onboardingView: some View {
@@ -307,6 +315,9 @@ package struct LearningsView: View {
             }
             .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
         }
+        .onAppear(perform: openPendingLearningRecords)
+        .onChange(of: appState.pendingLearningRecordsCategory) { _, _ in openPendingLearningRecords() }
+        .onChange(of: manager.currentProfile == nil) { _, _ in openPendingLearningRecords() }
         .sheet(item: $selectedLearningRecordsCategory) { category in
             if let profile = manager.currentProfile {
                 learningRecordsDetailSheet(category: category, profile: profile)

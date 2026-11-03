@@ -280,10 +280,10 @@ package struct PreviewView: View {
             icon: "pencil.and.outline",
             iconColor: SortyDesignSystem.Colors.resolvedAccent,
             actions: [
-                HUDNotificationAction(title: "Manage Learnings", systemImage: "brain") {
+                HUDNotificationAction(title: "View My Edits", systemImage: "brain") {
                     HapticFeedbackManager.shared.tap()
                     NotificationManager.shared.dismissHUD()
-                    appState.openRelatedView(.learnings)
+                    appState.openLearningRecords("feedback")
                 }
             ]
         )
