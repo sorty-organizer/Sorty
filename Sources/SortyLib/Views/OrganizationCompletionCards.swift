@@ -249,7 +249,7 @@ struct CompletionFeatureSuggestionCard: View {
             }
             .buttonStyle(.plain)
             .fixedSize()
-            .help("Open storage location settings")
+            .help("Choose a folder to add as a storage location")
 
             Button(action: onDismiss) {
                 Image(systemName: "xmark")

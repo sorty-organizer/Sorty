@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct OrganizationCompleteView: View {
     @SortyHotReload private var hotReload
@@ -40,6 +41,7 @@ struct OrganizationCompleteView: View {
     @State var failureMessage: String?
     @State var failedAction: FailedAction?
     @State private var isStorageSuggestionDismissed = false
+    @State private var isPickingStorageLocation = false
     /// True while an undo/redo failure from this view owns the completion
     /// screen. The organizer's `.error` transition clears the completion pin,
     /// which would swap this view's failure card for the generic ErrorView, so
@@ -190,6 +192,31 @@ struct OrganizationCompleteView: View {
         )
     }
     
+    /// Adds the folder picked from the storage tip and confirms with a HUD.
+    private func addStorageLocation(from result: Result<URL, Error>) {
+        do {
+            let url = try result.get()
+            try withAnimation(.sortyFade) {
+                try storageLocationsManager.addLocation(url: url)
+            }
+            HapticFeedbackManager.shared.success()
+            NotificationManager.shared.showHUDInfo(
+                title: "Storage location added",
+                message: "Future plans can send files to \(url.lastPathComponent).",
+                icon: "externaldrive.fill.badge.checkmark",
+                iconColor: SortyDesignSystem.Colors.success
+            )
+        } catch {
+            HapticFeedbackManager.shared.error()
+            NotificationManager.shared.showHUDInfo(
+                title: "Couldn't add that folder",
+                message: error.userFacingMessage,
+                icon: "exclamationmark.triangle.fill",
+                iconColor: SortyDesignSystem.Colors.warning
+            )
+        }
+    }
+
     private var historyLink: some View {
         Button {
             HapticFeedbackManager.shared.tap()
@@ -278,10 +305,10 @@ struct OrganizationCompleteView: View {
                                 }
                             }
                         ) {
+                            // Storage locations normally live on the Ready page, which
+                            // this screen can't return to, so add one right here.
                             HapticFeedbackManager.shared.tap()
-                            withAnimation(.pageTransition) {
-                                appState.currentView = .organize
-                            }
+                            isPickingStorageLocation = true
                         }
                         .frame(maxWidth: 560)
                         .opacity(historyLinkAppeared ? 1 : 0)
@@ -302,6 +329,12 @@ struct OrganizationCompleteView: View {
             }
         }
         .background(WorkflowGradientBackground())
+        .fileImporter(
+            isPresented: $isPickingStorageLocation,
+            allowedContentTypes: [.folder]
+        ) { result in
+            addStorageLocation(from: result)
+        }
         .animation(.sortySmooth, value: undoState)
         .onChange(of: undoState) { _, newState in
             if newState != .failed {
