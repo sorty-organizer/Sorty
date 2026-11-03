@@ -193,7 +193,7 @@ The Sorty skill installer is available in Settings → Features → Sorty Skill 
 
 ### Sorty Labs telemetry
 
-Labs features report in more detail than stable features while they are experimental. All events come from `LabsTelemetry` (`Sources/SortyCore/Analytics/LabsTelemetry.swift`) with `feature=labs`, and each one also leaves a `sorty.workflow` Sentry breadcrumb, so a crash or handled error shows the Labs steps before it. None of them include file names, paths, rule text or folder names.
+Labs features report in more detail than stable features while they are experimental. All events come from `LabsTelemetry` (`Sources/SortyCore/Analytics/LabsTelemetry.swift`) with `feature=labs`, and each one also leaves a `sorty.workflow` Sentry breadcrumb, so a crash or handled error shows the Labs steps before it. None of them include file names, paths or folder names.
 
 | Event | When | Properties |
 | --- | --- | --- |
@@ -202,13 +202,10 @@ Labs features report in more detail than stable features while they are experime
 | `Expiring Files Move To Trash` | Move to Trash finished | `source`, `count_bucket` (trashed), `selection_kind` (`all`, `subset`), `result_kind` (`age_only`, `finished_only`, `mixed`), `failure_reason` (`changed_since_scan`, `trash_failed`, `changed_and_trash_failed`); outcome `partial` or `failed` |
 | `Expiring Files File Kept` | Keep pressed | `source`, `result_kind` (the file's kind, e.g. `installer`, `app_installed`) |
 | `Expiring Files Age Changed` | Age menu changed | `selection_kind` (`7_days` etc., or `custom`) |
-| `Routing Rules Drafted` | AI drafted a rule, or failed to | outcome `success`/`failed` |
-| `Routing Rules Saved` / `Deleted` / `Enabled` / `Disabled` | Rule changed | `count_bucket` (rules afterwards) |
-| `Organize Routing Applied` | Rules routed files in an organize run | `count_bucket` (routed), `result_kind` (`all_routed`, `some_routed`) |
 | `<Feature> Opened From Settings` | Labs shortcut in Settings used | `source=settings` |
 | `Remote Experiments Card Viewed` | In Testing card loaded, once per visit | `count_bucket`; flag keys are not sent |
 
-The Labs switches and Spot Finished Downloads report through `Setting Changed`. Sentry receives sanitized handled errors for `labs` operations `expiring_files_scan` (usually a missing Files and Folders permission), `expiring_files_trash` and `routing_rule_draft`. When a feature leaves Labs, drop the per-kind properties and scan event, and move what remains into the normal taxonomy.
+The Labs switches and Spot Finished Downloads report through `Setting Changed`. Sentry receives sanitized handled errors for `labs` operations `expiring_files_scan` (usually a missing Files and Folders permission) and `expiring_files_trash`. When a feature leaves Labs, drop the per-kind properties and scan event, and move what remains into the normal taxonomy.
 
 The website uses the same `labs-` key prefix through the typed hooks in `website/lib/feature-flags.ts`. Components should use `useLabsFeatureEnabled`, `useLabsFeatureVariant`, or `useLabsFeaturePayload`; the hooks read cached assignments without emitting feature-flag exposure events, and payloads are limited to bounded `title`, `description`, and `system_image` values. Denying website analytics clears the rendered Labs state and stops further flag use or exposure events.
 

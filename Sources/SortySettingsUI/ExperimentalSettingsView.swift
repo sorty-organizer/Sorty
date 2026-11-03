@@ -147,7 +147,6 @@ private struct LabsIconTile: View {
 private struct SortyLabsCard: View {
     @SortyHotReload private var hotReload
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(SortyLabsFeature.routingRules.defaultsKey) private var routingRules = false
     @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var expiringFiles = false
     @AppStorage(ExpiringFilesManager.ageInDaysKey) private var expiringAgeInDays = ExpiringFilesManager.defaultAgeInDays
     @AppStorage(ExpiringFilesManager.finishedDownloadsKey) private var finishedDownloads = false
@@ -188,7 +187,6 @@ private struct SortyLabsCard: View {
                 }
             }
             .animation(reduceMotion ? .sortyFade : .sortySmooth, value: expiringFiles)
-            .animation(reduceMotion ? .sortyFade : .sortySmooth, value: routingRules)
         }
         .onChange(of: expiringFiles) { _, _ in
             Task { await ExpiringFilesManager.shared.refresh() }
@@ -262,7 +260,6 @@ private struct SortyLabsCard: View {
     /// Points each enabled feature at the screen where it lives in the main window.
     private func openLink(for feature: SortyLabsFeature) -> some View {
         let (title, destination): (String, AppState.AppView) = switch feature {
-        case .routingRules: ("Add Routing Rules in Exclusions", .exclusions)
         case .expiringFiles: ("Review in Watched Folders", .watchedFolders)
         }
         return Button {
@@ -279,7 +276,6 @@ private struct SortyLabsCard: View {
     /// SettingsToggle already plays the haptic and records the change.
     private func binding(for feature: SortyLabsFeature) -> Binding<Bool> {
         switch feature {
-        case .routingRules: $routingRules
         case .expiringFiles: $expiringFiles
         }
     }

@@ -2,7 +2,7 @@
 //  SortyLabsTests.swift
 //  SortyTests
 //
-//  Routing rules, project clusters and expiring files (Labs).
+//  Project clusters and expiring files (Labs).
 //
 
 import Foundation
@@ -24,63 +24,6 @@ final class SortyLabsTests: XCTestCase {
 
     override func tearDownWithError() throws {
         try? FileManager.default.removeItem(at: tempDirectory)
-    }
-
-    // MARK: - Routing Rules
-
-    func testRoutingDestinationsStayInsideTheOrganizedFolder() {
-        XCTAssertEqual(RoutingRule.sanitizedTemplate("/Finance//Statements/"), "Finance/Statements")
-        XCTAssertEqual(RoutingRule.sanitizedTemplate("~/Taxes/{YYYY}"), "Taxes/{YYYY}")
-        XCTAssertEqual(RoutingRule.sanitizedTemplate("../Elsewhere"), "")
-    }
-
-    func testFirstMatchingRoutingRuleFillsDateTokens() throws {
-        let statements = RoutingRule(
-            sourceText: "Bank statements go to Finance",
-            conditions: [ExclusionRule(type: .fileName, pattern: "statement")],
-            destinationTemplate: "Finance/{YYYY}-{MM}"
-        )
-        let images = RoutingRule(
-            sourceText: "Images go to Pictures",
-            conditions: [ExclusionRule(type: .fileType, fileTypeCategory: .images)],
-            destinationTemplate: "Pictures"
-        )
-        let matcher = RoutingRuleMatcher(rules: [statements, images])
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC")!
-        let created = calendar.date(from: DateComponents(year: 2026, month: 3, day: 9))
-
-        let pdf = FileItem(path: "/tmp/Chase Statement.pdf", name: "Chase Statement", extension: "pdf", creationDate: created)
-        let rule = try XCTUnwrap(matcher.firstMatch(for: pdf))
-        XCTAssertEqual(rule.id, statements.id)
-        XCTAssertEqual(rule.destination(for: pdf, calendar: calendar), "Finance/2026-03")
-
-        let note = FileItem(path: "/tmp/notes.txt", name: "notes", extension: "txt")
-        XCTAssertNil(matcher.firstMatch(for: note))
-    }
-
-    func testDisabledRoutingRulesNeverMatch() {
-        let rule = RoutingRule(
-            sourceText: "Statements",
-            conditions: [ExclusionRule(type: .fileName, pattern: "statement")],
-            destinationTemplate: "Finance",
-            isEnabled: false
-        )
-        XCTAssertTrue(RoutingRuleMatcher(rules: [rule]).isEmpty)
-    }
-
-    func testRoutingResolutionDecodesConditionsAndDestination() throws {
-        let response = """
-        {"destination":"/Finance/Statements/{YYYY}","tools":[{"kind":"file_name_contains","pattern":"statement","description":"Statements"}]}
-        """
-        let resolution = try NaturalLanguageExclusionResolver.decodeRouting(from: response)
-        XCTAssertEqual(resolution.destinationTemplate, "Finance/Statements/{YYYY}")
-        XCTAssertEqual(resolution.conditions.map(\.type), [.fileName])
-    }
-
-    func testRoutingResolutionRequiresADestination() {
-        let response = #"{"destination":"","tools":[{"kind":"file_extension","pattern":"pdf"}]}"#
-        XCTAssertThrowsError(try NaturalLanguageExclusionResolver.decodeRouting(from: response))
     }
 
     // MARK: - Project Detection

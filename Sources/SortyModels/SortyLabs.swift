@@ -14,7 +14,6 @@ import Foundation
 /// Reads go straight to `UserDefaults`, so scanners and organizer phases can
 /// check a feature from any isolation domain.
 public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
-    case routingRules = "labs.routingRules"
     case expiringFiles = "labs.expiringFiles"
 
     public var id: String { rawValue }
@@ -28,15 +27,12 @@ public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
-        case .routingRules: "Routing Rules"
         case .expiringFiles: "Expiring Files"
         }
     }
 
     public var summary: String {
         switch self {
-        case .routingRules:
-            "Describe where files go, like \"bank statements go to Finance/Statements/{YYYY}\". Sorty turns it into a rule that runs without AI."
         case .expiringFiles:
             "Old installers, archives and screenshots in Downloads and on the Desktop show up under Clean Up, in Watched Folders and the menu bar. Nothing is trashed without your review."
         }
@@ -44,7 +40,6 @@ public enum SortyLabsFeature: String, CaseIterable, Identifiable, Sendable {
 
     public var systemImage: String {
         switch self {
-        case .routingRules: "arrow.triangle.branch"
         case .expiringFiles: "hourglass"
         }
     }

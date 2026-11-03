@@ -143,31 +143,6 @@ package enum LabsTelemetry {
         }
     }
 
-    // MARK: - Routing Rules
-
-    /// The AI turned a request into a draft rule, or failed to.
-    package static func routingRuleDrafted(succeeded: Bool) {
-        capture(
-            subfeature: "routing_rules",
-            action: "rule_drafted",
-            outcome: succeeded ? "success" : "failed",
-            properties: ["source": Surface.exclusions.rawValue]
-        )
-    }
-
-    /// A rule was saved, deleted, or switched on or off. `ruleCount` is the total afterwards.
-    package static func routingRuleChanged(action: String, ruleCount: Int) {
-        capture(
-            subfeature: "routing_rules",
-            action: action,
-            outcome: "success",
-            properties: [
-                "source": Surface.exclusions.rawValue,
-                "count_bucket": AnalyticsManager.countBucket(ruleCount),
-            ]
-        )
-    }
-
     // MARK: - Settings
 
     /// A Labs feature's shortcut in Settings was used to jump to its screen.
@@ -196,7 +171,6 @@ package enum LabsTelemetry {
 
     nonisolated static func featureIdentifier(_ feature: SortyLabsFeature) -> String {
         switch feature {
-        case .routingRules: "routing_rules"
         case .expiringFiles: "expiring_files"
         }
     }

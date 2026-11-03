@@ -15,7 +15,6 @@ package struct ExclusionRulesView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var learningsManager: LearningsManager
     @Environment(\.accessibilityReduceMotion) var reduceMotion
-    @AppStorage(SortyLabsFeature.routingRules.defaultsKey) var isRoutingRulesEnabled = false
     @Environment(\.controlActiveState) var controlActiveState
     @Environment(\.scenePhase) var scenePhase
     /// Injected for tests (MockAIClient); defaults to the factory in production.
@@ -214,11 +213,6 @@ package struct ExclusionRulesView: View {
                                     systemImage: "magnifyingglass",
                                     size: .inline
                                 )
-                            }
-
-                            if isRoutingRulesEnabled && !isSearching {
-                                RoutingRulesCard()
-                                    .animatedAppearance(delay: 0.10)
                             }
 
                             if !isSearching || !filteredLearningExclusionPatterns.isEmpty {

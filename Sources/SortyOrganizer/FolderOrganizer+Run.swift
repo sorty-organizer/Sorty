@@ -165,48 +165,22 @@ extension FolderOrganizer {
             }
 
             let (filesWithHashes, duplicateContext) = try await duplicateDetectionPhase(files: files)
-            let routing = partitionFilesByRoutingRules(filesWithHashes)
-            if routing.routedCount > 0 {
-                // Labs: how much of a run routing rules handle without the AI.
-                OrganizerServices.captureWorkflow(
-                    workflow: "organize",
-                    stage: "routing_applied",
-                    outcome: routing.remaining.isEmpty ? "success" : "partial",
-                    properties: [
-                        "count_bucket": OrganizerServices.countBucket(routing.routedCount),
-                        "result_kind": routing.remaining.isEmpty ? "all_routed" : "some_routed",
-                    ]
-                )
-            }
-            let validatedPlan: OrganizationPlan
-            if routing.remaining.isEmpty {
-                // Every file matched a routing rule, so there is nothing to ask the AI.
-                validatedPlan = OrganizationPlan(
-                    suggestions: routing.suggestions,
-                    notes: "All \(routing.routedCount) files matched your routing rules."
-                )
-            } else {
-                if routing.routedCount > 0 {
-                    updateProgress(0.21, stage: "Routed \(routing.routedCount) files by your rules")
-                }
-                let (plan, instructions, personaPrompt, imagePayload) = try await aiAnalysisPhase(
-                    files: routing.remaining,
-                    directory: directory,
-                    customPrompt: customPrompt,
-                    temperature: temperature,
-                    duplicateContext: duplicateContext
-                )
-                let aiPlan = try await validationPhase(
-                    plan: plan,
-                    files: routing.remaining,
-                    directory: directory,
-                    instructions: instructions,
-                    personaPrompt: personaPrompt,
-                    temperature: temperature,
-                    imagePayload: imagePayload
-                )
-                validatedPlan = Self.mergingRoutedSuggestions(routing.suggestions, into: aiPlan)
-            }
+            let (plan, instructions, personaPrompt, imagePayload) = try await aiAnalysisPhase(
+                files: filesWithHashes,
+                directory: directory,
+                customPrompt: customPrompt,
+                temperature: temperature,
+                duplicateContext: duplicateContext
+            )
+            let validatedPlan = try await validationPhase(
+                plan: plan,
+                files: filesWithHashes,
+                directory: directory,
+                instructions: instructions,
+                personaPrompt: personaPrompt,
+                temperature: temperature,
+                imagePayload: imagePayload
+            )
             handleLearningToolCall(
                 from: validatedPlan,
                 source: .manual,
