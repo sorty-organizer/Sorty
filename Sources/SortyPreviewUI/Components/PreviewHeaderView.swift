@@ -122,9 +122,9 @@ struct PreviewHeaderView: View {
                         .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
                     }
                     .buttonStyle(.plain)
-                    .help("View AI reasoning")
-                    .accessibilityLabel("AI reasoning")
-                    .accessibilityHint("Show plan reasoning popover")
+                    .help("View AI summary")
+                    .accessibilityLabel("AI summary")
+                    .accessibilityHint("Show the AI summary of this plan")
                     .popover(isPresented: $showNotesPopover, arrowEdge: .bottom) {
                         VStack(alignment: .leading, spacing: 0) {
                             HStack(spacing: 8) {
@@ -138,7 +138,7 @@ struct PreviewHeaderView: View {
                                         .foregroundStyle(SortyDesignSystem.Colors.info)
                                 }
 
-                                Text("AI Reasoning")
+                                Text("AI Summary")
                                     .font(.caption)
                                     .fontWeight(.semibold)
                                     .foregroundStyle(.primary)
@@ -222,26 +222,21 @@ struct PreviewHeaderView: View {
             }
             }
 
-            Text("\(totalFiles) files • \(totalFolders) folders")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .numericTextTransition(
-                    animationValue: "\(totalFiles)-\(totalFolders)"
-                )
+            // One plain summary line; renames join it instead of sitting in their own pill.
+            HStack(spacing: 4) {
+                Text("\(totalFiles) files • \(totalFolders) folders")
+                    .numericTextTransition(
+                        animationValue: "\(totalFiles)-\(totalFolders)"
+                    )
 
-            if renameCount > 0 {
-                HStack(spacing: 4) {
-                    Image(systemName: "wand.and.stars")
-                    Text("\(renameCount) renames")
+                if renameCount > 0 {
+                    Text("•")
+                    Text("\(renameCount) \(renameCount == 1 ? "rename" : "renames")")
                         .numericTextTransition(animationValue: renameCount)
                 }
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xs, interactive: false)
             }
+            .font(.caption)
+            .foregroundColor(.secondary)
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
