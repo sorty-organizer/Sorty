@@ -26,7 +26,17 @@ struct PreviewHeaderView: View {
 
     @State private var showNotesPopover = false
     @State private var showDropHelpPopover = false
+    @AppStorage("preview.hideDropHint") private var hideDropHint = false
     @State private var activeDiff: OrganizationPlanDiff?
+
+    /// Hides the drag hint chip for good; the user has learned the gesture.
+    private func dismissDropHint() {
+        HapticFeedbackManager.shared.light()
+        showDropHelpPopover = false
+        withAnimation(.sortySnappy) {
+            hideDropHint = true
+        }
+    }
 
     var body: some View {
         HStack {
@@ -158,6 +168,7 @@ struct PreviewHeaderView: View {
             Spacer()
 
             // Drag hint
+            if !hideDropHint {
             Button {
                 HapticFeedbackManager.shared.light()
                 showDropHelpPopover.toggle()
@@ -177,6 +188,11 @@ struct PreviewHeaderView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Drop in a folder")
             .accessibilityHint("Explain how to move files between folders")
+            .accessibilityAction(named: "Hide hint", dismissDropHint)
+            .contextMenu {
+                Button("Hide Hint", action: dismissDropHint)
+            }
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
             .popover(isPresented: $showDropHelpPopover, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 6) {
@@ -192,10 +208,18 @@ struct PreviewHeaderView: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    HStack {
+                        Spacer()
+                        Button("Don't Show Again", action: dismissDropHint)
+                            .buttonStyle(.sortyBordered(size: .small))
+                            .accessibilityIdentifier("PreviewHideDropHintButton")
+                    }
                 }
                 .padding(12)
                 .frame(width: 260)
                 .systemLiquidGlassPopover(cornerRadius: SortyDesignSystem.Radius.lg)
+            }
             }
 
             Text("\(totalFiles) files • \(totalFolders) folders")
