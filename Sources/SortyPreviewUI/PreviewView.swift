@@ -276,7 +276,7 @@ package struct PreviewView: View {
         hasShownLearnedEditNotice = true
         NotificationManager.shared.showHUDInfo(
             title: "Sorty learns from your edits",
-            message: "Moves, renames, and files sent to Unorganized help future plans match how you organize. You can review or clear them in Learnings.",
+            message: "Your moves, renames, and Unorganized picks shape future plans. Review or clear them in Learnings.",
             icon: "pencil.and.outline",
             iconColor: SortyDesignSystem.Colors.resolvedAccent,
             actions: [
