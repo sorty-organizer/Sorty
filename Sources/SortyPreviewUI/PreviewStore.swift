@@ -688,17 +688,13 @@ package class PreviewStore: ObservableObject {
     /// Sets a file's pending name. Pass `isUserEdited` for names the user typed, not AI regenerations.
     package func updateRename(fileID: UUID, folderID: UUID, newName: String, isUserEdited: Bool = false) {
         // Record rename edit before mutating the plan
-        if let file = findFile(by: fileID),
-           let mapping = renameMappings[fileID], mapping.hasRename, mapping.isUserEdited != true {
-            learningsManager?.recordRenameFeedback(
-                originalName: file.displayName,
-                suggestedName: mapping.suggestedName,
-                finalName: newName,
-                folderPath: folderIDToPath[folderID],
-                action: .edit,
-                confidence: mapping.renameConfidence
+        if let file = findFile(by: fileID) {
+            recordRenameLearning(
+                for: file,
+                newName: newName,
+                isUserEdited: isUserEdited,
+                folderPath: folderIDToPath[folderID]
             )
-            recordEditCaptured()
         }
         
         var updatedPlan = plan
@@ -715,10 +711,37 @@ package class PreviewStore: ObservableObject {
     /// `isUserEdited` is false when the name came from the regenerate button.
     package func updateUnorganizedRename(fileID: UUID, newName: String?, isUserEdited: Bool = true) {
         guard let file = plan.unorganizedFiles.first(where: { $0.id == fileID }) else { return }
+        if let newName {
+            recordRenameLearning(
+                for: file,
+                newName: newName,
+                isUserEdited: isUserEdited,
+                folderPath: file.url?.deletingLastPathComponent().path
+            )
+        }
         var updatedPlan = plan
         updatedPlan.unorganizedRenameMappings.upsertRename(for: file, newName: newName, isUserEdited: isUserEdited)
         updatedPlan.unorganizedRenameMappings.removeAll { !$0.hasRename }
         updateInternalPlan(updatedPlan)
+    }
+
+    /// Saves rename feedback: changes to an AI suggestion, and the first name the
+    /// user types for a file. Re-editing the user's own name teaches nothing new.
+    private func recordRenameLearning(for file: FileItem, newName: String, isUserEdited: Bool, folderPath: String?) {
+        let mapping = renameMappings[file.id]
+        let replacesAISuggestion = mapping?.hasRename == true && mapping?.isUserEdited != true
+        let replacesUserName = mapping?.hasRename == true && mapping?.isUserEdited == true
+        guard replacesAISuggestion || (isUserEdited && !replacesUserName) else { return }
+        guard newName != file.displayName else { return }
+        learningsManager?.recordRenameFeedback(
+            originalName: file.displayName,
+            suggestedName: replacesAISuggestion ? mapping?.suggestedName : nil,
+            finalName: newName,
+            folderPath: folderPath,
+            action: .edit,
+            confidence: replacesAISuggestion ? mapping?.renameConfidence : nil
+        )
+        recordEditCaptured()
     }
 
     package func rejectRename(fileID: UUID, folderID: UUID) {

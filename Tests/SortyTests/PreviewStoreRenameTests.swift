@@ -3,6 +3,7 @@ import XCTest
 @testable import SortyLib
 @testable import SortyCore
 @testable import SortyLearnings
+@testable import SortyPreviewUI
 
 @MainActor
 final class PreviewStoreRenameTests: XCTestCase {
@@ -55,6 +56,30 @@ final class PreviewStoreRenameTests: XCTestCase {
 
         store.updateRename(fileID: file.id, folderID: folder.id, newName: "regenerated.txt")
         XCTAssertNil(store.plan.suggestions[0].renameMapping(for: file)?.isUserEdited)
+    }
+
+    func testFirstTypedNameIsLearnedButReEditingItIsNot() async {
+        let suite = "PreviewStoreRenameTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let manager = LearningsManager(userDefaults: defaults)
+        manager.currentProfile = LearningsProfile()
+        await manager.grantConsent()
+
+        let file = makeFile("scan")
+        let loose = makeFile("loose")
+        let folder = FolderSuggestion(folderName: "Docs", files: [file])
+        let store = PreviewStore(plan: OrganizationPlan(suggestions: [folder], unorganizedFiles: [loose], notes: ""))
+        store.learningsManager = manager
+
+        store.updateRename(fileID: file.id, folderID: folder.id, newName: "Lease.txt", isUserEdited: true)
+        XCTAssertEqual(store.editsCapturedCount, 1)
+
+        store.updateRename(fileID: file.id, folderID: folder.id, newName: "Lease 2026.txt", isUserEdited: true)
+        XCTAssertEqual(store.editsCapturedCount, 1)
+
+        store.updateUnorganizedRename(fileID: loose.id, newName: "Receipt.txt")
+        XCTAssertEqual(store.editsCapturedCount, 2)
     }
 
     func testUpdateRenameNoOpDoesNotCreateMapping() {
