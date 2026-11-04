@@ -26,6 +26,7 @@ package struct MascotHeartParticleMorphView: View {
     @State private var animationRun = 0
     @State private var replayStartProgress = 1.0
     @State private var isSettled = false
+    @State private var isPrepared = false
     @State private var isWindowVisible = true
 
     // `color` kept for API compat but mascot uses its true palette, not the accent.
@@ -38,38 +39,14 @@ package struct MascotHeartParticleMorphView: View {
     package var body: some View {
         Button(action: replayAnimation) {
             Group {
-                if isSettled || reduceMotion {
-                    // Settled heart renders once with no timeline; the looping
-                    // heartbeat below is paused instead of ticking forever.
-                    ParticleMorphCanvas(
-                        progress: 1,
-                        heartbeatScale: 1,
-                        isHeartComplete: true
-                    )
+                if isPrepared {
+                    morphTimeline
+                        .transition(.opacity)
                 } else {
-                    // No scenePhase gate: this view lives in a manually created
-                    // NSWindow, where scenePhase never becomes .active.
-                    SwiftUI.TimelineView(
-                        .animation(
-                            // A few seconds at most, then the view settles.
-                            minimumInterval: 1.0 / 60.0,
-                            paused: reduceMotion || animationStart == nil || isSettled
-                                || !isWindowVisible || controlActiveState == .inactive
-                        )
-                    ) { timeline in
-                        let elapsed = animationStart.map { timeline.date.timeIntervalSince($0) } ?? 0
-                        let isReplay = animationRun > 0
-                        let isHeartComplete = reduceMotion || heartIsComplete(at: elapsed, isReplay: isReplay)
-
-                        ParticleMorphCanvas(
-                            progress: isHeartComplete ? 1 : morphProgress(at: elapsed, isReplay: isReplay),
-                            heartbeatScale: reduceMotion ? 1 : motionScale(at: elapsed, isReplay: isReplay),
-                            isHeartComplete: isHeartComplete,
-                            ringProgress: ringProgress(at: elapsed, isReplay: isReplay)
-                        )
-                    }
+                    Color.clear
                 }
             }
+            .animation(reduceMotion ? nil : .sortyFade, value: isPrepared)
             .contentShape(Rectangle())
             .accessibilityHidden(true)
         }
@@ -81,6 +58,13 @@ package struct MascotHeartParticleMorphView: View {
         .task(id: AnimationTaskID(reduceMotion: reduceMotion, run: animationRun)) {
             animationStart = nil
             isSettled = reduceMotion
+            // Building the particles takes long enough to stall a frame, so it
+            // happens off the main actor before anything draws.
+            await Task.detached(priority: .userInitiated) {
+                ParticleMorphCanvas.prepare()
+            }.value
+            guard !Task.isCancelled else { return }
+            isPrepared = true
             guard !reduceMotion else { return }
 
             try? await Task.sleep(for: .milliseconds(120))
@@ -112,6 +96,32 @@ package struct MascotHeartParticleMorphView: View {
             try? await Task.sleep(for: .seconds(2 * Timing.heartbeatDuration))
             guard !Task.isCancelled else { return }
             isSettled = true
+        }
+    }
+
+    /// One timeline for every state. Swapping to a separate settled view
+    /// recreates the canvas, which can flash an empty frame.
+    private var morphTimeline: some View {
+        // No scenePhase gate: this view lives in a manually created NSWindow,
+        // where scenePhase never becomes .active. The timeline runs at the
+        // display rate for a few seconds, then pauses once settled.
+        SwiftUI.TimelineView(
+            .animation(
+                paused: reduceMotion || animationStart == nil || isSettled
+                    || !isWindowVisible || controlActiveState == .inactive
+            )
+        ) { timeline in
+            let isResting = isSettled || reduceMotion
+            let elapsed = animationStart.map { timeline.date.timeIntervalSince($0) } ?? 0
+            let isReplay = animationRun > 0
+            let isHeartComplete = isResting || heartIsComplete(at: elapsed, isReplay: isReplay)
+
+            ParticleMorphCanvas(
+                progress: isHeartComplete ? 1 : morphProgress(at: elapsed, isReplay: isReplay),
+                heartbeatScale: isResting ? 1 : motionScale(at: elapsed, isReplay: isReplay),
+                isHeartComplete: isHeartComplete,
+                ringProgress: isResting ? 0 : ringProgress(at: elapsed, isReplay: isReplay)
+            )
         }
     }
 
@@ -171,22 +181,25 @@ package struct MascotHeartParticleMorphView: View {
 
         let crouch: CGFloat = 0.06
         if elapsed < start {
-            return 1 - crouch * eased((elapsed - start + Timing.anticipationDuration) / Timing.anticipationDuration)
+            return 1 - crouch * smoothed((elapsed - start + Timing.anticipationDuration) / Timing.anticipationDuration)
         }
-        return 1 - crouch * (1 - eased((elapsed - start) / Timing.releaseDuration))
+        return 1 - crouch * (1 - smoothed((elapsed - start) / Timing.releaseDuration))
     }
 
-    /// The first beat is the landing, so it hits harder than the rest.
+    /// Two beats per cycle. The first beat of all is the landing, so it hits
+    /// harder. Each beat starts and ends at rest so the motion never jerks.
     private func heartbeatScale(sinceHeartStart elapsed: TimeInterval) -> CGFloat {
         let peak: CGFloat = elapsed < Timing.heartbeatDuration ? 0.13 : 0.075
         let t = elapsed.truncatingRemainder(dividingBy: Timing.heartbeatDuration)
-        switch t {
-        case 0..<0.11: return 1 + peak * eased(t / 0.11)
-        case 0.11..<0.20: return 1 + peak - peak * eased((t - 0.11) / 0.09)
-        case 0.24..<0.32: return 1 + 0.038 * eased((t - 0.24) / 0.08)
-        case 0.32..<0.44: return 1.038 - 0.038 * eased((t - 0.32) / 0.12)
-        default: return 1
-        }
+        return 1 + beat(at: t, start: 0, duration: 0.26, peak: peak)
+            + beat(at: t, start: 0.26, duration: 0.22, peak: 0.038)
+    }
+
+    private func beat(at t: TimeInterval, start: TimeInterval, duration: TimeInterval, peak: CGFloat) -> CGFloat {
+        let p = (t - start) / duration
+        guard p > 0, p < 1 else { return 0 }
+        let wave = sin(.pi * p)
+        return peak * CGFloat(wave * wave)
     }
 
     /// Progress of the ring that leaves the heart as it lands.
@@ -199,9 +212,9 @@ package struct MascotHeartParticleMorphView: View {
         elapsed >= morphStart(isReplay: isReplay) + Timing.morphDuration
     }
 
-    private func eased(_ p: Double) -> CGFloat {
-        let c = min(max(p, 0), 1)
-        return CGFloat(1 - pow(1 - c, 3))
+    private func smoothed(_ p: Double) -> CGFloat {
+        let c = clamped(p)
+        return CGFloat(c * c * (3 - 2 * c))
     }
 }
 
@@ -219,7 +232,7 @@ private struct ParticleMorphCanvas: View {
 
     /// Share of the morph spent staggering departures. Each particle flies
     /// for the remainder, so outer particles peel away first.
-    private static let maximumDelay: CGFloat = 0.38
+    nonisolated private static let maximumDelay: CGFloat = 0.38
     private static let heartRed = 0.96
     private static let heartGreen = 0.19
     private static let heartBlue = 0.26
@@ -362,7 +375,13 @@ private struct ParticleMorphCanvas: View {
         Color(red: Self.heartRed, green: Self.heartGreen, blue: Self.heartBlue)
     }
 
-    private static let particles: [ParticleMorphDefinition] =
+    /// Builds every lazy particle table. Call off the main actor before drawing.
+    nonisolated static func prepare() {
+        _ = particles
+        _ = MascotHeartParticleTargets.heartPath
+    }
+
+    nonisolated private static let particles: [ParticleMorphDefinition] =
         MascotHeartParticleTargets.mascot.indices.map { index in
             let mascot = MascotHeartParticleTargets.mascot[index]
             let heart = MascotHeartParticleTargets.heart[index]
@@ -385,13 +404,13 @@ private struct ParticleMorphCanvas: View {
             )
         }
 
-    private static func seed(for index: Int) -> CGFloat {
+    nonisolated private static func seed(for index: Int) -> CGFloat {
         let mixed = UInt64(index &* 73_856_093) ^ UInt64(index &* 19_349_663)
         return CGFloat(mixed % 1_000) / 1_000
     }
 }
 
-private struct ParticleMorphDefinition {
+private struct ParticleMorphDefinition: Sendable {
     let mascot: MascotParticle
     let heart: CGPoint
     let delay: CGFloat
@@ -399,7 +418,7 @@ private struct ParticleMorphDefinition {
     let arcOffset: CGPoint
 }
 
-private struct MascotParticle {
+private struct MascotParticle: Sendable {
     let point: CGPoint
     let red: Double
     let green: Double
@@ -460,6 +479,8 @@ fR0uRnqBHZGmw4UdKDtodiGVprl6Ifb7/X0h0vH2gSHd9PaFIfj+/Ygh7/T1diWRudZ6JZve9X0lxfP6
 
     private static func makeHeartPoints(count: Int) -> [CGPoint] {
         let outline = makeHeartOutline()
+        // A quarter of the vertices is plenty to test which points are inside.
+        let polygon = stride(from: 0, to: outline.count, by: 4).map { outline[$0] }
         let outlineCount = min(220, count / 6)
         var points = resampleClosedPolyline(outline, count: outlineCount)
         points.reserveCapacity(count)
@@ -471,7 +492,7 @@ fR0uRnqBHZGmw4UdKDtodiGVprl6Ifb7/X0h0vH2gSHd9PaFIfj+/Ygh7/T1diWRudZ6JZve9X0lxfP6
             let x = minX + halton(haltonIndex, base: 2) * (maxX - minX)
             let y = minY + halton(haltonIndex, base: 3) * (maxY - minY)
             let p = CGPoint(x: x, y: y)
-            if isInsidePolygon(p, polygon: outline) {
+            if isInsidePolygon(p, polygon: polygon) {
                 points.append(p)
             }
             haltonIndex += 1
