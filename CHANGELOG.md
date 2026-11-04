@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.1] - 2026-11-04
 
+A broad pass of UI cleanup and bug fixes across Sorty.
+
 ### New
 
 - Rename files directly in the preview, including files left unorganized. Edit a name, regenerate a suggestion, or revert it before applying the plan.

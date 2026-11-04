@@ -94,11 +94,11 @@ public struct WhatsNewTourView: View {
             WhatsNewPage(
                 imageName: "AppIcon-Release.png",
                 title: "Sorty 1.3.1",
-                description: "Rename in preview, review expiring files, and send richer feedback."
+                description: "UI cleanup and bug fixes across Sorty."
             ),
             WhatsNewPage(
                 title: "Sorty 1.3.1",
-                description: "More control before you apply a plan."
+                description: "A broad pass of UI cleanup and bug fixes."
             ),
         ]
     }
@@ -195,7 +195,7 @@ public struct WhatsNewTourView: View {
                     .foregroundStyle(.primary)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("Edit names before applying a plan, review files ready for cleanup, and share feedback with attachments.")
+                Text("A broad cleanup of previews, Settings, onboarding, and completion screens, with fixes across providers, feedback, and file handling.")
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

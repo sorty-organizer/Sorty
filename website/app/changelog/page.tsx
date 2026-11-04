@@ -48,9 +48,9 @@ const RELEASES = [
     version: 'Sorty 1.3.1',
     status: 'Upcoming',
     date: 'In preparation',
-    title: 'More control before you apply',
+    title: 'UI cleanup and bug fixes',
     summary:
-      'Rename files in preview, review expiring files in Sorty Labs, and send feedback with attachments. Release validation is in progress; 1.3.0 remains the current download.',
+      'A broad pass of UI cleanup across previews, Settings, onboarding, and completion screens, alongside fixes for providers, feedback, and file handling. Release validation is in progress; 1.3.0 remains the current download.',
     highlights: [
       {
         icon: Sparkles,
