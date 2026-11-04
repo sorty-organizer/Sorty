@@ -92,9 +92,8 @@ public struct WhatsNewTourView: View {
     private var pages: [WhatsNewPage] {
         [
             WhatsNewPage(
-                imageName: "AppIcon-Release.png",
-                title: "Sorty 1.3.1",
-                description: "UI cleanup and bug fixes across Sorty."
+                title: "More control over your files",
+                description: "Edit names before organizing, review old files, and send feedback with attachments."
             ),
             WhatsNewPage(
                 title: "Sorty 1.3.1",
@@ -108,13 +107,12 @@ public struct WhatsNewTourView: View {
 
         return ZStack(alignment: .top) {
             VStack(spacing: 0) {
-                // The release summary uses the copy space that the image pages
-                // need. Both layouts still end at the same fixed action-button row.
+                // Highlights and the release summary share a fixed action-button row.
                 Group {
                     if isReleaseSummary {
                         releaseSummary
                     } else {
-                        imageSection(page)
+                        releaseHighlights
                     }
                 }
                 .frame(height: isReleaseSummary ? 496 : 416, alignment: .top)
@@ -309,70 +307,60 @@ public struct WhatsNewTourView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func imageSection(_ page: WhatsNewPage) -> some View {
-        ZStack {
-            if currentPage == 0 {
-                RadialGradient(
-                    colors: [SortyDesignSystem.Colors.resolvedAccent.opacity(0.30), .clear],
-                    center: .center,
-                    startRadius: 24,
-                    endRadius: 270
-                )
+    /// Release-specific highlights replace the previous release's app-icon showcase.
+    private var releaseHighlights: some View {
+        VStack(spacing: 14) {
+            releaseHighlight(
+                title: "Refine names in preview",
+                detail: "Edit, regenerate, or revert a name before applying your plan.",
+                symbol: "pencil.line",
+                color: SortyDesignSystem.Colors.resolvedAccent
+            )
+            releaseHighlight(
+                title: "Review old files before cleanup",
+                detail: "Try Expiring Files in Sorty Labs. Review each file before moving it to Trash.",
+                symbol: "hourglass",
+                color: SortyDesignSystem.Colors.warning
+            )
+            releaseHighlight(
+                title: "Show what went wrong",
+                detail: "Attach files to feedback and preview the diagnostics included in your report.",
+                symbol: "paperclip",
+                color: SortyDesignSystem.Colors.success
+            )
+        }
+        .padding(.horizontal, 48)
+        .padding(.top, 72)
+        .frame(width: 640, height: 400, alignment: .top)
+    }
+
+    private func releaseHighlight(
+        title: LocalizedStringKey,
+        detail: LocalizedStringKey,
+        symbol: String,
+        color: Color
+    ) -> some View {
+        HStack(alignment: .center, spacing: 16) {
+            Image(systemName: symbol)
+                .font(.system(size: 25, weight: .medium))
+                .foregroundStyle(color)
+                .frame(width: 44)
                 .accessibilityHidden(true)
-            }
-            if let imageName = page.imageName {
-                bundledImage(imageName)
-                    .padding(.vertical, currentPage == 0 ? 10 : 0)
-                    .frame(width: 640, height: 400)
-                    .clipped()
-                    .id(imageName)
-                    .transition(
-                        .asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 1.006)),
-                            removal: .opacity.combined(with: .scale(scale: 0.994))
-                        )
-                    )
-            }
 
-            if page.imageName != nil {
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: Color(nsColor: .windowBackgroundColor).opacity(0.20), location: 0.45),
-                        .init(color: Color(nsColor: .windowBackgroundColor), location: 1.0),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .allowsHitTesting(false)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(.headline, design: .rounded))
+                    .accessibilityAddTraits(.isHeader)
+                Text(detail)
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 640, height: 400)
-    }
-
-    @ViewBuilder
-    private func bundledImage(_ name: String) -> some View {
-        if let image = WhatsNewImageLoader.image(named: name) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        } else {
-            missingImagePlaceholder(name)
-        }
-    }
-
-    private func missingImagePlaceholder(_ name: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: "photo")
-                .font(.system(size: 42, weight: .semibold))
-                .foregroundStyle(.secondary)
-            Text(name)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(16)
+        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
+        .accessibilityElement(children: .combine)
     }
 
     private var topControls: some View {
@@ -659,64 +647,8 @@ private struct GooeyPageIndicator: View, @MainActor Animatable {
 }
 
 private struct WhatsNewPage: Hashable {
-    let imageName: String?
     let title: String
     let description: String
-
-    init(imageName: String? = nil, title: String, description: String) {
-        self.imageName = imageName
-        self.title = title
-        self.description = description
-    }
-}
-
-private enum WhatsNewImageLoader {
-    static func image(named name: String) -> NSImage? {
-        let resourceName = (name as NSString).deletingPathExtension
-        let resourceExtension = (name as NSString).pathExtension
-        let fileExtension = resourceExtension.isEmpty ? "png" : resourceExtension
-        // Never touch Bundle.module here: its generated accessor traps with
-        // EXC_BREAKPOINT when the SPM bundle is absent from an Xcode-built app.
-        if let url = appIconURL(resourceName: resourceName, fileExtension: fileExtension),
-           let image = NSImage(contentsOf: url) {
-            return image
-        }
-        return SortyResources.image(named: resourceName, withExtension: fileExtension)
-            ?? NSImage(named: name)
-    }
-
-    private static func appIconURL(resourceName: String, fileExtension: String) -> URL? {
-        let fileName = "\(resourceName).\(fileExtension)"
-        if let url = SortyResources.bundle.url(
-            forResource: resourceName,
-            withExtension: fileExtension,
-            subdirectory: "AppIcons"
-        ) {
-            return url
-        }
-        if let url = Bundle.main.url(
-            forResource: resourceName,
-            withExtension: fileExtension,
-            subdirectory: "AppIcons"
-        ) {
-            return url
-        }
-
-        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
-        let roots = [SortyResources.bundle.resourceURL, Bundle.main.resourceURL].compactMap { $0 }
-        var candidates: [URL] = []
-        for root in roots {
-            candidates.append(root.appendingPathComponent("AppIcons/\(fileName)"))
-            candidates.append(root.appendingPathComponent(fileName))
-        }
-        candidates.append(Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/AppIcons/\(fileName)"))
-        candidates.append(cwd.appendingPathComponent("Sources/SortyLib/Resources/AppIcons/\(fileName)"))
-
-        for candidate in candidates where FileManager.default.fileExists(atPath: candidate.path) {
-            return candidate
-        }
-        return nil
-    }
 }
 
 #Preview {

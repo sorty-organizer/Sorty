@@ -63,7 +63,6 @@ App icon sources live in `Assets/AppIcon`. Run
 the ICNS files and release asset catalog. The generator adds the Dock margins.
 Changing source artwork does not update an existing release ZIP.
 
-The What's New tour loads `Sources/SortyLib/Resources/AppIcons/AppIcon-Release.png`.
-Keep that copy in sync with `Assets/AppIcon/AppIcon-Release.png` when replacing
-the release artwork. The first tour page fits the icon into a 380-point square
-with 10 points of space above and below it, inside the 400-point image area.
+The 1.3.1 What's New tour leads with preview renaming, Expiring Files, and
+feedback attachments, followed by the release summary. It keeps the existing
+640×576 paged layout and does not showcase the unchanged app icon.
