@@ -257,8 +257,6 @@ folder selected so you can right-click it yourself.
 |----------|--------|
 | ⇧⌘U | Check for Updates |
 | ⌘? | Sorty Help |
-| ⌥⌘N | What's New in Sorty |
-| ⌥⌘F | Send Feedback |
 
 ---
 

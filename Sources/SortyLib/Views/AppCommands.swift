@@ -185,20 +185,6 @@ public struct SortyCommands: Commands {
             .keyboardShortcut("?", modifiers: .command)
             .disabled(appState == nil)
 
-            Button("What's New in Sorty", systemImage: "gift") {
-                appState?.isShowingWhatsNew = true
-            }
-            .keyboardShortcut("n", modifiers: [.command, .option])
-            .disabled(!(appState?.hasCompletedOnboarding ?? false))
-
-            Link(destination: URL(string: "https://github.com/sorty-organizer/Sorty/blob/main/HELP.md")!) {
-                Label("Documentation", systemImage: "doc.text")
-            }
-
-            Link(destination: URL(string: "https://sorty-organizer.github.io/Sorty/changelog")!) {
-                Label("View Changelog", systemImage: "clock.arrow.circlepath")
-            }
-
             Button("Restart Onboarding...", systemImage: "sparkles") {
                 appState?.showOnboarding()
             }
@@ -206,19 +192,17 @@ public struct SortyCommands: Commands {
 
             Divider()
 
-            Button("Send Feedback...", systemImage: "exclamationmark.bubble") {
+            Button("Report Bug", systemImage: "ladybug") {
                 appState?.showBugReport()
             }
-            .keyboardShortcut("f", modifiers: [.command, .option])
             .disabled(appState == nil)
 
-            Link(destination: URL(string: "https://github.com/sorty-organizer/Sorty")!) { Label("GitHub Repository", systemImage: "chevron.left.forwardslash.chevron.right") }
+            Link(destination: URL(string: "https://github.com/shirishpothi/Sorty")!) { Label("GitHub Repository", systemImage: "chevron.left.forwardslash.chevron.right") }
 
             if FeatureFlags.supportDeveloperEnabled {
                 Link(destination: URL(string: "https://github.com/sponsors/shirishpothi")!) { Label("Support the Developer", systemImage: "heart") }
             }
 
-            // HelpMenuHoverHapticsController finds this item by its exact title.
             Button("Thank you for using Sorty", systemImage: "heart.fill") {
                 appState?.showThanksForUsingSorty()
             }

@@ -19,6 +19,7 @@ struct MainWindowRootView: View {
     @StateObject private var windowSession: WindowSession
     @State private var handledLaunchRequestID: UUID?
     @State private var handledUITestDeepLink = false
+    @State private var isShowingWhatsNew = false
     @State private var importPickerDelayTask: Task<Void, Never>?
     @State private var whatsNewDelayTask: Task<Void, Never>?
     @State private var uiTestDeeplinkTask: Task<Void, Never>?
@@ -94,7 +95,7 @@ struct MainWindowRootView: View {
                 isPresented: $windowSession.appState.showDeleteUsageDataConfirmation,
                 deleteAction: windowSession.appState.deleteUsageData
             )
-            .sheet(isPresented: $windowSession.appState.isShowingWhatsNew) {
+            .sheet(isPresented: $isShowingWhatsNew) {
                 WhatsNewTourView {
                     markWhatsNewSeen()
                 }
@@ -455,7 +456,7 @@ struct MainWindowRootView: View {
             guard !Task.isCancelled else { return }
             guard !windowSession.organizer.state.isOperationInProgress else { return }
             if forceShowWhatsNewOnLaunch || lastSeenWhatsNewBuild != currentIdentifier {
-                windowSession.appState.isShowingWhatsNew = true
+                isShowingWhatsNew = true
             }
             whatsNewDelayTask = nil
         }
@@ -471,7 +472,7 @@ struct MainWindowRootView: View {
             lastSeenWhatsNewBuild = currentIdentifier
         }
         forceShowWhatsNewOnLaunch = false
-        windowSession.appState.isShowingWhatsNew = false
+        isShowingWhatsNew = false
     }
 
     private func whatsNewVersion() -> String {

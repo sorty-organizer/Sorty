@@ -32,7 +32,7 @@ struct HelpSettingsView: View {
                         )
 
                         HelpIconLink(
-                            title: "Send Feedback",
+                            title: "Report Bug",
                             icon: "exclamationmark.bubble",
                             color: SortyDesignSystem.Colors.error,
                             focusTarget: .helpReportIssue,
