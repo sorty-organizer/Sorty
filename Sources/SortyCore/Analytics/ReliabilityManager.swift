@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 @preconcurrency import Sentry
 import SortyAI
 import SortyFS
+import SortyLearnings
 
 /// Product area a bug report is about; one per feature module so Sentry
 /// reports can be filtered by `report_area`.
@@ -925,6 +926,22 @@ public final class ReliabilityManager {
             }
             return .init(category: category, cause: cause)
         }
+        if let learningsError = error as? LearningsFileError {
+            switch learningsError {
+            case .noEncryptionKey:
+                return .init(category: "authentication", cause: "learnings_key_unavailable")
+            case .keychainSaveFailed:
+                return .init(category: "authentication", cause: "learnings_key_save_failed")
+            case .keychainDeleteFailed:
+                return .init(category: "authentication", cause: "learnings_key_delete_failed")
+            case .encryptionFailed:
+                return .init(category: "validation", cause: "learnings_encryption_failed")
+            case .decryptionFailed:
+                return .init(category: "validation", cause: "learnings_decryption_failed")
+            case .corruptProfileQuarantined:
+                return .init(category: "validation", cause: "learnings_profile_quarantined")
+            }
+        }
         if error is DecodingError {
             return .init(category: "validation", cause: "decoding_failed")
         }
@@ -1174,6 +1191,12 @@ public final class ReliabilityManager {
             "invalid_model_list": "model list could not be read",
             "credentials_rejected": "credentials rejected",
             "missing_or_invalid_configuration": "missing or invalid configuration",
+            "learnings_key_unavailable": "Learnings encryption key unavailable",
+            "learnings_key_save_failed": "Learnings encryption key could not be saved",
+            "learnings_key_delete_failed": "Learnings encryption key could not be deleted",
+            "learnings_encryption_failed": "Learnings encryption failed",
+            "learnings_decryption_failed": "Learnings decryption failed",
+            "learnings_profile_quarantined": "unreadable Learnings profile set aside",
             "unclassified": "unclassified error",
         ]
         return labels[cause] ?? cause.replacingOccurrences(of: "_", with: " ")
