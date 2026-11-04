@@ -389,8 +389,12 @@ struct MainWindowRootView: View {
     private var contentWithEnvironment: some View {
         ContentView()
             .frame(
-                minWidth: SortyDesignSystem.Sizing.windowMinWidth,
-                minHeight: SortyDesignSystem.Sizing.windowMinHeight
+                minWidth: windowSession.appState.hasCompletedOnboarding
+                    ? SortyDesignSystem.Sizing.windowMinWidth
+                    : SortyDesignSystem.Sizing.windowOnboardingWidth,
+                minHeight: windowSession.appState.hasCompletedOnboarding
+                    ? SortyDesignSystem.Sizing.windowMinHeight
+                    : SortyDesignSystem.Sizing.windowOnboardingHeight
             )
             .handlesExternalEvents(
                 preferring: MainWindowRouter.existingWindowExternalEventMatchers,

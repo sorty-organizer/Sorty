@@ -84,7 +84,9 @@ playback when leaving that page or closing onboarding.
 
 ## Onboarding window
 
-The onboarding window has a minimum content size of 1100 by 720 points. Its
+The onboarding window has a minimum content size of 1100 by 720 points. The
+main window root must use that same minimum while either onboarding flow is
+active; the regular 960 by 640 minimum otherwise lets the root clip onboarding. Its
 main `VStack` owns the vertical allocation between the progress rail, step
 content, and navigation controls. Non-completion steps receive the stack's
 finite remaining size directly.
@@ -412,3 +414,15 @@ and skip the immediate Reduce Motion reveal. Keep manual connection-test tap
 feedback in its button/retry actions so automatic connection probes stay quiet.
 Reuse existing selection, success, and error feedback instead of adding a second
 pulse around actions that already provide it.
+
+### Replay the skill introduction
+
+Quit Sorty, run these commands, then reopen it:
+
+```sh
+defaults write com.sorty.app hasCompletedSkillIntroduction -bool false
+defaults write com.sorty.app hasCompletedOnboarding -bool false
+```
+
+Both flags are required: completed app onboarding bypasses the skill introduction.
+Help > Restart Onboarding intentionally opens app setup without the skill intro.
