@@ -269,9 +269,6 @@ private struct MilestoneEmptyStateSliverModifier: ViewModifier {
         sweepTask = Task { @MainActor in
             await Task.yield()
             guard !Task.isCancelled else { return }
-            HapticSequenceManager.shared.playShimmerWave(
-                duration: emptyStateSliverDuration
-            )
             withAnimation(.easeInOut(duration: emptyStateSliverDuration)) {
                 sweepProgress = 1
             }
@@ -348,9 +345,6 @@ private struct AnimatedEmptyStateIconModifier: ViewModifier {
             .onAppear {
                 guard !reduceMotion else { return }
                 sweepProgress = 0
-                HapticSequenceManager.shared.playShimmerWave(
-                    duration: emptyStateSliverDuration
-                )
                 withAnimation(.easeInOut(duration: emptyStateSliverDuration)) {
                     sweepProgress = 1
                 }

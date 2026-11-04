@@ -158,10 +158,7 @@ struct AnalysisView: View {
         .onChange(of: organizer.insightHistory.count) { _, newCount in
             lastInsightCount = newCount
         }
-        .onChange(of: currentMessageTier) { oldTier, newTier in
-            if oldTier == .none, newTier != .none {
-                HapticSequenceManager.shared.playEventPulse()
-            }
+        .onChange(of: currentMessageTier) { _, newTier in
             if newTier == .takingLonger {
                 showTakingLongerHUDIfNeeded()
             } else {

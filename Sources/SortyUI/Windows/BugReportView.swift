@@ -120,10 +120,10 @@ public struct BugReportView: View {
                     )
                     .frame(height: min(max(textHeight, 88), 200))
                     .accessibilityIdentifier("BugReportDescription")
-                    .onChange(of: description) { _, newValue in
+                    .onChange(of: description) { oldValue, newValue in
                         if newValue.count > 2_000 {
                             description = String(newValue.prefix(2_000))
-                            HapticFeedbackManager.shared.error()
+                            if oldValue.count < 2_000 { HapticFeedbackManager.shared.error() }
                         }
                     }
                     if description.isEmpty {
@@ -908,7 +908,6 @@ private struct FeedbackTextView: NSViewRepresentable {
                       let png = NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:]) {
                 coordinator?.parent.onDropImage(png, "png")
             }
-            HapticFeedbackManager.shared.success()
             return true
         }
     }

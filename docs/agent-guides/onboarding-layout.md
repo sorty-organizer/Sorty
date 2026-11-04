@@ -2,8 +2,8 @@
 
 ## Skill setup
 
-Agent tiles use the immediate tap haptic. Selecting the current agent leaves
-its location unchanged. Backdrop and edge-glow presenters attach only when the
+Agent tiles use one selection pulse when the agent changes. Selecting the current
+agent leaves its location unchanged and stays silent. Backdrop and edge-glow presenters attach only when the
 host window changes; window notifications handle geometry and activation.
 Ordinary selection and hover updates must not re-order the screen panels.
 Destination changes refresh installer status without publishing a transient
@@ -408,12 +408,11 @@ size. Unchanged layout bounds must not rebuild scan/ripple paths or discard the
 completion blob's settled rasterization. Completion activity changes only pause
 or resume its layer clock; they must not rerun its reveal or ambient settle.
 
-Onboarding haptics follow discrete reveal milestones and explicit user actions,
-never animation frames. Automatic reveal pulses only play while Sorty is active
-and skip the immediate Reduce Motion reveal. Keep manual connection-test tap
-feedback in its button/retry actions so automatic connection probes stay quiet.
-Reuse existing selection, success, and error feedback instead of adding a second
-pulse around actions that already provide it.
+Onboarding haptics follow explicit user actions, not reveal milestones, icon
+sweeps, hover, or automatic connection checks. Completion has one success pulse
+when the user leaves setup. Manual connection tests retain outcome feedback.
+Shared button styles stay silent; action handlers own feedback so a cancelled
+press cannot fire and one action does not get two pulses.
 
 ### Replay the skill introduction
 

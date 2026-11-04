@@ -183,6 +183,11 @@ package final class ExpiringFilesManager: ObservableObject {
         if changed > 0 { parts.append("Skipped \(changed) that changed since the scan.") }
         if failed > 0 { parts.append("\(failed) couldn't be moved.") }
         lastResult = parts.joined(separator: " ")
+        if failed > 0 || changed > 0 {
+            HapticFeedbackManager.shared.error()
+        } else if !trashed.isEmpty {
+            HapticFeedbackManager.shared.success()
+        }
     }
 
     /// Drops reminders for files that are gone, so the list doesn't grow forever.

@@ -325,10 +325,7 @@ struct SkillSetupView: View {
         .task(id: [step.rawValue, reduceMotion ? 1 : 0]) {
             await revealIntroduction()
         }
-        .onChange(of: introductionStage) { previousStage, stage in
-            if isOnboarding, !reduceMotion, NSApp.isActive, stage > previousStage, stage >= 2 {
-                HapticFeedbackManager.shared.light()
-            }
+        .onChange(of: introductionStage) { _, stage in
             if step == .rethink && stage >= 3 {
                 hasRevealedSkillUnderline = true
             }

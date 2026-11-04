@@ -187,9 +187,6 @@ public struct CompletionStepView: View {
             guard !Task.isCancelled else { return }
             tipsAppeared = true
             showParticles = true
-            if NSApp.isActive {
-                HapticFeedbackManager.shared.light()
-            }
         }
     }
 

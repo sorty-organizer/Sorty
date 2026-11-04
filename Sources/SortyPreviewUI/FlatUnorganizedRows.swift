@@ -234,8 +234,10 @@ struct FlatUnorganizedFileRowView: View {
     private func saveName() {
         let trimmed = editedName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
+            let didChangeName = trimmed != (renameMapping?.suggestedName ?? file.displayName)
             store.updateUnorganizedRename(fileID: file.id, newName: trimmed)
             onPlanChanged()
+            if didChangeName { HapticFeedbackManager.shared.selection() }
         }
         isEditingName = false
     }

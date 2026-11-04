@@ -591,7 +591,6 @@ private struct OnboardingCompletionDestination: View {
 
     var body: some View {
         CompletionStepView(providerSetupStatus: providerSetupStatus) {
-            HapticFeedbackManager.shared.success()
             // The user just saw a long completion reveal. Skip the extra
             // ReadyToOrganizeView entrance cascade on the first main screen.
             appState.hasPresentedReadyToOrganize = true

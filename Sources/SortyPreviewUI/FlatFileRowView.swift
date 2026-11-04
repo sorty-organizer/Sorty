@@ -123,8 +123,10 @@ struct FlatFileRowView: View {
     
     private func saveRename() {
         if !editedName.isEmpty {
+            let didChangeName = editedName != (renameMapping?.suggestedName ?? file.displayName)
             store.updateRename(fileID: file.id, folderID: parentFolderID, newName: editedName, isUserEdited: true)
             onPlanChanged()
+            if didChangeName { HapticFeedbackManager.shared.selection() }
         }
         isEditingName = false
     }

@@ -108,14 +108,7 @@ private struct SortyButtonBody: View {
             .animation(reduceMotion ? nil : .sortyQuick, value: pressed)
             .animation(reduceMotion ? nil : .sortyQuick, value: isHovering)
             .onHover { isHovering = $0 && isEnabled }
-            .onChange(of: pressed) { _, isPressed in
-                guard isPressed else { return }
-                if intent == .destructive {
-                    HapticFeedbackManager.shared.error()
-                } else {
-                    HapticFeedbackManager.shared.tap()
-                }
-            }
+
     }
 
     @ViewBuilder
@@ -201,17 +194,7 @@ public struct MetalFxPrimaryButtonStyle: ButtonStyle {
             .opacity(isEnabled ? 1 : 0.56)
             .animation(.sortyQuick, value: pressed)
             .animation(.sortySnappy, value: isHovering)
-            .onHover { hovering in
-                isHovering = hovering
-                if hovering {
-                    HapticFeedbackManager.shared.selection()
-                }
-            }
-            .onChange(of: pressed) { _, newValue in
-                if newValue {
-                    HapticFeedbackManager.shared.tap()
-                }
-            }
+            .onHover { isHovering = $0 && isEnabled }
     }
 }
 

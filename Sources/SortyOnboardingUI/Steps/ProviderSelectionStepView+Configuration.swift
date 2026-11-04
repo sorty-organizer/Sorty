@@ -313,7 +313,7 @@ extension ProviderSelectionStepView {
             Group {
                 switch connectionStatus {
                 case .idle:
-                    ProviderTestConnectionButton(canTest: canTest, action: testConnection)
+                    ProviderTestConnectionButton(canTest: canTest, action: { testConnection() })
 
                 case .testing:
                     HStack(spacing: 8) {

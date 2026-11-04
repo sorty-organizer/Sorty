@@ -30,3 +30,15 @@ hover feedback, short spring transitions).
 `PreviewMocks.swift` provides `makeOrganizationPlan()`, its generation stats,
 and exclusion rules for the active harnesses and SwiftUI previews. Its
 `.preview` environment objects support the previews that use them.
+
+## Haptic feedback
+
+Action handlers own haptics; shared button styles stay silent. Do not emit on
+mouse-down, hover, decorative reveals, loading messages, or automatic connection
+probes. A cancelled press and a programmatic state update should stay silent.
+
+Use one subtle selection pulse for a deliberate change, one success pulse after
+a committed operation succeeds, and one error pulse when an attempted action
+fails or is blocked. Report partial cleanup as an error, never success before
+files have moved. Avoid adding a start pulse when an operation already reports
+its outcome. Native controls and visual feedback remain the primary cues.

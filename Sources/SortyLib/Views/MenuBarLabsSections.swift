@@ -135,7 +135,6 @@ struct MenuBarExpiringFilesSection: View {
             .fixedSize(horizontal: false, vertical: true)
 
             Button {
-                HapticFeedbackManager.shared.success()
                 let chosen = selected
                 Task {
                     await manager.moveToTrash(chosen, from: .menuBar)

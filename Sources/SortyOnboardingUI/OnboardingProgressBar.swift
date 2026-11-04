@@ -32,7 +32,6 @@ struct OnboardingIconSliver: View {
             .onAppear {
                 guard !reduceMotion else { return }
                 sweepProgress = 0
-                HapticSequenceManager.shared.playShimmerWave(duration: sliverDuration)
                 withAnimation(.easeInOut(duration: sliverDuration)) {
                     sweepProgress = 1
                 }

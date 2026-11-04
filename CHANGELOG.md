@@ -20,6 +20,7 @@ A broad pass of UI cleanup and bug fixes across Sorty.
 
 ### Improved
 
+- Reduced duplicate and decorative haptics; added deliberate feedback for preview rename saves and cleanup results.
 - Simplified preview counts, AI Summary, completion actions, and notices explaining how edited names inform Learnings.
 - Added approval of pending learned patterns and combined project detection with Developer Mode.
 - Refined Settings, onboarding, native segmented controls, and shared button styles.

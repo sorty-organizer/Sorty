@@ -412,9 +412,6 @@ struct OnboardingCustomPersonaCard: View {
             }
         }
         .onHover { hovering in
-            if hovering && !isHovered {
-                HapticFeedbackManager.shared.selection()
-            }
             isHovered = hovering
         }
         .animation(reduceMotion ? nil : .sortyFade, value: isHovered)

@@ -19,13 +19,12 @@ public class HapticFeedbackManager {
 
     /// Performs haptic feedback for button taps and general interactions
     public func tap() {
-        performEmphasizedPulse()
+        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
     }
 
     /// Performs haptic feedback for successful actions
     public func success() {
         NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .default)
-        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
     }
 
     /// Performs haptic feedback for alignment or snapping
@@ -36,7 +35,6 @@ public class HapticFeedbackManager {
     /// Performs haptic feedback for errors or warnings
     public func error() {
         NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
-        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
     }
 
     /// Performs haptic feedback for selection changes
@@ -44,14 +42,8 @@ public class HapticFeedbackManager {
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
     }
 
-    /// Performs a subtle light haptic for hover transitions and gentle state changes.
+    /// Performs subtle feedback for a deliberate, lightweight action.
     public func light() {
-        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-    }
-
-    /// Emits a short two-step pulse that is more perceptible than a single generic tap.
-    private func performEmphasizedPulse() {
-        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
     }
 

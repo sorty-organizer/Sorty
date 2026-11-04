@@ -129,7 +129,6 @@ private struct ExpiringFilesPanel: View {
                 HStack {
                     Spacer()
                     Button {
-                        HapticFeedbackManager.shared.success()
                         let chosen = selectedCandidates
                         Task {
                             await expiring.moveToTrash(chosen, from: .watchedFolders)
@@ -246,7 +245,10 @@ private struct ExpiringCandidateRow: View {
             detail: Text("\(candidate.reason.rawValue) · added \(candidate.dateAdded.formatted(.relative(presentation: .named))) · \(ByteCountFormatter.string(fromByteCount: candidate.size, countStyle: .file))"),
             showsPreview: candidate.reason == .screenshot
         ) {
-            Toggle("", isOn: $isSelected)
+            Toggle("", isOn: Binding(
+                get: { isSelected },
+                set: { isSelected = $0; HapticFeedbackManager.shared.selection() }
+            ))
                 .toggleStyle(.checkbox)
                 .labelsHidden()
                 .accessibilityLabel("Trash \(candidate.url.lastPathComponent)")

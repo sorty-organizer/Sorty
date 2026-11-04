@@ -43,6 +43,7 @@ extension ProviderSelectionStepView {
     }
 
     func selectProvider(_ provider: AIProvider) {
+        guard settingsViewModel.config.provider != provider else { return }
         HapticFeedbackManager.shared.selection()
         commitInputDrafts()
         settingsViewModel.config.provider = provider
@@ -182,12 +183,12 @@ extension ProviderSelectionStepView {
             guard !Task.isCancelled else { return }
             taskController.testDebounceTask = nil
             if readinessSnapshot.canTestConnection {
-                testConnection()
+                testConnection(providesFeedback: false)
             }
         }
     }
 
-    func testConnection() {
+    func testConnection(providesFeedback: Bool = true) {
         taskController.connectionTestTask?.cancel()
         let testedConfig = settingsViewModel.config
         let testID = UUID()
@@ -208,7 +209,7 @@ extension ProviderSelectionStepView {
                       taskController.connectionTestID == testID,
                       settingsViewModel.config == testedConfig else { return }
                 connectionStatus = .success
-                HapticFeedbackManager.shared.success()
+                if providesFeedback { HapticFeedbackManager.shared.success() }
             } catch let decodingError as DecodingError {
                 guard !Task.isCancelled,
                       taskController.connectionTestID == testID,
@@ -229,14 +230,14 @@ extension ProviderSelectionStepView {
                 }
                 connectionStatus = .failed
                 connectionError = "Invalid response format from server. The API endpoint may be incorrect or the service returned unexpected data. (\(context))"
-                HapticFeedbackManager.shared.error()
+                if providesFeedback { HapticFeedbackManager.shared.error() }
             } catch {
                 guard !Task.isCancelled,
                       taskController.connectionTestID == testID,
                       settingsViewModel.config == testedConfig else { return }
                 connectionStatus = .failed
                 connectionError = error.userFacingMessage
-                HapticFeedbackManager.shared.error()
+                if providesFeedback { HapticFeedbackManager.shared.error() }
             }
         }
     }
