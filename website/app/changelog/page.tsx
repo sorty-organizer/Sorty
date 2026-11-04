@@ -47,7 +47,7 @@ const RELEASES = [
   {
     version: 'Sorty 1.3.1',
     status: 'Released',
-    date: 'November 4, 2026',
+    date: 'November 5, 2026',
     title: 'UI cleanup and bug fixes',
     summary:
       'A broad pass of UI cleanup across previews, Settings, onboarding, and completion screens, alongside fixes for providers, feedback, and file handling.',

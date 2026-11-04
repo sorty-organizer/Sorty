@@ -7,15 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### New
-
-- Added menu commands to reveal the selected folder in Finder, undo the last organization, and open Clean Up when Expiring Files is on.
-
-### Improved
-
-- Added keyboard shortcuts for more menu commands and ended History commands that open a dialog with an ellipsis.
-
-## [1.3.1] - 2026-11-04
+## [1.3.1] - 2026-11-05
 
 A broad pass of UI cleanup and bug fixes across Sorty.
 
@@ -25,6 +17,7 @@ A broad pass of UI cleanup and bug fixes across Sorty.
 - Try Expiring Files in Sorty Labs: review old installers, archives, and screenshots from Clean Up in Watched Folders or the menu bar before moving them to Trash.
 - Send feedback with attachments, an optional email address, and a preview of included diagnostics. Opening a GitHub issue is optional.
 - Filter OpenCode Zen and Go models to show free options.
+- Added menu commands to reveal the selected folder in Finder, undo the last organization, and open Clean Up when Expiring Files is on.
 
 ### Improved
 
@@ -34,6 +27,8 @@ A broad pass of UI cleanup and bug fixes across Sorty.
 - Refined Settings, onboarding, native segmented controls, and shared button styles.
 - Moved duplicate cleanup, sound preparation, and image-cache teardown off the main actor; removed the rotating analysis status-message timer.
 - Updated provider model choices and made the Sorty skill usable without the app installed.
+- Rebuilt What's New with sample versions of each new feature you can try, and smoother movement between pages.
+- Added keyboard shortcuts for more menu commands.
 
 ### Fixed
 
@@ -46,6 +41,7 @@ A broad pass of UI cleanup and bug fixes across Sorty.
 - Fixed feedback attachments lost at the sandbox boundary and cleaned up staged attachments when reports close.
 - Addressed scan, file-open, and relocation authorization hangs; isolated the analysis cancellation dialog from the streaming view. Production confirmation of the analysis hang mitigations is still pending.
 - Fixed Finder Quick Action icon-update races, menu bar insertion loops, native window-button interference, and several clipped labels.
+- Fixed the Thanks window animation, which froze before snapping to the heart. It now plays through to a solid heart, and the heart on the Support the Developer button is visible.
 
 ## [1.3.0] - 2026-10-05
 
