@@ -12,6 +12,7 @@ public struct WhatsNewTourView: View {
     @State private var currentPage = 0
     @State private var appIcon: NSImage?
     @State private var interactionMonitor: Any?
+    @State private var tourWindow: NSWindow?
     @State private var isPointerInside = false
     @State private var swipeAccumulatedTranslation: CGFloat = 0
     @State private var hasTriggeredSwipeForGesture = false
@@ -32,6 +33,11 @@ public struct WhatsNewTourView: View {
         }
         .frame(width: 740, height: 540)
         .background(Color(nsColor: .windowBackgroundColor))
+        .background {
+            WhatsNewWindowReader { tourWindow = $0 }
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
         .contentShape(Rectangle())
         .windowLinkHoverPillHost()
         .onHover { isInside in
@@ -145,6 +151,11 @@ public struct WhatsNewTourView: View {
             }
 
             Spacer(minLength: 0)
+
+            Link("Full changelog", destination: URL(string: "https://sorty-organizer.github.io/Sorty/changelog/")!)
+                .font(.caption)
+                .padding(.horizontal, SortyDesignSystem.Spacing.xs)
+                .padding(.bottom, SortyDesignSystem.Spacing.lg)
         }
         .padding(.horizontal, SortyDesignSystem.Spacing.md)
         .padding(.top, SortyDesignSystem.Spacing.xl)
@@ -326,6 +337,7 @@ public struct WhatsNewTourView: View {
         interactionMonitor = NSEvent.addLocalMonitorForEvents(
             matching: .keyDown.union(.scrollWheel)
         ) { event in
+            guard let tourWindow, event.window === tourWindow else { return event }
             switch event.type {
             case .keyDown:
                 return handleKeyDownEvent(event)
@@ -351,10 +363,10 @@ public struct WhatsNewTourView: View {
         guard event.modifierFlags.intersection(navigationModifiers).isEmpty else { return event }
 
         switch event.specialKey {
-        case .leftArrow, .upArrow:
+        case .leftArrow:
             navigateToPreviousPage()
             return nil
-        case .rightArrow, .downArrow:
+        case .rightArrow:
             navigateToNextPage()
             return nil
         default:
@@ -452,6 +464,13 @@ private struct WhatsNewChapterRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovering = false
 
+    init(title: LocalizedStringKey, symbol: String, isSelected: Bool, action: @escaping () -> Void) {
+        self.title = title
+        self.symbol = symbol
+        self.isSelected = isSelected
+        self.action = action
+    }
+
     private var rowFill: Color {
         if isSelected {
             return SortyDesignSystem.Colors.resolvedAccent.opacity(0.16)
@@ -505,6 +524,10 @@ private struct WhatsNewIllustration: View {
 
     @SortyHotReload private var hotReload
     let kind: Kind
+
+    init(kind: Kind) {
+        self.kind = kind
+    }
 
     private let panelShape = RoundedRectangle(
         cornerRadius: SortyDesignSystem.Radius.xl,
@@ -846,4 +869,26 @@ private enum WhatsNewImageLoader {
 
 #Preview {
     WhatsNewTourView {}
+}
+
+/// Captures the actual sheet window so its event monitor leaves other windows alone.
+private struct WhatsNewWindowReader: NSViewRepresentable {
+    let onAttach: (NSWindow) -> Void
+
+    func makeNSView(context: Context) -> AttachedView {
+        let view = AttachedView()
+        view.onAttach = onAttach
+        return view
+    }
+
+    func updateNSView(_ nsView: AttachedView, context: Context) {}
+
+    final class AttachedView: NSView {
+        var onAttach: ((NSWindow) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let window { onAttach?(window) }
+        }
+    }
 }
