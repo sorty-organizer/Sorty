@@ -65,4 +65,6 @@ Changing source artwork does not update an existing release ZIP.
 
 The 1.3.1 What's New tour leads with preview renaming, Expiring Files, and
 feedback attachments, followed by the release summary. It keeps the existing
-640×576 paged layout and does not showcase the unchanged app icon.
+640×576 paged layout and does not showcase the unchanged app icon. Each
+highlight card in `WhatsNewHighlightsView.swift` holds a working sample with
+local state only. The rename sample reuses the preview's rename controls.

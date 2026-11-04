@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-struct RenameNameChangeView: View {
+package struct RenameNameChangeView: View {
     @SortyHotReload private var hotReload
     let suggestedName: String
     let helpText: String
@@ -16,7 +16,19 @@ struct RenameNameChangeView: View {
     /// Set while a regeneration is in flight so the incoming name animates in.
     @State private var awaitingRegeneratedName = false
 
-    var body: some View {
+    package init(
+        suggestedName: String,
+        helpText: String,
+        isRegenerating: Bool = false,
+        isHighlighted: Bool = false
+    ) {
+        self.suggestedName = suggestedName
+        self.helpText = helpText
+        self.isRegenerating = isRegenerating
+        self.isHighlighted = isHighlighted
+    }
+
+    package var body: some View {
         Text(suggestedName)
             .fontWeight(.medium)
             .foregroundColor(SortyDesignSystem.Colors.success)
@@ -441,14 +453,26 @@ struct FlatFileRowSurface: View {
     }
 }
 
-struct RenameActionGlassCluster: View {
+package struct RenameActionGlassCluster: View {
     @SortyHotReload private var hotReload
     let isRegenerating: Bool
     let onEdit: () -> Void
     let onRegenerate: () -> Void
     let onReject: () -> Void
 
-    var body: some View {
+    package init(
+        isRegenerating: Bool,
+        onEdit: @escaping () -> Void,
+        onRegenerate: @escaping () -> Void,
+        onReject: @escaping () -> Void
+    ) {
+        self.isRegenerating = isRegenerating
+        self.onEdit = onEdit
+        self.onRegenerate = onRegenerate
+        self.onReject = onReject
+    }
+
+    package var body: some View {
         HStack(spacing: 2) {
             RenameGlassIconButton(systemImage: "pencil", help: "Edit suggested name", action: onEdit)
             Button(action: onRegenerate) {

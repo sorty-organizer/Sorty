@@ -15,7 +15,11 @@ public struct WhatsNewTourView: View {
     @State private var swipeAccumulatedTranslation: CGFloat = 0
     @State private var hasTriggeredSwipeForGesture = false
     @State private var navigationDirection: CGFloat = 1
+    /// True while the sample rename field has focus. Return and the arrow keys
+    /// then belong to the field, not to page navigation.
+    @State private var isEditingSampleName = false
 
+    private let pageCount = 2
     private let swipeThreshold: CGFloat = 42
     private let maximumSwipeOffset: CGFloat = 14
 
@@ -25,7 +29,7 @@ public struct WhatsNewTourView: View {
 
     public var body: some View {
         ZStack {
-            tourPage(page)
+            tourPage
                 .id(currentPage)
                 .offset(x: reduceMotion ? 0 : resistedSwipeOffset)
                 .transition(pageTransition)
@@ -85,29 +89,14 @@ public struct WhatsNewTourView: View {
         )
     }
 
-    private var page: WhatsNewPage {
-        pages[currentPage]
+    private var isReleaseSummary: Bool {
+        currentPage == pageCount - 1
     }
 
-    private var pages: [WhatsNewPage] {
-        [
-            WhatsNewPage(
-                title: "More control over your files",
-                description: "Edit names before organizing, review old files, and send feedback with attachments."
-            ),
-            WhatsNewPage(
-                title: "Sorty 1.3.1",
-                description: "A broad pass of UI cleanup and bug fixes."
-            ),
-        ]
-    }
-
-    private func tourPage(_ page: WhatsNewPage) -> some View {
-        let isReleaseSummary = currentPage == pages.count - 1
-
-        return ZStack(alignment: .top) {
+    /// Both pages share this frame, so the indicator and action button stay put.
+    private var tourPage: some View {
+        ZStack(alignment: .top) {
             VStack(spacing: 0) {
-                // Highlights and the release summary share a fixed action-button row.
                 Group {
                     if isReleaseSummary {
                         releaseSummary
@@ -115,34 +104,11 @@ public struct WhatsNewTourView: View {
                         releaseHighlights
                     }
                 }
-                .frame(height: isReleaseSummary ? 496 : 416, alignment: .top)
+                .frame(height: 496, alignment: .top)
 
                 VStack(spacing: 0) {
                     pageIndicator
-                        .padding(.bottom, isReleaseSummary ? 8 : 10)
-
-                    if !isReleaseSummary {
-                        // Align the copy by its bottom edge. A wrapped description
-                        // grows upward and keeps the same gap above the button.
-                        VStack(spacing: 4) {
-                            Text(page.title)
-                                .font(.system(size: 22, weight: .bold, design: .rounded))
-                                .foregroundStyle(.primary)
-                                .multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .accessibilityAddTraits(.isHeader)
-
-                            Text(page.description)
-                                .font(.system(size: 13, weight: .medium, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .lineLimit(2)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.horizontal, 28)
-                        }
-                        .frame(height: 64, alignment: .bottom)
-                        .offset(y: -8)
-                    }
+                        .padding(.bottom, 8)
 
                     Spacer(minLength: 0)
 
@@ -150,7 +116,7 @@ public struct WhatsNewTourView: View {
                         .frame(height: 44)
                         .accessibilityHidden(true)
                 }
-                .frame(height: isReleaseSummary ? 72 : 152)
+                .frame(height: 72)
                 .padding(.bottom, 8)
             }
             .frame(width: 640, height: 576, alignment: .top)
@@ -161,22 +127,18 @@ public struct WhatsNewTourView: View {
         }
         .frame(width: 640, height: 576, alignment: .top)
         .background {
-            if isReleaseSummary {
-                LinearGradient(
-                    stops: [
-                        .init(
-                            color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.14),
-                            location: 0
-                        ),
-                        .init(color: Color.purple.opacity(0.06), location: 0.34),
-                        .init(color: Color(nsColor: .windowBackgroundColor), location: 0.82),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            } else {
-                Color(nsColor: .windowBackgroundColor)
-            }
+            LinearGradient(
+                stops: [
+                    .init(
+                        color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.14),
+                        location: 0
+                    ),
+                    .init(color: Color.purple.opacity(0.06), location: 0.34),
+                    .init(color: Color(nsColor: .windowBackgroundColor), location: 0.82),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         }
         .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous))
         .overlay {
@@ -185,21 +147,29 @@ public struct WhatsNewTourView: View {
         }
     }
 
+    /// Shared page heading. Trailing space keeps text clear of the close button.
+    private func pageHeader(title: LocalizedStringKey, subtitle: LocalizedStringKey) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(.title, design: .rounded, weight: .bold))
+                .foregroundStyle(.primary)
+                .accessibilityAddTraits(.isHeader)
+
+            Text(subtitle)
+                .font(.system(.subheadline, design: .rounded, weight: .medium))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.trailing, 56)
+    }
+
     private var releaseSummary: some View {
         VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Sorty 1.3.1")
-                    .font(.system(.title, design: .rounded, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .accessibilityAddTraits(.isHeader)
-
-                Text("A broad cleanup of previews, Settings, onboarding, and completion screens, with fixes across providers, feedback, and file handling.")
-                    .font(.system(.subheadline, design: .rounded, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            pageHeader(
+                title: "Sorty 1.3.1",
+                subtitle: "A broad cleanup of previews, Settings, onboarding, and completion screens, with fixes across providers, feedback, and file handling."
+            )
             .padding(.leading, 44)
-            .padding(.trailing, 56)
 
             ScrollView(.vertical) {
                 HStack(alignment: .top, spacing: 12) {
@@ -283,84 +253,19 @@ public struct WhatsNewTourView: View {
         }
         .padding(SortyDesignSystem.Spacing.lg)
         .frame(maxWidth: .infinity, minHeight: 348, alignment: .topLeading)
-        .background {
-            LinearGradient(
-                colors: [
-                    color.opacity(0.10),
-                    Color.primary.opacity(0.025),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: SortyDesignSystem.Radius.xl,
-                style: .continuous
-            )
-        )
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
-        .overlay {
-            RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.xl, style: .continuous)
-                .strokeBorder(color.opacity(0.28), lineWidth: 1)
-        }
-        .accessibilityElement(children: .contain)
+        .whatsNewCard(tint: color)
     }
 
-    /// Release-specific highlights replace the previous release's app-icon showcase.
+    /// Each 1.3.1 highlight shows a working sample of the feature it describes.
     private var releaseHighlights: some View {
-        VStack(spacing: 14) {
-            releaseHighlight(
-                title: "Refine names in preview",
-                detail: "Edit, regenerate, or revert a name before applying your plan.",
-                symbol: "pencil.line",
-                color: SortyDesignSystem.Colors.resolvedAccent
-            )
-            releaseHighlight(
-                title: "Review old files before cleanup",
-                detail: "Try Expiring Files in Sorty Labs. Review each file before moving it to Trash.",
-                symbol: "hourglass",
-                color: SortyDesignSystem.Colors.warning
-            )
-            releaseHighlight(
-                title: "Show what went wrong",
-                detail: "Attach files to feedback and preview the diagnostics included in your report.",
-                symbol: "paperclip",
-                color: SortyDesignSystem.Colors.success
-            )
-        }
-        .padding(.horizontal, 48)
-        .padding(.top, 72)
-        .frame(width: 640, height: 400, alignment: .top)
-    }
+        VStack(alignment: .leading, spacing: 20) {
+            pageHeader(title: "More control over your files", subtitle: "New in Sorty 1.3.1")
+                .padding(.leading, 4)
 
-    private func releaseHighlight(
-        title: LocalizedStringKey,
-        detail: LocalizedStringKey,
-        symbol: String,
-        color: Color
-    ) -> some View {
-        HStack(alignment: .center, spacing: 16) {
-            Image(systemName: symbol)
-                .font(.system(size: 25, weight: .medium))
-                .foregroundStyle(color)
-                .frame(width: 44)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(.headline, design: .rounded))
-                    .accessibilityAddTraits(.isHeader)
-                Text(detail)
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            WhatsNewHighlightsView(isEditingSampleName: $isEditingSampleName)
         }
-        .padding(16)
-        .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.xl, interactive: false)
-        .accessibilityElement(children: .combine)
+        .padding(24)
+        .frame(width: 640, height: 496, alignment: .topLeading)
     }
 
     private var topControls: some View {
@@ -400,7 +305,7 @@ public struct WhatsNewTourView: View {
     private var pageIndicator: some View {
         GooeyPageIndicator(
             selectedIndex: CGFloat(currentPage),
-            pageCount: pages.count,
+            pageCount: pageCount,
             accent: SortyDesignSystem.Colors.resolvedAccent
         )
         .animation(
@@ -408,18 +313,18 @@ public struct WhatsNewTourView: View {
             value: currentPage
         )
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Page \(currentPage + 1) of \(pages.count)")
+        .accessibilityLabel("Page \(currentPage + 1) of \(pageCount)")
     }
 
     private var actionButton: some View {
         Button {
-            if currentPage == pages.count - 1 {
+            if isReleaseSummary {
                 onFinish()
             } else {
                 navigateToNextPage()
             }
         } label: {
-            Text(currentPage == pages.count - 1 ? "Start using Sorty" : "Continue")
+            Text(isReleaseSummary ? "Start using Sorty" : "Continue")
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .frame(width: 156, height: 24)
                 .numericTextTransition(animationValue: currentPage)
@@ -461,7 +366,7 @@ public struct WhatsNewTourView: View {
             }
             isActionHovering = hovering
         }
-        .keyboardShortcut(.defaultAction)
+        .keyboardShortcut(isEditingSampleName ? nil : .defaultAction)
     }
 
     private func navigateToPreviousPage() {
@@ -472,7 +377,7 @@ public struct WhatsNewTourView: View {
     }
 
     private func navigateToNextPage() {
-        guard currentPage < pages.count - 1 else { return }
+        guard currentPage < pageCount - 1 else { return }
         HapticFeedbackManager.shared.selection()
         navigationDirection = 1
         currentPage += 1
@@ -505,6 +410,8 @@ public struct WhatsNewTourView: View {
     }
 
     private func handleKeyDownEvent(_ event: NSEvent) -> NSEvent? {
+        guard !isEditingSampleName else { return event }
+
         let navigationModifiers: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
         guard event.modifierFlags.intersection(navigationModifiers).isEmpty else { return event }
 
@@ -644,11 +551,6 @@ private struct GooeyPageIndicator: View, @MainActor Animatable {
         }
         .frame(width: 70, height: 8)
     }
-}
-
-private struct WhatsNewPage: Hashable {
-    let title: String
-    let description: String
 }
 
 #Preview {
