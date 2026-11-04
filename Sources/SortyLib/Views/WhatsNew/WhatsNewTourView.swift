@@ -14,26 +14,20 @@ public struct WhatsNewTourView: View {
     @State private var isPointerInside = false
     @State private var swipeAccumulatedTranslation: CGFloat = 0
     @State private var hasTriggeredSwipeForGesture = false
-    @State private var navigationDirection: CGFloat = 1
     /// True while the sample rename field has focus. Return and the arrow keys
     /// then belong to the field, not to page navigation.
     @State private var isEditingSampleName = false
 
     private let pageCount = 2
     private let swipeThreshold: CGFloat = 42
-    private let maximumSwipeOffset: CGFloat = 14
+    private let maximumSwipeProgress: CGFloat = 0.14
 
     public init(onFinish: @escaping () -> Void) {
         self.onFinish = onFinish
     }
 
     public var body: some View {
-        ZStack {
-            tourPage
-                .id(currentPage)
-                .offset(x: reduceMotion ? 0 : resistedSwipeOffset)
-                .transition(pageTransition)
-        }
+        tourFrame
         .overlay(alignment: .bottom) {
             actionButton
                 .frame(height: 44)
@@ -56,53 +50,41 @@ public struct WhatsNewTourView: View {
         }
     }
 
-    private var pageTransitionAnimation: Animation? {
-        reduceMotion ? nil : .smooth(duration: 0.36)
+    private var pageTransitionAnimation: Animation {
+        reduceMotion ? .sortyFade : .sortySpringStandard
     }
 
     private var swipeResetAnimation: Animation? {
         reduceMotion ? nil : .sortySmooth
     }
 
-    private var resistedSwipeOffset: CGFloat {
-        min(max(swipeAccumulatedTranslation * 0.20, -maximumSwipeOffset), maximumSwipeOffset)
+    /// Fraction of a page the current swipe has pulled, with more resistance
+    /// when there is no page in that direction.
+    private var swipeProgress: CGFloat {
+        guard !reduceMotion else { return 0 }
+
+        let limit = maximumSwipeProgress
+        let progress = min(max(-swipeAccumulatedTranslation / 300, -limit), limit)
+        let hasPageAhead = progress > 0 ? currentPage < pageCount - 1 : currentPage > 0
+        return hasPageAhead ? progress : progress * 0.35
     }
 
-    private var pageTransition: AnyTransition {
-        guard !reduceMotion else { return .opacity }
-
-        return .asymmetric(
-            insertion: .modifier(
-                active: WhatsNewPageTransitionModifier(
-                    opacity: 0,
-                    horizontalOffset: navigationDirection * 28
-                ),
-                identity: WhatsNewPageTransitionModifier()
-            ),
-            removal: .modifier(
-                active: WhatsNewPageTransitionModifier(
-                    opacity: 0,
-                    horizontalOffset: navigationDirection * -16
-                ),
-                identity: WhatsNewPageTransitionModifier()
-            )
-        )
+    /// Fractional page position. Pages and the indicator both follow it.
+    private var pagePosition: CGFloat {
+        CGFloat(currentPage) + swipeProgress
     }
 
     private var isReleaseSummary: Bool {
         currentPage == pageCount - 1
     }
 
-    /// Both pages share this frame, so the indicator and action button stay put.
-    private var tourPage: some View {
+    /// Chrome stays in place while only the page content moves between pages.
+    private var tourFrame: some View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
-                Group {
-                    if isReleaseSummary {
-                        releaseSummary
-                    } else {
-                        releaseHighlights
-                    }
+                ZStack(alignment: .top) {
+                    pageContent(index: 0) { releaseHighlights }
+                    pageContent(index: 1) { releaseSummary }
                 }
                 .frame(height: 496, alignment: .top)
 
@@ -147,6 +129,27 @@ public struct WhatsNewTourView: View {
         }
     }
 
+    /// Both pages stay mounted so motion can run in either direction and the
+    /// samples keep their state. Only the current page takes input.
+    private func pageContent<Content: View>(
+        index: Int,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let isCurrent = index == currentPage
+
+        return content()
+            .modifier(
+                WhatsNewPageMotion(
+                    distance: CGFloat(index) - pagePosition,
+                    travel: reduceMotion ? 0 : 72,
+                    shrink: reduceMotion ? 0 : 0.035
+                )
+            )
+            .disabled(!isCurrent)
+            .allowsHitTesting(isCurrent)
+            .accessibilityHidden(!isCurrent)
+    }
+
     /// Shared page heading. Trailing space keeps text clear of the close button.
     private func pageHeader(title: LocalizedStringKey, subtitle: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -166,8 +169,8 @@ public struct WhatsNewTourView: View {
     private var releaseSummary: some View {
         VStack(alignment: .leading, spacing: 20) {
             pageHeader(
-                title: "Sorty 1.3.1",
-                subtitle: "A broad cleanup of previews, Settings, onboarding, and completion screens, with fixes across providers, feedback, and file handling."
+                title: "Everything New, Improved, and Fixed",
+                subtitle: "Sorty 1.3.1 cleans up previews, Settings, onboarding, and completion screens, with fixes across providers, feedback, and file handling."
             )
             .padding(.leading, 44)
 
@@ -259,7 +262,10 @@ public struct WhatsNewTourView: View {
     /// Each 1.3.1 highlight shows a working sample of the feature it describes.
     private var releaseHighlights: some View {
         VStack(alignment: .leading, spacing: 20) {
-            pageHeader(title: "More control over your files", subtitle: "New in Sorty 1.3.1")
+            pageHeader(
+                title: "What's New in Sorty 1.3.1",
+                subtitle: "Three new features give you more control over your files."
+            )
                 .padding(.leading, 4)
 
             WhatsNewHighlightsView(isEditingSampleName: $isEditingSampleName)
@@ -304,7 +310,7 @@ public struct WhatsNewTourView: View {
 
     private var pageIndicator: some View {
         GooeyPageIndicator(
-            selectedIndex: CGFloat(currentPage),
+            selectedIndex: pagePosition,
             pageCount: pageCount,
             accent: SortyDesignSystem.Colors.resolvedAccent
         )
@@ -324,7 +330,7 @@ public struct WhatsNewTourView: View {
                 navigateToNextPage()
             }
         } label: {
-            Text(isReleaseSummary ? "Start using Sorty" : "Continue")
+            Text(isReleaseSummary ? "Start using Sorty" : "See all changes")
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .frame(width: 156, height: 24)
                 .numericTextTransition(animationValue: currentPage)
@@ -372,14 +378,14 @@ public struct WhatsNewTourView: View {
     private func navigateToPreviousPage() {
         guard currentPage > 0 else { return }
         HapticFeedbackManager.shared.selection()
-        navigationDirection = -1
+        isEditingSampleName = false
         currentPage -= 1
     }
 
     private func navigateToNextPage() {
         guard currentPage < pageCount - 1 else { return }
         HapticFeedbackManager.shared.selection()
-        navigationDirection = 1
+        isEditingSampleName = false
         currentPage += 1
     }
 
@@ -487,14 +493,28 @@ public struct WhatsNewTourView: View {
     }
 }
 
-private struct WhatsNewPageTransitionModifier: ViewModifier {
-    var opacity: Double = 1
-    var horizontalOffset: CGFloat = 0
+/// Places a page by its signed distance from the visible position, where 0 is
+/// on screen and 1 is a full page away. The outgoing page clears before the
+/// incoming one resolves, so the two never read as a double exposure.
+private struct WhatsNewPageMotion: ViewModifier, @MainActor Animatable {
+    var distance: CGFloat
+    let travel: CGFloat
+    let shrink: CGFloat
+
+    var animatableData: CGFloat {
+        get { distance }
+        set { distance = newValue }
+    }
 
     func body(content: Content) -> some View {
+        let magnitude = min(abs(distance), 1)
+        let fade = min(max((magnitude - 0.08) / 0.54, 0), 1)
+        let easedFade = fade * fade * (3 - 2 * fade)
+
         content
-            .opacity(opacity)
-            .offset(x: horizontalOffset)
+            .opacity(1 - easedFade)
+            .scaleEffect(1 - magnitude * shrink)
+            .offset(x: distance * travel)
     }
 }
 

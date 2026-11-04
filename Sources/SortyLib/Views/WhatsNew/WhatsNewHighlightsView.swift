@@ -106,10 +106,10 @@ private struct WhatsNewCardHeading: View {
                 if let badge {
                     Text(badge)
                         .font(.system(.caption2, design: .rounded, weight: .semibold))
-                        .foregroundStyle(tint)
+                        .foregroundStyle(.primary)
                         .padding(.horizontal, SortyDesignSystem.Spacing.xs)
                         .padding(.vertical, 2)
-                        .background(tint.opacity(0.14), in: Capsule())
+                        .background(tint.opacity(0.32), in: Capsule())
                 }
             }
 
@@ -187,6 +187,7 @@ private struct WhatsNewRenameCard: View {
                     detail: "Edit, regenerate, or revert a name before applying your plan.",
                     symbol: "pencil.line",
                     tint: tint,
+                    badge: "New",
                     isProminent: true
                 )
 
@@ -211,10 +212,6 @@ private struct WhatsNewRenameCard: View {
             userName = nil
             suggestionIndex = (suggestionIndex + 1) % Self.suggestions.count
             isRegenerating = false
-        }
-        .onDisappear {
-            // Leaving the page removes the field, so hand the keyboard back.
-            isEditing = false
         }
     }
 
@@ -409,7 +406,7 @@ private struct WhatsNewExpiringCard: View {
                 detail: "Turn on Expiring Files, then check each file before it moves to Trash.",
                 symbol: "hourglass",
                 tint: tint,
-                badge: "Labs"
+                badge: "New in Labs"
             )
 
             VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xs) {
@@ -484,7 +481,8 @@ private struct WhatsNewFeedbackCard: View {
                 title: "Show what went wrong",
                 detail: "Attach files to feedback and preview the diagnostics in your report.",
                 symbol: "paperclip",
-                tint: tint
+                tint: tint,
+                badge: "New"
             )
 
             VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.sm) {
