@@ -33,7 +33,7 @@ public struct TrafficLightStyling: NSViewRepresentable {
     public final class Coordinator: NSObject {
         private var observations: [NSObjectProtocol] = []
         private weak var observedWindow: NSWindow?
-        private var originalLayerState: [ObjectIdentifier: (wantsLayer: Bool, cornerRadius: CGFloat)] = [:]
+        private var borderViews: [NSView] = []
 
         func observe(window: NSWindow?) {
             guard let window else {
@@ -47,10 +47,9 @@ public struct TrafficLightStyling: NSViewRepresentable {
             let nc = NotificationCenter.default
 
             observations.append(
-                nc.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self, weak window] _ in
+                nc.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self] _ in
                     MainActor.assumeIsolated {
-                        guard let window else { return }
-                        self?.restoreButtons(in: window)
+                        self?.removeBorders()
                     }
                 }
             )
@@ -86,15 +85,12 @@ public struct TrafficLightStyling: NSViewRepresentable {
         }
 
         func stopObserving() {
-            if let observedWindow {
-                restoreButtons(in: observedWindow)
-            }
+            removeBorders()
             for obs in observations {
                 NotificationCenter.default.removeObserver(obs)
             }
             observations.removeAll()
             observedWindow = nil
-            originalLayerState.removeAll()
         }
 
         // MARK: - Styling
@@ -106,34 +102,37 @@ public struct TrafficLightStyling: NSViewRepresentable {
         ]
 
         private func styleInactiveButtons(in window: NSWindow) {
+            removeBorders()
             for (type, borderColor) in Self.buttonTypes {
-                guard let button = window.standardWindowButton(type) else { continue }
-                let identifier = ObjectIdentifier(button)
-                if originalLayerState[identifier] == nil {
-                    originalLayerState[identifier] = (button.wantsLayer, button.layer?.cornerRadius ?? 0)
-                }
-                if button.layer == nil {
-                    button.wantsLayer = true
-                }
-                guard let layer = button.layer else { continue }
-                layer.cornerRadius = button.bounds.height / 2
-                layer.borderWidth = 1.0
-                layer.borderColor = borderColor.withAlphaComponent(0.78).cgColor
+                guard let button = window.standardWindowButton(type),
+                      let container = button.superview else { continue }
+
+                // AppKit owns the native button's backing layer, including its
+                // hover and pressed rendering. Draw the ring in a sibling view.
+                let border = TrafficLightBorderView(frame: button.frame)
+                border.autoresizingMask = button.autoresizingMask
+                border.wantsLayer = true
+                border.layer?.cornerRadius = button.bounds.height / 2
+                border.layer?.borderWidth = 1.0
+                border.layer?.borderColor = borderColor.withAlphaComponent(0.78).cgColor
+                border.setAccessibilityElement(false)
+                container.addSubview(border, positioned: .above, relativeTo: button)
+                borderViews.append(border)
             }
         }
 
-        private func restoreButtons(in window: NSWindow) {
-            for (type, _) in Self.buttonTypes {
-                guard let button = window.standardWindowButton(type) else { continue }
-                button.layer?.borderWidth = 0
-                button.layer?.borderColor = nil
-                if let original = originalLayerState[ObjectIdentifier(button)] {
-                    button.layer?.cornerRadius = original.cornerRadius
-                    button.wantsLayer = original.wantsLayer
-                }
+        private func removeBorders() {
+            for border in borderViews {
+                border.removeFromSuperview()
             }
+            borderViews.removeAll()
         }
     }
+}
+
+@MainActor
+private final class TrafficLightBorderView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 @MainActor
