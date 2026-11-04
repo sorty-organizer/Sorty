@@ -196,7 +196,10 @@ package final class ExpiringFilesManager: ObservableObject {
     /// True while the file at the candidate's path is still the one that was scanned.
     nonisolated static func isUnchanged(_ candidate: ExpiringFileCandidate) -> Bool {
         let keys: Set<URLResourceKey> = [.addedToDirectoryDateKey, .creationDateKey, .fileSizeKey, .isDirectoryKey]
-        guard let values = try? candidate.url.resourceValues(forKeys: keys) else { return false }
+        // Directory enumeration prefetches metadata onto its URLs. Reconstruct the
+        // URL so this safety check reads the current file rather than that cache.
+        let currentURL = URL(fileURLWithPath: candidate.url.path)
+        guard let values = try? currentURL.resourceValues(forKeys: keys) else { return false }
         let added = values.addedToDirectoryDate ?? values.creationDate
         guard let added, abs(added.timeIntervalSince(candidate.dateAdded)) < 1 else { return false }
         // Package sizes are summed at scan time; only plain files can be compared cheaply.

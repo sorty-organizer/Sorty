@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Read fresh file metadata before Expiring Files moves a reviewed file to Trash.
 - Fixed Codex subprocess crashes and an AI session invalidation race.
 - Improved recovery from AI response limits using smaller batches, partial JSON responses, and ambiguous filename matches.
 - Fixed Gemini connection checks, OpenCode inference routing, restored-preview regeneration, and day-template expansion.
