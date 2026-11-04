@@ -12,13 +12,16 @@ package struct MascotHeartParticleMorphView: View {
     private enum Timing {
         static let mascotHold: TimeInterval = 0.5
         static let reverseDuration: TimeInterval = 0.85
-        static let morphDuration: TimeInterval = 1.15
+        static let morphDuration: TimeInterval = 1.5
         static let heartbeatDuration: TimeInterval = 0.90
+        /// The mascot crouches for this long before the particles release.
+        static let anticipationDuration: TimeInterval = 0.24
+        static let releaseDuration: TimeInterval = 0.3
+        static let ringDuration: TimeInterval = 0.7
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.controlActiveState) private var controlActiveState
-    @Environment(\.scenePhase) private var scenePhase
     @State private var animationStart: Date?
     @State private var animationRun = 0
     @State private var replayStartProgress = 1.0
@@ -44,12 +47,14 @@ package struct MascotHeartParticleMorphView: View {
                         isHeartComplete: true
                     )
                 } else {
+                    // No scenePhase gate: this view lives in a manually created
+                    // NSWindow, where scenePhase never becomes .active.
                     SwiftUI.TimelineView(
                         .animation(
-                            minimumInterval: 1.0 / 30.0,
+                            // A few seconds at most, then the view settles.
+                            minimumInterval: 1.0 / 60.0,
                             paused: reduceMotion || animationStart == nil || isSettled
                                 || !isWindowVisible || controlActiveState == .inactive
-                                || scenePhase != .active
                         )
                     ) { timeline in
                         let elapsed = animationStart.map { timeline.date.timeIntervalSince($0) } ?? 0
@@ -58,8 +63,9 @@ package struct MascotHeartParticleMorphView: View {
 
                         ParticleMorphCanvas(
                             progress: isHeartComplete ? 1 : morphProgress(at: elapsed, isReplay: isReplay),
-                            heartbeatScale: reduceMotion ? 1 : heartbeatScale(at: elapsed, isReplay: isReplay),
-                            isHeartComplete: isHeartComplete
+                            heartbeatScale: reduceMotion ? 1 : motionScale(at: elapsed, isReplay: isReplay),
+                            isHeartComplete: isHeartComplete,
+                            ringProgress: ringProgress(at: elapsed, isReplay: isReplay)
                         )
                     }
                 }
@@ -126,7 +132,7 @@ package struct MascotHeartParticleMorphView: View {
 
     private func morphProgress(at elapsed: TimeInterval, isReplay: Bool) -> Double {
         guard isReplay else {
-            return easedProgress((elapsed - Timing.mascotHold) / Timing.morphDuration)
+            return clamped((elapsed - Timing.mascotHold) / Timing.morphDuration)
         }
 
         let reverseDuration = Timing.reverseDuration * replayStartProgress
@@ -135,7 +141,11 @@ package struct MascotHeartParticleMorphView: View {
         }
 
         let forwardElapsed = elapsed - reverseDuration - Timing.mascotHold
-        return easedProgress(forwardElapsed / Timing.morphDuration)
+        return clamped(forwardElapsed / Timing.morphDuration)
+    }
+
+    private func clamped(_ value: Double) -> Double {
+        min(max(value, 0), 1)
     }
 
     private func easedProgress(_ rawProgress: Double) -> Double {
@@ -146,26 +156,47 @@ package struct MascotHeartParticleMorphView: View {
         return 0.5 * p * p * p + 1
     }
 
-    private func heartbeatScale(at elapsed: TimeInterval, isReplay: Bool) -> CGFloat {
-        let reverseDuration = isReplay ? Timing.reverseDuration * replayStartProgress : 0
-        let heartStart = reverseDuration + Timing.mascotHold + Timing.morphDuration
-        guard elapsed >= heartStart else {
-            return 1
+    /// Time the forward morph begins, after any replay reverse and the hold.
+    private func morphStart(isReplay: Bool) -> TimeInterval {
+        (isReplay ? Timing.reverseDuration * replayStartProgress : 0) + Timing.mascotHold
+    }
+
+    /// Whole-figure scale: a crouch before release, then the heartbeat.
+    private func motionScale(at elapsed: TimeInterval, isReplay: Bool) -> CGFloat {
+        let start = morphStart(isReplay: isReplay)
+        let heartStart = start + Timing.morphDuration
+        guard elapsed < heartStart else {
+            return heartbeatScale(sinceHeartStart: elapsed - heartStart)
         }
 
-        let t = (elapsed - heartStart).truncatingRemainder(dividingBy: Timing.heartbeatDuration)
+        let crouch: CGFloat = 0.06
+        if elapsed < start {
+            return 1 - crouch * eased((elapsed - start + Timing.anticipationDuration) / Timing.anticipationDuration)
+        }
+        return 1 - crouch * (1 - eased((elapsed - start) / Timing.releaseDuration))
+    }
+
+    /// The first beat is the landing, so it hits harder than the rest.
+    private func heartbeatScale(sinceHeartStart elapsed: TimeInterval) -> CGFloat {
+        let peak: CGFloat = elapsed < Timing.heartbeatDuration ? 0.13 : 0.075
+        let t = elapsed.truncatingRemainder(dividingBy: Timing.heartbeatDuration)
         switch t {
-        case 0..<0.11: return 1 + 0.075 * eased(t / 0.11)
-        case 0.11..<0.20: return 1.075 - 0.075 * eased((t - 0.11) / 0.09)
+        case 0..<0.11: return 1 + peak * eased(t / 0.11)
+        case 0.11..<0.20: return 1 + peak - peak * eased((t - 0.11) / 0.09)
         case 0.24..<0.32: return 1 + 0.038 * eased((t - 0.24) / 0.08)
         case 0.32..<0.44: return 1.038 - 0.038 * eased((t - 0.32) / 0.12)
         default: return 1
         }
     }
 
+    /// Progress of the ring that leaves the heart as it lands.
+    private func ringProgress(at elapsed: TimeInterval, isReplay: Bool) -> Double {
+        let heartStart = morphStart(isReplay: isReplay) + Timing.morphDuration
+        return clamped((elapsed - heartStart) / Timing.ringDuration)
+    }
+
     private func heartIsComplete(at elapsed: TimeInterval, isReplay: Bool) -> Bool {
-        let reverseDuration = isReplay ? Timing.reverseDuration * replayStartProgress : 0
-        return elapsed >= reverseDuration + Timing.mascotHold + Timing.morphDuration
+        elapsed >= morphStart(isReplay: isReplay) + Timing.morphDuration
     }
 
     private func eased(_ p: Double) -> CGFloat {
@@ -184,6 +215,14 @@ private struct ParticleMorphCanvas: View {
     let progress: Double
     let heartbeatScale: CGFloat
     let isHeartComplete: Bool
+    var ringProgress: Double = 0
+
+    /// Share of the morph spent staggering departures. Each particle flies
+    /// for the remainder, so outer particles peel away first.
+    private static let maximumDelay: CGFloat = 0.38
+    private static let heartRed = 0.96
+    private static let heartGreen = 0.19
+    private static let heartBlue = 0.26
 
     var body: some View {
         Canvas(opaque: false, colorMode: .linear, rendersAsynchronously: true) { context, size in
@@ -206,19 +245,45 @@ private struct ParticleMorphCanvas: View {
         origin: CGPoint,
         side: CGFloat
     ) {
-        let diameter: CGFloat = 1.60
-        for particle in Self.particles {
-            let x = 0.5 + (particle.heart.x - 0.5) * heartbeatScale
-            let y = 0.5 + (particle.heart.y - 0.5) * heartbeatScale
-            let center = CGPoint(x: origin.x + x * side, y: origin.y + y * side)
-            let rect = CGRect(
-                x: center.x - diameter / 2,
-                y: center.y - diameter / 2,
-                width: diameter,
-                height: diameter
+        if ringProgress > 0, ringProgress < 1 {
+            let remaining = 1 - ringProgress
+            let growth = 1 + 0.27 * (1 - remaining * remaining * remaining)
+            context.stroke(
+                MascotHeartParticleTargets.heartPath.applying(
+                    heartTransform(origin: origin, side: side, scale: growth)
+                ),
+                with: .color(heartColor.opacity(0.75 * remaining * remaining)),
+                lineWidth: 1 + 2.5 * remaining
             )
-            context.fill(Path(ellipseIn: rect), with: .color(heartColor))
         }
+        fillHeart(in: &context, origin: origin, side: side, opacity: 1)
+    }
+
+    /// Fills the heart outline, scaled from the canvas center like the particles.
+    private func fillHeart(
+        in context: inout GraphicsContext,
+        origin: CGPoint,
+        side: CGFloat,
+        opacity: Double
+    ) {
+        context.fill(
+            MascotHeartParticleTargets.heartPath.applying(
+                heartTransform(origin: origin, side: side, scale: heartbeatScale)
+            ),
+            with: .color(heartColor.opacity(opacity))
+        )
+    }
+
+    private func heartTransform(origin: CGPoint, side: CGFloat, scale: CGFloat) -> CGAffineTransform {
+        let inset = side * (1 - scale) / 2
+        return CGAffineTransform(
+            a: side * scale,
+            b: 0,
+            c: 0,
+            d: side * scale,
+            tx: origin.x + inset,
+            ty: origin.y + inset
+        )
     }
 
     private func drawMorphingParticles(
@@ -226,38 +291,41 @@ private struct ParticleMorphCanvas: View {
         origin: CGPoint,
         side: CGFloat
     ) {
+        // Landing particles are too sparse to read as a shape, so the solid
+        // heart fades in beneath them over the end of the morph.
+        let fill = min(max((progress - 0.8) / 0.2, 0), 1)
+        if fill > 0 {
+            fillHeart(in: &context, origin: origin, side: side, opacity: fill * fill * (3 - 2 * fill))
+        }
+
         for particle in Self.particles {
-            let rect = particleRect(
-                particle: particle,
-                origin: origin,
-                side: side
-            )
-            drawParticle(
-                in: &context,
-                rect: rect,
-                particle: particle
+            let flight = flightProgress(of: particle)
+            context.fill(
+                Path(ellipseIn: particleRect(particle: particle, flight: flight, origin: origin, side: side)),
+                with: .color(particleColor(particle, flight: flight))
             )
         }
     }
 
+    /// Eased 0…1 position of one particle along its own flight.
+    private func flightProgress(of particle: ParticleMorphDefinition) -> CGFloat {
+        let raw = min(max((CGFloat(progress) - particle.delay) / (1 - Self.maximumDelay), 0), 1)
+        if raw < 0.5 {
+            return 4 * raw * raw * raw
+        }
+        let tail = 2 * raw - 2
+        return 0.5 * tail * tail * tail + 1
+    }
+
     private func particleRect(
         particle: ParticleMorphDefinition,
+        flight p: CGFloat,
         origin: CGPoint,
         side: CGFloat
     ) -> CGRect {
-        // tiny stagger (max 80ms) prevents pop-in glitch while keeping motion coherent
-        let raw = max(0, min((CGFloat(progress) - particle.delay) / (1 - particle.delay), 1))
-        // match global cubic easing per-particle with same curve
-        let p: CGFloat
-        if raw < 0.5 {
-            p = 4 * raw * raw * raw
-        } else {
-            let pp = 2 * raw - 2
-            p = 0.5 * pp * pp * pp + 1
-        }
-
-        // gentle arc: perpendicular offset peaks at mid-flight, scaled by travel distance
-        let arcProgress = CGFloat(sin(.pi * Double(p)))
+        // The swirl peaks mid-flight. All particles turn the same way, so the
+        // cloud reads as one vortex rather than scattered noise.
+        let arcProgress = sin(.pi * p)
         let cx = particle.midpoint.x + particle.arcOffset.x * arcProgress
         let cy = particle.midpoint.y + particle.arcOffset.y * arcProgress
 
@@ -272,46 +340,26 @@ private struct ParticleMorphCanvas: View {
         x = 0.5 + (x - 0.5) * heartbeatScale
         y = 0.5 + (y - 0.5) * heartbeatScale
 
-        let diameter: CGFloat = 1.60
+        // Particles swell in flight so the thinner cloud keeps its body.
+        let diameter = 1.6 + 1.5 * arcProgress
         let center = CGPoint(x: origin.x + x * side, y: origin.y + y * side)
         return CGRect(x: center.x - diameter / 2, y: center.y - diameter / 2, width: diameter, height: diameter)
     }
 
-    private func drawParticle(
-        in context: inout GraphicsContext,
-        rect: CGRect,
-        particle: ParticleMorphDefinition
-    ) {
-        let raw = max(0, min((CGFloat(progress) - particle.delay) / (1 - particle.delay), 1))
-        let p: Double
-        if raw < 0.5 {
-            p = 4 * Double(raw) * Double(raw) * Double(raw)
-        } else {
-            let pp = 2 * Double(raw) - 2
-            p = 0.5 * pp * pp * pp + 1
-        }
-
-        // crossfade with brief overlap — avoids muddy gray mid-morph
-        let mascotOpacity = max(0, 1 - p * 1.9)
-        let heartOpacity = max(0, (p - 0.18) / 0.82)
-        let heartEased = heartOpacity * heartOpacity * (3 - 2 * heartOpacity)
-
-        if mascotOpacity > 0.015 {
-            context.fill(
-                Path(ellipseIn: rect),
-                with: .color(particle.mascot.color.opacity(mascotOpacity))
-            )
-        }
-        if heartEased > 0.015 {
-            context.fill(
-                Path(ellipseIn: rect),
-                with: .color(heartColor.opacity(heartEased))
-            )
-        }
+    /// Blends one opaque color from the mascot palette to the heart. Layering
+    /// two translucent fills went muddy mid-flight and cost twice the draws.
+    private func particleColor(_ particle: ParticleMorphDefinition, flight: CGFloat) -> Color {
+        let linear = min(max((Double(flight) - 0.2) / 0.55, 0), 1)
+        let blend = linear * linear * (3 - 2 * linear)
+        return Color(
+            red: particle.mascot.red + (Self.heartRed - particle.mascot.red) * blend,
+            green: particle.mascot.green + (Self.heartGreen - particle.mascot.green) * blend,
+            blue: particle.mascot.blue + (Self.heartBlue - particle.mascot.blue) * blend
+        )
     }
 
     private var heartColor: Color {
-        Color(red: 0.96, green: 0.19, blue: 0.26)
+        Color(red: Self.heartRed, green: Self.heartGreen, blue: Self.heartBlue)
     }
 
     private static let particles: [ParticleMorphDefinition] =
@@ -319,15 +367,12 @@ private struct ParticleMorphCanvas: View {
             let mascot = MascotHeartParticleTargets.mascot[index]
             let heart = MascotHeartParticleTargets.heart[index]
             let seed = seed(for: index)
-            let angle = atan2(mascot.point.y - 0.5, mascot.point.x - 0.5)
-            let angleNorm = abs(angle) / .pi
-            let delay = seed * 0.06 + angleNorm * 0.04
+            let edgeDistance = min(hypot(mascot.point.x - 0.5, mascot.point.y - 0.5) / 0.5, 1)
+            let delay = maximumDelay * (0.75 * (1 - edgeDistance) + 0.25 * seed)
             let dx = heart.x - mascot.point.x
             let dy = heart.y - mascot.point.y
             let length = max(hypot(dx, dy), 0.001)
-            let arc = (0.012 + seed * 0.012)
-                * min(length * 1.5, 1)
-                * (seed > 0.5 ? 1 : -1)
+            let arc = (0.16 + seed * 0.18) * min(length * 1.6 + 0.25, 1)
             return ParticleMorphDefinition(
                 mascot: mascot,
                 heart: heart,
@@ -370,6 +415,14 @@ private enum MascotHeartParticleTargets {
 
     static let mascot: [MascotParticle] = orderedByAngle(makeMascotParticles())
     static let heart: [CGPoint] = orderedByAngle(makeHeartPoints(count: mascot.count))
+    /// Heart outline in the same normalized 0…1 space as the particles.
+    static let heartPath: Path = {
+        let outline = makeHeartOutline()
+        var path = Path()
+        path.addLines(stride(from: 0, to: outline.count, by: 4).map { outline[$0] })
+        path.closeSubpath()
+        return path
+    }()
 
     private static func makeMascotParticles() -> [MascotParticle] {
         guard let data = Data(base64Encoded: mascotParticleData) else {
