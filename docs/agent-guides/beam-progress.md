@@ -2,6 +2,8 @@
 
 Sorty's organization analysis screen uses the Beam playground card shape for
 the visible progress surface in `Sources/SortyLib/Views/AnalysisView.swift`.
+The What’s New CTA uses the same package’s small ocean beam with a capsule
+shape in `Sources/SortyLib/Views/WhatsNew/WhatsNewTourView.swift`.
 The folder-selection CTA applies that same button-sized treatment directly to
 the styled `Button` in `DirectorySelectionView.swift`, activating only after
 the control appears and while its window is active.

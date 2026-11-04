@@ -65,4 +65,5 @@ Changing source artwork does not update an existing release ZIP.
 
 The What's New tour loads `Sources/SortyLib/Resources/AppIcons/AppIcon-Release.png`.
 Keep that copy in sync with `Assets/AppIcon/AppIcon-Release.png` when replacing
-the release artwork. The tour shows the icon at 40 points in its chapter rail.
+the release artwork. The first tour page fits the icon into a 380-point square
+with 10 points of space above and below it, inside the 400-point image area.
