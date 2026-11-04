@@ -143,6 +143,8 @@ public class AppState: ObservableObject {
     @Published public var showsFinderWorkflowPicker = false
     /// Presents the What's New tour over this window's main view.
     @Published public var isShowingWhatsNew = false
+    /// Presents the Clean Up popover from the Watched Folders header.
+    @Published public var isShowingCleanUp = false
     @Published public var pendingNotificationActionRequest: PendingNotificationActionRequest?
     @Published public var pendingHistoryEntryID: UUID?
     @Published public var requiresSetupRepair: Bool {
@@ -326,6 +328,12 @@ public class AppState: ObservableObject {
 
     public var hasFiles: Bool {
         organizer?.currentPlan != nil
+    }
+
+    /// True when history holds an organization that can still be reversed.
+    public var canUndoLastOrganization: Bool {
+        guard !isOperationInProgress else { return false }
+        return organizer?.history.entries.contains { $0.success && !$0.isUndone } ?? false
     }
 
     public var canStartOrganization: Bool {
@@ -1072,6 +1080,15 @@ public class AppState: ObservableObject {
         """
         
         return html
+    }
+
+    /// Opens Watched Folders, then Clean Up once its header button is on screen.
+    public func showCleanUp() {
+        currentView = .watchedFolders
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            isShowingCleanUp = true
+        }
     }
 
     public func selectAllFiles() {

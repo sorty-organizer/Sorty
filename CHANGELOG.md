@@ -9,15 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New
 
-- Reopen the What's New tour any time from the Help menu.
+- Added menu commands to reopen What's New, reveal the selected folder in Finder, undo the last organization, open Clean Up when Expiring Files is on, and open the documentation and changelog.
 
 ### Improved
 
-- Updated menus: Report Bug is now Send Feedback, History gained ⇧⌘H, and commands that open a dialog now end in an ellipsis.
-
-### Fixed
-
-- Removed Help menu shortcuts that could not be typed on a keyboard.
+- Added keyboard shortcuts for most menu commands, renamed Report Bug to Send Feedback, and ended commands that open a dialog with an ellipsis.
 
 ## [1.3.1] - 2026-11-04
 

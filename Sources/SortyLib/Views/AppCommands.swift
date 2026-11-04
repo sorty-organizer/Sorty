@@ -35,6 +35,7 @@ public extension FocusedValues {
 public struct SortyCommands: Commands {
     @FocusedValue(\.appState) private var appState
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
+    @AppStorage(SortyLabsFeature.expiringFiles.defaultsKey) private var isExpiringFilesEnabled = false
 
     /// Release update checks need the network; debug builds rebuild locally.
     private var isUpdateCheckBlocked: Bool {
@@ -61,6 +62,7 @@ public struct SortyCommands: Commands {
             Button("Check for Updates...", systemImage: "arrow.triangle.2.circlepath") {
                 appState?.checkForUpdatesInteractive()
             }
+            .keyboardShortcut("u", modifiers: [.command, .shift])
             .disabled(appState == nil || isUpdateCheckBlocked)
         }
 
@@ -85,6 +87,14 @@ public struct SortyCommands: Commands {
             }
             .keyboardShortcut("o", modifiers: .command)
             .disabled(appState == nil)
+
+            Button("Reveal Folder in Finder", systemImage: "folder.badge.questionmark") {
+                if let directory = appState?.selectedDirectory {
+                    NSWorkspace.shared.activateFileViewerSelecting([directory])
+                }
+            }
+            .keyboardShortcut("r", modifiers: [.command, .option])
+            .disabled(appState?.selectedDirectory == nil)
 
             Divider()
 
@@ -150,16 +160,19 @@ public struct SortyCommands: Commands {
             ) {
                 appState?.toggleLearning()
             }
+            .keyboardShortcut("l", modifiers: [.command, .option])
             .disabled(appState == nil)
             
             Button("Export Learning Profile...", systemImage: "square.and.arrow.up") {
                 appState?.exportLearningsProfile()
             }
+            .keyboardShortcut("e", modifiers: [.command, .control])
             .disabled(appState == nil)
             
             Button("Import Learning Profile...", systemImage: "square.and.arrow.down") {
                 appState?.importLearningsProfile()
             }
+            .keyboardShortcut("i", modifiers: [.command, .control])
             .disabled(appState == nil)
         }
 
@@ -175,7 +188,16 @@ public struct SortyCommands: Commands {
             Button("What's New in Sorty", systemImage: "gift") {
                 appState?.isShowingWhatsNew = true
             }
+            .keyboardShortcut("n", modifiers: [.command, .option])
             .disabled(!(appState?.hasCompletedOnboarding ?? false))
+
+            Link(destination: URL(string: "https://github.com/sorty-organizer/Sorty/blob/main/HELP.md")!) {
+                Label("Documentation", systemImage: "doc.text")
+            }
+
+            Link(destination: URL(string: "https://sorty-organizer.github.io/Sorty/changelog")!) {
+                Label("View Changelog", systemImage: "clock.arrow.circlepath")
+            }
 
             Button("Restart Onboarding...", systemImage: "sparkles") {
                 appState?.showOnboarding()
@@ -187,9 +209,10 @@ public struct SortyCommands: Commands {
             Button("Send Feedback...", systemImage: "exclamationmark.bubble") {
                 appState?.showBugReport()
             }
+            .keyboardShortcut("f", modifiers: [.command, .option])
             .disabled(appState == nil)
 
-            Link(destination: URL(string: "https://github.com/shirishpothi/Sorty")!) { Label("GitHub Repository", systemImage: "chevron.left.forwardslash.chevron.right") }
+            Link(destination: URL(string: "https://github.com/sorty-organizer/Sorty")!) { Label("GitHub Repository", systemImage: "chevron.left.forwardslash.chevron.right") }
 
             if FeatureFlags.supportDeveloperEnabled {
                 Link(destination: URL(string: "https://github.com/sponsors/shirishpothi")!) { Label("Support the Developer", systemImage: "heart") }
@@ -199,6 +222,7 @@ public struct SortyCommands: Commands {
             Button("Thank you for using Sorty", systemImage: "heart.fill") {
                 appState?.showThanksForUsingSorty()
             }
+            .keyboardShortcut("♥", modifiers: .command)
             .disabled(appState == nil)
 
             Divider()
@@ -206,11 +230,13 @@ public struct SortyCommands: Commands {
             Button("Accreditations", systemImage: "rosette") {
                 appState?.showAccreditations(entryPoint: .help)
             }
+            .keyboardShortcut("©", modifiers: .command)
             .disabled(appState == nil)
 
             Button("Internet Access Policy", systemImage: "network") {
                 appState?.showInternetAccessPolicy()
             }
+            .keyboardShortcut("🌐", modifiers: .command)
             .disabled(appState == nil)
 
             Divider()
@@ -254,6 +280,24 @@ public struct SortyCommands: Commands {
             .keyboardShortcut("p", modifiers: [.command, .shift])
             .disabled(!(appState?.hasCurrentPlan ?? false))
 
+            // Not ⌘Z, which must keep undoing text edits. The coordinator
+            // confirms before anything moves.
+            Button("Undo Last Organization...", systemImage: "arrow.uturn.backward") {
+                NotificationCenter.default.post(name: .requestUndoOrganizationConfirmation, object: nil)
+            }
+            .keyboardShortcut("z", modifiers: [.command, .option])
+            .disabled(!(appState?.canUndoLastOrganization ?? false))
+
+            if isExpiringFilesEnabled {
+                Divider()
+
+                Button("Clean Up Old Files...", systemImage: SortyLabsFeature.expiringFiles.systemImage) {
+                    appState?.showCleanUp()
+                }
+                .keyboardShortcut("k", modifiers: [.command, .option])
+                .disabled(appState == nil)
+            }
+
             Divider()
 
             Button("Cancel", systemImage: "xmark.circle") {
@@ -278,16 +322,19 @@ public struct SortyCommands: Commands {
                 Button("As CSV") {
                     appState?.exportHistory(format: .csv)
                 }
+                .keyboardShortcut("e", modifiers: [.command, .option])
 
                 Button("As JSON") {
                     appState?.exportHistory(format: .json)
                 }
+                .keyboardShortcut("e", modifiers: [.command, .option, .shift])
             }
             .disabled(appState == nil)
 
             Button("Import History...", systemImage: "square.and.arrow.down") {
                 appState?.importHistory()
             }
+            .keyboardShortcut("i", modifiers: [.command, .option])
             .disabled(appState == nil)
 
             Divider()

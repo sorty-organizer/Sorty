@@ -226,6 +226,7 @@ folder selected so you can right-click it yourself.
 | ⌘7 | Settings page |
 | ⌘, | Settings window |
 | ⌘\\ | Show or Hide Sidebar |
+| ⌥⌘R | Reveal Folder in Finder |
 
 ### Organization
 
@@ -235,7 +236,29 @@ folder selected so you can right-click it yourself.
 | ⇧⌘R | Regenerate |
 | ⇧⌘A | Apply Changes |
 | ⇧⌘P | Preview Changes |
+| ⌥⌘Z | Undo Last Organization |
+| ⌥⌘K | Clean Up Old Files (Labs) |
 | ⎋ | Cancel |
+
+### Learnings and History
+
+| Shortcut | Action |
+|----------|--------|
+| ⌥⌘L | Pause or Resume Learning |
+| ⌃⌘E | Export Learning Profile |
+| ⌃⌘I | Import Learning Profile |
+| ⌥⌘E | Export History as CSV |
+| ⌥⇧⌘E | Export History as JSON |
+| ⌥⌘I | Import History |
+
+### App and Help
+
+| Shortcut | Action |
+|----------|--------|
+| ⇧⌘U | Check for Updates |
+| ⌘? | Sorty Help |
+| ⌥⌘N | What's New in Sorty |
+| ⌥⌘F | Send Feedback |
 
 ---
 

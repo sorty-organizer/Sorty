@@ -12,15 +12,12 @@ import SwiftUI
 /// for clearing old installers, archives and screenshots by simple rules, no AI.
 struct ExpiringFilesButton: View {
     @ObservedObject private var expiring = ExpiringFilesManager.shared
-    @State private var isPresented = false
+    @EnvironmentObject private var appState: AppState
 
     var body: some View {
         Button {
             HapticFeedbackManager.shared.tap()
-            isPresented.toggle()
-            if isPresented {
-                LabsTelemetry.expiringReviewOpened(from: .watchedFolders, waiting: expiring.candidates.count)
-            }
+            appState.isShowingCleanUp.toggle()
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: SortyLabsFeature.expiringFiles.systemImage)
@@ -40,9 +37,15 @@ struct ExpiringFilesButton: View {
         .help("Clear old installers, archives and screenshots, found by file type and age")
         .accessibilityLabel(expiring.candidates.isEmpty ? "Clean Up" : "Clean Up, \(expiring.candidates.count) files")
         .accessibilityIdentifier("ExpiringFilesButton")
-        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
+        .popover(isPresented: $appState.isShowingCleanUp, arrowEdge: .bottom) {
             ExpiringFilesPanel()
                 .systemLiquidGlassPopover(cornerRadius: 12)
+        }
+        // The menu command opens this too, so count opens here, not in the button.
+        .onChange(of: appState.isShowingCleanUp) { _, isShowing in
+            if isShowing {
+                LabsTelemetry.expiringReviewOpened(from: .watchedFolders, waiting: expiring.candidates.count)
+            }
         }
         .task {
             await expiring.refresh()
