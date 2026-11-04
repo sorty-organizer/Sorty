@@ -7,9 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-04
+
+### New
+
+- Rename files directly in the preview, including files left unorganized. Edit a name, regenerate a suggestion, or revert it before applying the plan.
+- Try Expiring Files in Sorty Labs: review old installers, archives, and screenshots from Clean Up in Watched Folders or the menu bar before moving them to Trash.
+- Send feedback with attachments, an optional email address, and a preview of included diagnostics. Opening a GitHub issue is optional.
+- Filter OpenCode Zen and Go models to show free options.
+
+### Improved
+
+- Simplified preview counts, AI Summary, completion actions, and notices explaining how edited names inform Learnings.
+- Added approval of pending learned patterns and combined project detection with Developer Mode.
+- Refined Settings, onboarding, native segmented controls, and shared button styles.
+- Moved duplicate cleanup, sound preparation, and image-cache teardown off the main actor; removed the rotating analysis status-message timer.
+- Updated provider model choices and made the Sorty skill usable without the app installed.
+
 ### Fixed
 
-- Draw inactive traffic-light borders separately from the native buttons to avoid disrupting their hover and pressed appearance.
+- Fixed Codex subprocess crashes and an AI session invalidation race.
+- Improved recovery from AI response limits using smaller batches, partial JSON responses, and ambiguous filename matches.
+- Fixed Gemini connection checks, OpenCode inference routing, restored-preview regeneration, and day-template expansion.
+- Fixed feedback attachments lost at the sandbox boundary and cleaned up staged attachments when reports close.
+- Addressed scan, file-open, and relocation authorization hangs; isolated the analysis cancellation dialog from the streaming view. Production confirmation of the analysis hang mitigations is still pending.
+- Fixed Finder Quick Action icon-update races, menu bar insertion loops, native window-button interference, and several clipped labels.
 
 ## [1.3.0] - 2026-10-05
 

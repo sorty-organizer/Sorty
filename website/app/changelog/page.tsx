@@ -45,6 +45,36 @@ export const metadata: Metadata = {
 
 const RELEASES = [
   {
+    version: 'Sorty 1.3.1',
+    status: 'Upcoming',
+    date: 'In preparation',
+    title: 'More control before you apply',
+    summary:
+      'Rename files in preview, review expiring files in Sorty Labs, and send feedback with attachments. Release validation is in progress; 1.3.0 remains the current download.',
+    highlights: [
+      {
+        icon: Sparkles,
+        title: 'Rename in preview',
+        body: 'Edit, regenerate, or revert names before applying a plan, including files left unorganized. Preview counts, AI Summary, and learning notices are clearer.',
+      },
+      {
+        icon: FolderGit2,
+        title: 'Review expiring files',
+        body: 'Enable Expiring Files in Labs to review old installers, archives, and screenshots from Clean Up in Watched Folders or the menu bar before moving them to Trash.',
+      },
+      {
+        icon: ShieldCheck,
+        title: 'Share useful feedback',
+        body: 'Attach files, add an optional email address, and preview included diagnostics. Opening a GitHub issue is optional. Attachment delivery across the sandbox boundary is fixed.',
+      },
+      {
+        icon: ShieldCheck,
+        title: 'Provider and interface fixes',
+        body: 'Fixes cover Codex crashes, AI session lifetime, response-limit recovery, Gemini connection checks, OpenCode routing, Finder icons, and window controls. Analysis hang mitigations still need production confirmation.',
+      },
+    ],
+  },
+  {
     version: 'Sorty 1.3.0',
     status: 'Released',
     date: 'October 5, 2026',

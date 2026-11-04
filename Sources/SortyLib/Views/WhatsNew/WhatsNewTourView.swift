@@ -93,16 +93,12 @@ public struct WhatsNewTourView: View {
         [
             WhatsNewPage(
                 imageName: "AppIcon-Release.png",
-                title: "Sorty 1.3.0",
-                description: "Meet the Sorty skill. Bring your preferences to your agent."
+                title: "Sorty 1.3.1",
+                description: "Rename in preview, review expiring files, and send richer feedback."
             ),
             WhatsNewPage(
-                title: "A clearer menu bar",
-                description: "The old and new icons for all seven Sorty activities."
-            ),
-            WhatsNewPage(
-                title: "Sorty 1.3.0",
-                description: "Organize through conversation, or continue with the native app."
+                title: "Sorty 1.3.1",
+                description: "More control before you apply a plan."
             ),
         ]
     }
@@ -194,12 +190,12 @@ public struct WhatsNewTourView: View {
     private var releaseSummary: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Sorty 1.3.0")
+                Text("Sorty 1.3.1")
                     .font(.system(.title, design: .rounded, weight: .bold))
                     .foregroundStyle(.primary)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("The Sorty skill brings file organizing to your agent, with selective preference import and reversible plans.")
+                Text("Edit names before applying a plan, review files ready for cleanup, and share feedback with attachments.")
                     .font(.system(.subheadline, design: .rounded, weight: .medium))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -214,9 +210,9 @@ public struct WhatsNewTourView: View {
                         symbol: "sparkles",
                         color: SortyDesignSystem.Colors.resolvedAccent,
                         items: [
-                            "Sorty skill for Codex, Claude Code, OpenCode, and Pi",
-                            "Selective preference and Learnings import",
-                            "OpenCode Zen and Go, DMG installer, and optional bug reports"
+                            "Edit, regenerate, and revert names in preview",
+                            "Expiring Files review in Sorty Labs",
+                            "Feedback attachments and optional email"
                         ]
                     )
                     releaseSection(
@@ -224,9 +220,9 @@ public struct WhatsNewTourView: View {
                         symbol: "arrow.up.right.circle.fill",
                         color: SortyDesignSystem.Colors.success,
                         items: [
-                            "Skill-first onboarding with Continue with App",
-                            "Menu bar and Finder icon styles",
-                            "Clearer privacy controls and preview notices"
+                            "Clearer preview and completion screens",
+                            "Approve pending learned patterns",
+                            "Free model filter for OpenCode"
                         ]
                     )
                     releaseSection(
@@ -234,11 +230,10 @@ public struct WhatsNewTourView: View {
                         symbol: "wrench.and.screwdriver.fill",
                         color: SortyDesignSystem.Colors.warning,
                         items: [
-                            "Missing and replaced files stop unsafe operations",
-                            "Concurrent AI batches keep their streams separate",
-                            "Cross-volume copies preserve edited sources",
-                            "Finder, widgets, and skill setup recovery",
-                            "Internal telemetry stays separate from user reports"
+                            "Codex crashes and AI session lifetime",
+                            "AI response-limit recovery",
+                            "Feedback attachment delivery",
+                            "Finder icon updates and window controls"
                         ]
                     )
                 }
@@ -323,10 +318,7 @@ public struct WhatsNewTourView: View {
                 )
                 .accessibilityHidden(true)
             }
-            if currentPage == 1 {
-                menuIconComparison
-                    .frame(width: 640, height: 400)
-            } else if let imageName = page.imageName {
+            if let imageName = page.imageName {
                 bundledImage(imageName)
                     .padding(.vertical, currentPage == 0 ? 10 : 0)
                     .frame(width: 640, height: 400)
@@ -340,7 +332,7 @@ public struct WhatsNewTourView: View {
                     )
             }
 
-            if currentPage != 1 {
+            if page.imageName != nil {
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0),
@@ -354,52 +346,6 @@ public struct WhatsNewTourView: View {
             }
         }
         .frame(width: 640, height: 400)
-    }
-
-    // The 1.3.0 comparison is temporary. Remove this page and the Old PNGs
-    // after the release is confirmed; later tours should show current artwork.
-    private var menuIconComparison: some View {
-        let activities: [(name: String, resource: String)] = [
-            ("Idle", "Idle"),
-            ("Greeting", "Greeting"),
-            ("Organizing", "Organizing"),
-            ("Renaming", "Renaming"),
-            ("Watched folder", "WatchedFolder"),
-            ("Duplicate scan", "DuplicateScanning"),
-            ("Learning", "Learning")
-        ]
-
-        return VStack(spacing: 6) {
-            HStack(spacing: 0) {
-                Text("Activity")
-                    .frame(width: 160, alignment: .leading)
-                Text("Before")
-                    .frame(width: 82)
-                Text("Now")
-                    .frame(width: 82)
-            }
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .foregroundStyle(.secondary)
-            .padding(.bottom, 4)
-
-            ForEach(activities, id: \.resource) { activity in
-                HStack(alignment: .center, spacing: 0) {
-                    Text(activity.name)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .frame(width: 160, height: 40, alignment: .leading)
-
-                    bundledImage("SortyMenuOld\(activity.resource).png")
-                        .frame(width: 82, height: 40)
-                        .accessibilityLabel("Previous \(activity.name) icon")
-
-                    bundledImage("SortyMenu\(activity.resource).png")
-                        .frame(width: 82, height: 40)
-                        .accessibilityLabel("New \(activity.name) icon")
-                }
-                .frame(height: 40)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
