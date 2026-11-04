@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### New
+
+- Reopen the What's New tour any time from the Help menu.
+
+### Improved
+
+- Updated menus: Report Bug is now Send Feedback, History gained ⇧⌘H, and commands that open a dialog now end in an ellipsis.
+
+### Fixed
+
+- Removed Help menu shortcuts that could not be typed on a keyboard.
+
 ## [1.3.1] - 2026-11-04
 
 A broad pass of UI cleanup and bug fixes across Sorty.

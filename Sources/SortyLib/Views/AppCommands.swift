@@ -172,6 +172,11 @@ public struct SortyCommands: Commands {
             .keyboardShortcut("?", modifiers: .command)
             .disabled(appState == nil)
 
+            Button("What's New in Sorty", systemImage: "gift") {
+                appState?.isShowingWhatsNew = true
+            }
+            .disabled(!(appState?.hasCompletedOnboarding ?? false))
+
             Button("Restart Onboarding...", systemImage: "sparkles") {
                 appState?.showOnboarding()
             }
@@ -179,7 +184,7 @@ public struct SortyCommands: Commands {
 
             Divider()
 
-            Button("Report Bug", systemImage: "ladybug") {
+            Button("Send Feedback...", systemImage: "exclamationmark.bubble") {
                 appState?.showBugReport()
             }
             .disabled(appState == nil)
@@ -190,10 +195,10 @@ public struct SortyCommands: Commands {
                 Link(destination: URL(string: "https://github.com/sponsors/shirishpothi")!) { Label("Support the Developer", systemImage: "heart") }
             }
 
+            // HelpMenuHoverHapticsController finds this item by its exact title.
             Button("Thank you for using Sorty", systemImage: "heart.fill") {
                 appState?.showThanksForUsingSorty()
             }
-            .keyboardShortcut("♥", modifiers: .command)
             .disabled(appState == nil)
 
             Divider()
@@ -201,13 +206,11 @@ public struct SortyCommands: Commands {
             Button("Accreditations", systemImage: "rosette") {
                 appState?.showAccreditations(entryPoint: .help)
             }
-            .keyboardShortcut("©", modifiers: .command)
             .disabled(appState == nil)
 
             Button("Internet Access Policy", systemImage: "network") {
                 appState?.showInternetAccessPolicy()
             }
-            .keyboardShortcut("🌐", modifiers: .command)
             .disabled(appState == nil)
 
             Divider()
@@ -266,6 +269,7 @@ public struct SortyCommands: Commands {
             Button("Open History", systemImage: "clock") {
                 appState?.currentView = .history
             }
+            .keyboardShortcut("h", modifiers: [.command, .shift])
             .disabled(appState == nil)
 
             Divider()
@@ -281,14 +285,14 @@ public struct SortyCommands: Commands {
             }
             .disabled(appState == nil)
 
-            Button("Import History", systemImage: "square.and.arrow.down") {
+            Button("Import History...", systemImage: "square.and.arrow.down") {
                 appState?.importHistory()
             }
             .disabled(appState == nil)
 
             Divider()
 
-            Button("Clear History", systemImage: "trash") {
+            Button("Clear History...", systemImage: "trash") {
                 appState?.clearHistoryWithConfirmation()
             }
             .disabled(appState == nil)

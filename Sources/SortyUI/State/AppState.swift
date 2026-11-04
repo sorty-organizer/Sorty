@@ -141,6 +141,8 @@ public class AppState: ObservableObject {
     /// Raw value of a Learnings records list to open once Learnings is on screen.
     @Published public var pendingLearningRecordsCategory: String?
     @Published public var showsFinderWorkflowPicker = false
+    /// Presents the What's New tour over this window's main view.
+    @Published public var isShowingWhatsNew = false
     @Published public var pendingNotificationActionRequest: PendingNotificationActionRequest?
     @Published public var pendingHistoryEntryID: UUID?
     @Published public var requiresSetupRepair: Bool {

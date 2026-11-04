@@ -35,7 +35,7 @@ Welcome to the official Sorty documentation. Sorty is a smart file organization 
 1. **Select a Folder**: Click "Open Directory" (⌘O) or drag a folder onto the app
 2. **Choose a Persona**: Select a persona (e.g., "Developer", "Photographer") to tailor organization
 3. **Preview**: Click "Organize" to see Sorty's proposed folder structure
-4. **Apply**: Review the preview and click "Apply Changes" — undo anytime with ⌘Z
+4. **Apply**: Review the preview and click "Apply Changes" — undo it from the completion screen or History
 
 ### System Requirements
 
@@ -217,13 +217,15 @@ folder selected so you can right-click it yourself.
 | Shortcut | Action |
 |----------|--------|
 | ⌘O | Open Directory |
-| ⌘1 | Organize View |
+| ⌘1 | Organize |
+| ⌘2 | Watched Folders |
 | ⌘3 | Duplicates |
-| ⌘4 | Exclusions |
-| ⌘5 | Watched Folders |
-| ⌘, | Settings |
-| ⇧⌘H | History |
-| ⇧⌘L | The Learnings |
+| ⌘4 or ⇧⌘H | History |
+| ⌘5 or ⇧⌘L | Learnings |
+| ⌘6 | Exclusions |
+| ⌘7 | Settings page |
+| ⌘, | Settings window |
+| ⌘\\ | Show or Hide Sidebar |
 
 ### Organization
 
@@ -231,8 +233,8 @@ folder selected so you can right-click it yourself.
 |----------|--------|
 | ⌘R | Start Organization |
 | ⇧⌘R | Regenerate |
-| ⌘⏎ | Apply Changes |
-| ⌘Z | Undo |
+| ⇧⌘A | Apply Changes |
+| ⇧⌘P | Preview Changes |
 | ⎋ | Cancel |
 
 ---
@@ -318,7 +320,7 @@ killall Finder
 ## FAQ
 
 ### Can I undo organization?
-Yes! Press ⌘Z immediately after applying, or go to History and click "Revert" on any past session.
+Yes! Click Undo on the completion screen right after applying, or go to History and click "Revert" on any past session.
 
 ### Will Sorty delete my files?
 No. Organization only moves files into folders. The only deletion feature is for duplicates, with Safe Deletion enabled by default.
