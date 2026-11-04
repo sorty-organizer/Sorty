@@ -221,6 +221,7 @@ public struct WhatsNewTourView: View {
                         color: SortyDesignSystem.Colors.success,
                         items: [
                             "Clearer preview and completion screens",
+                            "Restrained haptics for actions and outcomes",
                             "Approve pending learned patterns",
                             "Free model filter for OpenCode"
                         ]
@@ -233,7 +234,8 @@ public struct WhatsNewTourView: View {
                             "Codex crashes and AI session lifetime",
                             "AI response-limit recovery",
                             "Feedback attachment delivery",
-                            "Finder icon updates and window controls"
+                            "Finder icon updates and window controls",
+                            "Onboarding minimum window size"
                         ]
                     )
                 }

@@ -438,7 +438,7 @@ jobs:
           python3 scripts/generate_sparkle_release_notes.py \
             --version "${{ needs.prepare-release.outputs.version }}" \
             --title "Sorty ${{ needs.prepare-release.outputs.version }}" \
-            --summary "Meet the Sorty skill: organize files through your agent, import selected preferences and Learnings, or continue with the native app." \
+            --summary "UI cleanup and bug fixes across Sorty, with clearer previews, refined onboarding, restrained haptics, and fixes for providers, feedback, and file handling." \
             --changelog CHANGELOG.md \
             --markdown releases/release-notes.md \
             --html releases/release-notes.html

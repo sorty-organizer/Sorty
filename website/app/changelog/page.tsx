@@ -46,16 +46,16 @@ export const metadata: Metadata = {
 const RELEASES = [
   {
     version: 'Sorty 1.3.1',
-    status: 'Upcoming',
-    date: 'In preparation',
+    status: 'Released',
+    date: 'November 4, 2026',
     title: 'UI cleanup and bug fixes',
     summary:
-      'A broad pass of UI cleanup across previews, Settings, onboarding, and completion screens, alongside fixes for providers, feedback, and file handling. Release validation is in progress; 1.3.0 remains the current download.',
+      'A broad pass of UI cleanup across previews, Settings, onboarding, and completion screens, alongside fixes for providers, feedback, and file handling.',
     highlights: [
       {
         icon: Sparkles,
         title: 'Rename in preview',
-        body: 'Edit, regenerate, or revert names before applying a plan, including files left unorganized. Preview counts, AI Summary, and learning notices are clearer.',
+        body: 'Edit, regenerate, or revert names before applying a plan, including files left unorganized. Preview counts, AI Summary, and learning notices are clearer. Haptic feedback now focuses on deliberate actions and outcomes.',
       },
       {
         icon: FolderGit2,
@@ -70,7 +70,7 @@ const RELEASES = [
       {
         icon: ShieldCheck,
         title: 'Provider and interface fixes',
-        body: 'Fixes cover Codex crashes, AI session lifetime, response-limit recovery, Gemini connection checks, OpenCode routing, Finder icons, and window controls. Analysis hang mitigations still need production confirmation.',
+        body: 'Fixes cover Codex crashes, AI session lifetime, response-limit recovery, Gemini connection checks, OpenCode routing, Finder icons, window controls, and onboarding minimum size. Analysis hang mitigations still need production confirmation.',
       },
     ],
   },
