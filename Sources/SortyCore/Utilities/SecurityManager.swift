@@ -127,17 +127,14 @@ public class SecurityManager: ObservableObject {
             case .biometryLockout, .biometryNotAvailable, .biometryNotEnrolled:
                 return nil
             case .userCancel:
-                self.error = "Authentication cancelled"
-                self.isUnlocked = false
+                failAuthentication("Authentication cancelled")
                 return false
             default:
-                self.error = "Authentication failed: \(error.userFacingMessage)"
-                self.isUnlocked = false
+                failAuthentication("Authentication failed: \(error.userFacingMessage)")
                 return false
             }
         } catch {
-            self.error = "Authentication failed: \(error.userFacingMessage)"
-            self.isUnlocked = false
+            failAuthentication("Authentication failed: \(error.userFacingMessage)")
             return false
         }
 
@@ -149,8 +146,7 @@ public class SecurityManager: ObservableObject {
         let context = LAContext()
 
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil) else {
-            self.error = "No authentication method available on this device."
-            self.isUnlocked = false
+            failAuthentication("No authentication method available on this device.")
             return false
         }
 
@@ -161,21 +157,18 @@ public class SecurityManager: ObservableObject {
                 LogManager.shared.log("Authentication successful via password", category: "SecurityManager")
                 return true
             }
-            self.error = "Authentication failed."
-            self.isUnlocked = false
+            failAuthentication("Authentication failed.")
             return false
         } catch let error as LAError {
             switch error.code {
             case .userCancel, .systemCancel, .appCancel:
-                self.error = "Authentication cancelled"
+                failAuthentication("Authentication cancelled")
             default:
-                self.error = "Password authentication failed: \(error.userFacingMessage)"
+                failAuthentication("Password authentication failed: \(error.userFacingMessage)")
             }
-            self.isUnlocked = false
             return false
         } catch {
-            self.error = "Password authentication failed: \(error.userFacingMessage)"
-            self.isUnlocked = false
+            failAuthentication("Password authentication failed: \(error.userFacingMessage)")
             return false
         }
     }
@@ -195,6 +188,13 @@ public class SecurityManager: ObservableObject {
         if isUnlocked {
             startSessionTimer()
         }
+    }
+
+    /// Single exit for a failed or cancelled authentication: records the
+    /// message and locks the session so no stale method or timer outlives it.
+    private func failAuthentication(_ message: String) {
+        error = message
+        lock()
     }
 
     private func completeSuccessfulAuthentication(method: AuthenticationMethod) {
