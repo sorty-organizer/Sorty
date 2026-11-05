@@ -66,12 +66,7 @@ extension FolderOrganizer {
     }
 
     func isOperationInProgress() -> Bool {
-        switch state {
-        case .scanning, .organizing, .applying:
-            return true
-        default:
-            return false
-        }
+        state.isOperationInProgress
     }
 
     func resetToIdle(source: OrganizationEntrySource = .manual) {

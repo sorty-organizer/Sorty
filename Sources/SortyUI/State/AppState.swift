@@ -496,13 +496,7 @@ public class AppState: ObservableObject {
     }
 
     public var isOperationInProgress: Bool {
-        guard let state = organizer?.state else { return false }
-        switch state {
-        case .scanning, .organizing, .applying:
-            return true
-        default:
-            return false
-        }
+        organizer?.state.isOperationInProgress ?? false
     }
 
     /// Resolve the security-scoped bookmark for the selected directory.

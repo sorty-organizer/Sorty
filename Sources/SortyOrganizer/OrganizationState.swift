@@ -16,8 +16,9 @@ public enum OrganizationState: Equatable, Sendable {
 
     /// Whether the organizer is actively performing work and should not be interrupted.
     /// Ready means a plan is waiting for user review (no active work), so it is
-    /// not in-progress. Kept in sync with `isTrackedRunningState`, the private
-    /// `isOperationInProgress()`, and `AppState.isOperationInProgress`.
+    /// not in-progress. This is the single definition: `FolderOrganizer`'s
+    /// running-organizer tracking and in-progress guard, and
+    /// `AppState.isOperationInProgress`, all call it.
     public var isOperationInProgress: Bool {
         switch self {
         case .scanning, .organizing, .applying:

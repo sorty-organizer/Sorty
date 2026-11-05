@@ -106,15 +106,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         !runningOrganizerIDs.isEmpty
     }
 
-    private nonisolated static func isTrackedRunningState(_ state: OrganizationState) -> Bool {
-        switch state {
-        case .scanning, .organizing, .applying:
-            return true
-        case .idle, .ready, .completed, .error:
-            return false
-        }
-    }
-
     private var isRegisteredAsRunningOrganizer = false
 
     struct PresentationState {
@@ -689,8 +680,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     @MainActor
     private func syncRunningOrganizationRegistrationIfNeeded(from oldState: OrganizationState, to newState: OrganizationState) {
-        let wasTracked = Self.isTrackedRunningState(oldState)
-        let shouldTrack = Self.isTrackedRunningState(newState)
+        let wasTracked = oldState.isOperationInProgress
+        let shouldTrack = newState.isOperationInProgress
         guard wasTracked != shouldTrack else { return }
 
         let id = ObjectIdentifier(self)
