@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SortyFileSystem
 import Combine
 
 public enum PersonaType: String, Codable, CaseIterable, Sendable {
@@ -132,8 +133,7 @@ public class PersonaManager: ObservableObject {
     private let customPromptsKey = "customPersonaPrompts"
     private let customIdKey = "selectedCustomPersonaId"
     @Published public private(set) var hasLoadedPersistedState = false
-    private var loadTask: Task<PersistedSnapshot, Never>?
-    private var loadGeneration = 0
+    private let hydration = HydrationGate<PersistedSnapshot>()
     private var hasPendingChanges = false
     private var hasPendingScalarChanges = false
 
@@ -153,16 +153,12 @@ public class PersonaManager: ObservableObject {
     public func loadPersistedState() async {
         guard !hasLoadedPersistedState else { return }
 
-        let generation = loadGeneration
-        let task: Task<PersistedSnapshot, Never>
-        if let loadTask {
-            task = loadTask
-        } else {
+        let (task, generation) = hydration.join {
             let persistedDataReader = persistedDataReader
             let storageKey = storageKey
             let customPromptsKey = customPromptsKey
             let customIdKey = customIdKey
-            task = Task.detached(priority: .userInitiated) {
+            return Task.detached(priority: .userInitiated) {
                 var snapshot = PersistedSnapshot()
                 snapshot.selectedPersonaRaw = persistedDataReader.string(forKey: storageKey)
                 snapshot.selectedCustomPersonaId = persistedDataReader.string(forKey: customIdKey)
@@ -172,11 +168,10 @@ public class PersonaManager: ObservableObject {
                 }
                 return snapshot
             }
-            loadTask = task
         }
 
         let snapshot = await task.value
-        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+        guard !hasLoadedPersistedState, hydration.isCurrent(generation) else { return }
 
         if !hasPendingScalarChanges {
             if let rawValue = snapshot.selectedPersonaRaw,
@@ -194,7 +189,7 @@ public class PersonaManager: ObservableObject {
         customPrompts = mergedPrompts
 
         hasLoadedPersistedState = true
-        loadTask = nil
+        hydration.finish()
 
         if hasPendingChanges || hasPendingScalarChanges {
             hasPendingChanges = false
@@ -264,9 +259,7 @@ public class PersonaManager: ObservableObject {
     }
 
     public func reset() {
-        loadGeneration &+= 1
-        loadTask?.cancel()
-        loadTask = nil
+        hydration.invalidate()
         hasLoadedPersistedState = true
         hasPendingChanges = false
         hasPendingScalarChanges = false

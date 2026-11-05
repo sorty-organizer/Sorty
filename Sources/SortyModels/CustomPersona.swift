@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SortyFileSystem
 import Combine
 
 // MARK: - Custom Persona Model
@@ -132,8 +133,7 @@ public class CustomPersonaStore: ObservableObject {
     private let persistedDataReader: UserDefaultsDataReader
     private let storageKey = "customPersonas"
     nonisolated(unsafe) private var clearUsageObserver: NSObjectProtocol?
-    private var loadTask: Task<[CustomPersona], Never>?
-    private var loadGeneration = 0
+    private let hydration = HydrationGate<[CustomPersona]>()
     private var hasPendingChanges = false
 
     public init(userDefaults: UserDefaults = .standard) {
@@ -146,25 +146,20 @@ public class CustomPersonaStore: ObservableObject {
     public func loadPersistedState() async {
         guard !hasLoadedPersistedState else { return }
 
-        let generation = loadGeneration
-        let task: Task<[CustomPersona], Never>
-        if let loadTask {
-            task = loadTask
-        } else {
+        let (task, generation) = hydration.join {
             let persistedDataReader = persistedDataReader
             let storageKey = storageKey
-            task = Task.detached(priority: .userInitiated) {
+            return Task.detached(priority: .userInitiated) {
                 guard let data = persistedDataReader.data(forKey: storageKey),
                       let decoded = try? JSONDecoder().decode([CustomPersona].self, from: data) else {
                     return []
                 }
                 return decoded
             }
-            loadTask = task
         }
 
         let persistedPersonas = await task.value
-        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+        guard !hasLoadedPersistedState, hydration.isCurrent(generation) else { return }
 
         let inMemoryByID = Dictionary(uniqueKeysWithValues: customPersonas.map { ($0.id, $0) })
         let persistedIDs = Set(persistedPersonas.map(\.id))
@@ -173,7 +168,7 @@ public class CustomPersonaStore: ObservableObject {
         customPersonas = merged
 
         hasLoadedPersistedState = true
-        loadTask = nil
+        hydration.finish()
 
         if hasPendingChanges {
             hasPendingChanges = false
@@ -198,9 +193,7 @@ public class CustomPersonaStore: ObservableObject {
     }
 
     public func clearAll() {
-        loadGeneration &+= 1
-        loadTask?.cancel()
-        loadTask = nil
+        hydration.invalidate()
         hasLoadedPersistedState = true
         hasPendingChanges = false
         customPersonas.removeAll()

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SortyFileSystem
 import Combine
 
 @MainActor
@@ -17,8 +18,7 @@ public class NamingPresetManager: ObservableObject {
 
     private let userDefaults: UserDefaults
     private let persistedDataReader: UserDefaultsDataReader
-    private var loadTask: Task<[NamingPreset], Never>?
-    private var loadGeneration = 0
+    private let hydration = HydrationGate<[NamingPreset]>()
     private var hasPendingChanges = false
 
     public static let shared = NamingPresetManager()
@@ -33,25 +33,20 @@ public class NamingPresetManager: ObservableObject {
     public func loadPersistedState() async {
         guard !hasLoadedPersistedState else { return }
 
-        let generation = loadGeneration
-        let task: Task<[NamingPreset], Never>
-        if let loadTask {
-            task = loadTask
-        } else {
+        let (task, generation) = hydration.join {
             let persistedDataReader = persistedDataReader
             let storageKey = Self.storageKey
-            task = Task.detached(priority: .utility) {
+            return Task.detached(priority: .utility) {
                 guard let data = persistedDataReader.data(forKey: storageKey),
                       let decoded = try? JSONDecoder().decode([NamingPreset].self, from: data) else {
                     return []
                 }
                 return decoded
             }
-            loadTask = task
         }
 
         let persistedPresets = await task.value
-        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+        guard !hasLoadedPersistedState, hydration.isCurrent(generation) else { return }
 
         let inMemoryByID = Dictionary(uniqueKeysWithValues: customPresets.map { ($0.id, $0) })
         let persistedIDs = Set(persistedPresets.map(\.id))
@@ -60,7 +55,7 @@ public class NamingPresetManager: ObservableObject {
         customPresets = merged
 
         hasLoadedPersistedState = true
-        loadTask = nil
+        hydration.finish()
 
         if hasPendingChanges {
             hasPendingChanges = false
@@ -132,9 +127,7 @@ public class NamingPresetManager: ObservableObject {
     }
 
     public func clearAll() {
-        loadGeneration &+= 1
-        loadTask?.cancel()
-        loadTask = nil
+        hydration.invalidate()
         hasLoadedPersistedState = true
         hasPendingChanges = false
         customPresets.removeAll()

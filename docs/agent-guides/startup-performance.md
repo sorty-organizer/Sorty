@@ -48,7 +48,7 @@ The main content observes the managers as persisted state arrives. Settings pers
 
 `LoginItemManager` keeps construction free of `SMAppService` queries. Its registration observation starts from `configureGlobalsIfNeeded()`, and startup reconciliation runs off the main actor.
 
-The loaders are idempotent. A second caller awaits the existing task. Bookmark restores are also coalesced, including repeated requests for the same saved location. Hold or merge edits made during hydration before saving. Clearing or resetting a store invalidates an in-flight result so deleted data cannot reappear. Preserve these contracts when adding another loader.
+Stores with a single background read (`CustomPersonaStore`, `NamingPresetManager`, `NotificationSettingsManager`, `PersonaManager`, `SteeringPromptManager`) share `HydrationGate` in `SortyFileSystem` for that coalescing and invalidation; their merge rules stay in each store. The loaders are idempotent. A second caller awaits the existing task. Bookmark restores are also coalesced, including repeated requests for the same saved location. Hold or merge edits made during hydration before saving. Clearing or resetting a store invalidates an in-flight result so deleted data cannot reappear. Preserve these contracts when adding another loader.
 
 `Task.yield()` only offers the executor a scheduling opportunity. Neither it nor SwiftUI `onAppear` proves that a frame has reached the display. Keep synchronous work after suspension points short as well; replacing a blocking initializer with a blocking view task merely moves the stall.
 

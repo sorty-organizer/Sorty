@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SortyFileSystem
 import Combine
 
 public struct SavedSteeringPrompt: Codable, Identifiable, Sendable {
@@ -68,8 +69,7 @@ public class SteeringPromptManager: ObservableObject {
 
     private let userDefaults: UserDefaults
     private let persistedDataReader: UserDefaultsDataReader
-    private var loadTask: Task<PersistedSnapshot, Never>?
-    private var loadGeneration = 0
+    private let hydration = HydrationGate<PersistedSnapshot>()
     private var hasPendingChanges = false
 
     private struct PersistedSnapshot: Sendable {
@@ -89,14 +89,10 @@ public class SteeringPromptManager: ObservableObject {
     public func loadPersistedState() async {
         guard !hasLoadedPersistedState else { return }
 
-        let generation = loadGeneration
-        let task: Task<PersistedSnapshot, Never>
-        if let loadTask {
-            task = loadTask
-        } else {
+        let (task, generation) = hydration.join {
             let persistedDataReader = persistedDataReader
             let storageKey = Self.storageKey
-            task = Task.detached(priority: .utility) {
+            return Task.detached(priority: .utility) {
                 var snapshot = PersistedSnapshot()
                 guard let data = persistedDataReader.data(forKey: storageKey),
                       let decoded = try? JSONDecoder().decode([SavedSteeringPrompt].self, from: data) else {
@@ -111,11 +107,10 @@ public class SteeringPromptManager: ObservableObject {
                 snapshot.didRemovePlaceholders = cleaned.count != loadedCount
                 return snapshot
             }
-            loadTask = task
         }
 
         let snapshot = await task.value
-        guard !hasLoadedPersistedState, generation == loadGeneration else { return }
+        guard !hasLoadedPersistedState, hydration.isCurrent(generation) else { return }
 
         let inMemoryByID = Dictionary(uniqueKeysWithValues: prompts.map { ($0.id, $0) })
         let persistedIDs = Set(snapshot.prompts.map(\.id))
@@ -127,7 +122,7 @@ public class SteeringPromptManager: ObservableObject {
         }
 
         hasLoadedPersistedState = true
-        loadTask = nil
+        hydration.finish()
 
         if hasPendingChanges {
             hasPendingChanges = false
@@ -196,9 +191,7 @@ public class SteeringPromptManager: ObservableObject {
     }
 
     public func clearAll() {
-        loadGeneration &+= 1
-        loadTask?.cancel()
-        loadTask = nil
+        hydration.invalidate()
         hasLoadedPersistedState = true
         hasPendingChanges = false
         prompts.removeAll()
