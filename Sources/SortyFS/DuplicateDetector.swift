@@ -501,7 +501,13 @@ public class DuplicateDetectionManager: ObservableObject {
     @Published public var duplicateGroups: [DuplicateGroup] = [] {
         didSet { refreshDerivedDuplicateSummary() }
     }
-    @Published public var isScanning = false
+    /// True while a scan is preparing or running; derived from `state` so the two cannot disagree.
+    public var isScanning: Bool {
+        switch state {
+        case .preparing, .scanning: return true
+        case .idle, .completed, .failed: return false
+        }
+    }
     @Published public var scanProgress: Double = 0
     @Published public var lastScanDate: Date?
     @Published public var semanticGroups: [SemanticDuplicateGroup] = [] {
@@ -603,7 +609,6 @@ public class DuplicateDetectionManager: ObservableObject {
         scanGeneration &+= 1
         let generation = scanGeneration
         if Task.isCancelled {
-            isScanning = false
             state = .idle
             scanStage = ""
             return
@@ -619,7 +624,6 @@ public class DuplicateDetectionManager: ObservableObject {
             ]
         )
         state = .scanning(progress: 0)
-        isScanning = true
         scanProgress = 0
         scanStage = "Preparing..."
         lastProgressUpdate = .distantPast
@@ -639,7 +643,6 @@ public class DuplicateDetectionManager: ObservableObject {
             duplicateGroups = []
             semanticGroups = []
             lastScanDate = Date()
-            isScanning = false
             scanProgress = 1.0
             scanStage = ""
             scanDuration = Date().timeIntervalSince(scanStartedAt)
@@ -671,7 +674,6 @@ public class DuplicateDetectionManager: ObservableObject {
 
         guard scanGeneration == generation else { return }
         if Task.isCancelled {
-            isScanning = false
             state = .idle
             scanStage = ""
             return
@@ -690,7 +692,6 @@ public class DuplicateDetectionManager: ObservableObject {
         }
 
         if Task.isCancelled {
-            isScanning = false
             state = .idle
             scanStage = ""
             SortyFSTelemetry.captureWorkflow(
@@ -741,7 +742,6 @@ public class DuplicateDetectionManager: ObservableObject {
                 }
                 guard scanGeneration == generation else { return }
                 if Task.isCancelled {
-                    isScanning = false
                     state = .idle
                     scanStage = ""
                     return
@@ -750,7 +750,6 @@ public class DuplicateDetectionManager: ObservableObject {
                 let promotedExactGroups = await promoteExactMatches(from: detectedSemanticGroups)
                 guard scanGeneration == generation else { return }
                 if Task.isCancelled {
-                    isScanning = false
                     state = .idle
                     scanStage = ""
                     return
@@ -778,7 +777,6 @@ public class DuplicateDetectionManager: ObservableObject {
 
         guard scanGeneration == generation else { return }
         if Task.isCancelled {
-            isScanning = false
             state = .idle
             scanStage = ""
             return
@@ -786,7 +784,6 @@ public class DuplicateDetectionManager: ObservableObject {
         duplicateGroups = groups
         
         lastScanDate = Date()
-        isScanning = false
         scanProgress = 1.0
         scanStage = ""
         scanDuration = Date().timeIntervalSince(scanStartedAt)
@@ -803,9 +800,18 @@ public class DuplicateDetectionManager: ObservableObject {
         )
     }
     
+    /// Marks the pre-scan phase (directory enumeration) before `scanForDuplicates` takes over.
+    public func beginPreparing() {
+        state = .preparing
+    }
+
+    /// Records a failure that happened before the detector could start scanning.
+    public func failPreparing(message: String) {
+        state = .failed(message)
+    }
+
     public func cancelCurrentScan() {
         scanGeneration &+= 1
-        isScanning = false
         scanProgress = 0
         scanStage = ""
         state = .idle
@@ -818,7 +824,6 @@ public class DuplicateDetectionManager: ObservableObject {
         lastScanDate = nil
         scanProgress = 0
         scanStage = ""
-        isScanning = false
         state = .idle
         scannedFileCount = 0
         hashCandidateCount = 0

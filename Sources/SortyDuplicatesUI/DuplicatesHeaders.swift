@@ -31,7 +31,7 @@ struct DuplicatesHeaderNew: View {
     }
 
     private var isScanInProgress: Bool {
-        manager.isScanning || manager.state == .preparing
+        manager.isScanning
     }
 
     /// Path-keyed folder icon cache. The header re-renders on every scan

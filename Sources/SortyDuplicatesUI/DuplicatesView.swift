@@ -185,7 +185,7 @@ package struct DuplicatesView: View {
             currentScanID = UUID()
             currentScanTask?.cancel()
             currentScanTask = nil
-            if detectionManager.isScanning || isPreparingScan {
+            if detectionManager.isScanning {
                 detectionManager.cancelCurrentScan()
             }
         }

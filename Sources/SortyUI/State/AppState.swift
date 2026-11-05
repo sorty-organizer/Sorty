@@ -119,9 +119,18 @@ public class AppState: ObservableObject {
         if let loadedDuplicateManager { return loadedDuplicateManager }
         let manager = DuplicateDetectionManager()
         loadedDuplicateManager = manager
-        duplicateScanningSubscription = manager.$isScanning.dropFirst().sink { [weak self] isScanning in
-            self?.isDuplicateScanning = isScanning
-        }
+        duplicateScanningSubscription = manager.$state
+            .map { state -> Bool in
+                switch state {
+                case .preparing, .scanning: return true
+                case .idle, .completed, .failed: return false
+                }
+            }
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] isScanning in
+                self?.isDuplicateScanning = isScanning
+            }
         return manager
     }
     public private(set) lazy var duplicateSettings = DuplicateSettingsManager()

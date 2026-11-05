@@ -15,7 +15,7 @@ extension DuplicatesView {
 
         // Cancel any in-flight scan and invalidate any work already returned by it.
         currentScanTask?.cancel()
-        if detectionManager.isScanning || isPreparingScan {
+        if detectionManager.isScanning {
             detectionManager.cancelCurrentScan()
         }
         let scanID = UUID()
@@ -23,7 +23,7 @@ extension DuplicatesView {
 
         // Capture current directory
         capturedDirectory = directory
-        detectionManager.state = .preparing
+        detectionManager.beginPreparing()
 
         currentScanTask = Task {
             let scanner = DirectoryScanner()
@@ -64,7 +64,7 @@ extension DuplicatesView {
                 }
             } catch {
                 if currentScanID == scanID, !Task.isCancelled {
-                    detectionManager.state = .failed(error.userFacingMessage)
+                    detectionManager.failPreparing(message: error.userFacingMessage)
                     HapticFeedbackManager.shared.error()
                     DebugLogger.log("Duplicate scan failed: \(error)")
                     AnalyticsManager.shared.captureWorkflow(
