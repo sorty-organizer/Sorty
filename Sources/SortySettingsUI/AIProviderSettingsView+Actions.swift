@@ -31,7 +31,7 @@ extension AIProviderSettingsView {
                     withAnimation(
                         shouldAnimate ? .sortySmooth : nil
                     ) {
-                        testConnectionStatus = "Success: Connection test passed"
+                        testConnectionStatus = .success
                         testConnectionDetails = nil
                     }
                     clearSetupRepairIfProviderIsUsable(testedConfig: testedConfig)
@@ -55,7 +55,7 @@ extension AIProviderSettingsView {
                     guard connectionTestID == testID, viewModel.config == testedConfig else { return }
                     HapticFeedbackManager.shared.error()
                     withAnimation(.sortySmooth) {
-                        testConnectionStatus = "Error: Invalid response format"
+                        testConnectionStatus = .failure("Invalid response format")
                         testConnectionDetails = "The API endpoint may be incorrect or the service returned unexpected data.\n\nDetails: \(context)"
                     }
                 }
@@ -73,11 +73,11 @@ extension AIProviderSettingsView {
 
                     withAnimation(.sortySmooth) {
                         if isInternetAccessBlocked {
-                            testConnectionStatus = """
-                            Error: Sorty can’t connect to \(testedConfig.provider.displayName) while Block Internet Connections is on.
-                            """
+                            testConnectionStatus = .failure(
+                                "Sorty can’t connect to \(testedConfig.provider.displayName) while Block Internet Connections is on."
+                            )
                         } else {
-                            testConnectionStatus = "Error: \(error.userFacingMessage)"
+                            testConnectionStatus = .failure(error.userFacingMessage)
                         }
                         testConnectionDetails = details
                     }

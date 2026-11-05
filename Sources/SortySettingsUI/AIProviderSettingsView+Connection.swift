@@ -66,10 +66,10 @@ extension AIProviderSettingsView {
                     .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
                     .accessibilityLabel(connectionButtonTitle)
 
-                    if let status = testConnectionStatus, isConnectionFailed {
+                    if case .failure(let status)? = testConnectionStatus, isConnectionFailed {
                         VStack(alignment: .center, spacing: 8) {
                             HStack(alignment: .center, spacing: 6) {
-                                Text(status.replacingOccurrences(of: "Error: ", with: ""))
+                                Text(status)
                                     .font(.caption)
                                     .fontWeight(.semibold)
                                     .foregroundColor(isInternetAccessBlocked ? SortyDesignSystem.Colors.warning : SortyDesignSystem.Colors.error)

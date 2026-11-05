@@ -16,7 +16,7 @@ struct AIProviderSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
 
-    @State var testConnectionStatus: String?
+    @State var testConnectionStatus: ConnectionTestResult?
     @State var testConnectionDetails: String?
     @State var isTestingConnection = false
     @State var connectionTestID: UUID?
@@ -38,13 +38,19 @@ struct AIProviderSettingsView: View {
     @State var connectionSuccessResetTask: Task<Void, Never>?
     @State var connectionTestTask: Task<Void, Never>?
 
+    /// Outcome of the last connection test. The case, not the message text, decides how it renders.
+    enum ConnectionTestResult: Equatable {
+        case success
+        case failure(String)
+    }
+
     var isConnectionSuccessful: Bool {
-        testConnectionStatus?.contains("Success") == true
+        testConnectionStatus == .success
     }
 
     var isConnectionFailed: Bool {
-        guard let status = testConnectionStatus else { return false }
-        return !isConnectionSuccessful && !status.isEmpty
+        if case .failure(let message)? = testConnectionStatus { return !message.isEmpty }
+        return false
     }
 
     let providerColumns = Array(
