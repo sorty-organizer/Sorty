@@ -33,6 +33,7 @@ A broad pass of UI cleanup and bug fixes across Sorty.
 ### Fixed
 
 - Preserve the 1100×720 onboarding minimum so setup controls stay inside the window.
+- Installing an update no longer stops at a quit warning when watched folders are active.
 - Read fresh file metadata before Expiring Files moves a reviewed file to Trash.
 - Distinguish Learnings Keychain and unreadable-profile errors in diagnostics instead of reporting them as unclassified.
 - Fixed Codex subprocess crashes and an AI session invalidation race.

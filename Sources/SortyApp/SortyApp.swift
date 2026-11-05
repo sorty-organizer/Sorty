@@ -362,7 +362,10 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
                 return .runningActivities(FolderOrganizer.runningOrganizationCount)
             }
 
-            guard shouldContinueRunningWhenLastWindowCloses else {
+            // Running work above still warns. Idle monitoring resumes after the
+            // relaunch, and a prompt here would stall Sparkle's install.
+            guard !SparkleUpdateManager.isRelaunchingForUpdate,
+                  shouldContinueRunningWhenLastWindowCloses else {
                 return nil
             }
 

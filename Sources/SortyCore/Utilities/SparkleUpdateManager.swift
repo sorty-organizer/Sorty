@@ -9,6 +9,7 @@ import AppKit
 import Combine
 import Foundation
 import SwiftUI
+import os
 
 #if canImport(Sparkle)
 import Sparkle
@@ -98,6 +99,16 @@ struct SparkleTrafficLightSkipStore {
 
 @MainActor
 public class SparkleUpdateManager: ObservableObject {
+    private nonisolated static let relaunchState = OSAllocatedUnfairLock(initialState: false)
+
+    /// True once the user has accepted an update and Sparkle is about to quit
+    /// and relaunch Sorty. The quit warning reads this so a watched-folder
+    /// prompt cannot stall the install; Sorty reopens straight away.
+    public nonisolated static var isRelaunchingForUpdate: Bool {
+        get { relaunchState.withLock { $0 } }
+        set { relaunchState.withLock { $0 = newValue } }
+    }
+
 
     @Published public var canCheckForUpdates = false
     @Published public var lastCheckDate: Date?
@@ -435,6 +446,7 @@ private class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
         let underlyingError = userInfo[NSUnderlyingErrorKey] as? Error
         let underlyingMessage = underlyingError?.localizedDescription ?? "None"
         
+        SparkleUpdateManager.isRelaunchingForUpdate = false
         LogManager.shared.log("Sparkle update failed: \(message). Underlying: \(underlyingMessage). Code: \(nsError.code)", level: .error, category: "SparkleUpdateManager")
         
         Task { @MainActor in
@@ -449,6 +461,7 @@ private class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
     }
 
     nonisolated func updaterWillRelaunchApplication(_ updater: SPUUpdater) {
+        SparkleUpdateManager.isRelaunchingForUpdate = true
         LogManager.shared.log("Application will relaunch after update", category: "SparkleUpdateManager")
     }
 
