@@ -475,10 +475,15 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
     var stateCallback: ((SparkleUpdateManager.UpdateState) -> Void)?
 
     private let skipStore = SparkleTrafficLightSkipStore()
-    private var pendingAppcastItem: SUAppcastItem?
-    private var pendingState: SPUUserUpdateState?
-    private var pendingReply: ((SPUUserUpdateChoice) -> Void)?
-    private var isHoldingScheduledUpdate = false
+    /// A scheduled update held at Sparkle's first choice. Non-nil means held.
+    private struct HeldUpdate {
+        let appcastItem: SUAppcastItem
+        let state: SPUUserUpdateState
+        let reply: (SPUUserUpdateChoice) -> Void
+    }
+
+    private var heldUpdate: HeldUpdate?
+    private var isHoldingScheduledUpdate: Bool { heldUpdate != nil }
     private var downloadedBytes: UInt64 = 0
     private var expectedContentLength: UInt64 = 0
 
@@ -532,21 +537,17 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
         }
 
         stateCallback?(availableState)
-        pendingAppcastItem = appcastItem
-        pendingState = state
-        pendingReply = stateAwareReply
-        isHoldingScheduledUpdate = true
+        heldUpdate = HeldUpdate(appcastItem: appcastItem, state: state, reply: stateAwareReply)
     }
 
     func installPendingUpdate() -> Bool {
-        guard let appcastItem = pendingAppcastItem else { return false }
+        guard let held = heldUpdate else { return false }
 
-        if appcastItem.isInformationOnlyUpdate {
+        if held.appcastItem.isInformationOnlyUpdate {
             presentPendingUpdate()
         } else {
-            let reply = pendingReply
             clearPendingUpdate()
-            reply?(.install)
+            held.reply(.install)
         }
         return true
     }
@@ -668,19 +669,14 @@ private final class SparkleUserDriver: SPUStandardUserDriver {
     }
 
     private func presentPendingUpdate() {
-        guard let appcastItem = pendingAppcastItem,
-              let state = pendingState,
-              let reply = pendingReply else { return }
+        guard let held = heldUpdate else { return }
 
         clearPendingUpdate()
-        super.showUpdateFound(with: appcastItem, state: state, reply: reply)
+        super.showUpdateFound(with: held.appcastItem, state: held.state, reply: held.reply)
     }
 
     private func clearPendingUpdate() {
-        pendingAppcastItem = nil
-        pendingState = nil
-        pendingReply = nil
-        isHoldingScheduledUpdate = false
+        heldUpdate = nil
     }
 }
 
