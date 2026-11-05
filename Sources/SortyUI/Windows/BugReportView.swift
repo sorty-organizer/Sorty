@@ -27,11 +27,31 @@ public struct BugReportView: View {
     @State private var includeDiagnostics = true
     /// The user's choice; kept while internet is blocked so it returns when unblocked.
     @State private var wantsGitHub = false
-    /// Set after Sentry succeeds (no duplicate on a GitHub retry) or fails (fall back to GitHub).
-    @State private var skipsSentry = false
-    @State private var sentryEventID: String?
+    @State private var submission: SentrySubmission = .notSent
     @State private var errorMessage: String?
-    @State private var isSending = false
+
+    /// Sentry submission progress. After `.sent` (no duplicate on a GitHub
+    /// retry) or `.failed` (fall back to GitHub) Sentry is skipped.
+    private enum SentrySubmission: Equatable {
+        case notSent
+        case sending
+        case sent(eventID: String)
+        case failed
+    }
+
+    private var isSending: Bool { submission == .sending }
+
+    private var skipsSentry: Bool {
+        switch submission {
+        case .sent, .failed: return true
+        case .notSent, .sending: return false
+        }
+    }
+
+    private var sentryEventID: String? {
+        if case .sent(let eventID) = submission { return eventID }
+        return nil
+    }
     @State private var recentIssuesPreview: String?
 
     /// `diagnosticConfig` supplies the live AI settings for the diagnostic ZIP
@@ -514,7 +534,7 @@ public struct BugReportView: View {
 
     private func openIssue() async {
         guard !isSending else { return }
-        // Decide before sending: a successful send sets `skipsSentry`, which
+        // Decide before sending: a successful send sets `submission` to `.sent`, which
         // would otherwise flip `opensGitHub` on and open GitHub uninvited.
         let shouldOpenGitHub = opensGitHub
         let comment = trimmedDescription
@@ -522,9 +542,9 @@ public struct BugReportView: View {
         // An empty description opens the bare GitHub template below. There
         // is no text to send, so Sentry is skipped instead of failing.
         if sendToSentry, showsSentryOption, !comment.isEmpty {
-            isSending = true
+            submission = .sending
             let diagnosticsZIP = collectsDiagnostics ? await makeDiagnosticsZIP() : nil
-            isSending = false
+            submission = .notSent
             defer {
                 if let diagnosticsZIP {
                     try? FileManager.default.removeItem(at: diagnosticsZIP.deletingLastPathComponent())
@@ -539,12 +559,11 @@ public struct BugReportView: View {
                 includeDiagnostics: collectsDiagnostics
             ) else {
                 errorMessage = "Couldn't reach Sorty's developers. Press Open GitHub Issue to report it there instead."
-                skipsSentry = true
+                submission = .failed
                 captureSubmit(outcome: "failed", sentry: true, github: false)
                 return
             }
-            sentryEventID = eventID
-            skipsSentry = true // Retrying GitHub must not send a duplicate report.
+            submission = .sent(eventID: eventID) // Retrying GitHub must not send a duplicate report.
             NotificationManager.shared.showHUDInfo(
                 title: "Feedback sent",
                 message: "Thanks. Your report reached Sorty's developers.",
