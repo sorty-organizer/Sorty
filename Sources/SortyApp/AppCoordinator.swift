@@ -78,6 +78,193 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         var mode: OrganizationMode
     }
 
+    /// Per-folder bookkeeping for unattended watched-folder work. A folder can
+    /// hold a queued batch (waiting to run), an active batch (running now), a
+    /// saved review plan, and the window claim presenting that plan, all at
+    /// once, so these stay separate collections. They are private to the
+    /// ledger so every change goes through a named transition. The persisted
+    /// format (`PersistedPendingWatchBatch`/`Review`) is derived from these
+    /// by `AppCoordinator.outstandingWatchWorkSnapshot()` and is unchanged.
+    private struct WatchWorkLedger {
+        private var queued: [UUID: PendingWatchBatch] = [:]
+        private var active: [UUID: PendingWatchBatch] = [:]
+        private var reviews: [UUID: PendingWatchReview] = [:]
+        private var claims: [UUID: PendingReviewClaim] = [:]
+
+        // MARK: Queued batches
+
+        var queuedFolderCount: Int { queued.count }
+        var hasQueuedBatches: Bool { !queued.isEmpty }
+
+        func queuedBatch(for folderID: UUID) -> PendingWatchBatch? { queued[folderID] }
+
+        /// Adds files to the folder's queued batch, keeping the earliest retry
+        /// timing. `adoptingFolder` also refreshes the folder and resolved URL
+        /// from the incoming batch (live events); restore keeps the existing ones.
+        mutating func enqueue(_ incoming: PendingWatchBatch, adoptingFolder: Bool) {
+            guard var existing = queued[incoming.folder.id] else {
+                queued[incoming.folder.id] = incoming
+                return
+            }
+            existing.files.formUnion(incoming.files)
+            if adoptingFolder {
+                existing.folder = incoming.folder
+                existing.resolvedURL = incoming.resolvedURL
+            }
+            existing.stabilityRetryAttempt = min(existing.stabilityRetryAttempt, incoming.stabilityRetryAttempt)
+            existing.operationRetryAttempt = min(existing.operationRetryAttempt, incoming.operationRetryAttempt)
+            existing.nextAttemptAt = min(existing.nextAttemptAt, incoming.nextAttemptAt)
+            queued[incoming.folder.id] = existing
+        }
+
+        /// Puts a batch back that was taken for a run that did not start.
+        mutating func requeue(_ batch: PendingWatchBatch, for folderID: UUID) {
+            queued[folderID] = batch
+        }
+
+        /// Edits the queued batch in place. Returns false when none is queued.
+        @discardableResult
+        mutating func updateQueued(_ folderID: UUID, _ update: (inout PendingWatchBatch) -> Void) -> Bool {
+            guard var batch = queued[folderID] else { return false }
+            update(&batch)
+            queued[folderID] = batch
+            return true
+        }
+
+        @discardableResult
+        mutating func removeQueued(_ folderID: UUID) -> PendingWatchBatch? {
+            queued.removeValue(forKey: folderID)
+        }
+
+        /// Drops queued batches whose folder is no longer in `keeping`.
+        /// Returns true when anything was dropped.
+        mutating func dropQueued(keeping folderIDs: Set<UUID>) -> Bool {
+            let stale = queued.keys.filter { !folderIDs.contains($0) }
+            for folderID in stale { queued.removeValue(forKey: folderID) }
+            return !stale.isEmpty
+        }
+
+        mutating func makeAllQueuedDue(at date: Date) {
+            for folderID in Array(queued.keys) {
+                queued[folderID]?.nextAttemptAt = date
+                queued[folderID]?.operationRetryAttempt = 0
+            }
+        }
+
+        /// The queued batch that is due soonest. Folders with a saved review
+        /// wait until the review is resolved.
+        func nextDueBatch(at date: Date) -> (folderID: UUID, batch: PendingWatchBatch)? {
+            queued
+                .filter { $0.value.nextAttemptAt <= date && reviews[$0.key] == nil }
+                .min(by: { $0.value.nextAttemptAt < $1.value.nextAttemptAt })
+                .map { ($0.key, $0.value) }
+        }
+
+        var earliestQueuedAttempt: Date? {
+            queued.filter { reviews[$0.key] == nil }.map(\.value.nextAttemptAt).min()
+        }
+
+        // MARK: Active batches
+
+        func activeBatch(for folderID: UUID) -> PendingWatchBatch? { active[folderID] }
+
+        mutating func beginActive(_ batch: PendingWatchBatch) {
+            active[batch.folder.id] = batch
+        }
+
+        mutating func finishActive(_ folderID: UUID) {
+            active.removeValue(forKey: folderID)
+        }
+
+        /// A manual run takes over the folder: nothing queued or active survives.
+        mutating func discardForManualRun(_ folderID: UUID) {
+            queued.removeValue(forKey: folderID)
+            active.removeValue(forKey: folderID)
+        }
+
+        // MARK: Reviews
+
+        func review(for folderID: UUID) -> PendingWatchReview? { reviews[folderID] }
+        func hasReview(for folderID: UUID) -> Bool { reviews[folderID] != nil }
+
+        func reviewFolderID(forPlan planID: UUID) -> UUID? {
+            reviews.first(where: { $0.value.plan.id == planID })?.key
+        }
+
+        mutating func saveReview(_ review: PendingWatchReview, for folderID: UUID) {
+            reviews[folderID] = review
+        }
+
+        @discardableResult
+        mutating func updateReview(_ folderID: UUID, _ update: (inout PendingWatchReview) -> Void) -> Bool {
+            guard var review = reviews[folderID] else { return false }
+            update(&review)
+            reviews[folderID] = review
+            return true
+        }
+
+        /// Removes the review and its window claim together. Returns what was
+        /// removed so a failed save can put it back with `restoreReview`.
+        mutating func resolveReview(_ folderID: UUID) -> (review: PendingWatchReview, claim: PendingReviewClaim?)? {
+            guard let review = reviews.removeValue(forKey: folderID) else { return nil }
+            return (review, claims.removeValue(forKey: folderID))
+        }
+
+        mutating func restoreReview(_ removed: (review: PendingWatchReview, claim: PendingReviewClaim?), for folderID: UUID) {
+            reviews[folderID] = removed.review
+            claims[folderID] = removed.claim
+        }
+
+        /// Drops reviews whose folder is no longer in `keeping`, with their claims.
+        mutating func dropReviews(keeping folderIDs: Set<UUID>) -> Bool {
+            let stale = reviews.keys.filter { !folderIDs.contains($0) }
+            for folderID in stale {
+                reviews.removeValue(forKey: folderID)
+                claims.removeValue(forKey: folderID)
+            }
+            return !stale.isEmpty
+        }
+
+        // MARK: Review claims
+
+        func claim(for folderID: UUID) -> PendingReviewClaim? { claims[folderID] }
+
+        mutating func setClaim(_ claim: PendingReviewClaim, for folderID: UUID) {
+            claims[folderID] = claim
+        }
+
+        mutating func clearClaim(for folderID: UUID) {
+            claims.removeValue(forKey: folderID)
+        }
+
+        // MARK: Derived
+
+        /// Folders with anything queued or running, for activity refresh.
+        var busyFolderIDs: Set<UUID> {
+            Set(queued.keys).union(active.keys)
+        }
+
+        /// Queued work plus whatever is running, merged per folder, so a quit
+        /// mid-run re-queues the running files.
+        func outstandingBatches() -> [UUID: PendingWatchBatch] {
+            var outstanding = queued
+            for (folderID, running) in active {
+                if var existing = outstanding[folderID] {
+                    existing.files.formUnion(running.files)
+                    existing.stabilityRetryAttempt = min(existing.stabilityRetryAttempt, running.stabilityRetryAttempt)
+                    existing.operationRetryAttempt = min(existing.operationRetryAttempt, running.operationRetryAttempt)
+                    existing.nextAttemptAt = min(existing.nextAttemptAt, running.nextAttemptAt)
+                    outstanding[folderID] = existing
+                } else {
+                    outstanding[folderID] = running
+                }
+            }
+            return outstanding
+        }
+
+        var outstandingReviews: [UUID: PendingWatchReview] { reviews }
+    }
+
     private actor PendingWorkPersistence {
         private var latestRevision = 0
         private var pendingBatches: [PersistedPendingWatchBatch] = []
@@ -150,11 +337,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     private var watchedFoldersSubscription: AnyCancellable?
     private var organizerConfigurationSubscription: AnyCancellable?
     private var exclusionMatcherSubscription: AnyCancellable?
-    private var pendingFiles: [UUID: PendingWatchBatch] = [:]
-    private var activeWatchBatches: [UUID: PendingWatchBatch] = [:]
+    private var watchWork = WatchWorkLedger()
     private var snoozedFolderIDs: Set<UUID> = []
-    private var pendingWatchReviews: [UUID: PendingWatchReview] = [:]
-    private var pendingReviewClaims: [UUID: PendingReviewClaim] = [:]
     private var ignoredWatchEventsUntil: [UUID: Date] = [:]
     private var manualOrganizationFolders: [UUID: WatchedFolder] = [:]
     private var autoOrganizeTasks: [UUID: Task<Void, Never>] = [:]
@@ -302,12 +486,9 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             Task { @MainActor in
                 var completedReviewFolderID: UUID?
                 if let completedPlanID = entry.plan?.id,
-                   let reviewedFolderID = self.pendingWatchReviews.first(where: {
-                       $0.value.plan.id == completedPlanID
-                   })?.key {
+                   let reviewedFolderID = self.watchWork.reviewFolderID(forPlan: completedPlanID) {
                     completedReviewFolderID = reviewedFolderID
-                    self.pendingWatchReviews.removeValue(forKey: reviewedFolderID)
-                    self.pendingReviewClaims.removeValue(forKey: reviewedFolderID)
+                    _ = self.watchWork.resolveReview(reviewedFolderID)
                     if !(await self.persistOutstandingWatchWorkImmediately()) {
                         self.persistOutstandingWatchWork()
                     }
@@ -320,7 +501,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                     let completedPath = URL(fileURLWithPath: entry.directoryPath).standardizedFileURL.path
                     if let watchedFolder = self.watchedFoldersManager.folder(matchingPath: completedPath) {
                         if watchedFolder.id != completedReviewFolderID {
-                            self.pendingFiles.removeValue(forKey: watchedFolder.id)
+                            self.watchWork.removeQueued(watchedFolder.id)
                             self.persistOutstandingWatchWork()
                         }
                         self.ignoredWatchEventsUntil[watchedFolder.id] = Date().addingTimeInterval(2.0)
@@ -542,7 +723,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
 
         if let watchedFolder = watchedFoldersManager.folder(matchingPath: path),
-           pendingFiles[watchedFolder.id] != nil {
+           watchWork.queuedBatch(for: watchedFolder.id) != nil {
             retryPendingWatchBatch(folderID: watchedFolder.id)
             notificationManager.recordActionLifecycle("retry", stage: "queued", detail: path)
             return
@@ -776,11 +957,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             ignoredWatchEventsUntil.removeValue(forKey: folder.id)
         }
         
-        if isOrganizerBusyForAutomation() || pendingWatchReviews[folder.id] != nil {
-            let existingFileCount = pendingFiles[folder.id]?.files.count ?? 0
-            let isNewPendingFolder = pendingFiles[folder.id] == nil
+        if isOrganizerBusyForAutomation() || watchWork.hasReview(for: folder.id) {
+            let existingFileCount = watchWork.queuedBatch(for: folder.id)?.files.count ?? 0
+            let isNewPendingFolder = watchWork.queuedBatch(for: folder.id) == nil
             guard existingFileCount + routedFiles.count <= maximumPendingFilesPerFolder,
-                  !isNewPendingFolder || pendingFiles.count < maximumPendingFolderCount else {
+                  !isNewPendingFolder || watchWork.queuedFolderCount < maximumPendingFolderCount else {
                 completion(false)
                 return
             }
@@ -804,7 +985,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         stabilityRetryAttempt: Int = 0,
         operationRetryAttempt: Int = 0
     ) -> Task<Void, Never> {
-        if pendingWatchReviews[folder.id] != nil {
+        if watchWork.hasReview(for: folder.id) {
             mergePendingFiles(
                 folder: folder,
                 files: files,
@@ -823,14 +1004,14 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
         let taskID = UUID()
         autoOrganizeTaskIDs[folder.id] = taskID
-        activeWatchBatches[folder.id] = PendingWatchBatch(
+        watchWork.beginActive(PendingWatchBatch(
             folder: folder,
             files: files,
             resolvedURL: resolvedURL,
             stabilityRetryAttempt: stabilityRetryAttempt,
             operationRetryAttempt: operationRetryAttempt,
             nextAttemptAt: Date()
-        )
+        ))
         persistOutstandingWatchWork()
         let task = Task { [weak self] in
             guard let self else { return }
@@ -844,10 +1025,10 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             if self.autoOrganizeTaskIDs[folder.id] == taskID {
                 self.autoOrganizeTasks.removeValue(forKey: folder.id)
                 self.autoOrganizeTaskIDs.removeValue(forKey: folder.id)
-                self.activeWatchBatches.removeValue(forKey: folder.id)
+                self.watchWork.finishActive(folder.id)
                 self.persistOutstandingWatchWork()
             }
-            if !Task.isCancelled, !self.isOrganizerBusyForAutomation(), !self.pendingFiles.isEmpty {
+            if !Task.isCancelled, !self.isOrganizerBusyForAutomation(), self.watchWork.hasQueuedBatches {
                 self.processPendingFiles()
             }
         }
@@ -978,12 +1159,12 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
             if executionFolder.effectiveApplyPolicy == .notifyAndReview,
                let plan = organizer.currentPlan {
-                pendingWatchReviews[executionFolder.id] = PendingWatchReview(
+                watchWork.saveReview(PendingWatchReview(
                     folder: executionFolder,
                     plan: plan,
                     fileCount: candidateAudit.stable.count,
                     mode: executionFolder.effectiveOrganizationMode
-                )
+                ), for: executionFolder.id)
                 if await persistOutstandingWatchWorkImmediately() {
                     notificationManager.show(
                         .previewReady(
@@ -1068,47 +1249,38 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     ) {
         guard !files.isEmpty else { return }
 
-        if var existing = pendingFiles[folder.id] {
-            existing.files.formUnion(files)
-            existing.folder = folder
-            existing.resolvedURL = resolvedURL
-            existing.stabilityRetryAttempt = min(existing.stabilityRetryAttempt, stabilityRetryAttempt)
-            existing.operationRetryAttempt = min(existing.operationRetryAttempt, operationRetryAttempt)
-            existing.nextAttemptAt = min(existing.nextAttemptAt, nextAttemptAt)
-            pendingFiles[folder.id] = existing
-        } else {
-            pendingFiles[folder.id] = PendingWatchBatch(
+        watchWork.enqueue(
+            PendingWatchBatch(
                 folder: folder,
                 files: files,
                 resolvedURL: resolvedURL,
                 stabilityRetryAttempt: stabilityRetryAttempt,
                 operationRetryAttempt: operationRetryAttempt,
                 nextAttemptAt: nextAttemptAt
-            )
-        }
+            ),
+            adoptingFolder: true
+        )
         persistOutstandingWatchWork()
     }
 
     private func retryPendingWatchBatch(folderID: UUID) {
-        guard var pending = pendingFiles[folderID] else { return }
-        pending.nextAttemptAt = Date()
-        pending.operationRetryAttempt = 0
-        pendingFiles[folderID] = pending
+        guard watchWork.updateQueued(folderID, { pending in
+            pending.nextAttemptAt = Date()
+            pending.operationRetryAttempt = 0
+        }) else { return }
         persistOutstandingWatchWork()
         scheduleRetry()
     }
 
     private func discardPendingWatchBatch(folderID: UUID) {
-        pendingFiles.removeValue(forKey: folderID)
+        watchWork.removeQueued(folderID)
         persistOutstandingWatchWork()
     }
 
     private func discardPendingWatchReview(folderID: UUID) async {
-        guard let review = pendingWatchReviews.removeValue(forKey: folderID) else { return }
-        let claim = pendingReviewClaims.removeValue(forKey: folderID)
+        guard let removed = watchWork.resolveReview(folderID) else { return }
         guard await persistOutstandingWatchWorkImmediately() else {
-            pendingWatchReviews[folderID] = review
-            pendingReviewClaims[folderID] = claim
+            watchWork.restoreReview(removed, for: folderID)
             notificationManager.showError(
                 message: "Sorty couldn't discard the saved plan. It remains ready for review.",
                 isCritical: false
@@ -1126,11 +1298,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     ) -> PendingReviewPresentationResult {
         guard let folderPath,
               let folder = watchedFoldersManager.folder(matchingPath: folderPath),
-              let review = pendingWatchReviews[folder.id] else { return .unavailable }
+              let review = watchWork.review(for: folder.id) else { return .unavailable }
         if let planID, review.plan.id != planID {
             return .unavailable
         }
-        if let claim = pendingReviewClaims[folder.id] {
+        if let claim = watchWork.claim(for: folder.id) {
             let isStillPresented: Bool
             if claim.organizer?.currentPlan?.id == review.plan.id {
                 switch claim.organizer?.state {
@@ -1146,16 +1318,16 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 _ = MainWindowRouter.shared.activateWindow(for: claim.sessionID)
                 return .activatedExisting
             }
-            pendingReviewClaims.removeValue(forKey: folder.id)
+            watchWork.clearClaim(for: folder.id)
         }
         targetOrganizer.loadPreparedIncrementalPlan(
             review.plan,
             directory: folder.url,
             mode: review.mode
         )
-        pendingReviewClaims[folder.id] = PendingReviewClaim(
-            sessionID: sessionID,
-            organizer: targetOrganizer
+        watchWork.setClaim(
+            PendingReviewClaim(sessionID: sessionID, organizer: targetOrganizer),
+            for: folder.id
         )
         refreshActivity(for: folder.id)
         return .presented
@@ -1206,14 +1378,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         let enabledFolders = configuredFolders.filter { $0.value.isEnabled }
         var changed = false
 
-        for folderID in Array(pendingFiles.keys) where enabledFolders[folderID] == nil {
-            pendingFiles.removeValue(forKey: folderID)
+        if watchWork.dropQueued(keeping: Set(enabledFolders.keys)) {
             changed = true
         }
 
-        for folderID in Array(pendingWatchReviews.keys) where configuredFolders[folderID] == nil {
-            pendingWatchReviews.removeValue(forKey: folderID)
-            pendingReviewClaims.removeValue(forKey: folderID)
+        if watchWork.dropReviews(keeping: Set(configuredFolders.keys)) {
             changed = true
         }
 
@@ -1221,27 +1390,26 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             task.cancel()
             autoOrganizeTasks.removeValue(forKey: folderID)
             autoOrganizeTaskIDs.removeValue(forKey: folderID)
-            activeWatchBatches.removeValue(forKey: folderID)
+            watchWork.finishActive(folderID)
             organizer.cancel(source: .watchedFolder)
             changed = true
         }
 
         for (folderID, folder) in configuredFolders {
-            if var pending = pendingFiles[folderID] {
+            let wasSnoozed = snoozedFolderIDs.contains(folderID)
+            let didUpdateQueued = watchWork.updateQueued(folderID) { pending in
                 pending.folder = folder
                 pending.resolvedURL = folder.url
                 if let snoozedUntil = folder.snoozedUntil, snoozedUntil > Date() {
                     pending.nextAttemptAt = max(pending.nextAttemptAt, snoozedUntil)
-                } else if snoozedFolderIDs.contains(folderID) {
+                } else if wasSnoozed {
                     pending.nextAttemptAt = Date()
                 }
-                pendingFiles[folderID] = pending
+            }
+            if didUpdateQueued {
                 changed = true
             }
-            if var review = pendingWatchReviews[folderID] {
-                review.folder = folder
-                pendingWatchReviews[folderID] = review
-            }
+            watchWork.updateReview(folderID) { $0.folder = folder }
         }
 
         if changed {
@@ -1255,10 +1423,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         guard hasRestoredPendingWork else { return }
         folderWatcher.reconcileNow()
         let now = Date()
-        for folderID in Array(pendingFiles.keys) {
-            pendingFiles[folderID]?.nextAttemptAt = now
-            pendingFiles[folderID]?.operationRetryAttempt = 0
-        }
+        watchWork.makeAllQueuedDue(at: now)
         persistOutstandingWatchWork()
         scheduleRetry()
     }
@@ -1309,24 +1474,16 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 operationRetryAttempt: 0,
                 nextAttemptAt: Date()
             )
-            if var existing = pendingFiles[currentFolder.id] {
-                existing.files.formUnion(restored.files)
-                existing.stabilityRetryAttempt = min(existing.stabilityRetryAttempt, restored.stabilityRetryAttempt)
-                existing.operationRetryAttempt = min(existing.operationRetryAttempt, restored.operationRetryAttempt)
-                existing.nextAttemptAt = min(existing.nextAttemptAt, restored.nextAttemptAt)
-                pendingFiles[currentFolder.id] = existing
-            } else {
-                pendingFiles[currentFolder.id] = restored
-            }
+            watchWork.enqueue(restored, adoptingFolder: false)
         }
         for review in persistedWork.reviews {
             guard let currentFolder = configuredFolders[review.folderID] else { continue }
-            pendingWatchReviews[currentFolder.id] = PendingWatchReview(
+            watchWork.saveReview(PendingWatchReview(
                 folder: currentFolder,
                 plan: review.plan,
                 fileCount: review.fileCount,
                 mode: review.mode ?? currentFolder.effectiveOrganizationMode
-            )
+            ), for: currentFolder.id)
         }
         persistOutstandingWatchWork()
     }
@@ -1395,20 +1552,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         batches: [PersistedPendingWatchBatch],
         reviews: [PersistedPendingWatchReview]
     ) {
-        var outstanding = pendingFiles
-        for (folderID, active) in activeWatchBatches {
-            if var existing = outstanding[folderID] {
-                existing.files.formUnion(active.files)
-                existing.stabilityRetryAttempt = min(existing.stabilityRetryAttempt, active.stabilityRetryAttempt)
-                existing.operationRetryAttempt = min(existing.operationRetryAttempt, active.operationRetryAttempt)
-                existing.nextAttemptAt = min(existing.nextAttemptAt, active.nextAttemptAt)
-                outstanding[folderID] = existing
-            } else {
-                outstanding[folderID] = active
-            }
-        }
-
-        let persisted = outstanding.map { folderID, batch in
+        let persisted = watchWork.outstandingBatches().map { folderID, batch in
             PersistedPendingWatchBatch(
                 folderID: folderID,
                 files: batch.files,
@@ -1417,7 +1561,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 nextAttemptAt: batch.nextAttemptAt
             )
         }
-        let persistedReviews = pendingWatchReviews.map { folderID, review in
+        let persistedReviews = watchWork.outstandingReviews.map { folderID, review in
             PersistedPendingWatchReview(
                 folderID: folderID,
                 plan: review.plan,
@@ -1580,14 +1724,12 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
 
         let now = Date()
-        guard let (folderID, pending) = pendingFiles
-            .filter({ $0.value.nextAttemptAt <= now && pendingWatchReviews[$0.key] == nil })
-            .min(by: { $0.value.nextAttemptAt < $1.value.nextAttemptAt }) else {
+        guard let (folderID, pending) = watchWork.nextDueBatch(at: now) else {
             scheduleRetry()
             return
         }
 
-        pendingFiles.removeValue(forKey: folderID)
+        watchWork.removeQueued(folderID)
         guard !isManualOrganizationActive(for: folderID),
               let currentFolder = watchedFoldersManager.folder(withID: folderID),
               currentFolder.isEnabled else {
@@ -1597,7 +1739,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
 
         if let snoozedUntil = currentFolder.snoozedUntil, snoozedUntil > now {
-            pendingFiles[folderID] = pending
+            watchWork.requeue(pending, for: folderID)
             deferPendingWork(for: folderID, until: snoozedUntil)
             scheduleRetry()
             return
@@ -1617,10 +1759,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         retryTask?.cancel()
         retryTask = nil
         guard organizer.aiClient != nil,
-              let earliestAttempt = pendingFiles
-                .filter({ pendingWatchReviews[$0.key] == nil })
-                .map(\.value.nextAttemptAt)
-                .min(),
+              let earliestAttempt = watchWork.earliestQueuedAttempt,
               earliestAttempt != .distantFuture else { return }
 
         let stateDelay = isOrganizerBusyForAutomation() ? retryBaseDelay : 0
@@ -1638,16 +1777,13 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
 
     private func deferPendingWork(for folderID: UUID, until date: Date) {
-        guard var pending = pendingFiles[folderID] else { return }
-        pending.nextAttemptAt = max(pending.nextAttemptAt, date)
-        pendingFiles[folderID] = pending
+        guard watchWork.updateQueued(folderID, { $0.nextAttemptAt = max($0.nextAttemptAt, date) }) else { return }
         persistOutstandingWatchWork()
     }
 
     private func refreshAllActivity() {
         let folderIDs = Set(watchedFoldersManager.folders.map(\.id))
-            .union(pendingFiles.keys)
-            .union(activeWatchBatches.keys)
+            .union(watchWork.busyFolderIDs)
         for folderID in folderIDs {
             refreshActivity(for: folderID)
         }
@@ -1659,7 +1795,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             return
         }
 
-        if let review = pendingWatchReviews[folderID] {
+        if let review = watchWork.review(for: folderID) {
             watchedFoldersManager.setActivity(
                 .awaitingReview(fileCount: review.fileCount),
                 for: folderID
@@ -1667,7 +1803,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             return
         }
 
-        if let active = activeWatchBatches[folderID] {
+        if let active = watchWork.activeBatch(for: folderID) {
             watchedFoldersManager.setActivity(
                 .waitingForStability(fileCount: active.files.count, nextAttemptAt: Date()),
                 for: folderID
@@ -1675,7 +1811,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             return
         }
 
-        guard let pending = pendingFiles[folderID] else {
+        guard let pending = watchWork.queuedBatch(for: folderID) else {
             watchedFoldersManager.setActivity(nil, for: folderID)
             return
         }
@@ -1724,8 +1860,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
 
         manualOrganizationFolders[sessionID] = folder
-        pendingFiles.removeValue(forKey: folder.id)
-        activeWatchBatches.removeValue(forKey: folder.id)
+        watchWork.discardForManualRun(folder.id)
         persistOutstandingWatchWork()
         ignoredWatchEventsUntil.removeValue(forKey: folder.id)
         folderWatcher.pause(folder)
@@ -1742,7 +1877,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         guard let folder = manualOrganizationFolders.removeValue(forKey: sessionID) else { return }
         guard !isManualOrganizationActive(for: folder.id) else { return }
 
-        pendingFiles.removeValue(forKey: folder.id)
+        watchWork.removeQueued(folder.id)
         persistOutstandingWatchWork()
         ignoredWatchEventsUntil[folder.id] = Date().addingTimeInterval(2.0)
         if let currentFolder = watchedFoldersManager.folder(withID: folder.id),
