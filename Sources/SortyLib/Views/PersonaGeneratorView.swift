@@ -31,13 +31,43 @@ struct PersonaGeneratorView: View {
     @State private var questions: [HoningQuestion] = []
     @State private var answers: [String: String] = [:]
     @State private var customAnswers: [String: String] = [:]
-    @State private var isHoning: Bool = false
-    @State private var isLoadingQuestions: Bool = false
+    @State private var phase: Phase = .input
     @State private var currentQuestionIndex: Int = 0
-    @State private var isGeneratingPersona = false
     @State private var honingTask: Task<Void, Never>?
     @State private var generationTask: Task<Void, Never>?
     @FocusState private var focusedCustomAnswerQuestionID: String?
+
+    /// Where the flow is. `.generating` remembers whether the questions were
+    /// answered, so a failed or cancelled generation returns to the same screen.
+    private enum Phase: Equatable {
+        case input
+        case loadingQuestions
+        case honing
+        case generating(fromHoning: Bool)
+    }
+
+    private var isHoning: Bool {
+        switch phase {
+        case .honing, .generating(fromHoning: true): return true
+        case .input, .loadingQuestions, .generating(fromHoning: false): return false
+        }
+    }
+
+    private var isLoadingQuestions: Bool { phase == .loadingQuestions }
+
+    private var isGeneratingPersona: Bool {
+        if case .generating = phase { return true }
+        return false
+    }
+
+    /// Leaves a transient loading or generating phase for the screen it came from.
+    private func endTransientPhase() {
+        switch phase {
+        case .loadingQuestions, .generating(fromHoning: false): phase = .input
+        case .generating(fromHoning: true): phase = .honing
+        case .input, .honing: break
+        }
+    }
 
     private let promptSuggestions = [
         "Organize my sci-fi ebook collection by author, then series.",
@@ -71,8 +101,7 @@ struct PersonaGeneratorView: View {
             honingTask = nil
             generationTask?.cancel()
             generationTask = nil
-            isLoadingQuestions = false
-            isGeneratingPersona = false
+            endTransientPhase()
         }
     }
 
@@ -323,7 +352,7 @@ struct PersonaGeneratorView: View {
                         if currentQuestionIndex > 0 {
                             currentQuestionIndex -= 1
                         } else {
-                            isHoning = false
+                            phase = .input
                         }
                     }
                 }
@@ -460,7 +489,7 @@ struct PersonaGeneratorView: View {
     private func startHoning() {
         guard !isLoadingQuestions, !isGeneratingPersona, !generator.isGenerating else { return }
 
-        isLoadingQuestions = true
+        phase = .loadingQuestions
         currentQuestionIndex = 0
         answers.removeAll()
         customAnswers.removeAll()
@@ -469,7 +498,7 @@ struct PersonaGeneratorView: View {
 
         honingTask = Task { @MainActor in
             defer {
-                isLoadingQuestions = false
+                if isLoadingQuestions { phase = .input }
                 honingTask = nil
             }
 
@@ -485,7 +514,7 @@ struct PersonaGeneratorView: View {
                 } else {
                     HapticFeedbackManager.shared.selection()
                     withAnimation(.sortySmooth) {
-                        isHoning = true
+                        phase = .honing
                     }
                 }
             } catch is CancellationError {
@@ -499,7 +528,7 @@ struct PersonaGeneratorView: View {
 
     private func generateFinalPersona() {
         guard !isGeneratingPersona, !generator.isGenerating else { return }
-        isGeneratingPersona = true
+        phase = .generating(fromHoning: isHoning)
         let description = prompt
         let generationQuestions = questions
         let generationAnswers = answers
@@ -507,7 +536,7 @@ struct PersonaGeneratorView: View {
 
         generationTask = Task { @MainActor in
             defer {
-                isGeneratingPersona = false
+                if isGeneratingPersona { endTransientPhase() }
                 generationTask = nil
             }
 
