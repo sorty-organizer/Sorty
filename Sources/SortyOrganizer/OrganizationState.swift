@@ -52,9 +52,15 @@ public enum OrganizationState: Equatable, Sendable {
             return false
         case (_, .idle), (_, .error):
             return true
-        // Incremental auto-apply can finish while organizing. Completed runs
-        // can regenerate, restore a preview, or apply undo/redo operations.
-        case (.organizing, _), (.completed, _):
+        // Incremental auto-apply can finish while organizing, and a restarted
+        // run re-scans from organizing.
+        case (.organizing, .organizing), (.organizing, .scanning), (.organizing, .ready),
+             (.organizing, .applying), (.organizing, .completed):
+            return true
+        // Completed runs can regenerate, restore a preview, or apply
+        // undo/redo operations.
+        case (.completed, .completed), (.completed, .scanning), (.completed, .organizing),
+             (.completed, .ready), (.completed, .applying):
             return true
         case (.idle, .scanning),
              (.scanning, .scanning), (.scanning, .organizing), (.scanning, .ready),

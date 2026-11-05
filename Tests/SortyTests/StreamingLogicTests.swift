@@ -524,6 +524,9 @@ final class StreamingLogicTests: XCTestCase {
         // Ready can re-scan; organizing can restart scanning.
         XCTAssertTrue(OrganizationState.canTransition(from: .ready, to: .scanning))
         XCTAssertTrue(OrganizationState.canTransition(from: .organizing, to: .scanning))
+        // Incremental auto-apply moves from organizing straight through applying.
+        XCTAssertTrue(OrganizationState.canTransition(from: .organizing, to: .applying))
+        XCTAssertTrue(OrganizationState.canTransition(from: .organizing, to: .completed))
     }
 
     func testInvalidStateTransitions() {

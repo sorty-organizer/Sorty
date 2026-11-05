@@ -298,7 +298,8 @@ extension FolderOrganizer {
         // A revert is a new operation: clear any stale cancellation flag left
         // by reset()/cancel() and claim .applying (forced) so a concurrent
         // organize() observes real work in flight instead of racing the moves.
-        // From .idle the plain transition is invalid, so this must be forced.
+        // Forced: a revert may start from any state, including mid-run or while
+        // another revert holds .applying, where a validated move would be refused.
         isCancellationRequested = false
         updateState(.applying, stage: "Verifying files before undo...", progress: 0.1, force: true)
 
@@ -433,6 +434,7 @@ extension FolderOrganizer {
             entryIDs: entriesToUndo.map(\.id),
             path: path
         ) {
+            // Forced: see performUndoHistoryEntry; a revert can start from any state.
             self.isCancellationRequested = false
             self.updateState(.applying, stage: "Rolling back states...", progress: 0.1, force: true)
 
@@ -474,8 +476,8 @@ extension FolderOrganizer {
         let currentOperation = detailedEntry.operations?.first { $0.id == operation.id } ?? operation
         return try await withRevertGuard(entryIDs: [detailedEntry.id], path: detailedEntry.directoryPath) {
             // Single-file revert is still file work: track it like the batch
-            // paths so organize() cannot start mid-restore. Forced because the
-            // plain idle->applying transition is invalid.
+            // paths so organize() cannot start mid-restore. Forced for the same
+            // reason as performUndoHistoryEntry: a revert can start from any state.
             self.isCancellationRequested = false
             self.updateState(.applying, stage: "Undoing change...", progress: 0.3, force: true)
 

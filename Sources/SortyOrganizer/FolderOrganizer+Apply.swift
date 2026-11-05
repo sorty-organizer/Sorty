@@ -57,6 +57,8 @@ extension FolderOrganizer {
         // via cancelInternal and starting a concurrent file-move pass.
         // performApply validates off-main afterwards; a validation failure
         // still surfaces as .error from here.
+        // Forced: the run-token claim above is what guarantees exclusivity, so
+        // the prior state is not an authority here (apply can follow any state).
         withBatchUpdates {
             transition(to: .applying, force: true)
             organizationStage = "Applying changes to your files..."

@@ -260,6 +260,9 @@ extension FolderOrganizer {
             ? Self.recoverLegacyUserInstructions(snapshot.customInstructions)
             : snapshot.customInstructions
         currentDirectory = directory
+        // Restore rebuilds a finished state from a clean idle slate. That is
+        // deliberately not a workflow edge (idle -> ready/completed stays
+        // invalid in canTransition), so these two moves are forced.
         switch snapshot.stateHint {
         case .ready:
             guard let plan = snapshot.plan else { return directory }
@@ -289,6 +292,8 @@ extension FolderOrganizer {
         currentDirectory = directory
         currentPlan = plan
         preparedPlanModeOverride = mode
+        // Forced: a prepared review replaces whatever the organizer was doing,
+        // including states (applying, scanning) that never lead to .ready.
         transition(to: .ready, force: true)
         organizationStage = "Ready for review"
         progress = 1
