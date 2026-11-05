@@ -345,7 +345,7 @@ extension FolderOrganizer {
                     organizationStage = "Undo complete"
                 }
                 progress = 1.0
-                transition(to: .idle, force: true)
+                transition(to: .idle)
             }
 
             if shouldPostNotification {
@@ -364,7 +364,7 @@ extension FolderOrganizer {
 
         } catch {
             await MainActor.run {
-                transition(to: .error(error), force: true)
+                transition(to: .error(error))
                 errorMessage = error.userFacingMessage
             }
             throw error
@@ -460,7 +460,7 @@ extension FolderOrganizer {
             await MainActor.run { [self] in
                 self.organizationStage = combinedResult.hasIssues ? "Restoration complete (some files skipped)" : "Restoration complete"
                 self.progress = 1.0
-                self.transition(to: .idle, force: true)
+                self.transition(to: .idle)
             }
 
             return combinedResult
@@ -504,14 +504,14 @@ extension FolderOrganizer {
 
                     self.history.updateEntry(updatedEntry)
                 }
-                self.updateState(.idle, stage: "Undo complete", progress: 1.0, force: true)
+                self.updateState(.idle, stage: "Undo complete", progress: 1.0)
 
                 return result
             } catch {
                 // A failed single-file revert must not leave the organizer
                 // stuck in .applying; mirror the batch undo error transition.
                 await MainActor.run {
-                    self.transition(to: .error(error), force: true)
+                    self.transition(to: .error(error))
                     self.errorMessage = error.userFacingMessage
                 }
                 throw error

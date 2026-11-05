@@ -113,7 +113,7 @@ extension FolderOrganizer {
         currentInsight = ""
         insightHistory = []
         insightsCache = nil
-        transition(to: .idle, force: true)
+        transition(to: .idle)
         organizationStage = "" // Clear instead of "Organization cancelled" to avoid "doing too much"
         isStreaming = false
         measuredWorkProgress = nil
@@ -155,7 +155,7 @@ extension FolderOrganizer {
             history.addEntry(failedEntry)
         }
 
-        transition(to: .error(error), force: true)
+        transition(to: .error(error))
         errorMessage = displayMessage
         measuredWorkProgress = nil
         

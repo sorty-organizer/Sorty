@@ -166,7 +166,7 @@ extension FolderOrganizer {
             // validation failure.
             guard isCurrentOrganizeRun(runToken) else { throw error }
             let displayMessage = userFacingErrorMessage(for: error)
-            transition(to: .error(error), force: true)
+            transition(to: .error(error))
             errorMessage = displayMessage
             OrganizerServices.showError(
                 message: displayMessage,
@@ -417,7 +417,7 @@ extension FolderOrganizer {
                     if wasCancelled {
                         resetToIdleUnlessCancellationResetIsSuppressed(source: source)
                     } else {
-                        transition(to: .error(error), force: true)
+                        transition(to: .error(error))
                         errorMessage = userFacingErrorMessage(for: error)
                         organizationStage = errorMessage ?? "Apply failed"
                     }
@@ -486,7 +486,7 @@ extension FolderOrganizer {
             }
         } catch {
             await MainActor.run {
-                transition(to: .error(error), force: true)
+                transition(to: .error(error))
                 errorMessage = error.userFacingMessage
             }
             throw error
@@ -778,7 +778,7 @@ extension FolderOrganizer {
         } catch {
             stopTimeoutTimer()
             await MainActor.run {
-                transition(to: .error(error), force: true)
+                transition(to: .error(error))
                 errorMessage = error.userFacingMessage
             }
             OrganizerServices.captureWorkflow(

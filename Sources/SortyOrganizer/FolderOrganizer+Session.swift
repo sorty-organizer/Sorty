@@ -19,7 +19,7 @@ extension FolderOrganizer {
         // Batch all reset operations into a single UI update cycle
         withBatchUpdates {
             pinsCompletionView = false
-            transition(to: .idle, force: true)
+            transition(to: .idle)
             progress = 0.0
             currentPlan = nil
             planHistory = []

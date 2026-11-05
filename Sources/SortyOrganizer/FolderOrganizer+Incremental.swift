@@ -221,7 +221,7 @@ extension FolderOrganizer {
 
         if files.isEmpty {
             await MainActor.run {
-                transition(to: .idle, force: true)
+                transition(to: .idle)
                 organizationStage = "No new files to organize"
             }
             return
