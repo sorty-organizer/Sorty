@@ -76,8 +76,11 @@ public final class ReliabilityManager {
         "https://5765fff5d0af8028865923c7c73b18ef@o4511816291844096.ingest.us.sentry.io/4511816293744640"
 
     private let defaults: UserDefaults
-    private var isActive = false
-    private var isStarting = false
+    /// `starting` stays set after a stop until the stale setup closes, so at
+    /// most one Sentry setup is ever in flight.
+    private enum StartupPhase { case stopped, starting, active }
+    private var startupPhase: StartupPhase = .stopped
+    private var isActive: Bool { startupPhase == .active }
     private var startupGeneration: UInt64 = 0
     private var captureRateLimiter = ReliabilityCaptureRateLimiter()
     private var breadcrumbRateLimiter = AnalyticsCaptureRateLimiter(
@@ -115,8 +118,7 @@ public final class ReliabilityManager {
             return
         }
 
-        guard !isActive,
-              !isStarting,
+        guard startupPhase == .stopped,
               !Self.isReliabilitySuppressedForThisProcess,
               let dsn = Self.configuredDSN()
         else {
@@ -124,7 +126,7 @@ public final class ReliabilityManager {
         }
 
         // Keep consent gating on the main actor; hop SDK start off launch.
-        isStarting = true
+        startupPhase = .starting
         startupGeneration &+= 1
         let generation = startupGeneration
         let cacheDirectory = Self.cacheDirectory
@@ -182,22 +184,21 @@ public final class ReliabilityManager {
         guard generation == startupGeneration else {
             // Stop/consent changes can invalidate setup while it is running.
             // Do not start a second setup until this one has been closed.
-            isStarting = false
+            startupPhase = .stopped
             SentrySDK.close()
             try? FileManager.default.removeItem(at: Self.cacheDirectory)
             startIfAuthorized()
             return
         }
-        isStarting = false
-        guard !isActive,
-              consent == .granted,
+        startupPhase = .stopped
+        guard consent == .granted,
               !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
               !Self.isReliabilitySuppressedForThisProcess else {
             SentrySDK.close()
             try? FileManager.default.removeItem(at: Self.cacheDirectory)
             return
         }
-        isActive = true
+        startupPhase = .active
         AIPipeDiagnostics.configure { operation, phase, errorCode in
             guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else { return }
             let breadcrumb = Breadcrumb(level: .info, category: "sorty.cli_stdin")
@@ -737,11 +738,11 @@ public final class ReliabilityManager {
         launchSpan = nil
         windowSystemObservers.forEach(NotificationCenter.default.removeObserver)
         windowSystemObservers.removeAll()
-        // Keep isStarting set so at most one Sentry setup is ever in flight.
-        // The stale finish handler clears it once the in-flight setup is closed.
+        // A `.starting` phase is left alone so at most one Sentry setup is ever
+        // in flight. The stale finish handler clears it once that setup is closed.
         startupGeneration &+= 1
-        if isActive {
-            isActive = false
+        if startupPhase == .active {
+            startupPhase = .stopped
             SentrySDK.close()
         }
         captureRateLimiter.reset()

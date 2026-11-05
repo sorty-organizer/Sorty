@@ -43,13 +43,21 @@ public final class AnalyticsManager: ObservableObject {
 
     public static let consentDefaultsKey = "analyticsConsent"
     @Published public private(set) var consent: AnalyticsConsent
-    @Published public private(set) var isActive = false
+    /// True once PostHog finished setup. Changes publish only when this flips.
+    public var isActive: Bool { startupPhase == .active }
     @Published public private(set) var experimentalFeatures: [ExperimentalFeature] = []
     @Published public private(set) var isLoadingExperimentalFeatures = false
 
     private let defaults: UserDefaults
     private var activeProjectToken: String?
-    private var isStarting = false
+    /// `starting` stays set after a stop until the stale setup closes, so at
+    /// most one PostHog setup is ever in flight.
+    private enum StartupPhase { case stopped, starting, active }
+    private var startupPhase: StartupPhase = .stopped {
+        willSet {
+            if (newValue == .active) != (startupPhase == .active) { objectWillChange.send() }
+        }
+    }
     private var startupGeneration: UInt64 = 0
     private var captureRateLimiter = AnalyticsCaptureRateLimiter()
     private var pendingCaptures: [BufferedAnalyticsCapture] = []
@@ -73,8 +81,7 @@ public final class AnalyticsManager: ObservableObject {
         guard consent == .granted,
               !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
               !Self.isAnalyticsSuppressedForThisProcess,
-              !isActive,
-              !isStarting
+              startupPhase == .stopped
         else {
             return
         }
@@ -86,7 +93,7 @@ public final class AnalyticsManager: ObservableObject {
 
         // Keep consent gating on the main actor; hop PostHog setup off
         // launch. Preserve the launchDuration timestamp across the hop.
-        isStarting = true
+        startupPhase = .starting
         startupGeneration &+= 1
         let generation = startupGeneration
         let capturedLaunchDuration = launchDuration
@@ -125,15 +132,14 @@ public final class AnalyticsManager: ObservableObject {
         guard generation == startupGeneration else {
             // Stop/consent changes can invalidate setup while it is running.
             // Do not start a second setup until this one has been closed.
-            isStarting = false
+            startupPhase = .stopped
             PostHogSDK.shared.close()
             Self.removePersistedSDKData(projectToken: projectToken)
             startIfAuthorized()
             return
         }
-        isStarting = false
-        guard !isActive,
-              consent == .granted,
+        startupPhase = .stopped
+        guard consent == .granted,
               !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled,
               !Self.isAnalyticsSuppressedForThisProcess else {
             // An opt-out landed while setup was running; drop anything
@@ -144,7 +150,7 @@ public final class AnalyticsManager: ObservableObject {
             return
         }
         activeProjectToken = projectToken
-        isActive = true
+        startupPhase = .active
         var sessionProperties: [String: Any] = [
             "platform_surface": "mac_app",
             "launch_source": "standard",
@@ -502,8 +508,8 @@ public final class AnalyticsManager: ObservableObject {
         let projectToken = activeProjectToken
             ?? Self.productionProjectToken
 
-        if isActive {
-            isActive = false
+        if startupPhase == .active {
+            startupPhase = .stopped
             PostHogSDK.shared.close()
         }
 
