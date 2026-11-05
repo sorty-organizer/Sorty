@@ -114,8 +114,9 @@ public final class FolderWatcher: @unchecked Sendable {
     private var deliveryInFlight: Set<UUID> = []
     private var debounceWorkItems: [UUID: DispatchWorkItem] = [:]
     private var pendingFileCount = 0
+    /// True while the stream is stopped for backpressure. Resuming always
+    /// rebuilds the stream so events missed during the pause are replayed.
     private var isSuspendedForBackpressure = false
-    private var shouldReplayAfterBackpressure = false
 
     /// Removal tombstones keyed by relative path so a same-named arrival in a
     /// different subfolder is not swallowed within the correlation window.
@@ -863,7 +864,6 @@ public final class FolderWatcher: @unchecked Sendable {
     private func suspendForBackpressure() {
         guard !isSuspendedForBackpressure else { return }
         isSuspendedForBackpressure = true
-        shouldReplayAfterBackpressure = true
         cursorPersistenceWorkItem?.cancel()
         cursorPersistenceWorkItem = nil
         queue.async { [weak self] in
@@ -880,10 +880,7 @@ public final class FolderWatcher: @unchecked Sendable {
         }
 
         isSuspendedForBackpressure = false
-        if shouldReplayAfterBackpressure {
-            shouldReplayAfterBackpressure = false
-            rebuildStream()
-        }
+        rebuildStream()
     }
 
     private func rememberRemoval(at path: String) {
@@ -1839,7 +1836,6 @@ public final class FolderWatcher: @unchecked Sendable {
         pendingFiles.removeAll()
         pendingFileCount = 0
         isSuspendedForBackpressure = false
-        shouldReplayAfterBackpressure = false
     }
 
     private func isReadableDirectory(atPath path: String) -> Bool {
