@@ -281,6 +281,15 @@ if [ -d "$APP_PATH" ]; then
     SPARKLE_FRAMEWORK="${APP_PATH}/Contents/Frameworks/Sparkle.framework"
     SPARKLE_RESOURCES="$(sparkle_resources_dir "$SPARKLE_FRAMEWORK")"
     SPARKLE_VERSION_DIR="$(sparkle_current_version_dir "$SPARKLE_FRAMEWORK")"
+
+    # Release resolves through xcodebuild, so check what actually shipped.
+    PINNED_SPARKLE=$(sed -nE 's/.*Sparkle", exact: "([^"]+)".*/\1/p' "${PROJECT_DIR}/Package.swift")
+    EMBEDDED_SPARKLE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${SPARKLE_RESOURCES}/Info.plist" 2>/dev/null || echo "")
+    if [ -z "$PINNED_SPARKLE" ]; then
+        fail "Sparkle must be pinned with exact: in Package.swift"
+    elif [ "$EMBEDDED_SPARKLE" != "$PINNED_SPARKLE" ]; then
+        fail "Embedded Sparkle ${EMBEDDED_SPARKLE:-unknown} does not match pinned ${PINNED_SPARKLE}"
+    fi
     UPDATER_PATH=""
     AUTOUPDATE_PATH=""
 

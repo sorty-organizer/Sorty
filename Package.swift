@@ -270,8 +270,10 @@ let package = Package(
         .package(path: "Packages/sentry-cocoa"),
         // Pinned InjectionLite sources with Sorty's reentrant-save protection.
         .package(path: "Packages/InjectionLite"),
-        // 2.9.3 fixes Sparkle's macOS 26 cache protection for bundle IDs ending in `.app`.
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.3")
+        // Exact on purpose: Release resolves through xcodebuild, whose lockfile is
+        // gitignored, so a range would ship whatever Sparkle is newest that day.
+        // Upgrade deliberately and test an installed update.
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0")
     ],
     targets: packageTargets
 )
