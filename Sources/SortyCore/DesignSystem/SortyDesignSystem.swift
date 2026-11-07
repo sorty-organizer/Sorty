@@ -106,17 +106,17 @@ public enum SortyDesignSystem {
 /// Reduce Motion is on.
 public extension Animation {
     /// Hover, press and other instant feedback.
-    static var sortyQuick: Animation { .easeOut(duration: 0.15) }
+    static var sortyQuick: Animation { .timingCurve(0.16, 1, 0.3, 1, duration: 0.15) }
     /// Cross-fades and state swaps.
-    static var sortyFade: Animation { .easeInOut(duration: 0.2) }
-    /// Slower fades for larger surfaces.
-    static var sortySlowFade: Animation { .easeInOut(duration: 0.3) }
+    static var sortyFade: Animation { .timingCurve(0.22, 1, 0.36, 1, duration: 0.2) }
+    /// Fades for larger surfaces.
+    static var sortySlowFade: Animation { .timingCurve(0.22, 1, 0.36, 1, duration: 0.26) }
     /// Small toggles, chips, disclosure and row expansion.
-    static var sortySnappy: Animation { .spring(response: 0.28, dampingFraction: 0.82) }
+    static var sortySnappy: Animation { .spring(response: 0.24, dampingFraction: 0.82) }
     /// Panels, cards and layout changes.
-    static var sortySmooth: Animation { .spring(response: 0.4, dampingFraction: 0.84) }
+    static var sortySmooth: Animation { .spring(response: 0.28, dampingFraction: 0.84) }
     /// Large transitions such as page and sheet changes.
-    static var sortySpringStandard: Animation { .spring(response: 0.5, dampingFraction: 0.8) }
+    static var sortySpringStandard: Animation { .spring(response: 0.28, dampingFraction: 0.8) }
     /// Celebratory pops that should overshoot.
-    static var sortyBouncy: Animation { .spring(response: 0.35, dampingFraction: 0.65) }
+    static var sortyBouncy: Animation { .spring(response: 0.28, dampingFraction: 0.65) }
 }

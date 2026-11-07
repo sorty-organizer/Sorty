@@ -202,7 +202,7 @@ package class PreviewStore: ObservableObject {
         // Reset pulse after brief delay
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
-            withAnimation(.easeIn(duration: 0.1)) {
+            withAnimation(.easeOut(duration: 0.1)) {
                 editCapturedPulse = false
             }
         }

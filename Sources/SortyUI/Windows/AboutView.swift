@@ -244,7 +244,7 @@ private struct AboutAppIconEasterEgg: View {
             .frame(width: stageWidth, height: stageHeight)
             .contentShape(Rectangle())
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: carousel.iconID)
-            .animation(reduceMotion ? .sortyFade : .easeIn(duration: 0.24), value: carousel.isBursting)
+            .animation(reduceMotion ? .sortyFade : .easeOut(duration: 0.24), value: carousel.isBursting)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Sorty app icon")

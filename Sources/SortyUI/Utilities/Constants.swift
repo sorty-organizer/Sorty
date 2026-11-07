@@ -344,7 +344,8 @@ public struct BouncingSpinner: View {
                 )
             ) { timeline in
                 let elapsed = timeline.date.timeIntervalSinceReferenceDate
-                let rotation = elapsed.truncatingRemainder(dividingBy: 0.8) / 0.8 * 360
+                // Keep rotation linear; easing each revolution would cause a visible hitch.
+                let rotation = elapsed.truncatingRemainder(dividingBy: 0.6) / 0.6 * 360
                 let scale = CGFloat(0.95 + (sin(elapsed * .pi * 2 / 0.8) + 1) * 0.025)
                 spinner(rotation: rotation, scale: scale)
             }

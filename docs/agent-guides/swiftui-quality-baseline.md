@@ -18,6 +18,13 @@ Use this baseline when changing Sorty's macOS SwiftUI surfaces.
 
 ## Motion and rendering
 
+- Use the shared `sorty` animation presets for interaction feedback. Their
+  ease-out curves start promptly, and their durations or spring responses stay
+  below 300 ms. Springs can take longer to settle; keep longer choreography
+  deliberate rather than applying it to routine controls.
+- The shared `BouncingSpinner` rotates once every 600 ms with linear motion.
+  Keep its 12 fps refresh limit and its inactive-window and Reduce Motion gates.
+
 - Settings sections, including Deeplinks and Finder Integration, use
   `.animatedAppearance(delay:)` for the shared staggered fade-and-rise entrance.
   The modifier shows content immediately when Reduce Motion is enabled.

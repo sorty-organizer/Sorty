@@ -451,7 +451,7 @@ package struct OrganizingFlightStageView: View {
         if Task.isCancelled { return }
 
         // Show the receive halo just before the file lands.
-        withAnimation(.easeIn(duration: 0.28 * pace).delay(0.14 * pace)) {
+        withAnimation(.easeOut(duration: 0.28 * pace).delay(0.14 * pace)) {
             haloFolderName = folderName
         }
 
