@@ -797,7 +797,7 @@ public final class ReliabilityManager {
         #if DEBUG
         return "development"
         #else
-        return InternalTelemetry.isEnabled ? "internal" : "production"
+        return "production"
         #endif
     }
 

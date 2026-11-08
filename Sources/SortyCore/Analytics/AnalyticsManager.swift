@@ -16,15 +16,12 @@ public enum AnalyticsConsent: String, Sendable {
 }
 
 public enum InternalTelemetry {
-    public static let defaultsKey = "internalTelemetry"
-
-    /// True for the team's own traffic: every debug build (`make now`/`make dev`),
-    /// plus release builds opted in with `defaults write com.sorty.app internalTelemetry -bool true`.
+    /// Debug builds mark traffic as internal; release builds always report production traffic.
     public static var isEnabled: Bool {
         #if DEBUG
         return true
         #else
-        return UserDefaults.standard.bool(forKey: defaultsKey)
+        return false
         #endif
     }
 }

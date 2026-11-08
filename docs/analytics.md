@@ -16,11 +16,11 @@ This boundary is separate from AI-provider requests. If a user explicitly enable
 
 ## Internal traffic
 
-Sorty sends an `is_internal` event property to PostHog and an `is_internal` tag to Sentry. Both are `false` by default. They contain no device or account identifier. Internal activity stays available for debugging while production views can exclude it.
+The Mac app marks debug builds (`make now` / `make dev`) with `is_internal=true` in PostHog and Sentry, and Sentry uses `environment=development`. Release builds always use `is_internal=false` and Sentry's `environment=production`. The old `com.sorty.app internalTelemetry` preference is ignored. These markers contain no device or account identifier.
 
-On a team Mac, run `defaults write com.sorty.app internalTelemetry -bool true` before launching Sorty. Restart Sorty after changing the value so Sentry's crash, hang, and transaction scope has the correct tag. Run `defaults delete com.sorty.app internalTelemetry` to return to the default. Each Mac needs its own setting. For the website, open the public site in each browser profile you use and run `localStorage.setItem('sorty.website.internalTelemetry', 'true')` in that site's developer console, then reload. Remove that key and reload to return to the default. Browser private windows and other profiles need separate settings.
+The website keeps its per-browser internal override. Open the public site and run `localStorage.setItem('sorty.website.internalTelemetry', 'true')` in that site's developer console, then reload. Remove that key and reload to return to the default. Private windows and other browser profiles need separate settings.
 
-Filter PostHog events and dashboards on the event property `is_internal = false`. Marked Sentry installations report under `environment=internal`, so use `environment=production` for production Issues and Discover views. The Sentry `is_internal` tag provides a second check on individual events. Check each dashboard tile's own filters before treating a dashboard as clean. Keep a separate internal view when investigating your own runs. Older anonymous events have no marker and cannot be assigned to an internal user retroactively. The split starts for app activity after the marked build is installed and for website activity after the marked site is deployed.
+Filter PostHog events and dashboards on `is_internal=false` and Sentry views on `environment=production`. Website traffic marked internal uses Sentry's `environment=internal`. Check each dashboard tile's own filters. Older events keep their original markers; this change applies to Mac app events sent by builds containing it.
 
 ## Event taxonomy
 
