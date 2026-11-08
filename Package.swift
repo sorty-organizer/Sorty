@@ -263,7 +263,7 @@ let package = Package(
         .package(path: "Packages/Beam"),
         .package(
             url: "https://github.com/PostHog/posthog-ios.git",
-            exact: "3.68.2"
+            exact: "3.93.6"
         ),
         // Expose only the pinned Sentry binary we link, avoiding downloads of
         // six unused variants from the upstream package manifest.

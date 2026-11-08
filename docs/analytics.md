@@ -4,6 +4,8 @@ Website scroll depth uses PostHog's built-in numeric scroll and content measurem
 
 Sorty uses PostHog for lightweight product analytics and Sentry for reliability telemetry across the Mac app and public website. PostHog answers which screens and features are useful; Sentry reports crashes, hangs, sanitized handled errors, and sampled performance traces. Neither service may inspect user content.
 
+PostHog SDKs are pinned to `posthog-js` 1.447.3 for the website and `posthog-ios` 3.93.6 for the Mac app. Website deployments publish the web SDK update; the native SDK reaches users with the next app release. SDK Health can continue showing older versions while events from older clients remain in its seven-day window.
+
 ## Consent and privacy
 
 The Mac app is opt-in. `AnalyticsManager` and `ReliabilityManager` do not initialize their SDKs until the user allows anonymous analytics after onboarding. Denial is persisted locally but never reported. Revoking consent, enabling **Block Internet Connections**, or deleting Sorty usage data closes both SDKs and clears their local queues and anonymous identifiers.
