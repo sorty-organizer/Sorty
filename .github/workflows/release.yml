@@ -482,6 +482,10 @@ jobs:
           if ! git tag -l | grep -q "^${TAG_NAME}$"; then
             git tag -a "${TAG_NAME}" -m "Release ${{ needs.prepare-release.outputs.version }}"
             git push origin "${TAG_NAME}"
+          elif [[ "$(git rev-parse "${TAG_NAME}^{commit}")" != "$(git rev-parse HEAD)" ]]; then
+            # A stale tag would make GitHub, Sentry, and the shipped build disagree.
+            echo "::error::${TAG_NAME} points to $(git rev-parse --short "${TAG_NAME}^{commit}"), but this build is $(git rev-parse --short HEAD). Move or delete the tag first."
+            exit 1
           fi
 
       - name: Extract changelog for release body
@@ -616,7 +620,7 @@ jobs:
           test -n "${SENTRY_AUTH_TOKEN}"
           npm exec --yes --package=@sentry/cli@3.6.2 -- bash -e -c '
             sentry-cli releases new "$SENTRY_RELEASE" --url "$SENTRY_RELEASE_URL"
-            sentry-cli releases set-commits "$SENTRY_RELEASE" --auto
+            python3 .github/scripts/sentry-set-release-commits.py "$SENTRY_RELEASE"
             sentry-cli debug-files upload --no-sources --wait-for 60 .build/DerivedData
             sentry-cli releases finalize "$SENTRY_RELEASE"
             sentry-cli deploys new --release "$SENTRY_RELEASE" --env production --name "$SENTRY_RELEASE" --url "$SENTRY_RELEASE_URL"
