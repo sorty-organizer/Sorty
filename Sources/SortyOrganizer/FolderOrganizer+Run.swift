@@ -293,8 +293,8 @@ extension FolderOrganizer {
             }
         }
         await scanner.setScanProgressCallback { [weak self] current in
-            // Throttle per-file callbacks to avoid spawning a Task per file.
-            guard current == 1 || current.isMultiple(of: 25) else { return }
+            // The scanner already throttles this to every 1,000 files or
+            // twice a second, whichever comes first.
             Task { @MainActor [weak self] in
                 guard let self, !Task.isCancelled, !self.isCancellationRequested else { return }
                 self.scannedFileCount = current
@@ -338,9 +338,13 @@ extension FolderOrganizer {
             try? await Task.sleep(for: .seconds(1.5))
         }
 
-        let scanResult = exclusionMatcher?.isEmpty == false
+        var scanResult = exclusionMatcher?.isEmpty == false
             ? "Found \(filesFound.count) files after exclusions"
             : "Found \(filesFound.count) files"
+        let cloudOnlyCount = await scanner.lastCloudOnlyFileCount
+        if cloudOnlyCount > 0 {
+            scanResult += " (\(GenerationStats.formatCount(cloudOnlyCount)) online-only, sorted by name)"
+        }
         let scanResultStage = usesDeepScan
             ? "\(scanResult); content is ready for analysis"
             : "Fast Mode: \(scanResult.lowercased())"

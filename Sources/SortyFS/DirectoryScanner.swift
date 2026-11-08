@@ -117,6 +117,9 @@ package actor DirectoryScanner {
     private var isScanning = false
     private var scannedCount = 0
     private var cloudPlaceholdersSkipped = 0
+    /// Online-only cloud files kept in the current scan. They are organized
+    /// by name and metadata only; reading them would force a download.
+    private var cloudOnlyFilesKept = 0
     /// Symlinked entries skipped during the current scan (never followed, so
     /// `A/loop -> ..` style cycles cannot hang or escape the scan root).
     private var symlinksSkipped = 0
@@ -132,6 +135,9 @@ package actor DirectoryScanner {
     private var normalBatchSize = 50
     private var pressureBatchSize = 10
     private let enumerationProgressInterval = 1_000
+    /// Cloud providers list folders over the network, so progress also
+    /// publishes on a timer instead of waiting for the next 1,000 files.
+    private let enumerationProgressMinimumInterval: Duration = .milliseconds(500)
     private let pauseTimeout: Duration = .seconds(30)
     private let duplicateScanBatchSize = 2_048
     private let maximumCompleteSemanticFileCount = 5_000
@@ -142,6 +148,8 @@ package actor DirectoryScanner {
     package private(set) var degradationReason: String?
     /// Project folders (relative paths) the last scan left intact.
     package private(set) var lastProtectedProjectFolders: [String] = []
+    /// Online-only cloud files the last scan kept without reading content.
+    package private(set) var lastCloudOnlyFileCount = 0
 
     /// Callback for deep scan progress updates
     private var deepScanProgressCallback: (@Sendable (_ current: Int, _ total: Int) -> Void)?
@@ -199,6 +207,8 @@ package actor DirectoryScanner {
         degradationReason = nil
         deepScanAnalyzedCount = 0
         lastProtectedProjectFolders = []
+        cloudOnlyFilesKept = 0
+        lastCloudOnlyFileCount = 0
 
         // Lazy initialization of memory pressure monitoring
         if !isMonitoringSetup {
@@ -258,9 +268,10 @@ package actor DirectoryScanner {
         if deepScan {
             await contentAnalyzer.scheduleCacheFlush()
         }
+        lastCloudOnlyFileCount = cloudOnlyFilesKept
 
         logger.info(
-            "Scan completed: \(self.scannedCount) files, cloud placeholders skipped: \(self.cloudPlaceholdersSkipped), symlinks skipped: \(self.symlinksSkipped), memory pressure: \(self.memoryPressureState.rawValue)"
+            "Scan completed: \(self.scannedCount) files, cloud-only kept: \(self.cloudOnlyFilesKept), cloud placeholders skipped: \(self.cloudPlaceholdersSkipped), symlinks skipped: \(self.symlinksSkipped), memory pressure: \(self.memoryPressureState.rawValue)"
         )
 
         return files
@@ -670,17 +681,18 @@ package actor DirectoryScanner {
             resourceValues: resourceValues,
             pathExtension: pathExtension
         )
-        if skipCloudPlaceholders && hasCloudSignals && isCloudPlaceholder(at: url, fileSize: size) {
+        if skipCloudPlaceholders && Self.isLegacyCloudStub(url) {
             throw ScannerError.cloudPlaceholder
         }
         let cloudStatus = hasCloudSignals ? detectCloudStatus(at: url) : nil
+        let contentIsLocal = Self.contentIsLocal(cloudStatus)
 
         // Read Finder comment via extended attribute
         let finderComment = url.finderComment
 
         // Deep scan: extract content metadata
         var contentMetadata: ContentMetadata?
-        if deepScan {
+        if deepScan && contentIsLocal {
             contentMetadata = await contentAnalyzer.analyze(fileURL: url)
         }
 
@@ -690,7 +702,7 @@ package actor DirectoryScanner {
         // Hash computation for duplicate detection, off the scan priority so a
         // large file never inherits a user-initiated QoS from the caller.
         var sha256Hash: String?
-        if computeHashes {
+        if computeHashes && contentIsLocal {
             let target = url
             sha256Hash = await Task.detached(priority: .utility) {
                 HashUtility.computeSHA256(for: target)
@@ -809,6 +821,11 @@ package actor DirectoryScanner {
            let key = Self.visitedDirectoryKey(for: rootID) {
             visitedDirectoryIDs.insert(key)
         }
+        // Every entry under a cloud root is a cloud entry, so the per-file
+        // path check only runs for ordinary roots.
+        let rootIsCloud: Bool? = Self.pathSuggestsCloudStorage(url.path) ? true : nil
+        let progressClock = ContinuousClock()
+        var lastProgressPublish = progressClock.now
 
         // Lightweight enumeration rows. Expensive content analysis and hashing
         // run in a bounded parallel phase after enumeration (see
@@ -819,6 +836,13 @@ package actor DirectoryScanner {
             // Check and wait if paused due to memory pressure
             try await waitIfPaused()
             try Task.checkCancellation()
+
+            // Slow cloud listings can stall between entries; keep the count
+            // moving at least twice a second.
+            if progressClock.now - lastProgressPublish >= enumerationProgressMinimumInterval {
+                lastProgressPublish = progressClock.now
+                scanProgressCallback?(scannedCount)
+            }
 
             // Get file attributes. The enumerator already skips hidden files when requested,
             // so avoid an extra per-file resource lookup for large directories.
@@ -884,23 +908,23 @@ package actor DirectoryScanner {
             let hasCloudSignals = hasPotentialCloudSignals(
                 at: fileURL,
                 resourceValues: resourceValues,
-                pathExtension: pathExtension
+                pathExtension: pathExtension,
+                pathIsInCloudContainer: rootIsCloud
             )
 
-            // Cloud placeholder detection can require xattr checks, so only run it
-            // when the path or prefetched resource values indicate cloud storage.
-            // The known file size is passed so zero-byte gating avoids a
-            // redundant size lookup inside the check.
-            if skipCloudPlaceholders && hasCloudSignals && isCloudPlaceholder(at: fileURL, fileSize: size) {
-                let provider = cloudProviderName(for: fileURL) ?? "Unknown"
-                logger.debug(
-                    "Skipping cloud placeholder (\(provider)): \(fileURL.lastPathComponent)")
+            // Legacy `.icloud`/`.cloud` stubs are stand-ins, not the file, so
+            // they stay out. Online-only File Provider items (iCloud Drive,
+            // Google Drive, OneDrive, Dropbox) are real files that move and
+            // rename without downloading; they stay in, unread.
+            if skipCloudPlaceholders && Self.isLegacyCloudStub(fileURL) {
                 cloudPlaceholdersSkipped += 1
                 continue
             }
 
-            // Determine cloud status for the file
             let cloudStatus = hasCloudSignals ? detectCloudStatus(at: fileURL) : nil
+            if !Self.contentIsLocal(cloudStatus) {
+                cloudOnlyFilesKept += 1
+            }
 
             // Finder comments are lightweight filesystem metadata and remain useful
             // even when content extraction is disabled.
@@ -932,6 +956,7 @@ package actor DirectoryScanner {
                 await Task.yield()
 
                 if scannedCount.isMultiple(of: enumerationProgressInterval) {
+                    lastProgressPublish = progressClock.now
                     scanProgressCallback?(scannedCount)
                     await checkMemoryPressure()
                     if memoryPressureState != .normal {
@@ -992,6 +1017,71 @@ package actor DirectoryScanner {
         var sha256Hash: String?
     }
 
+    /// One scheduled content-analysis/hash job.
+    private struct EnrichmentWork: Sendable {
+        let index: Int
+        let url: URL
+        let wantsAnalysis: Bool
+        let enableOCR: Bool
+        let wantsHash: Bool
+    }
+
+    /// Picks the next entry that has work. Entries with nothing to do
+    /// (cloud-only, or past the analysis budget without hashing) are passed
+    /// over without a child task, so a huge folder does not pay for hundreds
+    /// of thousands of empty tasks.
+    private struct EnrichmentScheduler {
+        let total: Int
+        let deepScan: Bool
+        let computeHashes: Bool
+        let analysisBudget: Int
+        var skipHeavyWork: Bool
+        private(set) var budgetSkipped = false
+        private var nextIndex = 0
+        private var analysisUsed = 0
+
+        init(total: Int, deepScan: Bool, computeHashes: Bool, analysisBudget: Int, skipHeavyWork: Bool) {
+            self.total = total
+            self.deepScan = deepScan
+            self.computeHashes = computeHashes
+            self.analysisBudget = analysisBudget
+            self.skipHeavyWork = skipHeavyWork
+        }
+
+        mutating func next(in pending: [PendingScanEntry]) -> EnrichmentWork? {
+            while nextIndex < total {
+                let index = nextIndex
+                nextIndex += 1
+                let entry = pending[index]
+                guard DirectoryScanner.contentIsLocal(entry.cloudStatus) else { continue }
+
+                let withinBudget = deepScan && analysisUsed < analysisBudget
+                if deepScan && !withinBudget {
+                    budgetSkipped = true
+                    // Only hashing can run past the budget.
+                    guard computeHashes else {
+                        nextIndex = total
+                        return nil
+                    }
+                }
+                let wantsAnalysis = withinBudget
+                    && !(skipHeavyWork && DirectoryScanner.isExpensiveMediaExtension(entry.pathExtension))
+                guard wantsAnalysis || computeHashes else { continue }
+                if wantsAnalysis {
+                    analysisUsed += 1
+                }
+                return EnrichmentWork(
+                    index: index,
+                    url: entry.url,
+                    wantsAnalysis: wantsAnalysis,
+                    enableOCR: !(wantsAnalysis && skipHeavyWork),
+                    wantsHash: computeHashes
+                )
+            }
+            return nil
+        }
+    }
+
     /// Maximum concurrent content-analysis/hash tasks. Two lanes overlap
     /// Vision/PDF/AV I/O without multiplying memory pressure.
     private let enrichmentConcurrency = 2
@@ -1010,52 +1100,38 @@ package actor DirectoryScanner {
         let total = pending.count
 
         if deepScan || computeHashes {
-            let analysisBudget = deepScan
-                ? (deepScanFileLimit.map { max(0, $0 - deepScanAnalyzedCount) } ?? Int.max)
-                : 0
-            var analysisUsed = 0
-            var budgetSkipped = 0
-            // Re-read as the phase runs: pressure can change mid-scan, and AV
-            // assets plus OCR are the first work to shed.
-            var skipHeavyWork = shouldSkipNonEssentialWork()
+            var scheduler = EnrichmentScheduler(
+                total: total,
+                deepScan: deepScan,
+                computeHashes: computeHashes,
+                analysisBudget: deepScan
+                    ? (deepScanFileLimit.map { max(0, $0 - deepScanAnalyzedCount) } ?? Int.max)
+                    : 0,
+                // Re-read as the phase runs: pressure can change mid-scan, and
+                // AV assets plus OCR are the first work to shed.
+                skipHeavyWork: shouldSkipNonEssentialWork()
+            )
             var completedSinceYield = 0
-            var nextIndex = 0
 
             await withTaskGroup(of: (Int, ContentMetadata?, String?, Bool).self) { group in
-                // Seed the lanes.
-                while nextIndex < min(enrichmentConcurrency, total) {
-                    let index = nextIndex
-                    nextIndex += 1
-                    let entry = pending[index]
-                    let withinBudget = deepScan && analysisBudget - analysisUsed > 0
-                    if deepScan && !withinBudget {
-                        budgetSkipped += 1
-                    }
-                    let skipAnalysis = withinBudget && skipHeavyWork
-                        && Self.isExpensiveMediaExtension(entry.pathExtension)
-                    let wantsAnalysis = withinBudget && !skipAnalysis
-                    if wantsAnalysis {
-                        analysisUsed += 1
-                    }
-                    let analyzeWithoutOCR = wantsAnalysis && skipHeavyWork
-                    let wantsHash = computeHashes
-                    group.addTask(priority: .utility) {
-                        var metadata: ContentMetadata?
-                        if wantsAnalysis {
-                            metadata = await self.contentAnalyzer.analyze(
-                                fileURL: entry.url,
-                                enableOCR: !analyzeWithoutOCR
-                            )
+                var inFlight = 0
+                while true {
+                    while inFlight < enrichmentConcurrency, let work = scheduler.next(in: pending) {
+                        inFlight += 1
+                        group.addTask(priority: .utility) {
+                            var metadata: ContentMetadata?
+                            if work.wantsAnalysis {
+                                metadata = await self.contentAnalyzer.analyze(
+                                    fileURL: work.url,
+                                    enableOCR: work.enableOCR
+                                )
+                            }
+                            let hash = work.wantsHash ? HashUtility.computeSHA256(for: work.url) : nil
+                            return (work.index, metadata, hash, work.wantsAnalysis)
                         }
-                        var hash: String?
-                        if wantsHash {
-                            hash = HashUtility.computeSHA256(for: entry.url)
-                        }
-                        return (index, metadata, hash, wantsAnalysis)
                     }
-                }
-
-                while let result = await group.next() {
+                    guard let result = await group.next() else { break }
+                    inFlight -= 1
                     if Task.isCancelled {
                         group.cancelAll()
                         break
@@ -1071,45 +1147,13 @@ package actor DirectoryScanner {
                     if completedSinceYield >= enrichmentYieldInterval {
                         completedSinceYield = 0
                         await Task.yield()
-                        skipHeavyWork = shouldSkipNonEssentialWork()
-                    }
-
-                    if nextIndex < total {
-                        let index = nextIndex
-                        nextIndex += 1
-                        let entry = pending[index]
-                        let withinBudget = deepScan && analysisBudget - analysisUsed > 0
-                        if deepScan && !withinBudget {
-                            budgetSkipped += 1
-                        }
-                        let skipAnalysis = withinBudget && skipHeavyWork
-                            && Self.isExpensiveMediaExtension(entry.pathExtension)
-                        let wantsAnalysis = withinBudget && !skipAnalysis
-                        if wantsAnalysis {
-                            analysisUsed += 1
-                        }
-                        let analyzeWithoutOCR = wantsAnalysis && skipHeavyWork
-                        let wantsHash = computeHashes
-                        group.addTask(priority: .utility) {
-                            var metadata: ContentMetadata?
-                            if wantsAnalysis {
-                                metadata = await self.contentAnalyzer.analyze(
-                                    fileURL: entry.url,
-                                    enableOCR: !analyzeWithoutOCR
-                                )
-                            }
-                            var hash: String?
-                            if wantsHash {
-                                hash = HashUtility.computeSHA256(for: entry.url)
-                            }
-                            return (index, metadata, hash, wantsAnalysis)
-                        }
+                        scheduler.skipHeavyWork = shouldSkipNonEssentialWork()
                     }
                 }
             }
             try Task.checkCancellation()
 
-            if deepScan, budgetSkipped > 0, degradationReason == nil {
+            if deepScan, scheduler.budgetSkipped, degradationReason == nil {
                 lastScanWasDegraded = true
                 degradationReason =
                     "Deep content analysis was limited to \(deepScanAnalyzedCount) files to keep this large folder responsive"
@@ -1200,8 +1244,22 @@ package actor DirectoryScanner {
             return pathIsInCloudContainer
         }
 
-        let pathComponents = url.standardizedFileURL.pathComponents.map { $0.lowercased() }
-        return pathComponents.contains("cloudstorage") || pathComponents.contains("dropbox")
+        return Self.pathSuggestsCloudStorage(url.path)
+    }
+
+    /// Pre-File Provider stand-in files (`.name.icloud`, OneDrive `.cloud`).
+    /// They describe a file stored elsewhere and must never be organized.
+    private static func isLegacyCloudStub(_ url: URL) -> Bool {
+        let pathExtension = url.pathExtension.lowercased()
+        return pathExtension == "cloud"
+            || (pathExtension == "icloud" && url.lastPathComponent.hasPrefix("."))
+    }
+
+    /// False for online-only or still-downloading cloud files. Opening their
+    /// content would make the provider download them, so analysis and
+    /// hashing skip them.
+    private static func contentIsLocal(_ cloudStatus: CloudFileStatus?) -> Bool {
+        cloudStatus != .cloudOnly && cloudStatus != .downloading
     }
 
     private func isCloudPlaceholder(at url: URL, fileSize: Int? = nil) -> Bool {

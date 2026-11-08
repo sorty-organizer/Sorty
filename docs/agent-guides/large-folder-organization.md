@@ -8,6 +8,12 @@ All three Organize workflows share the same bounded pipeline:
 4. `PreviewStore` starts plans above 2,000 files collapsed and renders at most 500 file rows per expanded section. Hidden rows remain in the plan and are included when applying it.
 5. `FileSystemManager` builds per-folder rename/tag indexes once, throttles operation progress callbacks, and preserves the full operation journal required for partial-failure recovery and undo.
 
+Enumeration progress publishes every 1,000 files or every 500 ms, whichever comes first, so slow cloud folder listings never look frozen. Enrichment only creates child tasks for files that still have analysis or hashing work; once the deep-scan budget is spent and hashes are off, it stops scheduling.
+
+## Cloud folders
+
+Online-only File Provider files (iCloud Drive, Google Drive, OneDrive, Dropbox) stay in Organize scans with `cloudStatus` `.cloudOnly` or `.downloading`. They move and rename without downloading, so the AI sorts them by name and metadata. Deep scan, scan hashing, and exact-duplicate checks never open their content, because a read makes the provider download the file. Legacy stand-in stubs (`.name.icloud`, OneDrive `.cloud`) are still skipped. The scan result line reports how many online-only files were kept. Moving one to a different volume (an external storage location) still downloads it, the same as Finder.
+
 Streaming AI text is capped at 256,000 retained characters and 48,000 UI-presented characters. Preview-version undo is disabled for plans above 20,000 files to avoid retaining several complete copies of a very large plan.
 
 When changing these paths, keep progress tied to measured work, avoid per-file main-actor publications, and never trade away complete apply coverage for a smaller preview.

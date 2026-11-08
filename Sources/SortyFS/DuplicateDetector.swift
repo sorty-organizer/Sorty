@@ -219,7 +219,10 @@ public actor DuplicateDetector {
         var firstIndexBySize: [Int64: Int] = [:]
         var duplicateIndicesBySize: [Int64: [Int]] = [:]
 
-        for (index, file) in files.enumerated() where !file.isDirectory {
+        // Online-only cloud files are left out: hashing them would make the
+        // provider download every same-sized file in the folder.
+        for (index, file) in files.enumerated()
+        where !file.isDirectory && file.cloudStatus != .cloudOnly && file.cloudStatus != .downloading {
             if duplicateIndicesBySize[file.size] != nil {
                 duplicateIndicesBySize[file.size, default: []].append(index)
             } else if let firstIndex = firstIndexBySize.removeValue(forKey: file.size) {
