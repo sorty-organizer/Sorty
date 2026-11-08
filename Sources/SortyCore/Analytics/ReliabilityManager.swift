@@ -756,7 +756,12 @@ public final class ReliabilityManager {
     }
 
     private static var releaseName: String {
-        "com.sorty.app@\(versionNumber)+\(buildNumber)"
+        #if DEBUG
+        // Group local builds by version; dist still identifies the individual build.
+        return "com.sorty.app.dev@\(versionNumber)"
+        #else
+        return "com.sorty.app@\(versionNumber)+\(buildNumber)"
+        #endif
     }
 
     /// One-line environment summary shown in the feedback window and GitHub drafts.

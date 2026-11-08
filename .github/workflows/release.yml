@@ -611,11 +611,13 @@ jobs:
           SENTRY_ORG: sorty-z1
           SENTRY_PROJECT: sorty-macos
           SENTRY_RELEASE: com.sorty.app@${{ needs.prepare-release.outputs.version }}+${{ needs.prepare-release.outputs.build_num }}
+          SENTRY_RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.prepare-release.outputs.version }}
         run: |
           test -n "${SENTRY_AUTH_TOKEN}"
           npm exec --yes --package=@sentry/cli@3.6.2 -- bash -e -c '
-            sentry-cli releases new "$SENTRY_RELEASE"
+            sentry-cli releases new "$SENTRY_RELEASE" --url "$SENTRY_RELEASE_URL"
             sentry-cli releases set-commits "$SENTRY_RELEASE" --auto
             sentry-cli debug-files upload --no-sources --wait-for 60 .build/DerivedData
             sentry-cli releases finalize "$SENTRY_RELEASE"
+            sentry-cli deploys new --release "$SENTRY_RELEASE" --env production --name "$SENTRY_RELEASE" --url "$SENTRY_RELEASE_URL"
           '
