@@ -110,6 +110,10 @@ jobs:
             out/_next/static
           pnpm exec sentry-cli releases finalize \
             "${NEXT_PUBLIC_SENTRY_RELEASE}"
+          # Keep the active release list focused on Mac app versions.
+          # Archived releases still accept events and keep source maps.
+          pnpm exec sentry-cli releases archive \
+            "${NEXT_PUBLIC_SENTRY_RELEASE}"
           find out/_next/static -type f -name '*.map' -delete
 
       - name: Audit public artifact for observability secrets
