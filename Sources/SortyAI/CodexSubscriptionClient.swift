@@ -423,6 +423,12 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
                             try Self.writeInput(promptData, to: inputPipe, operation: .generation)
                         }
                         try inputPipe.fileHandleForWriting.close()
+                    } catch where Self.isBrokenPipe(error) {
+                        // EPIPE means Codex exited before reading its prompt
+                        // (bad flag, image, or model). Its exit status and
+                        // stderr explain why, so let the termination handler
+                        // resume instead of reporting a bare write failure.
+                        try? inputPipe.fileHandleForWriting.close()
                     } catch {
                         process.terminationHandler = nil
                         try? inputPipe.fileHandleForWriting.close()
@@ -751,11 +757,23 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             try pipe.fileHandleForWriting.write(contentsOf: data)
             AIPipeDiagnostics.record(operation, .completed)
         } catch {
-            let nsError = error as NSError
-            let posix = nsError.domain == NSPOSIXErrorDomain ? Int32(exactly: nsError.code) : nil
-            AIPipeDiagnostics.record(operation, .failed, errorCode: posix)
+            AIPipeDiagnostics.record(operation, .failed, errorCode: posixCode(of: error))
             throw error
         }
+    }
+
+    /// FileHandle wraps write errors as NSFileWriteUnknownError (Cocoa 512);
+    /// the POSIX cause sits in NSUnderlyingErrorKey.
+    nonisolated static func posixCode(of error: Error) -> Int32? {
+        let nsError = error as NSError
+        if nsError.domain == NSPOSIXErrorDomain { return Int32(exactly: nsError.code) }
+        guard let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError,
+              underlying.domain == NSPOSIXErrorDomain else { return nil }
+        return Int32(exactly: underlying.code)
+    }
+
+    nonisolated static func isBrokenPipe(_ error: Error) -> Bool {
+        posixCode(of: error) == EPIPE
     }
 
     /// Makes writes to a CLI's stdin throw EPIPE instead of raising SIGPIPE,
