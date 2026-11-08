@@ -1,5 +1,7 @@
 # Sorty Analytics
 
+Website scroll depth uses PostHog's built-in numeric scroll and content measurements on `$pageview` and `$pageleave` events. The property allowlist retains the last and maximum depths in pixels and as fractions so PostHog Web Analytics can report how far visitors read. The existing `web:scroll_depth_reached` events retain the 25%, 50%, 75%, 90%, and 100% milestones. Both follow the website's analytics preference, Global Privacy Control, and Do Not Track.
+
 Sorty uses PostHog for lightweight product analytics and Sentry for reliability telemetry across the Mac app and public website. PostHog answers which screens and features are useful; Sentry reports crashes, hangs, sanitized handled errors, and sampled performance traces. Neither service may inspect user content.
 
 ## Consent and privacy
