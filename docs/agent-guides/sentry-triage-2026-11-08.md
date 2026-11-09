@@ -42,3 +42,12 @@ archived, and 1.3.1 has no unresolved issues.
    not as resolved.
 5. Change fingerprints only with a new version prefix
    (`sorty.handled_error.vN`), then resolve the old groups in that release.
+
+## Follow-up: SORTY-MACOS-54 (1.3.1)
+
+New hang at `ApplicationMover.moveAndRelaunch`, the "Sorty couldn't be moved"
+alert. `NSAlert.runModal()` ran inside a main-actor `Task`, so the main
+dispatch queue stayed blocked while the alert was open. Alerts shown from a
+`Task` now go through `ModalAlertPresenter.present(_:)`, which schedules them on
+the main run loop. The uninstall-failure alert in `AppState` had the same
+pattern and uses it too. Resolve 54 in the release that ships this fix.

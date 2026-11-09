@@ -645,7 +645,7 @@ private enum ApplicationMover {
                 alert.alertStyle = .warning
                 alert.messageText = "Sorty couldn’t be moved"
                 alert.informativeText = message
-                alert.runModal()
+                ModalAlertPresenter.present(alert)
             }
         }
     }

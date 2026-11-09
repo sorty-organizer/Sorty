@@ -1577,7 +1577,7 @@ public class AppState: ObservableObject {
             alert.messageText = "Uninstall Could Not Finish"
             alert.informativeText = "\(detail) The app was not deleted, so you can resolve the issue and try again.\(recovery)"
             alert.addButton(withTitle: "OK")
-            alert.runModal()
+            ModalAlertPresenter.present(alert)
         }
     }
     
