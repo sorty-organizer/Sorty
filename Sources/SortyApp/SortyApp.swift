@@ -641,12 +641,45 @@ private enum ApplicationMover {
                     outcome: "failed",
                     properties: ["failure_reason": reason]
                 )
-                let alert = NSAlert()
-                alert.alertStyle = .warning
-                alert.messageText = "Sorty couldn’t be moved"
-                alert.informativeText = message
-                ModalAlertPresenter.present(alert)
+                presentMoveFailure(message: message, reason: reason, sourceURL: sourceURL)
             }
+        }
+    }
+
+    /// Explains a failed move and offers the manual route: Finder can always
+    /// move the app, and App Management access lets the next attempt replace
+    /// an existing copy.
+    private static func presentMoveFailure(message: String, reason: String, sourceURL: URL) {
+        let offersAppManagement = reason == "replace_blocked"
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Sorty couldn’t be moved"
+        alert.informativeText = message
+        alert.addButton(withTitle: "Show in Finder")
+        if offersAppManagement {
+            alert.addButton(withTitle: "Open App Management")
+        }
+        alert.addButton(withTitle: "Not Now")
+        ModalAlertPresenter.present(alert) { response in
+            switch response {
+            case .alertFirstButtonReturn:
+                NSWorkspace.shared.open(URL(fileURLWithPath: AppRelocationService.applicationsPath, isDirectory: true))
+                NSWorkspace.shared.activateFileViewerSelecting([sourceURL])
+            case .alertSecondButtonReturn where offersAppManagement:
+                openAppManagementSettings()
+            default:
+                break
+            }
+        }
+    }
+
+    private static func openAppManagementSettings() {
+        let candidates = [
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AppBundles",
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_AppBundles",
+        ]
+        for candidate in candidates {
+            if let url = URL(string: candidate), NSWorkspace.shared.open(url) { return }
         }
     }
 

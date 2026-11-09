@@ -65,11 +65,37 @@ public enum AppRelocationService {
         "\"\(value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\""
     }
 
-    public static func moveScript(source: URL, destination: URL) -> String {
+    /// Exit status of the move script when the existing app in Applications
+    /// could not be set aside. App Management blocks this for root as well.
+    nonisolated static let replaceStepStatus = 10
+    /// Exit status when the running copy could not be moved into place.
+    nonisolated static let moveStepStatus = 11
+
+    /// Builds the privileged move. An existing copy at `destination` is renamed
+    /// aside first, so a blocked or failed step never leaves a half-deleted app
+    /// in Applications; it is restored if the move fails and sent to the
+    /// user's Trash once the new copy is in place.
+    public static func moveScript(source: URL, destination: URL, trashDirectory: URL? = nil) -> String {
+        let token = UUID().uuidString
+        let backup = destination.deletingLastPathComponent()
+            .appendingPathComponent(".\(destination.deletingPathExtension().lastPathComponent)-replaced-\(token).app")
+        let trash = (trashDirectory ?? FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".Trash", isDirectory: true))
+            .appendingPathComponent("\(destination.deletingPathExtension().lastPathComponent) (replaced \(token.prefix(8))).app")
+        let shell = """
+        set -u; src=$1; dst=$2; bak=$3; trash=$4; \
+        if [ -e "$dst" ]; then /bin/mv "$dst" "$bak" || exit \(replaceStepStatus); fi; \
+        if ! /bin/mv "$src" "$dst"; then [ -e "$bak" ] && /bin/mv "$bak" "$dst"; exit \(moveStepStatus); fi; \
+        /usr/bin/xattr -dr com.apple.quarantine "$dst" || true; \
+        if [ -e "$bak" ]; then /bin/mv "$bak" "$trash" || /bin/rm -rf "$bak" || true; fi
         """
+        return """
+        set shellCode to \(appleScriptString(shell))
         set sourcePath to \(appleScriptString(source.path))
         set destinationPath to \(appleScriptString(destination.path))
-        do shell script "/bin/rm -rf " & quoted form of destinationPath & " && /bin/mv " & quoted form of sourcePath & " " & quoted form of destinationPath & " && (/usr/bin/xattr -dr com.apple.quarantine " & quoted form of destinationPath & " || /usr/bin/true)" with administrator privileges
+        set backupPath to \(appleScriptString(backup.path))
+        set trashPath to \(appleScriptString(trash.path))
+        do shell script "/bin/sh -c " & quoted form of shellCode & " sorty-move " & quoted form of sourcePath & " " & quoted form of destinationPath & " " & quoted form of backupPath & " " & quoted form of trashPath with administrator privileges
         """
     }
 
@@ -97,23 +123,45 @@ public enum AppRelocationService {
     }
 
     /// Maps osascript's stderr to a result. Cancelling the password prompt is
-    /// AppleScript error -128 and must not be reported as a failure.
+    /// AppleScript error -128 and must not be reported as a failure. A shell
+    /// failure ends with its exit status in parentheses, which names the step.
     nonisolated static func classifyMoveFailure(_ output: String) -> AppMoveResult {
         let output = output.trimmingCharacters(in: .whitespacesAndNewlines)
         if output.contains("(-128)") { return .cancelled }
-        let fallback = "Move Sorty to Applications in Finder, then reopen it."
-        let reason: String
         if output.contains("(-60005)") || output.contains("(-60007)") {
-            reason = "not_authorized"
-        } else if output.localizedCaseInsensitiveContains("Operation not permitted")
-            || output.localizedCaseInsensitiveContains("Permission denied") {
-            reason = "permission_denied"
-        } else if output.localizedCaseInsensitiveContains("No such file") {
-            reason = "source_missing"
-        } else {
-            reason = "script_failed"
+            return .failed(
+                message: "Sorty needs an administrator password to move into Applications.",
+                reason: "not_authorized"
+            )
         }
-        return .failed(message: output.isEmpty ? fallback : output, reason: reason)
+        let isPermissionError = output.localizedCaseInsensitiveContains("Operation not permitted")
+            || output.localizedCaseInsensitiveContains("Permission denied")
+        if output.hasSuffix("(\(replaceStepStatus))") {
+            return .failed(
+                message: isPermissionError
+                    ? "macOS didn’t let Sorty replace the copy already in Applications. Allow Sorty under Privacy & Security › App Management, or drag this copy into Applications in Finder."
+                    : "Sorty couldn’t set aside the copy already in Applications. Drag this copy into Applications in Finder instead.",
+                reason: isPermissionError ? "replace_blocked" : "replace_failed"
+            )
+        }
+        if output.hasSuffix("(\(moveStepStatus))") {
+            if output.localizedCaseInsensitiveContains("No such file") {
+                return .failed(
+                    message: "Sorty couldn’t find its own app file. Move Sorty to Applications in Finder, then reopen it.",
+                    reason: "source_missing"
+                )
+            }
+            return .failed(
+                message: isPermissionError
+                    ? "macOS didn’t let Sorty move itself out of its current folder. Drag Sorty into Applications in Finder instead."
+                    : "Sorty couldn’t move itself into Applications. Drag Sorty into Applications in Finder instead.",
+                reason: isPermissionError ? "source_blocked" : "move_failed"
+            )
+        }
+        return .failed(
+            message: "Sorty couldn’t move itself into Applications. Drag Sorty into Applications in Finder, then reopen it.",
+            reason: isPermissionError ? "permission_denied" : "script_failed"
+        )
     }
 
     /// Waits for this instance to exit, then opens the moved copy. Opening

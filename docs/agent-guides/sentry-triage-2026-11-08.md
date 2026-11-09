@@ -51,3 +51,16 @@ dispatch queue stayed blocked while the alert was open. Alerts shown from a
 `Task` now go through `ModalAlertPresenter.present(_:)`, which schedules them on
 the main run loop. The uninstall-failure alert in `AppState` had the same
 pattern and uses it too. Resolve 54 in the release that ships this fix.
+
+The event's breadcrumbs show why the move failed: the user approved the admin
+prompt, then `rm`/`mv` returned "Operation not permitted" (`permission_denied`)
+while Sorty ran translocated from a quarantined download. Onboarding was
+already complete, so an older copy was probably in Applications. Release builds
+are ad-hoc signed with no Team ID, so macOS App Management can block replacing
+that copy even as root, and the old `rm -rf` could leave it half-deleted. The
+move script now renames the existing copy aside (restoring it if the move
+fails, trashing it on success), and its exit status names the failed step
+(`replace_blocked` vs `source_blocked`). The alert offers Finder and the App
+Management pane instead of raw shell output. Developer ID signing would remove
+the App Management block for Sorty replacing Sorty; that is a release decision,
+not a code change.
