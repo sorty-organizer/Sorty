@@ -912,6 +912,11 @@ public final class ReliabilityManager {
                     return .init(category: "network", cause: "connection_failed")
                 }
                 return classification
+            case .cliExecutionFailed(let exitCode, _):
+                return .init(
+                    category: exitCode == 127 ? "configuration" : "cli",
+                    cause: exitCode == 127 ? "cli_executable_missing" : "cli_execution_failed"
+                )
             case .apiError(let statusCode, _):
                 let cause = aiError.isQuotaExhausted ? "quota_exhausted"
                     : ((100...599).contains(statusCode) ? "http_\(statusCode)" : "invalid_http_status")
@@ -1052,6 +1057,9 @@ public final class ReliabilityManager {
         var diagnostics: [String: Any] = ["diagnostics_version": 3]
         var underlying = error
         if let aiError = error as? AIClientError {
+            if case .cliExecutionFailed(let exitCode, _) = aiError {
+                diagnostics["cli_exit_code"] = exitCode
+            }
             if case .apiError(let statusCode, let message) = aiError, (100...599).contains(statusCode) {
                 diagnostics["http_status"] = statusCode
                 diagnostics["provider_reason_recognized"] = false
@@ -1177,6 +1185,8 @@ public final class ReliabilityManager {
             "timeout": "request timed out",
             "quota_exhausted": "quota exhausted",
             "invalid_http_status": "invalid HTTP status",
+            "cli_executable_missing": "Codex could not find a required executable",
+            "cli_execution_failed": "Codex execution failed",
             "client_not_configured": "no AI provider configured",
             "missing_plan": "no current plan",
             "plan_directory_mismatch": "plan belongs to a different folder",
@@ -1290,7 +1300,7 @@ enum ReliabilityFault: String, Sendable {
             self = .setup
         case "network":
             self = .network
-        case "permission":
+        case "permission", "cli":
             self = .system
         case "filesystem":
             let environmental: Set = [

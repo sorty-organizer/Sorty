@@ -53,6 +53,7 @@ public enum AIClientError: LocalizedError, Sendable {
     case invalidResponse
     case invalidResponseFormat
     case internetAccessBlocked
+    case cliExecutionFailed(exitCode: Int, message: String)
     case apiError(statusCode: Int, message: String)
     case networkError(any Error & Sendable)
     case jsonDecodingError(context: String)
@@ -112,6 +113,11 @@ public enum AIClientError: LocalizedError, Sendable {
             return "Invalid response format (JSON mode might be unsupported)"
         case .internetAccessBlocked:
             return "Internet access is blocked"
+        case .cliExecutionFailed(let exitCode, _):
+            if exitCode == 127 {
+                return "Codex could not find a required executable. Check your Codex installation and try again."
+            }
+            return "Codex stopped before completing the request (exit code \(exitCode))."
         case .apiError(let statusCode, let message):
             if Self.isQuotaExhaustedMessage(message, statusCode: statusCode) {
                 return "API Error (\(statusCode)): This model has used its free-tier allowance. Add paid credits or switch models."
@@ -132,6 +138,8 @@ public enum AIClientError: LocalizedError, Sendable {
 
             Sorty blocked this request before it reached the AI provider because Block Internet Connections is on.
             """
+        case .cliExecutionFailed(_, let message):
+            return redactPotentialKeys(message)
         case .apiError(_, let message):
             let parsed = parseErrorMessage(message)
             let redactedRaw = redactPotentialKeys(message)

@@ -117,6 +117,7 @@ public final class CodexCLIAuthManager: ObservableObject {
         if let codexExecutablePath {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: codexExecutablePath)
+            process.environment = CodexSubscriptionClient.codexEnvironment(executablePath: codexExecutablePath)
             process.arguments = ["login", "status"]
 
             let outputPipe = Pipe()
@@ -300,6 +301,7 @@ public final class CodexCLIAuthManager: ObservableObject {
             if let codexExecutablePath = await CodexSubscriptionClient.resolveCodexExecutablePathAsync() {
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: codexExecutablePath)
+                process.environment = CodexSubscriptionClient.codexEnvironment(executablePath: codexExecutablePath)
                 process.arguments = ["logout"]
                 process.standardOutput = Pipe()
                 process.standardError = Pipe()
@@ -380,6 +382,7 @@ public final class CodexCLIAuthManager: ObservableObject {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexExecutablePath)
+        process.environment = CodexSubscriptionClient.codexEnvironment(executablePath: codexExecutablePath)
         process.arguments = ["login", "--device-auth"]
 
         let outputPipe = Pipe()

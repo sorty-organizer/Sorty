@@ -212,6 +212,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
+        process.environment = Self.codexEnvironment(executablePath: codexPath)
         process.arguments = ["app-server", "--stdio"]
 
         let inputPipe = Pipe()
@@ -339,6 +340,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
+        process.environment = Self.codexEnvironment(executablePath: codexPath)
         process.arguments = Self.codexArguments(
             model: config.model,
             outputURL: outputURL,
@@ -482,8 +484,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         let diagnostics = String(data: diagnosticData, encoding: .utf8) ?? ""
 
         guard process.terminationStatus == 0 else {
-            throw AIClientError.apiError(
-                statusCode: Int(process.terminationStatus),
+            throw AIClientError.cliExecutionFailed(
+                exitCode: Int(process.terminationStatus),
                 message: diagnostics.isEmpty ? "Codex CLI exited without a response." : diagnostics
             )
         }
@@ -799,6 +801,23 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             }
             onEscalated()
         }
+    }
+
+    /// GUI launches have a limited PATH. Include the launcher and its resolved
+    /// installation so scripts can find sibling runtimes such as nvm's Node.
+    nonisolated static func codexEnvironment(executablePath: String) -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        let executableURL = URL(fileURLWithPath: executablePath)
+        let directories = [
+            executableURL.deletingLastPathComponent().path,
+            executableURL.resolvingSymlinksInPath().deletingLastPathComponent().path,
+        ] + (environment["PATH"] ?? "").split(separator: ":").map(String.init) + [
+            "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin",
+        ]
+        var seen = Set<String>()
+        environment["PATH"] = directories.filter { !$0.isEmpty && seen.insert($0).inserted }
+            .joined(separator: ":")
+        return environment
     }
 
     /// Synchronous callers only inspect cached and common paths. A cold login

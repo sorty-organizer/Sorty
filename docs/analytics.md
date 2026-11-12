@@ -61,6 +61,8 @@ Useful saved searches for `environment:production`:
 
 Handled-error fingerprints start with `sorty.handled_error.v2`. Builds through 1.3.0 sent these errors without an exception or message, so Sentry lists them as `<unlabeled event>`. Use their `error_cause` tag. Those issues stop receiving events once users update.
 
+Codex process failures use `cli_execution_failed` (or `cli_executable_missing` for exit 127) and numeric `cli_exit_code`, never `http_status`. CLI diagnostics remain local and are not included in automatic telemetry. Generation, model discovery, and authentication share a launch environment that adds the launcher directory, resolved installation directory, and standard tool directories to `PATH`, so GUI launches can find required runtimes. This mitigates missing-runtime failures; exit 127 alone does not identify which executable was missing.
+
 ### Root-cause context
 
 The readable exception titles, fault classification, levels, and v2 fingerprints
