@@ -152,6 +152,42 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
         XCTAssertEqual(quoted, "'/tmp/codex '\\''$HOME'\\''; touch /tmp/pwn'")
     }
 
+    func testCodexFeatureDiscoveryFailsClosedAndCanRecover() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sorty-codex-features-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let executable = directory.appendingPathComponent("codex")
+        for script in [
+            "#!/bin/sh\nexit 1\n",
+            "#!/bin/sh\nexit 0\n",
+            "#!/bin/sh\nprintf 'shell_tool could not be loaded\\n'\n",
+            "#!/bin/sh\nprintf 'apps stable true\\n'\n"
+        ] {
+            try script.write(to: executable, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+            do {
+                _ = try await CodexSubscriptionClient.supportedFeaturesAsync(executablePath: executable.path)
+                XCTFail("Unavailable tool capability information must stop an organization request")
+            } catch {
+                XCTAssertTrue(error is AIClientError)
+            }
+        }
+        try "#!/bin/sh\nprintf 'shell_tool stable true\\napps stable true\\n'\n".write(
+            to: executable, atomically: true, encoding: .utf8
+        )
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+        let recovered = try await CodexSubscriptionClient.supportedFeaturesAsync(executablePath: executable.path)
+        XCTAssertEqual(recovered, ["shell_tool", "apps"])
+        // A CLI update at the same path may introduce another tool feature.
+        try "#!/bin/sh\nprintf 'shell_tool stable true\\napps stable true\\ncomputer_use stable true\\n'\n".write(
+            to: executable, atomically: true, encoding: .utf8
+        )
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+        let updated = try await CodexSubscriptionClient.supportedFeaturesAsync(executablePath: executable.path)
+        XCTAssertTrue(updated.contains("computer_use"))
+    }
+
     func testCodexOrganizeDisablesOnlyToolFeaturesTheInstallKnows() {
         // `codex features list` from an install that lacks computer_use.
         let listing = """

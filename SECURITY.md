@@ -89,6 +89,14 @@ For maximum privacy, use local options:
 - **Ollama**: Processes requests on the configured Ollama server; a loopback endpoint keeps processing on your machine
 - **Apple Foundation Models**: On-device processing via Apple Intelligence
 
+### Codex CLI Processing
+
+Codex-backed analysis disables the installed CLI's command, browser, app, and
+computer-use features recognized by Sorty. Sorty checks the CLI feature list
+before each inference and refuses to proceed if that check fails or cannot establish
+support for disabling command tools. Read-only filesystem mode alone does not
+prevent a model from reading unrelated local files.
+
 ### Network Security
 
 - TLS sessions for AI requests require TLS 1.2 or later. Local Ollama and explicitly configured HTTP endpoints do not use TLS

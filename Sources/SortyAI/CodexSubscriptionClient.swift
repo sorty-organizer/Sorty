@@ -345,7 +345,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
 
         try FileManager.default.createDirectory(at: workingDirectoryURL, withIntermediateDirectories: true)
 
-        let supportedFeatures = await Self.supportedFeaturesAsync(executablePath: codexPath)
+        let supportedFeatures = try await Self.supportedFeaturesAsync(executablePath: codexPath)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
@@ -594,24 +594,22 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         "apps",
     ]
 
-    private static let supportedFeaturesLock = NSLock()
-    nonisolated(unsafe) private static var supportedFeaturesByPath: [String: Set<String>] = [:]
-
     /// Feature names the Codex at `executablePath` accepts, from
     /// `codex features list`. Codex exits with an error on an unknown
-    /// `--disable` name, so only listed names may be passed. Returns an empty
-    /// set when listing fails (older Codex), which leaves the call unchanged.
-    nonisolated static func supportedFeaturesAsync(executablePath: String) async -> Set<String> {
-        if let cached = supportedFeaturesLock.withLock({ supportedFeaturesByPath[executablePath] }) {
-            return cached
-        }
+    /// `--disable` name, so only listed names may be passed. Reject unavailable
+    /// capability information rather than running without tool restrictions.
+    /// Probe each request: a CLI upgrade at the same path may add new tools.
+    nonisolated static func supportedFeaturesAsync(executablePath: String) async throws -> Set<String> {
         let features = await Task.detached(priority: .utility) {
             listSupportedFeatures(executablePath: executablePath)
         }.value
-        if let features {
-            supportedFeaturesLock.withLock { supportedFeaturesByPath[executablePath] = features }
+        guard let features, features.contains("shell_tool") else {
+            throw AIClientError.apiError(
+                statusCode: 503,
+                message: "Sorty couldn't verify that Codex command tools can be disabled. Try again, or update the Codex CLI."
+            )
         }
-        return features ?? []
+        return features
     }
 
     private nonisolated static func listSupportedFeatures(executablePath: String) -> Set<String>? {
@@ -639,7 +637,9 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     /// Reads the first column of `codex features list` output.
     nonisolated static func parseFeatureList(_ output: String) -> Set<String> {
         Set(output.split(whereSeparator: \.isNewline).compactMap { line in
-            line.split(separator: " ", omittingEmptySubsequences: true).first.map(String.init)
+            let fields = line.split(whereSeparator: \.isWhitespace)
+            guard fields.count >= 3, fields.last == "true" || fields.last == "false" else { return nil }
+            return String(fields[0])
         })
     }
 
