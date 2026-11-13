@@ -38,6 +38,9 @@ jobs:
       - name: Run Gitleaks
         run: gitleaks detect --source . --verbose
 
+      - name: Run standalone file-operation security regressions
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s .agents/skills/sorty/scripts -p 'test_sorty_*.py'
+
   fuzz:
     runs-on: blacksmith-6vcpu-macos-26
     timeout-minutes: 10
