@@ -62,15 +62,6 @@ def has_unsafe_components(path: Path) -> bool:
     )
 
 
-def nearest_existing_parent(path: Path) -> Path:
-    current = path
-    while not current.exists() and not current.is_symlink():
-        if current == current.parent:
-            break
-        current = current.parent
-    return current if current.is_dir() else current.parent
-
-
 def is_within(path: Path, root: Path) -> bool:
     try:
         path.relative_to(root)
@@ -246,6 +237,8 @@ class Operation:
     source: Path
     destination: Path
     expected: dict[str, Any]
+    destination_parent: Path
+    relative_destination: bool
 
 
 def source_snapshot(path: Path) -> dict[str, Any]:
@@ -384,7 +377,7 @@ def resolve_plan(plan: dict[str, Any]) -> tuple[Path, str, list[Operation], list
         elif not snapshot_matches(source, raw["expected"]):
             errors.append(f"source changed since scan: {source}")
         if not destination_input.is_absolute():
-            resolved_parent = nearest_existing_parent(destination.parent).resolve(strict=False)
+            resolved_parent = destination.parent.resolve(strict=False)
             if not is_within(resolved_parent, root.resolve(strict=False)):
                 errors.append(f"relative destination reaches outside source_root through a symlinked parent: {destination}")
         if mode == "organize" and source.name != destination.name:
@@ -400,7 +393,10 @@ def resolve_plan(plan: dict[str, Any]) -> tuple[Path, str, list[Operation], list
             errors.append(f"cannot move a directory inside itself: {source} -> {destination}")
         seen_sources.add(source_key)
         seen_destinations.add(destination_key)
-        operations.append(Operation(source, destination, raw["expected"]))
+        operations.append(Operation(
+            source, destination, raw["expected"],
+            destination.parent.resolve(strict=False), not destination_input.is_absolute(),
+        ))
 
     operation_source_keys = {filesystem_key(operation.source) for operation in operations}
     unorganized_keys: set[str] = set()
@@ -568,7 +564,18 @@ def apply_plan(plan_path: Path, state_dir: Path, origin: str = "agent") -> dict[
         "plan": str(canonical(plan_path)), "origin": origin,
     })
     completed = 0
+    resolved_root = root.resolve(strict=False)
     for index, operation in enumerate(operations):
+        # Earlier moves can install symlinks, including inside a moved folder.
+        # Check parents against the validated plan before creating directories
+        # or writing a pending move. The final source may itself be a symlink.
+        if not is_within(operation.source.parent.resolve(strict=False), resolved_root):
+            raise SortyError(f"source reaches outside source_root through a symlinked parent: {operation.source}")
+        destination_parent = operation.destination.parent.resolve(strict=False)
+        if (operation.relative_destination and not is_within(destination_parent, resolved_root)) or (
+            destination_parent != operation.destination_parent
+        ):
+            raise SortyError(f"destination changed through a symlinked parent: {operation.destination}")
         if not snapshot_matches(operation.source, operation.expected):
             raise SortyError(f"source changed before operation {index}: {operation.source}")
         operation_id = f"{apply_id}:{index}"

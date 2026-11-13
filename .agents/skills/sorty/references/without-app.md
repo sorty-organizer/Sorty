@@ -107,3 +107,16 @@ python3 scripts/sorty_profile.py learn remove ID
 ```
 
 A glob without `/` matches item names; a glob with `/` matches absolute paths. Agent exclusions apply to every scan, plan, and watcher run alongside imported rules. Record a learning only when the user states a lasting preference or confirms a correction, and keep each one short and factual. `show` lists both as `agentExclusions` and `agentLearnings`.
+
+### Symlink changes during apply
+
+Each move rechecks the resolved source parent and destination parent. A relative
+destination must remain inside the selected root, and its parent must still
+resolve to the location validated for the plan. This also catches symlinks
+introduced by earlier moves, including links carried inside a moved folder.
+Explicit absolute destinations remain supported for manually approved plans.
+If a later move is rejected, earlier completed moves remain recorded in the
+journal and can be rolled back. Safe moves of symlink items remain supported.
+
+These checks detect changed paths before each operation; they do not provide
+atomic isolation from another process changing directories during a move.

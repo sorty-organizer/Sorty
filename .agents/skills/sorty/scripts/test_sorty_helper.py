@@ -170,6 +170,45 @@ class SortyHelperTests(unittest.TestCase):
         self.assertFalse(result["valid"])
         self.assertTrue(any("symlinked parent" in error for error in result["errors"]))
 
+    def test_apply_rechecks_relative_destination_after_earlier_moves(self):
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                outside = self.base / ("outside-nested" if nested else "outside-link")
+                outside.mkdir()
+                source_name = "bundle" if nested else "pivot"
+                source = self.root / source_name
+                if nested:
+                    source.mkdir()
+                    (source / "pivot").symlink_to(outside, target_is_directory=True)
+                else:
+                    source.symlink_to(outside, target_is_directory=True)
+                payload = self.root / "sample.txt"
+                payload.write_text("harmless sample")
+                moved = f"Archive/{source_name}"
+                parent = f"{moved}/pivot" if nested else moved
+                plan = self.write_plan("organize", [
+                    {"source": source_name, "destination": moved},
+                    {"source": "sample.txt", "destination": f"{parent}/sample.txt"},
+                ])
+                with self.assertRaisesRegex(sorty_helper.SortyError, "destination.*symlinked parent"):
+                    sorty_helper.apply_plan(plan, self.state)
+                self.assertTrue(payload.exists())
+                self.assertEqual(list(outside.iterdir()), [])
+                journal = max((self.state / "journals").glob("*.jsonl"), key=lambda p: p.stat().st_mtime_ns)
+                self.assertEqual(sorty_helper.rollback(journal)["status"], "completed")
+                self.assertTrue(source.exists())
+                payload.unlink()
+
+    def test_explicit_absolute_destination_remains_supported(self):
+        source = self.root / "export.txt"
+        source.write_text("export")
+        destination = self.base / "external" / "export.txt"
+        plan = self.write_plan("organize", [{"source": "export.txt", "destination": str(destination)}])
+        result = sorty_helper.apply_plan(plan, self.state)
+        self.assertEqual(destination.read_text(), "export")
+        self.assertEqual(sorty_helper.rollback(Path(result["journal"]))["status"], "completed")
+        self.assertEqual(source.read_text(), "export")
+
     def test_apply_rejects_source_changed_after_plan(self):
         source = self.root / "draft.txt"
         source.write_text("first", encoding="utf-8")
