@@ -35,6 +35,12 @@ unsandboxed process to selected folders.
 The Finder Sync and widget extensions are sandboxed. They share selected state
 with the main app through the `group.com.sorty.app` app group.
 
+Release builds are ad hoc signed, so the main app carries
+`com.apple.security.cs.disable-library-validation` to load its bundled Sparkle
+framework. Library validation would otherwise make it harder for other code to
+load into Sorty and use its Full Disk Access. This entitlement can go once
+releases are signed with a Developer ID.
+
 ### External Links
 
 External `sorty://organize` and `sorty://scan` links select a folder but do not
@@ -43,6 +49,19 @@ The user starts analysis inside Sorty. New watched folders proposed by links
 are saved disabled with **Notify and Review** selected; the user must enable
 them before monitoring starts. Links to existing watches do not change their
 activation or apply policy.
+
+Other links that change settings also leave the change switched off or ask
+first:
+
+- `sorty://storage?action=add` and `sorty://exclusions?action=add` (or
+  `rules`) save the location or rule turned off.
+- `sorty://persona?generate=true` asks before sending the description to the
+  AI provider, and does not select the new persona.
+- Links can't add folders inside `~/Library` (except iCloud Drive and
+  `~/Library/CloudStorage`), hidden folders in the home folder,
+  `/Applications`, or `/Library` as watched folders or storage locations.
+  Storage locations refuse these folders however they are added, and plans
+  that move files into them are rejected.
 
 Path validation rejects unreadable directories and protected system paths,
 including symlink targets. Readability alone does not authorize an AI request

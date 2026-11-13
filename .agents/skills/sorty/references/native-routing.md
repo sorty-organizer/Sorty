@@ -26,7 +26,9 @@ Open a native route only when the user's request authorizes opening Sorty. Build
 | Settings | `sorty://settings?section=...` |
 | Help | `sorty://help?section=...` |
 
-Supported organization modes are `organize`, `organizeAndRename`, and `renameOnly`. `scan` is an alias that autostarts organization.
+Supported organization modes are `organize`, `organizeAndRename`, and `renameOnly`. `scan` is an alias for `organize`. Links never start analysis: `autostart` is ignored, and the user starts organizing in Sorty.
+
+Links that change settings leave the change for the user to turn on: watched folders, storage locations, and exclusion rules are added switched off, and `persona?generate=true` asks before generating.
 
 Use the `open` command with one fully encoded URL. Opening the app is an external UI action, so follow the current environment's approval rules.
 

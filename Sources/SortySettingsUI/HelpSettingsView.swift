@@ -161,7 +161,7 @@ struct DeeplinkSettingsView: View {
                 entries: [
                     DeeplinkEntry(title: "Organize Folder", url: Link.url("organize", ["path": Link.path("Downloads"), "autostart": "true"]), summary: "Select a folder, then start analysis in Sorty. Also accepts persona and mode.", focusTarget: .deeplinksOrganizeFolder),
                     DeeplinkEntry(title: "Duplicates", url: Link.url("duplicates", ["path": Link.path("Downloads"), "autostart": "true"]), summary: "Select a folder, then start a duplicate scan in Sorty.", focusTarget: .deeplinksDuplicates),
-                    DeeplinkEntry(title: "Persona", url: Link.url("persona", ["action": "create", "generate": "true", "prompt": "Design files"]), summary: "Create or select a persona, optionally generating one from a prompt.", focusTarget: .deeplinksPersona),
+                    DeeplinkEntry(title: "Persona", url: Link.url("persona", ["action": "create", "generate": "true", "prompt": "Design files"]), summary: "Open personas. With generate, Sorty asks before creating one from the prompt.", focusTarget: .deeplinksPersona),
                     DeeplinkEntry(title: "Learnings", url: Link.url("learnings", ["action": "stats"]), summary: "Open Learnings. Actions: stats, withdraw, export, import, or clear.", focusTarget: .deeplinksLearnings)
                 ]
             ),
@@ -171,9 +171,9 @@ struct DeeplinkSettingsView: View {
                 color: .orange,
                 entries: [
                     DeeplinkEntry(title: "Watched Folders", url: Link.url("watched", ["action": "add", "path": Link.path("Downloads")]), summary: "Open watched folders, optionally adding a disabled folder with Notify and Review selected.", focusTarget: .deeplinksWatchedFolders),
-                    DeeplinkEntry(title: "Storage", url: Link.url("storage", ["action": "add", "path": "/Volumes/Archive"]), summary: "Open storage locations, optionally adding a path.", focusTarget: .deeplinksStorage),
+                    DeeplinkEntry(title: "Storage", url: Link.url("storage", ["action": "add", "path": "/Volumes/Archive"]), summary: "Open storage locations, optionally adding a path that starts turned off.", focusTarget: .deeplinksStorage),
                     DeeplinkEntry(title: "Exclude from Sorty", url: Link.url("exclude", ["path": Link.path("Downloads/Archive")]), summary: "Exclude a specific file or folder from future plans.", focusTarget: .deeplinksFinderExclude),
-                    DeeplinkEntry(title: "Exclusions", url: Link.url("exclusions", ["action": "add", "pattern": "node_modules"]), summary: "Open exclusions, optionally adding a name pattern.", focusTarget: .deeplinksExclusions),
+                    DeeplinkEntry(title: "Exclusions", url: Link.url("exclusions", ["action": "add", "pattern": "node_modules"]), summary: "Open exclusions, optionally adding a pattern that starts turned off.", focusTarget: .deeplinksExclusions),
                     DeeplinkEntry(title: "Rules", url: Link.url("rules", ["action": "add", "type": "pathContains", "pattern": ".cache"]), summary: "Open exclusion rules, optionally adding a typed rule.", focusTarget: .deeplinksRules)
                 ]
             )

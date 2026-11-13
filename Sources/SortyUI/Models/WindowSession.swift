@@ -191,23 +191,25 @@ public final class WindowSession: ObservableObject {
             appState.openSettingsWindow(section: .strategy)
             if action == "create" || generate {
                 if generate, let prompt {
-                    Task<Void, Never> {
+                    // Link text becomes instructions in every later prompt, and
+                    // generating spends the user's provider credits. Ask first,
+                    // and leave the new persona unselected.
+                    Task { @MainActor in
+                        await Task.yield()
+                        guard confirmPersonaGeneration(from: prompt) else { return }
                         let generator = PersonaGenerator()
                         do {
                             let result = try await generator.generatePersona(from: prompt, config: settingsViewModel.config)
-                            await MainActor.run {
-                                let newPersona = CustomPersona(
-                                    name: result.name,
-                                    icon: result.icon,
-                                    description: prompt,
-                                    promptModifier: result.prompt,
-                                    instructionSuggestions: result.suggestions
-                                )
-                                customPersonaStore.addPersona(newPersona)
-                                personaManager.selectCustomPersona(newPersona.id)
-                            }
+                            let newPersona = CustomPersona(
+                                name: result.name,
+                                icon: result.icon,
+                                description: prompt,
+                                promptModifier: result.prompt,
+                                instructionSuggestions: result.suggestions
+                            )
+                            customPersonaStore.addPersona(newPersona)
                         } catch {
-                            print("Failed to generate persona: \(error)")
+                            DebugLogger.log("Failed to generate persona from link: \(error.localizedDescription)")
                         }
                     }
                 }
@@ -216,7 +218,7 @@ public final class WindowSession: ObservableObject {
         case .watched(let action, let path):
             appState.currentView = .watchedFolders
             if action == "add", let path {
-                guard case .success(let folderURL) = IncomingPathValidator.validatedDirectoryURL(for: path) else {
+                guard case .success(let folderURL) = IncomingPathValidator.validatedLinkDirectoryURL(for: path) else {
                     DebugLogger.log("Rejected deeplink watched path: \(path)")
                     break
                 }
@@ -243,8 +245,12 @@ public final class WindowSession: ObservableObject {
         case .rules(let action, _, let pattern),
              .exclusions(let action, let pattern):
             appState.currentView = .exclusions
-            if action == "add", let pattern {
-                let rule = ExclusionRule(type: .pathContains, pattern: pattern)
+            // A broad pattern such as "/" would silently stop all organizing,
+            // so link-added rules start off and the user turns them on.
+            if action == "add",
+               let pattern = pattern?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !pattern.isEmpty {
+                let rule = ExclusionRule(type: .pathContains, pattern: pattern, isEnabled: false)
                 exclusionRules.addRule(rule)
             }
 
@@ -276,18 +282,33 @@ public final class WindowSession: ObservableObject {
             // Storage locations are managed inline on the Ready to Organize page.
             appState.currentView = .organize
             if action == "add", let path {
-                guard case .success(let url) = IncomingPathValidator.validatedDirectoryURL(for: path) else {
+                guard case .success(let url) = IncomingPathValidator.validatedLinkDirectoryURL(for: path) else {
                     DebugLogger.log("Rejected deeplink storage path: \(path)")
                     break
                 }
+                // The AI may move files into enabled storage locations, so a
+                // link only proposes one; the user switches it on.
                 do {
-                    try storageLocationsManager.addLocation(url: url)
+                    try storageLocationsManager.addLocation(url: url, isEnabled: false)
                 } catch {
                     DebugLogger.log("Deeplink storage add failed: \(error.localizedDescription)")
                     organizer.state = .error(error)
                 }
             }
         }
+    }
+
+    /// Asks before a `sorty://persona` link generates a persona. Returns true
+    /// only when the user chooses Generate.
+    private func confirmPersonaGeneration(from prompt: String) -> Bool {
+        let preview = prompt.count > 300 ? String(prompt.prefix(300)) + "…" : prompt
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Generate a Persona From This Link?"
+        alert.informativeText = "A link asked Sorty to create a persona from this description. Sorty will send it to your AI provider, and the persona's instructions will guide future organizing if you select it.\n\n\u{201C}\(preview)\u{201D}"
+        alert.addButton(withTitle: "Generate")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     private func securityScopedBookmark(for url: URL) -> Data? {

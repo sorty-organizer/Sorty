@@ -389,10 +389,18 @@ public class StorageLocationsManager: ObservableObject {
         saveLocations()
     }
     
-    public func addLocation(url: URL, description: String? = nil, customName: String? = nil) throws {
+    public func addLocation(url: URL, description: String? = nil, customName: String? = nil, isEnabled: Bool = true) throws {
         let canonicalPath = StorageLocationPathResolver.canonicalPath(url.path)
         guard !locations.contains(where: { StorageLocationPathResolver.pathsEqual($0.path, canonicalPath) }) else {
             throw StorageLocationError.duplicateLocation
+        }
+        // The AI may move files into any storage location, so app data and
+        // login-item folders such as ~/Library/LaunchAgents are never allowed.
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+        let resolvedPath = url.resolvingSymlinksInPath().standardizedFileURL.path
+        if IncomingPathValidator.isProtectedFromLinks(canonicalPath, homeDirectoryPath: homePath)
+            || IncomingPathValidator.isProtectedFromLinks(resolvedPath, homeDirectoryPath: homePath) {
+            throw StorageLocationError.protectedLocation
         }
 
         // For picker URLs, explicitly starting security scope improves bookmark reliability
@@ -414,7 +422,7 @@ public class StorageLocationsManager: ObservableObject {
             path: url.path,
             name: customName ?? url.lastPathComponent,
             description: description,
-            isEnabled: true,
+            isEnabled: isEnabled,
             bookmarkData: bookmarkData
         )
         location.accessStatus = .unknown
@@ -883,11 +891,14 @@ private actor StorageSubfolderDiscoveryService {
 
 public enum StorageLocationError: LocalizedError, Equatable {
     case duplicateLocation
+    case protectedLocation
 
     public var errorDescription: String? {
         switch self {
         case .duplicateLocation:
             return "That folder is already a storage location."
+        case .protectedLocation:
+            return "Sorty can't move files into this folder. Choose a folder outside Library, Applications, and hidden folders."
         }
     }
 }

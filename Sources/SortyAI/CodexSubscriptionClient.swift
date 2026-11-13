@@ -327,7 +327,12 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             ? FileManager.default.temporaryDirectory
                 .appendingPathComponent("sorty-codex-schema-\(UUID().uuidString).json")
             : nil
+        // Codex's read-only sandbox still allows reads anywhere, so start it in
+        // an empty folder instead of inheriting the app's working directory.
+        let workingDirectoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sorty-codex-cwd-\(UUID().uuidString)", isDirectory: true)
         defer {
+            try? FileManager.default.removeItem(at: workingDirectoryURL)
             try? FileManager.default.removeItem(at: outputURL)
             try? FileManager.default.removeItem(at: diagnosticsURL)
             if let schemaURL {
@@ -338,9 +343,12 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             try Self.writeOrganizationResponseSchema(to: schemaURL)
         }
 
+        try FileManager.default.createDirectory(at: workingDirectoryURL, withIntermediateDirectories: true)
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
         process.environment = Self.codexEnvironment(executablePath: codexPath)
+        process.currentDirectoryURL = workingDirectoryURL
         process.arguments = Self.codexArguments(
             model: config.model,
             outputURL: outputURL,

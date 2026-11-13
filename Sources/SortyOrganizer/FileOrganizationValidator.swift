@@ -69,6 +69,7 @@ struct FileOrganizationValidator {
         let allowedPaths = Set(allowedLocations.map { StorageLocationPathResolver.resolvedPath($0.path) })
 
         let basePath = StorageLocationPathResolver.resolvedPath(baseURL.path)
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
 
         func checkSuggestion(
             _ suggestion: FolderSuggestion,
@@ -79,8 +80,11 @@ struct FileOrganizationValidator {
             let childConfinementRootPath: String
             if let absolutePath = StorageLocationPathResolver.normalizedAbsolutePath(from: suggestion.folderName) {
                 let resolvedPath = StorageLocationPathResolver.resolvedPath(absolutePath)
+                // Also covers storage locations saved before protected
+                // folders were refused at add time.
                 guard !allowedPaths.isEmpty,
-                      isAllowedStorageDestination(resolvedPath, allowedRoots: allowedPaths) else {
+                      isAllowedStorageDestination(resolvedPath, allowedRoots: allowedPaths),
+                      !IncomingPathValidator.isProtectedFromLinks(resolvedPath, homeDirectoryPath: homePath) else {
                     throw ValidationError.invalidStorageLocation(absolutePath)
                 }
                 childParentURL = URL(fileURLWithPath: resolvedPath, isDirectory: true)

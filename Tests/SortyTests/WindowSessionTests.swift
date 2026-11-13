@@ -195,6 +195,17 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(watchedFoldersManager.folders[0].effectiveApplyPolicy, .autoApply)
     }
 
+    func testExclusionsAddDeeplinkSavesRuleTurnedOff() throws {
+        let pattern = "sorty-link-pattern-\(UUID().uuidString)"
+
+        handle(.exclusions(action: "add", pattern: "  \(pattern)  "))
+
+        let rule = try XCTUnwrap(exclusionRules.rules.first { $0.pattern == pattern })
+        defer { exclusionRules.removeRule(rule) }
+        XCTAssertFalse(rule.isEnabled)
+        XCTAssertEqual(session.appState.currentView, .exclusions)
+    }
+
     func testLearningsClearDeeplinkRequiresDeletionConfirmation() {
         handle(.learnings(action: .clear, project: nil))
 

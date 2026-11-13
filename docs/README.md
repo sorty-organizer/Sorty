@@ -273,7 +273,7 @@ their settings.
 ```
 sorty://organize?path=/Users/me/Downloads&autostart=true
 sorty://duplicates?path=/Users/me/Documents
-sorty://persona?action=generate&prompt=sci-fi%20collector
+sorty://persona?generate=true&prompt=sci-fi%20collector
 sorty://watched?action=add&path=/Users/me/Downloads
 sorty://rules?action=add&type=pattern&pattern=*.log
 sorty://settings

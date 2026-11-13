@@ -258,32 +258,35 @@ The app provides comprehensive URL schemes to control all aspects of the applica
 | Route | Parameters | Description |
 |-------|------------|-------------|
 | `sorty://persona` | | Open persona management |
-| | `action=generate` | Generate a new persona |
 | | `prompt=<description>` | Description for persona generation |
-| | `generate=true` | Trigger generation immediately |
+| | `generate=true` | Ask to generate a persona from `prompt` |
+
+Sorty asks before generating, because the description is sent to your AI provider. The new persona is saved but not selected.
 
 **Examples:**
 - `sorty://persona` - Open persona view
-- `sorty://persona?action=generate&prompt=sci-fi%20ebook%20collector` - Generate persona from description
+- `sorty://persona?generate=true&prompt=sci-fi%20ebook%20collector` - Generate a persona from a description
 
 ### Watched Folders
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
 | `sorty://watched` | | Open watched folders view |
-| | `action=add` | Add a new watched folder |
+| | `action=add` | Add a watched folder. It starts turned off with Notify and Review selected |
 | | `path=<folder_path>` | Path to add as watched |
 
 **Examples:**
 - `sorty://watched` - Open watched folders
-- `sorty://watched?action=add&path=/Users/me/Downloads` - Add Downloads as watched
+- `sorty://watched?action=add&path=/Users/me/Downloads` - Add Downloads as a watched folder you can turn on
+
+Links can't add folders inside `~/Library` (except iCloud Drive and `~/Library/CloudStorage`), hidden folders in your home folder, `/Applications`, or `/Library` as watched folders or storage locations.
 
 ### Rules
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
 | `sorty://rules` | | Open exclusion rules |
-| | `action=add` | Add a new rule |
+| | `action=add` | Add a new rule, turned off until you enable it |
 | | `type=<pattern\|folder\|extension>` | Type of exclusion rule |
 | | `pattern=<glob_pattern>` | Pattern to exclude (e.g., "*.tmp") |
 

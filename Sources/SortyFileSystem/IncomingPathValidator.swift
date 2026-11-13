@@ -33,6 +33,7 @@ public enum IncomingPathValidationError: LocalizedError, Equatable, Sendable {
     case doesNotExist(String)
     case notDirectory(String)
     case blockedSystemPath(String)
+    case protectedLinkPath(String)
     case unreadable(String)
 
     public var errorDescription: String? {
@@ -45,6 +46,8 @@ public enum IncomingPathValidationError: LocalizedError, Equatable, Sendable {
             return "Not a folder: \(path)"
         case .blockedSystemPath(let path):
             return "Sorty cannot open this system folder: \(path)"
+        case .protectedLinkPath(let path):
+            return "Links can't open this folder: \(path). Choose it in Sorty instead."
         case .unreadable(let path):
             return "Sorty cannot read this folder: \(path)"
         }
@@ -176,6 +179,47 @@ public struct IncomingPathValidator {
             return .failure(.unreadable(standardizedPath))
         }
         return .success(url)
+    }
+
+    /// Validates a folder named by a `sorty://` link. Any web page or local
+    /// process can open these links, so on top of `validatedDirectoryURL` this
+    /// refuses app data, login items, and credential folders that a link could
+    /// otherwise turn into a watched folder or move destination. Folders the
+    /// user picks inside Sorty go through `validatedDirectoryURL` only.
+    public static func validatedLinkDirectoryURL(
+        for path: String?,
+        homeDirectoryPath: String = FileManager.default.homeDirectoryForCurrentUser.path
+    ) -> Result<URL, IncomingPathValidationError> {
+        let result = validatedDirectoryURL(for: path)
+        guard case .success(let url) = result else { return result }
+        let resolvedPath = url.resolvingSymlinksInPath().standardizedFileURL.path
+        for candidate in Set([url.path, resolvedPath])
+        where isProtectedFromLinks(candidate, homeDirectoryPath: homeDirectoryPath) {
+            return .failure(.protectedLinkPath(candidate))
+        }
+        return result
+    }
+
+    /// True for `~/Library` (except cloud storage), dot-folders in the home
+    /// folder, and the shared `/Applications` and `/Library` trees.
+    public static func isProtectedFromLinks(_ standardizedPath: String, homeDirectoryPath: String) -> Bool {
+        func isWithin(_ root: String) -> Bool {
+            standardizedPath == root || standardizedPath.hasPrefix(root + "/")
+        }
+        if isWithin("/Applications") || isWithin("/Library") {
+            return true
+        }
+        let home = URL(fileURLWithPath: homeDirectoryPath).standardizedFileURL.path
+        guard home != "/", standardizedPath.hasPrefix(home + "/") else { return false }
+        let relative = standardizedPath.dropFirst(home.count + 1)
+        if relative.hasPrefix(".") {
+            return true
+        }
+        let library = home + "/Library"
+        guard isWithin(library) else { return false }
+        // iCloud Drive and File Provider folders (Dropbox, Google Drive,
+        // OneDrive) live under ~/Library and are ordinary user documents.
+        return !(isWithin(library + "/Mobile Documents") || isWithin(library + "/CloudStorage"))
     }
 
     /// Off-main variant for IPC/deeplink observers: fileExists/readability

@@ -300,9 +300,10 @@ Sorty supports the `sorty://` URL scheme for automation and external control:
 | `sorty://settings?section=ai` | Open specific settings section |
 | `sorty://history` | Open organization history |
 | `sorty://history?entry=<uuid>` | Open a specific history session |
-| `sorty://persona?generate=true&prompt=<text>` | Generate a persona |
+| `sorty://persona?generate=true&prompt=<text>` | Generate a persona after you confirm; it is not selected automatically |
 | `sorty://watched?action=add&path=<path>` | Add a disabled folder with Notify and Review selected |
-| `sorty://rules?action=add&pattern=<pattern>` | Add exclusion rule |
+| `sorty://rules?action=add&pattern=<pattern>` | Add an exclusion rule, turned off until you enable it |
+| `sorty://storage?action=add&path=<path>` | Add a storage location, turned off until you enable it |
 | `sorty://help?section=<topic>` | Open help section |
 
 ## License
