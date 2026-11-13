@@ -271,6 +271,21 @@ def snapshot_matches(path: Path, expected: dict[str, Any]) -> bool:
     return actual == expected
 
 
+def filesystem_identity(path: Path) -> dict[str, Any]:
+    """Identify an item without following a terminal symlink or mutable timestamps."""
+    info = path.lstat()
+    identity = {"device": info.st_dev, "inode": info.st_ino, "kind": stat.S_IFMT(info.st_mode)}
+    if hasattr(info, "st_birthtime"):
+        identity["created"] = info.st_birthtime
+    return identity
+
+
+def parent_identity(path: Path) -> dict[str, Any]:
+    """Bind rollback to both a parent's resolved location and its directory object."""
+    parent = path.parent.resolve(strict=True)
+    return {"path": str(parent), **filesystem_identity(parent)}
+
+
 def load_plan(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -582,10 +597,15 @@ def apply_plan(plan_path: Path, state_dir: Path, origin: str = "agent") -> dict[
         base = {
             "record": "operation", "operation_id": operation_id,
             "source": str(operation.source), "destination": str(operation.destination),
+            "original_parent": parent_identity(operation.source),
         }
         append_journal(journal, {**base, "status": "pending", "at": now()})
         method = guarded_move(operation.source, operation.destination)
-        append_journal(journal, {**base, "status": "completed", "method": method, "at": now()})
+        append_journal(journal, {
+            **base, "status": "completed", "method": method, "at": now(),
+            "destination_parent": parent_identity(operation.destination),
+            "moved_identity": filesystem_identity(operation.destination),
+        })
         completed += 1
     append_journal(journal, {"record": "summary", "status": "completed", "completed": completed, "at": now()})
     return {"status": "completed", "apply_id": apply_id, "completed": completed, "journal": str(journal)}
@@ -619,6 +639,24 @@ def rollback(journal: Path) -> dict[str, Any]:
             continue
         original = Path(row["source"])
         current = Path(row["destination"])
+        # Legacy records cannot prove which item and parents were authorized.
+        # Leave them untouched rather than treating current path occupants as
+        # the originals. Report a partial rollback for manual recovery.
+        if not all(isinstance(row.get(key), dict) for key in (
+            "original_parent", "destination_parent", "moved_identity"
+        )):
+            errors.append(f"rollback safety metadata missing; recover manually: {current}")
+            continue
+        try:
+            if parent_identity(original) != row["original_parent"] or parent_identity(current) != row["destination_parent"]:
+                errors.append(f"rollback parent changed: {current} -> {original}")
+                continue
+            if filesystem_identity(current) != row["moved_identity"]:
+                errors.append(f"moved item was replaced: {current}")
+                continue
+        except OSError as error:
+            errors.append(f"cannot verify rollback item: {current}: {error}")
+            continue
         if original.exists() or original.is_symlink():
             errors.append(f"original path is occupied: {original}")
             continue

@@ -98,6 +98,24 @@ class SortyWatchTests(unittest.TestCase):
         self.assertEqual(result["status"], "error", "extension changes still need explicit approval")
         self.assertTrue((self.root / "a.txt").exists())
 
+    def test_watcher_rejects_absolute_tilde_traversal_and_symlink_escapes(self):
+        outside = self.base / "outside"
+        outside.mkdir()
+        (self.root / "linked").symlink_to(outside, target_is_directory=True)
+        for index, destination in enumerate((str(outside / "sample.txt"), "~/sample.txt", "../outside/sample.txt", "linked/sample.txt")):
+            with self.subTest(destination=destination):
+                handler = self.handler("reply = {'operations': [{'source': p, 'destination': " + repr(destination) + "} for p in items if p == 'sample.txt']}")
+                watch_id = "escape-" + str(index)
+                self.add(handler=handler, apply=True, id=watch_id, include_existing=True)
+                source = self.root / "sample.txt"
+                source.write_text("sample")
+                with patch.dict("os.environ", {"HOME": str(self.base / "test-home")}):
+                    result = sorty_watch.run_watcher(watch_id)
+                self.assertEqual(result["status"], "error")
+                self.assertEqual(result["moved"], [])
+                self.assertTrue(source.exists())
+                self.assertEqual(list(outside.iterdir()), [])
+
     def test_handler_failures_and_collisions_queue_items(self):
         (self.root / "PDFs").mkdir()
         (self.root / "PDFs/b.pdf").write_text("existing", encoding="utf-8")

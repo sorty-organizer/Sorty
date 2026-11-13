@@ -73,7 +73,7 @@ It replies with JSON. Prose or a code fence around it is tolerated.
 {"operations": [{"source": "Invoice March.pdf", "destination": "Finance/2026/invoice-march.pdf"}], "unorganized": [{"path": "x.bin", "reason": "unknown format"}]}
 ```
 
-The watcher, not the handler, does the moving. Snapshots are taken before the handler runs, so a handler that edits files itself fails validation. Sources it was not offered are rejected. Extension changes, escapes from the folder, and overwrites are refused. Omitted items are queued. A handler that crashes, times out (`--handler-timeout`, default 600 seconds), or prints no JSON queues its items and reports an error.
+The watcher, not the handler, does the moving. Snapshots are taken before the handler runs, so a handler that edits files itself fails validation. Sources it was not offered are rejected. Handler destinations must be relative paths inside the watched folder; absolute paths, home-relative paths, traversal, and symlink escapes are refused. Extension changes and overwrites are also refused. Omitted items are queued. A handler that crashes, times out (`--handler-timeout`, default 600 seconds), or prints no JSON queues its items and reports an error.
 
 A cloud-model handler that can read file contents is sending contents to a cloud model, so it needs that approval as well. Show the user the exact command, then run `run ID --dry-run` and walk through the suggestions before enabling `--apply`. If the user explicitly asks for a deterministic script instead of a model, the agent may write one that speaks the same JSON protocol. Base it on the folder's actual structure and keep it in the state directory, never in the watched folder or the skill.
 
@@ -120,3 +120,15 @@ journal and can be rolled back. Safe moves of symlink items remain supported.
 
 These checks detect changed paths before each operation; they do not provide
 atomic isolation from another process changing directories during a move.
+
+### Rollback safety
+
+New apply journals record the moved item's filesystem identity and both parent
+directories. Rollback checks those identities before each restore and leaves
+replaced items or redirected paths untouched. Editing the same file in place
+still allows rollback; replacing it with a different file does not.
+
+Older journals without these safety records cannot be rolled back automatically.
+They report a partial rollback with a manual-recovery message. Inspect the
+recorded source and destination before recovering those files manually.
+These checks do not provide atomic isolation from concurrent filesystem changes.

@@ -209,6 +209,47 @@ class SortyHelperTests(unittest.TestCase):
         self.assertEqual(sorty_helper.rollback(Path(result["journal"]))["status"], "completed")
         self.assertEqual(source.read_text(), "export")
 
+    def test_rollback_refuses_replaced_parents_items_and_legacy_records(self):
+        for attack in ("destination-parent", "original-parent", "item", "legacy"):
+            with self.subTest(attack=attack):
+                original_dir = self.root / (attack + "-inbox")
+                original_dir.mkdir()
+                original = original_dir / "report.txt"
+                original.write_text("shared sample")
+                archive = self.root / (attack + "-archive")
+                plan = self.write_plan("organize", [{
+                    "source": str(original), "destination": str(archive / "report.txt")
+                }])
+                applied = sorty_helper.apply_plan(plan, self.state)
+                journal = Path(applied["journal"])
+                moved = archive / "report.txt"
+                private = self.base / (attack + "-private")
+                private.mkdir()
+                if attack == "destination-parent":
+                    moved.unlink()
+                    archive.rmdir()
+                    (private / "report.txt").write_text("private marker")
+                    archive.symlink_to(private, target_is_directory=True)
+                elif attack == "original-parent":
+                    original_dir.rmdir()
+                    original_dir.symlink_to(private, target_is_directory=True)
+                elif attack == "item":
+                    moved.rename(archive / "actual-moved-item.txt")
+                    moved.write_text("unrelated replacement")
+                else:
+                    rows = sorty_helper.read_journal(journal)
+                    for row in rows:
+                        for key in ("original_parent", "destination_parent", "moved_identity"):
+                            row.pop(key, None)
+                    journal.write_text("".join(json.dumps(row) + "\n" for row in rows))
+                result = sorty_helper.rollback(journal)
+                self.assertEqual(result["status"], "partial")
+                self.assertEqual(result["restored"], 0)
+                self.assertFalse(original.exists())
+                self.assertTrue(moved.exists())
+                if attack == "destination-parent":
+                    self.assertEqual((private / "report.txt").read_text(), "private marker")
+
     def test_apply_rejects_source_changed_after_plan(self):
         source = self.root / "draft.txt"
         source.write_text("first", encoding="utf-8")
@@ -262,9 +303,10 @@ class SortyHelperTests(unittest.TestCase):
         destination = self.root / "Documents" / "report.txt"
         self.assertFalse(source.exists())
         self.assertEqual(destination.read_text(encoding="utf-8"), "draft")
+        destination.write_text("edited after organization", encoding="utf-8")
         rollback = sorty_helper.rollback(Path(result["journal"]))
         self.assertEqual(rollback["status"], "completed")
-        self.assertEqual(source.read_text(encoding="utf-8"), "draft")
+        self.assertEqual(source.read_text(encoding="utf-8"), "edited after organization")
         self.assertFalse(destination.exists())
 
     def test_cross_volume_fallback_verifies_and_moves(self):
@@ -281,11 +323,14 @@ class SortyHelperTests(unittest.TestCase):
                 raise OSError(errno.EXDEV, "cross-device")
             return real_rename(old, new)
 
+        plan = self.write_plan("organize", [{"source": "a.txt", "destination": "elsewhere/a.txt"}])
         with patch.object(sorty_helper.os, "rename", side_effect=exdev_once):
-            method = sorty_helper.guarded_move(source, destination)
-        self.assertEqual(method, "verified-copy")
+            applied = sorty_helper.apply_plan(plan, self.state)
         self.assertEqual(destination.read_text(encoding="utf-8"), "payload")
         self.assertFalse(source.exists())
+        restored = sorty_helper.rollback(Path(applied["journal"]))
+        self.assertEqual(restored["status"], "completed")
+        self.assertEqual(source.read_text(encoding="utf-8"), "payload")
 
     def test_interrupted_apply_leaves_pending_journal(self):
         first = self.root / "one.txt"

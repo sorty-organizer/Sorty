@@ -36,6 +36,8 @@ from sorty_helper import (
     canonical,
     emit,
     is_package,
+    is_within,
+    has_unsafe_components,
     matches_exclusion,
     now,
     reject_broad_root,
@@ -460,6 +462,12 @@ def ask_handler(config: dict[str, Any], root: Path, paths: list[Path]) -> tuple[
             raise SortyError(f"handler returned an invalid operation: {raw!r}")
         handled.add(source)
         target = Path(destination).expanduser()
+        # A handler proposes placements within this watch, not the explicit
+        # external exports supported by manually approved helper plans.
+        if target.is_absolute() or has_unsafe_components(target) or not is_within(
+            (root / target).parent.resolve(strict=False), root.resolve(strict=False)
+        ):
+            raise SortyError(f"handler destination escapes watched folder: {destination}")
         if target == Path(source):
             unorganized.append({"path": source, "reason": "AI left it in place"})
         elif (target if target.is_absolute() else root / target).exists():
