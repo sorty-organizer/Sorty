@@ -152,6 +152,34 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
         XCTAssertEqual(quoted, "'/tmp/codex '\\''$HOME'\\''; touch /tmp/pwn'")
     }
 
+    func testCodexOrganizeDisablesOnlyToolFeaturesTheInstallKnows() {
+        // `codex features list` from an install that lacks computer_use.
+        let listing = """
+        apps                                     stable             true
+        browser_use                              stable             true
+        shell_tool                               stable             true
+        unified_exec                             stable             true
+        web_search_cached                        deprecated         false
+        """
+        let supported = CodexSubscriptionClient.parseFeatureList(listing)
+        let disabled = CodexSubscriptionClient.toolFeatures.filter(supported.contains)
+        XCTAssertEqual(disabled, ["shell_tool", "unified_exec", "browser_use", "apps"])
+
+        let arguments = CodexSubscriptionClient.codexArguments(
+            model: "gpt-test",
+            outputURL: URL(fileURLWithPath: "/tmp/out.txt"),
+            schemaURL: nil,
+            imageFiles: [],
+            disabledFeatures: disabled
+        )
+        XCTAssertEqual(arguments.last, "-")
+        XCTAssertEqual(
+            arguments.dropLast().suffix(8),
+            ["--disable", "shell_tool", "--disable", "unified_exec", "--disable", "browser_use", "--disable", "apps"]
+        )
+        XCTAssertFalse(arguments.contains("computer_use"))
+    }
+
     func testSubscriptionDisplayMetadata() {
         // Representative assertion per family: auth-method display name,
         // subscription product name, subscription-capable provider list, and

@@ -345,6 +345,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
 
         try FileManager.default.createDirectory(at: workingDirectoryURL, withIntermediateDirectories: true)
 
+        let supportedFeatures = await Self.supportedFeaturesAsync(executablePath: codexPath)
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
         process.environment = Self.codexEnvironment(executablePath: codexPath)
@@ -355,7 +357,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             schemaURL: schemaURL,
             imageFiles: imageFiles,
             fastMode: CodexSubscriptionSettings.isFastModeEnabled,
-            reasoningEffort: config.reasoningEffort
+            reasoningEffort: config.reasoningEffort,
+            disabledFeatures: Self.toolFeatures.filter(supportedFeatures.contains)
         )
 
         let inputPipe = Pipe()
@@ -526,7 +529,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         schemaURL: URL?,
         imageFiles: [URL],
         fastMode: Bool = false,
-        reasoningEffort: ReasoningEffort = .automatic
+        reasoningEffort: ReasoningEffort = .automatic,
+        disabledFeatures: [String] = []
     ) -> [String] {
         var arguments = [
             "exec",
@@ -567,8 +571,76 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             arguments += ["--image", imageFile.path]
         }
 
+        for feature in disabledFeatures {
+            arguments += ["--disable", feature]
+        }
+
         arguments.append("-")
         return arguments
+    }
+
+    /// Codex features that let the agent run commands, browse, or drive apps.
+    /// The read-only sandbox still allows reading any file, so text in a
+    /// scanned file could otherwise make the agent read `~/.ssh` and put it in
+    /// the plan. Organize calls only need text back, so each of these that the
+    /// installed Codex knows is turned off.
+    nonisolated static let toolFeatures = [
+        "shell_tool",
+        "unified_exec",
+        "browser_use",
+        "browser_use_external",
+        "computer_use",
+        "in_app_browser",
+        "apps",
+    ]
+
+    private static let supportedFeaturesLock = NSLock()
+    nonisolated(unsafe) private static var supportedFeaturesByPath: [String: Set<String>] = [:]
+
+    /// Feature names the Codex at `executablePath` accepts, from
+    /// `codex features list`. Codex exits with an error on an unknown
+    /// `--disable` name, so only listed names may be passed. Returns an empty
+    /// set when listing fails (older Codex), which leaves the call unchanged.
+    nonisolated static func supportedFeaturesAsync(executablePath: String) async -> Set<String> {
+        if let cached = supportedFeaturesLock.withLock({ supportedFeaturesByPath[executablePath] }) {
+            return cached
+        }
+        let features = await Task.detached(priority: .utility) {
+            listSupportedFeatures(executablePath: executablePath)
+        }.value
+        if let features {
+            supportedFeaturesLock.withLock { supportedFeaturesByPath[executablePath] = features }
+        }
+        return features ?? []
+    }
+
+    private nonisolated static func listSupportedFeatures(executablePath: String) -> Set<String>? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        process.environment = codexEnvironment(executablePath: executablePath)
+        process.arguments = ["features", "list"]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+        let watchdog = DispatchWorkItem { if process.isRunning { process.terminate() } }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 10, execute: watchdog)
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        watchdog.cancel()
+        guard process.terminationStatus == 0 else { return nil }
+        return parseFeatureList(String(decoding: data, as: UTF8.self))
+    }
+
+    /// Reads the first column of `codex features list` output.
+    nonisolated static func parseFeatureList(_ output: String) -> Set<String> {
+        Set(output.split(whereSeparator: \.isNewline).compactMap { line in
+            line.split(separator: " ", omittingEmptySubsequences: true).first.map(String.init)
+        })
     }
 
     private nonisolated static func writeOrganizationResponseSchema(to url: URL) throws {
