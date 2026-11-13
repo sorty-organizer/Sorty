@@ -808,10 +808,11 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     nonisolated static func codexEnvironment(executablePath: String) -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
         let executableURL = URL(fileURLWithPath: executablePath)
-        let directories = [
+        let inheritedDirectories = (environment["PATH"] ?? "").split(separator: ":").map { String($0) }
+        let directories: [String] = [
             executableURL.deletingLastPathComponent().path,
             executableURL.resolvingSymlinksInPath().deletingLastPathComponent().path,
-        ] + (environment["PATH"] ?? "").split(separator: ":").map(String.init) + [
+        ] + inheritedDirectories + [
             "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin",
         ]
         var seen = Set<String>()
