@@ -27,18 +27,33 @@ Sorty releases are distributed as pre-built ZIP archives. The app is not signed 
 
 ### Sandboxing
 
-Sorty runs within the macOS App Sandbox with the following entitlements:
+The main macOS app is **not sandboxed** in the current Xcode configurations.
+It can access files permitted by the user's account and macOS privacy controls
+(TCC). User-selected file and bookmark entitlements do not confine an
+unsandboxed process to selected folders.
 
-- User-selected file access (read/write)
-- Network access for AI provider APIs
-- No system-level access outside the sandbox
+The Finder Sync and widget extensions are sandboxed. They share selected state
+with the main app through the `group.com.sorty.app` app group.
+
+### External Links
+
+External `sorty://organize` and `sorty://scan` links select a folder but do not
+start scanning or AI processing, including when `autostart=true` is supplied.
+The user starts analysis inside Sorty. New watched folders proposed by links
+are saved disabled with **Notify and Review** selected; the user must enable
+them before monitoring starts. Links to existing watches do not change their
+activation or apply policy.
+
+Path validation rejects unreadable directories and protected system paths,
+including symlink targets. Readability alone does not authorize an AI request
+or automatic file changes.
 
 ### Data Security
 
 #### Local Data Protection
 
 - **The Learnings Profile**: Stored with AES-256 encryption
-- **Biometric Protection**: Touch ID/Face ID required to access learning data
+- **Optional Authentication**: Sensitive-action authentication is disabled by default. When enabled, Sorty uses available biometrics with system-password fallback and a session timeout
 - **Organization History**: Stored locally, not encrypted (contains file paths and metadata)
 - **Settings**: Stored in standard UserDefaults
 
@@ -47,17 +62,17 @@ Sorty runs within the macOS App Sandbox with the following entitlements:
 When using cloud-based AI providers (OpenAI, Anthropic, etc.):
 
 - File names and metadata are sent for analysis
-- File contents are NOT uploaded unless Deep Scan is explicitly enabled
+- Extracted content can be uploaded when Deep Scan is enabled; image payloads also depend on the vision settings and provider support. Review the effective settings before analyzing sensitive files
 - API keys are stored in the macOS Keychain
-- Traffic occurs over HTTPS
+- Built-in cloud endpoints use HTTPS. Custom endpoints can use HTTP; only use plaintext HTTP with a trusted local service
 
 For maximum privacy, use local options:
-- **Ollama**: Processes files entirely on your machine
+- **Ollama**: Processes requests on the configured Ollama server; a loopback endpoint keeps processing on your machine
 - **Apple Foundation Models**: On-device processing via Apple Intelligence
 
 ### Network Security
 
-- All API calls use HTTPS with TLS 1.2+
+- TLS sessions for AI requests require TLS 1.2 or later. Local Ollama and explicitly configured HTTP endpoints do not use TLS
 - API keys are never logged or transmitted outside AI provider endpoints
 - Update checks fetch Sparkle appcasts and release archives from GitHub Releases over HTTPS
 - Anonymous product analytics and crash reports are sent to PostHog only after
@@ -78,7 +93,7 @@ For maximum privacy, use local options:
 ### Protecting Your Data
 
 1. **Use Local AI When Possible**
-   - Ollama keeps all processing on your device
+   - A local Ollama endpoint keeps processing on your device
    - Apple Foundation Models require macOS 15+
 
 2. **Secure Your API Keys**
@@ -171,4 +186,4 @@ Review the security policies of your chosen AI provider:
 
 ---
 
-Last updated: July 2026
+Last updated: November 2026

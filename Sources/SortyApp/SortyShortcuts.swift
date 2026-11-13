@@ -75,7 +75,7 @@ struct OpenSortyDestinationIntent: AppIntent {
 struct OrganizeFolderInSortyIntent: AppIntent {
     static let title: LocalizedStringResource = "Organize Folder in Sorty"
     static let description = IntentDescription(
-        "Open Sorty with a folder path ready to organize, or start immediately."
+        "Open Sorty with a folder path ready to organize. Start analysis inside Sorty."
     )
     static let openAppWhenRun = true
 
@@ -85,7 +85,7 @@ struct OrganizeFolderInSortyIntent: AppIntent {
     )
     var folderPath: String
 
-    @Parameter(title: "Start Immediately", default: true)
+    @Parameter(title: "Legacy Autostart (Ignored)", default: false)
     var startImmediately: Bool
 
     init() {
@@ -118,9 +118,7 @@ struct OrganizeFolderInSortyIntent: AppIntent {
 
         NSWorkspace.shared.open(url)
         return .result(
-            dialog: startImmediately
-                ? "Opening Sorty and starting organization."
-                : "Opening Sorty with that folder ready to organize."
+            dialog: "Opening Sorty with that folder ready to organize. Start analysis in Sorty."
         )
     }
 }

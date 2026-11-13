@@ -101,7 +101,7 @@ public final class WindowSession: ObservableObject {
                 storageLocationsManager: StorageLocationsManager,
                 learningsManager: LearningsManager) {
         switch destination {
-        case .organize(let path, let personaId, _, let autostart):
+        case .organize(let path, let personaId, _, _):
             if let path {
                 switch IncomingPathValidator.validatedDirectoryURL(for: path) {
                 case .success(let url):
@@ -120,28 +120,10 @@ public final class WindowSession: ObservableObject {
                     personaManager.selectCustomPersona(personaId)
                 }
             }
-            // Reset organizer to idle so user sees ReadyToOrganize page
-            if !autostart {
-                appState.organizer?.reset()
-            }
+            // External links select a folder; only an explicit in-app action
+            // may scan it or submit its information to the configured provider.
+            appState.organizer?.reset()
             appState.currentView = .organize
-            if autostart {
-                Task { @MainActor in
-                    do {
-                        try await Task.sleep(nanoseconds: 500_000_000)
-                    } catch {
-                        return
-                    }
-                    guard let directory = appState.selectedDirectory else { return }
-                    do {
-                        try await appState.prepareForManualOrganization(at: directory)
-                        try await appState.organizer?.organize(directory: directory)
-                    } catch is CancellationError {
-                    } catch {
-                        appState.organizer?.state = .error(error)
-                    }
-                }
-            }
 
         case .duplicates(let path, _):
             // Autostart is intentionally dropped for duplicates: deeplinks only
@@ -248,7 +230,9 @@ public final class WindowSession: ObservableObject {
                 } else {
                     watchedFolder = WatchedFolder(
                         path: normalizedPath,
-                        bookmarkData: securityScopedBookmark(for: folderURL)
+                        isEnabled: false,
+                        bookmarkData: securityScopedBookmark(for: folderURL),
+                        applyPolicy: .notifyAndReview
                     )
                     watchedFoldersManager.addFolder(watchedFolder)
                 }

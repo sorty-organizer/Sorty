@@ -95,7 +95,7 @@ Multimodal AI requests retry without images only for HTTP 413 or a 400/422 respo
 
 ## Deeplinks
 URL scheme `sorty://` — see `DeeplinkHandler` for routes:
-- `sorty://organize?path=/path&persona=Developer&autostart=true`
+- `sorty://organize?path=/path&persona=Developer` selects a folder; external `autostart` requests are ignored. New watches added by links are disabled and use Notify and Review.
 - `sorty://settings`
 
 ## Finder Extension

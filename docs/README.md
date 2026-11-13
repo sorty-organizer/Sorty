@@ -262,7 +262,11 @@ folder selected so you can right-click it yourself.
 
 ## App Deeplinks
 
-Control Sorty via URL schemes.
+Open Sorty pages and propose folder configuration via URL schemes. Organization
+and scan links never start AI processing automatically; `autostart=true` is
+accepted for compatibility but ignored. New watches added by links are disabled
+and use Notify and Review until the user enables them. Existing watches retain
+their settings.
 
 ### Examples
 

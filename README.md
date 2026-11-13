@@ -294,14 +294,14 @@ Sorty supports the `sorty://` URL scheme for automation and external control:
 
 | Deeplink | Description |
 |----------|-------------|
-| `sorty://organize?path=<path>&persona=<id>&autostart=true` | Start organization |
-| `sorty://duplicates?path=<path>&autostart=true` | Scan for duplicates |
+| `sorty://organize?path=<path>&persona=<id>&autostart=true` | Select a folder; start analysis inside Sorty |
+| `sorty://duplicates?path=<path>&autostart=true` | Select a folder for a user-started duplicate scan |
 | `sorty://learnings?action=stats` | Open Learnings statistics |
 | `sorty://settings?section=ai` | Open specific settings section |
 | `sorty://history` | Open organization history |
 | `sorty://history?entry=<uuid>` | Open a specific history session |
 | `sorty://persona?generate=true&prompt=<text>` | Generate a persona |
-| `sorty://watched?action=add&path=<path>` | Add watched folder |
+| `sorty://watched?action=add&path=<path>` | Add a disabled folder with Notify and Review selected |
 | `sorty://rules?action=add&pattern=<pattern>` | Add exclusion rule |
 | `sorty://help?section=<topic>` | Open help section |
 

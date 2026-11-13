@@ -124,6 +124,33 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(capture.value, targetSessionID.uuidString)
     }
 
+    func testExternalAutostartLinksNeverPrepareOrganization() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sorty-scan-deeplink-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        session.appState.organizer = session.organizer
+        var preparationCount = 0
+        session.appState.prepareManualOrganizationAction = { _ in
+            preparationCount += 1
+        }
+        for rawURL in [
+            "sorty://scan?path=\(directory.path)",
+            "sorty://organize?path=\(directory.path)&autostart=true",
+            "sorty://organize?autostart=true"
+        ] {
+            DeeplinkHandler.shared.handle(url: try XCTUnwrap(URL(string: rawURL)))
+            handle(try XCTUnwrap(DeeplinkHandler.shared.pendingDestination))
+            DeeplinkHandler.shared.clearPending()
+            XCTAssertEqual(session.appState.selectedDirectory?.standardizedFileURL, directory.standardizedFileURL)
+        }
+        // Beyond the old delayed-start deadline: neither explicit nor retained
+        // folder selection grants permission to prepare a provider request.
+        try await Task.sleep(for: .milliseconds(700))
+        XCTAssertEqual(preparationCount, 0)
+        XCTAssertEqual(session.appState.currentView, .organize)
+    }
+
     func testWatchedAddDeeplinkRejectsMissingFolder() {
         let missingPath = "/tmp/sorty-missing-\(UUID().uuidString)"
 
@@ -134,7 +161,7 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertNil(session.appState.highlightedWatchedFolderID)
     }
 
-    func testWatchedAddDeeplinkAddsNewFolder() throws {
+    func testWatchedAddDeeplinkCreatesDisabledReviewOnlyFolder() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("sorty-watch-deeplink-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -145,6 +172,10 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(session.appState.currentView, .watchedFolders)
         XCTAssertEqual(watchedFoldersManager.folders.map(\.path), [directory.standardizedFileURL.path])
         XCTAssertEqual(session.appState.highlightedWatchedFolderID, watchedFoldersManager.folders.first?.id)
+        let folder = try XCTUnwrap(watchedFoldersManager.folders.first)
+        XCTAssertFalse(folder.isEnabled)
+        XCTAssertFalse(folder.autoOrganize)
+        XCTAssertEqual(folder.effectiveApplyPolicy, .notifyAndReview)
     }
 
     func testWatchedAddDeeplinkHighlightsExistingStandardizedPath() throws {
@@ -160,6 +191,8 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(watchedFoldersManager.folders.count, 1)
         XCTAssertEqual(watchedFoldersManager.folders.first?.path, directory.standardizedFileURL.path)
         XCTAssertEqual(session.appState.highlightedWatchedFolderID, existingFolder.id)
+        XCTAssertTrue(watchedFoldersManager.folders[0].isEnabled)
+        XCTAssertEqual(watchedFoldersManager.folders[0].effectiveApplyPolicy, .autoApply)
     }
 
     func testLearningsClearDeeplinkRequiresDeletionConfirmation() {
