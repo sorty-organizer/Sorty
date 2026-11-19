@@ -110,6 +110,8 @@ generate_delta() (
     # Compare file contents, permissions, and symlinks without following the links.
     differences=$(/usr/bin/rsync -nrlpc --delete --itemize-changes \
         "${APP_PLIST%/Contents/Info.plist}/" "$work_dir/Patched.app/") || return 1
+    # A delta may retain timestamps from the old bundle for unchanged files.
+    differences=$(awk '$1 !~ /^\.[fdL]\.\.[tT]\.+$/' <<< "$differences") || return 1
     if [ -n "$differences" ]; then
         printf 'Reconstructed app differs from the release bundle:\n%s\n' "$differences" >&2
         return 1
