@@ -252,10 +252,20 @@ with Thin LTO disabled.
 
 The release publishes `Sorty.dmg` for drag-to-install setup and `Sorty.zip` for
 Sparkle updates. The hosted workflow also tries to build a signed Sparkle delta
-from each of the three most recent stable releases. It checks that the patch reconstructs
-the signed release app and saves at least 12.5% of the ZIP download. Check the
-Generate Appcast log for both sizes. Sparkle uses the full ZIP for builds without
-a matching delta and can retry with it when a patch cannot be applied.
+from each of the three most recent stable releases. It checks that each patch
+reconstructs the signed release app and saves at least 12.5% of the ZIP download.
+Sparkle uses the full ZIP for builds without a matching delta and can retry
+with it when a patch cannot be applied.
+
+Before publishing, check the Generate Appcast log in the Blacksmith
+validation-only run. Record the full ZIP size and each patch size, starting
+with the current public build. The 3.9 MB patch in the
+[first multi-version validation](https://github.com/sorty-organizer/Sorty/actions/runs/44534516578)
+is a reference point for the latest-build patch. If a patch is unexpectedly
+large, compare the bundles for files that changed unnecessarily, such as
+regenerated assets with identical content. Fix avoidable changes and rerun
+validation. Preserve the release's features, supported architectures, signature
+checks, and full ZIP fallback.
 
 To package an existing release app locally, run
 `bash scripts/package-dmg.sh`. It uses a temporary Python environment with

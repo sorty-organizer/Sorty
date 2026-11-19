@@ -4,6 +4,7 @@
 - Fast loop: `make dev` builds debug without tests; `make now` builds debug and launches; `make harness[-settings|-organize]` launches targeted harnesses.
 - For minor changes, do not run local verification such as `make now` or `make dev`;
 - Local `make ci`, `make test`, and `make test-full` must not be used to skip Blacksmith checks for commit, push, PR, or release confidence.
+- Before publishing a release, review Sparkle download sizes and reduce avoidable bundle changes as described in the [release guide](CONTRIBUTING.md#release-process).
 - Tests are valuable when they are focused. Avoid endless smoke tests, low-signal coverage, and regression tests whose only purpose is preserving behavior that has been deliberately deleted.
 - Always prefer frequent small commits and pushes on `main` over large local-only batches. After each coherent change or fix or thread, commit with a clear message.
 - Use `[skip ci]` generously unless otherwise specified
