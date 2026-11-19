@@ -251,7 +251,13 @@ Release builds retain both architectures and whole-module Swift optimization,
 with Thin LTO disabled.
 
 The release publishes `Sorty.dmg` for drag-to-install setup and `Sorty.zip` for
-Sparkle updates. To package an existing release app locally, run
+Sparkle updates. The hosted workflow also tries to build a signed Sparkle delta
+from the latest published stable build. It checks that the patch reconstructs
+the signed release app and saves at least 12.5% of the ZIP download. Check the
+Generate Appcast log for both sizes. Sparkle uses the full ZIP for builds without
+a matching delta and can retry with it when a patch cannot be applied.
+
+To package an existing release app locally, run
 `bash scripts/package-dmg.sh`. It uses a temporary Python environment with
 `dmgbuild==1.6.7`, the artwork in `Assets/DMG`, and a saved Finder layout without
 UI automation. Python 3.10+ and network access to PyPI are required. It verifies

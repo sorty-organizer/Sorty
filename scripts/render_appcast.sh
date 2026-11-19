@@ -31,6 +31,7 @@ ${minimum_system_xml}
                  sparkle:shortVersionString="${VERSION}"
                  type="application/octet-stream"
                  ${ENCLOSURE_EXTRA_ATTR}/>
+${APPCAST_DELTAS_XML:-}
     </item>
   </channel>
 </rss>

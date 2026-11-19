@@ -300,7 +300,7 @@ jobs:
           cp "releases/Sorty.zip" "release-artifacts/"
           cp ".build/logs/xcodebuild_compile.log" "release-artifacts/build_output_universal.log"
 
-          # Preserve Sparkle's sign_update so the fresh release runner can sign appcasts.
+          # Carry the pinned Sparkle tools to the release runner.
           SIGN_UPDATE_TOOL=$(find \
             ".build/artifacts" \
             ".build/DerivedData/SourcePackages/artifacts" \
@@ -313,7 +313,10 @@ jobs:
             exit 1
           fi
           mkdir -p "release-artifacts/sparkle-tools"
-          cp "$SIGN_UPDATE_TOOL" "release-artifacts/sparkle-tools/sign_update"
+          cp "$SIGN_UPDATE_TOOL" "release-artifacts/sparkle-tools/"
+          if [ -x "${SIGN_UPDATE_TOOL%/*}/BinaryDelta" ]; then
+            cp "${SIGN_UPDATE_TOOL%/*}/BinaryDelta" "release-artifacts/sparkle-tools/"
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
@@ -376,11 +379,11 @@ jobs:
           cp artifacts/universal/Sorty.zip releases/
           ditto -x -k releases/Sorty.zip releases/
 
-          if [ -f "artifacts/universal/sparkle-tools/sign_update" ]; then
-            mkdir -p ".build/artifacts/sparkle/Sparkle/bin"
-            cp "artifacts/universal/sparkle-tools/sign_update" \
-               ".build/artifacts/sparkle/Sparkle/bin/sign_update"
-            chmod +x ".build/artifacts/sparkle/Sparkle/bin/sign_update"
+          SPARKLE_BIN=".build/artifacts/sparkle/Sparkle/bin"
+          mkdir -p "$SPARKLE_BIN"
+          install -m 755 artifacts/universal/sparkle-tools/sign_update "$SPARKLE_BIN/"
+          if [ -f artifacts/universal/sparkle-tools/BinaryDelta ]; then
+            install -m 755 artifacts/universal/sparkle-tools/BinaryDelta "$SPARKLE_BIN/"
           fi
 
       - name: Validate downloadable app defaults and architecture
@@ -446,6 +449,17 @@ jobs:
           grep -q '<h2>Improved</h2>' releases/release-notes.html
           grep -q '<h2>Fixed</h2>' releases/release-notes.html
 
+      - name: Download previous Sparkle update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BASE_DIR="$RUNNER_TEMP/sorty-delta-base"
+          if gh release download --repo "$GITHUB_REPOSITORY" --pattern Sorty.zip --dir "$BASE_DIR"; then
+            echo "APPCAST_DELTA_BASE_ZIP=$BASE_DIR/Sorty.zip" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Previous release ZIP unavailable. Offering the full update."
+          fi
+
       - name: Generate Appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
@@ -456,6 +470,7 @@ jobs:
           ZIP_NAME_OVERRIDE="Sorty.zip" ./scripts/generate_appcast_ci.sh
 
       - name: Validate Sparkle Update System
+        id: sparkle
         run: |
           chmod +x ./scripts/validate_sparkle.sh
           ./scripts/validate_sparkle.sh \
@@ -464,6 +479,11 @@ jobs:
             --expected-version "${{ needs.prepare-release.outputs.version }}" \
             --expected-channel default \
             --expected-release-tag "v${{ needs.prepare-release.outputs.version }}"
+
+          DELTA_URL=$(xmllint --xpath 'string((//item)[1]/*[local-name()="deltas"]/enclosure/@url)' releases/appcast-v2.xml)
+          if [ -n "$DELTA_URL" ]; then
+            echo "delta_asset=releases/${DELTA_URL##*/}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Preserve legacy key-transition appcast
         env:
@@ -517,6 +537,7 @@ jobs:
           overwrite_files: true
           fail_on_unmatched_files: true
           files: |
+            ${{ steps.sparkle.outputs.delta_asset }}
             releases/Sorty.zip
             releases/Sorty.dmg
             releases/appcast.xml
@@ -542,8 +563,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
+          DELTA_ASSET: ${{ steps.sparkle.outputs.delta_asset }}
         run: |
-          EXPECTED_ASSETS=$(printf '%s\n' Sorty.zip Sorty.dmg appcast-v2.xml appcast.xml release-notes.html | sort)
+          EXPECTED_ASSETS=$(
+            {
+              printf '%s\n' Sorty.zip Sorty.dmg appcast-v2.xml appcast.xml release-notes.html
+              if [ -n "$DELTA_ASSET" ]; then
+                basename "$DELTA_ASSET"
+              fi
+            } | sort
+          )
           ACTUAL_ASSETS=$(gh release view "v${VERSION}" --json assets --jq '.assets[].name' | sort)
           if [ "$ACTUAL_ASSETS" != "$EXPECTED_ASSETS" ]; then
             echo "Unexpected release assets:" >&2
@@ -565,6 +594,13 @@ jobs:
             "https://github.com/${{ github.repository }}/releases/latest/download/appcast-v2.xml" \
             --output /tmp/appcast-v2.xml
           cmp releases/appcast-v2.xml /tmp/appcast-v2.xml
+          if [ -n "$DELTA_ASSET" ]; then
+            DELTA_NAME=${DELTA_ASSET##*/}
+            curl --fail --silent --show-error --location \
+              "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/$DELTA_NAME" \
+              --output "$RUNNER_TEMP/$DELTA_NAME"
+            cmp "$DELTA_ASSET" "$RUNNER_TEMP/$DELTA_NAME"
+          fi
           curl --fail --silent --show-error --location \
             "https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml" \
             --output /tmp/appcast.xml

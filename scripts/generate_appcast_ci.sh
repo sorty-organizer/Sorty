@@ -1,5 +1,5 @@
 #!/bin/bash
-# Generate signed appcast.xml for Sparkle auto-updates in CI
+# Generate a signed Sparkle ZIP enclosure and an optional delta in CI.
 # Usage: ./scripts/generate_appcast_ci.sh
 # Requires: SPARKLE_PRIVATE_KEY environment variable (Sparkle private key from generate_keys)
 
@@ -45,65 +45,103 @@ APPCAST_ITEM_TITLE="${APPCAST_ITEM_TITLE:-Version ${VERSION}}"
 APPCAST_CHANNEL="${APPCAST_CHANNEL:-}"
 APPCAST_LINK="${APPCAST_LINK:-https://github.com/${REPOSITORY}}"
 
-# Generate Ed25519 signature using Sparkle's sign_update tool
-ENCLOSURE_EXTRA_ATTR="length=\"${SIZE}\""
-if [ -n "${SPARKLE_PRIVATE_KEY:-}" ]; then
-    log_item "Signing update with Sparkle sign_update..."
+# Use the Sparkle tools from the same build that produced the app.
+SIGN_UPDATE_TOOL=$(
+    find \
+        "${BUILD_DIR}/artifacts" \
+        "${BUILD_DIR}/DerivedData/SourcePackages/artifacts" \
+        "${WORKSPACE_BUILD_DIR}/artifacts" \
+        "${WORKSPACE_BUILD_DIR}/DerivedData/SourcePackages/artifacts" \
+        -name "sign_update" \
+        -type f \
+        -not -path "*/old_dsa_scripts/*" \
+        2>/dev/null | head -1
+)
 
-    PRIVATE_KEY_FILE="${RELEASE_DIR}/sparkle_private_key.tmp"
-    printf '%s' "$SPARKLE_PRIVATE_KEY" > "$PRIVATE_KEY_FILE"
-    chmod 600 "$PRIVATE_KEY_FILE"
+if [ ! -x "$SIGN_UPDATE_TOOL" ] || [ -z "${SPARKLE_PRIVATE_KEY:-}" ]; then
+    log_failure "Appcast generation requires Sparkle sign_update and SPARKLE_PRIVATE_KEY."
+    exit 1
+fi
 
-    SIGN_UPDATE_TOOL=$(
-        find \
-            "${BUILD_DIR}/artifacts" \
-            "${BUILD_DIR}/DerivedData/SourcePackages/artifacts" \
-            "${WORKSPACE_BUILD_DIR}/artifacts" \
-            "${WORKSPACE_BUILD_DIR}/DerivedData/SourcePackages/artifacts" \
-            -name "sign_update" \
-            -type f \
-            -not -path "*/old_dsa_scripts/*" \
-            2>/dev/null | head -1
-    )
+# Pass the key through stdin only to sign_update.
+export -n SPARKLE_PRIVATE_KEY
+sign_archive() {
+    printf '%s\n' "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE_TOOL" --ed-key-file - -p "$1"
+}
 
-    if [ -n "$SIGN_UPDATE_TOOL" ] && [ -x "$SIGN_UPDATE_TOOL" ]; then
-        SIGNATURE_OUTPUT=$("$SIGN_UPDATE_TOOL" -f "$PRIVATE_KEY_FILE" "$ZIP_PATH" 2>/dev/null || true)
-        if echo "$SIGNATURE_OUTPUT" | grep -q 'sparkle:edSignature='; then
-            ENCLOSURE_EXTRA_ATTR=$(echo "$SIGNATURE_OUTPUT" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g')
-            log_success "Ed25519 signature generated successfully"
-        else
-            log_failure "Could not generate signature."
-            log_item "Check that SPARKLE_PRIVATE_KEY matches Info.plist SUPublicEDKey"
-            exit 1
-        fi
-    else
-        log_failure "Sparkle sign_update tool not found."
-        log_item "Build artifacts must include Sparkle tools under SwiftPM or Xcode SourcePackages artifacts"
-        exit 1
+PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "${APP_PLIST}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "${PROJECT_DIR}/Info.plist")
+if ! SIGNATURE=$(sign_archive "$ZIP_PATH") || [[ ! "$SIGNATURE" =~ ^[A-Za-z0-9+/]{86}==$ ]]; then
+    log_failure "Could not sign update. Check that SPARKLE_PRIVATE_KEY matches SUPublicEDKey."
+    exit 1
+fi
+ENCLOSURE_EXTRA_ATTR="sparkle:edSignature=\"$SIGNATURE\" length=\"$SIZE\""
+
+generate_delta() (
+    local binary_delta="${SIGN_UPDATE_TOOL%/*}/BinaryDelta"
+    local work_dir old_app old_plist old_framework old_build framework_build
+    local delta_name delta_path delta_size delta_signature old_sparkle_size differences
+
+    [ -x "$binary_delta" ] || return 1
+    work_dir=$(mktemp -d) || return 1
+    trap 'rm -rf "$work_dir"' EXIT
+    ditto -x -k "$APPCAST_DELTA_BASE_ZIP" "$work_dir/base" >&2 || return 1
+
+    old_app="$work_dir/base/${PROJECT_NAME}.app"
+    old_plist="$old_app/Contents/Info.plist"
+    old_framework="$old_app/Contents/Frameworks/Sparkle.framework"
+    old_build=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$old_plist") || return 1
+    framework_build=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$old_framework/Resources/Info.plist") || return 1
+    [[ "$old_build" =~ ^[0-9]+$ && "$BUILD_NUM" =~ ^[0-9]+$ && "$framework_build" =~ ^[0-9]+$ ]] || return 1
+    # Sparkle build 2041 and later support version 4 delta archives.
+    [ "$framework_build" -ge 2041 ] && [ "$old_build" -lt "$BUILD_NUM" ] || return 1
+    [ "$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "$old_plist")" = "$PUBLIC_KEY" ] || return 1
+    [ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$old_plist")" = "$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PLIST")" ] || return 1
+    codesign --verify --deep --strict "$old_app" >&2 || return 1
+
+    delta_name="${PROJECT_NAME}-${BUILD_NUM}-from-${old_build}.delta"
+    delta_path="$work_dir/$delta_name"
+    "$binary_delta" create --version 4 "$old_app" "${APP_PLIST%/Contents/Info.plist}" "$delta_path" >&2 || return 1
+    delta_size=$(stat -f%z "$delta_path") || return 1
+    # Use Sparkle's size threshold so large patches use the full archive instead.
+    [ "$delta_size" -gt 0 ] && [ "$delta_size" -le $((SIZE * 7 / 8)) ] || return 1
+
+    "$binary_delta" apply "$old_app" "$work_dir/Patched.app" "$delta_path" >&2 || return 1
+    codesign --verify --deep --strict "$work_dir/Patched.app" >&2 || return 1
+    # Compare file contents, permissions, and symlinks without following the links.
+    differences=$(/usr/bin/rsync -nrlpc --delete --itemize-changes \
+        "${APP_PLIST%/Contents/Info.plist}/" "$work_dir/Patched.app/") || return 1
+    if [ -n "$differences" ]; then
+        printf 'Reconstructed app differs from the release bundle:\n%s\n' "$differences" >&2
+        return 1
     fi
 
-    rm -f "$PRIVATE_KEY_FILE"
-else
-    log_failure "No SPARKLE_PRIVATE_KEY found."
-    log_item "Set SPARKLE_PRIVATE_KEY in GitHub Secrets to enable signed updates"
-    exit 1
+    old_sparkle_size=$(stat -Lf%z "$old_framework/Sparkle") || return 1
+    delta_signature=$(sign_archive "$delta_path") || return 1
+    [[ "$delta_signature" =~ ^[A-Za-z0-9+/]{86}==$ ]] || return 1
+    mv "$delta_path" "$RELEASE_DIR/$delta_name" || return 1
+    echo "Verified delta from build $old_build: $delta_size bytes ($SIZE bytes full)." >&2
+
+    cat <<EOF
+      <sparkle:deltas>
+        <enclosure url="${RELEASE_URL%/*}/${delta_name}"
+                   sparkle:version="${BUILD_NUM}"
+                   sparkle:shortVersionString="${VERSION}"
+                   sparkle:deltaFrom="${old_build}"
+                   sparkle:deltaFromSparkleExecutableSize="${old_sparkle_size}"
+                   sparkle:edSignature="${delta_signature}"
+                   length="${delta_size}" type="application/octet-stream"/>
+      </sparkle:deltas>
+EOF
+)
+
+APPCAST_DELTAS_XML=""
+if [ -f "${APPCAST_DELTA_BASE_ZIP:-}" ] && ! APPCAST_DELTAS_XML=$(generate_delta); then
+    log_warning "No usable delta from the previous release. Offering the signed ZIP."
 fi
 
 render_appcast "${APPCAST_FILE}"
 
-log_success "Generated appcast.xml at ${APPCAST_FILE}"
-
-# Validate the generated appcast
-if echo "$ENCLOSURE_EXTRA_ATTR" | grep -q 'sparkle:edSignature='; then
-    log_success "✓ Appcast is SIGNED with Ed25519"
-    PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "${APP_PLIST}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "${PROJECT_DIR}/Info.plist" 2>/dev/null || true)
-    PUBLIC_KEY_FINGERPRINT=$(printf '%s' "$PUBLIC_KEY" | shasum -a 256 | awk '{print substr($1, 1, 12)}')
-    log_item "Sparkle public key fingerprint: ${PUBLIC_KEY_FINGERPRINT}"
-else
-    log_warning "⚠ Appcast is UNSIGNED - updates may fail signature verification"
-fi
-
-# Display info for debugging
+log_success "Generated signed appcast at ${APPCAST_FILE}"
 log_item "Version: ${VERSION} (${BUILD_NUM})"
 log_item "Download URL: ${RELEASE_URL}"
 log_item "Size: ${SIZE} bytes"

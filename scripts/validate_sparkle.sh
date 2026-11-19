@@ -162,6 +162,24 @@ elif [ ${#PUBLIC_KEY} -ne 44 ]; then
     fail "SUPublicEDKey must be 44 characters (Ed25519 base64)"
 fi
 
+verify_update_signature() {
+    swift - "$PUBLIC_KEY" "$1" "$2" >/dev/null <<'SWIFT'
+import CryptoKit
+import Foundation
+
+let args = CommandLine.arguments
+guard args.count == 4,
+      let publicKeyData = Data(base64Encoded: args[1]),
+      let signatureData = Data(base64Encoded: args[2]) else {
+    exit(2)
+}
+
+let archiveData = try Data(contentsOf: URL(fileURLWithPath: args[3]))
+let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
+exit(publicKey.isValidSignature(signatureData, for: archiveData) ? 0 : 1)
+SWIFT
+}
+
 if [ ! -f "$APPCAST_PATH" ]; then
     fail "appcast.xml not found at $APPCAST_PATH"
 else
@@ -209,21 +227,7 @@ else
         if [ ! -f "$ENC_FILE" ]; then
             fail "Enclosure ZIP not found next to appcast: $ENC_FILE"
         else
-            if ! swift - "$PUBLIC_KEY" "$ENC_SIG" "$ENC_FILE" >/dev/null <<'SWIFT'
-import CryptoKit
-import Foundation
-
-let args = CommandLine.arguments
-guard args.count == 4,
-      let publicKeyData = Data(base64Encoded: args[1]),
-      let signatureData = Data(base64Encoded: args[2]) else {
-    exit(2)
-}
-
-let archiveData = try Data(contentsOf: URL(fileURLWithPath: args[3]))
-let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
-exit(publicKey.isValidSignature(signatureData, for: archiveData) ? 0 : 1)
-SWIFT
+            if ! verify_update_signature "$ENC_SIG" "$ENC_FILE"
             then
                 PUBLIC_KEY_FINGERPRINT=$(printf '%s' "$PUBLIC_KEY" | shasum -a 256 | awk '{print substr($1, 1, 12)}')
                 SIGNATURE_FINGERPRINT=$(printf '%s' "$ENC_SIG" | shasum -a 256 | awk '{print substr($1, 1, 12)}')
@@ -231,6 +235,31 @@ SWIFT
                 echo "Sparkle signature fingerprint: ${SIGNATURE_FINGERPRINT}"
                 fail "Enclosure Sparkle signature does not verify with SUPublicEDKey"
             fi
+        fi
+    fi
+
+    # The hosted feed serves at most one delta, from the previous published build.
+    DELTA_XPATH='(//item)[1]/*[local-name()="deltas"]/*[local-name()="enclosure"]'
+    DELTA_COUNT=$(xmllint --xpath "count($DELTA_XPATH)" "$APPCAST_PATH" 2>/dev/null || echo 0)
+    if [ "$DELTA_COUNT" -gt 1 ]; then
+        fail "Appcast contains more than one delta enclosure"
+    elif [ "$DELTA_COUNT" -eq 1 ]; then
+        DELTA_URL=$(xmllint --xpath "string($DELTA_XPATH/@url)" "$APPCAST_PATH")
+        DELTA_FROM=$(xmllint --xpath "string($DELTA_XPATH/@*[local-name()='deltaFrom'])" "$APPCAST_PATH")
+        DELTA_BUILD=$(xmllint --xpath "string($DELTA_XPATH/@*[local-name()='version'])" "$APPCAST_PATH")
+        DELTA_SIGNATURE=$(xmllint --xpath "string($DELTA_XPATH/@*[local-name()='edSignature'])" "$APPCAST_PATH")
+        DELTA_LENGTH=$(xmllint --xpath "string($DELTA_XPATH/@length)" "$APPCAST_PATH")
+        DELTA_NAME="Sorty-${ENC_VERSION}-from-${DELTA_FROM}.delta"
+        DELTA_FILE="$(dirname "$APPCAST_PATH")/$DELTA_NAME"
+
+        if [[ ! "$DELTA_FROM" =~ ^[0-9]+$ || ! "$DELTA_BUILD" =~ ^[0-9]+$ ]] ||
+            [ "$DELTA_FROM" -ge "$DELTA_BUILD" ] || [ "$DELTA_BUILD" != "$ENC_VERSION" ] ||
+            [ "$DELTA_URL" != "${ENC_URL%/*}/$DELTA_NAME" ]; then
+            fail "Delta must update an older build and point to an asset on the same release"
+        elif [ ! -s "$DELTA_FILE" ] || [ "$DELTA_LENGTH" != "$(stat -f%z "$DELTA_FILE")" ]; then
+            fail "Delta file missing or length does not match the appcast"
+        elif ! verify_update_signature "$DELTA_SIGNATURE" "$DELTA_FILE"; then
+            fail "Delta Sparkle signature does not verify with SUPublicEDKey"
         fi
     fi
 
