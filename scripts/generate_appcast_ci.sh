@@ -84,7 +84,7 @@ generate_delta() (
     [ -x "$binary_delta" ] || return 1
     work_dir=$(mktemp -d) || return 1
     trap 'rm -rf "$work_dir"' EXIT
-    ditto -x -k "$APPCAST_DELTA_BASE_ZIP" "$work_dir/base" >&2 || return 1
+    ditto -x -k "$1" "$work_dir/base" >&2 || return 1
 
     old_app="$work_dir/base/${PROJECT_NAME}.app"
     old_plist="$old_app/Contents/Info.plist"
@@ -124,7 +124,6 @@ generate_delta() (
     echo "Verified delta from build $old_build: $delta_size bytes ($SIZE bytes full)." >&2
 
     cat <<EOF
-      <sparkle:deltas>
         <enclosure url="${RELEASE_URL%/*}/${delta_name}"
                    sparkle:version="${BUILD_NUM}"
                    sparkle:shortVersionString="${VERSION}"
@@ -132,13 +131,23 @@ generate_delta() (
                    sparkle:deltaFromSparkleExecutableSize="${old_sparkle_size}"
                    sparkle:edSignature="${delta_signature}"
                    length="${delta_size}" type="application/octet-stream"/>
-      </sparkle:deltas>
 EOF
 )
 
 APPCAST_DELTAS_XML=""
-if [ -f "${APPCAST_DELTA_BASE_ZIP:-}" ] && ! APPCAST_DELTAS_XML=$(generate_delta); then
-    log_warning "No usable delta from the previous release. Offering the signed ZIP."
+if [ -n "${APPCAST_DELTA_BASE_DIR:-}" ]; then
+    DELTA_ENCLOSURES=""
+    for base_zip in "$APPCAST_DELTA_BASE_DIR"/*/Sorty.zip; do
+        [ -f "$base_zip" ] || continue
+        if enclosure=$(generate_delta "$base_zip"); then
+            DELTA_ENCLOSURES+="$enclosure"$'\n'
+        else
+            log_warning "No usable delta from $(basename "$(dirname "$base_zip")"). That build can use the signed ZIP."
+        fi
+    done
+    if [ -n "$DELTA_ENCLOSURES" ]; then
+        APPCAST_DELTAS_XML=$(printf '      <sparkle:deltas>\n%s      </sparkle:deltas>' "$DELTA_ENCLOSURES")
+    fi
 fi
 
 render_appcast "${APPCAST_FILE}"

@@ -238,12 +238,12 @@ else
         fi
     fi
 
-    # The hosted feed serves at most one delta, from the previous published build.
-    DELTA_XPATH='(//item)[1]/*[local-name()="deltas"]/*[local-name()="enclosure"]'
-    DELTA_COUNT=$(xmllint --xpath "count($DELTA_XPATH)" "$APPCAST_PATH" 2>/dev/null || echo 0)
-    if [ "$DELTA_COUNT" -gt 1 ]; then
-        fail "Appcast contains more than one delta enclosure"
-    elif [ "$DELTA_COUNT" -eq 1 ]; then
+    # xmllint's XPath CLI cannot register prefixes. Match the Sparkle namespace explicitly.
+    DELTAS_XPATH='(//item)[1]/*[local-name()="deltas" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"]/enclosure'
+    DELTA_COUNT=$(xmllint --xpath "count($DELTAS_XPATH)" "$APPCAST_PATH" 2>/dev/null || echo 0)
+    SEEN_DELTA_BUILDS=" "
+    for ((INDEX = 1; INDEX <= DELTA_COUNT; INDEX++)); do
+        DELTA_XPATH="($DELTAS_XPATH)[$INDEX]"
         DELTA_URL=$(xmllint --xpath "string($DELTA_XPATH/@url)" "$APPCAST_PATH")
         DELTA_FROM=$(xmllint --xpath "string($DELTA_XPATH/@*[local-name()='deltaFrom'])" "$APPCAST_PATH")
         DELTA_BUILD=$(xmllint --xpath "string($DELTA_XPATH/@*[local-name()='version'])" "$APPCAST_PATH")
@@ -256,12 +256,16 @@ else
             [ "$DELTA_FROM" -ge "$DELTA_BUILD" ] || [ "$DELTA_BUILD" != "$ENC_VERSION" ] ||
             [ "$DELTA_URL" != "${ENC_URL%/*}/$DELTA_NAME" ]; then
             fail "Delta must update an older build and point to an asset on the same release"
+        elif [[ "$SEEN_DELTA_BUILDS" == *" $DELTA_FROM "* ]]; then
+            fail "Appcast has duplicate deltas for source build $DELTA_FROM"
         elif [ ! -s "$DELTA_FILE" ] || [ "$DELTA_LENGTH" != "$(stat -f%z "$DELTA_FILE")" ]; then
             fail "Delta file missing or length does not match the appcast"
         elif ! verify_update_signature "$DELTA_SIGNATURE" "$DELTA_FILE"; then
             fail "Delta Sparkle signature does not verify with SUPublicEDKey"
+        else
+            SEEN_DELTA_BUILDS+="$DELTA_FROM "
         fi
-    fi
+    done
 
     if [ -n "$PLIST_VERSION" ] && [ "$ENC_SHORT" != "$PLIST_VERSION" ]; then
         fail "Enclosure shortVersionString (${ENC_SHORT}) does not match Info.plist (${PLIST_VERSION})"

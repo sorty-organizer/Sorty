@@ -252,7 +252,7 @@ with Thin LTO disabled.
 
 The release publishes `Sorty.dmg` for drag-to-install setup and `Sorty.zip` for
 Sparkle updates. The hosted workflow also tries to build a signed Sparkle delta
-from the latest published stable build. It checks that the patch reconstructs
+from each of the three most recent stable releases. It checks that the patch reconstructs
 the signed release app and saves at least 12.5% of the ZIP download. Check the
 Generate Appcast log for both sizes. Sparkle uses the full ZIP for builds without
 a matching delta and can retry with it when a patch cannot be applied.

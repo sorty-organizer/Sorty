@@ -449,16 +449,25 @@ jobs:
           grep -q '<h2>Improved</h2>' releases/release-notes.html
           grep -q '<h2>Fixed</h2>' releases/release-notes.html
 
-      - name: Download previous Sparkle update
+      - name: Download recent stable Sparkle updates
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BASE_DIR="$RUNNER_TEMP/sorty-delta-base"
-          if gh release download --repo "$GITHUB_REPOSITORY" --pattern Sorty.zip --dir "$BASE_DIR"; then
-            echo "APPCAST_DELTA_BASE_ZIP=$BASE_DIR/Sorty.zip" >> "$GITHUB_ENV"
-          else
-            echo "::warning::Previous release ZIP unavailable. Offering the full update."
+          if ! TAGS=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 20 \
+            --json tagName,isDraft,isPrerelease,publishedAt \
+            --jq 'map(select(.isDraft == false and .isPrerelease == false and (.tagName | test("^v[0-9]+[.][0-9]+[.][0-9]+$")))) | sort_by(.publishedAt) | reverse | .[0:3][] | .tagName'); then
+            echo "::warning::Could not list prior releases. Offering the full update."
+            exit 0
           fi
+          while IFS= read -r TAG; do
+            [ -n "$TAG" ] || continue
+            if ! gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern Sorty.zip --dir "$BASE_DIR/$TAG"; then
+              echo "::warning::Sorty.zip unavailable for $TAG. That build can use the full update."
+              rm -f "$BASE_DIR/$TAG/Sorty.zip"
+            fi
+          done <<< "$TAGS"
+          echo "APPCAST_DELTA_BASE_DIR=$BASE_DIR" >> "$GITHUB_ENV"
 
       - name: Generate Appcast
         env:
@@ -480,10 +489,16 @@ jobs:
             --expected-channel default \
             --expected-release-tag "v${{ needs.prepare-release.outputs.version }}"
 
-          DELTA_URL=$(xmllint --xpath 'string((//item)[1]/*[local-name()="deltas"]/enclosure/@url)' releases/appcast-v2.xml)
-          if [ -n "$DELTA_URL" ]; then
-            echo "delta_asset=releases/${DELTA_URL##*/}" >> "$GITHUB_OUTPUT"
-          fi
+          DELTAS='(//item)[1]/*[local-name()="deltas" and namespace-uri()="http://www.andymatuschak.org/xml-namespaces/sparkle"]/enclosure'
+          COUNT=$(xmllint --xpath "count($DELTAS)" releases/appcast-v2.xml)
+          {
+            echo 'delta_assets<<EOF'
+            for ((INDEX = 1; INDEX <= COUNT; INDEX++)); do
+              URL=$(xmllint --xpath "string(($DELTAS)[$INDEX]/@url)" releases/appcast-v2.xml)
+              echo "releases/${URL##*/}"
+            done
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
 
       - name: Preserve legacy key-transition appcast
         env:
@@ -537,7 +552,7 @@ jobs:
           overwrite_files: true
           fail_on_unmatched_files: true
           files: |
-            ${{ steps.sparkle.outputs.delta_asset }}
+            ${{ steps.sparkle.outputs.delta_assets }}
             releases/Sorty.zip
             releases/Sorty.dmg
             releases/appcast.xml
@@ -563,14 +578,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
-          DELTA_ASSET: ${{ steps.sparkle.outputs.delta_asset }}
+          DELTA_ASSETS: ${{ steps.sparkle.outputs.delta_assets }}
         run: |
           EXPECTED_ASSETS=$(
             {
               printf '%s\n' Sorty.zip Sorty.dmg appcast-v2.xml appcast.xml release-notes.html
-              if [ -n "$DELTA_ASSET" ]; then
+              while IFS= read -r DELTA_ASSET; do
+                [ -n "$DELTA_ASSET" ] || continue
                 basename "$DELTA_ASSET"
-              fi
+              done <<< "$DELTA_ASSETS"
             } | sort
           )
           ACTUAL_ASSETS=$(gh release view "v${VERSION}" --json assets --jq '.assets[].name' | sort)
@@ -594,13 +610,14 @@ jobs:
             "https://github.com/${{ github.repository }}/releases/latest/download/appcast-v2.xml" \
             --output /tmp/appcast-v2.xml
           cmp releases/appcast-v2.xml /tmp/appcast-v2.xml
-          if [ -n "$DELTA_ASSET" ]; then
+          while IFS= read -r DELTA_ASSET; do
+            [ -n "$DELTA_ASSET" ] || continue
             DELTA_NAME=${DELTA_ASSET##*/}
             curl --fail --silent --show-error --location \
               "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/$DELTA_NAME" \
               --output "$RUNNER_TEMP/$DELTA_NAME"
             cmp "$DELTA_ASSET" "$RUNNER_TEMP/$DELTA_NAME"
-          fi
+          done <<< "$DELTA_ASSETS"
           curl --fail --silent --show-error --location \
             "https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml" \
             --output /tmp/appcast.xml
