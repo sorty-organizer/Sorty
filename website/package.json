@@ -23,7 +23,7 @@
     "@sentry/nextjs": "10.75.2",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
-    "next": "16.4.1",
+    "next": "16.4.5",
     "posthog-js": "1.447.3",
     "react": "^19",
     "react-dom": "^19",
