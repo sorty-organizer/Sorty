@@ -1,8 +1,0 @@
-interface:
-  display_name: "Swift FocusEngine Pro"
-  short_description: "Focus management skill for tvOS, iOS, watchOS, and visionOS."
-  brand_color: "#007AFF"
-  default_prompt: "Use $swift-focusengine-pro to review my project for focus issues."
-
-policy:
-  allow_implicit_invocation: true

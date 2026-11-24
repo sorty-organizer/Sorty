@@ -1,6 +1,0 @@
-interface:
-  display_name: "Sorty Organizer (Experimental)"
-  short_description: "Preview and safely organize folders with AI"
-  default_prompt: "Use $sorty-organizer to organize this folder with a reviewable plan before moving anything."
-policy:
-  allow_implicit_invocation: false
